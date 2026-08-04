@@ -1,0 +1,154 @@
+{
+  "8": {
+    "inputs": {
+      "samples": [
+        "63",
+        0
+      ],
+      "vae": [
+        "114",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "score_1, score_2, score_3,bad anatomy, bad proportions, deformed anatomy, deformed face, deformed eyes, text, multiple fingers,watermark,artist name",
+      "clip": [
+        "113",
+        2
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "28": {
+    "inputs": {
+      "width": [
+        "119",
+        0
+      ],
+      "height": [
+        "118",
+        0
+      ],
+      "batch_size": [
+        "120",
+        0
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "63": {
+    "inputs": {
+      "seed": 536474517963359,
+      "steps": 18,
+      "cfg": 6,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "113",
+        3
+      ],
+      "positive": [
+        "113",
+        1
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "99": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "113": {
+    "inputs": {
+      "positive": "Nai3 style, Close-up details, Exusiai (Arknights), 1girl, halo, glowing wings, red short hair, huge breasts, orange eyes, shiny_skin, (Kabedon:1.4), bright light, divine aura, bullet trails, techwear, stylish jacket, choker, earrings, jewelry, collarbone, looking at viewer, cheerful smile, fingernails, add a touch of dimension to your image without affecting the details, (anime:1.1), soft neon lights, ethereal atmosphere, exquisite details, magical atmosphere, concept art, highly detailed, absurdres, 32k UHD, sharp focus, best quality, masterpiece, golden hour, unconventional supreme masterpiece, exquisite details, gentle atmosphere, with high-end texture, in the style of fashion photography, magazine cover, dynamic angle, dynamic pose, magazine cover, dynamic angle, dynamic pose, (artist: quasarcake:0.8), extreme aesthetics, (wlop:0.6), (honjou raita, lack, rella, wanke:0.5), masterpiece, best quality, good quality, latest, 2024, 2023, very beautiful, absurd, visual impact, tense shot, absurdres, 32k UHD, sharp focus, best quality, masterpiece, emotional, unconventional supreme masterpiece, exquisite details, gentle atmosphere, with high-end texture, in the style of fashion photography, (visual impact:1.2), give the poster a dynamic and visually striking appearance, influential image, official art, colorful, splashed colors, cinematic perspective, masterpiece, best quality, amazing quality, very beautiful, absurd, best quality, latest, glamor, curvy, alternate_costume,",
+      "auto_random": false,
+      "lora_str": "",
+      "temp_str": "[{\"id\":\"token_1_1783060772687\",\"text\":\"Nai3 style\",\"translate\":\"Nai3 style\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_2_1783060772687\",\"text\":\"Close-up details\",\"translate\":\"Close-up details\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_3_1783060772687\",\"text\":\"Exusiai (Arknights)\",\"translate\":\"Exusiai (Arknights)\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_47_1783060272283\",\"text\":\"1girl\",\"translate\":\"1女孩\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_4_1783060772687\",\"text\":\"halo\",\"translate\":\"光环\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false},{\"id\":\"token_5_1783060772687\",\"text\":\"glowing wings\",\"translate\":\"发光 翅膀\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_6_1783060772687\",\"text\":\"red short hair\",\"translate\":\"红色 短发\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_7_1783060772687\",\"text\":\"huge breasts\",\"translate\":\"巨乳(E)\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_8_1783060772687\",\"text\":\"orange eyes\",\"translate\":\"橙色眼睛\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_9_1783060772687\",\"text\":\"shiny_skin\",\"translate\":\"有光泽的皮肤\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_10_1783060772687\",\"text\":\"(Kabedon:1.4)\",\"translate\":\"(Kabedon\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_11_1783060772687\",\"text\":\"bright light\",\"translate\":\"bright 亮的\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_12_1783060772687\",\"text\":\"divine aura\",\"translate\":\"divine 光环\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_13_1783060772687\",\"text\":\"bullet trails\",\"translate\":\"子弹 trails\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_14_1783060772687\",\"text\":\"techwear\",\"translate\":\"techwear\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_15_1783060772687\",\"text\":\"stylish jacket\",\"translate\":\"stylish 夹克衫\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false},{\"id\":\"token_16_1783060772687\",\"text\":\"choker\",\"translate\":\"颈部饰品\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false},{\"id\":\"token_17_1783060772687\",\"text\":\"earrings\",\"translate\":\"耳环\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false},{\"id\":\"token_18_1783060772687\",\"text\":\"jewelry\",\"translate\":\"首饰\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false},{\"id\":\"token_19_1783060772687\",\"text\":\"collarbone\",\"translate\":\"锁骨\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_20_1783060772687\",\"text\":\"looking at viewer\",\"translate\":\"looking at viewer\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_21_1783060772687\",\"text\":\"cheerful smile\",\"translate\":\"cheerful 微笑\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(241, 229, 140, .4)\",\"isLoraTag\":false},{\"id\":\"token_22_1783060772687\",\"text\":\"fingernails\",\"translate\":\"手指甲\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_23_1783060772687\",\"text\":\"add a touch of dimension to your image without affecting the details\",\"translate\":\"add a touch of dimension to your image without affecting the details\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_24_1783060772687\",\"text\":\"(anime:1.1)\",\"translate\":\"(anime\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_25_1783060772687\",\"text\":\"soft neon lights\",\"translate\":\"soft 霓虹灯\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(159, 32, 240, .4)\",\"isLoraTag\":false},{\"id\":\"token_60_1783060272283\",\"text\":\"ethereal atmosphere\",\"translate\":\"ethereal atmosphere\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_45_1783060272283\",\"text\":\"exquisite details\",\"translate\":\"exquisite details\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_61_1783060272283\",\"text\":\"magical atmosphere\",\"translate\":\"magical atmosphere\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_66_1783060272283\",\"text\":\"concept art\",\"translate\":\"concept art\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_44_1783060272283\",\"text\":\"highly detailed\",\"translate\":\"highly detailed\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_42_1783060272283\",\"text\":\"absurdres\",\"translate\":\"超高分辨率\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_43_1783060272283\",\"text\":\"32k UHD\",\"translate\":\"32k UHD\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_26_1783060772687\",\"text\":\"sharp focus\",\"translate\":\"sharp focus\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_38_1783060272283\",\"text\":\"best quality\",\"translate\":\"best quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_27_1783060772687\",\"text\":\"masterpiece\",\"translate\":\"masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_28_1783060772687\",\"text\":\"golden hour\",\"translate\":\"golden hour\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_29_1783060772687\",\"text\":\"unconventional supreme masterpiece\",\"translate\":\"unconventional supreme masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_30_1783060772687\",\"text\":\"exquisite details\",\"translate\":\"exquisite details\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_62_1783060272283\",\"text\":\"gentle atmosphere\",\"translate\":\"gentle atmosphere\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_31_1783060772687\",\"text\":\"with high-end texture\",\"translate\":\"with high-end texture\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_32_1783060772687\",\"text\":\"in the style of fashion photography\",\"translate\":\"in the style of 时尚 photography\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_33_1783060772687\",\"text\":\"magazine cover\",\"translate\":\"magazine 封面\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_34_1783060772687\",\"text\":\"dynamic angle\",\"translate\":\"dynamic angle\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_35_1783060772687\",\"text\":\"dynamic pose\",\"translate\":\"dynamic 姿势\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(241, 229, 140, .4)\",\"isLoraTag\":false},{\"id\":\"token_36_1783060772687\",\"text\":\"magazine cover\",\"translate\":\"magazine 封面\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_37_1783060772687\",\"text\":\"dynamic angle\",\"translate\":\"dynamic angle\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_38_1783060772687\",\"text\":\"dynamic pose\",\"translate\":\"dynamic 姿势\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(241, 229, 140, .4)\",\"isLoraTag\":false},{\"id\":\"token_39_1783060772687\",\"text\":\"(artist: quasarcake:0.8)\",\"translate\":\"quasarcake\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_46_1783060272283\",\"text\":\"extreme aesthetics\",\"translate\":\"extreme aesthetics\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_69_1783060272283\",\"text\":\"(wlop:0.6)\",\"translate\":\"(wlop\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_70_1783060272283\",\"text\":\"(honjou raita\",\"translate\":\"(honjou raita\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_71_1783060272283\",\"text\":\"lack\",\"translate\":\"lack\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_72_1783060272283\",\"text\":\"rella\",\"translate\":\"rella\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_73_1783060272283\",\"text\":\"wanke:0.5)\",\"translate\":\"wanke\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_40_1783060772687\",\"text\":\"masterpiece\",\"translate\":\"masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_74_1783060272283\",\"text\":\"best quality\",\"translate\":\"best quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_41_1783060772687\",\"text\":\"good quality\",\"translate\":\"good quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_40_1783060272283\",\"text\":\"latest\",\"translate\":\"latest\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_41_1783060272283\",\"text\":\"2024\",\"translate\":\"2024\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_42_1783060772687\",\"text\":\"2023\",\"translate\":\"2023年\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_43_1783060772687\",\"text\":\"very beautiful\",\"translate\":\"very beautiful\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_44_1783060772687\",\"text\":\"absurd\",\"translate\":\"absurd\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_45_1783060772687\",\"text\":\"visual impact\",\"translate\":\"visual impact\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_54_1783060272283\",\"text\":\"tense shot\",\"translate\":\"tense shot\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_77_1783060272283\",\"text\":\"absurdres\",\"translate\":\"超高分辨率\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_46_1783060772687\",\"text\":\"32k UHD\",\"translate\":\"32k UHD\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_47_1783060772687\",\"text\":\"sharp focus\",\"translate\":\"sharp focus\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_48_1783060772687\",\"text\":\"best quality\",\"translate\":\"best quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_49_1783060772687\",\"text\":\"masterpiece\",\"translate\":\"masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_63_1783060272283\",\"text\":\"emotional\",\"translate\":\"emotional\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_50_1783060772687\",\"text\":\"unconventional supreme masterpiece\",\"translate\":\"unconventional supreme masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_51_1783060772687\",\"text\":\"exquisite details\",\"translate\":\"exquisite details\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_52_1783060772687\",\"text\":\"gentle atmosphere\",\"translate\":\"gentle atmosphere\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_53_1783060772687\",\"text\":\"with high-end texture\",\"translate\":\"with high-end texture\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_54_1783060772687\",\"text\":\"in the style of fashion photography\",\"translate\":\"in the style of 时尚 photography\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_57_1783060272283\",\"text\":\"(visual impact:1.2)\",\"translate\":\"(visual impact\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_55_1783060772687\",\"text\":\"give the poster a dynamic and visually striking appearance\",\"translate\":\"give the poster a dynamic and visually striking appearance\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_56_1783060772687\",\"text\":\"influential image\",\"translate\":\"influential image\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_67_1783060272283\",\"text\":\"official art\",\"translate\":\"official art\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_58_1783060272283\",\"text\":\"colorful\",\"translate\":\"色彩斑斓的\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(0, 255, 255, .4)\",\"isLoraTag\":false},{\"id\":\"token_59_1783060272283\",\"text\":\"splashed colors\",\"translate\":\"splashed colors\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_57_1783060772687\",\"text\":\"cinematic perspective\",\"translate\":\"cinematic 透视\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_58_1783060772687\",\"text\":\"masterpiece\",\"translate\":\"masterpiece\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_59_1783060772687\",\"text\":\"best quality\",\"translate\":\"best quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_39_1783060272283\",\"text\":\"amazing quality\",\"translate\":\"amazing quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_60_1783060772687\",\"text\":\"very beautiful\",\"translate\":\"very beautiful\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_61_1783060772687\",\"text\":\"absurd\",\"translate\":\"absurd\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_62_1783060772687\",\"text\":\"best quality\",\"translate\":\"best quality\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_63_1783060772687\",\"text\":\"latest\",\"translate\":\"latest\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":null,\"isLoraTag\":false},{\"id\":\"token_49_1783060272283\",\"text\":\"glamor\",\"translate\":\"魅力\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_64_1783060772687\",\"text\":\"curvy\",\"translate\":\"魔鬼身材\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(255, 123, 2, .4)\",\"isLoraTag\":false},{\"id\":\"token_50_1783060272283\",\"text\":\"alternate_costume\",\"translate\":\"与原设不同衣服\",\"isPunctuation\":false,\"isEditing\":false,\"isHidden\":false,\"color\":\"rgba(230, 84, 128, .4)\",\"isLoraTag\":false}]",
+      "temp_lora_str": "",
+      "random_template": "",
+      "打开提示词编辑器": null,
+      "打开Lora堆": "",
+      "opt_clip": [
+        "114",
+        1
+      ],
+      "opt_model": [
+        "114",
+        0
+      ]
+    },
+    "class_type": "WeiLinPromptUI",
+    "_meta": {
+      "title": "WeiLin 全能提示词编辑器"
+    }
+  },
+  "114": {
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v170.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Checkpoint加载器（简易）"
+    }
+  },
+  "118": {
+    "inputs": {
+      "value": 1344
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "画高"
+    }
+  },
+  "119": {
+    "inputs": {
+      "value": 1024
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "画宽"
+    }
+  },
+  "120": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "批量次数"
+    }
+  }
+}

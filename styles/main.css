@@ -1,0 +1,369 @@
+/**
+ * ST DrawAssistant — 扩展样式
+ *
+ * 设计原则：
+ * 1. 全部颜色通过 --SmartTheme* CSS 变量，自动适配 ST 亮/暗色主题
+ * 2. 动画时长引用 --animation-duration，与 ST 全局动画节奏一致
+ * 3. da- 类名前缀，避免与 ST 核心样式冲突
+ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   1. 设置面板
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    font-family: var(--mainFontFamily, sans-serif);
+    font-size: var(--mainFontSize, 0.9rem);
+    color: var(--SmartThemeBodyColor);
+}
+
+.da-settings-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0 8px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    margin-bottom: 4px;
+}
+
+.da-settings-icon { font-size: 1.2em; }
+
+.da-settings-title {
+    margin: 0;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--SmartThemeTextColor);
+    flex: 1;
+}
+
+.da-settings-version {
+    font-size: 0.75em;
+    color: var(--SmartThemeTextColor);
+    opacity: 0.5;
+    background: var(--SmartThemeInputBg);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.da-section {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-section:last-child { border-bottom: none; }
+
+.da-section-title {
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--SmartThemeTextColor);
+    opacity: 0.6;
+    margin-bottom: 2px;
+}
+
+.da-section-footer { padding-top: 8px; }
+
+.da-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-field-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-label {
+    flex: 0 0 auto;
+    min-width: 90px;
+    font-size: 0.85em;
+    color: var(--SmartThemeBodyColor);
+}
+
+.da-input,
+.da-select,
+.da-textarea {
+    background: var(--SmartThemeInputBg);
+    color: var(--SmartThemeBodyColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: var(--mainFontFamily, sans-serif);
+    font-size: 0.85em;
+    transition: border-color var(--animation-duration, 0.2s) ease,
+                box-shadow var(--animation-duration, 0.2s) ease;
+    outline: none;
+}
+
+.da-input:focus,
+.da-select:focus,
+.da-textarea:focus {
+    border-color: var(--interactable-outline-color, #7289da);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactable-outline-color, #7289da) 25%, transparent);
+}
+
+.da-input { flex: 1; min-width: 0; }
+.da-input-narrow { width: 80px; flex: 0 0 auto; }
+.da-select { flex: 1; cursor: pointer; }
+.da-textarea { width: 100%; resize: vertical; min-height: 50px; box-sizing: border-box; }
+.da-unit { font-size: 0.8em; opacity: 0.6; flex: 0 0 auto; }
+
+.da-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--SmartThemeButtonBg);
+}
+
+.da-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    font-family: var(--mainFontFamily, sans-serif);
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: opacity var(--animation-duration, 0.2s) ease,
+                background var(--animation-duration, 0.2s) ease;
+}
+
+.da-btn:hover { opacity: 0.85; }
+.da-btn:active { opacity: 0.7; }
+
+.da-btn-secondary {
+    background: var(--SmartThemeInputBg);
+    color: var(--SmartThemeBodyColor);
+}
+
+.da-status-text { font-size: 0.8em; flex: 1; }
+.da-status-text.da-status-ok { color: #43b581; }
+.da-status-text.da-status-error { color: #f04747; }
+.da-status-text.da-status-checking { opacity: 0.6; }
+
+.da-hint { font-size: 0.75em; opacity: 0.55; line-height: 1.4; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   2. 楼层生图按钮（内联于消息文本中）
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 按钮外层容器（换行自适应块） */
+.da-floor-btn-wrapper {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0;
+    width: 100%;
+}
+
+/* 按钮专属图像 Slot（挂载在按钮下方） */
+.da-floor-btn-img-slot {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+}
+
+/* 主按钮 */
+.da-floor-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    font-family: var(--mainFontFamily, sans-serif);
+    font-size: 0.82em;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition:
+        background var(--animation-duration, 0.2s) ease,
+        border-color var(--animation-duration, 0.2s) ease,
+        transform var(--animation-duration, 0.15s) ease,
+        box-shadow var(--animation-duration, 0.2s) ease;
+    outline: none;
+    vertical-align: middle;
+}
+
+.da-floor-btn:active {
+    transform: scale(0.96);
+}
+
+/* ── 状态：默认 ── */
+.da-floor-btn--default {
+    background: var(--SmartThemeInputBg);
+    color: var(--SmartThemeBodyColor);
+    border-color: var(--SmartThemeBorderColor);
+}
+
+.da-floor-btn--default:hover {
+    background: color-mix(in srgb, var(--interactable-outline-color, #7289da) 15%, var(--SmartThemeInputBg));
+    border-color: var(--interactable-outline-color, #7289da);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactable-outline-color, #7289da) 15%, transparent);
+}
+
+/* ── 状态：提交中（防抖） ── */
+.da-floor-btn--loading {
+    background: var(--SmartThemeInputBg);
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.6;
+    cursor: not-allowed;
+    border-color: var(--SmartThemeBorderColor);
+}
+
+/* ── 状态：生成中（带进度，点击取消） ── */
+.da-floor-btn--progress {
+    background: color-mix(in srgb, #f0a500 18%, var(--SmartThemeInputBg));
+    color: var(--SmartThemeBodyColor);
+    border-color: #f0a500;
+    cursor: pointer;
+    animation: da-pulse 1.8s ease-in-out infinite;
+}
+
+.da-floor-btn--progress:hover {
+    background: color-mix(in srgb, #f04747 18%, var(--SmartThemeInputBg));
+    border-color: #f04747;
+}
+
+.da-floor-btn--progress:hover::before {
+    content: "点击取消 ";
+}
+
+/* ── 状态：完成 ── */
+.da-floor-btn--done {
+    background: color-mix(in srgb, #43b581 18%, var(--SmartThemeInputBg));
+    color: var(--SmartThemeBodyColor);
+    border-color: #43b581;
+}
+
+.da-floor-btn--done:hover {
+    background: color-mix(in srgb, #43b581 30%, var(--SmartThemeInputBg));
+}
+
+/* ── 状态：错误 ── */
+.da-floor-btn--error {
+    background: color-mix(in srgb, #f04747 18%, var(--SmartThemeInputBg));
+    color: var(--SmartThemeBodyColor);
+    border-color: #f04747;
+}
+
+.da-floor-btn--error:hover {
+    background: color-mix(in srgb, #f04747 30%, var(--SmartThemeInputBg));
+}
+
+/* 提示词预览文本（按钮右侧） */
+.da-floor-btn-prompt {
+    font-size: 0.76em;
+    opacity: 0.45;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    display: inline-block;
+    font-style: italic;
+}
+
+/* ── 脉冲动画（生成中） ── */
+@keyframes da-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.7; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   3. 图像容器与生成图像展示
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 图像容器（插入在 .mes_text 之后） */
+.da-image-container {
+    display: block;
+    margin-top: 10px;
+    max-width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* 生成完成的图像 */
+.da-generated-img {
+    display: block;
+    max-width: 100%;
+    max-height: 600px;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    cursor: zoom-in;
+    transition: opacity var(--animation-duration, 0.2s) ease,
+                transform var(--animation-duration, 0.25s) ease;
+    border: 1px solid var(--SmartThemeBorderColor);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.da-generated-img:hover {
+    transform: scale(1.01);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* 生成中的预览图（低质量，模糊处理） */
+.da-preview-img {
+    display: block;
+    max-width: 100%;
+    max-height: 400px;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    filter: blur(1px);
+    opacity: 0.8;
+    border: 1px dashed var(--SmartThemeBorderColor);
+    transition: opacity 0.3s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   4. Lightbox 全屏查看器
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    cursor: zoom-out;
+    backdrop-filter: blur(4px);
+    animation: da-fadein 0.15s ease;
+}
+
+.da-lightbox-inner {
+    max-width: 92vw;
+    max-height: 92vh;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.da-lightbox-inner img {
+    display: block;
+    max-width: 92vw;
+    max-height: 92vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+@keyframes da-fadein {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
