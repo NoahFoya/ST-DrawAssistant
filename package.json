@@ -1,6 +1,6 @@
 {
   "name": "st-drawassistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate context-aware images in SillyTavern chat using AI backends (ComfyUI, SD WebUI)",
   "main": "dist/index.js",
   "scripts": {

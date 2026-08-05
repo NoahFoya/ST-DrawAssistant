@@ -1,211 +1,138 @@
 /**
- * ComfyUI Workflow 注入工具
+ * @module drivers/comfyui-workflow
+ * @description ComfyUI Workflow 工作流变量解析与参数注入引擎
  *
  * 职责：
- * 1. 持有 Wai 工作流作为内置默认工作流
- * 2. 根据 WorkflowInjectionConfig 将生成参数注入到工作流节点
- * 3. 返回可直接 POST 到 /prompt 的 workflow 对象
+ * - 持有内置默认工作流模版
+ * - 深度搜索与解析 %prompt%, %width%, %height% 等占位符变量
+ * - 动态追加正负向 Prefix/Suffix 及 Lora 组合
+ * - 从 /history 响应结构中安全提取 SaveImage 输出节点结果
  *
- * 策略：直接修改已知节点 ID 的 inputs 字段，不依赖节点类型扫描。
- * 这样即使工作流含有自定义节点（如 WeiLinPromptUI），也能正确注入。
+ * 规范参考：
+ * - .agents/Skills/comfyui-api-reference/SKILL.md §4 (Workflow API JSON 结构规范)
  */
 
+
 import type { GenerateOptions } from './types';
-import type { WorkflowInjectionConfig } from '../settings/types';
+import { DEFAULT_WAI_WORKFLOW_JSON } from '../settings/defaults';
+import { logger } from '../core/logger';
 
 // ─── 工作流节点类型 ────────────────────────────────────────────────────────────
 
-export type WorkflowJson = Record<string, {
-    class_type: string;
+export interface WorkflowNode {
     inputs: Record<string, unknown>;
-    _meta?: { title?: string };
-}>;
+    class_type: string;
+    _meta?: Record<string, unknown>;
+}
 
-// ─── 内置 Wai 工作流 ─────────────────────────────────────────────────────────
-
-/**
- * 内置 Wai Illustrious SDXL 工作流
- * 节点结构：
- *   114 CheckpointLoaderSimple → 113 WeiLinPromptUI → 63 KSampler → 8 VAEDecode → 99 SaveImage
- *   12 CLIPTextEncode（负向）→ 63 KSampler.negative
- *   119/118/120 PrimitiveInt（宽/高/批量）→ 28 EmptyLatentImage → 63 KSampler.latent_image
- */
-const BUILTIN_WAI_WORKFLOW: WorkflowJson = {
-    "8": {
-        "inputs": { "samples": ["63", 0], "vae": ["114", 2] },
-        "class_type": "VAEDecode",
-        "_meta": { "title": "VAE解码" }
-    },
-    "12": {
-        "inputs": {
-            "text": "score_1, score_2, score_3, bad anatomy, bad proportions, deformed anatomy, deformed face, deformed eyes, text, multiple fingers, watermark, artist name",
-            "clip": ["113", 2]
-        },
-        "class_type": "CLIPTextEncode",
-        "_meta": { "title": "CLIP文本编码（负向）" }
-    },
-    "28": {
-        "inputs": {
-            "width": ["119", 0],
-            "height": ["118", 0],
-            "batch_size": ["120", 0]
-        },
-        "class_type": "EmptyLatentImage",
-        "_meta": { "title": "空Latent图像" }
-    },
-    "63": {
-        "inputs": {
-            "seed": 536474517963359,
-            "steps": 18,
-            "cfg": 6,
-            "sampler_name": "euler_ancestral",
-            "scheduler": "normal",
-            "denoise": 1,
-            "model": ["113", 3],
-            "positive": ["113", 1],
-            "negative": ["12", 0],
-            "latent_image": ["28", 0]
-        },
-        "class_type": "KSampler",
-        "_meta": { "title": "K采样器" }
-    },
-    "99": {
-        "inputs": { "filename_prefix": "ComfyUI", "images": ["8", 0] },
-        "class_type": "SaveImage",
-        "_meta": { "title": "保存图像" }
-    },
-    "113": {
-        "inputs": {
-            "positive": "masterpiece, best quality, 1girl",
-            "auto_random": false,
-            "lora_str": "",
-            "temp_str": "[]",
-            "temp_lora_str": "",
-            "opt_clip": ["114", 1],
-            "opt_model": ["114", 0]
-        },
-        "class_type": "WeiLinPromptUI",
-        "_meta": { "title": "WeiLin 全能提示词编辑器" }
-    },
-    "114": {
-        "inputs": { "ckpt_name": "waiIllustriousSDXL_v170.safetensors" },
-        "class_type": "CheckpointLoaderSimple",
-        "_meta": { "title": "Checkpoint加载器（简易）" }
-    },
-    "118": {
-        "inputs": { "value": 1344 },
-        "class_type": "PrimitiveInt",
-        "_meta": { "title": "画高" }
-    },
-    "119": {
-        "inputs": { "value": 1024 },
-        "class_type": "PrimitiveInt",
-        "_meta": { "title": "画宽" }
-    },
-    "120": {
-        "inputs": { "value": 1 },
-        "class_type": "PrimitiveInt",
-        "_meta": { "title": "批量次数" }
-    }
-};
+export type WorkflowJson = Record<string, WorkflowNode>;
 
 // ─── 工作流加载 ───────────────────────────────────────────────────────────────
 
 /**
  * 获取工作流 JSON 对象
  * - 若 workflowJsonStr 非空，解析用户自定义工作流
- * - 否则使用内置 Wai 工作流（深拷贝，避免直接修改原对象）
+ * - 否则使用内置 Wai 工作流
  *
  * @param workflowJsonStr 用户在设置面板中粘贴的工作流 JSON 字符串
  */
 export function loadWorkflow(workflowJsonStr: string): WorkflowJson {
-    if (workflowJsonStr.trim()) {
-        try {
-            return JSON.parse(workflowJsonStr) as WorkflowJson;
-        } catch {
-            console.warn('[ST-DrawAssistant] Failed to parse custom workflow JSON, falling back to builtin');
-        }
+    const rawJson = workflowJsonStr && workflowJsonStr.trim() ? workflowJsonStr : DEFAULT_WAI_WORKFLOW_JSON;
+    try {
+        return JSON.parse(rawJson) as WorkflowJson;
+    } catch (err) {
+        logger.error('致命错误: 工作流 JSON 解析失败!', err);
+        throw new Error(`工作流 JSON 语法错误: ${err instanceof Error ? err.message : String(err)}`);
     }
-    // 深拷贝内置工作流，确保每次生图独立
-    return JSON.parse(JSON.stringify(BUILTIN_WAI_WORKFLOW)) as WorkflowJson;
 }
 
-// ─── 参数注入 ─────────────────────────────────────────────────────────────────
-
 /**
- * 将生成参数注入到工作流节点
+ * 使用正则与类型解析将工作流 JSON 字符串中的 %xxx% 变量替换为实际运行参数
+ * 提示词正负向按五段式 / 三段式精准顺序拼接后注入工作流
  *
- * @param workflow 工作流对象（将被原地修改）
- * @param options 生成参数
- * @param injection 注入点配置
- * @param promptPrefix 全局正向提示词前缀
- * @param negativePrefix 全局负向提示词
- * @returns 注入后的工作流对象（同一引用，已原地修改）
+ * @param workflowJsonStr 用户定义的 ComfyUI API 格式工作流 JSON 字符串
+ * @param options 生图运行参数 (含 prompt, negativePrompt, width, height, steps, cfgScale, seed 等)
+ * @param promptPrefix 正向前缀提示词
+ * @param negativePrefix 负向提示词
+ * @param checkpointPosPrefix 模型专用正向提示词 (归属于模型预设)
+ * @param checkpointNegPrefix 模型专用负向提示词 (归属于模型预设)
+ * @param promptSuffix 正向后缀提示词 (含格式化追加的 Lora 标签)
+ * @returns 完成参数注入可直接提交至 /prompt 的工作流 JSON 对象
  */
-export function injectParams(
-    workflow: WorkflowJson,
+export function substituteWorkflowVariables(
+    workflowJsonStr: string,
     options: GenerateOptions,
-    injection: WorkflowInjectionConfig,
     promptPrefix: string,
-    negativePrefix: string
+    negativePrefix: string,
+    checkpointPosPrefix: string = '',
+    checkpointNegPrefix: string = '',
+    promptSuffix: string = ''
 ): WorkflowJson {
-    // 组合最终正向提示词：全局前缀 + AI 生成提示词
-    const finalPositive = [promptPrefix, options.prompt]
+    const rawJson = workflowJsonStr && workflowJsonStr.trim() ? workflowJsonStr : DEFAULT_WAI_WORKFLOW_JSON;
+
+    // 组合最终正向与负向提示词
+    const finalPositive = [checkpointPosPrefix, promptPrefix, options.prompt, promptSuffix]
+        .map(s => (s ?? '').trim())
         .filter(Boolean)
         .join(', ');
 
-    // 组合最终负向提示词：设置中的默认值 + 可选的额外负向提示词
     const finalNegative = [
+        checkpointNegPrefix,
         negativePrefix,
         options.negativePrompt ?? '',
-    ].filter(Boolean).join(', ');
+    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
 
-    // ── 注入正向提示词 ────────────────────────────────────────────────────────
-    const posNode = workflow[injection.positiveNodeId];
-    if (posNode) {
-        posNode.inputs[injection.positiveField] = finalPositive;
-    } else {
-        console.warn(`[ST-DrawAssistant] 正向提示词节点 "${injection.positiveNodeId}" 不存在于工作流中`);
+    const seed = (options.seed !== undefined && options.seed >= 0)
+        ? options.seed
+        : Math.floor(Math.random() * 1000000000000000);
+
+    const stringVarMap: Record<string, string> = {
+        '%prompt%': finalPositive,
+        '%negative_prompt%': finalNegative,
+        '%ckpt_name%': options.ckptName || '',
+        '%clip_name%': options.clipName || '',
+        '%vae_name%': options.vaeName || '',
+        '%sampler_name%': options.samplerName || 'euler_ancestral',
+        '%scheduler%': options.scheduler || 'normal',
+    };
+
+    const numVarMap: Record<string, number> = {
+        '%width%': options.width,
+        '%height%': options.height,
+        '%steps%': options.steps,
+        '%cfg%': options.cfgScale,
+        '%seed%': seed,
+        '%denoise%': options.denoise ?? 1.0,
+    };
+
+    let processed = rawJson;
+
+    // 1. 替换数值变量（处理带引号与不带引号情况，确保符合 JSON 语法）
+    //    数值变量的替换内容为纯数字字符串，不含 $ 等特殊字符，直接替换安全。
+    for (const [key, numVal] of Object.entries(numVarMap)) {
+        const quotedKeyRegex = new RegExp(`"\\${key}"`, 'g');
+        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        const numStr = String(numVal);
+        processed = processed.replace(quotedKeyRegex, numStr);
+        processed = processed.replace(rawKeyRegex, numStr);
     }
 
-    // ── 注入负向提示词 ────────────────────────────────────────────────────────
-    const negNode = workflow[injection.negativeNodeId];
-    if (negNode) {
-        negNode.inputs[injection.negativeField] = finalNegative;
-    } else {
-        console.warn(`[ST-DrawAssistant] 负向提示词节点 "${injection.negativeNodeId}" 不存在于工作流中`);
+    // 2. 替换字符串变量（使用函数形式 replacement 防止用户输入的 $ 被误解释）
+    //    String.replace(regex, string) 中 $1/$&/$' 等有特殊语义（MDN 确认）。
+    //    用户提示词前缀可能含 LoRA 语法 <lora:name_$1:0.8> 或货币符号 $100，
+    //    必须使用函数形式 replace(regex, () => str) 才能将返回值视为纯字面量。
+    for (const [key, strVal] of Object.entries(stringVarMap)) {
+        const escapedStr = JSON.stringify(strVal).slice(1, -1);
+        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        processed = processed.replace(rawKeyRegex, () => escapedStr);
     }
 
-    // ── 注入宽度 ──────────────────────────────────────────────────────────────
-    const widthNode = workflow[injection.widthNodeId];
-    if (widthNode) {
-        widthNode.inputs[injection.widthField] = options.width;
+    try {
+        return JSON.parse(processed) as WorkflowJson;
+    } catch (err) {
+        logger.error('变量替换后 JSON 解析失败:', { err, processed });
+        throw new Error(`工作流变量解析错误: ${err instanceof Error ? err.message : String(err)}`);
     }
-
-    // ── 注入高度 ──────────────────────────────────────────────────────────────
-    const heightNode = workflow[injection.heightNodeId];
-    if (heightNode) {
-        heightNode.inputs[injection.heightField] = options.height;
-    }
-
-    // ── 注入 KSampler 参数 ────────────────────────────────────────────────────
-    const samplerNode = workflow[injection.kSamplerNodeId];
-    if (samplerNode) {
-        // 使用随机种子（若 options.seed 为 -1 或未提供）
-        samplerNode.inputs['seed'] = (options.seed !== undefined && options.seed >= 0)
-            ? options.seed
-            : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
-        samplerNode.inputs['steps'] = options.steps;
-        samplerNode.inputs['cfg'] = options.cfgScale;
-        samplerNode.inputs['sampler_name'] = options.samplerName;
-        if ('scheduler' in options && options.scheduler) {
-            samplerNode.inputs['scheduler'] = options.scheduler;
-        }
-    } else {
-        console.warn(`[ST-DrawAssistant] KSampler 节点 "${injection.kSamplerNodeId}" 不存在于工作流中`);
-    }
-
-    return workflow;
 }
 
 // ─── 输出图像提取 ─────────────────────────────────────────────────────────────

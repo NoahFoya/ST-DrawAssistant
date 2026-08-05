@@ -15,6 +15,12 @@ export interface GenerateOptions {
     prompt: string;
     /** 负向提示词 */
     negativePrompt?: string;
+    /** 模型名称 (Checkpoint / UNet / Diffusion Model) */
+    ckptName?: string;
+    /** CLIP 模型名称 */
+    clipName?: string;
+    /** VAE 模型名称 */
+    vaeName?: string;
     /** 图像宽度（像素） */
     width: number;
     /** 图像高度（像素） */
@@ -29,6 +35,8 @@ export interface GenerateOptions {
     scheduler?: string;
     /** 随机种子（-1 表示随机） */
     seed?: number;
+    /** 重噪系数 (0.0 - 1.0) */
+    denoise?: number;
     /** 后端特有的扩展参数（透传给驱动，不做类型约束） */
     extra?: Record<string, unknown>;
 }
@@ -119,6 +127,16 @@ export interface ImageDriver {
      * 用于设置面板动态填充下拉选项
      */
     getSamplers(): Promise<string[]>;
+    /** 获取后端支持的调度器列表 */
+    getSchedulers?(): Promise<string[]>;
+    /** 获取后端所有可用模型列表 (Checkpoint + UNet + Diffusion Model) */
+    getModels?(): Promise<string[]>;
+    /** 获取后端所有可用 CLIP 模型列表 */
+    getClips?(): Promise<string[]>;
+    /** 获取后端所有可用 VAE 模型列表 */
+    getVaes?(): Promise<string[]>;
+    /** 获取后端所有可用 Lora 模型列表 */
+    getLoras?(): Promise<string[]>;
 }
 /** 驱动错误类型枚举 */
 export declare enum DriverErrorType {

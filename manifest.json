@@ -1,11 +1,11 @@
 {
-    "display_name": "ST DrawAssistant",
+    "display_name": "Starlight DrawAssistant",
     "name": "ST-DrawAssistant",
     "js": "dist/index.js",
     "css": "styles/main.css",
-    "author": "ST-DrawAssistant Contributors",
-    "version": "0.1.0",
+    "author": "NoahFoya with AICode",
+    "version": "0.2.0",
     "description": "Generate context-aware images in SillyTavern chat using AI backends (ComfyUI, SD WebUI)",
     "loading_order": 10,
-    "homePage": "https://github.com/your-username/ST-DrawAssistant"
+    "homePage": "https://github.com/NoahFoya/ST-DrawAssistant"
 }

@@ -1,0 +1,1 @@
+{"version":3,"file":"image-cropper-modal.d.ts","sourceRoot":"","sources":["../../../src/ui/components/image-cropper-modal.ts"],"names":[],"mappings":"AAAA;;;;;;;;;GASG;AAIH,MAAM,WAAW,cAAc;IAC3B,QAAQ,EAAE,MAAM,CAAC;IACjB,SAAS,EAAE,CAAC,aAAa,EAAE,MAAM,KAAK,IAAI,CAAC;IAC3C,QAAQ,CAAC,EAAE,MAAM,IAAI,CAAC;CACzB;AAED;;GAEG;AACH,wBAAgB,qBAAqB,CAAC,OAAO,EAAE,cAAc,GAAG,IAAI,CAkMnE"}

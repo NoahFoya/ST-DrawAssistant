@@ -1,0 +1,78 @@
+{
+  "8": {
+    "inputs": { "samples": ["63", 0], "vae": ["114", 2] },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE解码" }
+  },
+  "12": {
+    "inputs": {
+      "text": "%negative_prompt%",
+      "clip": ["113", 2]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP文本编码（负向）" }
+  },
+  "28": {
+    "inputs": {
+      "width": ["119", 0],
+      "height": ["118", 0],
+      "batch_size": ["120", 0]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "空Latent图像" }
+  },
+  "63": {
+    "inputs": {
+      "seed": "%seed%",
+      "steps": "%steps%",
+      "cfg": "%cfg%",
+      "sampler_name": "%sampler_name%",
+      "scheduler": "%scheduler%",
+      "denoise": "%denoise%",
+      "model": ["113", 3],
+      "positive": ["113", 1],
+      "negative": ["12", 0],
+      "latent_image": ["28", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": { "title": "K采样器" }
+  },
+  "99": {
+    "inputs": { "filename_prefix": "ComfyUI", "images": ["8", 0] },
+    "class_type": "SaveImage",
+    "_meta": { "title": "保存图像" }
+  },
+  "113": {
+    "inputs": {
+      "positive": "%prompt%",
+      "auto_random": false,
+      "lora_str": "",
+      "temp_str": "[]",
+      "temp_lora_str": "",
+      "opt_clip": ["114", 1],
+      "opt_model": ["114", 0]
+    },
+    "class_type": "WeiLinPromptUI",
+    "_meta": { "title": "WeiLin 全能提示词编辑器" }
+  },
+  "114": {
+    "inputs": { "ckpt_name": "%ckpt_name%" },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Checkpoint加载器（简易）" }
+  },
+  "118": {
+    "inputs": { "value": "%height%" },
+    "class_type": "PrimitiveInt",
+    "_meta": { "title": "画高" }
+  },
+  "119": {
+    "inputs": { "value": "%width%" },
+    "class_type": "PrimitiveInt",
+    "_meta": { "title": "画宽" }
+  },
+  "120": {
+    "inputs": { "value": 1 },
+    "class_type": "PrimitiveInt",
+    "_meta": { "title": "批量次数" }
+  }
+}

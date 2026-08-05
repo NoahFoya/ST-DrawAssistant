@@ -1,5 +1,6 @@
 /**
- * 楼层生图按钮控制器
+ * @module ui/floor-button
+ * @description 楼层生图按钮控制器
  *
  * 职责：
  * 1. 扫描 AI 消息文本，识别 `image###提示词###` 占位符
@@ -12,14 +13,28 @@
  *   默认结束：###
  *   示例：image###1girl, cityscape, night###
  *
- * 参考：.agents/Skills/st-image-generation-patterns/SKILL.md §5
+ * 规范参考：
+ * - .agents/Skills/st-image-generation-patterns/SKILL.md §5 (楼层按钮交互模式与生命周期)
  */
+
 
 import { TaskManager } from '../task/manager';
 import type { ImageDriver } from '../drivers/types';
 import type { DrawAssistantSettings } from '../settings/types';
 import { renderImageToMessage, renderPreviewToMessage, clearPreview } from './image-renderer';
 import { getContext } from '../core/context';
+import { saveImageToDB, getImageFromDB } from '../storage/image-db';
+import { logger } from '../core/logger';
+
+import { escapeHtmlAttr } from '../utils/html';
+
+interface SavedImageMeta {
+    uuid?: string;
+    base64?: string;
+    mime?: string;
+    prompt?: string;
+    timestamp?: number;
+}
 
 // ─── 按钮状态 ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +50,7 @@ interface FloorButtonContext {
     messageElement: HTMLElement;
     messageIndex: number;
     buttonIndex: number;
+    cleanupTaskListeners?: () => void;
 }
 
 const BUTTON_LABELS: Record<ButtonState, string> = {
@@ -65,7 +81,7 @@ export function injectFloorButtons(
 ): void {
     const mesTextEl = messageElement.querySelector<HTMLElement>('.mes_text');
     if (!mesTextEl) {
-        console.debug(`[draw-assistant] injectFloorButtons[${messageIndex}]: .mes_text not found`, messageElement);
+        logger.debug(`injectFloorButtons[${messageIndex}]: .mes_text not found`, messageElement);
         return;
     }
 
@@ -86,7 +102,7 @@ export function injectFloorButtons(
     pattern.lastIndex = 0;
 
     // 调试：打印前 200 字符
-    console.debug(`[draw-assistant] injectFloorButtons[${messageIndex}]: scanning, pattern=${pattern.source}, html preview=${originalHtml.slice(0, 200).replace(/\n/g, '\\n')}`);
+    logger.debug(`injectFloorButtons[${messageIndex}]: scanning, pattern=${pattern.source}, html preview=${originalHtml.slice(0, 200).replace(/\n/g, '\\n')}`);
 
     let hasMatch = false;
     let matchIndex = 0;
@@ -96,7 +112,7 @@ export function injectFloorButtons(
         // 清理 prompt 中可能的 HTML 标签（如 markdown 解析留下的 <br> 或 <p>）
         const cleanPrompt = capturedPrompt.replace(/<[^>]+>/g, ' ').trim();
         const btnId = `da-floor-btn-${messageIndex}-${matchIndex++}`;
-        console.debug(`[draw-assistant] injectFloorButtons[${messageIndex}]: match found! prompt="${cleanPrompt.slice(0, 60)}"`);
+        logger.debug(`injectFloorButtons[${messageIndex}]: match found! prompt="${cleanPrompt.slice(0, 60)}"`);
         return `<span class="da-floor-btn-placeholder" id="${btnId}" data-prompt="${escapeHtmlAttr(cleanPrompt)}"></span>`;
     });
 
@@ -106,11 +122,12 @@ export function injectFloorButtons(
 
     // 更新 DOM
     mesTextEl.innerHTML = newHtml;
-    messageElement.setAttribute('data-da-injected', 'true');
+
+
 
     // 为每个占位符创建实际按钮
     const placeholders = mesTextEl.querySelectorAll<HTMLElement>('.da-floor-btn-placeholder');
-    console.debug(`[draw-assistant] injectFloorButtons[${messageIndex}]: replacing ${placeholders.length} placeholder(s) with button(s)`);
+    logger.debug(`injectFloorButtons[${messageIndex}]: replacing ${placeholders.length} placeholder(s) with button(s)`);
     placeholders.forEach((placeholder, idx) => {
         const promptText = placeholder.getAttribute('data-prompt') ?? '';
         const ctx = createButton(placeholder, promptText, messageElement, messageIndex, idx);
@@ -128,8 +145,8 @@ function createButton(
     messageIndex: number,
     buttonIndex: number
 ): FloorButtonContext {
-    // 创建按钮外层包装
-    const wrapperEl = document.createElement('span');
+    // 创建按钮外层包装（改为 div block 元素，确保图片独占一行）
+    const wrapperEl = document.createElement('div');
     wrapperEl.className = 'da-floor-btn-wrapper';
 
     // 创建按钮
@@ -144,7 +161,7 @@ function createButton(
     promptPreview.textContent = truncateText(promptText, 40);
     promptPreview.title = promptText;
 
-    // 创建该按钮专属的图像挂载 Slot
+    // 创建该按钮专属的图像挂载 Slot（width:100% 确保换行独占）
     const imageSlot = document.createElement('div');
     imageSlot.className = 'da-floor-btn-img-slot';
 
@@ -170,32 +187,65 @@ function createButton(
     return ctx;
 }
 
-/** 尝试从聊天记录恢复历史生成的图像 */
-function restoreSavedImage(ctx: FloorButtonContext): void {
+/** 尝试从 IndexedDB (及旧 extra 结构) 恢复历史生成的图像 */
+async function restoreSavedImage(ctx: FloorButtonContext): Promise<void> {
     try {
         const stCtx = getContext();
         const msg = stCtx.chat?.[ctx.messageIndex];
-        const swipeId = msg?.swipe_id ?? (msg?.extra?.swipe_id as number | undefined) ?? 0;
+        if (!msg) return;
 
-        const daImagesRoot = msg?.extra?.da_images as Record<string | number, unknown> | undefined;
+        const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
+        const daImagesRoot = msg.extra?.da_images as Record<string | number, unknown> | undefined;
         if (!daImagesRoot) return;
 
-        let savedImg: { base64: string; mime?: string } | undefined;
+        let savedMeta: SavedImageMeta | undefined;
 
         if (daImagesRoot[swipeId] && typeof daImagesRoot[swipeId] === 'object') {
-            const swipeImages = daImagesRoot[swipeId] as Record<number, { base64: string; mime?: string }>;
-            savedImg = swipeImages[ctx.buttonIndex];
-        } else if (daImagesRoot[ctx.buttonIndex] && (daImagesRoot[ctx.buttonIndex] as { base64?: string }).base64) {
+            const swipeImages = daImagesRoot[swipeId] as Record<number, SavedImageMeta>;
+            savedMeta = swipeImages[ctx.buttonIndex];
+        } else if (daImagesRoot[ctx.buttonIndex]) {
             // 兼容回退旧格式
-            savedImg = daImagesRoot[ctx.buttonIndex] as { base64: string; mime?: string };
+            savedMeta = daImagesRoot[ctx.buttonIndex] as SavedImageMeta;
         }
 
-        if (savedImg && savedImg.base64) {
-            renderImageToMessage(ctx.imageSlot, savedImg.base64, savedImg.mime || 'image/png');
+        if (!savedMeta) return;
+
+        let imageDataStr: string | null = null;
+        let mime = savedMeta.mime || 'image/png';
+
+        // 1. 新规范：从 IndexedDB 按 UUID 获取图像
+        if (savedMeta.uuid) {
+            const record = await getImageFromDB(savedMeta.uuid);
+            if (record) {
+                imageDataStr = record.data;
+                mime = record.mime || mime;
+            }
+        }
+        // 2. 旧数据平滑无缝迁移：若读到存量 Base64，自动存入 IndexedDB 并把 chat.json 中的 Base64 擦除
+        else if (savedMeta.base64) {
+            imageDataStr = savedMeta.base64;
+            const newUuid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                ? crypto.randomUUID()
+                : `migrated_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+            await saveImageToDB(newUuid, savedMeta.base64, mime, savedMeta.prompt || ctx.promptText);
+
+            // 清除巨型 Base64，仅留 uuid 引用
+            delete savedMeta.base64;
+            savedMeta.uuid = newUuid;
+
+            const saveFn = stCtx.saveChatConditional ?? (window as unknown as { saveChatConditional?: () => void }).saveChatConditional;
+            if (typeof saveFn === 'function') {
+                saveFn();
+            }
+        }
+
+        if (imageDataStr) {
+            renderImageToMessage(ctx.imageSlot, imageDataStr, mime);
             setButtonState(ctx, 'done');
         }
     } catch (err) {
-        console.warn('[ST-DrawAssistant] 恢复历史图像失败:', err);
+        logger.warn('恢复历史图像失败', err);
     }
 }
 
@@ -213,12 +263,14 @@ function bindButtonEvents(
 
         if (ctx.state === 'progress' && ctx.currentTaskId) {
             // 点击进行中的按钮 → 取消
+            logger.warn(`用户点击取消生图任务: messageIndex=${ctx.messageIndex}, taskId=${ctx.currentTaskId}`);
             taskManager.cancelWithDriver(ctx.currentTaskId, driver);
             setButtonState(ctx, 'default');
             return;
         }
 
         // 开始生图
+        logger.info(`用户触发楼层生图: messageIndex=${ctx.messageIndex}, prompt="${ctx.promptText.slice(0, 50)}..."`);
         setButtonState(ctx, 'loading');
 
         try {
@@ -227,7 +279,24 @@ function bindButtonEvents(
             ctx.currentTaskId = taskId;
             setButtonState(ctx, 'progress');
 
-            // 订阅任务事件
+            // 若之前已有残留监听器，优先触发安全清理
+            if (ctx.cleanupTaskListeners) {
+                ctx.cleanupTaskListeners();
+                ctx.cleanupTaskListeners = undefined;
+            }
+
+            // 订阅任务事件与注册清理例程
+            const cleanup = () => {
+                taskManager.off('progress', onProgress);
+                taskManager.off('complete', onComplete);
+                taskManager.off('error', onError);
+                taskManager.off('cancelled', onCancelled);
+                if (ctx.cleanupTaskListeners === cleanup) {
+                    ctx.cleanupTaskListeners = undefined;
+                }
+            };
+            ctx.cleanupTaskListeners = cleanup;
+
             const onProgress = (tid: string, percent: number, msg?: string, previewUrl?: string) => {
                 if (tid !== taskId) return;
                 updateProgress(ctx, percent, msg);
@@ -238,41 +307,35 @@ function bindButtonEvents(
 
             const onComplete = (tid: string, result: import('../drivers/types').GenerateResult) => {
                 if (tid !== taskId) return;
-                taskManager.off('progress', onProgress);
-                taskManager.off('complete', onComplete);
-                taskManager.off('error', onError);
-                taskManager.off('cancelled', onCancelled);
+                cleanup();
 
+                logger.info(`楼层生图任务完成: messageIndex=${ctx.messageIndex}, taskId=${taskId}`);
                 clearPreview(ctx.imageSlot);
                 renderImageToMessage(ctx.imageSlot, result.imageData, result.mimeType);
                 setButtonState(ctx, 'done');
                 ctx.currentTaskId = null;
 
-                // 持久化保存图像到聊天记录 extra 字段
-                persistImageToChat(ctx, result.imageData, result.mimeType);
+                // 持久化保存图像到聊天记录 extra 字段（若已启用）
+                void persistImageToChat(ctx, result.imageData, result.mimeType, settings);
             };
 
             const onError = (tid: string, error: Error) => {
                 if (tid !== taskId) return;
-                taskManager.off('progress', onProgress);
-                taskManager.off('complete', onComplete);
-                taskManager.off('error', onError);
-                taskManager.off('cancelled', onCancelled);
+                cleanup();
 
+                logger.error(`楼层生图任务失败: messageIndex=${ctx.messageIndex}, taskId=${taskId}`, error);
                 clearPreview(ctx.imageSlot);
                 setButtonState(ctx, 'error');
                 ctx.buttonEl.title = `错误：${error.message}`;
                 ctx.currentTaskId = null;
 
-                console.error('[ST-DrawAssistant] 生图错误:', error);
+                logger.error('楼层生图触发渲染错误', error);
+                showToastError(error.message);
             };
 
             const onCancelled = (tid: string) => {
                 if (tid !== taskId) return;
-                taskManager.off('progress', onProgress);
-                taskManager.off('complete', onComplete);
-                taskManager.off('error', onError);
-                taskManager.off('cancelled', onCancelled);
+                cleanup();
 
                 clearPreview(ctx.imageSlot);
                 setButtonState(ctx, 'default');
@@ -285,44 +348,162 @@ function bindButtonEvents(
             taskManager.on('cancelled', onCancelled);
 
         } catch (err) {
-            console.error('[ST-DrawAssistant] 提交任务失败:', err);
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            logger.error('提交楼层生图任务失败', err);
             setButtonState(ctx, 'error');
             ctx.currentTaskId = null;
+            showToastError(errorMsg);
         }
     });
 }
 
-/** 持久化保存图片到 ST 聊天记录 extra (支持 swipe_id 分隔离区) */
-function persistImageToChat(ctx: FloorButtonContext, imageData: string, mimeType: string): void {
+/** 辅助函数：显示 ST 全局 Toast 错误弹窗 */
+function showToastError(message: string): void {
+    const win = window as unknown as { toastr?: { error: (msg: string, title?: string) => void } };
+    if (win.toastr && typeof win.toastr.error === 'function') {
+        win.toastr.error(message, '绘画助手 生图失败');
+    }
+}
+
+/** 辅助转码工具：根据设置转码图片 */
+async function compressImageData(
+    imageData: string,
+    mimeType: string,
+    format?: 'original' | 'webp' | 'jpeg',
+    quality: number = 0.85
+): Promise<{ data: string; mime: string }> {
+    if (!format || format === 'original') {
+        return { data: imageData, mime: mimeType };
+    }
+    const targetMime = format === 'webp' ? 'image/webp' : 'image/jpeg';
+    if (mimeType === targetMime) {
+        return { data: imageData, mime: mimeType };
+    }
+    try {
+        return await new Promise((resolve) => {
+            const img = new Image();
+            const src = imageData.startsWith('data:') ? imageData : `data:${mimeType};base64,${imageData}`;
+
+            // 5 秒加载超时保底，规避转码异步挂起
+            const timer = setTimeout(() => {
+                logger.warn('图片转码加载超时，降级回退原始格式');
+                cleanup();
+                resolve({ data: imageData, mime: mimeType });
+            }, 5000);
+
+            const cleanup = () => {
+                clearTimeout(timer);
+                img.onload = null;
+                img.onerror = null;
+            };
+
+            img.onload = () => {
+                cleanup();
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, img.width);
+                    canvas.height = Math.max(1, img.height);
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0);
+                        const dataUrl = canvas.toDataURL(targetMime, quality);
+                        const base64 = dataUrl.split(',')[1] || imageData;
+                        resolve({ data: base64, mime: targetMime });
+                        return;
+                    }
+                } catch (e) {
+                    logger.warn('Canvas 绘制转码图片异常，降级回退原始格式', e);
+                }
+                resolve({ data: imageData, mime: mimeType });
+            };
+
+            img.onerror = (err) => {
+                cleanup();
+                logger.warn('加载转码图片源失败', err);
+                resolve({ data: imageData, mime: mimeType });
+            };
+
+            img.src = src;
+        });
+    } catch (err) {
+        logger.warn('压缩图像降级回退原始格式', err);
+        return { data: imageData, mime: mimeType };
+    }
+}
+
+/** 持久化保存图片：检查 persistToChat 阻断与 imageStorageMode 分流 */
+async function persistImageToChat(
+    ctx: FloorButtonContext,
+    rawImageData: string,
+    rawMimeType: string,
+    settings: DrawAssistantSettings
+): Promise<void> {
+    if (!settings.persistToChat) return;
+
     try {
         const stCtx = getContext();
         const msg = stCtx.chat?.[ctx.messageIndex];
-        if (msg) {
-            const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
-            const extra = { ...(msg.extra ?? {}) };
-            const daImagesRoot = { ...(extra.da_images as Record<string | number, unknown> ?? {}) };
-            
-            const swipeImages = { ...(daImagesRoot[swipeId] as Record<number, unknown> ?? {}) };
-            swipeImages[ctx.buttonIndex] = {
-                base64: imageData,
-                mime: mimeType,
-                prompt: ctx.promptText,
-                timestamp: Date.now(),
-            };
+        if (!msg) return;
 
-            daImagesRoot[swipeId] = swipeImages;
-            extra.da_images = daImagesRoot;
-            msg.extra = extra; // 刷新对象引用，触发 ST 标记
+        // 转码为选定格式 (PNG / WebP / JPEG)
+        const { data: imageData, mime: mimeType } = await compressImageData(
+            rawImageData,
+            rawMimeType,
+            settings.imageFormat,
+            settings.imageQuality
+        );
 
-            const saveFn = stCtx.saveChatConditional ?? window.saveChatConditional ?? (window as unknown as Record<string, () => void>)['saveChat'];
-            if (typeof saveFn === 'function') {
-                saveFn();
-            } else {
-                console.warn('[ST-DrawAssistant] saveChatConditional / saveChat 函数不可用');
-            }
+        // 1. 始终存入 IndexedDB（独立高效且防止聊天记录膨胀）
+        const uuid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        const params = buildGenerateParams(ctx.promptText, settings);
+        const fullPositivePrompt = params.prompt;
+        const fullNegativePrompt = params.negativePrompt;
+
+        const metadata = {
+            provider: settings.provider ?? 'comfyui',
+            ckptName: settings.ckptName,
+            samplerName: settings.samplerName,
+            steps: settings.steps,
+            cfgScale: settings.cfgScale,
+            width: settings.width,
+            height: settings.height,
+            negativePrompt: fullNegativePrompt,
+        };
+
+        await saveImageToDB(uuid, imageData, mimeType, fullPositivePrompt, metadata);
+
+        // 2. msg.extra.da_images 中保存 UUID 引用（以及可选的额外 Base64 副本）
+        const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
+        const extra = { ...(msg.extra ?? {}) };
+        const daImagesRoot = { ...(extra.da_images as Record<string | number, unknown> ?? {}) };
+        const swipeImages = { ...(daImagesRoot[swipeId] as Record<number, unknown> ?? {}) };
+
+        const imageEntry: Record<string, unknown> = {
+            uuid,
+            mime: mimeType,
+            prompt: fullPositivePrompt,
+            timestamp: Date.now(),
+        };
+
+        if (settings.extraSaveToChat) {
+            imageEntry.base64 = imageData;
+        }
+
+        swipeImages[ctx.buttonIndex] = imageEntry;
+
+        daImagesRoot[swipeId] = swipeImages;
+        extra.da_images = daImagesRoot;
+        msg.extra = extra;
+
+        const saveFn = stCtx.saveChatConditional ?? (window as unknown as { saveChatConditional?: () => void }).saveChatConditional;
+        if (typeof saveFn === 'function') {
+            saveFn();
         }
     } catch (err) {
-        console.warn('[ST-DrawAssistant] 无法持久化图片到聊天记录:', err);
+        logger.warn('持久化图片引用到聊天记录失败（若 saveImageToDB 已成功，图像数据在 IndexedDB 中仍存在，但 chat 引用丢失，下次会话可能无法通过 UUID 恢复图像）', err);
     }
 }
 
@@ -358,9 +539,39 @@ function buildGenerateParams(
     promptText: string,
     settings: DrawAssistantSettings
 ): import('../drivers/types').GenerateOptions {
+    let positive = promptText;
+    let negativeFromPrompt = '';
+
+    if (promptText.includes('|')) {
+        const parts = promptText.split('|');
+        positive = parts[0].trim();
+        negativeFromPrompt = parts.slice(1).join('|').trim();
+    }
+
+    const loraSuffix = (settings.loras && settings.loras.length > 0)
+        ? settings.loras.filter(l => l.name).map(l => `<lora:${l.name}:${l.weight}>`).join(', ')
+        : '';
+
+    const fullPositive = [
+        settings.checkpointPositivePrefix,
+        settings.promptPrefix,
+        positive,
+        settings.promptSuffix,
+        loraSuffix
+    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
+
+    const fullNegative = [
+        settings.checkpointNegativePrefix,
+        settings.negativePrefix,
+        negativeFromPrompt
+    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
+
     return {
-        prompt: promptText,
-        negativePrompt: settings.negativePrefix,
+        prompt: fullPositive,
+        negativePrompt: fullNegative,
+        ckptName: settings.ckptName,
+        clipName: settings.clipName,
+        vaeName: settings.vaeName,
         width: settings.width,
         height: settings.height,
         steps: settings.steps,
@@ -384,10 +595,6 @@ function buildPlaceholderRegex(start: string, end: string): RegExp {
     const startPattern = escapeRegex(start).replace(/#/g, '(?:#|&#35;|&num;)');
     const endPattern = escapeRegex(end).replace(/#/g, '(?:#|&#35;|&num;)');
     return new RegExp(`${startPattern}([\\s\\S]*?)${endPattern}`, 'gi');
-}
-
-function escapeHtmlAttr(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function truncateText(text: string, maxLen: number): string {
