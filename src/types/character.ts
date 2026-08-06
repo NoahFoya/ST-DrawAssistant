@@ -170,6 +170,8 @@ export interface MacroRuleNode {
      * 子分支节点列表 (限制最多 2 层深度；若拥有 children 则为路由节点，不能包含 variables)
      */
     children?: MacroRuleNode[];
+    /** UI 界面节点折叠/展开状态 */
+    isExpanded?: boolean;
 }
 
 /**

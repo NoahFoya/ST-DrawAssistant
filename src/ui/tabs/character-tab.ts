@@ -2629,7 +2629,7 @@ function renderMacroRulesPane(): HTMLElement {
     cardPreview.appendChild(prevResultBox);
     root.appendChild(cardPreview);
 
-    // ── 2 层树节点通用递推渲染器 ───────────────────────────────────────────────
+    // ── 2 层树节点通用递推折叠渲染器 ───────────────────────────────────────────
     const render2LevelNodeTree = (
         nodes: MacroRuleNode[],
         branchVarOptions: Array<{ key: string; label: string }>,
@@ -2641,125 +2641,233 @@ function renderMacroRulesPane(): HTMLElement {
         listContainer.style.gap = '8px';
 
         nodes.forEach((node, idx) => {
+            if (node.isExpanded === undefined) {
+                node.isExpanded = depth === 0; // Level 1 默认展开，Level 2 默认折叠
+            }
+
+            const isRouteNode = Array.isArray(node.children) && node.children.length > 0;
+
             const nodeEl = document.createElement('div');
-            nodeEl.style.background = 'rgba(255, 255, 255, 0.02)';
+            nodeEl.style.background = depth === 0 ? 'rgba(255, 255, 255, 0.025)' : 'rgba(0, 0, 0, 0.15)';
             nodeEl.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
             nodeEl.style.borderRadius = '6px';
             nodeEl.style.padding = '10px 12px';
             nodeEl.style.marginLeft = `${depth * 20}px`;
-            nodeEl.style.borderLeft = depth > 0 ? '3px dashed var(--da-primary-color, #a855f7)' : '2px solid var(--da-primary-color, #a855f7)';
+            nodeEl.style.borderLeft = depth > 0 ? '3px dashed var(--da-primary-color, #a855f7)' : '3px solid var(--da-primary-color, #a855f7)';
+            nodeEl.style.transition = 'all 0.2s ease';
 
-            const row1 = document.createElement('div');
-            row1.style.display = 'flex';
-            row1.style.justifyContent = 'space-between';
-            row1.style.alignItems = 'center';
-            row1.style.gap = '10px';
+            // ── 行 1：标题与字段主控行 (横向流式紧凑) ─────────────────────────────
+            const mainRow = document.createElement('div');
+            mainRow.style.display = 'flex';
+            mainRow.style.alignItems = 'center';
+            mainRow.style.justifyContent = 'space-between';
+            mainRow.style.flexWrap = 'wrap';
+            mainRow.style.gap = '10px';
+
+            const leftFields = document.createElement('div');
+            leftFields.style.display = 'flex';
+            leftFields.style.alignItems = 'center';
+            leftFields.style.flexWrap = 'wrap';
+            leftFields.style.gap = '12px';
+
+            // 层级图标与徽章
+            const badge = document.createElement('span');
+            badge.className = 'da-badge secondary';
+            badge.style.fontSize = '0.78em';
+            badge.style.padding = '2px 6px';
+            badge.style.borderRadius = '4px';
+            badge.style.background = depth === 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.08)';
+            badge.style.color = depth === 0 ? 'var(--da-primary-color, #c084fc)' : '#ccc';
+            badge.textContent = depth === 0 ? (isRouteNode ? '📍 L1 路由' : '🌿 L1 分支') : '🍃 L2 叶子';
+            leftFields.appendChild(badge);
+
+            // 字段 1：名称
+            const nameBox = document.createElement('div');
+            nameBox.style.display = 'inline-flex';
+            nameBox.style.alignItems = 'center';
+            nameBox.style.gap = '6px';
+            nameBox.style.fontSize = '0.85em';
+
+            const nameLbl = document.createElement('span');
+            nameLbl.style.opacity = '0.8';
+            nameLbl.style.whiteSpace = 'nowrap';
+            nameLbl.textContent = isRouteNode ? '路由名称:' : '分支名称:';
 
             const nameInput = document.createElement('input');
             nameInput.type = 'text';
             nameInput.className = 'da-input';
-            nameInput.style.fontSize = '0.85em';
-            nameInput.style.width = '140px';
-            nameInput.value = node.name;
-            nameInput.placeholder = depth === 0 ? 'L1 分支名' : 'L2 子分支名';
+            nameInput.style.fontSize = '0.88em';
+            nameInput.style.width = '130px';
+            nameInput.style.padding = '3px 8px';
+            nameInput.value = node.name || '';
+            nameInput.placeholder = '分支名称';
             nameInput.addEventListener('change', () => {
                 node.name = nameInput.value;
                 updateLivePreview();
             });
 
+            nameBox.appendChild(nameLbl);
+            nameBox.appendChild(nameInput);
+            leftFields.appendChild(nameBox);
+
+            // 字段 2：匹配标识符
+            const patternBox = document.createElement('div');
+            patternBox.style.display = 'inline-flex';
+            patternBox.style.alignItems = 'center';
+            patternBox.style.gap = '6px';
+            patternBox.style.fontSize = '0.85em';
+
+            const patternLbl = document.createElement('span');
+            patternLbl.style.opacity = '0.8';
+            patternLbl.style.whiteSpace = 'nowrap';
+            patternLbl.textContent = '匹配标识符:';
+
             const patternInput = document.createElement('input');
             patternInput.type = 'text';
             patternInput.className = 'da-input';
-            patternInput.style.fontSize = '0.85em';
+            patternInput.style.fontSize = '0.88em';
             patternInput.style.width = '140px';
+            patternInput.style.padding = '3px 8px';
             patternInput.style.fontFamily = 'monospace';
-            patternInput.value = node.pattern;
-            patternInput.placeholder = depth === 0 ? '匹配词 -from_behind' : '匹配词 -sfw-upperbody';
+            patternInput.value = node.pattern || '';
+            patternInput.placeholder = depth === 0 ? '-from_behind' : '-sfw-upperbody';
             patternInput.addEventListener('change', () => {
                 node.pattern = patternInput.value;
                 updateLivePreview();
             });
 
-            const nodeActions = document.createElement('div');
-            nodeActions.style.display = 'flex';
-            nodeActions.style.gap = '6px';
+            patternBox.appendChild(patternLbl);
+            patternBox.appendChild(patternInput);
+            leftFields.appendChild(patternBox);
 
-            // 约束 1：最多 2 层 (depth 为 0 时可添加 L2 子分支)
+            // 折叠摘要显示信息 (当收起时提示子节点/变量数量)
+            if (!node.isExpanded) {
+                const summaryInfo = document.createElement('span');
+                summaryInfo.style.fontSize = '0.8em';
+                summaryInfo.style.opacity = '0.6';
+                summaryInfo.style.fontStyle = 'italic';
+                if (isRouteNode) {
+                    summaryInfo.textContent = `(${node.children?.length || 0} 个子分支)`;
+                } else {
+                    summaryInfo.textContent = `(${node.variables?.length || 0} 个触发变量)`;
+                }
+                leftFields.appendChild(summaryInfo);
+            }
+
+            // 右侧按钮工具栏
+            const rightActions = document.createElement('div');
+            rightActions.style.display = 'flex';
+            rightActions.style.alignItems = 'center';
+            rightActions.style.gap = '6px';
+
+            // 1. 折叠 / 展开 按钮
+            const toggleBtn = createIconButton(
+                node.isExpanded ? '<i class="fa-solid fa-chevron-up"></i> 收起' : '<i class="fa-solid fa-chevron-down"></i> 展开',
+                node.isExpanded ? '折叠收起详情' : '展开查看详情',
+                () => {
+                    node.isExpanded = !node.isExpanded;
+                    refreshAll();
+                }
+            );
+            toggleBtn.style.fontSize = '0.8em';
+            toggleBtn.style.padding = '3px 8px';
+
+            // 2. 添加 L2 子分支按钮 (仅在 depth === 0 时允许)
             if (depth === 0) {
-                const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加 L2 子分支 (转为路由分支)', () => {
+                const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i> 子分支', '添加 L2 子分支 (转为路由分支)', () => {
                     node.children = node.children || [];
                     node.children.push({
                         id: `node-sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                         name: 'L2 子分支',
                         pattern: '--sub-pattern',
                         enabled: true,
-                        variables: ['facialFeatures', 'upperBodySFW']
+                        variables: ['facialFeatures', 'upperBodySFW'],
+                        isExpanded: true
                     });
-                    // 约束 3：互斥约束! 拥有 children 时，自动清除当前节点的 variables
-                    delete node.variables;
+                    delete node.variables; // 拥有 children 时清除 variables 保证互斥
+                    node.isExpanded = true;
                     refreshAll();
                 });
-                nodeActions.appendChild(addChildBtn);
+                addChildBtn.style.fontSize = '0.8em';
+                addChildBtn.style.padding = '3px 8px';
+                rightActions.appendChild(addChildBtn);
             }
 
+            // 3. 删除按钮
             const delBtn = createIconButton('<i class="fa-solid fa-trash"></i>', '删除此分支', () => {
                 nodes.splice(idx, 1);
                 refreshAll();
             }, true);
 
-            nodeActions.appendChild(delBtn);
+            rightActions.appendChild(toggleBtn);
+            rightActions.appendChild(delBtn);
 
-            row1.appendChild(nameInput);
-            row1.appendChild(patternInput);
-            row1.appendChild(nodeActions);
-            nodeEl.appendChild(row1);
+            mainRow.appendChild(leftFields);
+            mainRow.appendChild(rightActions);
+            nodeEl.appendChild(mainRow);
 
-            // 约束 3：互斥展示! 有 children 展子分支，无 children 展叶子节点【变量列表类 LoRA 选择器】
-            if (Array.isArray(node.children) && node.children.length > 0) {
-                const childContainer = render2LevelNodeTree(node.children, branchVarOptions, depth + 1);
-                childContainer.style.marginTop = '8px';
-                nodeEl.appendChild(childContainer);
-            } else {
-                const varBox = document.createElement('div');
-                varBox.style.marginTop = '8px';
-                varBox.style.padding = '8px';
-                varBox.style.background = 'rgba(0,0,0,0.15)';
-                varBox.style.borderRadius = '4px';
-                varBox.style.display = 'flex';
-                varBox.style.flexDirection = 'column';
-                varBox.style.gap = '6px';
+            // ── 行 2：展开后的详情区块 (包含子分支或类 LoRA 胶囊变量选择器) ───────────────────
+            if (node.isExpanded) {
+                if (isRouteNode) {
+                    // 路由分支 -> 展递推子节点容器
+                    const childBox = document.createElement('div');
+                    childBox.style.marginTop = '10px';
+                    childBox.style.paddingTop = '10px';
+                    childBox.style.borderTop = '1px dashed var(--da-border-color, rgba(255,255,255,0.08))';
 
-                const varTitle = document.createElement('div');
-                varTitle.style.fontWeight = 'bold';
-                varTitle.style.opacity = '0.75';
-                varTitle.style.fontSize = '0.8em';
-                varTitle.textContent = '🍃 命中此分支时包含的变量列表:';
-                varBox.appendChild(varTitle);
+                    const childContainer = render2LevelNodeTree(node.children!, branchVarOptions, depth + 1);
+                    childBox.appendChild(childContainer);
+                    nodeEl.appendChild(childBox);
+                } else {
+                    // 叶子节点 -> 展变量列表与胶囊添加器
+                    const varDetailBox = document.createElement('div');
+                    varDetailBox.style.marginTop = '10px';
+                    varDetailBox.style.padding = '8px 10px';
+                    varDetailBox.style.background = 'rgba(0,0,0,0.2)';
+                    varDetailBox.style.borderRadius = '6px';
+                    varDetailBox.style.display = 'flex';
+                    varDetailBox.style.flexDirection = 'column';
+                    varDetailBox.style.gap = '6px';
 
-                const currentVars = node.variables || [];
-                const pillSelector = renderPillListSelector(
-                    currentVars,
-                    branchVarOptions,
-                    (updatedVars) => {
-                        node.variables = updatedVars;
-                        updateLivePreview();
-                    },
-                    '+ 添加匹配变量'
-                );
+                    const varHeader = document.createElement('div');
+                    varHeader.style.display = 'flex';
+                    varHeader.style.alignItems = 'center';
+                    varHeader.style.gap = '6px';
 
-                // 若包含 customTag，提供输入框
-                if (currentVars.includes('customTag')) {
-                    const customTagInputGroup = createTextInput('自定义 Tag 文本:', 'node-custom-tag-input', node.customTag || '');
-                    customTagInputGroup.input.style.fontSize = '0.85em';
-                    customTagInputGroup.input.addEventListener('change', () => {
-                        node.customTag = customTagInputGroup.input.value;
-                        updateLivePreview();
-                    });
-                    varBox.appendChild(customTagInputGroup.wrapper);
+                    const varTitle = document.createElement('span');
+                    varTitle.style.fontWeight = 'bold';
+                    varTitle.style.opacity = '0.85';
+                    varTitle.style.fontSize = '0.82em';
+                    varTitle.style.color = 'var(--da-primary-color, #c084fc)';
+                    varTitle.textContent = '🍃 触发变量列表 (命中该分支时绑定的变量标签):';
+                    varHeader.appendChild(varTitle);
+                    varDetailBox.appendChild(varHeader);
+
+                    const currentVars = node.variables || [];
+                    const pillSelector = renderPillListSelector(
+                        currentVars,
+                        branchVarOptions,
+                        (updatedVars) => {
+                            node.variables = updatedVars;
+                            updateLivePreview();
+                        },
+                        '+ 添加匹配变量'
+                    );
+
+                    // 若包含 customTag，提供输入框
+                    if (currentVars.includes('customTag')) {
+                        const customTagInputGroup = createTextInput('自定义 Tag 文本:', 'node-custom-tag-input', node.customTag || '');
+                        customTagInputGroup.input.style.fontSize = '0.85em';
+                        customTagInputGroup.input.addEventListener('change', () => {
+                            node.customTag = customTagInputGroup.input.value;
+                            updateLivePreview();
+                        });
+                        varDetailBox.appendChild(customTagInputGroup.wrapper);
+                    }
+
+                    varDetailBox.appendChild(pillSelector);
+                    nodeEl.appendChild(varDetailBox);
                 }
-
-                varBox.appendChild(pillSelector);
-                nodeEl.appendChild(varBox);
             }
 
             listContainer.appendChild(nodeEl);
