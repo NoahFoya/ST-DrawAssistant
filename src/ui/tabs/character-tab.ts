@@ -2101,7 +2101,7 @@ function renderPillListSelector(
 }
 
 /**
- * 渲染子界面 5：动态提示词匹配与替换规则内容 (角色/服装纵向平铺)
+ * 渲染子界面 5：动态提示词匹配与替换规则内容 (规范化 UI + 独立实时预览)
  */
 function renderMacroRulesPane(): HTMLElement {
     const root = document.createElement('div');
@@ -2110,213 +2110,230 @@ function renderMacroRulesPane(): HTMLElement {
     root.style.gap = '16px';
 
     let activeScheme: MacroTreeScheme = getActiveMacroTreeScheme();
+    let currentBlock: 'character' | 'outfit' = 'character';
 
-    // 文件导入 hidden input
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.json';
-    fileInput.style.display = 'none';
-    root.appendChild(fileInput);
+    // Hidden input for file import
+    const hiddenFileInput = document.createElement('input');
+    hiddenFileInput.type = 'file';
+    hiddenFileInput.accept = '.json';
+    hiddenFileInput.style.display = 'none';
+    root.appendChild(hiddenFileInput);
 
-    // ── 1. 方案管理工具栏 (Scheme Management Toolbar) ───────────────────────────
-    const cardToolbar = document.createElement('div');
-    cardToolbar.className = 'da-section-card';
-    cardToolbar.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    cardToolbar.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    cardToolbar.style.borderRadius = '8px';
-    cardToolbar.style.padding = '14px 16px';
+    // ── 区块 A：匹配方案管理区 (深度对齐注入模板方案管理栏风格) ──────────────────────
+    const sectionA = document.createElement('div');
+    sectionA.className = 'da-section-card';
 
-    const renderToolbar = () => {
-        cardToolbar.innerHTML = '';
+    const headerA = document.createElement('div');
+    headerA.className = 'da-section-header';
+    headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-diagram-project"></i> 动态提示词匹配方案管理</span>';
+    sectionA.appendChild(headerA);
 
-        const barRow = document.createElement('div');
-        barRow.style.display = 'flex';
-        barRow.style.justifyContent = 'space-between';
-        barRow.style.alignItems = 'center';
-        barRow.style.flexWrap = 'wrap';
-        barRow.style.gap = '10px';
+    const controlsRow = document.createElement('div');
+    controlsRow.style.display = 'flex';
+    controlsRow.style.gap = '8px';
+    controlsRow.style.alignItems = 'center';
+    controlsRow.style.flexWrap = 'wrap';
 
-        const leftBox = document.createElement('div');
-        leftBox.style.display = 'flex';
-        leftBox.style.alignItems = 'center';
-        leftBox.style.gap = '10px';
+    const selectEl = document.createElement('select');
+    selectEl.id = 'macro_tree_scheme_preset_id';
+    selectEl.className = 'da-select';
+    selectEl.style.flex = '1';
+    selectEl.style.minWidth = '180px';
 
-        const barTitle = document.createElement('span');
-        barTitle.style.fontWeight = 'bold';
-        barTitle.style.color = 'var(--da-primary-color, #a855f7)';
-        barTitle.style.fontSize = '0.95em';
-        barTitle.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 动态提示词匹配方案:';
-
-        const schemeSelect = document.createElement('select');
-        schemeSelect.className = 'da-select';
-        schemeSelect.style.fontSize = '0.85em';
-        schemeSelect.style.minWidth = '180px';
-
-        const allSchemes = getMacroTreeSchemes();
-        schemeSelect.innerHTML = allSchemes.map(s =>
-            `<option value="${s.id}" ${s.id === activeScheme.id ? 'selected' : ''}>${s.name}${s.isDefault ? ' (默认)' : ''}</option>`
-        ).join('');
-
-        schemeSelect.addEventListener('change', () => {
-            setActiveMacroTreeSchemeId(schemeSelect.value);
-            activeScheme = getActiveMacroTreeScheme();
-            refreshAll();
+    const refreshSchemeSelect = () => {
+        const list = getMacroTreeSchemes();
+        selectEl.innerHTML = '';
+        list.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = `${s.name}${s.isDefault ? ' (默认)' : ''}`;
+            selectEl.appendChild(opt);
         });
-
-        leftBox.appendChild(barTitle);
-        leftBox.appendChild(schemeSelect);
-
-        const rightBtns = document.createElement('div');
-        rightBtns.style.display = 'flex';
-        rightBtns.style.gap = '6px';
-        rightBtns.style.flexWrap = 'wrap';
-
-        // 新建方案
-        const newBtn = document.createElement('button');
-        newBtn.className = 'da-btn secondary';
-        newBtn.style.fontSize = '0.82em';
-        newBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 新建方案';
-        newBtn.addEventListener('click', () => {
-            const name = prompt('请输入新匹配方案名称:', '自定义匹配方案');
-            if (name && name.trim()) {
-                const newScheme: MacroTreeScheme = {
-                    ...JSON.parse(JSON.stringify(DEFAULT_MACRO_TREE_SCHEME)),
-                    id: `macro-scheme-${Date.now()}`,
-                    name: name.trim(),
-                    isDefault: false
-                };
-                saveMacroTreeScheme(newScheme);
-                activeScheme = newScheme;
-                refreshAll();
-            }
-        });
-
-        // 复制方案
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'da-btn secondary';
-        copyBtn.style.fontSize = '0.82em';
-        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> 复制';
-        copyBtn.addEventListener('click', () => {
-            const copyScheme: MacroTreeScheme = {
-                ...JSON.parse(JSON.stringify(activeScheme)),
-                id: `macro-scheme-${Date.now()}`,
-                name: `${activeScheme.name} (副本)`,
-                isDefault: false
-            };
-            saveMacroTreeScheme(copyScheme);
-            activeScheme = copyScheme;
-            refreshAll();
-        });
-
-        // 导入方案
-        const importBtn = document.createElement('button');
-        importBtn.className = 'da-btn secondary';
-        importBtn.style.fontSize = '0.82em';
-        importBtn.innerHTML = '<i class="fa-solid fa-file-import"></i> 导入';
-        importBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // 导出方案
-        const exportBtn = document.createElement('button');
-        exportBtn.className = 'da-btn secondary';
-        exportBtn.style.fontSize = '0.82em';
-        exportBtn.innerHTML = '<i class="fa-solid fa-file-export"></i> 导出';
-        exportBtn.addEventListener('click', () => {
-            const jsonStr = exportMacroTreeScheme(activeScheme.id);
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `macro-scheme-${activeScheme.name}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        });
-
-        // 恢复默认预设
-        const resetBtn = document.createElement('button');
-        resetBtn.className = 'da-btn secondary';
-        resetBtn.style.fontSize = '0.82em';
-        resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 恢复预设';
-        resetBtn.addEventListener('click', () => {
-            if (confirm('确定要将当前匹配方案重置为 Wai/Standard 默认预设吗？')) {
-                activeScheme = resetMacroTreeScheme();
-                refreshAll();
-            }
-        });
-
-        // 保存方案
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'da-btn primary';
-        saveBtn.style.fontSize = '0.82em';
-        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存方案';
-        saveBtn.addEventListener('click', () => {
-            saveMacroTreeScheme(activeScheme);
-            updateLivePreview();
-            const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
-            if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
-                winToastr.toastr.success('匹配替换规则方案保存成功！', '绘画助手');
-            }
-        });
-
-        // 删除方案
-        const delBtn = document.createElement('button');
-        delBtn.className = 'da-btn secondary';
-        delBtn.style.fontSize = '0.82em';
-        delBtn.style.color = '#ef4444';
-        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i> 删除';
-        if (activeScheme.isDefault) {
-            delBtn.disabled = true;
-            delBtn.style.opacity = '0.4';
-            delBtn.title = '默认预设方案不能删除';
-        } else {
-            delBtn.addEventListener('click', () => {
-                if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
-                    deleteMacroTreeScheme(activeScheme.id);
-                    activeScheme = getActiveMacroTreeScheme();
-                    refreshAll();
-                }
-            });
+        if (list.some(s => s.id === activeScheme.id)) {
+            selectEl.value = activeScheme.id;
+        } else if (list[0]) {
+            activeScheme = list[0];
+            selectEl.value = activeScheme.id;
         }
-
-        rightBtns.appendChild(newBtn);
-        rightBtns.appendChild(copyBtn);
-        rightBtns.appendChild(importBtn);
-        rightBtns.appendChild(exportBtn);
-        rightBtns.appendChild(resetBtn);
-        rightBtns.appendChild(saveBtn);
-        rightBtns.appendChild(delBtn);
-
-        barRow.appendChild(leftBox);
-        barRow.appendChild(rightBtns);
-        cardToolbar.appendChild(barRow);
     };
 
-    fileInput.addEventListener('change', (e) => {
-        const target = e.target as HTMLInputElement;
-        if (target.files && target.files[0]) {
-            const file = target.files[0];
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                try {
-                    const content = evt.target?.result as string;
-                    activeScheme = importMacroTreeScheme(content);
-                    refreshAll();
-                    const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
-                    if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
-                        winToastr.toastr.success(`方案“${activeScheme.name}”导入成功！`, '绘画助手');
-                    }
-                } catch (err) {
-                    alert(`导入失败：${(err as Error).message}`);
-                }
+    refreshSchemeSelect();
+
+    selectEl.addEventListener('change', () => {
+        setActiveMacroTreeSchemeId(selectEl.value);
+        activeScheme = getActiveMacroTreeScheme();
+        refreshAll();
+    });
+
+    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建匹配方案', () => {
+        const name = prompt('请输入新匹配方案名称:', '自定义匹配方案');
+        if (name && name.trim()) {
+            const newScheme: MacroTreeScheme = {
+                ...JSON.parse(JSON.stringify(DEFAULT_MACRO_TREE_SCHEME)),
+                id: `macro-scheme-${Date.now()}`,
+                name: name.trim(),
+                isDefault: false
             };
-            reader.readAsText(file);
+            saveMacroTreeScheme(newScheme);
+            activeScheme = newScheme;
+            refreshSchemeSelect();
+            refreshAll();
         }
     });
 
-    root.appendChild(cardToolbar);
+    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前匹配方案', () => {
+        saveMacroTreeScheme(activeScheme);
+        updateCharPreview();
+        updateOutfitPreview();
+        const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+        if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+            winToastr.toastr.success('匹配方案保存成功！', '绘画助手');
+        }
+    });
 
-    // ── 可选固定变量注册表 (只含实体标准属性，无 customTag) ─────────────────────
+    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新方案', () => {
+        const newName = prompt('另存为新方案名称:', `${activeScheme.name}_副本`);
+        if (!newName || !newName.trim()) return;
+        const copyScheme: MacroTreeScheme = {
+            ...JSON.parse(JSON.stringify(activeScheme)),
+            id: `macro-scheme-${Date.now()}`,
+            name: newName.trim(),
+            isDefault: false
+        };
+        saveMacroTreeScheme(copyScheme);
+        activeScheme = copyScheme;
+        refreshSchemeSelect();
+        refreshAll();
+    });
+
+    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
+        if (activeScheme.isDefault) {
+            alert('ℹ️ 默认预设方案不可重命名');
+            return;
+        }
+        const newName = prompt('重命名方案名称:', activeScheme.name);
+        if (newName && newName.trim()) {
+            activeScheme.name = newName.trim();
+            saveMacroTreeScheme(activeScheme);
+            refreshSchemeSelect();
+        }
+    });
+
+    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出方案 JSON', () => {
+        const jsonStr = exportMacroTreeScheme(activeScheme.id);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `macro-scheme-${activeScheme.name}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入方案 JSON', () => {
+        hiddenFileInput.click();
+    });
+
+    hiddenFileInput.addEventListener('change', () => {
+        const file = hiddenFileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const content = evt.target?.result as string;
+                activeScheme = importMacroTreeScheme(content);
+                refreshSchemeSelect();
+                refreshAll();
+                const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+                if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+                    winToastr.toastr.success(`方案“${activeScheme.name}”导入成功！`, '绘画助手');
+                }
+            } catch (err) {
+                alert(`导入失败：${(err as Error).message}`);
+            }
+            hiddenFileInput.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    const btnReset = createIconButton('<i class="fa-solid fa-rotate-left"></i>', '恢复默认预设', () => {
+        if (confirm('确定要恢复为 Wai/Standard 默认预设方案吗？')) {
+            activeScheme = resetMacroTreeScheme();
+            refreshSchemeSelect();
+            refreshAll();
+        }
+    });
+
+    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
+        if (activeScheme.isDefault) {
+            alert('⚠️ 默认预设方案不可删除');
+            return;
+        }
+        if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
+            deleteMacroTreeScheme(activeScheme.id);
+            activeScheme = getActiveMacroTreeScheme();
+            refreshSchemeSelect();
+            refreshAll();
+        }
+    }, true);
+
+    controlsRow.appendChild(selectEl);
+    controlsRow.appendChild(btnNew);
+    controlsRow.appendChild(btnSave);
+    controlsRow.appendChild(btnSaveAs);
+    controlsRow.appendChild(btnRename);
+    controlsRow.appendChild(btnExport);
+    controlsRow.appendChild(btnImport);
+    controlsRow.appendChild(btnReset);
+    controlsRow.appendChild(btnDelete);
+
+    sectionA.appendChild(controlsRow);
+    root.appendChild(sectionA);
+
+    // ── 区块 B：页面切换 Nav Pills ──────────────────────────────────────────────
+    const sectionNav = document.createElement('div');
+    sectionNav.style.display = 'flex';
+    sectionNav.style.gap = '8px';
+
+    const charTabBtn = document.createElement('button');
+    charTabBtn.className = 'da-btn primary';
+    charTabBtn.style.fontSize = '0.88em';
+    charTabBtn.innerHTML = '<i class="fa-solid fa-user"></i> 👤 角色提示词匹配规则';
+
+    const outfitTabBtn = document.createElement('button');
+    outfitTabBtn.className = 'da-btn secondary';
+    outfitTabBtn.style.fontSize = '0.88em';
+    outfitTabBtn.innerHTML = '<i class="fa-solid fa-shirt"></i> 👗 服装提示词匹配规则';
+
+    const updateNavState = () => {
+        if (currentBlock === 'character') {
+            charTabBtn.className = 'da-btn primary';
+            outfitTabBtn.className = 'da-btn secondary';
+            charBlockContainer.style.display = 'flex';
+            outfitBlockContainer.style.display = 'none';
+        } else {
+            charTabBtn.className = 'da-btn secondary';
+            outfitTabBtn.className = 'da-btn primary';
+            charBlockContainer.style.display = 'none';
+            outfitBlockContainer.style.display = 'flex';
+        }
+    };
+
+    charTabBtn.addEventListener('click', () => {
+        currentBlock = 'character';
+        updateNavState();
+    });
+
+    outfitTabBtn.addEventListener('click', () => {
+        currentBlock = 'outfit';
+        updateNavState();
+    });
+
+    sectionNav.appendChild(charTabBtn);
+    sectionNav.appendChild(outfitTabBtn);
+    root.appendChild(sectionNav);
+
+    // ── 变量选项注册表 ────────────────────────────────────────────────────────
     const charFixedOptions = [
         { key: 'nameEN', label: '角色英文名 (nameEN)' },
         { key: 'characterTraits', label: '角色特征 (characterTraits)' },
@@ -2328,7 +2345,6 @@ function renderMacroRulesPane(): HTMLElement {
         { key: 'nameCN', label: '服装中文名 (nameCN)' }
     ];
 
-    // ── 可选条件变量注册表 (叶子节点勾选，可含 customTag) ──────────────────────
     const charBranchOptions = [
         { key: 'nameEN', label: '英文名 (nameEN)' },
         { key: 'characterTraits', label: '角色特征 (characterTraits)' },
@@ -2353,13 +2369,47 @@ function renderMacroRulesPane(): HTMLElement {
         { key: 'customTag', label: '自定义 Tag 字符串' }
     ];
 
-    // ── 2. 区块 A：角色提示词匹配规则 (纵向平铺) ─────────────────────────────
+    // ── 1. 角色规则容器 Block (包含角色独立预览 + 规则树) ─────────────────────
+    const charBlockContainer = document.createElement('div');
+    charBlockContainer.style.display = 'flex';
+    charBlockContainer.style.flexDirection = 'column';
+    charBlockContainer.style.gap = '16px';
+
+    // 1.1 角色匹配替换测试预览卡片 (置于角色规则最上方)
+    const charPreviewCard = document.createElement('div');
+    charPreviewCard.className = 'da-section-card';
+
+    const charPrevHeader = document.createElement('div');
+    charPrevHeader.className = 'da-section-header';
+    charPrevHeader.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-eye"></i> ⚡ 角色匹配替换测试预览</span>';
+    charPreviewCard.appendChild(charPrevHeader);
+
+    const charPrevInputGroup = createTextInput('测试角色 Prompt:', 'macro-char-debug-input', '1girl, $rikka_takarada_(ssss.gridman)-from_front-sfw-upperbody$, standing, daylight');
+    
+    const charPrevResultBox = document.createElement('div');
+    charPrevResultBox.style.marginTop = '8px';
+    charPrevResultBox.style.padding = '10px';
+    charPrevResultBox.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.3))';
+    charPrevResultBox.style.borderRadius = '6px';
+    charPrevResultBox.style.fontSize = '0.85em';
+    charPrevResultBox.style.fontFamily = 'monospace';
+    charPrevResultBox.style.wordBreak = 'break-all';
+
+    const updateCharPreview = () => {
+        saveMacroTreeScheme(activeScheme);
+        const testInput = charPrevInputGroup.input.value;
+        const rendered = processCharacterPrompt(testInput);
+        charPrevResultBox.textContent = rendered || '(标记未匹配，已擦除替换为 0 字符空字符串)';
+    };
+
+    charPrevInputGroup.input.addEventListener('input', updateCharPreview);
+    charPreviewCard.appendChild(charPrevInputGroup.wrapper);
+    charPreviewCard.appendChild(charPrevResultBox);
+    charBlockContainer.appendChild(charPreviewCard);
+
+    // 1.2 角色规则配置 Card
     const charBlockCard = document.createElement('div');
     charBlockCard.className = 'da-section-card';
-    charBlockCard.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    charBlockCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    charBlockCard.style.borderRadius = '8px';
-    charBlockCard.style.padding = '16px';
     charBlockCard.style.display = 'flex';
     charBlockCard.style.flexDirection = 'column';
     charBlockCard.style.gap = '14px';
@@ -2367,17 +2417,7 @@ function renderMacroRulesPane(): HTMLElement {
     const renderCharBlock = () => {
         charBlockCard.innerHTML = '';
 
-        const charHeaderRow = document.createElement('div');
-        charHeaderRow.style.display = 'flex';
-        charHeaderRow.style.alignItems = 'center';
-        charHeaderRow.style.gap = '8px';
-        charHeaderRow.style.color = 'var(--da-primary-color, #c084fc)';
-        charHeaderRow.style.fontWeight = 'bold';
-        charHeaderRow.style.fontSize = '0.95em';
-        charHeaderRow.innerHTML = '<i class="fa-solid fa-user"></i> 角色提示词匹配规则';
-        charBlockCard.appendChild(charHeaderRow);
-
-        // 2.1 角色固定匹配内容
+        // 固定内容
         const charFixedBox = document.createElement('div');
         charFixedBox.style.display = 'flex';
         charFixedBox.style.flexDirection = 'column';
@@ -2395,7 +2435,7 @@ function renderMacroRulesPane(): HTMLElement {
             charFixedOptions,
             (updated) => {
                 activeScheme.characterFixedVariables = updated;
-                updateLivePreview();
+                updateCharPreview();
             },
             '+ 添加固定匹配变量'
         );
@@ -2404,7 +2444,7 @@ function renderMacroRulesPane(): HTMLElement {
         charFixedBox.appendChild(charFixedSelector);
         charBlockCard.appendChild(charFixedBox);
 
-        // 2.2 角色 2 层条件匹配规则树
+        // 条件匹配树
         const charTreeBox = document.createElement('div');
         charTreeBox.style.display = 'flex';
         charTreeBox.style.flexDirection = 'column';
@@ -2457,15 +2497,50 @@ function renderMacroRulesPane(): HTMLElement {
         charBlockCard.appendChild(charTreeBox);
     };
 
-    root.appendChild(charBlockCard);
+    charBlockContainer.appendChild(charBlockCard);
+    root.appendChild(charBlockContainer);
 
-    // ── 3. 区块 B：服装提示词匹配规则 (纵向平铺) ─────────────────────────────
+    // ── 2. 服装规则容器 Block (包含服装独立预览 + 规则树) ─────────────────────
+    const outfitBlockContainer = document.createElement('div');
+    outfitBlockContainer.style.display = 'none';
+    outfitBlockContainer.style.flexDirection = 'column';
+    outfitBlockContainer.style.gap = '16px';
+
+    // 2.1 服装匹配替换测试预览卡片 (置于服装规则最上方)
+    const outfitPreviewCard = document.createElement('div');
+    outfitPreviewCard.className = 'da-section-card';
+
+    const outfitPrevHeader = document.createElement('div');
+    outfitPrevHeader.className = 'da-section-header';
+    outfitPrevHeader.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-eye"></i> ⚡ 服装匹配替换测试预览</span>';
+    outfitPreviewCard.appendChild(outfitPrevHeader);
+
+    const outfitPrevInputGroup = createTextInput('测试服装 Prompt:', 'macro-outfit-debug-input', '$rikka_takarada_default_uniform-sfw-upperbody$, standing, daylight');
+
+    const outfitPrevResultBox = document.createElement('div');
+    outfitPrevResultBox.style.marginTop = '8px';
+    outfitPrevResultBox.style.padding = '10px';
+    outfitPrevResultBox.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.3))';
+    outfitPrevResultBox.style.borderRadius = '6px';
+    outfitPrevResultBox.style.fontSize = '0.85em';
+    outfitPrevResultBox.style.fontFamily = 'monospace';
+    outfitPrevResultBox.style.wordBreak = 'break-all';
+
+    const updateOutfitPreview = () => {
+        saveMacroTreeScheme(activeScheme);
+        const testInput = outfitPrevInputGroup.input.value;
+        const rendered = processCharacterPrompt(testInput);
+        outfitPrevResultBox.textContent = rendered || '(标记未匹配，已擦除替换为 0 字符空字符串)';
+    };
+
+    outfitPrevInputGroup.input.addEventListener('input', updateOutfitPreview);
+    outfitPreviewCard.appendChild(outfitPrevInputGroup.wrapper);
+    outfitPreviewCard.appendChild(outfitPrevResultBox);
+    outfitBlockContainer.appendChild(outfitPreviewCard);
+
+    // 2.2 服装规则配置 Card
     const outfitBlockCard = document.createElement('div');
     outfitBlockCard.className = 'da-section-card';
-    outfitBlockCard.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    outfitBlockCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    outfitBlockCard.style.borderRadius = '8px';
-    outfitBlockCard.style.padding = '16px';
     outfitBlockCard.style.display = 'flex';
     outfitBlockCard.style.flexDirection = 'column';
     outfitBlockCard.style.gap = '14px';
@@ -2473,17 +2548,7 @@ function renderMacroRulesPane(): HTMLElement {
     const renderOutfitBlock = () => {
         outfitBlockCard.innerHTML = '';
 
-        const outfitHeaderRow = document.createElement('div');
-        outfitHeaderRow.style.display = 'flex';
-        outfitHeaderRow.style.alignItems = 'center';
-        outfitHeaderRow.style.gap = '8px';
-        outfitHeaderRow.style.color = 'var(--da-primary-color, #c084fc)';
-        outfitHeaderRow.style.fontWeight = 'bold';
-        outfitHeaderRow.style.fontSize = '0.95em';
-        outfitHeaderRow.innerHTML = '<i class="fa-solid fa-shirt"></i> 服装提示词匹配规则';
-        outfitBlockCard.appendChild(outfitHeaderRow);
-
-        // 3.1 服装固定匹配内容
+        // 固定内容
         const outfitFixedBox = document.createElement('div');
         outfitFixedBox.style.display = 'flex';
         outfitFixedBox.style.flexDirection = 'column';
@@ -2501,7 +2566,7 @@ function renderMacroRulesPane(): HTMLElement {
             outfitFixedOptions,
             (updated) => {
                 activeScheme.outfitFixedVariables = updated;
-                updateLivePreview();
+                updateOutfitPreview();
             },
             '+ 添加固定匹配变量'
         );
@@ -2510,7 +2575,7 @@ function renderMacroRulesPane(): HTMLElement {
         outfitFixedBox.appendChild(outfitFixedSelector);
         outfitBlockCard.appendChild(outfitFixedBox);
 
-        // 3.2 服装 2 层条件匹配规则树
+        // 条件匹配树
         const outfitTreeBox = document.createElement('div');
         outfitTreeBox.style.display = 'flex';
         outfitTreeBox.style.flexDirection = 'column';
@@ -2563,47 +2628,8 @@ function renderMacroRulesPane(): HTMLElement {
         outfitBlockCard.appendChild(outfitTreeBox);
     };
 
-    root.appendChild(outfitBlockCard);
-
-    // ── 4. 实时双区块解包调试预览卡片 ─────────────────────────────────────────
-    const cardPreview = document.createElement('div');
-    cardPreview.className = 'da-section-card';
-    cardPreview.style.background = 'rgba(168, 85, 247, 0.05)';
-    cardPreview.style.border = '1px dashed var(--da-primary-color, #a855f7)';
-    cardPreview.style.borderRadius = '8px';
-    cardPreview.style.padding = '16px';
-
-    const prevTitle = document.createElement('div');
-    prevTitle.style.fontWeight = 'bold';
-    prevTitle.style.color = 'var(--da-primary-color, #c084fc)';
-    prevTitle.style.fontSize = '0.92em';
-    prevTitle.style.marginBottom = '8px';
-    prevTitle.textContent = '⚡ 实时提示词替换测试预览 (0 字符空擦除测试)';
-
-    const prevInputGroup = createTextInput('测试输入 Prompt:', 'macro-debug-input', '1girl, $rikka_takarada_(ssss.gridman)-from_front-sfw-upperbody$, $rikka_takarada_default_uniform-sfw-upperbody$, standing, daylight');
-
-    const prevResultBox = document.createElement('div');
-    prevResultBox.style.marginTop = '8px';
-    prevResultBox.style.padding = '10px';
-    prevResultBox.style.background = 'rgba(0,0,0,0.3)';
-    prevResultBox.style.borderRadius = '6px';
-    prevResultBox.style.fontSize = '0.85em';
-    prevResultBox.style.fontFamily = 'monospace';
-    prevResultBox.style.wordBreak = 'break-all';
-
-    const updateLivePreview = () => {
-        saveMacroTreeScheme(activeScheme);
-        const testInput = prevInputGroup.input.value;
-        const rendered = processCharacterPrompt(testInput);
-        prevResultBox.textContent = rendered || '(标记未匹配，已擦除替换为 0 字符空字符串)';
-    };
-
-    prevInputGroup.input.addEventListener('input', updateLivePreview);
-
-    cardPreview.appendChild(prevTitle);
-    cardPreview.appendChild(prevInputGroup.wrapper);
-    cardPreview.appendChild(prevResultBox);
-    root.appendChild(cardPreview);
+    outfitBlockContainer.appendChild(outfitBlockCard);
+    root.appendChild(outfitBlockContainer);
 
     // ── 2 层树节点通用递推折叠渲染器 (无冗余噪音徽章) ─────────────────────────
     const render2LevelNodeTree = (
@@ -2668,7 +2694,7 @@ function renderMacroRulesPane(): HTMLElement {
             nameInput.placeholder = '分支名称';
             nameInput.addEventListener('change', () => {
                 node.name = nameInput.value;
-                updateLivePreview();
+                updateBothPreviews();
             });
 
             nameBox.appendChild(nameLbl);
@@ -2698,7 +2724,7 @@ function renderMacroRulesPane(): HTMLElement {
             patternInput.placeholder = depth === 0 ? '-from_behind' : '-sfw-upperbody';
             patternInput.addEventListener('change', () => {
                 node.pattern = patternInput.value;
-                updateLivePreview();
+                updateBothPreviews();
             });
 
             patternBox.appendChild(patternLbl);
@@ -2812,7 +2838,7 @@ function renderMacroRulesPane(): HTMLElement {
                         branchVarOptions,
                         (updatedVars) => {
                             node.variables = updatedVars;
-                            updateLivePreview();
+                            updateBothPreviews();
                         },
                         '+ 添加匹配变量'
                     );
@@ -2822,7 +2848,7 @@ function renderMacroRulesPane(): HTMLElement {
                         customTagInputGroup.input.style.fontSize = '0.85em';
                         customTagInputGroup.input.addEventListener('change', () => {
                             node.customTag = customTagInputGroup.input.value;
-                            updateLivePreview();
+                            updateBothPreviews();
                         });
                         varDetailBox.appendChild(customTagInputGroup.wrapper);
                     }
@@ -2838,11 +2864,17 @@ function renderMacroRulesPane(): HTMLElement {
         return listContainer;
     };
 
+    const updateBothPreviews = () => {
+        updateCharPreview();
+        updateOutfitPreview();
+    };
+
     const refreshAll = () => {
-        renderToolbar();
+        refreshSchemeSelect();
         renderCharBlock();
         renderOutfitBlock();
-        updateLivePreview();
+        updateNavState();
+        updateBothPreviews();
     };
 
     refreshAll();
