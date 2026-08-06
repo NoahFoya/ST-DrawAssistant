@@ -79,7 +79,7 @@ export declare function showExtractionToast(title: string, badgeText: string, is
  */
 export declare function processExtractedCharacterTags(messageText: string): void;
 /**
- * 动态提示词预处理与宏解包引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 实体并按纯 Tag 格式解包替换)
+ * 动态提示词预处理与树形宏解包引擎 (解析 $...$ 动态标记，按树形多分支方案求值，未匹配占位符统一替换为空字符串)
  */
 export declare function processCharacterPrompt(promptText: string): string;
 //# sourceMappingURL=character-injection.d.ts.map

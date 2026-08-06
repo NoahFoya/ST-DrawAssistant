@@ -3,12 +3,13 @@
  * @description 角色设定、服装设定、设定启用方案及注入模板方案的持久化存储管理器
  */
 
-import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme } from '../types/character';
+import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, MacroTreeScheme } from '../types/character';
 
 const CHARACTER_PROFILES_KEY = 'st_da_character_profiles_v1';
 const OUTFIT_PROFILES_KEY = 'st_da_outfit_profiles_v1';
 const ENABLE_SCHEMES_KEY = 'st_da_enable_schemes_v1';
 const INJECTION_TEMPLATES_KEY = 'st_da_injection_templates_v1';
+const MACRO_TREE_SCHEME_KEY = 'st_da_macro_tree_scheme_v1';
 
 /** 默认的示例角色预设 */
 const DEFAULT_CHARACTER: CharacterProfile = {
@@ -287,4 +288,104 @@ export function upsertInjectionTemplate(template: InjectionTemplateScheme): void
 export function deleteInjectionTemplate(id: string): void {
     const list = getInjectionTemplates().filter(t => t.id !== id || t.isSystemPreset);
     saveInjectionTemplates(list);
+}
+
+// ─── 树形宏模板匹配规则方案存储 ──────────────────────────────────────────────
+
+export const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme = {
+    id: 'default-macro-tree-v1',
+    name: 'Wai/Standard 树形宏匹配默认预设',
+    isDefault: true,
+    characterTemplate: '{nameEN}, {facial}, {upperBody}, {fullBody}, {traits}',
+    outfitTemplate: '{nameEN}, {upperBody}, {fullBody}',
+    rootNodes: [
+        {
+            id: 'node-behind',
+            name: '背面视角上下文',
+            pattern: '-from_behind',
+            enabled: true,
+            action: { propertyKey: 'facialFeaturesBack', fallbackKey: 'facialFeatures' },
+            children: [
+                {
+                    id: 'node-behind-upper-sfw',
+                    name: '背面 SFW 上半身',
+                    pattern: '-sfw-upperbody',
+                    enabled: true,
+                    action: { propertyKey: 'upperBodySFWBack', fallbackKey: 'upperBodySFW' }
+                },
+                {
+                    id: 'node-behind-upper-nsfw',
+                    name: '背面 NSFW 上半身',
+                    pattern: '-nsfw-upperbody',
+                    enabled: true,
+                    action: { propertyKey: 'upperBodyNSFWBack', fallbackKey: 'upperBodyNSFW' }
+                },
+                {
+                    id: 'node-behind-lower-sfw',
+                    name: '背面 SFW 下半身',
+                    pattern: '-sfw-lowerbody',
+                    enabled: true,
+                    action: { propertyKey: 'fullBodySFWBack', fallbackKey: 'fullBodySFW' }
+                },
+                {
+                    id: 'node-behind-lower-nsfw',
+                    name: '背面 NSFW 下半身',
+                    pattern: '-nsfw-lowerbody',
+                    enabled: true,
+                    action: { propertyKey: 'fullBodyNSFWBack', fallbackKey: 'fullBodyNSFW' }
+                }
+            ]
+        },
+        {
+            id: 'node-front-upper-sfw',
+            name: '正面 SFW 上半身',
+            pattern: '-sfw-upperbody',
+            enabled: true,
+            action: { propertyKey: 'upperBodySFW' }
+        },
+        {
+            id: 'node-front-upper-nsfw',
+            name: '正面 NSFW 上半身',
+            pattern: '-nsfw-upperbody',
+            enabled: true,
+            action: { propertyKey: 'upperBodyNSFW' }
+        },
+        {
+            id: 'node-front-lower-sfw',
+            name: '正面 SFW 下半身',
+            pattern: '-sfw-lowerbody',
+            enabled: true,
+            action: { propertyKey: 'fullBodySFW' }
+        },
+        {
+            id: 'node-front-lower-nsfw',
+            name: '正面 NSFW 下半身',
+            pattern: '-nsfw-lowerbody',
+            enabled: true,
+            action: { propertyKey: 'fullBodyNSFW' }
+        }
+    ]
+};
+
+export function getMacroTreeScheme(): MacroTreeScheme {
+    try {
+        const raw = localStorage.getItem(MACRO_TREE_SCHEME_KEY);
+        if (!raw) {
+            saveMacroTreeScheme(DEFAULT_MACRO_TREE_SCHEME);
+            return DEFAULT_MACRO_TREE_SCHEME;
+        }
+        const scheme = JSON.parse(raw) as MacroTreeScheme;
+        return scheme || DEFAULT_MACRO_TREE_SCHEME;
+    } catch {
+        return DEFAULT_MACRO_TREE_SCHEME;
+    }
+}
+
+export function saveMacroTreeScheme(scheme: MacroTreeScheme): void {
+    localStorage.setItem(MACRO_TREE_SCHEME_KEY, JSON.stringify(scheme));
+}
+
+export function resetMacroTreeScheme(): MacroTreeScheme {
+    saveMacroTreeScheme(DEFAULT_MACRO_TREE_SCHEME);
+    return DEFAULT_MACRO_TREE_SCHEME;
 }

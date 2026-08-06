@@ -19,11 +19,14 @@ import {
     getInjectionTemplates,
     getInjectionTemplateById,
     upsertInjectionTemplate,
-    deleteInjectionTemplate
+    deleteInjectionTemplate,
+    getMacroTreeScheme,
+    saveMacroTreeScheme,
+    resetMacroTreeScheme
 } from '../../storage/character-store';
-import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule } from '../../types/character';
+import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule, MacroTreeScheme, MacroRuleNode } from '../../types/character';
 import { checkCharacterCardConflict } from '../../core/character-event-listener';
-import { updateGlobalWorldbookPlaceholders } from '../../core/character-injection';
+import { updateGlobalWorldbookPlaceholders, processCharacterPrompt } from '../../core/character-injection';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -1994,7 +1997,7 @@ function createTextareaInput(label: string, id: string, value: string): { wrappe
 }
 
 /**
- * 渲染子界面 5：宏模板匹配规则内容
+ * 渲染子界面 5：树形可配置宏模板匹配规则内容
  */
 function renderMacroRulesPane(): HTMLElement {
     const root = document.createElement('div');
@@ -2002,55 +2005,357 @@ function renderMacroRulesPane(): HTMLElement {
     root.style.flexDirection = 'column';
     root.style.gap = '16px';
 
-    const card = document.createElement('div');
-    card.className = 'da-section-card';
-    card.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    card.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    card.style.borderRadius = '8px';
-    card.style.padding = '16px';
+    let currentScheme: MacroTreeScheme = getMacroTreeScheme();
+
+    // ── 顶部控制卡片 ─────────────────────────────────────────────────────────
+    const cardHeader = document.createElement('div');
+    cardHeader.className = 'da-section-card';
+    cardHeader.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    cardHeader.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    cardHeader.style.borderRadius = '8px';
+    cardHeader.style.padding = '16px';
+
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.justifyContent = 'space-between';
+    topRow.style.alignItems = 'center';
 
     const title = document.createElement('h3');
-    title.style.margin = '0 0 12px 0';
-    title.style.fontSize = '1em';
+    title.style.margin = '0';
+    title.style.fontSize = '1.05em';
     title.style.color = 'var(--da-primary-color, #a855f7)';
-    title.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 绘画 Tag 动态标记与宏解包匹配规则';
+    title.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 树形可配置宏模板规则方案';
+
+    const btnGroup = document.createElement('div');
+    btnGroup.style.display = 'flex';
+    btnGroup.style.gap = '8px';
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'da-btn secondary';
+    resetBtn.style.fontSize = '0.85em';
+    resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 恢复默认树预设';
+    resetBtn.addEventListener('click', () => {
+        if (confirm('确定要重置当前树形宏规则方案为 Wai/Standard 默认预设吗？')) {
+            currentScheme = resetMacroTreeScheme();
+            refreshAll();
+        }
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'da-btn primary';
+    saveBtn.style.fontSize = '0.85em';
+    saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存树形规则方案';
+    saveBtn.addEventListener('click', () => {
+        saveMacroTreeScheme(currentScheme);
+        updateLivePreview();
+        const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+        if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+            winToastr.toastr.success('树形宏模板匹配规则保存成功！', '绘画助手');
+        }
+    });
+
+    btnGroup.appendChild(resetBtn);
+    btnGroup.appendChild(saveBtn);
+    topRow.appendChild(title);
+    topRow.appendChild(btnGroup);
 
     const tip = document.createElement('p');
     tip.style.fontSize = '0.85em';
     tip.style.opacity = '0.8';
     tip.style.lineHeight = '1.5';
-    tip.style.margin = '0 0 16px 0';
-    tip.textContent = '此处的宏匹配规则专用于生图路径中从 AI 消息/楼层词中解析 $角色/服装$ 动态标记，独立于世界书注入路径与绑定方案。';
+    tip.style.margin = '8px 0 0 0';
+    tip.textContent = '此处的树形匹配规则支持无限层级嵌套与平级多分支并行求值。第一步固定匹配实体 Name，第二步在已匹配节点下继续递归计算子分支，未匹配占位符一律自动替换为空字符串。';
 
-    const rulesList = document.createElement('div');
-    rulesList.style.display = 'flex';
-    rulesList.style.flexDirection = 'column';
-    rulesList.style.gap = '12px';
-    rulesList.style.fontSize = '0.88em';
+    cardHeader.appendChild(topRow);
+    cardHeader.appendChild(tip);
+    root.appendChild(cardHeader);
 
-    rulesList.innerHTML = `
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">🏷️ 旧格式角色/服装标记语法</div>
-            <div style="font-family: monospace; font-size: 0.9em; opacity: 0.9;">$角色名-视角-sfw-upperBody-sfw-lowerBody$</div>
-            <div style="font-size: 0.82em; opacity: 0.75; margin-top: 4px;">例如：<code>$rikka_takarada-from_front-sfw-upperBody-sfw-lowerBody$</code> 或 <code>$rikka_takarada_default_uniform-upperBody-lowerBody$</code></div>
-        </div>
+    // ── 解包模板配置卡片 ─────────────────────────────────────────────────────
+    const cardTemplate = document.createElement('div');
+    cardTemplate.className = 'da-section-card';
+    cardTemplate.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    cardTemplate.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    cardTemplate.style.borderRadius = '8px';
+    cardTemplate.style.padding = '16px';
+    cardTemplate.style.display = 'flex';
+    cardTemplate.style.flexDirection = 'column';
+    cardTemplate.style.gap = '14px';
 
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">⚙️ JSON 结构化标记语法</div>
-            <div style="font-family: monospace; font-size: 0.9em; opacity: 0.9;">\${"name":"角色名","angle":"from front","upperBody":"sfw"}\$</div>
-            <div style="font-size: 0.82em; opacity: 0.75; margin-top: 4px;">自动提取 JSON 中的 name 字段匹配实体 Tag，忽略多余参数。</div>
-        </div>
+    const tplTitle = document.createElement('div');
+    tplTitle.style.fontWeight = 'bold';
+    tplTitle.style.color = 'var(--da-primary-color, #c084fc)';
+    tplTitle.style.fontSize = '0.92em';
+    tplTitle.textContent = '🏷️ 纯 Tag 替换模板格式配置 (0 XML 纯 Tag 格式)';
+    cardTemplate.appendChild(tplTitle);
 
-        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">⚡ 生图多段拼接优先规则</div>
-            <div style="font-size: 0.85em; opacity: 0.85; line-height: 1.5;">系统在多段拼接 (模型前缀 + 全局前缀 + 楼层词 + 全局后缀 + LoRA) 之前，优先完成 $...$ 动态标记解包，确保前缀后缀不干扰实体正则提取，并且出图元数据中将保存最终完整的提示词！</div>
-        </div>
-    `;
+    // 1. 角色解包模板
+    const charTplGroup = createTextInput('角色纯 Tag 解包模板:', 'macro-char-tpl-input', currentScheme.characterTemplate || '');
+    charTplGroup.input.addEventListener('input', () => {
+        currentScheme.characterTemplate = charTplGroup.input.value;
+        updateLivePreview();
+    });
 
-    card.appendChild(title);
-    card.appendChild(tip);
-    card.appendChild(rulesList);
-    root.appendChild(card);
+    const charPillBox = document.createElement('div');
+    charPillBox.style.display = 'flex';
+    charPillBox.style.gap = '6px';
+    charPillBox.style.flexWrap = 'wrap';
 
+    ['{nameEN}', '{facial}', '{upperBody}', '{fullBody}', '{traits}', '{nameCN}'].forEach(tag => {
+        const pill = document.createElement('span');
+        pill.className = 'da-badge secondary';
+        pill.style.cursor = 'pointer';
+        pill.textContent = tag;
+        pill.title = `点击插入 ${tag} 占位符`;
+        pill.addEventListener('click', () => {
+            charTplGroup.input.value += (charTplGroup.input.value ? ', ' : '') + tag;
+            currentScheme.characterTemplate = charTplGroup.input.value;
+            updateLivePreview();
+        });
+        charPillBox.appendChild(pill);
+    });
+    charTplGroup.wrapper.appendChild(charPillBox);
+    cardTemplate.appendChild(charTplGroup.wrapper);
+
+    // 2. 服装解包模板
+    const outfitTplGroup = createTextInput('服装纯 Tag 解包模板:', 'macro-outfit-tpl-input', currentScheme.outfitTemplate || '');
+    outfitTplGroup.input.addEventListener('input', () => {
+        currentScheme.outfitTemplate = outfitTplGroup.input.value;
+        updateLivePreview();
+    });
+
+    const outfitPillBox = document.createElement('div');
+    outfitPillBox.style.display = 'flex';
+    outfitPillBox.style.gap = '6px';
+    outfitPillBox.style.flexWrap = 'wrap';
+
+    ['{nameEN}', '{upperBody}', '{fullBody}', '{nameCN}'].forEach(tag => {
+        const pill = document.createElement('span');
+        pill.className = 'da-badge secondary';
+        pill.style.cursor = 'pointer';
+        pill.textContent = tag;
+        pill.title = `点击插入 ${tag} 占位符`;
+        pill.addEventListener('click', () => {
+            outfitTplGroup.input.value += (outfitTplGroup.input.value ? ', ' : '') + tag;
+            currentScheme.outfitTemplate = outfitTplGroup.input.value;
+            updateLivePreview();
+        });
+        outfitPillBox.appendChild(pill);
+    });
+    outfitTplGroup.wrapper.appendChild(outfitPillBox);
+    cardTemplate.appendChild(outfitTplGroup.wrapper);
+
+    root.appendChild(cardTemplate);
+
+    // ── 树形多分支规则构建器卡片 ─────────────────────────────────────────────
+    const cardTree = document.createElement('div');
+    cardTree.className = 'da-section-card';
+    cardTree.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    cardTree.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    cardTree.style.borderRadius = '8px';
+    cardTree.style.padding = '16px';
+
+    const treeHeader = document.createElement('div');
+    treeHeader.style.display = 'flex';
+    treeHeader.style.justifyContent = 'space-between';
+    treeHeader.style.alignItems = 'center';
+    treeHeader.style.marginBottom = '12px';
+
+    const treeTitle = document.createElement('div');
+    treeTitle.style.fontWeight = 'bold';
+    treeTitle.style.color = 'var(--da-primary-color, #c084fc)';
+    treeTitle.style.fontSize = '0.92em';
+    treeTitle.textContent = '🌳 树形多分支规则树构建器 (支持无限深层与多分支匹配)';
+
+    const addRootBtn = document.createElement('button');
+    addRootBtn.className = 'da-btn secondary';
+    addRootBtn.style.fontSize = '0.82em';
+    addRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加根规则节点';
+    addRootBtn.addEventListener('click', () => {
+        const newNode: MacroRuleNode = {
+            id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: '自定义规则节点',
+            pattern: '-custom-pattern',
+            enabled: true,
+            action: { propertyKey: 'custom', customTag: '' }
+        };
+        currentScheme.rootNodes.push(newNode);
+        refreshAll();
+    });
+
+    treeHeader.appendChild(treeTitle);
+    treeHeader.appendChild(addRootBtn);
+    cardTree.appendChild(treeHeader);
+
+    const treeContainer = document.createElement('div');
+    treeContainer.style.display = 'flex';
+    treeContainer.style.flexDirection = 'column';
+    treeContainer.style.gap = '8px';
+    cardTree.appendChild(treeContainer);
+
+    root.appendChild(cardTree);
+
+    // ── 实时多分支调试预览卡片 ───────────────────────────────────────────────
+    const cardPreview = document.createElement('div');
+    cardPreview.className = 'da-section-card';
+    cardPreview.style.background = 'rgba(168, 85, 247, 0.05)';
+    cardPreview.style.border = '1px dashed var(--da-primary-color, #a855f7)';
+    cardPreview.style.borderRadius = '8px';
+    cardPreview.style.padding = '16px';
+
+    const prevTitle = document.createElement('div');
+    prevTitle.style.fontWeight = 'bold';
+    prevTitle.style.color = 'var(--da-primary-color, #c084fc)';
+    prevTitle.style.fontSize = '0.92em';
+    prevTitle.style.marginBottom = '8px';
+    prevTitle.textContent = '⚡ 实时多分支解包测试预览 (0 XML 纯 Tag 格式)';
+
+    const prevInputGroup = createTextInput('测试输入 Prompt:', 'macro-debug-input', '$rikka_takarada_(ssss.gridman)-from_front-sfw-upperBody-sfw-lowerBody$, $rikka_takarada_default_uniform-upperBody-lowerBody$, standing, daylight');
+    
+    const prevResultBox = document.createElement('div');
+    prevResultBox.style.marginTop = '8px';
+    prevResultBox.style.padding = '10px';
+    prevResultBox.style.background = 'rgba(0,0,0,0.3)';
+    prevResultBox.style.borderRadius = '6px';
+    prevResultBox.style.fontSize = '0.85em';
+    prevResultBox.style.fontFamily = 'monospace';
+    prevResultBox.style.wordBreak = 'break-all';
+
+    const updateLivePreview = () => {
+        saveMacroTreeScheme(currentScheme);
+        const testInput = prevInputGroup.input.value;
+        const rendered = processCharacterPrompt(testInput);
+        prevResultBox.textContent = rendered || '(求值为空或占位符已擦除)';
+    };
+
+    prevInputGroup.input.addEventListener('input', updateLivePreview);
+
+    cardPreview.appendChild(prevTitle);
+    cardPreview.appendChild(prevInputGroup.wrapper);
+    cardPreview.appendChild(prevResultBox);
+    root.appendChild(cardPreview);
+
+    // ── 树节点渲染递归例程 ────────────────────────────────────────────────────
+    const renderNodeTree = (nodes: MacroRuleNode[], depth = 0): HTMLElement => {
+        const listContainer = document.createElement('div');
+        listContainer.style.display = 'flex';
+        listContainer.style.flexDirection = 'column';
+        listContainer.style.gap = '8px';
+
+        nodes.forEach((node, idx) => {
+            const nodeEl = document.createElement('div');
+            nodeEl.style.background = 'rgba(255, 255, 255, 0.02)';
+            nodeEl.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
+            nodeEl.style.borderRadius = '6px';
+            nodeEl.style.padding = '10px 12px';
+            nodeEl.style.marginLeft = `${depth * 20}px`;
+            nodeEl.style.borderLeft = depth > 0 ? '3px solid var(--da-primary-color, #a855f7)' : '1px solid var(--da-border-color)';
+
+            const row1 = document.createElement('div');
+            row1.style.display = 'flex';
+            row1.style.justifyContent = 'space-between';
+            row1.style.alignItems = 'center';
+            row1.style.gap = '10px';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'da-input';
+            nameInput.style.fontSize = '0.85em';
+            nameInput.style.width = '150px';
+            nameInput.value = node.name;
+            nameInput.placeholder = '规则名称';
+            nameInput.addEventListener('change', () => {
+                node.name = nameInput.value;
+                updateLivePreview();
+            });
+
+            const patternInput = document.createElement('input');
+            patternInput.type = 'text';
+            patternInput.className = 'da-input';
+            patternInput.style.fontSize = '0.85em';
+            patternInput.style.width = '140px';
+            patternInput.style.fontFamily = 'monospace';
+            patternInput.value = node.pattern;
+            patternInput.placeholder = '匹配词如 -from_behind';
+            patternInput.addEventListener('change', () => {
+                node.pattern = patternInput.value;
+                updateLivePreview();
+            });
+
+            const propSelect = document.createElement('select');
+            propSelect.className = 'da-select';
+            propSelect.style.fontSize = '0.85em';
+            propSelect.style.width = '160px';
+            propSelect.innerHTML = `
+                <option value="facialFeatures" ${node.action?.propertyKey === 'facialFeatures' ? 'selected' : ''}>五官外貌 (正面)</option>
+                <option value="facialFeaturesBack" ${node.action?.propertyKey === 'facialFeaturesBack' ? 'selected' : ''}>五官外貌 (背面)</option>
+                <option value="upperBodySFW" ${node.action?.propertyKey === 'upperBodySFW' ? 'selected' : ''}>上半身 SFW (正面)</option>
+                <option value="upperBodySFWBack" ${node.action?.propertyKey === 'upperBodySFWBack' ? 'selected' : ''}>上半身 SFW (背面)</option>
+                <option value="fullBodySFW" ${node.action?.propertyKey === 'fullBodySFW' ? 'selected' : ''}>下半身 SFW (正面)</option>
+                <option value="fullBodySFWBack" ${node.action?.propertyKey === 'fullBodySFWBack' ? 'selected' : ''}>下半身 SFW (背面)</option>
+                <option value="upperBodyNSFW" ${node.action?.propertyKey === 'upperBodyNSFW' ? 'selected' : ''}>上半身 NSFW (正面)</option>
+                <option value="upperBodyNSFWBack" ${node.action?.propertyKey === 'upperBodyNSFWBack' ? 'selected' : ''}>上半身 NSFW (背面)</option>
+                <option value="fullBodyNSFW" ${node.action?.propertyKey === 'fullBodyNSFW' ? 'selected' : ''}>下半身 NSFW (正面)</option>
+                <option value="fullBodyNSFWBack" ${node.action?.propertyKey === 'fullBodyNSFWBack' ? 'selected' : ''}>下半身 NSFW (背面)</option>
+                <option value="custom" ${node.action?.propertyKey === 'custom' ? 'selected' : ''}>自定义 Tag 注入</option>
+            `;
+            propSelect.addEventListener('change', () => {
+                node.action = node.action || {};
+                node.action.propertyKey = propSelect.value;
+                updateLivePreview();
+            });
+
+            const nodeActions = document.createElement('div');
+            nodeActions.style.display = 'flex';
+            nodeActions.style.gap = '6px';
+
+            const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加子分支', () => {
+                node.children = node.children || [];
+                node.children.push({
+                    id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    name: '子规则分支',
+                    pattern: '-sub-pattern',
+                    enabled: true,
+                    action: { propertyKey: 'custom', customTag: '' }
+                });
+                refreshAll();
+            });
+
+            const delBtn = createIconButton('<i class="fa-solid fa-trash"></i>', '删除此分支', () => {
+                nodes.splice(idx, 1);
+                refreshAll();
+            }, true);
+
+            nodeActions.appendChild(addChildBtn);
+            nodeActions.appendChild(delBtn);
+
+            row1.appendChild(nameInput);
+            row1.appendChild(patternInput);
+            row1.appendChild(propSelect);
+            row1.appendChild(nodeActions);
+            nodeEl.appendChild(row1);
+
+            if (node.children && node.children.length > 0) {
+                const childContainer = renderNodeTree(node.children, depth + 1);
+                childContainer.style.marginTop = '8px';
+                nodeEl.appendChild(childContainer);
+            }
+
+            listContainer.appendChild(nodeEl);
+        });
+
+        return listContainer;
+    };
+
+    const refreshAll = () => {
+        treeContainer.innerHTML = '';
+        if (currentScheme.rootNodes.length === 0) {
+            treeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无根节点，点击右上角“添加根规则节点”开始配置</div>';
+        } else {
+            treeContainer.appendChild(renderNodeTree(currentScheme.rootNodes, 0));
+        }
+        updateLivePreview();
+    };
+
+    refreshAll();
     return root;
 }

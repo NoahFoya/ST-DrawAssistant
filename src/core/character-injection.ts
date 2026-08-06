@@ -13,6 +13,7 @@ import {
     getOutfitProfiles,
     getEnableSchemes,
     getInjectionTemplates,
+    getMacroTreeScheme,
     upsertCharacterProfile,
     upsertOutfitProfile,
     upsertEnableScheme
@@ -21,7 +22,8 @@ import type {
     CharacterProfile,
     OutfitProfile,
     EnableSchemeProfile,
-    InjectionTemplateScheme
+    InjectionTemplateScheme,
+    MacroRuleNode
 } from '../types/character';
 import { getContext } from './context';
 import { logger } from './logger';
@@ -807,7 +809,51 @@ export function processExtractedCharacterTags(messageText: string): void {
 // ============================================================================
 
 /**
- * 动态提示词预处理与宏解包引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 实体并按纯 Tag 格式解包替换)
+ * 递归计算树形宏匹配规则 (支持平级多分支并行匹配与子分支递归计算)
+ */
+function evaluateTreeNodes(
+    nodes: MacroRuleNode[],
+    lowerContent: string,
+    entity: CharacterProfile | OutfitProfile,
+    tagContext: Record<string, string>
+): void {
+    if (!Array.isArray(nodes) || nodes.length === 0) return;
+
+    for (const node of nodes) {
+        if (!node.enabled || !node.pattern) continue;
+
+        // 校验匹配 pattern (如 "-from_behind", "-sfw-upperbody")
+        if (lowerContent.includes(node.pattern.toLowerCase())) {
+            if (node.action) {
+                const key = node.action.propertyKey;
+                const fallbackKey = node.action.fallbackKey;
+
+                let val = '';
+                if (key === 'custom') {
+                    val = node.action.customTag || '';
+                } else if (key && key in entity) {
+                    val = (entity as unknown as Record<string, unknown>)[key] as string || '';
+                }
+
+                if (!val && fallbackKey && fallbackKey in entity) {
+                    val = (entity as unknown as Record<string, unknown>)[fallbackKey] as string || '';
+                }
+
+                if (val && key) {
+                    tagContext[key] = val;
+                }
+            }
+
+            // 递归求值子分支节点 (允许子分支继续深层匹配)
+            if (Array.isArray(node.children) && node.children.length > 0) {
+                evaluateTreeNodes(node.children, lowerContent, entity, tagContext);
+            }
+        }
+    }
+}
+
+/**
+ * 动态提示词预处理与树形宏解包引擎 (解析 $...$ 动态标记，按树形多分支方案求值，未匹配占位符统一替换为空字符串)
  */
 export function processCharacterPrompt(promptText: string): string {
     if (!promptText || typeof promptText !== 'string') return promptText;
@@ -819,29 +865,25 @@ export function processCharacterPrompt(promptText: string): string {
 
     const existingChars = getCharacterProfiles();
     const existingOutfits = getOutfitProfiles();
+    const treeScheme = getMacroTreeScheme();
 
-    const processed = promptText.replace(tagRegex, (fullMatch, innerStr: string) => {
+    const processed = promptText.replace(tagRegex, (_fullMatch, innerStr: string) => {
         const rawContent = innerStr.trim();
-        if (!rawContent) return fullMatch;
+        if (!rawContent) return '';
 
-        // 提取实体名称与解析视角 / SFW / NSFW 后缀参数
         const lowerContent = rawContent.toLowerCase();
 
-        const isFromBehind = lowerContent.includes('-from_behind');
-        const isUpperNSFW = lowerContent.includes('-nsfw-upperbody');
-        const isLowerNSFW = lowerContent.includes('-nsfw-lowerbody') || lowerContent.includes('-nsfw-fullbody');
+        // 提取关键词列表做名字切割剥离
+        const collectPatterns = (nodes: MacroRuleNode[]): string[] => {
+            let res: string[] = [];
+            for (const n of nodes) {
+                if (n.pattern) res.push(n.pattern);
+                if (n.children) res = res.concat(collectPatterns(n.children));
+            }
+            return res;
+        };
 
-        // 后缀剔除清单，提取出纯名字 (如 rikka_takarada_(ssss.gridman) 或 rikka_takarada_default_uniform)
-        const suffixes = [
-            '-from_front', '-from_side', '-from_behind',
-            '-sfw-upperbody-sfw-lowerbody', '-sfw-upperbody-nsfw-lowerbody',
-            '-nsfw-upperbody-sfw-lowerbody', '-nsfw-upperbody-nsfw-lowerbody',
-            '-sfw-upperbody-sfw-fullbody', '-sfw-upperbody-nsfw-fullbody',
-            '-nsfw-upperbody-sfw-fullbody', '-nsfw-upperbody-nsfw-fullbody',
-            '-sfw-upperbody', '-nsfw-upperbody', '-sfw-lowerbody', '-nsfw-lowerbody',
-            '-upperbody-lowerbody', '-upperbody', '-lowerbody'
-        ];
-
+        const suffixes = collectPatterns(treeScheme.rootNodes);
         let normName = rawContent;
         for (const s of suffixes) {
             const idx = normName.toLowerCase().lastIndexOf(s.toLowerCase());
@@ -863,27 +905,29 @@ export function processCharacterPrompt(promptText: string): string {
         });
 
         if (matchedChar) {
-            const nameEN = matchedChar.nameEN || '';
-            const facial = isFromBehind
-                ? (matchedChar.facialFeaturesBack || matchedChar.facialFeatures || '')
-                : (matchedChar.facialFeatures || '');
+            const tagContext: Record<string, string> = {
+                nameEN: matchedChar.nameEN || '',
+                nameCN: matchedChar.nameCN || '',
+                traits: matchedChar.characterTraits || '',
+                facial: matchedChar.facialFeatures || '',
+                upperBody: matchedChar.upperBodySFW || '',
+                fullBody: matchedChar.fullBodySFW || ''
+            };
 
-            const upper = isFromBehind
-                ? (isUpperNSFW ? (matchedChar.upperBodyNSFWBack || matchedChar.upperBodyNSFW || '') : (matchedChar.upperBodySFWBack || matchedChar.upperBodySFW || ''))
-                : (isUpperNSFW ? (matchedChar.upperBodyNSFW || '') : (matchedChar.upperBodySFW || ''));
+            // 树形多分支递归求值
+            evaluateTreeNodes(treeScheme.rootNodes, lowerContent, matchedChar, tagContext);
 
-            const lower = isFromBehind
-                ? (isLowerNSFW ? (matchedChar.fullBodyNSFWBack || matchedChar.fullBodyNSFW || '') : (matchedChar.fullBodySFWBack || matchedChar.fullBodySFW || ''))
-                : (isLowerNSFW ? (matchedChar.fullBodyNSFW || '') : (matchedChar.fullBodySFW || ''));
+            let resultTpl = treeScheme.characterTemplate || '{nameEN}, {facial}, {upperBody}, {fullBody}, {traits}';
+            resultTpl = resultTpl.replace(/\{nameEN\}/gi, tagContext['nameEN'] || '');
+            resultTpl = resultTpl.replace(/\{nameCN\}/gi, tagContext['nameCN'] || '');
+            resultTpl = resultTpl.replace(/\{traits\}/gi, tagContext['traits'] || '');
+            resultTpl = resultTpl.replace(/\{facial\}/gi, tagContext['facialFeaturesBack'] || tagContext['facial'] || '');
+            resultTpl = resultTpl.replace(/\{upperBody\}/gi, tagContext['upperBodySFWBack'] || tagContext['upperBodyNSFWBack'] || tagContext['upperBodyNSFW'] || tagContext['upperBodySFW'] || tagContext['upperBody'] || '');
+            resultTpl = resultTpl.replace(/\{fullBody\}/gi, tagContext['fullBodySFWBack'] || tagContext['fullBodyNSFWBack'] || tagContext['fullBodyNSFW'] || tagContext['fullBodySFW'] || tagContext['fullBody'] || '');
+            resultTpl = resultTpl.replace(/\{upperSFW\}/gi, tagContext['upperBodySFW'] || '');
+            resultTpl = resultTpl.replace(/\{fullBodySFW\}/gi, tagContext['fullBodySFW'] || '');
 
-            const traits = matchedChar.characterTraits || '';
-
-            const charTags = [nameEN, facial, upper, lower, traits]
-                .map(s => s.trim())
-                .filter(Boolean)
-                .join(', ');
-
-            return charTags;
+            return cleanRenderedText(resultTpl);
         }
 
         // 2. 匹配服装实体
@@ -896,22 +940,29 @@ export function processCharacterPrompt(promptText: string): string {
         });
 
         if (matchedOutfit) {
-            const nameEN = matchedOutfit.nameEN || '';
-            const upper = isFromBehind ? (matchedOutfit.upperBodyBack || matchedOutfit.upperBody || '') : (matchedOutfit.upperBody || '');
-            const full = isFromBehind ? (matchedOutfit.fullBodyBack || matchedOutfit.fullBody || '') : (matchedOutfit.fullBody || '');
+            const tagContext: Record<string, string> = {
+                nameEN: matchedOutfit.nameEN || '',
+                nameCN: matchedOutfit.nameCN || '',
+                upperBody: matchedOutfit.upperBody || '',
+                fullBody: matchedOutfit.fullBody || ''
+            };
 
-            const outfitTags = [nameEN, upper, full]
-                .map(s => s.trim())
-                .filter(Boolean)
-                .join(', ');
+            evaluateTreeNodes(treeScheme.rootNodes, lowerContent, matchedOutfit, tagContext);
 
-            return outfitTags;
+            let resultTpl = treeScheme.outfitTemplate || '{nameEN}, {upperBody}, {fullBody}';
+            resultTpl = resultTpl.replace(/\{nameEN\}/gi, tagContext['nameEN'] || '');
+            resultTpl = resultTpl.replace(/\{nameCN\}/gi, tagContext['nameCN'] || '');
+            resultTpl = resultTpl.replace(/\{upperBody\}/gi, tagContext['upperBodyBack'] || tagContext['upperBody'] || '');
+            resultTpl = resultTpl.replace(/\{fullBody\}/gi, tagContext['fullBodyBack'] || tagContext['fullBody'] || '');
+
+            return cleanRenderedText(resultTpl);
         }
 
-        return fullMatch;
+        // 3. 未找到任何匹配实体 / 无效占位符 ➔ 擦除为 "" (空字符串)
+        return '';
     });
 
-    // 格式二次清洗：擦除任何混入的 <xml> 标签并清洗多余逗号
+    // 格式二次清洗：擦除任何混入的 <xml> 标签并清洗多余逗号与换行符
     const strippedXml = processed.replace(/<[^>]+>/g, ' ');
     return cleanRenderedText(strippedXml);
 }

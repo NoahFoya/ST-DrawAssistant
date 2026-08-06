@@ -130,4 +130,41 @@ export interface InjectionTemplateScheme {
     /** 通用服装列表项模板 {{通用服装启用列表}} */
     enableOutfitListTemplate: string;
 }
+/**
+ * 树形宏模板匹配规则节点 (Tree Rule Node)
+ */
+export interface MacroRuleNode {
+    id: string;
+    /** 节点的规则/分支名称 (如 "背面视角", "上半身 SFW 模式") */
+    name: string;
+    /** 匹配关键词 (如 "-from_behind", "-sfw-upperbody", "-nsfw-upperbody") */
+    pattern: string;
+    /** 节点启用状态 */
+    enabled: boolean;
+    /** 命中该分支时绑定的属性映射或 Tag 动作 */
+    action?: {
+        /** 调取的属性关联标识 (如 "facialFeaturesBack", "upperBodySFW", "fullBodySFW" 等) */
+        propertyKey?: string;
+        /** 当 propertyKey 为 'custom' 时的自定义 Tag 字符串 */
+        customTag?: string;
+        /** 降级保底属性关联标识 (如 "facialFeatures") */
+        fallbackKey?: string;
+    };
+    /** 子分支规则节点列表 (支持无限级树形深度与多分支并行匹配) */
+    children?: MacroRuleNode[];
+}
+/**
+ * 树形宏模板方案预设包 (Macro Rule Tree Scheme)
+ */
+export interface MacroTreeScheme {
+    id: string;
+    name: string;
+    isDefault?: boolean;
+    /** 根树节点列表 (允许多主分支并行求值) */
+    rootNodes: MacroRuleNode[];
+    /** 角色默认解包模板 (纯 Tag 格式，无 XML) */
+    characterTemplate: string;
+    /** 服装默认解包模板 (纯 Tag 格式，无 XML) */
+    outfitTemplate: string;
+}
 //# sourceMappingURL=character.d.ts.map
