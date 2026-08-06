@@ -46,4 +46,34 @@ export declare function injectCharacterPlaceholders(promptText: string, textCont
  * 使酒馆原生的 Prompt 预发送视窗 (Inspect Prompt / 提示词预览) 能够直接展示解包渲染后的最新 Tag 实体
  */
 export declare function updateGlobalWorldbookPlaceholders(textContent?: string): void;
+/**
+ * 响应 SillyTavern 官方 WORLDINFO_ENTRIES_LOADED 事件，只读解包替换 globalLore
+ */
+export declare function processWorldInfoLoadedData(data?: {
+    globalLore?: Array<{
+        content?: string;
+        _rawContent?: string;
+    }>;
+}, textContent?: string): void;
+/**
+ * 从预处理后的文本块中解析人物参数字典 (对齐 st-chatu8 标准字段映射)
+ */
+export declare function parseCharacterData(content: string): CharacterProfile | null;
+/**
+ * 从预处理后的文本块中解析服装参数字典 (对齐 st-chatu8 标准字段映射)
+ */
+export declare function parseOutfitData(content: string): OutfitProfile | null;
+/**
+ * 从 AI 消息文本或测试文本中自动提取 <人物> 与 <服装> 实体结构
+ */
+export declare function extractCharacterAndOutfitTags(messageText: string): {
+    characters: Array<CharacterProfile & {
+        matchedOutfits: OutfitProfile[];
+    }>;
+    outfits: OutfitProfile[];
+};
+/**
+ * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用
+ */
+export declare function processExtractedCharacterTags(messageText: string): void;
 //# sourceMappingURL=character-injection.d.ts.map

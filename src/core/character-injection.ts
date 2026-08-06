@@ -14,7 +14,10 @@ import {
     getCharacterProfiles,
     getOutfitProfiles,
     getEnableSchemes,
-    getInjectionTemplates
+    getInjectionTemplates,
+    upsertCharacterProfile,
+    upsertOutfitProfile,
+    upsertEnableScheme
 } from '../storage/character-store';
 import type {
     CharacterProfile,
@@ -331,4 +334,305 @@ export function updateGlobalWorldbookPlaceholders(textContent?: string): void {
         logger.warn('[CharacterInjection] 动态刷新全局世界书失败:', err);
     }
 }
+
+/**
+ * 响应 SillyTavern 官方 WORLDINFO_ENTRIES_LOADED 事件，只读解包替换 globalLore
+ */
+export function processWorldInfoLoadedData(
+    data?: { globalLore?: Array<{ content?: string; _rawContent?: string }> },
+    textContent?: string
+): void {
+    if (!data || !Array.isArray(data.globalLore)) return;
+
+    try {
+        const { characterListText, outfitListText } = renderCharacterAndOutfitInjection(textContent || '');
+
+        const charRegex = /{{(角色启用列表|角色列表|通用角色启用列表)}}/gi;
+        const outfitRegex = /{{(服装启用列表|服装列表|通用服装启用列表)}}/gi;
+
+        for (const entry of data.globalLore) {
+            if (!entry || typeof entry.content !== 'string') continue;
+            if (typeof entry._rawContent === 'undefined') {
+                entry._rawContent = entry.content;
+            }
+
+            const raw = entry._rawContent;
+            if (charRegex.test(raw) || outfitRegex.test(raw)) {
+                let updated = raw.replace(charRegex, characterListText);
+                updated = updated.replace(outfitRegex, outfitListText);
+                entry.content = cleanRenderedText(updated);
+            }
+        }
+
+        logger.debug('[CharacterInjection] 已通过 WORLDINFO_ENTRIES_LOADED 动态处理 globalLore 条目');
+    } catch (err) {
+        logger.warn('[CharacterInjection] 处理 WORLDINFO_ENTRIES_LOADED 失败:', err);
+    }
+}
+
+/**
+ * 从预处理后的文本块中解析人物参数字典 (对齐 st-chatu8 标准字段映射)
+ */
+export function parseCharacterData(content: string): CharacterProfile | null {
+    if (!content) return null;
+
+    const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+    const data: Partial<CharacterProfile> = {
+        nameCN: '',
+        nameEN: '',
+        characterTraits: '',
+        facialFeatures: '',
+        facialFeaturesBack: '',
+        upperBodySFW: '',
+        upperBodySFWBack: '',
+        fullBodySFW: '',
+        fullBodySFWBack: '',
+        upperBodyNSFW: '',
+        upperBodyNSFWBack: '',
+        fullBodyNSFW: '',
+        fullBodyNSFWBack: '',
+        negativePrompt: '',
+        outfitList: []
+    };
+
+    const fieldMap: Record<string, keyof CharacterProfile> = {
+        '中文名称': 'nameCN',
+        '英文名称': 'nameEN',
+        '角色特征': 'characterTraits',
+        '五官外貌': 'facialFeatures',
+        '五官外貌背面': 'facialFeaturesBack',
+        '上半身SFW': 'upperBodySFW',
+        '上半身SFW背面': 'upperBodySFWBack',
+        '下半身SFW': 'fullBodySFW',
+        '下半身SFW背面': 'fullBodySFWBack',
+        '上半身NSFW': 'upperBodyNSFW',
+        '上半身NSFW背面': 'upperBodyNSFWBack',
+        '下半身NSFW': 'fullBodyNSFW',
+        '下半身NSFW背面': 'fullBodyNSFWBack',
+        '负面': 'negativePrompt'
+    };
+
+    for (const line of lines) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) continue;
+        const key = line.substring(0, colonIdx).trim();
+        const value = line.substring(colonIdx + 1).trim();
+
+        if (fieldMap[key]) {
+            const prop = fieldMap[key];
+            (data as Record<string, unknown>)[prop] = value;
+        }
+    }
+
+    if (!data.nameCN) return null;
+
+    return {
+        id: `char-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        nameCN: data.nameCN || '',
+        nameEN: data.nameEN || '',
+        characterTraits: data.characterTraits || '',
+        facialFeatures: data.facialFeatures || '',
+        facialFeaturesBack: data.facialFeaturesBack || '',
+        upperBodySFW: data.upperBodySFW || '',
+        upperBodySFWBack: data.upperBodySFWBack || '',
+        fullBodySFW: data.fullBodySFW || '',
+        fullBodySFWBack: data.fullBodySFWBack || '',
+        upperBodyNSFW: data.upperBodyNSFW || '',
+        upperBodyNSFWBack: data.upperBodyNSFWBack || '',
+        fullBodyNSFW: data.fullBodyNSFW || '',
+        fullBodyNSFWBack: data.fullBodyNSFWBack || '',
+        negativePrompt: data.negativePrompt || '',
+        outfitList: []
+    };
+}
+
+/**
+ * 从预处理后的文本块中解析服装参数字典 (对齐 st-chatu8 标准字段映射)
+ */
+export function parseOutfitData(content: string): OutfitProfile | null {
+    if (!content) return null;
+
+    const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
+    const data: Partial<OutfitProfile> = {
+        nameCN: '',
+        nameEN: '',
+        upperBody: '',
+        upperBodyBack: '',
+        fullBody: '',
+        fullBodyBack: ''
+    };
+
+    const fieldMap: Record<string, keyof OutfitProfile> = {
+        '中文名称': 'nameCN',
+        '英文名称': 'nameEN',
+        '上半身': 'upperBody',
+        '上半身背面': 'upperBodyBack',
+        '下半身': 'fullBody',
+        '下半身背面': 'fullBodyBack'
+    };
+
+    for (const line of lines) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) continue;
+        const key = line.substring(0, colonIdx).trim();
+        const value = line.substring(colonIdx + 1).trim();
+
+        if (fieldMap[key]) {
+            const prop = fieldMap[key];
+            (data as Record<string, unknown>)[prop] = value;
+        }
+    }
+
+    if (!data.nameCN) return null;
+
+    return {
+        id: `outfit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        nameCN: data.nameCN || '',
+        nameEN: data.nameEN || '',
+        upperBody: data.upperBody || '',
+        upperBodyBack: data.upperBodyBack || '',
+        fullBody: data.fullBody || '',
+        fullBodyBack: data.fullBodyBack || ''
+    };
+}
+
+/**
+ * 从 AI 消息文本或测试文本中自动提取 <人物> 与 <服装> 实体结构
+ */
+export function extractCharacterAndOutfitTags(messageText: string): {
+    characters: Array<CharacterProfile & { matchedOutfits: OutfitProfile[] }>;
+    outfits: OutfitProfile[];
+} {
+    if (!messageText) return { characters: [], outfits: [] };
+
+    // 清除 <thinking> 思考块
+    const textWithoutThinking = messageText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+    const tagRegex = /<(人物|服装)>([\s\S]*?)<\/\1>/g;
+
+    const items: Array<{
+        type: 'character' | 'outfit';
+        data: CharacterProfile | OutfitProfile;
+        position: number;
+    }> = [];
+
+    let match: RegExpExecArray | null;
+    while ((match = tagRegex.exec(textWithoutThinking)) !== null) {
+        const type = match[1];
+        const content = match[2];
+        const position = match.index;
+
+        if (type === '人物') {
+            const parsed = parseCharacterData(content);
+            if (parsed) items.push({ type: 'character', data: parsed, position });
+        } else if (type === '服装') {
+            const parsed = parseOutfitData(content);
+            if (parsed) items.push({ type: 'outfit', data: parsed, position });
+        }
+    }
+
+    items.sort((a, b) => a.position - b.position);
+
+    let currentCharItem: { data: CharacterProfile; matchedOutfits: OutfitProfile[] } | null = null;
+    const characters: Array<CharacterProfile & { matchedOutfits: OutfitProfile[] }> = [];
+    const orphanOutfits: OutfitProfile[] = [];
+
+    for (const item of items) {
+        if (item.type === 'character') {
+            const charData = item.data as CharacterProfile;
+            currentCharItem = { data: charData, matchedOutfits: [] };
+            characters.push({ ...charData, matchedOutfits: currentCharItem.matchedOutfits });
+        } else if (item.type === 'outfit') {
+            const outfitData = item.data as OutfitProfile;
+            if (currentCharItem) {
+                currentCharItem.matchedOutfits.push(outfitData);
+            } else {
+                orphanOutfits.push(outfitData);
+            }
+        }
+    }
+
+    return { characters, outfits: orphanOutfits };
+}
+
+/**
+ * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用
+ */
+export function processExtractedCharacterTags(messageText: string): void {
+    if (!messageText) return;
+
+    const { characters, outfits } = extractCharacterAndOutfitTags(messageText);
+    if (characters.length === 0 && outfits.length === 0) return;
+
+    const existingChars = getCharacterProfiles();
+    const existingOutfits = getOutfitProfiles();
+    const activeScheme = resolveActiveEnableScheme();
+
+    characters.forEach(extractedChar => {
+        const matchedExisting = existingChars.find(
+            c => (c.nameCN && c.nameCN.trim() === extractedChar.nameCN.trim()) ||
+                 (c.nameEN && extractedChar.nameEN && c.nameEN.trim().toLowerCase() === extractedChar.nameEN.trim().toLowerCase())
+        );
+
+        const promptText = matchedExisting
+            ? `🎯 检测到 AI 回复中包含已存在的角色设定 "${extractedChar.nameCN}"，是否【覆盖更新】其详细参数？`
+            : `🎯 检测到 AI 回复中包含新角色设定 "${extractedChar.nameCN}"，是否【保存并启用】至当前方案？`;
+
+        if (confirm(promptText)) {
+            // 保存专属服装
+            const savedOutfitNames: string[] = [];
+            extractedChar.matchedOutfits.forEach(outfit => {
+                const matchedOutfit = existingOutfits.find(o => o.nameCN === outfit.nameCN);
+                if (matchedOutfit) {
+                    upsertOutfitProfile({ ...matchedOutfit, ...outfit, id: matchedOutfit.id });
+                    savedOutfitNames.push(matchedOutfit.nameCN);
+                } else {
+                    upsertOutfitProfile(outfit);
+                    savedOutfitNames.push(outfit.nameCN);
+                }
+            });
+
+            // 保存/更新角色
+            const charToSave: CharacterProfile = matchedExisting
+                ? { ...matchedExisting, ...extractedChar, id: matchedExisting.id, outfitList: Array.from(new Set([...(matchedExisting.outfitList || []), ...savedOutfitNames])) }
+                : { ...extractedChar, outfitList: savedOutfitNames };
+
+            upsertCharacterProfile(charToSave);
+
+            // 启用至当前活动方案
+            if (activeScheme) {
+                activeScheme.characterRules = activeScheme.characterRules || {};
+                activeScheme.characterRules[charToSave.id] = { enabled: true, rule: 'ALL' };
+                upsertEnableScheme(activeScheme);
+            }
+
+            updateGlobalWorldbookPlaceholders();
+            logger.info(`[CharacterInjection] 成功存档并启用角色设定 "${charToSave.nameCN}"`);
+        }
+    });
+
+    outfits.forEach(extractedOutfit => {
+        const matchedOutfit = existingOutfits.find(o => o.nameCN === extractedOutfit.nameCN);
+        const promptText = matchedOutfit
+            ? `👕 检测到 AI 回复中包含已存在的通用服装 "${extractedOutfit.nameCN}"，是否【覆盖更新】？`
+            : `👕 检测到 AI 回复中包含新通用服装 "${extractedOutfit.nameCN}"，是否【保存并启用】？`;
+
+        if (confirm(promptText)) {
+            const outfitToSave: OutfitProfile = matchedOutfit
+                ? { ...matchedOutfit, ...extractedOutfit, id: matchedOutfit.id }
+                : extractedOutfit;
+
+            upsertOutfitProfile(outfitToSave);
+
+            if (activeScheme) {
+                activeScheme.outfitRules = activeScheme.outfitRules || {};
+                activeScheme.outfitRules[outfitToSave.id] = { enabled: true, rule: 'match' };
+                upsertEnableScheme(activeScheme);
+            }
+
+            updateGlobalWorldbookPlaceholders();
+            logger.info(`[CharacterInjection] 成功存档并启用通用服装 "${outfitToSave.nameCN}"`);
+        }
+    });
+}
+
 
