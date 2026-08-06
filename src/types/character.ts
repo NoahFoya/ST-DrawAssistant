@@ -145,29 +145,30 @@ export interface InjectionTemplateScheme {
     enableOutfitListTemplate: string;
 }
 
-// ─── 树形宏模板匹配规则模型 ──────────────────────────────────────────────────
+// ─── 2层树形宏模板匹配规则模型 ──────────────────────────────────────────────
 
 /**
- * 树形宏模板匹配规则节点 (Tree Rule Node)
+ * 2层限制的树形宏模板匹配规则节点 (Macro Rule Node)
+ * 遵循互斥约束：父节点包含 children 时不可有 variables；只有叶子节点才拥有 variables 列表
  */
 export interface MacroRuleNode {
     id: string;
-    /** 节点的规则/分支名称 (如 "背面视角", "上半身 SFW 模式") */
+    /** 节点的规则/分支名称 (如 "背面视角", "正面 SFW 上半身") */
     name: string;
-    /** 匹配关键词 (如 "-from_behind", "-sfw-upperbody", "-nsfw-upperbody") */
+    /** 匹配关键词 (如 "-from_behind", "-sfw-upperbody") */
     pattern: string;
     /** 节点启用状态 */
     enabled: boolean;
-    /** 命中该分支时绑定的属性映射或 Tag 动作 */
-    action?: {
-        /** 调取的属性关联标识 (如 "facialFeaturesBack", "upperBodySFW", "fullBodySFW" 等) */
-        propertyKey?: string;
-        /** 当 propertyKey 为 'custom' 时的自定义 Tag 字符串 */
-        customTag?: string;
-        /** 降级保底属性关联标识 (如 "facialFeatures") */
-        fallbackKey?: string;
-    };
-    /** 子分支规则节点列表 (支持无限级树形深度与多分支并行匹配) */
+    /** 
+     * 叶子节点绑定的 Tag 变量列表 (互斥约束：仅当无 children 时生效)
+     * 例如: ['nameEN', 'facialFeatures', 'upperBodySFW', 'fullBodySFW']
+     */
+    variables?: string[];
+    /** 当 variables 包含 'customTag' 时的自定义 Tag 字符串 */
+    customTag?: string;
+    /** 
+     * 子分支节点列表 (限制最多 2 层深度；若拥有 children 则为路由节点，不能包含 variables)
+     */
     children?: MacroRuleNode[];
 }
 
@@ -178,10 +179,14 @@ export interface MacroTreeScheme {
     id: string;
     name: string;
     isDefault?: boolean;
-    /** 根树节点列表 (允许多主分支并行求值) */
+    /** 角色固定注入变量列表 (先于条件分支处理，如 ['nameEN', 'characterTraits']) */
+    characterFixedVariables?: string[];
+    /** 服装固定注入变量列表 (先于条件分支处理，如 ['nameEN']) */
+    outfitFixedVariables?: string[];
+    /** 2 层根树节点列表 (允许多主分支并行求值) */
     rootNodes: MacroRuleNode[];
-    /** 角色默认解包模板 (纯 Tag 格式，无 XML) */
-    characterTemplate: string;
-    /** 服装默认解包模板 (纯 Tag 格式，无 XML) */
-    outfitTemplate: string;
+    /** 角色纯 Tag 模版 (保留备用) */
+    characterTemplate?: string;
+    /** 服装纯 Tag 模版 (保留备用) */
+    outfitTemplate?: string;
 }

@@ -79,7 +79,11 @@ export declare function showExtractionToast(title: string, badgeText: string, is
  */
 export declare function processExtractedCharacterTags(messageText: string): void;
 /**
- * 动态提示词预处理与树形宏解包引擎 (解析 $...$ 动态标记，按树形多分支方案求值，未匹配占位符统一替换为空字符串)
+ * 动态提示词预处理与 2 层树形宏解包引擎
+ * 严格执行步骤时序性：
+ * Step 1: 精准匹配实体 Name；未匹配则返回 0 字符空字符串 "" (绝不出引双引号)
+ * Step 2: 先处理【固定注入内容】 (fixedVariables, 如 nameEN, characterTraits)
+ * Step 3: 再处理【条件分支内容】 (2 层树形多分支 variables 求值)
  */
 export declare function processCharacterPrompt(promptText: string): string;
 //# sourceMappingURL=character-injection.d.ts.map

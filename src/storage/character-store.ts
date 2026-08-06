@@ -294,45 +294,46 @@ export function deleteInjectionTemplate(id: string): void {
 
 export const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme = {
     id: 'default-macro-tree-v1',
-    name: 'Wai/Standard 树形宏匹配默认预设',
+    name: 'Wai/Standard 2层树形宏匹配默认预设',
     isDefault: true,
+    characterFixedVariables: ['nameEN', 'characterTraits'],
+    outfitFixedVariables: ['nameEN'],
     characterTemplate: '{nameEN}, {facial}, {upperBody}, {fullBody}, {traits}',
     outfitTemplate: '{nameEN}, {upperBody}, {fullBody}',
     rootNodes: [
         {
             id: 'node-behind',
-            name: '背面视角上下文',
+            name: '背面视角路由分支',
             pattern: '-from_behind',
             enabled: true,
-            action: { propertyKey: 'facialFeaturesBack', fallbackKey: 'facialFeatures' },
             children: [
                 {
                     id: 'node-behind-upper-sfw',
                     name: '背面 SFW 上半身',
                     pattern: '-sfw-upperbody',
                     enabled: true,
-                    action: { propertyKey: 'upperBodySFWBack', fallbackKey: 'upperBodySFW' }
+                    variables: ['facialFeaturesBack', 'upperBodySFWBack']
                 },
                 {
                     id: 'node-behind-upper-nsfw',
                     name: '背面 NSFW 上半身',
                     pattern: '-nsfw-upperbody',
                     enabled: true,
-                    action: { propertyKey: 'upperBodyNSFWBack', fallbackKey: 'upperBodyNSFW' }
+                    variables: ['facialFeaturesBack', 'upperBodyNSFWBack']
                 },
                 {
                     id: 'node-behind-lower-sfw',
                     name: '背面 SFW 下半身',
                     pattern: '-sfw-lowerbody',
                     enabled: true,
-                    action: { propertyKey: 'fullBodySFWBack', fallbackKey: 'fullBodySFW' }
+                    variables: ['fullBodySFWBack']
                 },
                 {
                     id: 'node-behind-lower-nsfw',
                     name: '背面 NSFW 下半身',
                     pattern: '-nsfw-lowerbody',
                     enabled: true,
-                    action: { propertyKey: 'fullBodyNSFWBack', fallbackKey: 'fullBodyNSFW' }
+                    variables: ['fullBodyNSFWBack']
                 }
             ]
         },
@@ -341,28 +342,28 @@ export const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme = {
             name: '正面 SFW 上半身',
             pattern: '-sfw-upperbody',
             enabled: true,
-            action: { propertyKey: 'upperBodySFW' }
+            variables: ['facialFeatures', 'upperBodySFW']
         },
         {
             id: 'node-front-upper-nsfw',
             name: '正面 NSFW 上半身',
             pattern: '-nsfw-upperbody',
             enabled: true,
-            action: { propertyKey: 'upperBodyNSFW' }
+            variables: ['facialFeatures', 'upperBodyNSFW']
         },
         {
             id: 'node-front-lower-sfw',
             name: '正面 SFW 下半身',
             pattern: '-sfw-lowerbody',
             enabled: true,
-            action: { propertyKey: 'fullBodySFW' }
+            variables: ['fullBodySFW']
         },
         {
             id: 'node-front-lower-nsfw',
             name: '正面 NSFW 下半身',
             pattern: '-nsfw-lowerbody',
             enabled: true,
-            action: { propertyKey: 'fullBodyNSFW' }
+            variables: ['fullBodyNSFW']
         }
     ]
 };

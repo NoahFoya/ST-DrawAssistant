@@ -1997,7 +1997,7 @@ function createTextareaInput(label: string, id: string, value: string): { wrappe
 }
 
 /**
- * 渲染子界面 5：树形可配置宏模板匹配规则内容
+ * 渲染子界面 5：2层树形可配置宏模板匹配规则内容
  */
 function renderMacroRulesPane(): HTMLElement {
     const root = document.createElement('div');
@@ -2007,7 +2007,7 @@ function renderMacroRulesPane(): HTMLElement {
 
     let currentScheme: MacroTreeScheme = getMacroTreeScheme();
 
-    // ── 顶部控制卡片 ─────────────────────────────────────────────────────────
+    // ── 1. 顶部控制卡片 ───────────────────────────────────────────────────────
     const cardHeader = document.createElement('div');
     cardHeader.className = 'da-section-card';
     cardHeader.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
@@ -2024,7 +2024,7 @@ function renderMacroRulesPane(): HTMLElement {
     title.style.margin = '0';
     title.style.fontSize = '1.05em';
     title.style.color = 'var(--da-primary-color, #a855f7)';
-    title.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 树形可配置宏模板规则方案';
+    title.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 2 层树形宏模板匹配规则与时序配置';
 
     const btnGroup = document.createElement('div');
     btnGroup.style.display = 'flex';
@@ -2064,89 +2064,102 @@ function renderMacroRulesPane(): HTMLElement {
     tip.style.opacity = '0.8';
     tip.style.lineHeight = '1.5';
     tip.style.margin = '8px 0 0 0';
-    tip.textContent = '此处的树形匹配规则支持无限层级嵌套与平级多分支并行求值。第一步固定匹配实体 Name，第二步在已匹配节点下继续递归计算子分支，未匹配占位符一律自动替换为空字符串。';
+    tip.textContent = '严格执行处理时序：① 先精准匹配 Name 实体（未找到擦除为 0 字符）；② 优先插入【固定注入内容】；③ 再遍历【2 层条件分支规则树】压入叶子节点变量 Tag。父节点与变量列表严格互斥。';
 
     cardHeader.appendChild(topRow);
     cardHeader.appendChild(tip);
     root.appendChild(cardHeader);
 
-    // ── 解包模板配置卡片 ─────────────────────────────────────────────────────
-    const cardTemplate = document.createElement('div');
-    cardTemplate.className = 'da-section-card';
-    cardTemplate.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    cardTemplate.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    cardTemplate.style.borderRadius = '8px';
-    cardTemplate.style.padding = '16px';
-    cardTemplate.style.display = 'flex';
-    cardTemplate.style.flexDirection = 'column';
-    cardTemplate.style.gap = '14px';
+    // ── 2. 固定注入内容配置卡片 (Fixed Injections) ───────────────────────────
+    const cardFixed = document.createElement('div');
+    cardFixed.className = 'da-section-card';
+    cardFixed.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    cardFixed.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    cardFixed.style.borderRadius = '8px';
+    cardFixed.style.padding = '16px';
+    cardFixed.style.display = 'flex';
+    cardFixed.style.flexDirection = 'column';
+    cardFixed.style.gap = '12px';
 
-    const tplTitle = document.createElement('div');
-    tplTitle.style.fontWeight = 'bold';
-    tplTitle.style.color = 'var(--da-primary-color, #c084fc)';
-    tplTitle.style.fontSize = '0.92em';
-    tplTitle.textContent = '🏷️ 纯 Tag 替换模板格式配置 (0 XML 纯 Tag 格式)';
-    cardTemplate.appendChild(tplTitle);
+    const fixedTitle = document.createElement('div');
+    fixedTitle.style.fontWeight = 'bold';
+    fixedTitle.style.color = 'var(--da-primary-color, #c084fc)';
+    fixedTitle.style.fontSize = '0.92em';
+    fixedTitle.textContent = '📌 优先处理：固定注入内容配置 (无论是否命中分支均生效)';
+    cardFixed.appendChild(fixedTitle);
 
-    // 1. 角色解包模板
-    const charTplGroup = createTextInput('角色纯 Tag 解包模板:', 'macro-char-tpl-input', currentScheme.characterTemplate || '');
-    charTplGroup.input.addEventListener('input', () => {
-        currentScheme.characterTemplate = charTplGroup.input.value;
-        updateLivePreview();
-    });
+    // 角色固定变量列表
+    const charFixedRow = document.createElement('div');
+    charFixedRow.style.fontSize = '0.85em';
+    charFixedRow.innerHTML = '<span style="opacity:0.85; margin-right:8px;">角色固定注入 Tag 列表:</span>';
+    
+    const charFixedList = currentScheme.characterFixedVariables || ['nameEN', 'characterTraits'];
+    const charVarOptions = [
+        { label: '角色英文名 (nameEN)', key: 'nameEN' },
+        { label: '角色特征 (characterTraits)', key: 'characterTraits' },
+        { label: '角色中文名 (nameCN)', key: 'nameCN' }
+    ];
 
-    const charPillBox = document.createElement('div');
-    charPillBox.style.display = 'flex';
-    charPillBox.style.gap = '6px';
-    charPillBox.style.flexWrap = 'wrap';
-
-    ['{nameEN}', '{facial}', '{upperBody}', '{fullBody}', '{traits}', '{nameCN}'].forEach(tag => {
-        const pill = document.createElement('span');
-        pill.className = 'da-badge secondary';
-        pill.style.cursor = 'pointer';
-        pill.textContent = tag;
-        pill.title = `点击插入 ${tag} 占位符`;
-        pill.addEventListener('click', () => {
-            charTplGroup.input.value += (charTplGroup.input.value ? ', ' : '') + tag;
-            currentScheme.characterTemplate = charTplGroup.input.value;
+    charVarOptions.forEach(opt => {
+        const lbl = document.createElement('label');
+        lbl.style.marginRight = '12px';
+        lbl.style.cursor = 'pointer';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = charFixedList.includes(opt.key);
+        chk.addEventListener('change', () => {
+            if (chk.checked) {
+                if (!charFixedList.includes(opt.key)) charFixedList.push(opt.key);
+            } else {
+                const idx = charFixedList.indexOf(opt.key);
+                if (idx >= 0) charFixedList.splice(idx, 1);
+            }
+            currentScheme.characterFixedVariables = charFixedList;
             updateLivePreview();
         });
-        charPillBox.appendChild(pill);
+        lbl.appendChild(chk);
+        lbl.appendChild(document.createTextNode(` ${opt.label}`));
+        charFixedRow.appendChild(lbl);
     });
-    charTplGroup.wrapper.appendChild(charPillBox);
-    cardTemplate.appendChild(charTplGroup.wrapper);
+    cardFixed.appendChild(charFixedRow);
 
-    // 2. 服装解包模板
-    const outfitTplGroup = createTextInput('服装纯 Tag 解包模板:', 'macro-outfit-tpl-input', currentScheme.outfitTemplate || '');
-    outfitTplGroup.input.addEventListener('input', () => {
-        currentScheme.outfitTemplate = outfitTplGroup.input.value;
-        updateLivePreview();
-    });
+    // 服装固定变量列表
+    const outfitFixedRow = document.createElement('div');
+    outfitFixedRow.style.fontSize = '0.85em';
+    outfitFixedRow.innerHTML = '<span style="opacity:0.85; margin-right:8px;">服装固定注入 Tag 列表:</span>';
 
-    const outfitPillBox = document.createElement('div');
-    outfitPillBox.style.display = 'flex';
-    outfitPillBox.style.gap = '6px';
-    outfitPillBox.style.flexWrap = 'wrap';
+    const outfitFixedList = currentScheme.outfitFixedVariables || ['nameEN'];
+    const outfitVarOptions = [
+        { label: '服装英文名 (nameEN)', key: 'nameEN' },
+        { label: '服装中文名 (nameCN)', key: 'nameCN' }
+    ];
 
-    ['{nameEN}', '{upperBody}', '{fullBody}', '{nameCN}'].forEach(tag => {
-        const pill = document.createElement('span');
-        pill.className = 'da-badge secondary';
-        pill.style.cursor = 'pointer';
-        pill.textContent = tag;
-        pill.title = `点击插入 ${tag} 占位符`;
-        pill.addEventListener('click', () => {
-            outfitTplGroup.input.value += (outfitTplGroup.input.value ? ', ' : '') + tag;
-            currentScheme.outfitTemplate = outfitTplGroup.input.value;
+    outfitVarOptions.forEach(opt => {
+        const lbl = document.createElement('label');
+        lbl.style.marginRight = '12px';
+        lbl.style.cursor = 'pointer';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = outfitFixedList.includes(opt.key);
+        chk.addEventListener('change', () => {
+            if (chk.checked) {
+                if (!outfitFixedList.includes(opt.key)) outfitFixedList.push(opt.key);
+            } else {
+                const idx = outfitFixedList.indexOf(opt.key);
+                if (idx >= 0) outfitFixedList.splice(idx, 1);
+            }
+            currentScheme.outfitFixedVariables = outfitFixedList;
             updateLivePreview();
         });
-        outfitPillBox.appendChild(pill);
+        lbl.appendChild(chk);
+        lbl.appendChild(document.createTextNode(` ${opt.label}`));
+        outfitFixedRow.appendChild(lbl);
     });
-    outfitTplGroup.wrapper.appendChild(outfitPillBox);
-    cardTemplate.appendChild(outfitTplGroup.wrapper);
+    cardFixed.appendChild(outfitFixedRow);
 
-    root.appendChild(cardTemplate);
+    root.appendChild(cardFixed);
 
-    // ── 树形多分支规则构建器卡片 ─────────────────────────────────────────────
+    // ── 3. 2 层限制规则树构建器卡片 (Capped 2-Level Tree Builder) ─────────────
     const cardTree = document.createElement('div');
     cardTree.className = 'da-section-card';
     cardTree.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
@@ -2164,19 +2177,19 @@ function renderMacroRulesPane(): HTMLElement {
     treeTitle.style.fontWeight = 'bold';
     treeTitle.style.color = 'var(--da-primary-color, #c084fc)';
     treeTitle.style.fontSize = '0.92em';
-    treeTitle.textContent = '🌳 树形多分支规则树构建器 (支持无限深层与多分支匹配)';
+    treeTitle.textContent = '🌿 2 层条件分支规则树 (最多 2 层，父分支与叶子变量列表互斥)';
 
     const addRootBtn = document.createElement('button');
     addRootBtn.className = 'da-btn secondary';
     addRootBtn.style.fontSize = '0.82em';
-    addRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加根规则节点';
+    addRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加 Level 1 主分支';
     addRootBtn.addEventListener('click', () => {
         const newNode: MacroRuleNode = {
             id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            name: '自定义规则节点',
-            pattern: '-custom-pattern',
+            name: '主分支',
+            pattern: '-pattern',
             enabled: true,
-            action: { propertyKey: 'custom', customTag: '' }
+            variables: ['facialFeatures', 'upperBodySFW']
         };
         currentScheme.rootNodes.push(newNode);
         refreshAll();
@@ -2194,7 +2207,7 @@ function renderMacroRulesPane(): HTMLElement {
 
     root.appendChild(cardTree);
 
-    // ── 实时多分支调试预览卡片 ───────────────────────────────────────────────
+    // ── 4. 实时多分支调试预览卡片 ─────────────────────────────────────────────
     const cardPreview = document.createElement('div');
     cardPreview.className = 'da-section-card';
     cardPreview.style.background = 'rgba(168, 85, 247, 0.05)';
@@ -2207,9 +2220,9 @@ function renderMacroRulesPane(): HTMLElement {
     prevTitle.style.color = 'var(--da-primary-color, #c084fc)';
     prevTitle.style.fontSize = '0.92em';
     prevTitle.style.marginBottom = '8px';
-    prevTitle.textContent = '⚡ 实时多分支解包测试预览 (0 XML 纯 Tag 格式)';
+    prevTitle.textContent = '⚡ 实时 2 层树形解包调试预览 (0 字符擦除测试)';
 
-    const prevInputGroup = createTextInput('测试输入 Prompt:', 'macro-debug-input', '$rikka_takarada_(ssss.gridman)-from_front-sfw-upperBody-sfw-lowerBody$, $rikka_takarada_default_uniform-upperBody-lowerBody$, standing, daylight');
+    const prevInputGroup = createTextInput('测试输入 Prompt:', 'macro-debug-input', '1girl, $rikka_takarada_(ssss.gridman)-from_front-sfw-upperbody$, $rikka_takarada_default_uniform-sfw-upperbody$, standing, daylight');
     
     const prevResultBox = document.createElement('div');
     prevResultBox.style.marginTop = '8px';
@@ -2224,7 +2237,7 @@ function renderMacroRulesPane(): HTMLElement {
         saveMacroTreeScheme(currentScheme);
         const testInput = prevInputGroup.input.value;
         const rendered = processCharacterPrompt(testInput);
-        prevResultBox.textContent = rendered || '(求值为空或占位符已擦除)';
+        prevResultBox.textContent = rendered || '(占位符未匹配，已擦除替换为 0 字符空字符串)';
     };
 
     prevInputGroup.input.addEventListener('input', updateLivePreview);
@@ -2234,7 +2247,21 @@ function renderMacroRulesPane(): HTMLElement {
     cardPreview.appendChild(prevResultBox);
     root.appendChild(cardPreview);
 
-    // ── 树节点渲染递归例程 ────────────────────────────────────────────────────
+    // ── 可选变量字段注册表 ────────────────────────────────────────────────────
+    const availableVarList = [
+        { key: 'nameEN', label: '英文名 (nameEN)' },
+        { key: 'characterTraits', label: '角色特征 (characterTraits)' },
+        { key: 'facialFeatures', label: '五官外貌-正面 (facialFeatures)' },
+        { key: 'facialFeaturesBack', label: '五官外貌-背面 (facialFeaturesBack)' },
+        { key: 'upperBodySFW', label: '上半身SFW-正面 (upperBodySFW)' },
+        { key: 'upperBodySFWBack', label: '上半身SFW-背面 (upperBodySFWBack)' },
+        { key: 'fullBodySFW', label: '下半身SFW-正面 (fullBodySFW)' },
+        { key: 'fullBodySFWBack', label: '下半身SFW-背面 (fullBodySFWBack)' },
+        { key: 'upperBodyNSFW', label: '上半身NSFW (upperBodyNSFW)' },
+        { key: 'fullBodyNSFW', label: '下半身NSFW (fullBodyNSFW)' }
+    ];
+
+    // ── 2 层树节点渲染递推例程 ────────────────────────────────────────────────
     const renderNodeTree = (nodes: MacroRuleNode[], depth = 0): HTMLElement => {
         const listContainer = document.createElement('div');
         listContainer.style.display = 'flex';
@@ -2248,7 +2275,7 @@ function renderMacroRulesPane(): HTMLElement {
             nodeEl.style.borderRadius = '6px';
             nodeEl.style.padding = '10px 12px';
             nodeEl.style.marginLeft = `${depth * 20}px`;
-            nodeEl.style.borderLeft = depth > 0 ? '3px solid var(--da-primary-color, #a855f7)' : '1px solid var(--da-border-color)';
+            nodeEl.style.borderLeft = depth > 0 ? '3px dashed var(--da-primary-color, #a855f7)' : '2px solid var(--da-primary-color, #a855f7)';
 
             const row1 = document.createElement('div');
             row1.style.display = 'flex';
@@ -2260,9 +2287,9 @@ function renderMacroRulesPane(): HTMLElement {
             nameInput.type = 'text';
             nameInput.className = 'da-input';
             nameInput.style.fontSize = '0.85em';
-            nameInput.style.width = '150px';
+            nameInput.style.width = '140px';
             nameInput.value = node.name;
-            nameInput.placeholder = '规则名称';
+            nameInput.placeholder = depth === 0 ? 'L1 分支名' : 'L2 子分支名';
             nameInput.addEventListener('change', () => {
                 node.name = nameInput.value;
                 updateLivePreview();
@@ -2275,32 +2302,9 @@ function renderMacroRulesPane(): HTMLElement {
             patternInput.style.width = '140px';
             patternInput.style.fontFamily = 'monospace';
             patternInput.value = node.pattern;
-            patternInput.placeholder = '匹配词如 -from_behind';
+            patternInput.placeholder = depth === 0 ? '匹配词 -from_behind' : '匹配词 -sfw-upperbody';
             patternInput.addEventListener('change', () => {
                 node.pattern = patternInput.value;
-                updateLivePreview();
-            });
-
-            const propSelect = document.createElement('select');
-            propSelect.className = 'da-select';
-            propSelect.style.fontSize = '0.85em';
-            propSelect.style.width = '160px';
-            propSelect.innerHTML = `
-                <option value="facialFeatures" ${node.action?.propertyKey === 'facialFeatures' ? 'selected' : ''}>五官外貌 (正面)</option>
-                <option value="facialFeaturesBack" ${node.action?.propertyKey === 'facialFeaturesBack' ? 'selected' : ''}>五官外貌 (背面)</option>
-                <option value="upperBodySFW" ${node.action?.propertyKey === 'upperBodySFW' ? 'selected' : ''}>上半身 SFW (正面)</option>
-                <option value="upperBodySFWBack" ${node.action?.propertyKey === 'upperBodySFWBack' ? 'selected' : ''}>上半身 SFW (背面)</option>
-                <option value="fullBodySFW" ${node.action?.propertyKey === 'fullBodySFW' ? 'selected' : ''}>下半身 SFW (正面)</option>
-                <option value="fullBodySFWBack" ${node.action?.propertyKey === 'fullBodySFWBack' ? 'selected' : ''}>下半身 SFW (背面)</option>
-                <option value="upperBodyNSFW" ${node.action?.propertyKey === 'upperBodyNSFW' ? 'selected' : ''}>上半身 NSFW (正面)</option>
-                <option value="upperBodyNSFWBack" ${node.action?.propertyKey === 'upperBodyNSFWBack' ? 'selected' : ''}>上半身 NSFW (背面)</option>
-                <option value="fullBodyNSFW" ${node.action?.propertyKey === 'fullBodyNSFW' ? 'selected' : ''}>下半身 NSFW (正面)</option>
-                <option value="fullBodyNSFWBack" ${node.action?.propertyKey === 'fullBodyNSFWBack' ? 'selected' : ''}>下半身 NSFW (背面)</option>
-                <option value="custom" ${node.action?.propertyKey === 'custom' ? 'selected' : ''}>自定义 Tag 注入</option>
-            `;
-            propSelect.addEventListener('change', () => {
-                node.action = node.action || {};
-                node.action.propertyKey = propSelect.value;
                 updateLivePreview();
             });
 
@@ -2308,36 +2312,84 @@ function renderMacroRulesPane(): HTMLElement {
             nodeActions.style.display = 'flex';
             nodeActions.style.gap = '6px';
 
-            const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加子分支', () => {
-                node.children = node.children || [];
-                node.children.push({
-                    id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                    name: '子规则分支',
-                    pattern: '-sub-pattern',
-                    enabled: true,
-                    action: { propertyKey: 'custom', customTag: '' }
+            // 约束 1：最多只支持 2 层！即 depth 只能为 0 时允许添加 Level 2 子分支
+            if (depth === 0) {
+                const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加 L2 子分支 (转为路由分支)', () => {
+                    node.children = node.children || [];
+                    node.children.push({
+                        id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                        name: 'L2 子分支',
+                        pattern: '--sub-pattern',
+                        enabled: true,
+                        variables: ['facialFeatures', 'upperBodySFW']
+                    });
+                    // 约束 3：互斥约束! 拥有 children 时，自动清除当前节点的 variables
+                    delete node.variables;
+                    refreshAll();
                 });
-                refreshAll();
-            });
+                nodeActions.appendChild(addChildBtn);
+            }
 
             const delBtn = createIconButton('<i class="fa-solid fa-trash"></i>', '删除此分支', () => {
                 nodes.splice(idx, 1);
                 refreshAll();
             }, true);
 
-            nodeActions.appendChild(addChildBtn);
             nodeActions.appendChild(delBtn);
 
             row1.appendChild(nameInput);
             row1.appendChild(patternInput);
-            row1.appendChild(propSelect);
             row1.appendChild(nodeActions);
             nodeEl.appendChild(row1);
 
-            if (node.children && node.children.length > 0) {
+            // 约束 3：互斥展示! 若有 children，展示子分支；若无 children，展示叶子节点【变量列表勾选框】
+            if (Array.isArray(node.children) && node.children.length > 0) {
                 const childContainer = renderNodeTree(node.children, depth + 1);
                 childContainer.style.marginTop = '8px';
                 nodeEl.appendChild(childContainer);
+            } else {
+                // 叶子节点变量列表复选框
+                const varBox = document.createElement('div');
+                varBox.style.marginTop = '8px';
+                varBox.style.padding = '8px';
+                varBox.style.background = 'rgba(0,0,0,0.15)';
+                varBox.style.borderRadius = '4px';
+                varBox.style.display = 'flex';
+                varBox.style.flexWrap = 'wrap';
+                varBox.style.gap = '8px 12px';
+                varBox.style.fontSize = '0.8em';
+
+                const varTitle = document.createElement('div');
+                varTitle.style.width = '100%';
+                varTitle.style.fontWeight = 'bold';
+                varTitle.style.opacity = '0.7';
+                varTitle.textContent = '🍃 叶子节点绑定的变量列表 {变量内容}:';
+                varBox.appendChild(varTitle);
+
+                const currentVars = node.variables || [];
+
+                availableVarList.forEach(vOpt => {
+                    const lbl = document.createElement('label');
+                    lbl.style.cursor = 'pointer';
+                    const chk = document.createElement('input');
+                    chk.type = 'checkbox';
+                    chk.checked = currentVars.includes(vOpt.key);
+                    chk.addEventListener('change', () => {
+                        node.variables = node.variables || [];
+                        if (chk.checked) {
+                            if (!node.variables.includes(vOpt.key)) node.variables.push(vOpt.key);
+                        } else {
+                            const idx = node.variables.indexOf(vOpt.key);
+                            if (idx >= 0) node.variables.splice(idx, 1);
+                        }
+                        updateLivePreview();
+                    });
+                    lbl.appendChild(chk);
+                    lbl.appendChild(document.createTextNode(` ${vOpt.label}`));
+                    varBox.appendChild(lbl);
+                });
+
+                nodeEl.appendChild(varBox);
             }
 
             listContainer.appendChild(nodeEl);
@@ -2349,7 +2401,7 @@ function renderMacroRulesPane(): HTMLElement {
     const refreshAll = () => {
         treeContainer.innerHTML = '';
         if (currentScheme.rootNodes.length === 0) {
-            treeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无根节点，点击右上角“添加根规则节点”开始配置</div>';
+            treeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无根节点，点击右上角“添加 Level 1 主分支”开始配置</div>';
         } else {
             treeContainer.appendChild(renderNodeTree(currentScheme.rootNodes, 0));
         }

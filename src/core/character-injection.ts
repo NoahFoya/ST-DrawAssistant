@@ -809,51 +809,84 @@ export function processExtractedCharacterTags(messageText: string): void {
 // ============================================================================
 
 /**
- * 递归计算树形宏匹配规则 (支持平级多分支并行匹配与子分支递归计算)
+ * 变量解析器：根据变量名从实体对象中提取对应的 Tag 内容 (含 Back 属性自动 Fallback 回退)
  */
-function evaluateTreeNodes(
+function resolveVarValue(
+    varName: string,
+    entity: CharacterProfile | OutfitProfile,
+    customTag?: string
+): string {
+    if (!varName) return '';
+    if (varName === 'customTag') return customTag || '';
+
+    if (varName in entity) {
+        const directVal = (entity as unknown as Record<string, unknown>)[varName];
+        if (typeof directVal === 'string' && directVal.trim()) {
+            return directVal.trim();
+        }
+    }
+
+    // 常用属性 Fallback 映射
+    const char = entity as Partial<CharacterProfile>;
+    const outfit = entity as Partial<OutfitProfile>;
+
+    switch (varName) {
+        case 'facialFeaturesBack':
+            return char.facialFeaturesBack || char.facialFeatures || '';
+        case 'upperBodySFWBack':
+            return char.upperBodySFWBack || char.upperBodySFW || outfit.upperBodyBack || outfit.upperBody || '';
+        case 'fullBodySFWBack':
+            return char.fullBodySFWBack || char.fullBodySFW || outfit.fullBodyBack || outfit.fullBody || '';
+        case 'upperBodyNSFWBack':
+            return char.upperBodyNSFWBack || char.upperBodyNSFW || '';
+        case 'fullBodyNSFWBack':
+            return char.fullBodyNSFWBack || char.fullBodyNSFW || '';
+        case 'upperBodyBack':
+            return outfit.upperBodyBack || outfit.upperBody || '';
+        case 'fullBodyBack':
+            return outfit.fullBodyBack || outfit.fullBody || '';
+        default:
+            return '';
+    }
+}
+
+/**
+ * 2 层树形求值例程：支持 2 层嵌套与互斥约束，收集命中叶子节点绑定的 variables 列表
+ */
+function evaluate2LevelNodes(
     nodes: MacroRuleNode[],
     lowerContent: string,
     entity: CharacterProfile | OutfitProfile,
-    tagContext: Record<string, string>
+    tagList: string[]
 ): void {
     if (!Array.isArray(nodes) || nodes.length === 0) return;
 
     for (const node of nodes) {
         if (!node.enabled || !node.pattern) continue;
 
-        // 校验匹配 pattern (如 "-from_behind", "-sfw-upperbody")
+        // 校验匹配关键词 (如 "-from_behind", "-sfw-upperbody")
         if (lowerContent.includes(node.pattern.toLowerCase())) {
-            if (node.action) {
-                const key = node.action.propertyKey;
-                const fallbackKey = node.action.fallbackKey;
-
-                let val = '';
-                if (key === 'custom') {
-                    val = node.action.customTag || '';
-                } else if (key && key in entity) {
-                    val = (entity as unknown as Record<string, unknown>)[key] as string || '';
-                }
-
-                if (!val && fallbackKey && fallbackKey in entity) {
-                    val = (entity as unknown as Record<string, unknown>)[fallbackKey] as string || '';
-                }
-
-                if (val && key) {
-                    tagContext[key] = val;
-                }
-            }
-
-            // 递归求值子分支节点 (允许子分支继续深层匹配)
+            // 约束 3：互斥约束! 若节点包含 children，则递归求值子分支；若无 children，则展开 variables 列表
             if (Array.isArray(node.children) && node.children.length > 0) {
-                evaluateTreeNodes(node.children, lowerContent, entity, tagContext);
+                evaluate2LevelNodes(node.children, lowerContent, entity, tagList);
+            } else if (Array.isArray(node.variables) && node.variables.length > 0) {
+                for (const vName of node.variables) {
+                    const val = resolveVarValue(vName, entity, node.customTag);
+                    if (val && !tagList.includes(val)) {
+                        tagList.push(val);
+                    }
+                }
             }
         }
     }
 }
 
 /**
- * 动态提示词预处理与树形宏解包引擎 (解析 $...$ 动态标记，按树形多分支方案求值，未匹配占位符统一替换为空字符串)
+ * 动态提示词预处理与 2 层树形宏解包引擎
+ * 严格执行步骤时序性：
+ * Step 1: 精准匹配实体 Name；未匹配则返回 0 字符空字符串 "" (绝不出引双引号)
+ * Step 2: 先处理【固定注入内容】 (fixedVariables, 如 nameEN, characterTraits)
+ * Step 3: 再处理【条件分支内容】 (2 层树形多分支 variables 求值)
  */
 export function processCharacterPrompt(promptText: string): string {
     if (!promptText || typeof promptText !== 'string') return promptText;
@@ -873,7 +906,7 @@ export function processCharacterPrompt(promptText: string): string {
 
         const lowerContent = rawContent.toLowerCase();
 
-        // 提取关键词列表做名字切割剥离
+        // 收集规则树中的所有关键词用于名字切割剥离
         const collectPatterns = (nodes: MacroRuleNode[]): string[] => {
             let res: string[] = [];
             for (const n of nodes) {
@@ -905,29 +938,21 @@ export function processCharacterPrompt(promptText: string): string {
         });
 
         if (matchedChar) {
-            const tagContext: Record<string, string> = {
-                nameEN: matchedChar.nameEN || '',
-                nameCN: matchedChar.nameCN || '',
-                traits: matchedChar.characterTraits || '',
-                facial: matchedChar.facialFeatures || '',
-                upperBody: matchedChar.upperBodySFW || '',
-                fullBody: matchedChar.fullBodySFW || ''
-            };
+            const collectedTags: string[] = [];
 
-            // 树形多分支递归求值
-            evaluateTreeNodes(treeScheme.rootNodes, lowerContent, matchedChar, tagContext);
+            // 【Step 2：先处理固定注入内容 (Fixed Injections FIRST)】
+            const fixedVars = treeScheme.characterFixedVariables || ['nameEN', 'characterTraits'];
+            for (const fVar of fixedVars) {
+                const fVal = resolveVarValue(fVar, matchedChar);
+                if (fVal && !collectedTags.includes(fVal)) {
+                    collectedTags.push(fVal);
+                }
+            }
 
-            let resultTpl = treeScheme.characterTemplate || '{nameEN}, {facial}, {upperBody}, {fullBody}, {traits}';
-            resultTpl = resultTpl.replace(/\{nameEN\}/gi, tagContext['nameEN'] || '');
-            resultTpl = resultTpl.replace(/\{nameCN\}/gi, tagContext['nameCN'] || '');
-            resultTpl = resultTpl.replace(/\{traits\}/gi, tagContext['traits'] || '');
-            resultTpl = resultTpl.replace(/\{facial\}/gi, tagContext['facialFeaturesBack'] || tagContext['facial'] || '');
-            resultTpl = resultTpl.replace(/\{upperBody\}/gi, tagContext['upperBodySFWBack'] || tagContext['upperBodyNSFWBack'] || tagContext['upperBodyNSFW'] || tagContext['upperBodySFW'] || tagContext['upperBody'] || '');
-            resultTpl = resultTpl.replace(/\{fullBody\}/gi, tagContext['fullBodySFWBack'] || tagContext['fullBodyNSFWBack'] || tagContext['fullBodyNSFW'] || tagContext['fullBodySFW'] || tagContext['fullBody'] || '');
-            resultTpl = resultTpl.replace(/\{upperSFW\}/gi, tagContext['upperBodySFW'] || '');
-            resultTpl = resultTpl.replace(/\{fullBodySFW\}/gi, tagContext['fullBodySFW'] || '');
+            // 【Step 3：再处理条件分支内容 (Conditional Branch Injections SECOND)】
+            evaluate2LevelNodes(treeScheme.rootNodes, lowerContent, matchedChar, collectedTags);
 
-            return cleanRenderedText(resultTpl);
+            return collectedTags.join(', ');
         }
 
         // 2. 匹配服装实体
@@ -940,29 +965,28 @@ export function processCharacterPrompt(promptText: string): string {
         });
 
         if (matchedOutfit) {
-            const tagContext: Record<string, string> = {
-                nameEN: matchedOutfit.nameEN || '',
-                nameCN: matchedOutfit.nameCN || '',
-                upperBody: matchedOutfit.upperBody || '',
-                fullBody: matchedOutfit.fullBody || ''
-            };
+            const collectedTags: string[] = [];
 
-            evaluateTreeNodes(treeScheme.rootNodes, lowerContent, matchedOutfit, tagContext);
+            // 【Step 2：先处理固定注入内容 (Fixed Injections FIRST)】
+            const fixedVars = treeScheme.outfitFixedVariables || ['nameEN'];
+            for (const fVar of fixedVars) {
+                const fVal = resolveVarValue(fVar, matchedOutfit);
+                if (fVal && !collectedTags.includes(fVal)) {
+                    collectedTags.push(fVal);
+                }
+            }
 
-            let resultTpl = treeScheme.outfitTemplate || '{nameEN}, {upperBody}, {fullBody}';
-            resultTpl = resultTpl.replace(/\{nameEN\}/gi, tagContext['nameEN'] || '');
-            resultTpl = resultTpl.replace(/\{nameCN\}/gi, tagContext['nameCN'] || '');
-            resultTpl = resultTpl.replace(/\{upperBody\}/gi, tagContext['upperBodyBack'] || tagContext['upperBody'] || '');
-            resultTpl = resultTpl.replace(/\{fullBody\}/gi, tagContext['fullBodyBack'] || tagContext['fullBody'] || '');
+            // 【Step 3：再处理条件分支内容 (Conditional Branch Injections SECOND)】
+            evaluate2LevelNodes(treeScheme.rootNodes, lowerContent, matchedOutfit, collectedTags);
 
-            return cleanRenderedText(resultTpl);
+            return collectedTags.join(', ');
         }
 
-        // 3. 未找到任何匹配实体 / 无效占位符 ➔ 擦除为 "" (空字符串)
+        // 3. ⚠️ 未找到任何匹配实体 / 无效占位符 ➔ 擦除替换为 0 字符空字符串 "" (绝不出双引号)
         return '';
     });
 
-    // 格式二次清洗：擦除任何混入的 <xml> 标签并清洗多余逗号与换行符
+    // 格式二次清洗：擦除任何混入的 <xml> 标签并清洗多余逗号与空空格
     const strippedXml = processed.replace(/<[^>]+>/g, ' ');
     return cleanRenderedText(strippedXml);
 }
