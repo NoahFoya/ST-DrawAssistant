@@ -2101,7 +2101,7 @@ function renderPillListSelector(
 }
 
 /**
- * 渲染子界面 5：动态提示词匹配与替换规则内容 (规范化 UI + 独立实时预览)
+ * 渲染子界面 5：动态提示词匹配与替换规则内容 (标准 UI 规范 + 图标按钮 + 100% 宽顶栏切换)
  */
 function renderMacroRulesPane(): HTMLElement {
     const root = document.createElement('div');
@@ -2119,7 +2119,7 @@ function renderMacroRulesPane(): HTMLElement {
     hiddenFileInput.style.display = 'none';
     root.appendChild(hiddenFileInput);
 
-    // ── 区块 A：匹配方案管理区 (深度对齐注入模板方案管理栏风格) ──────────────────────
+    // ── 1. 匹配方案管理区 (方案工具栏卡片) ───────────────────────────────────
     const sectionA = document.createElement('div');
     sectionA.className = 'da-section-card';
 
@@ -2183,8 +2183,7 @@ function renderMacroRulesPane(): HTMLElement {
 
     const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前匹配方案', () => {
         saveMacroTreeScheme(activeScheme);
-        updateCharPreview();
-        updateOutfitPreview();
+        updateBothPreviews();
         const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
         if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
             winToastr.toastr.success('匹配方案保存成功！', '绘画助手');
@@ -2290,20 +2289,46 @@ function renderMacroRulesPane(): HTMLElement {
     sectionA.appendChild(controlsRow);
     root.appendChild(sectionA);
 
-    // ── 区块 B：页面切换 Nav Pills ──────────────────────────────────────────────
-    const sectionNav = document.createElement('div');
-    sectionNav.style.display = 'flex';
-    sectionNav.style.gap = '8px';
+    // ── 2. 主匹配规则主体卡片 (角色/服装 顶级卡片容器) ─────────────────────────
+    const mainRulesCard = document.createElement('div');
+    mainRulesCard.className = 'da-section-card';
+    mainRulesCard.style.padding = '0';
+    mainRulesCard.style.overflow = 'hidden';
+
+    // 2.1 顶级 100% 宽度整行 Tab 切换栏
+    const fullTabBar = document.createElement('div');
+    fullTabBar.style.display = 'flex';
+    fullTabBar.style.width = '100%';
+    fullTabBar.style.borderBottom = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
 
     const charTabBtn = document.createElement('button');
     charTabBtn.className = 'da-btn primary';
-    charTabBtn.style.fontSize = '0.88em';
+    charTabBtn.style.flex = '1';
+    charTabBtn.style.borderRadius = '0';
+    charTabBtn.style.padding = '10px 16px';
+    charTabBtn.style.fontSize = '0.9em';
+    charTabBtn.style.fontWeight = 'bold';
     charTabBtn.innerHTML = '<i class="fa-solid fa-user"></i> 👤 角色提示词匹配规则';
 
     const outfitTabBtn = document.createElement('button');
     outfitTabBtn.className = 'da-btn secondary';
-    outfitTabBtn.style.fontSize = '0.88em';
+    outfitTabBtn.style.flex = '1';
+    outfitTabBtn.style.borderRadius = '0';
+    outfitTabBtn.style.padding = '10px 16px';
+    outfitTabBtn.style.fontSize = '0.9em';
+    outfitTabBtn.style.fontWeight = 'bold';
     outfitTabBtn.innerHTML = '<i class="fa-solid fa-shirt"></i> 👗 服装提示词匹配规则';
+
+    fullTabBar.appendChild(charTabBtn);
+    fullTabBar.appendChild(outfitTabBtn);
+    mainRulesCard.appendChild(fullTabBar);
+
+    // 主体卡片内部 Padding 容器
+    const cardContentBox = document.createElement('div');
+    cardContentBox.style.padding = '16px';
+    cardContentBox.style.display = 'flex';
+    cardContentBox.style.flexDirection = 'column';
+    cardContentBox.style.gap = '16px';
 
     const updateNavState = () => {
         if (currentBlock === 'character') {
@@ -2328,10 +2353,6 @@ function renderMacroRulesPane(): HTMLElement {
         currentBlock = 'outfit';
         updateNavState();
     });
-
-    sectionNav.appendChild(charTabBtn);
-    sectionNav.appendChild(outfitTabBtn);
-    root.appendChild(sectionNav);
 
     // ── 变量选项注册表 ────────────────────────────────────────────────────────
     const charFixedOptions = [
@@ -2369,28 +2390,34 @@ function renderMacroRulesPane(): HTMLElement {
         { key: 'customTag', label: '自定义 Tag 字符串' }
     ];
 
-    // ── 1. 角色规则容器 Block (包含角色独立预览 + 规则树) ─────────────────────
+    // ── 3.1 角色规则容器 Block (预览 + 规则树) ──────────────────────────────────
     const charBlockContainer = document.createElement('div');
     charBlockContainer.style.display = 'flex';
     charBlockContainer.style.flexDirection = 'column';
-    charBlockContainer.style.gap = '16px';
+    charBlockContainer.style.gap = '14px';
 
-    // 1.1 角色匹配替换测试预览卡片 (置于角色规则最上方)
+    // 角色独立调试预览卡片
     const charPreviewCard = document.createElement('div');
-    charPreviewCard.className = 'da-section-card';
+    charPreviewCard.style.padding = '12px';
+    charPreviewCard.style.borderRadius = '6px';
+    charPreviewCard.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.15))';
+    charPreviewCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
     const charPrevHeader = document.createElement('div');
-    charPrevHeader.className = 'da-section-header';
-    charPrevHeader.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-eye"></i> ⚡ 角色匹配替换测试预览</span>';
+    charPrevHeader.style.fontWeight = 'bold';
+    charPrevHeader.style.fontSize = '0.88em';
+    charPrevHeader.style.marginBottom = '6px';
+    charPrevHeader.style.color = 'var(--da-primary-color, #c084fc)';
+    charPrevHeader.innerHTML = '<i class="fa-solid fa-eye"></i> ⚡ 角色匹配替换测试预览';
     charPreviewCard.appendChild(charPrevHeader);
 
     const charPrevInputGroup = createTextInput('测试角色 Prompt:', 'macro-char-debug-input', '1girl, $rikka_takarada_(ssss.gridman)-from_front-sfw-upperbody$, standing, daylight');
     
     const charPrevResultBox = document.createElement('div');
-    charPrevResultBox.style.marginTop = '8px';
-    charPrevResultBox.style.padding = '10px';
-    charPrevResultBox.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.3))';
-    charPrevResultBox.style.borderRadius = '6px';
+    charPrevResultBox.style.marginTop = '6px';
+    charPrevResultBox.style.padding = '8px';
+    charPrevResultBox.style.background = 'rgba(0,0,0,0.3)';
+    charPrevResultBox.style.borderRadius = '4px';
     charPrevResultBox.style.fontSize = '0.85em';
     charPrevResultBox.style.fontFamily = 'monospace';
     charPrevResultBox.style.wordBreak = 'break-all';
@@ -2407,15 +2434,14 @@ function renderMacroRulesPane(): HTMLElement {
     charPreviewCard.appendChild(charPrevResultBox);
     charBlockContainer.appendChild(charPreviewCard);
 
-    // 1.2 角色规则配置 Card
-    const charBlockCard = document.createElement('div');
-    charBlockCard.className = 'da-section-card';
-    charBlockCard.style.display = 'flex';
-    charBlockCard.style.flexDirection = 'column';
-    charBlockCard.style.gap = '14px';
+    // 角色规则详情
+    const charRulesBox = document.createElement('div');
+    charRulesBox.style.display = 'flex';
+    charRulesBox.style.flexDirection = 'column';
+    charRulesBox.style.gap = '14px';
 
     const renderCharBlock = () => {
-        charBlockCard.innerHTML = '';
+        charRulesBox.innerHTML = '';
 
         // 固定内容
         const charFixedBox = document.createElement('div');
@@ -2442,7 +2468,7 @@ function renderMacroRulesPane(): HTMLElement {
 
         charFixedBox.appendChild(fixedTitle);
         charFixedBox.appendChild(charFixedSelector);
-        charBlockCard.appendChild(charFixedBox);
+        charRulesBox.appendChild(charFixedBox);
 
         // 条件匹配树
         const charTreeBox = document.createElement('div');
@@ -2461,11 +2487,8 @@ function renderMacroRulesPane(): HTMLElement {
         charTreeTitle.style.opacity = '0.9';
         charTreeTitle.textContent = '🌿 角色条件匹配规则树 (根据提示词后缀动态触发):';
 
-        const addCharRootBtn = document.createElement('button');
-        addCharRootBtn.className = 'da-btn secondary';
-        addCharRootBtn.style.fontSize = '0.8em';
-        addCharRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加角色主分支';
-        addCharRootBtn.addEventListener('click', () => {
+        // 图标化添加按钮 (Icon Only)
+        const addCharRootBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加角色主分支', () => {
             activeScheme.characterRootNodes = activeScheme.characterRootNodes || [];
             activeScheme.characterRootNodes.push({
                 id: `node-char-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2488,40 +2511,46 @@ function renderMacroRulesPane(): HTMLElement {
 
         const charNodes = activeScheme.characterRootNodes || [];
         if (charNodes.length === 0) {
-            charTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“添加角色主分支”开始配置</div>';
+            charTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“+”添加角色主分支</div>';
         } else {
             charTreeContainer.appendChild(render2LevelNodeTree(charNodes, charBranchOptions, 0));
         }
 
         charTreeBox.appendChild(charTreeContainer);
-        charBlockCard.appendChild(charTreeBox);
+        charRulesBox.appendChild(charTreeBox);
     };
 
-    charBlockContainer.appendChild(charBlockCard);
-    root.appendChild(charBlockContainer);
+    charBlockContainer.appendChild(charRulesBox);
+    cardContentBox.appendChild(charBlockContainer);
 
-    // ── 2. 服装规则容器 Block (包含服装独立预览 + 规则树) ─────────────────────
+    // ── 3.2 服装规则容器 Block (预览 + 规则树) ──────────────────────────────────
     const outfitBlockContainer = document.createElement('div');
     outfitBlockContainer.style.display = 'none';
     outfitBlockContainer.style.flexDirection = 'column';
-    outfitBlockContainer.style.gap = '16px';
+    outfitBlockContainer.style.gap = '14px';
 
-    // 2.1 服装匹配替换测试预览卡片 (置于服装规则最上方)
+    // 服装独立调试预览卡片
     const outfitPreviewCard = document.createElement('div');
-    outfitPreviewCard.className = 'da-section-card';
+    outfitPreviewCard.style.padding = '12px';
+    outfitPreviewCard.style.borderRadius = '6px';
+    outfitPreviewCard.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.15))';
+    outfitPreviewCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
     const outfitPrevHeader = document.createElement('div');
-    outfitPrevHeader.className = 'da-section-header';
-    outfitPrevHeader.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-eye"></i> ⚡ 服装匹配替换测试预览</span>';
+    outfitPrevHeader.style.fontWeight = 'bold';
+    outfitPrevHeader.style.fontSize = '0.88em';
+    outfitPrevHeader.style.marginBottom = '6px';
+    outfitPrevHeader.style.color = 'var(--da-primary-color, #c084fc)';
+    outfitPrevHeader.innerHTML = '<i class="fa-solid fa-eye"></i> ⚡ 服装匹配替换测试预览';
     outfitPreviewCard.appendChild(outfitPrevHeader);
 
     const outfitPrevInputGroup = createTextInput('测试服装 Prompt:', 'macro-outfit-debug-input', '$rikka_takarada_default_uniform-sfw-upperbody$, standing, daylight');
 
     const outfitPrevResultBox = document.createElement('div');
-    outfitPrevResultBox.style.marginTop = '8px';
-    outfitPrevResultBox.style.padding = '10px';
-    outfitPrevResultBox.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.3))';
-    outfitPrevResultBox.style.borderRadius = '6px';
+    outfitPrevResultBox.style.marginTop = '6px';
+    outfitPrevResultBox.style.padding = '8px';
+    outfitPrevResultBox.style.background = 'rgba(0,0,0,0.3)';
+    outfitPrevResultBox.style.borderRadius = '4px';
     outfitPrevResultBox.style.fontSize = '0.85em';
     outfitPrevResultBox.style.fontFamily = 'monospace';
     outfitPrevResultBox.style.wordBreak = 'break-all';
@@ -2538,15 +2567,14 @@ function renderMacroRulesPane(): HTMLElement {
     outfitPreviewCard.appendChild(outfitPrevResultBox);
     outfitBlockContainer.appendChild(outfitPreviewCard);
 
-    // 2.2 服装规则配置 Card
-    const outfitBlockCard = document.createElement('div');
-    outfitBlockCard.className = 'da-section-card';
-    outfitBlockCard.style.display = 'flex';
-    outfitBlockCard.style.flexDirection = 'column';
-    outfitBlockCard.style.gap = '14px';
+    // 服装规则详情
+    const outfitRulesBox = document.createElement('div');
+    outfitRulesBox.style.display = 'flex';
+    outfitRulesBox.style.flexDirection = 'column';
+    outfitRulesBox.style.gap = '14px';
 
     const renderOutfitBlock = () => {
-        outfitBlockCard.innerHTML = '';
+        outfitRulesBox.innerHTML = '';
 
         // 固定内容
         const outfitFixedBox = document.createElement('div');
@@ -2573,7 +2601,7 @@ function renderMacroRulesPane(): HTMLElement {
 
         outfitFixedBox.appendChild(fixedTitle);
         outfitFixedBox.appendChild(outfitFixedSelector);
-        outfitBlockCard.appendChild(outfitFixedBox);
+        outfitRulesBox.appendChild(outfitFixedBox);
 
         // 条件匹配树
         const outfitTreeBox = document.createElement('div');
@@ -2592,11 +2620,8 @@ function renderMacroRulesPane(): HTMLElement {
         outfitTreeTitle.style.opacity = '0.9';
         outfitTreeTitle.textContent = '🌿 服装条件匹配规则树 (根据提示词后缀动态触发):';
 
-        const addOutfitRootBtn = document.createElement('button');
-        addOutfitRootBtn.className = 'da-btn secondary';
-        addOutfitRootBtn.style.fontSize = '0.8em';
-        addOutfitRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加服装主分支';
-        addOutfitRootBtn.addEventListener('click', () => {
+        // 图标化添加按钮 (Icon Only)
+        const addOutfitRootBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加服装主分支', () => {
             activeScheme.outfitRootNodes = activeScheme.outfitRootNodes || [];
             activeScheme.outfitRootNodes.push({
                 id: `node-outfit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2619,19 +2644,22 @@ function renderMacroRulesPane(): HTMLElement {
 
         const outfitNodes = activeScheme.outfitRootNodes || [];
         if (outfitNodes.length === 0) {
-            outfitTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“添加服装主分支”开始配置</div>';
+            outfitTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“+”添加服装主分支</div>';
         } else {
             outfitTreeContainer.appendChild(render2LevelNodeTree(outfitNodes, outfitBranchOptions, 0));
         }
 
         outfitTreeBox.appendChild(outfitTreeContainer);
-        outfitBlockCard.appendChild(outfitTreeBox);
+        outfitRulesBox.appendChild(outfitTreeBox);
     };
 
-    outfitBlockContainer.appendChild(outfitBlockCard);
-    root.appendChild(outfitBlockContainer);
+    outfitBlockContainer.appendChild(outfitRulesBox);
+    cardContentBox.appendChild(outfitBlockContainer);
 
-    // ── 2 层树节点通用递推折叠渲染器 (无冗余噪音徽章) ─────────────────────────
+    mainRulesCard.appendChild(cardContentBox);
+    root.appendChild(mainRulesCard);
+
+    // ── 2 层树节点通用递推折叠渲染器 (纯图标按钮 Icon Only) ───────────────────
     const render2LevelNodeTree = (
         nodes: MacroRuleNode[],
         branchVarOptions: Array<{ key: string; label: string }>,
@@ -2653,12 +2681,12 @@ function renderMacroRulesPane(): HTMLElement {
             nodeEl.style.background = depth === 0 ? 'rgba(255, 255, 255, 0.025)' : 'rgba(0, 0, 0, 0.15)';
             nodeEl.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
             nodeEl.style.borderRadius = '6px';
-            nodeEl.style.padding = '10px 12px';
+            nodeEl.style.padding = '8px 12px';
             nodeEl.style.marginLeft = `${depth * 20}px`;
             nodeEl.style.borderLeft = depth > 0 ? '3px dashed var(--da-primary-color, #a855f7)' : '3px solid var(--da-primary-color, #a855f7)';
             nodeEl.style.transition = 'all 0.2s ease';
 
-            // ── 行 1：标题与字段主控行 (横向流式紧凑，无冗余噪音徽章) ───────────────────
+            // ── 行 1：标题与字段主控行 (横向流式紧凑) ─────────────────────────
             const mainRow = document.createElement('div');
             mainRow.style.display = 'flex';
             mainRow.style.alignItems = 'center';
@@ -2672,7 +2700,7 @@ function renderMacroRulesPane(): HTMLElement {
             leftFields.style.flexWrap = 'wrap';
             leftFields.style.gap = '12px';
 
-            // 字段 1：名称 (擦除“🍃 L2 叶子”等黑话/噪音徽章)
+            // 字段 1：名称
             const nameBox = document.createElement('div');
             nameBox.style.display = 'inline-flex';
             nameBox.style.alignItems = 'center';
@@ -2745,27 +2773,25 @@ function renderMacroRulesPane(): HTMLElement {
                 leftFields.appendChild(summaryInfo);
             }
 
-            // 右侧按钮工具栏
+            // 右侧按钮工具栏 (图标按钮 Icon Only!)
             const rightActions = document.createElement('div');
             rightActions.style.display = 'flex';
             rightActions.style.alignItems = 'center';
             rightActions.style.gap = '6px';
 
-            // 1. 折叠 / 展开 按钮
+            // 1. 折叠 / 展开 纯图标按钮
             const toggleBtn = createIconButton(
-                node.isExpanded ? '<i class="fa-solid fa-chevron-up"></i> 收起' : '<i class="fa-solid fa-chevron-down"></i> 展开',
+                node.isExpanded ? '<i class="fa-solid fa-chevron-up"></i>' : '<i class="fa-solid fa-chevron-down"></i>',
                 node.isExpanded ? '折叠收起详情' : '展开查看详情',
                 () => {
                     node.isExpanded = !node.isExpanded;
                     refreshAll();
                 }
             );
-            toggleBtn.style.fontSize = '0.8em';
-            toggleBtn.style.padding = '3px 8px';
 
-            // 2. 添加 L2 子分支按钮 (仅在 depth === 0 时允许)
+            // 2. 添加 L2 子分支纯图标按钮 (仅在 depth === 0 时允许)
             if (depth === 0) {
-                const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i> 子分支', '添加 L2 子分支 (转为路由分支)', () => {
+                const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加 L2 子分支', () => {
                     node.children = node.children || [];
                     node.children.push({
                         id: `node-sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2779,12 +2805,10 @@ function renderMacroRulesPane(): HTMLElement {
                     node.isExpanded = true;
                     refreshAll();
                 });
-                addChildBtn.style.fontSize = '0.8em';
-                addChildBtn.style.padding = '3px 8px';
                 rightActions.appendChild(addChildBtn);
             }
 
-            // 3. 删除按钮
+            // 3. 删除纯图标按钮
             const delBtn = createIconButton('<i class="fa-solid fa-trash"></i>', '删除此分支', () => {
                 nodes.splice(idx, 1);
                 refreshAll();
@@ -2801,8 +2825,8 @@ function renderMacroRulesPane(): HTMLElement {
             if (node.isExpanded) {
                 if (isRouteNode) {
                     const childBox = document.createElement('div');
-                    childBox.style.marginTop = '10px';
-                    childBox.style.paddingTop = '10px';
+                    childBox.style.marginTop = '8px';
+                    childBox.style.paddingTop = '8px';
                     childBox.style.borderTop = '1px dashed var(--da-border-color, rgba(255,255,255,0.08))';
 
                     const childContainer = render2LevelNodeTree(node.children!, branchVarOptions, depth + 1);
@@ -2810,7 +2834,7 @@ function renderMacroRulesPane(): HTMLElement {
                     nodeEl.appendChild(childBox);
                 } else {
                     const varDetailBox = document.createElement('div');
-                    varDetailBox.style.marginTop = '10px';
+                    varDetailBox.style.marginTop = '8px';
                     varDetailBox.style.padding = '8px 10px';
                     varDetailBox.style.background = 'rgba(0,0,0,0.2)';
                     varDetailBox.style.borderRadius = '6px';
@@ -2824,7 +2848,7 @@ function renderMacroRulesPane(): HTMLElement {
                     varHeader.style.gap = '6px';
 
                     const varTitle = document.createElement('span');
-                    varTitle.style.fontWeight = 'bold';
+                    varTitle.style.fontWeight = '600';
                     varTitle.style.opacity = '0.85';
                     varTitle.style.fontSize = '0.82em';
                     varTitle.style.color = 'var(--da-primary-color, #c084fc)';
