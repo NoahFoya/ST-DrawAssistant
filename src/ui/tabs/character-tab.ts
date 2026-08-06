@@ -7,7 +7,8 @@ import {
     getCharacterProfiles,
     getCharacterProfileById,
     upsertCharacterProfile,
-    deleteCharacterProfile
+    deleteCharacterProfile,
+    getOutfitProfiles
 } from '../../storage/character-store';
 import type { CharacterProfile } from '../../types/character';
 
@@ -17,6 +18,33 @@ import type { CharacterProfile } from '../../types/character';
 function countTokens(text: string): number {
     if (!text || !text.trim()) return 0;
     return text.split(/,|\n/).map(t => t.trim()).filter(Boolean).length;
+}
+
+/**
+ * 辅助创建仅图标按钮 (带 tooltip 提示)
+ */
+function createIconButton(
+    iconHtml: string,
+    titleText: string,
+    onClick: () => void,
+    isDanger = false
+): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = `da-icon-btn ${isDanger ? 'danger' : ''}`;
+    btn.title = titleText;
+    btn.style.height = '32px';
+    btn.style.minWidth = '32px';
+    btn.style.padding = '0 8px';
+    btn.style.display = 'inline-flex';
+    btn.style.alignItems = 'center';
+    btn.style.justifyContent = 'center';
+    btn.style.boxSizing = 'border-box';
+    btn.innerHTML = iconHtml;
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onClick();
+    });
+    return btn;
 }
 
 /**
@@ -37,17 +65,17 @@ export function renderCharacterTab(): HTMLElement {
     subNav.style.paddingBottom = '8px';
 
     const subTabs = [
-        { id: 'ch-sub-tab-character-settings', label: '1. 角色设定', active: true },
-        { id: 'ch-sub-tab-outfit-settings', label: '2. 服装设定', active: false },
-        { id: 'ch-sub-tab-character-enable', label: '3. 设定启用管理', active: false },
-        { id: 'ch-sub-tab-injection-templates', label: '4. 注入模板管理', active: false }
+        { id: 'ch-sub-tab-character-settings', label: '角色设定', active: true },
+        { id: 'ch-sub-tab-outfit-settings', label: '服装设定', active: false },
+        { id: 'ch-sub-tab-character-enable', label: '设定启用管理', active: false },
+        { id: 'ch-sub-tab-injection-templates', label: '注入模板管理', active: false }
     ];
 
     subTabs.forEach(st => {
         const btn = document.createElement('button');
         btn.className = `da-btn secondary ${st.active ? 'active' : ''}`;
         btn.style.fontSize = '0.85em';
-        btn.style.padding = '4px 12px';
+        btn.style.padding = '4px 14px';
         btn.textContent = st.label;
         btn.setAttribute('data-sub-tab', st.id);
 
@@ -110,13 +138,13 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     let currentProfile: CharacterProfile = getCharacterProfiles()[0];
 
-    // ── 区域 A：角色预设控制栏 ───────────────────────────────────────────────
+    // ── 区域 A：角色预设控制栏 (极简图标化工具栏) ───────────────────────────
     const sectionA = document.createElement('div');
     sectionA.className = 'da-section-card';
 
     const headerA = document.createElement('div');
     headerA.className = 'da-section-header';
-    headerA.innerHTML = '<span class="da-section-title">角色预设管理</span>';
+    headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-user-gear"></i> 角色预设管理</span>';
     sectionA.appendChild(headerA);
 
     const controlsRow = document.createElement('div');
@@ -150,34 +178,111 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     refreshPresetSelect();
 
-    // 按钮动作组件
-    const btnNew = document.createElement('button');
-    btnNew.className = 'da-btn secondary';
-    btnNew.textContent = '➕ 新建';
+    // 仅图标控制按钮组 (图标 + tooltip 浮动提示)
+    const hiddenFileInput = document.createElement('input');
+    hiddenFileInput.type = 'file';
+    hiddenFileInput.accept = '.json';
+    hiddenFileInput.style.display = 'none';
 
-    const btnSave = document.createElement('button');
-    btnSave.className = 'da-btn primary';
-    btnSave.textContent = '💾 保存';
+    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建预设', () => {
+        const name = prompt('请输入新角色名称（中文/英文）：');
+        if (!name) return;
+        const newP: CharacterProfile = {
+            id: `char-${Date.now()}`,
+            nameCN: name,
+            nameEN: name,
+            characterTraits: '',
+            facialFeatures: '',
+            facialFeaturesBack: '',
+            upperBodySFW: '',
+            upperBodySFWBack: '',
+            fullBodySFW: '',
+            fullBodySFWBack: '',
+            upperBodyNSFW: '',
+            upperBodyNSFWBack: '',
+            fullBodyNSFW: '',
+            fullBodyNSFWBack: '',
+            negativePrompt: '',
+            outfitList: []
+        };
+        upsertCharacterProfile(newP);
+        refreshPresetSelect();
+        populateForm(newP);
+    });
 
-    const btnSaveAs = document.createElement('button');
-    btnSaveAs.className = 'da-btn secondary';
-    btnSaveAs.textContent = '📄 另存为';
+    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前预设', () => {
+        saveCurrentForm();
+        alert('💾 角色预设已保存！');
+    });
 
-    const btnRename = document.createElement('button');
-    btnRename.className = 'da-btn secondary';
-    btnRename.textContent = '✏️ 重命名';
+    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新预设', () => {
+        const newName = prompt('另存为新预设名称：', `${currentProfile.nameCN || '角色'}_副本`);
+        if (!newName) return;
+        saveCurrentForm();
+        const copy: CharacterProfile = {
+            ...currentProfile,
+            id: `char-${Date.now()}`,
+            nameCN: newName,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        upsertCharacterProfile(copy);
+        refreshPresetSelect();
+        populateForm(copy);
+    });
 
-    const btnExport = document.createElement('button');
-    btnExport.className = 'da-btn secondary';
-    btnExport.textContent = '📤 导出';
+    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名预设', () => {
+        const newName = prompt('重命名角色中文名称：', currentProfile.nameCN);
+        if (newName === null) return;
+        currentProfile.nameCN = newName;
+        upsertCharacterProfile(currentProfile);
+        refreshPresetSelect();
+    });
 
-    const btnImport = document.createElement('button');
-    btnImport.className = 'da-btn secondary';
-    btnImport.textContent = '📥 导入';
+    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出当前角色预设', () => {
+        saveCurrentForm();
+        const jsonStr = JSON.stringify(currentProfile, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `character-${currentProfile.nameCN || currentProfile.id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
 
-    const btnDelete = document.createElement('button');
-    btnDelete.className = 'da-btn danger';
-    btnDelete.textContent = '🗑️ 删除';
+    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入角色预设 JSON', () => {
+        hiddenFileInput.click();
+    });
+
+    hiddenFileInput.addEventListener('change', () => {
+        const file = hiddenFileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const imported = JSON.parse(reader.result as string) as CharacterProfile;
+                if (!imported.nameCN && !imported.nameEN) throw new Error('无效的角色预设文件');
+                imported.id = `char-${Date.now()}`;
+                upsertCharacterProfile(imported);
+                refreshPresetSelect();
+                populateForm(imported);
+                alert('📥 角色预设导入成功！');
+            } catch {
+                alert('❌ 导入失败：无法解析该 JSON 角色文件');
+            }
+            hiddenFileInput.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除预设', () => {
+        if (!confirm(`⚠️ 确定要删除角色预设 "${currentProfile.nameCN || currentProfile.id}" 吗？`)) return;
+        deleteCharacterProfile(currentProfile.id);
+        refreshPresetSelect();
+        const first = getCharacterProfiles()[0];
+        if (first) populateForm(first);
+    }, true);
 
     controlsRow.appendChild(selectEl);
     controlsRow.appendChild(btnNew);
@@ -187,6 +292,7 @@ function renderCharacterSettingsPane(): HTMLElement {
     controlsRow.appendChild(btnExport);
     controlsRow.appendChild(btnImport);
     controlsRow.appendChild(btnDelete);
+    controlsRow.appendChild(hiddenFileInput);
 
     sectionA.appendChild(controlsRow);
     root.appendChild(sectionA);
@@ -202,14 +308,14 @@ function renderCharacterSettingsPane(): HTMLElement {
     const headerB = document.createElement('div');
     headerB.className = 'da-section-header';
     headerB.style.width = '100%';
-    headerB.innerHTML = '<span class="da-section-title">角色照片与配置</span>';
+    headerB.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-image"></i> 角色照片与配置</span>';
     sectionB.appendChild(headerB);
 
     const photoPreviewContainer = document.createElement('div');
     photoPreviewContainer.style.width = '160px';
     photoPreviewContainer.style.height = '160px';
     photoPreviewContainer.style.borderRadius = '8px';
-    photoPreviewContainer.style.border = '1px dashed var(--da-border-color, #444)';
+    photoPreviewContainer.style.border = '1px dashed var(--da-border-color, rgba(255,255,255,0.2))';
     photoPreviewContainer.style.display = 'flex';
     photoPreviewContainer.style.alignItems = 'center';
     photoPreviewContainer.style.justifyContent = 'center';
@@ -225,7 +331,7 @@ function renderCharacterSettingsPane(): HTMLElement {
     const placeholderText = document.createElement('span');
     placeholderText.style.fontSize = '0.85em';
     placeholderText.style.color = 'var(--da-text-secondary, #888)';
-    placeholderText.textContent = '暂无照片';
+    placeholderText.innerHTML = '<i class="fa-solid fa-image" style="font-size: 2em; opacity: 0.5;"></i>';
 
     photoPreviewContainer.appendChild(imgPreview);
     photoPreviewContainer.appendChild(placeholderText);
@@ -237,7 +343,7 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     const uploadBtn = document.createElement('button');
     uploadBtn.className = 'da-btn secondary';
-    uploadBtn.textContent = '🖼️ 上传照片';
+    uploadBtn.innerHTML = '<i class="fa-solid fa-upload"></i> 上传照片';
     uploadBtn.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', () => {
@@ -267,7 +373,7 @@ function renderCharacterSettingsPane(): HTMLElement {
     sendPhotoCheckbox.checked = !!currentProfile.sendPhoto;
 
     sendPhotoLabel.appendChild(sendPhotoCheckbox);
-    sendPhotoLabel.appendChild(document.createTextNode('发送图片 (作为生图参考)'));
+    sendPhotoLabel.appendChild(document.createTextNode('发送图片 (作为生图参考图)'));
 
     sectionB.appendChild(photoPreviewContainer);
     sectionB.appendChild(uploadBtn);
@@ -285,7 +391,7 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     const headerC = document.createElement('div');
     headerC.className = 'da-section-header';
-    headerC.innerHTML = '<span class="da-section-title">角色详细参数与 Tag 变量</span>';
+    headerC.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-sliders"></i> 角色详细参数与 Tag 变量</span>';
     sectionC.appendChild(headerC);
 
     // 中英文名
@@ -303,7 +409,7 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     // 全身组合 Token 统计看板
     const tokenCard = document.createElement('div');
-    tokenCard.style.padding = '10px';
+    tokenCard.style.padding = '10px 14px';
     tokenCard.style.borderRadius = '6px';
     tokenCard.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
     tokenCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
@@ -312,13 +418,13 @@ function renderCharacterSettingsPane(): HTMLElement {
     tokenTitle.style.fontWeight = 'bold';
     tokenTitle.style.fontSize = '0.85em';
     tokenTitle.style.marginBottom = '6px';
-    tokenTitle.textContent = '全身组合 Token 动态统计';
+    tokenTitle.textContent = '全身组合 Token 动态统计 (角色特征 + 五官 + 上半身 + 下半身)';
 
     const tokenGrid = document.createElement('div');
     tokenGrid.style.display = 'grid';
     tokenGrid.style.gridTemplateColumns = '1fr 1fr';
     tokenGrid.style.gap = '6px';
-    tokenGrid.style.fontSize = '0.8em';
+    tokenGrid.style.fontSize = '0.85em';
     tokenGrid.style.color = 'var(--da-text-secondary, #ccc)';
 
     const tokenFrontSFW = document.createElement('div');
@@ -366,10 +472,10 @@ function renderCharacterSettingsPane(): HTMLElement {
         const lowerNSFW = countTokens(textareasRecord.char_fullBodyNSFW?.value || '');
         const lowerNSFWBack = countTokens(textareasRecord.char_fullBodyNSFWBack?.value || '');
 
-        tokenFrontSFW.textContent = `正面 SFW 全身: ${traits + facial + upperSFW + lowerSFW} Tokens`;
-        tokenFrontNSFW.textContent = `正面 NSFW 全身: ${traits + facial + upperNSFW + lowerNSFW} Tokens`;
-        tokenBackSFW.textContent = `背面 SFW 全身: ${traits + facialBack + upperSFWBack + lowerSFWBack} Tokens`;
-        tokenBackNSFW.textContent = `背面 NSFW 全身: ${traits + facialBack + upperNSFWBack + lowerNSFWBack} Tokens`;
+        tokenFrontSFW.textContent = `正面 SFW 全身: ${traits + facial + upperSFW + lowerSFW}`;
+        tokenFrontNSFW.textContent = `正面 NSFW 全身: ${traits + facial + upperNSFW + lowerNSFW}`;
+        tokenBackSFW.textContent = `背面 SFW 全身: ${traits + facialBack + upperSFWBack + lowerSFWBack}`;
+        tokenBackNSFW.textContent = `背面 NSFW 全身: ${traits + facialBack + upperNSFWBack + lowerNSFWBack}`;
     };
 
     Object.entries(fieldsMap).forEach(([id, info]) => {
@@ -382,7 +488,7 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     root.appendChild(sectionC);
 
-    // ── 区域 D：角色专属服装列表管理 ────────────────────────────────────────
+    // ── 区域 D：角色专属服装列表管理与添加控制 ─────────────────────────────
     const sectionD = document.createElement('div');
     sectionD.className = 'da-section-card';
     sectionD.style.display = 'flex';
@@ -391,20 +497,145 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     const headerD = document.createElement('div');
     headerD.className = 'da-section-header';
-    headerD.innerHTML = '<span class="da-section-title">关联专属服装列表 ({outfits})</span>';
+    headerD.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-shirt"></i> 关联专属服装列表 ({outfits})</span>';
     sectionD.appendChild(headerD);
 
-    const outfitListInput = createTextareaInput('专属服装名称列表（每行一个）', 'char_outfit_list', (currentProfile.outfitList || []).join('\n'));
+    // 服装名称多行文本框
+    const outfitListInput = createTextareaInput('服装列表（每行一个服装名称）', 'char_outfit_list', (currentProfile.outfitList || []).join('\n'));
+    outfitListInput.textarea.rows = 4;
     sectionD.appendChild(outfitListInput.wrapper);
 
+    // 检测服装按钮与检测结果显示容器
     const checkBtn = document.createElement('button');
     checkBtn.className = 'da-btn secondary';
-    checkBtn.textContent = '✔️ 检测服装是否存在';
+    checkBtn.style.width = '100%';
+    checkBtn.innerHTML = '<i class="fa-solid fa-check-circle"></i> 检测服装是否存在';
+
+    const checkResultBox = document.createElement('div');
+    checkResultBox.style.display = 'none';
+    checkResultBox.style.padding = '10px';
+    checkResultBox.style.borderRadius = '6px';
+    checkResultBox.style.fontSize = '0.85em';
+    checkResultBox.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
+    checkResultBox.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+
+    checkBtn.addEventListener('click', () => {
+        const rawLines = outfitListInput.textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (rawLines.length === 0) {
+            checkResultBox.style.display = 'block';
+            checkResultBox.innerHTML = '<span style="color: #ff9800;">⚠️ 服装列表中暂未填写任何服装名称</span>';
+            return;
+        }
+        const registeredOutfits = getOutfitProfiles();
+        const results = rawLines.map(name => {
+            const exists = registeredOutfits.some(o => o.nameCN === name || o.nameEN === name);
+            return { name, exists };
+        });
+
+        let html = '<div style="font-weight: bold; margin-bottom: 6px;">服装存在性检测结果：</div>';
+        results.forEach(r => {
+            if (r.exists) {
+                html += `<div style="color: #4caf50;">✅ [已注册] ${r.name}</div>`;
+            } else {
+                html += `<div style="color: #f44336;">❌ [未找到] ${r.name} (将在服装设定中未定义)</div>`;
+            }
+        });
+        checkResultBox.innerHTML = html;
+        checkResultBox.style.display = 'block';
+    });
+
     sectionD.appendChild(checkBtn);
+    sectionD.appendChild(checkResultBox);
+
+    // ➕ 从服装预设中选择并添加服装控件
+    const selectorContainer = document.createElement('div');
+    selectorContainer.style.marginTop = '8px';
+    selectorContainer.style.display = 'flex';
+    selectorContainer.style.flexDirection = 'column';
+    selectorContainer.style.gap = '6px';
+
+    const selectorLabel = document.createElement('label');
+    selectorLabel.style.fontSize = '0.85em';
+    selectorLabel.style.color = 'var(--da-text-secondary, #aaa)';
+    selectorLabel.textContent = '从服装预设库中选择添加';
+
+    const selectorRow = document.createElement('div');
+    selectorRow.style.display = 'flex';
+    selectorRow.style.gap = '8px';
+    selectorRow.style.alignItems = 'center';
+
+    const outfitSelect = document.createElement('select');
+    outfitSelect.id = 'char_outfit_selector';
+    outfitSelect.className = 'da-select';
+    outfitSelect.style.flex = '1';
+
+    const refreshOutfitSelect = () => {
+        const outfits = getOutfitProfiles();
+        outfitSelect.innerHTML = '';
+        if (outfits.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '(暂无已知服装预设)';
+            outfitSelect.appendChild(opt);
+        } else {
+            outfits.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.nameCN || o.nameEN;
+                opt.textContent = `${o.nameCN} (${o.nameEN || '无英文名'})`;
+                outfitSelect.appendChild(opt);
+            });
+        }
+    };
+
+    refreshOutfitSelect();
+
+    const refreshOutfitBtn = createIconButton('<i class="fa-solid fa-rotate-right"></i>', '刷新服装预设列表', () => {
+        refreshOutfitSelect();
+    });
+
+    const addOutfitBtn = document.createElement('button');
+    addOutfitBtn.className = 'da-btn primary';
+    addOutfitBtn.style.whiteSpace = 'nowrap';
+    addOutfitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加服装';
+
+    addOutfitBtn.addEventListener('click', () => {
+        const val = outfitSelect.value;
+        if (!val) return;
+        const currentText = outfitListInput.textarea.value;
+        const existingLines = currentText.split('\n').map(s => s.trim()).filter(Boolean);
+        if (existingLines.includes(val)) {
+            alert(`ℹ️ 服装 "${val}" 已存在于列表中`);
+            return;
+        }
+        existingLines.push(val);
+        outfitListInput.textarea.value = existingLines.join('\n');
+    });
+
+    selectorRow.appendChild(outfitSelect);
+    selectorRow.appendChild(refreshOutfitBtn);
+    selectorRow.appendChild(addOutfitBtn);
+
+    selectorContainer.appendChild(selectorLabel);
+    selectorContainer.appendChild(selectorRow);
+    sectionD.appendChild(selectorContainer);
 
     root.appendChild(sectionD);
 
-    // 加载与绑定当前数据到表单
+    // 表单数据双向填充与保存
+    const saveCurrentForm = () => {
+        currentProfile.nameCN = nameCNInput.input.value;
+        currentProfile.nameEN = nameENInput.input.value;
+        currentProfile.sendPhoto = sendPhotoCheckbox.checked;
+
+        Object.entries(fieldsMap).forEach(([id, info]) => {
+            (currentProfile[info.key] as string) = textareasRecord[id]?.value || '';
+        });
+
+        currentProfile.outfitList = outfitListInput.textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+
+        upsertCharacterProfile(currentProfile);
+    };
+
     const populateForm = (p: CharacterProfile) => {
         currentProfile = p;
         nameCNInput.input.value = p.nameCN || '';
@@ -427,63 +658,13 @@ function renderCharacterSettingsPane(): HTMLElement {
         });
 
         outfitListInput.textarea.value = (p.outfitList || []).join('\n');
+        checkResultBox.style.display = 'none';
         updateTokenStats();
     };
 
     selectEl.addEventListener('change', () => {
         const found = getCharacterProfileById(selectEl.value);
         if (found) populateForm(found);
-    });
-
-    // 按钮事件组
-    btnSave.addEventListener('click', () => {
-        currentProfile.nameCN = nameCNInput.input.value;
-        currentProfile.nameEN = nameENInput.input.value;
-        currentProfile.sendPhoto = sendPhotoCheckbox.checked;
-
-        Object.entries(fieldsMap).forEach(([id, info]) => {
-            (currentProfile[info.key] as string) = textareasRecord[id]?.value || '';
-        });
-
-        currentProfile.outfitList = outfitListInput.textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
-
-        upsertCharacterProfile(currentProfile);
-        refreshPresetSelect();
-        alert('💾 角色预设保存成功！');
-    });
-
-    btnNew.addEventListener('click', () => {
-        const name = prompt('请输入新角色名称（中文/英文）：');
-        if (!name) return;
-        const newP: CharacterProfile = {
-            id: `char-${Date.now()}`,
-            nameCN: name,
-            nameEN: name,
-            characterTraits: '',
-            facialFeatures: '',
-            facialFeaturesBack: '',
-            upperBodySFW: '',
-            upperBodySFWBack: '',
-            fullBodySFW: '',
-            fullBodySFWBack: '',
-            upperBodyNSFW: '',
-            upperBodyNSFWBack: '',
-            fullBodyNSFW: '',
-            fullBodyNSFWBack: '',
-            negativePrompt: '',
-            outfitList: []
-        };
-        upsertCharacterProfile(newP);
-        refreshPresetSelect();
-        populateForm(newP);
-    });
-
-    btnDelete.addEventListener('click', () => {
-        if (!confirm(`⚠️ 确定要删除角色预设 "${currentProfile.nameCN || currentProfile.id}" 吗？`)) return;
-        deleteCharacterProfile(currentProfile.id);
-        refreshPresetSelect();
-        const first = getCharacterProfiles()[0];
-        if (first) populateForm(first);
     });
 
     populateForm(currentProfile);
