@@ -1,6 +1,6 @@
 /**
  * @module ui/tabs/character-tab
- * @description 角色管理主面板 UI 组件
+ * @description 角色管理主面板 UI 组件 (角色设定 + 服装设定)
  */
 
 import {
@@ -8,9 +8,12 @@ import {
     getCharacterProfileById,
     upsertCharacterProfile,
     deleteCharacterProfile,
-    getOutfitProfiles
+    getOutfitProfiles,
+    getOutfitProfileById,
+    upsertOutfitProfile,
+    deleteOutfitProfile
 } from '../../storage/character-store';
-import type { CharacterProfile } from '../../types/character';
+import type { CharacterProfile, OutfitProfile } from '../../types/character';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -100,12 +103,11 @@ export function renderCharacterTab(): HTMLElement {
     pane1.style.display = 'block';
     container.appendChild(pane1);
 
-    // 3. 子界面 2：服装设定 (占位)
-    const pane2 = document.createElement('div');
+    // 3. 子界面 2：服装设定 (`#ch-sub-tab-outfit-settings`)
+    const pane2 = renderOutfitSettingsPane();
     pane2.id = 'ch-sub-tab-outfit-settings';
-    pane2.className = 'da-sub-tab-content da-section-card';
+    pane2.className = 'da-sub-tab-content';
     pane2.style.display = 'none';
-    pane2.innerHTML = '<h3 style="text-align:center; padding:30px;">服装设定（等待按序规划后实现）</h3>';
     container.appendChild(pane2);
 
     // 4. 子界面 3：设定启用管理 (占位)
@@ -178,7 +180,6 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     refreshPresetSelect();
 
-    // 仅图标控制按钮组 (图标 + tooltip 浮动提示)
     const hiddenFileInput = document.createElement('input');
     hiddenFileInput.type = 'file';
     hiddenFileInput.accept = '.json';
@@ -394,7 +395,6 @@ function renderCharacterSettingsPane(): HTMLElement {
     headerC.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-sliders"></i> 角色详细参数与 Tag 变量</span>';
     sectionC.appendChild(headerC);
 
-    // 中英文名
     const nameRow = document.createElement('div');
     nameRow.style.display = 'grid';
     nameRow.style.gridTemplateColumns = '1fr 1fr';
@@ -407,7 +407,6 @@ function renderCharacterSettingsPane(): HTMLElement {
     nameRow.appendChild(nameENInput.wrapper);
     sectionC.appendChild(nameRow);
 
-    // 全身组合 Token 统计看板
     const tokenCard = document.createElement('div');
     tokenCard.style.padding = '10px 14px';
     tokenCard.style.borderRadius = '6px';
@@ -441,7 +440,6 @@ function renderCharacterSettingsPane(): HTMLElement {
     tokenCard.appendChild(tokenGrid);
     sectionC.appendChild(tokenCard);
 
-    // 11 项 Tag 文本框
     const fieldsMap: Record<string, { label: string; key: keyof CharacterProfile }> = {
         char_characterTraits: { label: '角色特征 {traits}', key: 'characterTraits' },
         char_facialFeatures: { label: '五官外貌(正面) {facial}', key: 'facialFeatures' },
@@ -500,12 +498,10 @@ function renderCharacterSettingsPane(): HTMLElement {
     headerD.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-shirt"></i> 关联专属服装列表 ({outfits})</span>';
     sectionD.appendChild(headerD);
 
-    // 服装名称多行文本框
     const outfitListInput = createTextareaInput('服装列表（每行一个服装名称）', 'char_outfit_list', (currentProfile.outfitList || []).join('\n'));
     outfitListInput.textarea.rows = 4;
     sectionD.appendChild(outfitListInput.wrapper);
 
-    // 检测服装按钮与检测结果显示容器
     const checkBtn = document.createElement('button');
     checkBtn.className = 'da-btn secondary';
     checkBtn.style.width = '100%';
@@ -547,7 +543,6 @@ function renderCharacterSettingsPane(): HTMLElement {
     sectionD.appendChild(checkBtn);
     sectionD.appendChild(checkResultBox);
 
-    // ➕ 从服装预设中选择并添加服装控件
     const selectorContainer = document.createElement('div');
     selectorContainer.style.marginTop = '8px';
     selectorContainer.style.display = 'flex';
@@ -621,7 +616,6 @@ function renderCharacterSettingsPane(): HTMLElement {
 
     root.appendChild(sectionD);
 
-    // 表单数据双向填充与保存
     const saveCurrentForm = () => {
         currentProfile.nameCN = nameCNInput.input.value;
         currentProfile.nameEN = nameENInput.input.value;
@@ -668,6 +662,284 @@ function renderCharacterSettingsPane(): HTMLElement {
     });
 
     populateForm(currentProfile);
+    return root;
+}
+
+/**
+ * 渲染子界面 2：服装设定内容 (极简精简版)
+ */
+function renderOutfitSettingsPane(): HTMLElement {
+    const root = document.createElement('div');
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '16px';
+
+    let currentOutfit: OutfitProfile = getOutfitProfiles()[0];
+
+    // ── 区域 A：服装预设控制栏 (极简图标化工具栏) ───────────────────────────
+    const sectionA = document.createElement('div');
+    sectionA.className = 'da-section-card';
+
+    const headerA = document.createElement('div');
+    headerA.className = 'da-section-header';
+    headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-shirt"></i> 服装预设管理</span>';
+    sectionA.appendChild(headerA);
+
+    const controlsRow = document.createElement('div');
+    controlsRow.style.display = 'flex';
+    controlsRow.style.gap = '8px';
+    controlsRow.style.alignItems = 'center';
+    controlsRow.style.flexWrap = 'wrap';
+
+    const selectEl = document.createElement('select');
+    selectEl.id = 'outfit_preset_id';
+    selectEl.className = 'da-select';
+    selectEl.style.flex = '1';
+    selectEl.style.minWidth = '180px';
+
+    const refreshOutfitPresetSelect = () => {
+        const outfits = getOutfitProfiles();
+        selectEl.innerHTML = '';
+        outfits.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = o.nameCN ? `${o.nameCN} (${o.nameEN || '未命名'})` : o.nameEN || o.id;
+            selectEl.appendChild(opt);
+        });
+        if (outfits.some(o => o.id === currentOutfit.id)) {
+            selectEl.value = currentOutfit.id;
+        } else if (outfits[0]) {
+            currentOutfit = outfits[0];
+            selectEl.value = currentOutfit.id;
+        }
+    };
+
+    refreshOutfitPresetSelect();
+
+    const hiddenFileInput = document.createElement('input');
+    hiddenFileInput.type = 'file';
+    hiddenFileInput.accept = '.json';
+    hiddenFileInput.style.display = 'none';
+
+    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建服装预设', () => {
+        const name = prompt('请输入新服装名称（中文/英文）：');
+        if (!name) return;
+        const newO: OutfitProfile = {
+            id: `outfit-${Date.now()}`,
+            nameCN: name,
+            nameEN: name,
+            upperBody: '',
+            upperBodyBack: '',
+            fullBody: '',
+            fullBodyBack: ''
+        };
+        upsertOutfitProfile(newO);
+        refreshOutfitPresetSelect();
+        populateForm(newO);
+    });
+
+    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前服装预设', () => {
+        saveCurrentForm();
+        alert('💾 服装预设已保存！');
+    });
+
+    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新服装预设', () => {
+        const newName = prompt('另存为新服装名称：', `${currentOutfit.nameCN || '服装'}_副本`);
+        if (!newName) return;
+        saveCurrentForm();
+        const copy: OutfitProfile = {
+            ...currentOutfit,
+            id: `outfit-${Date.now()}`,
+            nameCN: newName,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        upsertOutfitProfile(copy);
+        refreshOutfitPresetSelect();
+        populateForm(copy);
+    });
+
+    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名服装', () => {
+        const newName = prompt('重命名服装中文名称：', currentOutfit.nameCN);
+        if (newName === null) return;
+        currentOutfit.nameCN = newName;
+        upsertOutfitProfile(currentOutfit);
+        refreshOutfitPresetSelect();
+    });
+
+    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出服装预设 JSON', () => {
+        saveCurrentForm();
+        const jsonStr = JSON.stringify(currentOutfit, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `outfit-${currentOutfit.nameCN || currentOutfit.id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入服装预设 JSON', () => {
+        hiddenFileInput.click();
+    });
+
+    hiddenFileInput.addEventListener('change', () => {
+        const file = hiddenFileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const imported = JSON.parse(reader.result as string) as OutfitProfile;
+                if (!imported.nameCN && !imported.nameEN) throw new Error('无效的服装预设文件');
+                imported.id = `outfit-${Date.now()}`;
+                upsertOutfitProfile(imported);
+                refreshOutfitPresetSelect();
+                populateForm(imported);
+                alert('📥 服装预设导入成功！');
+            } catch {
+                alert('❌ 导入失败：无法解析该 JSON 服装文件');
+            }
+            hiddenFileInput.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除服装预设', () => {
+        if (!confirm(`⚠️ 确定要删除服装预设 "${currentOutfit.nameCN || currentOutfit.id}" 吗？`)) return;
+        deleteOutfitProfile(currentOutfit.id);
+        refreshOutfitPresetSelect();
+        const first = getOutfitProfiles()[0];
+        if (first) populateForm(first);
+    }, true);
+
+    controlsRow.appendChild(selectEl);
+    controlsRow.appendChild(btnNew);
+    controlsRow.appendChild(btnSave);
+    controlsRow.appendChild(btnSaveAs);
+    controlsRow.appendChild(btnRename);
+    controlsRow.appendChild(btnExport);
+    controlsRow.appendChild(btnImport);
+    controlsRow.appendChild(btnDelete);
+    controlsRow.appendChild(hiddenFileInput);
+
+    sectionA.appendChild(controlsRow);
+    root.appendChild(sectionA);
+
+    // ── 区域 B：服装详细参数与 Token 动态监控 ──────────────────────────────
+    const sectionB = document.createElement('div');
+    sectionB.className = 'da-section-card';
+    sectionB.style.display = 'flex';
+    sectionB.style.flexDirection = 'column';
+    sectionB.style.gap = '12px';
+
+    const headerB = document.createElement('div');
+    headerB.className = 'da-section-header';
+    headerB.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-sliders"></i> 服装详细参数与 Tag 变量</span>';
+    sectionB.appendChild(headerB);
+
+    const nameRow = document.createElement('div');
+    nameRow.style.display = 'grid';
+    nameRow.style.gridTemplateColumns = '1fr 1fr';
+    nameRow.style.gap = '12px';
+
+    const nameCNInput = createTextInput('服装中文名', 'outfit_nameCN', currentOutfit.nameCN);
+    const nameENInput = createTextInput('服装英文名', 'outfit_nameEN', currentOutfit.nameEN);
+
+    nameRow.appendChild(nameCNInput.wrapper);
+    nameRow.appendChild(nameENInput.wrapper);
+    sectionB.appendChild(nameRow);
+
+    // 服装全身组合 Token 统计看板
+    const tokenCard = document.createElement('div');
+    tokenCard.style.padding = '10px 14px';
+    tokenCard.style.borderRadius = '6px';
+    tokenCard.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
+    tokenCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+
+    const tokenTitle = document.createElement('div');
+    tokenTitle.style.fontWeight = 'bold';
+    tokenTitle.style.fontSize = '0.85em';
+    tokenTitle.style.marginBottom = '6px';
+    tokenTitle.textContent = '服装全身组合 Token 动态统计 (上半身 + 下半身)';
+
+    const tokenGrid = document.createElement('div');
+    tokenGrid.style.display = 'grid';
+    tokenGrid.style.gridTemplateColumns = '1fr 1fr';
+    tokenGrid.style.gap = '6px';
+    tokenGrid.style.fontSize = '0.85em';
+    tokenGrid.style.color = 'var(--da-text-secondary, #ccc)';
+
+    const tokenFront = document.createElement('div');
+    const tokenBack = document.createElement('div');
+
+    tokenGrid.appendChild(tokenFront);
+    tokenGrid.appendChild(tokenBack);
+
+    tokenCard.appendChild(tokenTitle);
+    tokenCard.appendChild(tokenGrid);
+    sectionB.appendChild(tokenCard);
+
+    // 4 项服装 Tag 文本框
+    const fieldsMap: Record<string, { label: string; key: keyof OutfitProfile }> = {
+        outfit_upperBody: { label: '上半身(正面) {upperBody}', key: 'upperBody' },
+        outfit_upperBodyBack: { label: '上半身(背面) {upperBodyBack}', key: 'upperBodyBack' },
+        outfit_fullBody: { label: '下半身服装(正面) {lowerBody}', key: 'fullBody' },
+        outfit_fullBodyBack: { label: '下半身(背面) {lowerBodyBack}', key: 'fullBodyBack' }
+    };
+
+    const textareasRecord: Record<string, HTMLTextAreaElement> = {};
+
+    const updateTokenStats = () => {
+        const upper = countTokens(textareasRecord.outfit_upperBody?.value || '');
+        const upperBack = countTokens(textareasRecord.outfit_upperBodyBack?.value || '');
+        const lower = countTokens(textareasRecord.outfit_fullBody?.value || '');
+        const lowerBack = countTokens(textareasRecord.outfit_fullBodyBack?.value || '');
+
+        tokenFront.textContent = `正面全身: ${upper + lower} Tokens`;
+        tokenBack.textContent = `背面全身: ${upperBack + lowerBack} Tokens`;
+    };
+
+    Object.entries(fieldsMap).forEach(([id, info]) => {
+        const value = (currentOutfit[info.key] as string) || '';
+        const fieldObj = createTextareaInput(info.label, id, value);
+        textareasRecord[id] = fieldObj.textarea;
+        fieldObj.textarea.addEventListener('input', updateTokenStats);
+        sectionB.appendChild(fieldObj.wrapper);
+    });
+
+    root.appendChild(sectionB);
+
+    const saveCurrentForm = () => {
+        currentOutfit.nameCN = nameCNInput.input.value;
+        currentOutfit.nameEN = nameENInput.input.value;
+
+        Object.entries(fieldsMap).forEach(([id, info]) => {
+            (currentOutfit[info.key] as string) = textareasRecord[id]?.value || '';
+        });
+
+        upsertOutfitProfile(currentOutfit);
+    };
+
+    const populateForm = (o: OutfitProfile) => {
+        currentOutfit = o;
+        nameCNInput.input.value = o.nameCN || '';
+        nameENInput.input.value = o.nameEN || '';
+
+        Object.entries(fieldsMap).forEach(([id, info]) => {
+            if (textareasRecord[id]) {
+                textareasRecord[id].value = (o[info.key] as string) || '';
+            }
+        });
+
+        updateTokenStats();
+    };
+
+    selectEl.addEventListener('change', () => {
+        const found = getOutfitProfileById(selectEl.value);
+        if (found) populateForm(found);
+    });
+
+    populateForm(currentOutfit);
     return root;
 }
 
