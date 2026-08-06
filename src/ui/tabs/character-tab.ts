@@ -33,6 +33,7 @@ import {
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule, MacroTreeScheme, MacroRuleNode } from '../../types/character';
 import { checkCharacterCardConflict } from '../../core/character-event-listener';
 import { updateGlobalWorldbookPlaceholders, processCharacterPrompt } from '../../core/character-injection';
+import { renderPresetToolbar } from '../components/preset-toolbar';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -173,153 +174,110 @@ function renderCharacterSettingsPane(): HTMLElement {
     headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-user-gear"></i> 角色预设管理</span>';
     sectionA.appendChild(headerA);
 
-    const controlsRow = document.createElement('div');
-    controlsRow.style.display = 'flex';
-    controlsRow.style.gap = '8px';
-    controlsRow.style.alignItems = 'center';
-    controlsRow.style.flexWrap = 'wrap';
+    const renderToolbar = () => {
+        const existingToolbar = sectionA.querySelector('.da-preset-toolbar');
+        if (existingToolbar) existingToolbar.remove();
 
-    const selectEl = document.createElement('select');
-    selectEl.id = 'character_preset_id';
-    selectEl.className = 'da-select';
-    selectEl.style.flex = '1';
-    selectEl.style.minWidth = '180px';
-
-    const refreshPresetSelect = () => {
         const profiles = getCharacterProfiles();
-        selectEl.innerHTML = '';
-        profiles.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = p.nameCN ? `${p.nameCN} (${p.nameEN || '未命名'})` : p.nameEN || p.id;
-            selectEl.appendChild(opt);
+        const toolbar = renderPresetToolbar({
+            profiles: profiles.map(p => ({
+                id: p.id,
+                name: p.nameCN ? `${p.nameCN} (${p.nameEN || '未命名'})` : p.nameEN || p.id,
+                data: p
+            })),
+            currentId: currentProfile.id,
+            onSelect: (id) => {
+                const found = getCharacterProfileById(id);
+                if (found) populateForm(found);
+            },
+            onNew: () => {
+                const name = prompt('请输入新角色名称（中文/英文）：');
+                if (!name || !name.trim()) return;
+                const newP: CharacterProfile = {
+                    id: `char-${Date.now()}`,
+                    nameCN: name.trim(),
+                    nameEN: name.trim(),
+                    characterTraits: '',
+                    facialFeatures: '',
+                    facialFeaturesBack: '',
+                    upperBodySFW: '',
+                    upperBodySFWBack: '',
+                    fullBodySFW: '',
+                    fullBodySFWBack: '',
+                    upperBodyNSFW: '',
+                    upperBodyNSFWBack: '',
+                    fullBodyNSFW: '',
+                    fullBodyNSFWBack: '',
+                    negativePrompt: '',
+                    outfitList: []
+                };
+                upsertCharacterProfile(newP);
+                renderToolbar();
+                populateForm(newP);
+            },
+            onSave: () => {
+                saveCurrentForm();
+                alert('💾 角色预设已保存！');
+            },
+            onSaveAs: () => {
+                const newName = prompt('另存为新预设名称：', `${currentProfile.nameCN || '角色'}_副本`);
+                if (!newName || !newName.trim()) return;
+                saveCurrentForm();
+                const copy: CharacterProfile = {
+                    ...currentProfile,
+                    id: `char-${Date.now()}`,
+                    nameCN: newName.trim(),
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+                upsertCharacterProfile(copy);
+                renderToolbar();
+                populateForm(copy);
+            },
+            onRename: () => {
+                const newName = prompt('重命名角色中文名称：', currentProfile.nameCN);
+                if (newName === null || !newName.trim()) return;
+                currentProfile.nameCN = newName.trim();
+                upsertCharacterProfile(currentProfile);
+                renderToolbar();
+            },
+            onExport: () => {
+                saveCurrentForm();
+                const jsonStr = JSON.stringify(currentProfile, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `character-${currentProfile.nameCN || currentProfile.id}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            onImport: (content) => {
+                try {
+                    const imported = JSON.parse(content) as CharacterProfile;
+                    if (!imported.nameCN && !imported.nameEN) throw new Error('无效的角色预设文件');
+                    imported.id = `char-${Date.now()}`;
+                    upsertCharacterProfile(imported);
+                    renderToolbar();
+                    populateForm(imported);
+                    alert('📥 角色预设导入成功！');
+                } catch {
+                    alert('❌ 导入失败：无法解析该 JSON 角色文件');
+                }
+            },
+            onDelete: () => {
+                if (!confirm(`⚠️ 确定要删除角色预设 "${currentProfile.nameCN || currentProfile.id}" 吗？`)) return;
+                deleteCharacterProfile(currentProfile.id);
+                renderToolbar();
+                const first = getCharacterProfiles()[0];
+                if (first) populateForm(first);
+            }
         });
-        if (profiles.some(p => p.id === currentProfile.id)) {
-            selectEl.value = currentProfile.id;
-        } else if (profiles[0]) {
-            currentProfile = profiles[0];
-            selectEl.value = currentProfile.id;
-        }
+
+        sectionA.appendChild(toolbar);
     };
 
-    refreshPresetSelect();
-
-    const hiddenFileInput = document.createElement('input');
-    hiddenFileInput.type = 'file';
-    hiddenFileInput.accept = '.json';
-    hiddenFileInput.style.display = 'none';
-
-    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建预设', () => {
-        const name = prompt('请输入新角色名称（中文/英文）：');
-        if (!name) return;
-        const newP: CharacterProfile = {
-            id: `char-${Date.now()}`,
-            nameCN: name,
-            nameEN: name,
-            characterTraits: '',
-            facialFeatures: '',
-            facialFeaturesBack: '',
-            upperBodySFW: '',
-            upperBodySFWBack: '',
-            fullBodySFW: '',
-            fullBodySFWBack: '',
-            upperBodyNSFW: '',
-            upperBodyNSFWBack: '',
-            fullBodyNSFW: '',
-            fullBodyNSFWBack: '',
-            negativePrompt: '',
-            outfitList: []
-        };
-        upsertCharacterProfile(newP);
-        refreshPresetSelect();
-        populateForm(newP);
-    });
-
-    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前预设', () => {
-        saveCurrentForm();
-        alert('💾 角色预设已保存！');
-    });
-
-    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新预设', () => {
-        const newName = prompt('另存为新预设名称：', `${currentProfile.nameCN || '角色'}_副本`);
-        if (!newName) return;
-        saveCurrentForm();
-        const copy: CharacterProfile = {
-            ...currentProfile,
-            id: `char-${Date.now()}`,
-            nameCN: newName,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-        upsertCharacterProfile(copy);
-        refreshPresetSelect();
-        populateForm(copy);
-    });
-
-    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名预设', () => {
-        const newName = prompt('重命名角色中文名称：', currentProfile.nameCN);
-        if (newName === null) return;
-        currentProfile.nameCN = newName;
-        upsertCharacterProfile(currentProfile);
-        refreshPresetSelect();
-    });
-
-    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出当前角色预设', () => {
-        saveCurrentForm();
-        const jsonStr = JSON.stringify(currentProfile, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `character-${currentProfile.nameCN || currentProfile.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-
-    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入角色预设 JSON', () => {
-        hiddenFileInput.click();
-    });
-
-    hiddenFileInput.addEventListener('change', () => {
-        const file = hiddenFileInput.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const imported = JSON.parse(reader.result as string) as CharacterProfile;
-                if (!imported.nameCN && !imported.nameEN) throw new Error('无效的角色预设文件');
-                imported.id = `char-${Date.now()}`;
-                upsertCharacterProfile(imported);
-                refreshPresetSelect();
-                populateForm(imported);
-                alert('📥 角色预设导入成功！');
-            } catch {
-                alert('❌ 导入失败：无法解析该 JSON 角色文件');
-            }
-            hiddenFileInput.value = '';
-        };
-        reader.readAsText(file);
-    });
-
-    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除预设', () => {
-        if (!confirm(`⚠️ 确定要删除角色预设 "${currentProfile.nameCN || currentProfile.id}" 吗？`)) return;
-        deleteCharacterProfile(currentProfile.id);
-        refreshPresetSelect();
-        const first = getCharacterProfiles()[0];
-        if (first) populateForm(first);
-    }, true);
-
-    controlsRow.appendChild(selectEl);
-    controlsRow.appendChild(btnNew);
-    controlsRow.appendChild(btnSave);
-    controlsRow.appendChild(btnSaveAs);
-    controlsRow.appendChild(btnRename);
-    controlsRow.appendChild(btnExport);
-    controlsRow.appendChild(btnImport);
-    controlsRow.appendChild(btnDelete);
-    controlsRow.appendChild(hiddenFileInput);
-
-    sectionA.appendChild(controlsRow);
+    renderToolbar();
     root.appendChild(sectionA);
 
     const sectionB = document.createElement('div');
@@ -677,11 +635,6 @@ function renderCharacterSettingsPane(): HTMLElement {
         updateTokenStats();
     };
 
-    selectEl.addEventListener('change', () => {
-        const found = getCharacterProfileById(selectEl.value);
-        if (found) populateForm(found);
-    });
-
     populateForm(currentProfile);
     return root;
 }
@@ -705,144 +658,101 @@ function renderOutfitSettingsPane(): HTMLElement {
     headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-shirt"></i> 服装预设管理</span>';
     sectionA.appendChild(headerA);
 
-    const controlsRow = document.createElement('div');
-    controlsRow.style.display = 'flex';
-    controlsRow.style.gap = '8px';
-    controlsRow.style.alignItems = 'center';
-    controlsRow.style.flexWrap = 'wrap';
+    const renderToolbar = () => {
+        const existingToolbar = sectionA.querySelector('.da-preset-toolbar');
+        if (existingToolbar) existingToolbar.remove();
 
-    const selectEl = document.createElement('select');
-    selectEl.id = 'outfit_preset_id';
-    selectEl.className = 'da-select';
-    selectEl.style.flex = '1';
-    selectEl.style.minWidth = '180px';
-
-    const refreshOutfitPresetSelect = () => {
         const outfits = getOutfitProfiles();
-        selectEl.innerHTML = '';
-        outfits.forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o.id;
-            opt.textContent = o.nameCN ? `${o.nameCN} (${o.nameEN || '未命名'})` : o.nameEN || o.id;
-            selectEl.appendChild(opt);
+        const toolbar = renderPresetToolbar({
+            profiles: outfits.map(o => ({
+                id: o.id,
+                name: o.nameCN ? `${o.nameCN} (${o.nameEN || '未命名'})` : o.nameEN || o.id,
+                data: o
+            })),
+            currentId: currentOutfit.id,
+            onSelect: (id) => {
+                const found = getOutfitProfileById(id);
+                if (found) populateForm(found);
+            },
+            onNew: () => {
+                const name = prompt('请输入新服装名称（中文/英文）：');
+                if (!name || !name.trim()) return;
+                const newO: OutfitProfile = {
+                    id: `outfit-${Date.now()}`,
+                    nameCN: name.trim(),
+                    nameEN: name.trim(),
+                    upperBody: '',
+                    upperBodyBack: '',
+                    fullBody: '',
+                    fullBodyBack: ''
+                };
+                upsertOutfitProfile(newO);
+                renderToolbar();
+                populateForm(newO);
+            },
+            onSave: () => {
+                saveCurrentForm();
+                alert('💾 服装预设已保存！');
+            },
+            onSaveAs: () => {
+                const newName = prompt('另存为新服装名称：', `${currentOutfit.nameCN || '服装'}_副本`);
+                if (!newName || !newName.trim()) return;
+                saveCurrentForm();
+                const copy: OutfitProfile = {
+                    ...currentOutfit,
+                    id: `outfit-${Date.now()}`,
+                    nameCN: newName.trim(),
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+                upsertOutfitProfile(copy);
+                renderToolbar();
+                populateForm(copy);
+            },
+            onRename: () => {
+                const newName = prompt('重命名服装中文名称：', currentOutfit.nameCN);
+                if (newName === null || !newName.trim()) return;
+                currentOutfit.nameCN = newName.trim();
+                upsertOutfitProfile(currentOutfit);
+                renderToolbar();
+            },
+            onExport: () => {
+                saveCurrentForm();
+                const jsonStr = JSON.stringify(currentOutfit, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `outfit-${currentOutfit.nameCN || currentOutfit.id}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            onImport: (content) => {
+                try {
+                    const imported = JSON.parse(content) as OutfitProfile;
+                    if (!imported.nameCN && !imported.nameEN) throw new Error('无效的服装预设文件');
+                    imported.id = `outfit-${Date.now()}`;
+                    upsertOutfitProfile(imported);
+                    renderToolbar();
+                    populateForm(imported);
+                    alert('📥 服装预设导入成功！');
+                } catch {
+                    alert('❌ 导入失败：无法解析该 JSON 服装文件');
+                }
+            },
+            onDelete: () => {
+                if (!confirm(`⚠️ 确定要删除服装预设 "${currentOutfit.nameCN || currentOutfit.id}" 吗？`)) return;
+                deleteOutfitProfile(currentOutfit.id);
+                renderToolbar();
+                const first = getOutfitProfiles()[0];
+                if (first) populateForm(first);
+            }
         });
-        if (outfits.some(o => o.id === currentOutfit.id)) {
-            selectEl.value = currentOutfit.id;
-        } else if (outfits[0]) {
-            currentOutfit = outfits[0];
-            selectEl.value = currentOutfit.id;
-        }
+
+        sectionA.appendChild(toolbar);
     };
 
-    refreshOutfitPresetSelect();
-
-    const hiddenFileInput = document.createElement('input');
-    hiddenFileInput.type = 'file';
-    hiddenFileInput.accept = '.json';
-    hiddenFileInput.style.display = 'none';
-
-    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建服装预设', () => {
-        const name = prompt('请输入新服装名称（中文/英文）：');
-        if (!name) return;
-        const newO: OutfitProfile = {
-            id: `outfit-${Date.now()}`,
-            nameCN: name,
-            nameEN: name,
-            upperBody: '',
-            upperBodyBack: '',
-            fullBody: '',
-            fullBodyBack: ''
-        };
-        upsertOutfitProfile(newO);
-        refreshOutfitPresetSelect();
-        populateForm(newO);
-    });
-
-    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前服装预设', () => {
-        saveCurrentForm();
-        alert('💾 服装预设已保存！');
-    });
-
-    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新服装预设', () => {
-        const newName = prompt('另存为新服装名称：', `${currentOutfit.nameCN || '服装'}_副本`);
-        if (!newName) return;
-        saveCurrentForm();
-        const copy: OutfitProfile = {
-            ...currentOutfit,
-            id: `outfit-${Date.now()}`,
-            nameCN: newName,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-        upsertOutfitProfile(copy);
-        refreshOutfitPresetSelect();
-        populateForm(copy);
-    });
-
-    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名服装', () => {
-        const newName = prompt('重命名服装中文名称：', currentOutfit.nameCN);
-        if (newName === null) return;
-        currentOutfit.nameCN = newName;
-        upsertOutfitProfile(currentOutfit);
-        refreshOutfitPresetSelect();
-    });
-
-    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出服装预设 JSON', () => {
-        saveCurrentForm();
-        const jsonStr = JSON.stringify(currentOutfit, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `outfit-${currentOutfit.nameCN || currentOutfit.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-
-    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入服装预设 JSON', () => {
-        hiddenFileInput.click();
-    });
-
-    hiddenFileInput.addEventListener('change', () => {
-        const file = hiddenFileInput.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const imported = JSON.parse(reader.result as string) as OutfitProfile;
-                if (!imported.nameCN && !imported.nameEN) throw new Error('无效的服装预设文件');
-                imported.id = `outfit-${Date.now()}`;
-                upsertOutfitProfile(imported);
-                refreshOutfitPresetSelect();
-                populateForm(imported);
-                alert('📥 服装预设导入成功！');
-            } catch {
-                alert('❌ 导入失败：无法解析该 JSON 服装文件');
-            }
-            hiddenFileInput.value = '';
-        };
-        reader.readAsText(file);
-    });
-
-    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除服装预设', () => {
-        if (!confirm(`⚠️ 确定要删除服装预设 "${currentOutfit.nameCN || currentOutfit.id}" 吗？`)) return;
-        deleteOutfitProfile(currentOutfit.id);
-        refreshOutfitPresetSelect();
-        const first = getOutfitProfiles()[0];
-        if (first) populateForm(first);
-    }, true);
-
-    controlsRow.appendChild(selectEl);
-    controlsRow.appendChild(btnNew);
-    controlsRow.appendChild(btnSave);
-    controlsRow.appendChild(btnSaveAs);
-    controlsRow.appendChild(btnRename);
-    controlsRow.appendChild(btnExport);
-    controlsRow.appendChild(btnImport);
-    controlsRow.appendChild(btnDelete);
-    controlsRow.appendChild(hiddenFileInput);
-
-    sectionA.appendChild(controlsRow);
+    renderToolbar();
     root.appendChild(sectionA);
 
     const sectionB = document.createElement('div');
@@ -951,11 +861,6 @@ function renderOutfitSettingsPane(): HTMLElement {
         updateTokenStats();
     };
 
-    selectEl.addEventListener('change', () => {
-        const found = getOutfitProfileById(selectEl.value);
-        if (found) populateForm(found);
-    });
-
     populateForm(currentOutfit);
     return root;
 }
@@ -979,143 +884,100 @@ function renderCharacterEnablePane(): HTMLElement {
     headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-list-check"></i> 设定启用方案管理</span>';
     sectionA.appendChild(headerA);
 
-    const controlsRow = document.createElement('div');
-    controlsRow.style.display = 'flex';
-    controlsRow.style.gap = '8px';
-    controlsRow.style.alignItems = 'center';
-    controlsRow.style.flexWrap = 'wrap';
+    const renderToolbar = () => {
+        const existingToolbar = sectionA.querySelector('.da-preset-toolbar');
+        if (existingToolbar) existingToolbar.remove();
 
-    const selectEl = document.createElement('select');
-    selectEl.id = 'enable_scheme_id';
-    selectEl.className = 'da-select';
-    selectEl.style.flex = '1';
-    selectEl.style.minWidth = '180px';
-
-    const refreshSchemeSelect = () => {
         const schemes = getEnableSchemes();
-        selectEl.innerHTML = '';
-        schemes.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = s.name;
-            selectEl.appendChild(opt);
+        const toolbar = renderPresetToolbar({
+            profiles: schemes.map(s => ({
+                id: s.id,
+                name: s.name,
+                data: s
+            })),
+            currentId: currentScheme.id,
+            onSelect: (id) => {
+                const found = getEnableSchemeById(id);
+                if (found) populateForm(found);
+            },
+            onNew: () => {
+                const name = prompt('请输入新启用方案名称：');
+                if (!name || !name.trim()) return;
+                const newS: EnableSchemeProfile = {
+                    id: `scheme-${Date.now()}`,
+                    name: name.trim(),
+                    boundCharacterCards: '',
+                    boundChatId: '',
+                    characterRules: {},
+                    outfitRules: {}
+                };
+                upsertEnableScheme(newS);
+                renderToolbar();
+                populateForm(newS);
+            },
+            onSave: () => {
+                saveCurrentForm();
+                alert('💾 设定启用方案已保存！');
+            },
+            onSaveAs: () => {
+                const newName = prompt('另存为新方案名称：', `${currentScheme.name}_副本`);
+                if (!newName || !newName.trim()) return;
+                saveCurrentForm();
+                const copy: EnableSchemeProfile = {
+                    ...currentScheme,
+                    id: `scheme-${Date.now()}`,
+                    name: newName.trim(),
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+                upsertEnableScheme(copy);
+                renderToolbar();
+                populateForm(copy);
+            },
+            onRename: () => {
+                const newName = prompt('重命名方案名称：', currentScheme.name);
+                if (newName === null || !newName.trim()) return;
+                currentScheme.name = newName.trim();
+                upsertEnableScheme(currentScheme);
+                renderToolbar();
+            },
+            onExport: () => {
+                saveCurrentForm();
+                const jsonStr = JSON.stringify(currentScheme, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `enable-scheme-${currentScheme.name}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            onImport: (content) => {
+                try {
+                    const imported = JSON.parse(content) as EnableSchemeProfile;
+                    if (!imported.name) throw new Error('无效的方案文件');
+                    imported.id = `scheme-${Date.now()}`;
+                    upsertEnableScheme(imported);
+                    renderToolbar();
+                    populateForm(imported);
+                    alert('📥 启用方案导入成功！');
+                } catch {
+                    alert('❌ 导入失败：无法解析该 JSON 方案文件');
+                }
+            },
+            onDelete: () => {
+                if (!confirm(`⚠️ 确定要删除方案 "${currentScheme.name}" 吗？`)) return;
+                deleteEnableScheme(currentScheme.id);
+                renderToolbar();
+                const first = getEnableSchemes()[0];
+                if (first) populateForm(first);
+            }
         });
-        if (schemes.some(s => s.id === currentScheme.id)) {
-            selectEl.value = currentScheme.id;
-        } else if (schemes[0]) {
-            currentScheme = schemes[0];
-            selectEl.value = currentScheme.id;
-        }
+
+        sectionA.appendChild(toolbar);
     };
 
-    refreshSchemeSelect();
-
-    const hiddenFileInput = document.createElement('input');
-    hiddenFileInput.type = 'file';
-    hiddenFileInput.accept = '.json';
-    hiddenFileInput.style.display = 'none';
-
-    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建设定启用方案', () => {
-        const name = prompt('请输入新启用方案名称：');
-        if (!name) return;
-        const newS: EnableSchemeProfile = {
-            id: `scheme-${Date.now()}`,
-            name,
-            boundCharacterCards: '',
-            boundChatId: '',
-            characterRules: {},
-            outfitRules: {}
-        };
-        upsertEnableScheme(newS);
-        refreshSchemeSelect();
-        populateForm(newS);
-    });
-
-    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前方案', () => {
-        saveCurrentForm();
-        alert('💾 设定启用方案已保存！');
-    });
-
-    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新方案', () => {
-        const newName = prompt('另存为新方案名称：', `${currentScheme.name}_副本`);
-        if (!newName) return;
-        saveCurrentForm();
-        const copy: EnableSchemeProfile = {
-            ...currentScheme,
-            id: `scheme-${Date.now()}`,
-            name: newName,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-        upsertEnableScheme(copy);
-        refreshSchemeSelect();
-        populateForm(copy);
-    });
-
-    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
-        const newName = prompt('重命名方案名称：', currentScheme.name);
-        if (newName === null) return;
-        currentScheme.name = newName;
-        upsertEnableScheme(currentScheme);
-        refreshSchemeSelect();
-    });
-
-    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出方案 JSON', () => {
-        saveCurrentForm();
-        const jsonStr = JSON.stringify(currentScheme, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `enable-scheme-${currentScheme.name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-
-    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入方案 JSON', () => {
-        hiddenFileInput.click();
-    });
-
-    hiddenFileInput.addEventListener('change', () => {
-        const file = hiddenFileInput.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const imported = JSON.parse(reader.result as string) as EnableSchemeProfile;
-                if (!imported.name) throw new Error('无效的方案文件');
-                imported.id = `scheme-${Date.now()}`;
-                upsertEnableScheme(imported);
-                refreshSchemeSelect();
-                populateForm(imported);
-                alert('📥 启用方案导入成功！');
-            } catch {
-                alert('❌ 导入失败：无法解析该 JSON 方案文件');
-            }
-            hiddenFileInput.value = '';
-        };
-        reader.readAsText(file);
-    });
-
-    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
-        if (!confirm(`⚠️ 确定要删除方案 "${currentScheme.name}" 吗？`)) return;
-        deleteEnableScheme(currentScheme.id);
-        refreshSchemeSelect();
-        const first = getEnableSchemes()[0];
-        if (first) populateForm(first);
-    }, true);
-
-    controlsRow.appendChild(selectEl);
-    controlsRow.appendChild(btnNew);
-    controlsRow.appendChild(btnSave);
-    controlsRow.appendChild(btnSaveAs);
-    controlsRow.appendChild(btnRename);
-    controlsRow.appendChild(btnExport);
-    controlsRow.appendChild(btnImport);
-    controlsRow.appendChild(btnDelete);
-    controlsRow.appendChild(hiddenFileInput);
-
-    sectionA.appendChild(controlsRow);
+    renderToolbar();
     root.appendChild(sectionA);
 
     const sectionB = document.createElement('div');
@@ -1492,11 +1354,6 @@ function renderCharacterEnablePane(): HTMLElement {
         updateGlobalWorldbookPlaceholders();
     };
 
-    selectEl.addEventListener('change', () => {
-        const found = getEnableSchemeById(selectEl.value);
-        if (found) populateForm(found);
-    });
-
     populateForm(currentScheme);
     return root;
 }
@@ -1522,151 +1379,100 @@ function renderInjectionTemplatesPane(): HTMLElement {
     headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-folder-tree"></i> 注入模板方案管理</span>';
     sectionA.appendChild(headerA);
 
-    const controlsRow = document.createElement('div');
-    controlsRow.style.display = 'flex';
-    controlsRow.style.gap = '8px';
-    controlsRow.style.alignItems = 'center';
-    controlsRow.style.flexWrap = 'wrap';
+    const renderToolbar = () => {
+        const existingToolbar = sectionA.querySelector('.da-preset-toolbar');
+        if (existingToolbar) existingToolbar.remove();
 
-    const selectEl = document.createElement('select');
-    selectEl.id = 'injection_template_preset_id';
-    selectEl.className = 'da-select';
-    selectEl.style.flex = '1';
-    selectEl.style.minWidth = '180px';
-
-    const refreshTplSelect = () => {
-        const list = getInjectionTemplates();
-        selectEl.innerHTML = '';
-        list.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            selectEl.appendChild(opt);
+        const templates = getInjectionTemplates();
+        const toolbar = renderPresetToolbar({
+            profiles: templates.map(t => ({
+                id: t.id,
+                name: t.name,
+                data: t
+            })),
+            currentId: currentTpl.id,
+            onSelect: (id) => {
+                const found = getInjectionTemplateById(id);
+                if (found) populateForm(found);
+            },
+            onNew: () => {
+                const name = prompt('请输入新注入模板方案名称：');
+                if (!name || !name.trim()) return;
+                const newT: InjectionTemplateScheme = {
+                    id: `tpl-${Date.now()}`,
+                    name: name.trim(),
+                    characterListTemplate: '',
+                    innerOutfitTemplate: '',
+                    commonCharacterListTemplate: '',
+                    enableOutfitListTemplate: ''
+                };
+                upsertInjectionTemplate(newT);
+                renderToolbar();
+                populateForm(newT);
+            },
+            onSave: () => {
+                saveCurrentForm();
+                alert('💾 注入模板方案已保存！');
+            },
+            onSaveAs: () => {
+                const newName = prompt('另存为新方案名称：', `${currentTpl.name}_副本`);
+                if (!newName || !newName.trim()) return;
+                saveCurrentForm();
+                const copy: InjectionTemplateScheme = {
+                    ...currentTpl,
+                    id: `tpl-${Date.now()}`,
+                    name: newName.trim(),
+                    isSystemPreset: false
+                };
+                upsertInjectionTemplate(copy);
+                renderToolbar();
+                populateForm(copy);
+            },
+            onRename: () => {
+                const newName = prompt('重命名方案名称：', currentTpl.name);
+                if (!newName || !newName.trim()) return;
+                currentTpl.name = newName.trim();
+                upsertInjectionTemplate(currentTpl);
+                renderToolbar();
+            },
+            onExport: () => {
+                saveCurrentForm();
+                const jsonStr = JSON.stringify(currentTpl, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `injection-template-${currentTpl.name}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            onImport: (content) => {
+                try {
+                    const imported = JSON.parse(content) as InjectionTemplateScheme;
+                    if (!imported.name) throw new Error('无效的模板方案文件');
+                    imported.id = `tpl-${Date.now()}`;
+                    imported.isSystemPreset = false;
+                    upsertInjectionTemplate(imported);
+                    renderToolbar();
+                    populateForm(imported);
+                    alert('📥 模板方案导入成功！');
+                } catch {
+                    alert('❌ 导入失败：无法解析该 JSON 模板文件');
+                }
+            },
+            onDelete: () => {
+                if (!confirm(`⚠️ 确定要删除方案 "${currentTpl.name}" 吗？`)) return;
+                deleteInjectionTemplate(currentTpl.id);
+                renderToolbar();
+                const first = getInjectionTemplates()[0];
+                if (first) populateForm(first);
+            }
         });
-        if (list.some(t => t.id === currentTpl.id)) {
-            selectEl.value = currentTpl.id;
-        } else if (list[0]) {
-            currentTpl = list[0];
-            selectEl.value = currentTpl.id;
-        }
+
+        sectionA.appendChild(toolbar);
     };
 
-    refreshTplSelect();
-
-    const hiddenFileInput = document.createElement('input');
-    hiddenFileInput.type = 'file';
-    hiddenFileInput.accept = '.json';
-    hiddenFileInput.style.display = 'none';
-
-    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建模板方案', () => {
-        const name = prompt('请输入新注入模板方案名称：');
-        if (!name) return;
-        const newT: InjectionTemplateScheme = {
-            id: `tpl-${Date.now()}`,
-            name,
-            characterListTemplate: '',
-            innerOutfitTemplate: '',
-            commonCharacterListTemplate: '',
-            enableOutfitListTemplate: ''
-        };
-        upsertInjectionTemplate(newT);
-        refreshTplSelect();
-        populateForm(newT);
-    });
-
-    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前模板方案', () => {
-        saveCurrentForm();
-        alert('💾 注入模板方案已保存！');
-    });
-
-    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新方案', () => {
-        const newName = prompt('另存为新方案名称：', `${currentTpl.name}_副本`);
-        if (!newName) return;
-        saveCurrentForm();
-        const copy: InjectionTemplateScheme = {
-            ...currentTpl,
-            id: `tpl-${Date.now()}`,
-            name: newName,
-            isSystemPreset: false
-        };
-        upsertInjectionTemplate(copy);
-        refreshTplSelect();
-        populateForm(copy);
-    });
-
-    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
-        const newName = prompt('重命名方案名称：', currentTpl.name);
-        if (!newName || !newName.trim()) return;
-        currentTpl.name = newName.trim();
-        upsertInjectionTemplate(currentTpl);
-        refreshTplSelect();
-    });
-
-    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出模板方案 JSON', () => {
-        saveCurrentForm();
-        const jsonStr = JSON.stringify(currentTpl, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `injection-template-${currentTpl.name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-
-    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入模板方案 JSON', () => {
-        hiddenFileInput.click();
-    });
-
-    hiddenFileInput.addEventListener('change', () => {
-        const file = hiddenFileInput.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const imported = JSON.parse(reader.result as string) as InjectionTemplateScheme;
-                if (!imported.name) throw new Error('无效的模板方案文件');
-                imported.id = `tpl-${Date.now()}`;
-                imported.isSystemPreset = false;
-                upsertInjectionTemplate(imported);
-                refreshTplSelect();
-                populateForm(imported);
-                alert('📥 模板方案导入成功！');
-            } catch {
-                alert('❌ 导入失败：无法解析该 JSON 模板文件');
-            }
-            hiddenFileInput.value = '';
-        };
-        reader.readAsText(file);
-    });
-
-    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
-        if (!confirm(`⚠️ 确定要删除方案 "${currentTpl.name}" 吗？`)) return;
-        deleteInjectionTemplate(currentTpl.id);
-        refreshTplSelect();
-        const first = getInjectionTemplates()[0];
-        if (first) populateForm(first);
-    }, true);
-
-    controlsRow.appendChild(selectEl);
-    controlsRow.appendChild(btnNew);
-    controlsRow.appendChild(btnSave);
-    controlsRow.appendChild(btnSaveAs);
-    controlsRow.appendChild(btnRename);
-    controlsRow.appendChild(btnExport);
-    controlsRow.appendChild(btnImport);
-    controlsRow.appendChild(btnDelete);
-    controlsRow.appendChild(hiddenFileInput);
-
-    const descNote = document.createElement('small');
-    descNote.style.display = 'block';
-    descNote.style.marginTop = '6px';
-    descNote.style.color = 'var(--da-text-secondary, #888)';
-    descNote.style.fontSize = '0.85em';
-    descNote.textContent = '系统预置方案不可直接重命名或删除。模板中用 {变量名} 作为占位符，整行占位符全空时该行会被自动剔除。';
-
-    sectionA.appendChild(controlsRow);
-    sectionA.appendChild(descNote);
+    renderToolbar();
     root.appendChild(sectionA);
 
     // ── 区块 B：3 大模板格式配置 + 变量一键插入面板 ─────────────────────────
@@ -1935,11 +1741,6 @@ function renderInjectionTemplatesPane(): HTMLElement {
         updateLivePreview();
     };
 
-    selectEl.addEventListener('change', () => {
-        const found = getInjectionTemplateById(selectEl.value);
-        if (found) populateForm(found);
-    });
-
     populateForm(currentTpl);
     return root;
 }
@@ -2120,157 +1921,110 @@ function renderMacroRulesPane(): HTMLElement {
     headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-diagram-project"></i> 动态提示词匹配方案管理</span>';
     sectionA.appendChild(headerA);
 
-    const controlsRow = document.createElement('div');
-    controlsRow.style.display = 'flex';
-    controlsRow.style.gap = '8px';
-    controlsRow.style.alignItems = 'center';
-    controlsRow.style.flexWrap = 'wrap';
+    const renderToolbar = () => {
+        const existingToolbar = sectionA.querySelector('.da-preset-toolbar');
+        if (existingToolbar) existingToolbar.remove();
 
-    const selectEl = document.createElement('select');
-    selectEl.id = 'macro_tree_scheme_preset_id';
-    selectEl.className = 'da-select';
-    selectEl.style.flex = '1';
-    selectEl.style.minWidth = '180px';
-
-    const refreshSchemeSelect = () => {
         const list = getMacroTreeSchemes();
-        selectEl.innerHTML = '';
-        list.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = `${s.name}${s.isDefault ? ' (默认)' : ''}`;
-            selectEl.appendChild(opt);
-        });
-        if (list.some(s => s.id === activeScheme.id)) {
-            selectEl.value = activeScheme.id;
-        } else if (list[0]) {
-            activeScheme = list[0];
-            selectEl.value = activeScheme.id;
-        }
-    };
-
-    refreshSchemeSelect();
-
-    selectEl.addEventListener('change', () => {
-        setActiveMacroTreeSchemeId(selectEl.value);
-        activeScheme = getActiveMacroTreeScheme();
-        refreshAll();
-    });
-
-    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建匹配方案', () => {
-        const name = prompt('请输入新匹配方案名称:', '自定义匹配方案');
-        if (name && name.trim()) {
-            const newScheme: MacroTreeScheme = {
-                ...JSON.parse(JSON.stringify(DEFAULT_MACRO_TREE_SCHEME)),
-                id: `macro-scheme-${Date.now()}`,
-                name: name.trim(),
-                isDefault: false
-            };
-            saveMacroTreeScheme(newScheme);
-            activeScheme = newScheme;
-            refreshSchemeSelect();
-            refreshAll();
-        }
-    });
-
-    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前匹配方案', () => {
-        saveMacroTreeScheme(activeScheme);
-        updateBothPreviews();
-        const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
-        if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
-            winToastr.toastr.success('匹配方案保存成功！', '绘画助手');
-        }
-    });
-
-    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新方案', () => {
-        const newName = prompt('另存为新方案名称:', `${activeScheme.name}_副本`);
-        if (!newName || !newName.trim()) return;
-        const copyScheme: MacroTreeScheme = {
-            ...JSON.parse(JSON.stringify(activeScheme)),
-            id: `macro-scheme-${Date.now()}`,
-            name: newName.trim(),
-            isDefault: false
-        };
-        saveMacroTreeScheme(copyScheme);
-        activeScheme = copyScheme;
-        refreshSchemeSelect();
-        refreshAll();
-    });
-
-    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
-        const newName = prompt('重命名方案名称:', activeScheme.name);
-        if (newName && newName.trim()) {
-            activeScheme.name = newName.trim();
-            saveMacroTreeScheme(activeScheme);
-            refreshSchemeSelect();
-        }
-    });
-
-    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出方案 JSON', () => {
-        const jsonStr = exportMacroTreeScheme(activeScheme.id);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `macro-scheme-${activeScheme.name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-
-    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入方案 JSON', () => {
-        hiddenFileInput.click();
-    });
-
-    hiddenFileInput.addEventListener('change', () => {
-        const file = hiddenFileInput.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            try {
-                const content = evt.target?.result as string;
-                activeScheme = importMacroTreeScheme(content);
-                refreshSchemeSelect();
+        const toolbar = renderPresetToolbar({
+            profiles: list.map(s => ({
+                id: s.id,
+                name: `${s.name}${s.isDefault ? ' (默认)' : ''}`,
+                data: s
+            })),
+            currentId: activeScheme.id,
+            onSelect: (id) => {
+                setActiveMacroTreeSchemeId(id);
+                activeScheme = getActiveMacroTreeScheme();
                 refreshAll();
+            },
+            onNew: () => {
+                const name = prompt('请输入新匹配方案名称:', '自定义匹配方案');
+                if (name && name.trim()) {
+                    const newScheme: MacroTreeScheme = {
+                        ...JSON.parse(JSON.stringify(DEFAULT_MACRO_TREE_SCHEME)),
+                        id: `macro-scheme-${Date.now()}`,
+                        name: name.trim(),
+                        isDefault: false
+                    };
+                    saveMacroTreeScheme(newScheme);
+                    activeScheme = newScheme;
+                    renderToolbar();
+                    refreshAll();
+                }
+            },
+            onSave: () => {
+                saveMacroTreeScheme(activeScheme);
+                updateBothPreviews();
                 const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
                 if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
-                    winToastr.toastr.success(`方案“${activeScheme.name}”导入成功！`, '绘画助手');
+                    winToastr.toastr.success('匹配方案保存成功！', '绘画助手');
                 }
-            } catch (err) {
-                alert(`导入失败：${(err as Error).message}`);
+            },
+            onSaveAs: () => {
+                const newName = prompt('另存为新方案名称:', `${activeScheme.name}_副本`);
+                if (!newName || !newName.trim()) return;
+                const copyScheme: MacroTreeScheme = {
+                    ...JSON.parse(JSON.stringify(activeScheme)),
+                    id: `macro-scheme-${Date.now()}`,
+                    name: newName.trim(),
+                    isDefault: false
+                };
+                saveMacroTreeScheme(copyScheme);
+                activeScheme = copyScheme;
+                renderToolbar();
+                refreshAll();
+            },
+            onRename: () => {
+                const newName = prompt('重命名方案名称:', activeScheme.name);
+                if (newName && newName.trim()) {
+                    activeScheme.name = newName.trim();
+                    saveMacroTreeScheme(activeScheme);
+                    renderToolbar();
+                }
+            },
+            onExport: () => {
+                const jsonStr = exportMacroTreeScheme(activeScheme.id);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `macro-scheme-${activeScheme.name}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            onImport: (content) => {
+                try {
+                    activeScheme = importMacroTreeScheme(content);
+                    renderToolbar();
+                    refreshAll();
+                    const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+                    if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+                        winToastr.toastr.success(`方案“${activeScheme.name}”导入成功！`, '绘画助手');
+                    }
+                } catch (err) {
+                    alert(`导入失败：${(err as Error).message}`);
+                }
+            },
+            onReset: () => {
+                if (confirm('确定要恢复为 Wai/Standard 默认预设方案吗？')) {
+                    activeScheme = resetMacroTreeScheme();
+                    renderToolbar();
+                    refreshAll();
+                }
+            },
+            onDelete: () => {
+                if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
+                    deleteMacroTreeScheme(activeScheme.id);
+                    activeScheme = getActiveMacroTreeScheme();
+                    renderToolbar();
+                    refreshAll();
+                }
             }
-            hiddenFileInput.value = '';
-        };
-        reader.readAsText(file);
-    });
+        });
 
-    const btnReset = createIconButton('<i class="fa-solid fa-rotate-left"></i>', '恢复默认预设', () => {
-        if (confirm('确定要恢复为 Wai/Standard 默认预设方案吗？')) {
-            activeScheme = resetMacroTreeScheme();
-            refreshSchemeSelect();
-            refreshAll();
-        }
-    });
-
-    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
-        if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
-            deleteMacroTreeScheme(activeScheme.id);
-            activeScheme = getActiveMacroTreeScheme();
-            refreshSchemeSelect();
-            refreshAll();
-        }
-    }, true);
-
-    controlsRow.appendChild(selectEl);
-    controlsRow.appendChild(btnNew);
-    controlsRow.appendChild(btnSave);
-    controlsRow.appendChild(btnSaveAs);
-    controlsRow.appendChild(btnRename);
-    controlsRow.appendChild(btnExport);
-    controlsRow.appendChild(btnImport);
-    controlsRow.appendChild(btnReset);
-    controlsRow.appendChild(btnDelete);
-
-    sectionA.appendChild(controlsRow);
+        sectionA.appendChild(toolbar);
+    };
     root.appendChild(sectionA);
 
     // ── 2. 主匹配规则主体卡片 (角色/服装 顶级卡片容器) ─────────────────────────
@@ -2878,7 +2632,7 @@ function renderMacroRulesPane(): HTMLElement {
     };
 
     const refreshAll = () => {
-        refreshSchemeSelect();
+        renderToolbar();
         renderCharBlock();
         renderOutfitBlock();
         updateNavState();

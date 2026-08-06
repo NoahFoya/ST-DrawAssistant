@@ -1,12 +1,10 @@
 /**
  * @module ui/components/preset-toolbar
- * @description 预设方案下拉选择与预设管理工具栏组件 (PresetToolbar)
+ * @description 统一预设方案下拉选择与管理工具栏通用组件 (PresetToolbar)
  *
  * 职责：
- *   - ✏️ 重命名方案
- *   - 📥 导入方案 JSON
- *   - 📤 导出方案 JSON
- *   - 🗑️ 删除方案 (所有预设均可自主编辑删除)
+ *   - 全插件 100% 标准化工具栏布局与 Icon 序列 (8 图标 FontAwesome)
+ *   - ➕ 新建 · 💾 保存 · 📄➔ 另存为 · ✏️ 重命名 · 📤 导出 JSON · 📥 导入 JSON · ↺ 恢复默认 · 🗑️ 删除
  */
 import type { PresetProfileItem } from '../../settings/types';
 export interface PresetToolbarOptions<T = Record<string, unknown>> {
@@ -22,17 +20,21 @@ export interface PresetToolbarOptions<T = Record<string, unknown>> {
     onNew: () => void;
     /** 💾 保存方案回调 */
     onSave: () => void;
+    /** 📄➔ 另存为新方案回调 (可选) */
+    onSaveAs?: () => void;
     /** ✏️ 重命名方案回调 */
     onRename: () => void;
-    /** 📥 导入方案回调 */
-    onImport: (content: string, fileName: string) => void;
     /** 📤 导出方案回调 */
     onExport: () => void;
+    /** 📥 导入方案回调 */
+    onImport: (content: string, fileName: string) => void;
+    /** ↺ 恢复默认预设回调 (可选) */
+    onReset?: () => void;
     /** 🗑️ 删除方案回调 */
     onDelete: () => void;
 }
 /**
- * 渲染响应式 Preset Toolbar 容器
+ * 渲染全插件统一样式的 Preset Toolbar 容器 (8 个标准 Icon 按钮)
  */
 export declare function renderPresetToolbar<T = Record<string, unknown>>(options: PresetToolbarOptions<T>): HTMLElement;
 //# sourceMappingURL=preset-toolbar.d.ts.map
