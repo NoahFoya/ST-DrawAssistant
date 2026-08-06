@@ -555,10 +555,116 @@ export function extractCharacterAndOutfitTags(messageText: string): {
 }
 
 /**
- * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用
+ * 非阻塞式角色设定提取确认浮层 UI (避免原生 confirm 阻塞 JS 主线程)
+ */
+export function showExtractionToast(
+    title: string,
+    message: string,
+    confirmText: string,
+    onConfirm: () => void
+): void {
+    try {
+        let container = document.getElementById('da-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'da-toast-container';
+            container.style.position = 'fixed';
+            container.style.top = '20px';
+            container.style.right = '20px';
+            container.style.zIndex = '999999';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '10px';
+            container.style.pointerEvents = 'none';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'da-section-card';
+        toast.style.pointerEvents = 'auto';
+        toast.style.background = 'var(--da-bg-secondary, rgba(20, 20, 30, 0.95))';
+        toast.style.border = '1px solid var(--da-primary-color, #7000ff)';
+        toast.style.borderRadius = '8px';
+        toast.style.padding = '12px 16px';
+        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+        toast.style.color = '#fff';
+        toast.style.minWidth = '280px';
+        toast.style.maxWidth = '380px';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.style.fontWeight = 'bold';
+        titleDiv.style.fontSize = '0.95em';
+        titleDiv.style.color = 'var(--da-primary-color, #a855f7)';
+        titleDiv.style.marginBottom = '4px';
+        titleDiv.textContent = title;
+
+        const msgDiv = document.createElement('div');
+        msgDiv.style.fontSize = '0.85em';
+        msgDiv.style.opacity = '0.9';
+        msgDiv.style.marginBottom = '10px';
+        msgDiv.style.lineHeight = '1.4';
+        msgDiv.textContent = message;
+
+        const btnRow = document.createElement('div');
+        btnRow.style.display = 'flex';
+        btnRow.style.justifyContent = 'flex-end';
+        btnRow.style.gap = '8px';
+
+        const btnCancel = document.createElement('button');
+        btnCancel.className = 'da-btn secondary';
+        btnCancel.style.padding = '3px 10px';
+        btnCancel.style.fontSize = '0.8em';
+        btnCancel.textContent = '忽略';
+
+        const btnConfirm = document.createElement('button');
+        btnConfirm.className = 'da-btn primary';
+        btnConfirm.style.padding = '3px 10px';
+        btnConfirm.style.fontSize = '0.8em';
+        btnConfirm.textContent = confirmText;
+
+        btnRow.appendChild(btnCancel);
+        btnRow.appendChild(btnConfirm);
+
+        toast.appendChild(titleDiv);
+        toast.appendChild(msgDiv);
+        toast.appendChild(btnRow);
+
+        const removeToast = () => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        };
+
+        btnCancel.addEventListener('click', removeToast);
+        btnConfirm.addEventListener('click', () => {
+            onConfirm();
+            removeToast();
+        });
+
+        // 15 秒无人操作自动淡出离开，绝不阻塞 UI 主线程
+        setTimeout(() => {
+            if (document.body.contains(toast)) removeToast();
+        }, 15000);
+
+        container.appendChild(toast);
+    } catch {
+        // 静默保护
+    }
+}
+
+/** 已去重处理过的消息文本哈希集合 */
+const processedMessageHashes = new Set<string>();
+
+/**
+ * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 非阻塞 UI)
  */
 export function processExtractedCharacterTags(messageText: string): void {
     if (!messageText) return;
+
+    // 哈希去重校验，防止同条消息触发多个事件时重复弹框
+    const hash = `${messageText.length}_${messageText.substring(0, 100)}`;
+    if (processedMessageHashes.has(hash)) return;
+    processedMessageHashes.add(hash);
 
     const { characters, outfits } = extractCharacterAndOutfitTags(messageText);
     if (characters.length === 0 && outfits.length === 0) return;
@@ -573,11 +679,13 @@ export function processExtractedCharacterTags(messageText: string): void {
                  (c.nameEN && extractedChar.nameEN && c.nameEN.trim().toLowerCase() === extractedChar.nameEN.trim().toLowerCase())
         );
 
-        const promptText = matchedExisting
-            ? `🎯 检测到 AI 回复中包含已存在的角色设定 "${extractedChar.nameCN}"，是否【覆盖更新】其详细参数？`
-            : `🎯 检测到 AI 回复中包含新角色设定 "${extractedChar.nameCN}"，是否【保存并启用】至当前方案？`;
+        const title = matchedExisting ? '🎯 检测到同名角色设定' : '🎯 检测到新角色设定';
+        const msg = matchedExisting
+            ? `发现角色 "${extractedChar.nameCN}" 的最新描述参数，是否覆盖更新？`
+            : `发现新角色 "${extractedChar.nameCN}"，是否保存并启用至当前方案？`;
+        const btnLabel = matchedExisting ? '覆盖更新' : '保存并启用';
 
-        if (confirm(promptText)) {
+        showExtractionToast(title, msg, btnLabel, () => {
             // 保存专属服装
             const savedOutfitNames: string[] = [];
             extractedChar.matchedOutfits.forEach(outfit => {
@@ -607,16 +715,18 @@ export function processExtractedCharacterTags(messageText: string): void {
 
             updateGlobalWorldbookPlaceholders();
             logger.info(`[CharacterInjection] 成功存档并启用角色设定 "${charToSave.nameCN}"`);
-        }
+        });
     });
 
     outfits.forEach(extractedOutfit => {
         const matchedOutfit = existingOutfits.find(o => o.nameCN === extractedOutfit.nameCN);
-        const promptText = matchedOutfit
-            ? `👕 检测到 AI 回复中包含已存在的通用服装 "${extractedOutfit.nameCN}"，是否【覆盖更新】？`
-            : `👕 检测到 AI 回复中包含新通用服装 "${extractedOutfit.nameCN}"，是否【保存并启用】？`;
+        const title = matchedOutfit ? '👕 检测到同名通用服装' : '👕 检测到新通用服装';
+        const msg = matchedOutfit
+            ? `发现通用服装 "${extractedOutfit.nameCN}" 的最新描述，是否覆盖更新？`
+            : `发现新通用服装 "${extractedOutfit.nameCN}"，是否保存并启用？`;
+        const btnLabel = matchedOutfit ? '覆盖更新' : '保存并启用';
 
-        if (confirm(promptText)) {
+        showExtractionToast(title, msg, btnLabel, () => {
             const outfitToSave: OutfitProfile = matchedOutfit
                 ? { ...matchedOutfit, ...extractedOutfit, id: matchedOutfit.id }
                 : extractedOutfit;
@@ -631,7 +741,7 @@ export function processExtractedCharacterTags(messageText: string): void {
 
             updateGlobalWorldbookPlaceholders();
             logger.info(`[CharacterInjection] 成功存档并启用通用服装 "${outfitToSave.nameCN}"`);
-        }
+        });
     });
 }
 
