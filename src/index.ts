@@ -124,6 +124,10 @@ async function init(): Promise<void> {
         // 4. 扫描现有聊天消息并注入楼层生图按钮
         injectExistingMessages();
 
+        // 5. 挂载角色管理事件监听与新角色卡智能提示
+        const { registerCharacterEventListeners } = await import('./core/character-event-listener');
+        registerCharacterEventListeners();
+
         logger.info(`初始化就绪 ✅ 触发生图占位符格式: ${settings!.placeholderStart}prompt${settings!.placeholderEnd}`);
     } catch (err) {
         logger.error('扩展初始化失败', err);

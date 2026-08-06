@@ -22,6 +22,7 @@ import {
     deleteInjectionTemplate
 } from '../../storage/character-store';
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule } from '../../types/character';
+import { checkCharacterCardConflict } from '../../core/character-event-listener';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -1131,6 +1132,16 @@ function renderCharacterEnablePane(): HTMLElement {
     cardBindInput.style.flex = '1';
     cardBindInput.value = currentScheme.boundCharacterCards || '';
 
+    cardBindInput.addEventListener('change', () => {
+        const val = cardBindInput.value.trim();
+        if (val) {
+            const conflictScheme = checkCharacterCardConflict(val, currentScheme.id);
+            if (conflictScheme) {
+                alert(`⚠️ 绑定冲突提醒：角色卡 "${val}" 已在另一方案 "${conflictScheme}" 中绑定！`);
+            }
+        }
+    });
+
     const btnGetCardName = document.createElement('button');
     btnGetCardName.className = 'da-btn secondary';
     btnGetCardName.style.whiteSpace = 'nowrap';
@@ -1141,7 +1152,12 @@ function renderCharacterEnablePane(): HTMLElement {
         const name2 = win.SillyTavern?.getContext?.()?.name2;
         if (name2) {
             cardBindInput.value = name2;
-            alert(`🎯 已获取当前酒馆角色卡名称: "${name2}"`);
+            const conflictScheme = checkCharacterCardConflict(name2, currentScheme.id);
+            if (conflictScheme) {
+                alert(`🎯 已获取当前角色卡: "${name2}"\n⚠️ 注意：该角色卡已被另一方案 "${conflictScheme}" 绑定！`);
+            } else {
+                alert(`🎯 已获取当前酒馆角色卡名称: "${name2}"`);
+            }
         } else {
             alert('ℹ️ 未检测到活动的酒馆角色卡或当前不在聊天视窗中');
         }

@@ -27,6 +27,7 @@ import { saveImageToDB, getImageFromDB } from '../storage/image-db';
 import { logger } from '../core/logger';
 
 import { escapeHtmlAttr } from '../utils/html';
+import { injectCharacterPlaceholders } from '../core/character-injection';
 
 interface SavedImageMeta {
     uuid?: string;
@@ -560,6 +561,8 @@ function buildGenerateParams(
         loraSuffix
     ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
 
+    const injectedPositive = injectCharacterPlaceholders(fullPositive, promptText);
+
     const fullNegative = [
         settings.checkpointNegativePrefix,
         settings.negativePrefix,
@@ -567,7 +570,7 @@ function buildGenerateParams(
     ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
 
     return {
-        prompt: fullPositive,
+        prompt: injectedPositive,
         negativePrompt: fullNegative,
         ckptName: settings.ckptName,
         clipName: settings.clipName,
