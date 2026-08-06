@@ -446,22 +446,10 @@ export class ComfyUIDriver extends BaseDriver {
 
         this.checkCancelled();
 
-        // 3. 运行变量替换引擎将参数注入工作流 (包含 Lora 格式化追加)
-        const loraSuffix = (this.settings.loras ?? [])
-            .filter(l => l.name)
-            .map(l => `<lora:${l.name}:${l.weight}>`)
-            .join(', ');
-
-        const finalSuffix = [this.settings.promptSuffix ?? '', loraSuffix].filter(Boolean).join(', ');
-
+        // 3. 运行变量替换引擎将参数注入工作流 (options.prompt 已在前置 buildGenerateParams 中完成编译与多段拼接)
         const workflow = substituteWorkflowVariables(
             this.settings.workflowJson,
-            options,
-            this.settings.promptPrefix,
-            this.settings.negativePrefix,
-            this.settings.checkpointPositivePrefix ?? '',
-            this.settings.checkpointNegativePrefix ?? '',
-            finalSuffix
+            options
         );
 
         // 4. 提交任务

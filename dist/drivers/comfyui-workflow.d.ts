@@ -28,18 +28,13 @@ export type WorkflowJson = Record<string, WorkflowNode>;
 export declare function loadWorkflow(workflowJsonStr: string): WorkflowJson;
 /**
  * 使用正则与类型解析将工作流 JSON 字符串中的 %xxx% 变量替换为实际运行参数
- * 提示词正负向按五段式 / 三段式精准顺序拼接后注入工作流
+ * 纯粹变量映射：直接将前置编译完成的 options.prompt 映射至 %prompt%
  *
  * @param workflowJsonStr 用户定义的 ComfyUI API 格式工作流 JSON 字符串
  * @param options 生图运行参数 (含 prompt, negativePrompt, width, height, steps, cfgScale, seed 等)
- * @param promptPrefix 正向前缀提示词
- * @param negativePrefix 负向提示词
- * @param checkpointPosPrefix 模型专用正向提示词 (归属于模型预设)
- * @param checkpointNegPrefix 模型专用负向提示词 (归属于模型预设)
- * @param promptSuffix 正向后缀提示词 (含格式化追加的 Lora 标签)
  * @returns 完成参数注入可直接提交至 /prompt 的工作流 JSON 对象
  */
-export declare function substituteWorkflowVariables(workflowJsonStr: string, options: GenerateOptions, promptPrefix: string, negativePrefix: string, checkpointPosPrefix?: string, checkpointNegPrefix?: string, promptSuffix?: string): WorkflowJson;
+export declare function substituteWorkflowVariables(workflowJsonStr: string, options: GenerateOptions): WorkflowJson;
 /**
  * 从 /history 响应的 outputs 中提取输出图像信息
  *
