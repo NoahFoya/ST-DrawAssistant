@@ -807,7 +807,7 @@ export function processExtractedCharacterTags(messageText: string): void {
 // ============================================================================
 
 /**
- * 动态提示词预处理与宏模板替换引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 并按当期宏模板解包替换)
+ * 动态提示词预处理与宏解包引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 实体并按纯 Tag 格式解包替换)
  */
 export function processCharacterPrompt(promptText: string): string {
     if (!promptText || typeof promptText !== 'string') return promptText;
@@ -819,102 +819,101 @@ export function processCharacterPrompt(promptText: string): string {
 
     const existingChars = getCharacterProfiles();
     const existingOutfits = getOutfitProfiles();
-    const activeScheme = resolveActiveEnableScheme();
-
-    const templates = getInjectionTemplates();
-    const activeTemplate = templates.find(t => t.id === activeScheme?.injectionTemplateId) || templates[0];
-
-    const charListTemplate = activeTemplate?.characterListTemplate || '{nameEN}, {facial}, {upperSFW}, {fullBodySFW}';
-    const outfitTemplate = activeTemplate?.enableOutfitListTemplate || '{nameEN}, {upperBody}, {fullBody}';
 
     const processed = promptText.replace(tagRegex, (fullMatch, innerStr: string) => {
         const rawContent = innerStr.trim();
         if (!rawContent) return fullMatch;
 
-        let extractedName = rawContent;
+        // 提取实体名称与解析视角 / SFW / NSFW 后缀参数
+        const lowerContent = rawContent.toLowerCase();
 
-        // JSON 格式解析 ${"name":"..."}$
-        if (rawContent.startsWith('{') && rawContent.endsWith('}')) {
-            try {
-                const parsed = JSON.parse(rawContent);
-                if (parsed.name) extractedName = parsed.name;
-            } catch {
-                // fallthrough
-            }
-        } else {
-            // 旧格式后缀解析 -sfw-upperbody, -sfw-upperBody-sfw-lowerBody, -upperBody-lowerBody
-            const patterns = [
-                '-from_front', '-from_side', '-from_behind',
-                '-sfw-upperbody-sfw-lowerbody', '-sfw-upperbody-nsfw-lowerbody',
-                '-nsfw-upperbody-sfw-lowerbody', '-nsfw-upperbody-nsfw-lowerbody',
-                '-sfw-upperbody-sfw-fullbody', '-sfw-upperbody-nsfw-fullbody',
-                '-nsfw-upperbody-sfw-fullbody', '-nsfw-upperbody-nsfw-fullbody',
-                '-sfw-upperbody', '-nsfw-upperbody', '-sfw-lowerbody', '-nsfw-lowerbody',
-                '-upperbody-lowerbody', '-upperbody', '-lowerbody'
-            ];
+        const isFromBehind = lowerContent.includes('-from_behind');
+        const isUpperNSFW = lowerContent.includes('-nsfw-upperbody');
+        const isLowerNSFW = lowerContent.includes('-nsfw-lowerbody') || lowerContent.includes('-nsfw-fullbody');
 
-            let lower = extractedName.toLowerCase();
-            for (const p of patterns) {
-                if (lower.endsWith(p.toLowerCase())) {
-                    extractedName = extractedName.substring(0, extractedName.length - p.length).trim();
-                    lower = extractedName.toLowerCase();
-                }
+        // 后缀剔除清单，提取出纯名字 (如 rikka_takarada_(ssss.gridman) 或 rikka_takarada_default_uniform)
+        const suffixes = [
+            '-from_front', '-from_side', '-from_behind',
+            '-sfw-upperbody-sfw-lowerbody', '-sfw-upperbody-nsfw-lowerbody',
+            '-nsfw-upperbody-sfw-lowerbody', '-nsfw-upperbody-nsfw-lowerbody',
+            '-sfw-upperbody-sfw-fullbody', '-sfw-upperbody-nsfw-fullbody',
+            '-nsfw-upperbody-sfw-fullbody', '-nsfw-upperbody-nsfw-fullbody',
+            '-sfw-upperbody', '-nsfw-upperbody', '-sfw-lowerbody', '-nsfw-lowerbody',
+            '-upperbody-lowerbody', '-upperbody', '-lowerbody'
+        ];
+
+        let normName = rawContent;
+        for (const s of suffixes) {
+            const idx = normName.toLowerCase().lastIndexOf(s.toLowerCase());
+            if (idx !== -1 && idx === normName.length - s.length) {
+                normName = normName.substring(0, idx).trim();
             }
         }
 
-        const normName = extractedName.trim().toLowerCase();
+        const matchKey = normName.toLowerCase();
+        const matchKeyNoTag = matchKey.replace(/_\([^\)]+\)/g, '').trim();
 
-        // 1. 匹配角色
-        const matchedChar = existingChars.find(c =>
-            (c.nameCN && c.nameCN.trim().toLowerCase() === normName) ||
-            (c.nameEN && c.nameEN.trim().toLowerCase() === normName) ||
-            (c.nameEN && c.nameEN.toLowerCase().includes(normName))
-        );
+        // 1. 优先匹配角色实体
+        const matchedChar = existingChars.find(c => {
+            const cCN = (c.nameCN || '').trim().toLowerCase();
+            const cEN = (c.nameEN || '').trim().toLowerCase();
+            const cENBase = cEN.replace(/_\([^\)]+\)/g, '').trim();
+            return (cCN && (cCN === matchKey || cCN === matchKeyNoTag)) ||
+                   (cEN && (cEN === matchKey || cEN === matchKeyNoTag || cENBase === matchKeyNoTag));
+        });
 
         if (matchedChar) {
-            let charText = charListTemplate;
-            charText = charText.replace(/\{nameCN\}/gi, matchedChar.nameCN || '');
-            charText = charText.replace(/\{nameEN\}/gi, matchedChar.nameEN || '');
-            charText = charText.replace(/\{traits\}/gi, matchedChar.characterTraits || '');
-            charText = charText.replace(/\{facial\}/gi, matchedChar.facialFeatures || '');
-            charText = charText.replace(/\{facialBack\}/gi, matchedChar.facialFeaturesBack || '');
-            charText = charText.replace(/\{upperSFW\}/gi, matchedChar.upperBodySFW || '');
-            charText = charText.replace(/\{upperSFWBack\}/gi, matchedChar.upperBodySFWBack || '');
-            charText = charText.replace(/\{fullBodySFW\}/gi, matchedChar.fullBodySFW || '');
-            charText = charText.replace(/\{fullBodySFWBack\}/gi, matchedChar.fullBodySFWBack || '');
-            charText = charText.replace(/\{upperNSFW\}/gi, matchedChar.upperBodyNSFW || '');
-            charText = charText.replace(/\{upperNSFWBack\}/gi, matchedChar.upperBodyNSFWBack || '');
-            charText = charText.replace(/\{fullBodyNSFW\}/gi, matchedChar.fullBodyNSFW || '');
-            charText = charText.replace(/\{fullBodyNSFWBack\}/gi, matchedChar.fullBodyNSFWBack || '');
-            charText = charText.replace(/\{negative\}/gi, matchedChar.negativePrompt || '');
-            charText = charText.replace(/\{outfits\}/gi, '');
+            const nameEN = matchedChar.nameEN || '';
+            const facial = isFromBehind
+                ? (matchedChar.facialFeaturesBack || matchedChar.facialFeatures || '')
+                : (matchedChar.facialFeatures || '');
 
-            return cleanRenderedText(charText);
+            const upper = isFromBehind
+                ? (isUpperNSFW ? (matchedChar.upperBodyNSFWBack || matchedChar.upperBodyNSFW || '') : (matchedChar.upperBodySFWBack || matchedChar.upperBodySFW || ''))
+                : (isUpperNSFW ? (matchedChar.upperBodyNSFW || '') : (matchedChar.upperBodySFW || ''));
+
+            const lower = isFromBehind
+                ? (isLowerNSFW ? (matchedChar.fullBodyNSFWBack || matchedChar.fullBodyNSFW || '') : (matchedChar.fullBodySFWBack || matchedChar.fullBodySFW || ''))
+                : (isLowerNSFW ? (matchedChar.fullBodyNSFW || '') : (matchedChar.fullBodySFW || ''));
+
+            const traits = matchedChar.characterTraits || '';
+
+            const charTags = [nameEN, facial, upper, lower, traits]
+                .map(s => s.trim())
+                .filter(Boolean)
+                .join(', ');
+
+            return charTags;
         }
 
-        // 2. 匹配服装
-        const matchedOutfit = existingOutfits.find(o =>
-            (o.nameCN && o.nameCN.trim().toLowerCase() === normName) ||
-            (o.nameEN && o.nameEN.trim().toLowerCase() === normName) ||
-            (o.nameEN && o.nameEN.toLowerCase().includes(normName))
-        );
+        // 2. 匹配服装实体
+        const matchedOutfit = existingOutfits.find(o => {
+            const oCN = (o.nameCN || '').trim().toLowerCase();
+            const oEN = (o.nameEN || '').trim().toLowerCase();
+            const oENBase = oEN.replace(/_\([^\)]+\)/g, '').trim();
+            return (oCN && (oCN === matchKey || oCN === matchKeyNoTag)) ||
+                   (oEN && (oEN === matchKey || oEN === matchKeyNoTag || oENBase === matchKeyNoTag));
+        });
 
         if (matchedOutfit) {
-            let outfitText = outfitTemplate;
-            outfitText = outfitText.replace(/\{nameCN\}/gi, matchedOutfit.nameCN || '');
-            outfitText = outfitText.replace(/\{nameEN\}/gi, matchedOutfit.nameEN || '');
-            outfitText = outfitText.replace(/\{upperBody\}/gi, matchedOutfit.upperBody || '');
-            outfitText = outfitText.replace(/\{upperBodyBack\}/gi, matchedOutfit.upperBodyBack || '');
-            outfitText = outfitText.replace(/\{fullBody\}/gi, matchedOutfit.fullBody || '');
-            outfitText = outfitText.replace(/\{fullBodyBack\}/gi, matchedOutfit.fullBodyBack || '');
+            const nameEN = matchedOutfit.nameEN || '';
+            const upper = isFromBehind ? (matchedOutfit.upperBodyBack || matchedOutfit.upperBody || '') : (matchedOutfit.upperBody || '');
+            const full = isFromBehind ? (matchedOutfit.fullBodyBack || matchedOutfit.fullBody || '') : (matchedOutfit.fullBody || '');
 
-            return cleanRenderedText(outfitText);
+            const outfitTags = [nameEN, upper, full]
+                .map(s => s.trim())
+                .filter(Boolean)
+                .join(', ');
+
+            return outfitTags;
         }
 
         return fullMatch;
     });
 
-    return cleanRenderedText(processed);
+    // 格式二次清洗：擦除任何混入的 <xml> 标签并清洗多余逗号
+    const strippedXml = processed.replace(/<[^>]+>/g, ' ');
+    return cleanRenderedText(strippedXml);
 }
 
 
