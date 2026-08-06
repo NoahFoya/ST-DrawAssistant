@@ -1,13 +1,14 @@
 /**
  * @module storage/character-store
- * @description 角色设定、服装设定及设定启用方案的持久化存储管理器
+ * @description 角色设定、服装设定、设定启用方案及注入模板方案的持久化存储管理器
  */
 
-import type { CharacterProfile, OutfitProfile, EnableSchemeProfile } from '../types/character';
+import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme } from '../types/character';
 
 const CHARACTER_PROFILES_KEY = 'st_da_character_profiles_v1';
 const OUTFIT_PROFILES_KEY = 'st_da_outfit_profiles_v1';
 const ENABLE_SCHEMES_KEY = 'st_da_enable_schemes_v1';
+const INJECTION_TEMPLATES_KEY = 'st_da_injection_templates_v1';
 
 /** 默认的示例角色预设 */
 const DEFAULT_CHARACTER: CharacterProfile = {
@@ -72,6 +73,50 @@ const DEFAULT_ENABLE_SCHEME: EnableSchemeProfile = {
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
+};
+
+/** 默认注入模板方案 (系统预置 XML 格式) */
+const DEFAULT_SYSTEM_INJECTION_TEMPLATE: InjectionTemplateScheme = {
+    id: 'tpl-default-xml',
+    name: 'Tavern XML 格式 (系统预置)',
+    isSystemPreset: true,
+    characterListTemplate: `<character name="{nameCN}">
+  <name_en>{nameEN}</name_en>
+  <traits>{traits}</traits>
+  <facial>{facial}</facial>
+  <upper_sfw>{upperSFW}</upper_sfw>
+  <lower_sfw>{lowerSFW}</lower_sfw>
+  <outfits>
+{outfits}
+  </outfits>
+</character>`,
+    innerOutfitTemplate: `    <outfit name="{nameCN}">
+      <upper>{upperBody}</upper>
+      <lower>{lowerBody}</lower>
+    </outfit>`,
+    commonCharacterListTemplate: '',
+    enableOutfitListTemplate: `<outfit name="{nameCN}">
+  <name_en>{nameEN}</name_en>
+  <upper>{upperBody}</upper>
+  <lower>{lowerBody}</lower>
+</outfit>`
+};
+
+/** Markdown 极简方案预置 */
+const MARKDOWN_INJECTION_TEMPLATE: InjectionTemplateScheme = {
+    id: 'tpl-markdown-card',
+    name: 'Markdown 极简卡片 (系统预置)',
+    isSystemPreset: true,
+    characterListTemplate: `### 👤 {nameCN} ({nameEN})
+- 特征: {traits}
+- 五官: {facial}
+- 着装: {upperSFW}, {lowerSFW}
+- 专属服装:
+{outfits}`,
+    innerOutfitTemplate: `  - [{nameCN}]: {upperBody}, {lowerBody}`,
+    commonCharacterListTemplate: '',
+    enableOutfitListTemplate: `### 👗 服装: {nameCN} ({nameEN})
+- 样式: {upperBody}, {lowerBody}`
 };
 
 // ─── 角色预设存储 ─────────────────────────────────────────────────────────────
@@ -195,4 +240,51 @@ export function upsertEnableScheme(scheme: EnableSchemeProfile): void {
 export function deleteEnableScheme(id: string): void {
     const list = getEnableSchemes().filter(s => s.id !== id);
     saveEnableSchemes(list);
+}
+
+// ─── 注入模板方案存储 ─────────────────────────────────────────────────────────
+
+export function getInjectionTemplates(): InjectionTemplateScheme[] {
+    try {
+        const raw = localStorage.getItem(INJECTION_TEMPLATES_KEY);
+        const defaults = [DEFAULT_SYSTEM_INJECTION_TEMPLATE, MARKDOWN_INJECTION_TEMPLATE];
+        if (!raw) {
+            saveInjectionTemplates(defaults);
+            return defaults;
+        }
+        const list = JSON.parse(raw) as InjectionTemplateScheme[];
+        // 保证系统默认方案始终存在
+        defaults.forEach(d => {
+            if (!list.some(item => item.id === d.id)) {
+                list.unshift(d);
+            }
+        });
+        return list;
+    } catch {
+        return [DEFAULT_SYSTEM_INJECTION_TEMPLATE, MARKDOWN_INJECTION_TEMPLATE];
+    }
+}
+
+export function saveInjectionTemplates(templates: InjectionTemplateScheme[]): void {
+    localStorage.setItem(INJECTION_TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+export function getInjectionTemplateById(id: string): InjectionTemplateScheme | undefined {
+    return getInjectionTemplates().find(t => t.id === id);
+}
+
+export function upsertInjectionTemplate(template: InjectionTemplateScheme): void {
+    const list = getInjectionTemplates();
+    const idx = list.findIndex(t => t.id === template.id);
+    if (idx >= 0) {
+        list[idx] = template;
+    } else {
+        list.push(template);
+    }
+    saveInjectionTemplates(list);
+}
+
+export function deleteInjectionTemplate(id: string): void {
+    const list = getInjectionTemplates().filter(t => t.id !== id || t.isSystemPreset);
+    saveInjectionTemplates(list);
 }
