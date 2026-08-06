@@ -27,7 +27,7 @@ import { saveImageToDB, getImageFromDB } from '../storage/image-db';
 import { logger } from '../core/logger';
 
 import { escapeHtmlAttr } from '../utils/html';
-import { injectCharacterPlaceholders } from '../core/character-injection';
+import { injectCharacterPlaceholders, processCharacterPrompt, cleanRenderedText } from '../core/character-injection';
 
 interface SavedImageMeta {
     uuid?: string;
@@ -540,28 +540,33 @@ function buildGenerateParams(
     promptText: string,
     settings: DrawAssistantSettings
 ): import('../drivers/types').GenerateOptions {
-    let positive = promptText;
+    let rawPositive = promptText;
     let negativeFromPrompt = '';
 
     if (promptText.includes('|')) {
         const parts = promptText.split('|');
-        positive = parts[0].trim();
+        rawPositive = parts[0].trim();
         negativeFromPrompt = parts.slice(1).join('|').trim();
     }
+
+    // 1. 【提示词宏模板预处理排在拼接之前】：优先对原始楼层正向词进行动态标记与占位符解包
+    const preprocessedPositive = injectCharacterPlaceholders(
+        processCharacterPrompt(rawPositive),
+        promptText
+    );
 
     const loraSuffix = (settings.loras && settings.loras.length > 0)
         ? settings.loras.filter(l => l.name).map(l => `<lora:${l.name}:${l.weight}>`).join(', ')
         : '';
 
+    // 2. 【多段拼接排在预处理之后】：拼接 Checkpoint前缀、全局前缀、已解包预处理的正向词、全局后缀、LoRA
     const fullPositive = [
         settings.checkpointPositivePrefix,
         settings.promptPrefix,
-        positive,
+        preprocessedPositive,
         settings.promptSuffix,
         loraSuffix
     ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
-
-    const injectedPositive = injectCharacterPlaceholders(fullPositive, promptText);
 
     const fullNegative = [
         settings.checkpointNegativePrefix,
@@ -569,9 +574,12 @@ function buildGenerateParams(
         negativeFromPrompt
     ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
 
+    const finalPositive = cleanRenderedText(fullPositive);
+    const finalNegative = cleanRenderedText(fullNegative);
+
     return {
-        prompt: injectedPositive,
-        negativePrompt: fullNegative,
+        prompt: finalPositive,
+        negativePrompt: finalNegative,
         ckptName: settings.ckptName,
         clipName: settings.clipName,
         vaeName: settings.vaeName,
