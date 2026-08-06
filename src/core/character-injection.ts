@@ -1,13 +1,11 @@
 /**
  * @module core/character-injection
- * @description 角色与服装提示词注入引擎
+ * @description 角色与服装提示词注入与生图 Prompt 编译核心引擎
  *
- * 职责：
- * - 动态解析活动的设定启用方案 (EnableSchemeProfile)，匹配多行 角色卡名称|chatId
- * - 根据规则 (ALL / match) 过滤仅为 enabled: true 的角色与服装实体
- * - 展开角色专属服装列表 {outfits}
- * - 容错匹配与替换占位符 ({{角色启用列表}}, {{服装启用列表}} 等别名)
- * - 空变量行与多余空行二次正则清洗
+ * 核心逻辑区块架构：
+ * - BLOCK 1: 【路径 A - 世界书只读注入路径】 (响应 WORLDINFO_ENTRIES_LOADED 钩子只读替换 globalLore 占位符)
+ * - BLOCK 2: 【路径 B-1 - 动态设定提取与居中 Toast 提示】 (扫描 <人物>/<服装> 结构化标签，去重弹窗存档/覆盖更新/启用)
+ * - BLOCK 3: 【路径 B-2 - 动态提示词 $...$ 宏解包与二次清洗】 (在生图多段拼接前优先解包动态 Tag，二次正则清洗)
  */
 
 import {
@@ -27,6 +25,11 @@ import type {
 } from '../types/character';
 import { getContext } from './context';
 import { logger } from './logger';
+
+// ============================================================================
+// BLOCK 1: 【路径 A - 世界书只读注入路径 (Worldbook Injection Path)】
+// 职责：响应 WORLDINFO_ENTRIES_LOADED 钩子，按绑定方案与注入模板解包世界书占位符
+// ============================================================================
 
 /**
  * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案，无匹配或未选中角色卡时返回 null)
@@ -369,6 +372,11 @@ export function processWorldInfoLoadedData(
         logger.warn('[CharacterInjection] 处理 WORLDINFO_ENTRIES_LOADED 失败:', err);
     }
 }
+
+// ============================================================================
+// BLOCK 2: 【路径 B-1 - 动态设定提取与居中 Toast 提示 (Tag Extraction & Toast)】
+// 职责：扫描 AI 消息中 <人物> 与 <服装> 标签，去重弹窗存档/覆盖更新/启用
+// ============================================================================
 
 /**
  * 从预处理后的文本块中解析人物参数字典 (对齐 st-chatu8 标准字段映射)
@@ -792,6 +800,11 @@ export function processExtractedCharacterTags(messageText: string): void {
         });
     });
 }
+
+// ============================================================================
+// BLOCK 3: 【路径 B-2 - 动态提示词 $...$ 宏解包与二次清洗 (Prompt Compiler & Cleaning)】
+// 职责：在生图多段拼接前优先解包 $...$ 动态标记，二次正则清洗空白宏与多余逗号
+// ============================================================================
 
 /**
  * 动态提示词预处理与宏模板替换引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 并按当期宏模板解包替换)
