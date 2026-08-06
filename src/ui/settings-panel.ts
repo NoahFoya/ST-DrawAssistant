@@ -18,6 +18,7 @@ import { renderComfyUITab } from './tabs/comfyui-tab';
 import { renderThemeTab, applyPluginTheme } from './tabs/theme-tab';
 import { renderFABSettingsTab } from './tabs/fab-settings-tab';
 import { renderGalleryTab } from './tabs/gallery-tab';
+import { renderCharacterTab } from './tabs/character-tab';
 import { renderDiagnosticsTab } from './tabs/diagnostics-tab';
 import { renderAboutTab } from './tabs/about-tab';
 import { toggleFABPanelState } from './fab';
@@ -59,8 +60,9 @@ export function getActiveTabItems(): TabItem[] {
         items.push({ id: 'sd-webui', label: 'SD-WebUI', icon: '' });
     }
 
-    // 图库、主题、悬浮窗、日志与统计、关于
+    // 角色管理、图库、主题、悬浮窗、日志与统计、关于
     items.push(
+        { id: 'character', label: '角色管理', icon: '' },
         { id: 'gallery', label: '图库', icon: '' },
         { id: 'theme', label: '主题', icon: '' },
         { id: 'fab-settings', label: '悬浮窗', icon: '' },
@@ -463,6 +465,8 @@ function switchTab(tabId: TabId): void {
         contentArea.appendChild(renderGeneralTab());
     } else if (tabId === 'comfyui') {
         contentArea.appendChild(renderComfyUITab());
+    } else if (tabId === 'character') {
+        contentArea.appendChild(renderCharacterTab());
     } else if (tabId === 'gallery') {
         contentArea.appendChild(renderGalleryTab());
     } else if (tabId === 'theme') {
