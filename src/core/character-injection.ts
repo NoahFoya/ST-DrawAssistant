@@ -555,7 +555,7 @@ export function extractCharacterAndOutfitTags(messageText: string): {
 }
 
 /**
- * 非阻塞式角色与服装设定提取确认浮层 UI (右下角定位，高颜值毛玻璃视效，绝不阻塞 JS 主线程)
+ * 非阻塞式角色与服装设定提取确认浮层 UI (顶部居中 18% 定位，主题自适应 CSS Tokens，绝不阻塞 JS 主线程)
  */
 export function showExtractionToast(
     title: string,
@@ -571,12 +571,14 @@ export function showExtractionToast(
             container = document.createElement('div');
             container.id = 'da-toast-container';
             container.style.position = 'fixed';
-            container.style.bottom = '30px';
-            container.style.right = '25px';
+            container.style.top = '18%';
+            container.style.left = '50%';
+            container.style.transform = 'translateX(-50%)';
             container.style.zIndex = '999999';
             container.style.display = 'flex';
             container.style.flexDirection = 'column';
             container.style.gap = '12px';
+            container.style.alignItems = 'center';
             container.style.pointerEvents = 'none';
             document.body.appendChild(container);
         }
@@ -584,63 +586,64 @@ export function showExtractionToast(
         const toast = document.createElement('div');
         toast.className = 'da-section-card';
         toast.style.pointerEvents = 'auto';
-        toast.style.background = 'var(--da-bg-secondary, rgba(18, 18, 28, 0.95))';
-        toast.style.backdropFilter = 'blur(12px)';
-        (toast.style as unknown as Record<string, string>).webkitBackdropFilter = 'blur(12px)';
-        toast.style.border = `1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.5)' : 'rgba(168, 85, 247, 0.5)'}`;
-        toast.style.borderRadius = '10px';
-        toast.style.padding = '14px 18px';
-        toast.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6)';
-        toast.style.color = '#fff';
-        toast.style.minWidth = '300px';
-        toast.style.maxWidth = '400px';
+        toast.style.background = 'var(--da-bg-secondary, rgba(18, 18, 28, 0.96))';
+        toast.style.backdropFilter = 'blur(14px)';
+        (toast.style as unknown as Record<string, string>).webkitBackdropFilter = 'blur(14px)';
+        toast.style.border = `1px solid ${isOverwrite ? 'var(--da-warning-color, rgba(245, 158, 11, 0.6))' : 'var(--da-border-color, rgba(168, 85, 247, 0.6))'}`;
+        toast.style.borderRadius = '12px';
+        toast.style.padding = '16px 20px';
+        toast.style.boxShadow = 'var(--da-shadow-lg, 0 12px 36px rgba(0, 0, 0, 0.5))';
+        toast.style.color = 'var(--da-text-primary, #ffffff)';
+        toast.style.minWidth = '320px';
+        toast.style.maxWidth = '440px';
         toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
 
         const headerRow = document.createElement('div');
         headerRow.style.display = 'flex';
         headerRow.style.alignItems = 'center';
         headerRow.style.justifyContent = 'space-between';
-        headerRow.style.marginBottom = '8px';
+        headerRow.style.marginBottom = '10px';
 
         const titleDiv = document.createElement('div');
         titleDiv.style.fontWeight = 'bold';
-        titleDiv.style.fontSize = '0.95em';
-        titleDiv.style.color = isOverwrite ? '#f59e0b' : '#a855f7';
+        titleDiv.style.fontSize = '0.98em';
+        titleDiv.style.color = isOverwrite ? 'var(--da-warning-color, #f59e0b)' : 'var(--da-primary-color, #a855f7)';
         titleDiv.innerHTML = title;
 
         const badgeSpan = document.createElement('span');
         badgeSpan.style.fontSize = '0.75em';
-        badgeSpan.style.padding = '2px 8px';
+        badgeSpan.style.padding = '2px 9px';
         badgeSpan.style.borderRadius = '12px';
-        badgeSpan.style.background = isOverwrite ? 'rgba(245, 158, 11, 0.2)' : 'rgba(168, 85, 247, 0.2)';
-        badgeSpan.style.color = isOverwrite ? '#fbbf24' : '#c084fc';
-        badgeSpan.style.border = `1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`;
+        badgeSpan.style.background = isOverwrite ? 'rgba(245, 158, 11, 0.2)' : 'var(--da-primary-transparent, rgba(168, 85, 247, 0.2))';
+        badgeSpan.style.color = isOverwrite ? '#fbbf24' : 'var(--da-primary-color, #c084fc)';
+        badgeSpan.style.border = `1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.4)' : 'var(--da-border-color, rgba(168, 85, 247, 0.4))'}`;
         badgeSpan.textContent = badgeText;
 
         headerRow.appendChild(titleDiv);
         headerRow.appendChild(badgeSpan);
 
         const bodyDiv = document.createElement('div');
-        bodyDiv.style.fontSize = '0.85em';
-        bodyDiv.style.opacity = '0.92';
-        bodyDiv.style.marginBottom = '12px';
+        bodyDiv.style.fontSize = '0.86em';
+        bodyDiv.style.opacity = '0.95';
+        bodyDiv.style.marginBottom = '14px';
         bodyDiv.style.lineHeight = '1.5';
+        bodyDiv.style.color = 'var(--da-text-secondary, rgba(255, 255, 255, 0.85))';
         bodyDiv.innerHTML = detailsHtml;
 
         const btnRow = document.createElement('div');
         btnRow.style.display = 'flex';
         btnRow.style.justifyContent = 'flex-end';
-        btnRow.style.gap = '8px';
+        btnRow.style.gap = '10px';
 
         const btnCancel = document.createElement('button');
         btnCancel.className = 'da-btn secondary';
-        btnCancel.style.padding = '4px 12px';
+        btnCancel.style.padding = '4px 14px';
         btnCancel.style.fontSize = '0.8em';
         btnCancel.textContent = '忽略';
 
         const btnConfirm = document.createElement('button');
         btnConfirm.className = isOverwrite ? 'da-btn secondary' : 'da-btn primary';
-        btnConfirm.style.padding = '4px 12px';
+        btnConfirm.style.padding = '4px 14px';
         btnConfirm.style.fontSize = '0.8em';
         if (isOverwrite) {
             btnConfirm.style.background = 'rgba(245, 158, 11, 0.2)';
@@ -658,7 +661,7 @@ export function showExtractionToast(
 
         const removeToast = () => {
             toast.style.opacity = '0';
-            toast.style.transform = 'translateY(10px)';
+            toast.style.transform = 'translateY(-10px)';
             setTimeout(() => toast.remove(), 300);
         };
 
@@ -683,7 +686,7 @@ export function showExtractionToast(
 const processedMessageHashes = new Set<string>();
 
 /**
- * 监听 AI 回复/编辑消息自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 右下角非阻塞 UI)
+ * 监听 AI 回复/编辑消息自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 居中自适应 UI)
  */
 export function processExtractedCharacterTags(messageText: string): void {
     if (!messageText) return;
@@ -713,7 +716,7 @@ export function processExtractedCharacterTags(messageText: string): void {
 
         let detailsHtml = `<div><strong>👤 角色名称：</strong>${extractedChar.nameCN}${extractedChar.nameEN ? ` (${extractedChar.nameEN})` : ''}</div>`;
         if (extractedChar.characterTraits) {
-            detailsHtml += `<div style="font-size:0.9em; opacity:0.8; margin-top:2px;">特征: ${extractedChar.characterTraits.substring(0, 60)}${extractedChar.characterTraits.length > 60 ? '...' : ''}</div>`;
+            detailsHtml += `<div style="font-size:0.9em; opacity:0.85; margin-top:2px;">特征: ${extractedChar.characterTraits.substring(0, 60)}${extractedChar.characterTraits.length > 60 ? '...' : ''}</div>`;
         }
 
         if (extractedChar.matchedOutfits && extractedChar.matchedOutfits.length > 0) {
@@ -766,7 +769,7 @@ export function processExtractedCharacterTags(messageText: string): void {
         let detailsHtml = `<div><strong>👕 服装名称：</strong>${extractedOutfit.nameCN}${extractedOutfit.nameEN ? ` (${extractedOutfit.nameEN})` : ''}</div>`;
         if (extractedOutfit.upperBody || extractedOutfit.fullBody) {
             const desc = [extractedOutfit.upperBody, extractedOutfit.fullBody].filter(Boolean).join(' | ');
-            detailsHtml += `<div style="font-size:0.9em; opacity:0.8; margin-top:2px;">内容: ${desc.substring(0, 60)}${desc.length > 60 ? '...' : ''}</div>`;
+            detailsHtml += `<div style="font-size:0.9em; opacity:0.85; margin-top:2px;">内容: ${desc.substring(0, 60)}${desc.length > 60 ? '...' : ''}</div>`;
         }
 
         const confirmBtnLabel = isOverwrite ? '覆盖更新服装' : '保存并启用服装';
@@ -788,6 +791,117 @@ export function processExtractedCharacterTags(messageText: string): void {
             logger.info(`[CharacterInjection] 成功存档并启用通用服装 "${outfitToSave.nameCN}"`);
         });
     });
+}
+
+/**
+ * 动态提示词预处理与宏模板替换引擎 (解析 $...$ 动态标记，匹配 CharacterProfile / OutfitProfile 并按当期宏模板解包替换)
+ */
+export function processCharacterPrompt(promptText: string): string {
+    if (!promptText || typeof promptText !== 'string') return promptText;
+
+    const tagRegex = /\$([^$]+)\$/g;
+    if (!tagRegex.test(promptText)) return promptText;
+
+    tagRegex.lastIndex = 0;
+
+    const existingChars = getCharacterProfiles();
+    const existingOutfits = getOutfitProfiles();
+    const activeScheme = resolveActiveEnableScheme();
+
+    const templates = getInjectionTemplates();
+    const activeTemplate = templates.find(t => t.id === activeScheme?.injectionTemplateId) || templates[0];
+
+    const charListTemplate = activeTemplate?.characterListTemplate || '{nameEN}, {facial}, {upperSFW}, {fullBodySFW}';
+    const outfitTemplate = activeTemplate?.enableOutfitListTemplate || '{nameEN}, {upperBody}, {fullBody}';
+
+    const processed = promptText.replace(tagRegex, (fullMatch, innerStr: string) => {
+        const rawContent = innerStr.trim();
+        if (!rawContent) return fullMatch;
+
+        let extractedName = rawContent;
+
+        // JSON 格式解析 ${"name":"..."}$
+        if (rawContent.startsWith('{') && rawContent.endsWith('}')) {
+            try {
+                const parsed = JSON.parse(rawContent);
+                if (parsed.name) extractedName = parsed.name;
+            } catch {
+                // fallthrough
+            }
+        } else {
+            // 旧格式后缀解析 -sfw-upperbody, -sfw-upperBody-sfw-lowerBody, -upperBody-lowerBody
+            const patterns = [
+                '-from_front', '-from_side', '-from_behind',
+                '-sfw-upperbody-sfw-lowerbody', '-sfw-upperbody-nsfw-lowerbody',
+                '-nsfw-upperbody-sfw-lowerbody', '-nsfw-upperbody-nsfw-lowerbody',
+                '-sfw-upperbody-sfw-fullbody', '-sfw-upperbody-nsfw-fullbody',
+                '-nsfw-upperbody-sfw-fullbody', '-nsfw-upperbody-nsfw-fullbody',
+                '-sfw-upperbody', '-nsfw-upperbody', '-sfw-lowerbody', '-nsfw-lowerbody',
+                '-upperbody-lowerbody', '-upperbody', '-lowerbody'
+            ];
+
+            let lower = extractedName.toLowerCase();
+            for (const p of patterns) {
+                if (lower.endsWith(p.toLowerCase())) {
+                    extractedName = extractedName.substring(0, extractedName.length - p.length).trim();
+                    lower = extractedName.toLowerCase();
+                }
+            }
+        }
+
+        const normName = extractedName.trim().toLowerCase();
+
+        // 1. 匹配角色
+        const matchedChar = existingChars.find(c =>
+            (c.nameCN && c.nameCN.trim().toLowerCase() === normName) ||
+            (c.nameEN && c.nameEN.trim().toLowerCase() === normName) ||
+            (c.nameEN && c.nameEN.toLowerCase().includes(normName))
+        );
+
+        if (matchedChar) {
+            let charText = charListTemplate;
+            charText = charText.replace(/\{nameCN\}/gi, matchedChar.nameCN || '');
+            charText = charText.replace(/\{nameEN\}/gi, matchedChar.nameEN || '');
+            charText = charText.replace(/\{traits\}/gi, matchedChar.characterTraits || '');
+            charText = charText.replace(/\{facial\}/gi, matchedChar.facialFeatures || '');
+            charText = charText.replace(/\{facialBack\}/gi, matchedChar.facialFeaturesBack || '');
+            charText = charText.replace(/\{upperSFW\}/gi, matchedChar.upperBodySFW || '');
+            charText = charText.replace(/\{upperSFWBack\}/gi, matchedChar.upperBodySFWBack || '');
+            charText = charText.replace(/\{fullBodySFW\}/gi, matchedChar.fullBodySFW || '');
+            charText = charText.replace(/\{fullBodySFWBack\}/gi, matchedChar.fullBodySFWBack || '');
+            charText = charText.replace(/\{upperNSFW\}/gi, matchedChar.upperBodyNSFW || '');
+            charText = charText.replace(/\{upperNSFWBack\}/gi, matchedChar.upperBodyNSFWBack || '');
+            charText = charText.replace(/\{fullBodyNSFW\}/gi, matchedChar.fullBodyNSFW || '');
+            charText = charText.replace(/\{fullBodyNSFWBack\}/gi, matchedChar.fullBodyNSFWBack || '');
+            charText = charText.replace(/\{negative\}/gi, matchedChar.negativePrompt || '');
+            charText = charText.replace(/\{outfits\}/gi, '');
+
+            return cleanRenderedText(charText);
+        }
+
+        // 2. 匹配服装
+        const matchedOutfit = existingOutfits.find(o =>
+            (o.nameCN && o.nameCN.trim().toLowerCase() === normName) ||
+            (o.nameEN && o.nameEN.trim().toLowerCase() === normName) ||
+            (o.nameEN && o.nameEN.toLowerCase().includes(normName))
+        );
+
+        if (matchedOutfit) {
+            let outfitText = outfitTemplate;
+            outfitText = outfitText.replace(/\{nameCN\}/gi, matchedOutfit.nameCN || '');
+            outfitText = outfitText.replace(/\{nameEN\}/gi, matchedOutfit.nameEN || '');
+            outfitText = outfitText.replace(/\{upperBody\}/gi, matchedOutfit.upperBody || '');
+            outfitText = outfitText.replace(/\{upperBodyBack\}/gi, matchedOutfit.upperBodyBack || '');
+            outfitText = outfitText.replace(/\{fullBody\}/gi, matchedOutfit.fullBody || '');
+            outfitText = outfitText.replace(/\{fullBodyBack\}/gi, matchedOutfit.fullBodyBack || '');
+
+            return cleanRenderedText(outfitText);
+        }
+
+        return fullMatch;
+    });
+
+    return cleanRenderedText(processed);
 }
 
 

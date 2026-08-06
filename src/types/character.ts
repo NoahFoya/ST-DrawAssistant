@@ -120,6 +120,9 @@ export interface EnableSchemeProfile {
     characterRules: Record<string, CharacterRuleConfig>;
     /** 各服装预设的启用状态与匹配规则: Key 为 outfitProfile.id */
     outfitRules: Record<string, OutfitRuleConfig>;
+    /** 关联的注入模板 ID */
+    injectionTemplateId?: string;
+    templateId?: string;
 
     createdAt?: number;
     updatedAt?: number;
