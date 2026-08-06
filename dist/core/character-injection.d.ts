@@ -73,11 +73,11 @@ export declare function extractCharacterAndOutfitTags(messageText: string): {
     outfits: OutfitProfile[];
 };
 /**
- * 非阻塞式角色设定提取确认浮层 UI (避免原生 confirm 阻塞 JS 主线程)
+ * 非阻塞式角色与服装设定提取确认浮层 UI (右下角定位，高颜值毛玻璃视效，绝不阻塞 JS 主线程)
  */
-export declare function showExtractionToast(title: string, message: string, confirmText: string, onConfirm: () => void): void;
+export declare function showExtractionToast(title: string, badgeText: string, isOverwrite: boolean, detailsHtml: string, confirmText: string, onConfirm: () => void): void;
 /**
- * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 非阻塞 UI)
+ * 监听 AI 回复/编辑消息自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 右下角非阻塞 UI)
  */
 export declare function processExtractedCharacterTags(messageText: string): void;
 //# sourceMappingURL=character-injection.d.ts.map

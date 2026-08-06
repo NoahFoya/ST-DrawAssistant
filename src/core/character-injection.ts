@@ -555,11 +555,13 @@ export function extractCharacterAndOutfitTags(messageText: string): {
 }
 
 /**
- * 非阻塞式角色设定提取确认浮层 UI (避免原生 confirm 阻塞 JS 主线程)
+ * 非阻塞式角色与服装设定提取确认浮层 UI (右下角定位，高颜值毛玻璃视效，绝不阻塞 JS 主线程)
  */
 export function showExtractionToast(
     title: string,
-    message: string,
+    badgeText: string,
+    isOverwrite: boolean,
+    detailsHtml: string,
     confirmText: string,
     onConfirm: () => void
 ): void {
@@ -569,12 +571,12 @@ export function showExtractionToast(
             container = document.createElement('div');
             container.id = 'da-toast-container';
             container.style.position = 'fixed';
-            container.style.top = '20px';
-            container.style.right = '20px';
+            container.style.bottom = '30px';
+            container.style.right = '25px';
             container.style.zIndex = '999999';
             container.style.display = 'flex';
             container.style.flexDirection = 'column';
-            container.style.gap = '10px';
+            container.style.gap = '12px';
             container.style.pointerEvents = 'none';
             document.body.appendChild(container);
         }
@@ -582,28 +584,48 @@ export function showExtractionToast(
         const toast = document.createElement('div');
         toast.className = 'da-section-card';
         toast.style.pointerEvents = 'auto';
-        toast.style.background = 'var(--da-bg-secondary, rgba(20, 20, 30, 0.95))';
-        toast.style.border = '1px solid var(--da-primary-color, #7000ff)';
-        toast.style.borderRadius = '8px';
-        toast.style.padding = '12px 16px';
-        toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+        toast.style.background = 'var(--da-bg-secondary, rgba(18, 18, 28, 0.95))';
+        toast.style.backdropFilter = 'blur(12px)';
+        (toast.style as unknown as Record<string, string>).webkitBackdropFilter = 'blur(12px)';
+        toast.style.border = `1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.5)' : 'rgba(168, 85, 247, 0.5)'}`;
+        toast.style.borderRadius = '10px';
+        toast.style.padding = '14px 18px';
+        toast.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6)';
         toast.style.color = '#fff';
-        toast.style.minWidth = '280px';
-        toast.style.maxWidth = '380px';
+        toast.style.minWidth = '300px';
+        toast.style.maxWidth = '400px';
+        toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+
+        const headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.alignItems = 'center';
+        headerRow.style.justifyContent = 'space-between';
+        headerRow.style.marginBottom = '8px';
 
         const titleDiv = document.createElement('div');
         titleDiv.style.fontWeight = 'bold';
         titleDiv.style.fontSize = '0.95em';
-        titleDiv.style.color = 'var(--da-primary-color, #a855f7)';
-        titleDiv.style.marginBottom = '4px';
-        titleDiv.textContent = title;
+        titleDiv.style.color = isOverwrite ? '#f59e0b' : '#a855f7';
+        titleDiv.innerHTML = title;
 
-        const msgDiv = document.createElement('div');
-        msgDiv.style.fontSize = '0.85em';
-        msgDiv.style.opacity = '0.9';
-        msgDiv.style.marginBottom = '10px';
-        msgDiv.style.lineHeight = '1.4';
-        msgDiv.textContent = message;
+        const badgeSpan = document.createElement('span');
+        badgeSpan.style.fontSize = '0.75em';
+        badgeSpan.style.padding = '2px 8px';
+        badgeSpan.style.borderRadius = '12px';
+        badgeSpan.style.background = isOverwrite ? 'rgba(245, 158, 11, 0.2)' : 'rgba(168, 85, 247, 0.2)';
+        badgeSpan.style.color = isOverwrite ? '#fbbf24' : '#c084fc';
+        badgeSpan.style.border = `1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`;
+        badgeSpan.textContent = badgeText;
+
+        headerRow.appendChild(titleDiv);
+        headerRow.appendChild(badgeSpan);
+
+        const bodyDiv = document.createElement('div');
+        bodyDiv.style.fontSize = '0.85em';
+        bodyDiv.style.opacity = '0.92';
+        bodyDiv.style.marginBottom = '12px';
+        bodyDiv.style.lineHeight = '1.5';
+        bodyDiv.innerHTML = detailsHtml;
 
         const btnRow = document.createElement('div');
         btnRow.style.display = 'flex';
@@ -612,26 +634,31 @@ export function showExtractionToast(
 
         const btnCancel = document.createElement('button');
         btnCancel.className = 'da-btn secondary';
-        btnCancel.style.padding = '3px 10px';
+        btnCancel.style.padding = '4px 12px';
         btnCancel.style.fontSize = '0.8em';
         btnCancel.textContent = '忽略';
 
         const btnConfirm = document.createElement('button');
-        btnConfirm.className = 'da-btn primary';
-        btnConfirm.style.padding = '3px 10px';
+        btnConfirm.className = isOverwrite ? 'da-btn secondary' : 'da-btn primary';
+        btnConfirm.style.padding = '4px 12px';
         btnConfirm.style.fontSize = '0.8em';
+        if (isOverwrite) {
+            btnConfirm.style.background = 'rgba(245, 158, 11, 0.2)';
+            btnConfirm.style.color = '#fbbf24';
+            btnConfirm.style.border = '1px solid #f59e0b';
+        }
         btnConfirm.textContent = confirmText;
 
         btnRow.appendChild(btnCancel);
         btnRow.appendChild(btnConfirm);
 
-        toast.appendChild(titleDiv);
-        toast.appendChild(msgDiv);
+        toast.appendChild(headerRow);
+        toast.appendChild(bodyDiv);
         toast.appendChild(btnRow);
 
         const removeToast = () => {
             toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.3s ease';
+            toast.style.transform = 'translateY(10px)';
             setTimeout(() => toast.remove(), 300);
         };
 
@@ -656,7 +683,7 @@ export function showExtractionToast(
 const processedMessageHashes = new Set<string>();
 
 /**
- * 监听 AI 回复自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 非阻塞 UI)
+ * 监听 AI 回复/编辑消息自动提取角色与服装标签，智能提示存档、同名覆盖更新与方案启用 (哈希去重 + 右下角非阻塞 UI)
  */
 export function processExtractedCharacterTags(messageText: string): void {
     if (!messageText) return;
@@ -673,19 +700,30 @@ export function processExtractedCharacterTags(messageText: string): void {
     const existingOutfits = getOutfitProfiles();
     const activeScheme = resolveActiveEnableScheme();
 
+    // 1. 处理所有提取出的角色 (含挂载的专属服装明细)
     characters.forEach(extractedChar => {
         const matchedExisting = existingChars.find(
             c => (c.nameCN && c.nameCN.trim() === extractedChar.nameCN.trim()) ||
                  (c.nameEN && extractedChar.nameEN && c.nameEN.trim().toLowerCase() === extractedChar.nameEN.trim().toLowerCase())
         );
 
-        const title = matchedExisting ? '🎯 检测到同名角色设定' : '🎯 检测到新角色设定';
-        const msg = matchedExisting
-            ? `发现角色 "${extractedChar.nameCN}" 的最新描述参数，是否覆盖更新？`
-            : `发现新角色 "${extractedChar.nameCN}"，是否保存并启用至当前方案？`;
-        const btnLabel = matchedExisting ? '覆盖更新' : '保存并启用';
+        const isOverwrite = !!matchedExisting;
+        const title = isOverwrite ? '<i class="fa-solid fa-pen-to-square"></i> 发现同名角色设定' : '<i class="fa-solid fa-user-plus"></i> 发现新角色设定';
+        const badgeText = isOverwrite ? '覆盖更新' : '新建预设';
 
-        showExtractionToast(title, msg, btnLabel, () => {
+        let detailsHtml = `<div><strong>👤 角色名称：</strong>${extractedChar.nameCN}${extractedChar.nameEN ? ` (${extractedChar.nameEN})` : ''}</div>`;
+        if (extractedChar.characterTraits) {
+            detailsHtml += `<div style="font-size:0.9em; opacity:0.8; margin-top:2px;">特征: ${extractedChar.characterTraits.substring(0, 60)}${extractedChar.characterTraits.length > 60 ? '...' : ''}</div>`;
+        }
+
+        if (extractedChar.matchedOutfits && extractedChar.matchedOutfits.length > 0) {
+            const outfitNames = extractedChar.matchedOutfits.map(o => o.nameCN || o.nameEN).filter(Boolean).join(', ');
+            detailsHtml += `<div style="margin-top:4px; color:var(--da-primary-color, #c084fc);"><strong>👕 包含专属服装 (${extractedChar.matchedOutfits.length})：</strong>${outfitNames}</div>`;
+        }
+
+        const confirmBtnLabel = isOverwrite ? '覆盖更新设定' : '保存并启用设定';
+
+        showExtractionToast(title, badgeText, isOverwrite, detailsHtml, confirmBtnLabel, () => {
             // 保存专属服装
             const savedOutfitNames: string[] = [];
             extractedChar.matchedOutfits.forEach(outfit => {
@@ -718,15 +756,22 @@ export function processExtractedCharacterTags(messageText: string): void {
         });
     });
 
+    // 2. 处理独立提取出的通用服装 (Orphan Outfits)
     outfits.forEach(extractedOutfit => {
         const matchedOutfit = existingOutfits.find(o => o.nameCN === extractedOutfit.nameCN);
-        const title = matchedOutfit ? '👕 检测到同名通用服装' : '👕 检测到新通用服装';
-        const msg = matchedOutfit
-            ? `发现通用服装 "${extractedOutfit.nameCN}" 的最新描述，是否覆盖更新？`
-            : `发现新通用服装 "${extractedOutfit.nameCN}"，是否保存并启用？`;
-        const btnLabel = matchedOutfit ? '覆盖更新' : '保存并启用';
+        const isOverwrite = !!matchedOutfit;
+        const title = isOverwrite ? '<i class="fa-solid fa-pen-to-square"></i> 发现同名通用服装' : '<i class="fa-solid fa-shirt"></i> 发现新通用服装';
+        const badgeText = isOverwrite ? '覆盖更新' : '新建服装';
 
-        showExtractionToast(title, msg, btnLabel, () => {
+        let detailsHtml = `<div><strong>👕 服装名称：</strong>${extractedOutfit.nameCN}${extractedOutfit.nameEN ? ` (${extractedOutfit.nameEN})` : ''}</div>`;
+        if (extractedOutfit.upperBody || extractedOutfit.fullBody) {
+            const desc = [extractedOutfit.upperBody, extractedOutfit.fullBody].filter(Boolean).join(' | ');
+            detailsHtml += `<div style="font-size:0.9em; opacity:0.8; margin-top:2px;">内容: ${desc.substring(0, 60)}${desc.length > 60 ? '...' : ''}</div>`;
+        }
+
+        const confirmBtnLabel = isOverwrite ? '覆盖更新服装' : '保存并启用服装';
+
+        showExtractionToast(title, badgeText, isOverwrite, detailsHtml, confirmBtnLabel, () => {
             const outfitToSave: OutfitProfile = matchedOutfit
                 ? { ...matchedOutfit, ...extractedOutfit, id: matchedOutfit.id }
                 : extractedOutfit;
