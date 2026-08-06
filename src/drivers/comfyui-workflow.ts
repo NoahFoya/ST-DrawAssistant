@@ -70,17 +70,31 @@ export function substituteWorkflowVariables(
 ): WorkflowJson {
     const rawJson = workflowJsonStr && workflowJsonStr.trim() ? workflowJsonStr : DEFAULT_WAI_WORKFLOW_JSON;
 
-    // 组合最终正向与负向提示词
-    const finalPositive = [checkpointPosPrefix, promptPrefix, options.prompt, promptSuffix]
-        .map(s => (s ?? '').trim())
-        .filter(Boolean)
-        .join(', ');
+    // 组合最终正向与负向提示词 (防范二次重复拼接：若 options.prompt 已包含前缀，则直接使用 options.prompt)
+    let finalPositive = (options.prompt || '').trim();
+    if (promptPrefix || checkpointPosPrefix || promptSuffix) {
+        const hasPrefix = (promptPrefix && finalPositive.includes(promptPrefix.trim())) ||
+                          (checkpointPosPrefix && finalPositive.includes(checkpointPosPrefix.trim()));
+        if (!hasPrefix) {
+            finalPositive = [checkpointPosPrefix, promptPrefix, options.prompt, promptSuffix]
+                .map(s => (s ?? '').trim())
+                .filter(Boolean)
+                .join(', ');
+        }
+    }
 
-    const finalNegative = [
-        checkpointNegPrefix,
-        negativePrefix,
-        options.negativePrompt ?? '',
-    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
+    let finalNegative = (options.negativePrompt || '').trim();
+    if (negativePrefix || checkpointNegPrefix) {
+        const hasNegPrefix = (negativePrefix && finalNegative.includes(negativePrefix.trim())) ||
+                             (checkpointNegPrefix && finalNegative.includes(checkpointNegPrefix.trim()));
+        if (!hasNegPrefix) {
+            finalNegative = [
+                checkpointNegPrefix,
+                negativePrefix,
+                options.negativePrompt ?? '',
+            ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
+        }
+    }
 
     const seed = (options.seed !== undefined && options.seed >= 0)
         ? options.seed
