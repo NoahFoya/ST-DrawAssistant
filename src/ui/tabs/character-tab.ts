@@ -1003,7 +1003,7 @@ function renderCharacterEnablePane(): HTMLElement {
         const newS: EnableSchemeProfile = {
             id: `scheme-${Date.now()}`,
             name,
-            boundCharacterCards: name,
+            boundCharacterCards: '',
             boundChatId: '',
             characterRules: {},
             outfitRules: {}
@@ -1120,17 +1120,14 @@ function renderCharacterEnablePane(): HTMLElement {
     const cardBindLabel = document.createElement('label');
     cardBindLabel.style.fontSize = '0.85em';
     cardBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
-    cardBindLabel.textContent = '绑定角色卡列表（在列表中匹配的角色卡自动启用本方案，每行一个）';
-
-    const cardBindSubRow = document.createElement('div');
-    cardBindSubRow.style.display = 'flex';
-    cardBindSubRow.style.gap = '8px';
+    cardBindLabel.textContent = '绑定角色卡列表（在列表中匹配的角色卡自动启用本方案，每行一个记录。格式：角色卡名称 或 角色卡名称|chatId）';
 
     const cardBindInput = document.createElement('textarea');
     cardBindInput.className = 'da-textarea';
     cardBindInput.rows = 4;
-    cardBindInput.style.flex = '1';
-    cardBindInput.placeholder = '输入要绑定的酒馆角色卡名称，每行一个';
+    cardBindInput.style.width = '100%';
+    cardBindInput.style.boxSizing = 'border-box';
+    cardBindInput.placeholder = '输入要绑定的酒馆角色卡名称，每行一个\n例如：\n爱丽丝\n鲍勃|chat-20260806-001';
     cardBindInput.value = currentScheme.boundCharacterCards || '';
 
     cardBindInput.addEventListener('change', () => {
@@ -1138,18 +1135,50 @@ function renderCharacterEnablePane(): HTMLElement {
         lines.forEach(val => {
             const conflictScheme = checkCharacterCardConflict(val, currentScheme.id);
             if (conflictScheme) {
-                alert(`⚠️ 改绑冲突提醒：角色卡 "${val}" 原本已在另一方案 "${conflictScheme}" 中绑定！保存后将改绑至当前方案。`);
+                alert(`⚠️ 改绑冲突提醒：记录 "${val}" 原本已在另一方案 "${conflictScheme}" 中绑定！保存后将改绑至当前方案。`);
             }
         });
     });
 
-    const btnGetCardName = document.createElement('button');
-    btnGetCardName.className = 'da-btn secondary';
-    btnGetCardName.style.whiteSpace = 'nowrap';
-    btnGetCardName.style.alignSelf = 'flex-start';
-    btnGetCardName.innerHTML = '<i class="fa-solid fa-plus"></i> 追加当前角色卡';
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.marginTop = '4px';
 
-    btnGetCardName.addEventListener('click', () => {
+    const btnAddChar = document.createElement('button');
+    btnAddChar.className = 'da-btn secondary';
+    btnAddChar.style.fontSize = '0.85em';
+    btnAddChar.innerHTML = '<i class="fa-solid fa-user-plus"></i> 追加当前角色';
+
+    btnAddChar.addEventListener('click', () => {
+        const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
+        const name2 = win.SillyTavern?.getContext?.()?.name2;
+        if (name2) {
+            const existingLines = cardBindInput.value.split('\n').map(l => l.trim()).filter(Boolean);
+            if (existingLines.includes(name2)) {
+                alert(`ℹ️ 当前角色卡 "${name2}" 已存在于绑定列表中`);
+                return;
+            }
+            existingLines.push(name2);
+            cardBindInput.value = existingLines.join('\n');
+
+            const conflictScheme = checkCharacterCardConflict(name2, currentScheme.id);
+            if (conflictScheme) {
+                alert(`🎯 已追加当前角色卡: "${name2}"\n⚠️ 注意：该记录原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
+            } else {
+                alert(`🎯 已追加当前酒馆角色卡: "${name2}"`);
+            }
+        } else {
+            alert('ℹ️ 未检测到活动的酒馆角色卡');
+        }
+    });
+
+    const btnAddCharChat = document.createElement('button');
+    btnAddCharChat.className = 'da-btn secondary';
+    btnAddCharChat.style.fontSize = '0.85em';
+    btnAddCharChat.innerHTML = '<i class="fa-solid fa-link"></i> 追加角色+聊天ID';
+
+    btnAddCharChat.addEventListener('click', () => {
         const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
         const stCtx = win.SillyTavern?.getContext?.();
         const name2 = stCtx?.name2;
@@ -1158,8 +1187,8 @@ function renderCharacterEnablePane(): HTMLElement {
         if (name2) {
             const entry = chatId ? `${name2}|${chatId}` : name2;
             const existingLines = cardBindInput.value.split('\n').map(l => l.trim()).filter(Boolean);
-            if (existingLines.includes(entry) || existingLines.includes(name2)) {
-                alert(`ℹ️ 当前角色卡 "${entry}" 已存在于绑定列表中`);
+            if (existingLines.includes(entry)) {
+                alert(`ℹ️ 当前记录 "${entry}" 已存在于绑定列表中`);
                 return;
             }
             existingLines.push(entry);
@@ -1167,67 +1196,26 @@ function renderCharacterEnablePane(): HTMLElement {
 
             const conflictScheme = checkCharacterCardConflict(entry, currentScheme.id);
             if (conflictScheme) {
-                alert(`🎯 已追加当前角色卡: "${entry}"\n⚠️ 注意：该角色卡原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
+                alert(`🎯 已追加角色+聊天ID: "${entry}"\n⚠️ 注意：该记录原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
             } else {
-                alert(`🎯 已追加当前酒馆角色卡: "${entry}"`);
+                alert(`🎯 已追加角色+聊天ID: "${entry}"`);
             }
         } else {
-            alert('ℹ️ 未检测到活动的酒馆角色卡或当前不在聊天视窗中');
+            alert('ℹ️ 未检测到活动的酒馆角色卡或聊天 ID');
         }
     });
 
-    cardBindSubRow.appendChild(cardBindInput);
-    cardBindSubRow.appendChild(btnGetCardName);
+    btnRow.appendChild(btnAddChar);
+    btnRow.appendChild(btnAddCharChat);
+
     cardBindRow.appendChild(cardBindLabel);
-    cardBindRow.appendChild(cardBindSubRow);
+    cardBindRow.appendChild(cardBindInput);
+    cardBindRow.appendChild(btnRow);
     sectionB.appendChild(cardBindRow);
-
-    const chatBindRow = document.createElement('div');
-    chatBindRow.className = 'da-field-col';
-    chatBindRow.style.display = 'flex';
-    chatBindRow.style.flexDirection = 'column';
-    chatBindRow.style.gap = '4px';
-
-    const chatBindLabel = document.createElement('label');
-    chatBindLabel.style.fontSize = '0.85em';
-    chatBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
-    chatBindLabel.textContent = '绑定聊天记录 ID (多方案绑定同一角色卡时，可使用 [角色卡|chatId] 格式或在此指定)';
-
-    const chatBindSubRow = document.createElement('div');
-    chatBindSubRow.style.display = 'flex';
-    chatBindSubRow.style.gap = '8px';
-
-    const chatBindInput = document.createElement('input');
-    chatBindInput.type = 'text';
-    chatBindInput.className = 'da-input';
-    chatBindInput.style.flex = '1';
-    chatBindInput.placeholder = '可选，输入特定的 chatId';
-    chatBindInput.value = currentScheme.boundChatId || '';
-
-    const btnGetChatId = document.createElement('button');
-    btnGetChatId.className = 'da-btn secondary';
-    btnGetChatId.style.whiteSpace = 'nowrap';
-    btnGetChatId.innerHTML = '<i class="fa-solid fa-bullseye"></i> 获取当前聊天 ID';
-
-    btnGetChatId.addEventListener('click', () => {
-        const win = window as unknown as { SillyTavern?: { getContext?: () => { chatId?: string } } };
-        const chatId = win.SillyTavern?.getContext?.()?.chatId;
-        if (chatId) {
-            chatBindInput.value = chatId;
-            alert(`🎯 已获取当前聊天记录 ID: "${chatId}"`);
-        } else {
-            alert('ℹ️ 未检测到当前聊天的 ID');
-        }
-    });
-
-    chatBindSubRow.appendChild(chatBindInput);
-    chatBindSubRow.appendChild(btnGetChatId);
-    chatBindRow.appendChild(chatBindLabel);
-    chatBindRow.appendChild(chatBindSubRow);
-    sectionB.appendChild(chatBindRow);
 
     root.appendChild(sectionB);
 
+    // ── 区块 C与D：角色与服装规则列表 ────────────────────────────────────────
     const sectionC = document.createElement('div');
     sectionC.className = 'da-section-card';
     sectionC.style.display = 'flex';
@@ -1292,47 +1280,22 @@ function renderCharacterEnablePane(): HTMLElement {
                 row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
                 row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
+                // 左侧：角色名称
                 const left = document.createElement('div');
                 left.style.display = 'flex';
                 left.style.alignItems = 'center';
-                left.style.gap = '10px';
-
-                const toggleBtn = document.createElement('button');
-                const updateToggleStyle = () => {
-                    if (ruleConfig.enabled) {
-                        toggleBtn.className = 'da-btn primary';
-                        toggleBtn.style.padding = '3px 10px';
-                        toggleBtn.style.fontSize = '0.8em';
-                        toggleBtn.style.minWidth = '75px';
-                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-on"></i> 已启用';
-                    } else {
-                        toggleBtn.className = 'da-btn secondary';
-                        toggleBtn.style.padding = '3px 10px';
-                        toggleBtn.style.fontSize = '0.8em';
-                        toggleBtn.style.opacity = '0.6';
-                        toggleBtn.style.minWidth = '75px';
-                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-off"></i> 已禁用';
-                    }
-                };
-                updateToggleStyle();
-
-                toggleBtn.addEventListener('click', () => {
-                    ruleConfig.enabled = !ruleConfig.enabled;
-                    currentScheme.characterRules[char.id] = ruleConfig;
-                    updateToggleStyle();
-                });
+                left.style.gap = '8px';
 
                 const nameSpan = document.createElement('span');
                 nameSpan.style.fontSize = '0.9em';
                 nameSpan.textContent = char.nameCN ? `${char.nameCN} (${char.nameEN || '未命名'})` : char.nameEN;
-
-                left.appendChild(toggleBtn);
                 left.appendChild(nameSpan);
 
+                // 右侧：规则选择器 + 启用按钮（移动至右侧控制区）
                 const right = document.createElement('div');
                 right.style.display = 'flex';
                 right.style.alignItems = 'center';
-                right.style.gap = '6px';
+                right.style.gap = '8px';
 
                 const ruleSelect = document.createElement('select');
                 ruleSelect.className = 'da-select';
@@ -1356,7 +1319,34 @@ function renderCharacterEnablePane(): HTMLElement {
                     currentScheme.characterRules[char.id] = ruleConfig;
                 });
 
+                const toggleBtn = document.createElement('button');
+                const updateToggleStyle = () => {
+                    if (ruleConfig.enabled) {
+                        toggleBtn.className = 'da-btn primary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-on"></i> 已启用';
+                    } else {
+                        toggleBtn.className = 'da-btn secondary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.opacity = '0.6';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-off"></i> 已禁用';
+                    }
+                };
+                updateToggleStyle();
+
+                toggleBtn.addEventListener('click', () => {
+                    ruleConfig.enabled = !ruleConfig.enabled;
+                    currentScheme.characterRules[char.id] = ruleConfig;
+                    updateToggleStyle();
+                });
+
                 right.appendChild(ruleSelect);
+                right.appendChild(toggleBtn);
+
                 row.appendChild(left);
                 row.appendChild(right);
                 characterRulesContainer.appendChild(row);
@@ -1379,10 +1369,44 @@ function renderCharacterEnablePane(): HTMLElement {
                 row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
                 row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
+                // 左侧：服装名称
                 const left = document.createElement('div');
                 left.style.display = 'flex';
                 left.style.alignItems = 'center';
-                left.style.gap = '10px';
+                left.style.gap = '8px';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.style.fontSize = '0.9em';
+                nameSpan.textContent = outfit.nameCN ? `${outfit.nameCN} (${outfit.nameEN || '未命名'})` : outfit.nameEN;
+                left.appendChild(nameSpan);
+
+                // 右侧：规则选择器 + 启用按钮（移动至右侧控制区）
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.alignItems = 'center';
+                right.style.gap = '8px';
+
+                const ruleSelect = document.createElement('select');
+                ruleSelect.className = 'da-select';
+                ruleSelect.style.fontSize = '0.8em';
+                ruleSelect.style.padding = '2px 8px';
+
+                const optMatch = document.createElement('option');
+                optMatch.value = 'match';
+                optMatch.textContent = 'match (匹配服装名才注入)';
+
+                const optAll = document.createElement('option');
+                optAll.value = 'ALL';
+                optAll.textContent = 'ALL (无条件注入)';
+
+                ruleSelect.appendChild(optMatch);
+                ruleSelect.appendChild(optAll);
+                ruleSelect.value = ruleConfig.rule || 'match';
+
+                ruleSelect.addEventListener('change', () => {
+                    ruleConfig.rule = ruleSelect.value as InjectionMatchRule;
+                    currentScheme.outfitRules[outfit.id] = ruleConfig;
+                });
 
                 const toggleBtn = document.createElement('button');
                 const updateToggleStyle = () => {
@@ -1409,41 +1433,9 @@ function renderCharacterEnablePane(): HTMLElement {
                     updateToggleStyle();
                 });
 
-                const nameSpan = document.createElement('span');
-                nameSpan.style.fontSize = '0.9em';
-                nameSpan.textContent = outfit.nameCN ? `${outfit.nameCN} (${outfit.nameEN || '未命名'})` : outfit.nameEN;
-
-                left.appendChild(toggleBtn);
-                left.appendChild(nameSpan);
-
-                const right = document.createElement('div');
-                right.style.display = 'flex';
-                right.style.alignItems = 'center';
-                right.style.gap = '6px';
-
-                const ruleSelect = document.createElement('select');
-                ruleSelect.className = 'da-select';
-                ruleSelect.style.fontSize = '0.8em';
-                ruleSelect.style.padding = '2px 8px';
-
-                const optMatch = document.createElement('option');
-                optMatch.value = 'match';
-                optMatch.textContent = 'match (匹配服装名才注入)';
-
-                const optAll = document.createElement('option');
-                optAll.value = 'ALL';
-                optAll.textContent = 'ALL (无条件注入)';
-
-                ruleSelect.appendChild(optMatch);
-                ruleSelect.appendChild(optAll);
-                ruleSelect.value = ruleConfig.rule || 'match';
-
-                ruleSelect.addEventListener('change', () => {
-                    ruleConfig.rule = ruleSelect.value as InjectionMatchRule;
-                    currentScheme.outfitRules[outfit.id] = ruleConfig;
-                });
-
                 right.appendChild(ruleSelect);
+                right.appendChild(toggleBtn);
+
                 row.appendChild(left);
                 row.appendChild(right);
                 outfitRulesContainer.appendChild(row);
@@ -1453,7 +1445,6 @@ function renderCharacterEnablePane(): HTMLElement {
 
     const saveCurrentForm = () => {
         currentScheme.boundCharacterCards = cardBindInput.value;
-        currentScheme.boundChatId = chatBindInput.value;
 
         // 极简存储策略：只记录 enabled: true 的实体
         const cleanCharRules: Record<string, { enabled: boolean; rule: InjectionMatchRule }> = {};
@@ -1478,7 +1469,6 @@ function renderCharacterEnablePane(): HTMLElement {
     const populateForm = (scheme: EnableSchemeProfile) => {
         currentScheme = scheme;
         cardBindInput.value = scheme.boundCharacterCards || '';
-        chatBindInput.value = scheme.boundChatId || '';
         renderRulesLists();
     };
 
