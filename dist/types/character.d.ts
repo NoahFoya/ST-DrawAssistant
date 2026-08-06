@@ -3,6 +3,10 @@
  * @description 角色与服装数据实体及契约模型规范
  */
 /**
+ * 实体注入规则模式: 'ALL' (无条件注入) | 'match' (上下文姓名/名称匹配成功才注入)
+ */
+export type InjectionMatchRule = 'ALL' | 'match';
+/**
  * 角色预设实体与 Tag 变量数据契约
  */
 export interface CharacterProfile {
@@ -74,6 +78,37 @@ export interface OutfitProfile {
     /** 创建时间戳 */
     createdAt?: number;
     /** 更新时间戳 */
+    updatedAt?: number;
+}
+/**
+ * 单个角色的规则设定
+ */
+export interface CharacterRuleConfig {
+    enabled: boolean;
+    rule: InjectionMatchRule;
+}
+/**
+ * 单个服装的规则设定
+ */
+export interface OutfitRuleConfig {
+    enabled: boolean;
+    rule: InjectionMatchRule;
+}
+/**
+ * 设定启用方案数据结构
+ */
+export interface EnableSchemeProfile {
+    id: string;
+    name: string;
+    /** 绑定的酒馆角色卡名称 (如 context.name2) */
+    boundCharacterCards: string;
+    /** 绑定的聊天记录 ID (如 context.chatId)，用于防冲突多方案精细区分 */
+    boundChatId?: string;
+    /** 各角色预设的启用状态与匹配规则: Key 为 characterProfile.id */
+    characterRules: Record<string, CharacterRuleConfig>;
+    /** 各服装预设的启用状态与匹配规则: Key 为 outfitProfile.id */
+    outfitRules: Record<string, OutfitRuleConfig>;
+    createdAt?: number;
     updatedAt?: number;
 }
 /**

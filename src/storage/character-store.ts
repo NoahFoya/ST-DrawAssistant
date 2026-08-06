@@ -1,12 +1,13 @@
 /**
  * @module storage/character-store
- * @description 角色设定及服装设定预设的持久化存储管理器
+ * @description 角色设定、服装设定及设定启用方案的持久化存储管理器
  */
 
-import type { CharacterProfile, OutfitProfile } from '../types/character';
+import type { CharacterProfile, OutfitProfile, EnableSchemeProfile } from '../types/character';
 
 const CHARACTER_PROFILES_KEY = 'st_da_character_profiles_v1';
 const OUTFIT_PROFILES_KEY = 'st_da_outfit_profiles_v1';
+const ENABLE_SCHEMES_KEY = 'st_da_enable_schemes_v1';
 
 /** 默认的示例角色预设 */
 const DEFAULT_CHARACTER: CharacterProfile = {
@@ -56,9 +57,25 @@ const DEFAULT_OUTFITS: OutfitProfile[] = [
     }
 ];
 
-/**
- * 获取所有角色预设
- */
+/** 默认示例设定启用方案 */
+const DEFAULT_ENABLE_SCHEME: EnableSchemeProfile = {
+    id: 'default-scheme-1',
+    name: '默认全局启用方案',
+    boundCharacterCards: '示例角色',
+    boundChatId: '',
+    characterRules: {
+        'default-char-1': { enabled: true, rule: 'ALL' }
+    },
+    outfitRules: {
+        'default-outfit-1': { enabled: true, rule: 'match' },
+        'default-outfit-2': { enabled: true, rule: 'match' }
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+};
+
+// ─── 角色预设存储 ─────────────────────────────────────────────────────────────
+
 export function getCharacterProfiles(): CharacterProfile[] {
     try {
         const raw = localStorage.getItem(CHARACTER_PROFILES_KEY);
@@ -73,23 +90,14 @@ export function getCharacterProfiles(): CharacterProfile[] {
     }
 }
 
-/**
- * 保存全量角色预设列表
- */
 export function saveCharacterProfiles(profiles: CharacterProfile[]): void {
     localStorage.setItem(CHARACTER_PROFILES_KEY, JSON.stringify(profiles));
 }
 
-/**
- * 根据 ID 获取指定角色预设
- */
 export function getCharacterProfileById(id: string): CharacterProfile | undefined {
     return getCharacterProfiles().find(p => p.id === id);
 }
 
-/**
- * 保存/更新单个角色预设
- */
 export function upsertCharacterProfile(profile: CharacterProfile): void {
     const list = getCharacterProfiles();
     const idx = list.findIndex(p => p.id === profile.id);
@@ -102,9 +110,6 @@ export function upsertCharacterProfile(profile: CharacterProfile): void {
     saveCharacterProfiles(list);
 }
 
-/**
- * 删除角色预设
- */
 export function deleteCharacterProfile(id: string): void {
     const list = getCharacterProfiles().filter(p => p.id !== id);
     saveCharacterProfiles(list);
@@ -112,9 +117,6 @@ export function deleteCharacterProfile(id: string): void {
 
 // ─── 服装预设存储 ─────────────────────────────────────────────────────────────
 
-/**
- * 获取所有服装预设
- */
 export function getOutfitProfiles(): OutfitProfile[] {
     try {
         const raw = localStorage.getItem(OUTFIT_PROFILES_KEY);
@@ -129,23 +131,14 @@ export function getOutfitProfiles(): OutfitProfile[] {
     }
 }
 
-/**
- * 保存全量服装预设列表
- */
 export function saveOutfitProfiles(profiles: OutfitProfile[]): void {
     localStorage.setItem(OUTFIT_PROFILES_KEY, JSON.stringify(profiles));
 }
 
-/**
- * 根据 ID 获取指定服装预设
- */
 export function getOutfitProfileById(id: string): OutfitProfile | undefined {
     return getOutfitProfiles().find(p => p.id === id);
 }
 
-/**
- * 保存/更新单个服装预设
- */
 export function upsertOutfitProfile(profile: OutfitProfile): void {
     const list = getOutfitProfiles();
     const idx = list.findIndex(p => p.id === profile.id);
@@ -158,10 +151,48 @@ export function upsertOutfitProfile(profile: OutfitProfile): void {
     saveOutfitProfiles(list);
 }
 
-/**
- * 删除服装预设
- */
 export function deleteOutfitProfile(id: string): void {
     const list = getOutfitProfiles().filter(p => p.id !== id);
     saveOutfitProfiles(list);
+}
+
+// ─── 设定启用方案存储 ─────────────────────────────────────────────────────────
+
+export function getEnableSchemes(): EnableSchemeProfile[] {
+    try {
+        const raw = localStorage.getItem(ENABLE_SCHEMES_KEY);
+        if (!raw) {
+            saveEnableSchemes([DEFAULT_ENABLE_SCHEME]);
+            return [DEFAULT_ENABLE_SCHEME];
+        }
+        const list = JSON.parse(raw) as EnableSchemeProfile[];
+        return list.length > 0 ? list : [DEFAULT_ENABLE_SCHEME];
+    } catch {
+        return [DEFAULT_ENABLE_SCHEME];
+    }
+}
+
+export function saveEnableSchemes(schemes: EnableSchemeProfile[]): void {
+    localStorage.setItem(ENABLE_SCHEMES_KEY, JSON.stringify(schemes));
+}
+
+export function getEnableSchemeById(id: string): EnableSchemeProfile | undefined {
+    return getEnableSchemes().find(s => s.id === id);
+}
+
+export function upsertEnableScheme(scheme: EnableSchemeProfile): void {
+    const list = getEnableSchemes();
+    const idx = list.findIndex(s => s.id === scheme.id);
+    scheme.updatedAt = Date.now();
+    if (idx >= 0) {
+        list[idx] = scheme;
+    } else {
+        list.push(scheme);
+    }
+    saveEnableSchemes(list);
+}
+
+export function deleteEnableScheme(id: string): void {
+    const list = getEnableSchemes().filter(s => s.id !== id);
+    saveEnableSchemes(list);
 }

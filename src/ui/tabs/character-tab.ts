@@ -1,6 +1,6 @@
 /**
  * @module ui/tabs/character-tab
- * @description 角色管理主面板 UI 组件 (角色设定 + 服装设定)
+ * @description 角色管理主面板 UI 组件 (角色设定 + 服装设定 + 设定启用管理)
  */
 
 import {
@@ -11,9 +11,13 @@ import {
     getOutfitProfiles,
     getOutfitProfileById,
     upsertOutfitProfile,
-    deleteOutfitProfile
+    deleteOutfitProfile,
+    getEnableSchemes,
+    getEnableSchemeById,
+    upsertEnableScheme,
+    deleteEnableScheme
 } from '../../storage/character-store';
-import type { CharacterProfile, OutfitProfile } from '../../types/character';
+import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionMatchRule } from '../../types/character';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -110,12 +114,11 @@ export function renderCharacterTab(): HTMLElement {
     pane2.style.display = 'none';
     container.appendChild(pane2);
 
-    // 4. 子界面 3：设定启用管理 (占位)
-    const pane3 = document.createElement('div');
+    // 4. 子界面 3：设定启用管理 (`#ch-sub-tab-character-enable`)
+    const pane3 = renderCharacterEnablePane();
     pane3.id = 'ch-sub-tab-character-enable';
-    pane3.className = 'da-sub-tab-content da-section-card';
+    pane3.className = 'da-sub-tab-content';
     pane3.style.display = 'none';
-    pane3.innerHTML = '<h3 style="text-align:center; padding:30px;">设定启用管理（等待按序规划后实现）</h3>';
     container.appendChild(pane3);
 
     // 5. 子界面 4：注入模板管理 (占位)
@@ -849,7 +852,6 @@ function renderOutfitSettingsPane(): HTMLElement {
     nameRow.appendChild(nameENInput.wrapper);
     sectionB.appendChild(nameRow);
 
-    // 服装全身组合 Token 统计看板
     const tokenCard = document.createElement('div');
     tokenCard.style.padding = '10px 14px';
     tokenCard.style.borderRadius = '6px';
@@ -879,7 +881,6 @@ function renderOutfitSettingsPane(): HTMLElement {
     tokenCard.appendChild(tokenGrid);
     sectionB.appendChild(tokenCard);
 
-    // 4 项服装 Tag 文本框
     const fieldsMap: Record<string, { label: string; key: keyof OutfitProfile }> = {
         outfit_upperBody: { label: '上半身(正面) {upperBody}', key: 'upperBody' },
         outfit_upperBodyBack: { label: '上半身(背面) {upperBodyBack}', key: 'upperBodyBack' },
@@ -940,6 +941,484 @@ function renderOutfitSettingsPane(): HTMLElement {
     });
 
     populateForm(currentOutfit);
+    return root;
+}
+
+/**
+ * 渲染子界面 3：设定启用管理内容
+ */
+function renderCharacterEnablePane(): HTMLElement {
+    const root = document.createElement('div');
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '16px';
+
+    let currentScheme: EnableSchemeProfile = getEnableSchemes()[0];
+
+    // ── 区块 A：方案选择区 (极简图标工具栏) ──────────────────────────────────
+    const sectionA = document.createElement('div');
+    sectionA.className = 'da-section-card';
+
+    const headerA = document.createElement('div');
+    headerA.className = 'da-section-header';
+    headerA.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-list-check"></i> 设定启用方案管理</span>';
+    sectionA.appendChild(headerA);
+
+    const controlsRow = document.createElement('div');
+    controlsRow.style.display = 'flex';
+    controlsRow.style.gap = '8px';
+    controlsRow.style.alignItems = 'center';
+    controlsRow.style.flexWrap = 'wrap';
+
+    const selectEl = document.createElement('select');
+    selectEl.id = 'enable_scheme_id';
+    selectEl.className = 'da-select';
+    selectEl.style.flex = '1';
+    selectEl.style.minWidth = '180px';
+
+    const refreshSchemeSelect = () => {
+        const schemes = getEnableSchemes();
+        selectEl.innerHTML = '';
+        schemes.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            selectEl.appendChild(opt);
+        });
+        if (schemes.some(s => s.id === currentScheme.id)) {
+            selectEl.value = currentScheme.id;
+        } else if (schemes[0]) {
+            currentScheme = schemes[0];
+            selectEl.value = currentScheme.id;
+        }
+    };
+
+    refreshSchemeSelect();
+
+    const hiddenFileInput = document.createElement('input');
+    hiddenFileInput.type = 'file';
+    hiddenFileInput.accept = '.json';
+    hiddenFileInput.style.display = 'none';
+
+    const btnNew = createIconButton('<i class="fa-solid fa-plus"></i>', '新建设定启用方案', () => {
+        const name = prompt('请输入新启用方案名称：');
+        if (!name) return;
+        const newS: EnableSchemeProfile = {
+            id: `scheme-${Date.now()}`,
+            name,
+            boundCharacterCards: name,
+            boundChatId: '',
+            characterRules: {},
+            outfitRules: {}
+        };
+        upsertEnableScheme(newS);
+        refreshSchemeSelect();
+        populateForm(newS);
+    });
+
+    const btnSave = createIconButton('<i class="fa-solid fa-save"></i>', '保存当前方案', () => {
+        saveCurrentForm();
+        alert('💾 设定启用方案已保存！');
+    });
+
+    const btnSaveAs = createIconButton('<i class="fa-solid fa-file-export"></i>', '另存为新方案', () => {
+        const newName = prompt('另存为新方案名称：', `${currentScheme.name}_副本`);
+        if (!newName) return;
+        saveCurrentForm();
+        const copy: EnableSchemeProfile = {
+            ...currentScheme,
+            id: `scheme-${Date.now()}`,
+            name: newName,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        upsertEnableScheme(copy);
+        refreshSchemeSelect();
+        populateForm(copy);
+    });
+
+    const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
+        const newName = prompt('重命名方案名称：', currentScheme.name);
+        if (newName === null) return;
+        currentScheme.name = newName;
+        upsertEnableScheme(currentScheme);
+        refreshSchemeSelect();
+    });
+
+    const btnExport = createIconButton('<i class="fa-solid fa-upload"></i>', '导出方案 JSON', () => {
+        saveCurrentForm();
+        const jsonStr = JSON.stringify(currentScheme, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `enable-scheme-${currentScheme.name}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    const btnImport = createIconButton('<i class="fa-solid fa-download"></i>', '导入方案 JSON', () => {
+        hiddenFileInput.click();
+    });
+
+    hiddenFileInput.addEventListener('change', () => {
+        const file = hiddenFileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const imported = JSON.parse(reader.result as string) as EnableSchemeProfile;
+                if (!imported.name) throw new Error('无效的方案文件');
+                imported.id = `scheme-${Date.now()}`;
+                upsertEnableScheme(imported);
+                refreshSchemeSelect();
+                populateForm(imported);
+                alert('📥 启用方案导入成功！');
+            } catch {
+                alert('❌ 导入失败：无法解析该 JSON 方案文件');
+            }
+            hiddenFileInput.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
+        if (!confirm(`⚠️ 确定要删除方案 "${currentScheme.name}" 吗？`)) return;
+        deleteEnableScheme(currentScheme.id);
+        refreshSchemeSelect();
+        const first = getEnableSchemes()[0];
+        if (first) populateForm(first);
+    }, true);
+
+    controlsRow.appendChild(selectEl);
+    controlsRow.appendChild(btnNew);
+    controlsRow.appendChild(btnSave);
+    controlsRow.appendChild(btnSaveAs);
+    controlsRow.appendChild(btnRename);
+    controlsRow.appendChild(btnExport);
+    controlsRow.appendChild(btnImport);
+    controlsRow.appendChild(btnDelete);
+    controlsRow.appendChild(hiddenFileInput);
+
+    sectionA.appendChild(controlsRow);
+    root.appendChild(sectionA);
+
+    // ── 区块 B：绑定角色卡与聊天记录 ID ─────────────────────────────────────
+    const sectionB = document.createElement('div');
+    sectionB.className = 'da-section-card';
+    sectionB.style.display = 'flex';
+    sectionB.style.flexDirection = 'column';
+    sectionB.style.gap = '12px';
+
+    const headerB = document.createElement('div');
+    headerB.className = 'da-section-header';
+    headerB.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-link"></i> 绑定角色卡与聊天分流 (绑定解耦)</span>';
+    sectionB.appendChild(headerB);
+
+    // 1. 绑定角色卡名称 (context.name2)
+    const cardBindRow = document.createElement('div');
+    cardBindRow.className = 'da-field-col';
+    cardBindRow.style.display = 'flex';
+    cardBindRow.style.flexDirection = 'column';
+    cardBindRow.style.gap = '4px';
+
+    const cardBindLabel = document.createElement('label');
+    cardBindLabel.style.fontSize = '0.85em';
+    cardBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
+    cardBindLabel.textContent = '绑定角色卡名称（在列表中匹配的角色卡自动启用本方案，每行一个）';
+
+    const cardBindSubRow = document.createElement('div');
+    cardBindSubRow.style.display = 'flex';
+    cardBindSubRow.style.gap = '8px';
+
+    const cardBindInput = document.createElement('input');
+    cardBindInput.type = 'text';
+    cardBindInput.className = 'da-input';
+    cardBindInput.style.flex = '1';
+    cardBindInput.value = currentScheme.boundCharacterCards || '';
+
+    const btnGetCardName = document.createElement('button');
+    btnGetCardName.className = 'da-btn secondary';
+    btnGetCardName.style.whiteSpace = 'nowrap';
+    btnGetCardName.innerHTML = '<i class="fa-solid fa-bullseye"></i> 获取当前角色卡';
+
+    btnGetCardName.addEventListener('click', () => {
+        const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
+        const name2 = win.SillyTavern?.getContext?.()?.name2;
+        if (name2) {
+            cardBindInput.value = name2;
+            alert(`🎯 已获取当前酒馆角色卡名称: "${name2}"`);
+        } else {
+            alert('ℹ️ 未检测到活动的酒馆角色卡或当前不在聊天视窗中');
+        }
+    });
+
+    cardBindSubRow.appendChild(cardBindInput);
+    cardBindSubRow.appendChild(btnGetCardName);
+    cardBindRow.appendChild(cardBindLabel);
+    cardBindRow.appendChild(cardBindSubRow);
+    sectionB.appendChild(cardBindRow);
+
+    // 2. 绑定聊天记录 ID (context.chatId) - 冲突防范解耦
+    const chatBindRow = document.createElement('div');
+    chatBindRow.className = 'da-field-col';
+    chatBindRow.style.display = 'flex';
+    chatBindRow.style.flexDirection = 'column';
+    chatBindRow.style.gap = '4px';
+
+    const chatBindLabel = document.createElement('label');
+    chatBindLabel.style.fontSize = '0.85em';
+    chatBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
+    chatBindLabel.textContent = '绑定聊天记录 ID (多方案绑定同一角色卡时，指定特定的 chatId 进行独立分流)';
+
+    const chatBindSubRow = document.createElement('div');
+    chatBindSubRow.style.display = 'flex';
+    chatBindSubRow.style.gap = '8px';
+
+    const chatBindInput = document.createElement('input');
+    chatBindInput.type = 'text';
+    chatBindInput.className = 'da-input';
+    chatBindInput.style.flex = '1';
+    chatBindInput.placeholder = '可选，输入特定的 chatId';
+    chatBindInput.value = currentScheme.boundChatId || '';
+
+    const btnGetChatId = document.createElement('button');
+    btnGetChatId.className = 'da-btn secondary';
+    btnGetChatId.style.whiteSpace = 'nowrap';
+    btnGetChatId.innerHTML = '<i class="fa-solid fa-bullseye"></i> 获取当前聊天 ID';
+
+    btnGetChatId.addEventListener('click', () => {
+        const win = window as unknown as { SillyTavern?: { getContext?: () => { chatId?: string } } };
+        const chatId = win.SillyTavern?.getContext?.()?.chatId;
+        if (chatId) {
+            chatBindInput.value = chatId;
+            alert(`🎯 已获取当前聊天记录 ID: "${chatId}"`);
+        } else {
+            alert('ℹ️ 未检测到当前聊天的 ID');
+        }
+    });
+
+    chatBindSubRow.appendChild(chatBindInput);
+    chatBindSubRow.appendChild(btnGetChatId);
+    chatBindRow.appendChild(chatBindLabel);
+    chatBindRow.appendChild(chatBindSubRow);
+    sectionB.appendChild(chatBindRow);
+
+    root.appendChild(sectionB);
+
+    // ── 区块 C：角色启用列表与规则控制区 ───────────────────────────────────
+    const sectionC = document.createElement('div');
+    sectionC.className = 'da-section-card';
+    sectionC.style.display = 'flex';
+    sectionC.style.flexDirection = 'column';
+    sectionC.style.gap = '12px';
+
+    const headerC = document.createElement('div');
+    headerC.className = 'da-section-header';
+    headerC.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-user-check"></i> 角色启用控制与注入规则</span>';
+    sectionC.appendChild(headerC);
+
+    const characterRulesContainer = document.createElement('div');
+    characterRulesContainer.style.display = 'flex';
+    characterRulesContainer.style.flexDirection = 'column';
+    characterRulesContainer.style.gap = '8px';
+
+    sectionC.appendChild(characterRulesContainer);
+    root.appendChild(sectionC);
+
+    // ── 区块 D：服装启用列表与规则控制区 ───────────────────────────────────
+    const sectionD = document.createElement('div');
+    sectionD.className = 'da-section-card';
+    sectionD.style.display = 'flex';
+    sectionD.style.flexDirection = 'column';
+    sectionD.style.gap = '12px';
+
+    const headerD = document.createElement('div');
+    headerD.className = 'da-section-header';
+    headerD.innerHTML = '<span class="da-section-title"><i class="fa-solid fa-shirt"></i> 服装启用控制与注入规则</span>';
+    sectionD.appendChild(headerD);
+
+    const outfitRulesContainer = document.createElement('div');
+    outfitRulesContainer.style.display = 'flex';
+    outfitRulesContainer.style.flexDirection = 'column';
+    outfitRulesContainer.style.gap = '8px';
+
+    sectionD.appendChild(outfitRulesContainer);
+    root.appendChild(sectionD);
+
+    // 重新从全局读取角色/服装列表并渲染规则行
+    const renderRulesLists = () => {
+        characterRulesContainer.innerHTML = '';
+        outfitRulesContainer.innerHTML = '';
+
+        const allChars = getCharacterProfiles();
+        const allOutfits = getOutfitProfiles();
+
+        currentScheme.characterRules = currentScheme.characterRules || {};
+        currentScheme.outfitRules = currentScheme.outfitRules || {};
+
+        // 渲染角色列表项
+        if (allChars.length === 0) {
+            characterRulesContainer.innerHTML = '<div style="color:#888; font-size:0.85em;">暂无保存的角色预设</div>';
+        } else {
+            allChars.forEach(char => {
+                const ruleConfig = currentScheme.characterRules[char.id] || { enabled: true, rule: 'ALL' };
+
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.justifyContent = 'space-between';
+                row.style.padding = '8px 12px';
+                row.style.borderRadius = '6px';
+                row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
+                row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
+
+                const left = document.createElement('label');
+                left.style.display = 'flex';
+                left.style.alignItems = 'center';
+                left.style.gap = '8px';
+                left.style.cursor = 'pointer';
+                left.style.fontSize = '0.9em';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = ruleConfig.enabled;
+                checkbox.addEventListener('change', () => {
+                    ruleConfig.enabled = checkbox.checked;
+                    currentScheme.characterRules[char.id] = ruleConfig;
+                });
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = char.nameCN ? `${char.nameCN} (${char.nameEN || '未命名'})` : char.nameEN;
+
+                left.appendChild(checkbox);
+                left.appendChild(nameSpan);
+
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.alignItems = 'center';
+                right.style.gap = '6px';
+
+                const ruleSelect = document.createElement('select');
+                ruleSelect.className = 'da-select';
+                ruleSelect.style.fontSize = '0.8em';
+                ruleSelect.style.padding = '2px 8px';
+
+                const optAll = document.createElement('option');
+                optAll.value = 'ALL';
+                optAll.textContent = 'ALL (无条件注入)';
+
+                const optMatch = document.createElement('option');
+                optMatch.value = 'match';
+                optMatch.textContent = 'match (匹配上下文才注入)';
+
+                ruleSelect.appendChild(optAll);
+                ruleSelect.appendChild(optMatch);
+                ruleSelect.value = ruleConfig.rule || 'ALL';
+
+                ruleSelect.addEventListener('change', () => {
+                    ruleConfig.rule = ruleSelect.value as InjectionMatchRule;
+                    currentScheme.characterRules[char.id] = ruleConfig;
+                });
+
+                right.appendChild(ruleSelect);
+                row.appendChild(left);
+                row.appendChild(right);
+                characterRulesContainer.appendChild(row);
+            });
+        }
+
+        // 渲染服装列表项
+        if (allOutfits.length === 0) {
+            outfitRulesContainer.innerHTML = '<div style="color:#888; font-size:0.85em;">暂无保存的服装预设</div>';
+        } else {
+            allOutfits.forEach(outfit => {
+                const ruleConfig = currentScheme.outfitRules[outfit.id] || { enabled: true, rule: 'match' };
+
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.justifyContent = 'space-between';
+                row.style.padding = '8px 12px';
+                row.style.borderRadius = '6px';
+                row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
+                row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
+
+                const left = document.createElement('label');
+                left.style.display = 'flex';
+                left.style.alignItems = 'center';
+                left.style.gap = '8px';
+                left.style.cursor = 'pointer';
+                left.style.fontSize = '0.9em';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = ruleConfig.enabled;
+                checkbox.addEventListener('change', () => {
+                    ruleConfig.enabled = checkbox.checked;
+                    currentScheme.outfitRules[outfit.id] = ruleConfig;
+                });
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = outfit.nameCN ? `${outfit.nameCN} (${outfit.nameEN || '未命名'})` : outfit.nameEN;
+
+                left.appendChild(checkbox);
+                left.appendChild(nameSpan);
+
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.alignItems = 'center';
+                right.style.gap = '6px';
+
+                const ruleSelect = document.createElement('select');
+                ruleSelect.className = 'da-select';
+                ruleSelect.style.fontSize = '0.8em';
+                ruleSelect.style.padding = '2px 8px';
+
+                const optMatch = document.createElement('option');
+                optMatch.value = 'match';
+                optMatch.textContent = 'match (匹配服装名才注入)';
+
+                const optAll = document.createElement('option');
+                optAll.value = 'ALL';
+                optAll.textContent = 'ALL (无条件注入)';
+
+                ruleSelect.appendChild(optMatch);
+                ruleSelect.appendChild(optAll);
+                ruleSelect.value = ruleConfig.rule || 'match';
+
+                ruleSelect.addEventListener('change', () => {
+                    ruleConfig.rule = ruleSelect.value as InjectionMatchRule;
+                    currentScheme.outfitRules[outfit.id] = ruleConfig;
+                });
+
+                right.appendChild(ruleSelect);
+                row.appendChild(left);
+                row.appendChild(right);
+                outfitRulesContainer.appendChild(row);
+            });
+        }
+    };
+
+    const saveCurrentForm = () => {
+        currentScheme.boundCharacterCards = cardBindInput.value;
+        currentScheme.boundChatId = chatBindInput.value;
+        upsertEnableScheme(currentScheme);
+    };
+
+    const populateForm = (scheme: EnableSchemeProfile) => {
+        currentScheme = scheme;
+        cardBindInput.value = scheme.boundCharacterCards || '';
+        chatBindInput.value = scheme.boundChatId || '';
+        renderRulesLists();
+    };
+
+    selectEl.addEventListener('change', () => {
+        const found = getEnableSchemeById(selectEl.value);
+        if (found) populateForm(found);
+    });
+
+    populateForm(currentScheme);
     return root;
 }
 
