@@ -3,6 +3,7 @@
  * @description 角色设定、服装设定、设定启用方案及注入模板方案的持久化存储管理器
  */
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, MacroTreeScheme } from '../types/character';
+export declare const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme;
 export declare function getCharacterProfiles(): CharacterProfile[];
 export declare function saveCharacterProfiles(profiles: CharacterProfile[]): void;
 export declare function getCharacterProfileById(id: string): CharacterProfile | undefined;
@@ -23,7 +24,6 @@ export declare function saveInjectionTemplates(templates: InjectionTemplateSchem
 export declare function getInjectionTemplateById(id: string): InjectionTemplateScheme | undefined;
 export declare function upsertInjectionTemplate(template: InjectionTemplateScheme): void;
 export declare function deleteInjectionTemplate(id: string): void;
-export declare const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme;
 export declare function getMacroTreeSchemes(): MacroTreeScheme[];
 export declare function saveMacroTreeSchemes(schemes: MacroTreeScheme[]): void;
 export declare function getActiveMacroTreeSchemeId(): string;

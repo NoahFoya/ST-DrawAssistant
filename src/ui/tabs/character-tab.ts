@@ -1595,13 +1595,9 @@ function renderInjectionTemplatesPane(): HTMLElement {
     });
 
     const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
-        if (currentTpl.isSystemPreset) {
-            alert('ℹ️ 系统预置方案不可重命名');
-            return;
-        }
         const newName = prompt('重命名方案名称：', currentTpl.name);
-        if (newName === null) return;
-        currentTpl.name = newName;
+        if (!newName || !newName.trim()) return;
+        currentTpl.name = newName.trim();
         upsertInjectionTemplate(currentTpl);
         refreshTplSelect();
     });
@@ -1645,10 +1641,6 @@ function renderInjectionTemplatesPane(): HTMLElement {
     });
 
     const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
-        if (currentTpl.isSystemPreset) {
-            alert('⚠️ 系统预置方案不可删除');
-            return;
-        }
         if (!confirm(`⚠️ 确定要删除方案 "${currentTpl.name}" 吗？`)) return;
         deleteInjectionTemplate(currentTpl.id);
         refreshTplSelect();
@@ -2206,10 +2198,6 @@ function renderMacroRulesPane(): HTMLElement {
     });
 
     const btnRename = createIconButton('<i class="fa-solid fa-pen"></i>', '重命名方案', () => {
-        if (activeScheme.isDefault) {
-            alert('ℹ️ 默认预设方案不可重命名');
-            return;
-        }
         const newName = prompt('重命名方案名称:', activeScheme.name);
         if (newName && newName.trim()) {
             activeScheme.name = newName.trim();
@@ -2264,10 +2252,6 @@ function renderMacroRulesPane(): HTMLElement {
     });
 
     const btnDelete = createIconButton('<i class="fa-solid fa-trash"></i>', '删除方案', () => {
-        if (activeScheme.isDefault) {
-            alert('⚠️ 默认预设方案不可删除');
-            return;
-        }
         if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
             deleteMacroTreeScheme(activeScheme.id);
             activeScheme = getActiveMacroTreeScheme();
