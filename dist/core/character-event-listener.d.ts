@@ -11,6 +11,10 @@ export declare function checkCharacterCardConflict(lineEntry: string, currentSch
  */
 export declare function isContextActive(): boolean;
 /**
+ * 兼容提取酒馆事件负载中的消息正文 (支持 number id, { message }, { id }, 或最新 chat 记录)
+ */
+export declare function extractTextFromEventPayload(arg: unknown): string;
+/**
  * 监听新角色卡切换事件、WORLDINFO_ENTRIES_LOADED 世界书编译事件与全局预发送文本刷新
  */
 export declare function registerCharacterEventListeners(): void;

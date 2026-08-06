@@ -68,6 +68,55 @@ export function isContextActive(): boolean {
 }
 
 /**
+ * 兼容提取酒馆事件负载中的消息正文 (支持 number id, { message }, { id }, 或最新 chat 记录)
+ */
+export function extractTextFromEventPayload(arg: unknown): string {
+    try {
+        const win = window as unknown as { SillyTavern?: { getContext?: () => { chat?: Array<{ mes?: string; content?: string }> } } };
+        const stChat = win.SillyTavern?.getContext?.()?.chat;
+
+        // 1. 若参数直接为消息索引数字/数字字符串 (如 MESSAGE_RECEIVED / MESSAGE_EDITED 传的 id)
+        if (typeof arg === 'number' || (typeof arg === 'string' && /^\d+$/.test(arg))) {
+            const idx = Number(arg);
+            if (stChat && stChat[idx]) {
+                return stChat[idx].mes || stChat[idx].content || '';
+            }
+        }
+
+        // 2. 若参数为对象结构 { message: { content/mes } } 或 { id/messageId }
+        if (arg && typeof arg === 'object') {
+            const obj = arg as {
+                message?: { content?: string; mes?: string };
+                id?: number;
+                messageId?: number;
+                content?: string;
+                mes?: string;
+            };
+
+            if (obj.message) {
+                return obj.message.mes || obj.message.content || '';
+            }
+            if (typeof obj.mes === 'string') return obj.mes;
+            if (typeof obj.content === 'string') return obj.content;
+
+            const targetIdx = typeof obj.id === 'number' ? obj.id : obj.messageId;
+            if (typeof targetIdx === 'number' && stChat && stChat[targetIdx]) {
+                return stChat[targetIdx].mes || stChat[targetIdx].content || '';
+            }
+        }
+
+        // 3. 兜底策略：读取当前聊天最后一条消息
+        if (stChat && stChat.length > 0) {
+            const lastMsg = stChat[stChat.length - 1];
+            return lastMsg.mes || lastMsg.content || '';
+        }
+    } catch (err) {
+        logger.warn('[CharacterEventListener] 提取事件 payload 消息文本失败:', err);
+    }
+    return '';
+}
+
+/**
  * 监听新角色卡切换事件、WORLDINFO_ENTRIES_LOADED 世界书编译事件与全局预发送文本刷新
  */
 export function registerCharacterEventListeners(): void {
@@ -113,15 +162,14 @@ export function registerCharacterEventListeners(): void {
 
         const handleMessageSent = (...args: unknown[]) => {
             if (!isContextActive()) return;
-            const data = args[0] as { message?: { content?: string } } | undefined;
-            updateGlobalWorldbookPlaceholders(data?.message?.content);
+            const textContent = extractTextFromEventPayload(args[0]);
+            updateGlobalWorldbookPlaceholders(textContent);
         };
 
         const handleMessageReceived = (...args: unknown[]) => {
             handleChatChanged();
             if (!isContextActive()) return;
-            const data = args[0] as { message?: { content?: string } } | undefined;
-            const textContent = typeof data?.message?.content === 'string' ? data.message.content : '';
+            const textContent = extractTextFromEventPayload(args[0]);
             if (textContent) {
                 processExtractedCharacterTags(textContent);
             }
@@ -141,9 +189,11 @@ export function registerCharacterEventListeners(): void {
         eventSource.on(event_types.MESSAGE_SENT || 'message_sent', handleMessageSent);
         eventSource.on(event_types.MESSAGE_RECEIVED || 'message_received', handleMessageReceived);
         eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered', handleMessageReceived);
+        eventSource.on(event_types.MESSAGE_EDITED || 'message_edited', handleMessageReceived);
+        eventSource.on(event_types.MESSAGE_UPDATED || 'message_updated', handleMessageReceived);
         eventSource.on(evtWorldInfo, handleWorldInfoLoaded);
 
-        logger.info(`[CharacterEventListener] 宿主事件监听与 WORLDINFO_ENTRIES_LOADED 世界书编译钩子就绪 (${String(evtWorldInfo)})`);
+        logger.info(`[CharacterEventListener] 宿主事件监听 (含编辑/回复/WORLDINFO_ENTRIES_LOADED) 注册就绪`);
     } catch (err) {
         logger.warn('[CharacterEventListener] 注册宿主事件监听失败:', err);
     }
