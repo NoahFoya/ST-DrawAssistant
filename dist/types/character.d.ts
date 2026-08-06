@@ -163,13 +163,13 @@ export interface MacroTreeScheme {
     isDefault?: boolean;
     /** 角色固定注入变量列表 (先于条件分支处理，如 ['nameEN', 'characterTraits']) */
     characterFixedVariables?: string[];
+    /** 角色 2 层规则树根节点列表 */
+    characterRootNodes: MacroRuleNode[];
     /** 服装固定注入变量列表 (先于条件分支处理，如 ['nameEN']) */
     outfitFixedVariables?: string[];
-    /** 2 层根树节点列表 (允许多主分支并行求值) */
-    rootNodes: MacroRuleNode[];
-    /** 角色纯 Tag 模版 (保留备用) */
-    characterTemplate?: string;
-    /** 服装纯 Tag 模版 (保留备用) */
-    outfitTemplate?: string;
+    /** 服装 2 层规则树根节点列表 */
+    outfitRootNodes: MacroRuleNode[];
+    /** 兼容字段 */
+    rootNodes?: MacroRuleNode[];
 }
 //# sourceMappingURL=character.d.ts.map

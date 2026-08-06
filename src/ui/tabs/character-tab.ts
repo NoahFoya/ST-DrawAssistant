@@ -20,9 +20,15 @@ import {
     getInjectionTemplateById,
     upsertInjectionTemplate,
     deleteInjectionTemplate,
-    getMacroTreeScheme,
+    getMacroTreeSchemes,
+    setActiveMacroTreeSchemeId,
+    getActiveMacroTreeScheme,
     saveMacroTreeScheme,
-    resetMacroTreeScheme
+    deleteMacroTreeScheme,
+    exportMacroTreeScheme,
+    importMacroTreeScheme,
+    resetMacroTreeScheme,
+    DEFAULT_MACRO_TREE_SCHEME
 } from '../../storage/character-store';
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule, MacroTreeScheme, MacroRuleNode } from '../../types/character';
 import { checkCharacterCardConflict } from '../../core/character-event-listener';
@@ -1914,14 +1920,11 @@ function renderInjectionTemplatesPane(): HTMLElement {
             .replace(/{lowerBody}/g, 'frilled skirt, white socks')
             .replace(/{lowerBodyBack}/g, 'frilled skirt back');
 
-        // 过滤空行的简易处理演示
         const cleanChar = charRendered.split('\n').filter(line => !line.includes('{}') && line.trim() !== '').join('\n');
         const cleanOutfit = outfitRendered.split('\n').filter(line => !line.includes('{}') && line.trim() !== '').join('\n');
 
         previewTextarea.value = `=== 【{{角色启用列表}}】渲染效果 ===\n${cleanChar}\n\n=== 【{{服装启用列表}}】渲染效果 ===\n${cleanOutfit}`;
     };
-
-    refreshPreviewBtn.addEventListener('click', updateLivePreview);
 
     const saveCurrentForm = () => {
         currentTpl.characterListTemplate = tplCharList.textarea.value;
@@ -1929,6 +1932,8 @@ function renderInjectionTemplatesPane(): HTMLElement {
         currentTpl.enableOutfitListTemplate = tplOutfitList.textarea.value;
         upsertInjectionTemplate(currentTpl);
     };
+
+    refreshPreviewBtn.addEventListener('click', updateLivePreview);
 
     const populateForm = (tpl: InjectionTemplateScheme) => {
         currentTpl = tpl;
@@ -1997,7 +2002,106 @@ function createTextareaInput(label: string, id: string, value: string): { wrappe
 }
 
 /**
- * 渲染子界面 5：2层树形可配置宏模板匹配规则内容
+ * 辅助例程：类 LoRA 胶囊标签添加与删除选择器组件
+ */
+function renderPillListSelector(
+    currentSelectedKeys: string[],
+    allOptions: Array<{ key: string; label: string }>,
+    onChange: (updatedKeys: string[]) => void,
+    placeholder = '+ 点击添加变量'
+): HTMLElement {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '6px';
+
+    const pillBox = document.createElement('div');
+    pillBox.style.display = 'flex';
+    pillBox.style.flexWrap = 'wrap';
+    pillBox.style.gap = '6px';
+    pillBox.style.alignItems = 'center';
+
+    const renderPills = () => {
+        pillBox.innerHTML = '';
+
+        // 渲染已选胶囊
+        currentSelectedKeys.forEach(k => {
+            const opt = allOptions.find(o => o.key === k);
+            const labelStr = opt ? opt.label : k;
+
+            const pill = document.createElement('span');
+            pill.className = 'da-badge primary';
+            pill.style.display = 'inline-flex';
+            pill.style.alignItems = 'center';
+            pill.style.gap = '4px';
+            pill.style.padding = '4px 8px';
+            pill.style.fontSize = '0.82em';
+            pill.style.borderRadius = '4px';
+            pill.style.background = 'var(--da-primary-color, #a855f7)';
+            pill.style.color = '#fff';
+
+            const txt = document.createElement('span');
+            txt.textContent = labelStr;
+
+            const closeBtn = document.createElement('i');
+            closeBtn.className = 'fa-solid fa-xmark';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.opacity = '0.8';
+            closeBtn.title = '点击移除此变量';
+            closeBtn.addEventListener('mouseenter', () => { closeBtn.style.opacity = '1'; });
+            closeBtn.addEventListener('mouseleave', () => { closeBtn.style.opacity = '0.8'; });
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = currentSelectedKeys.indexOf(k);
+                if (idx >= 0) {
+                    currentSelectedKeys.splice(idx, 1);
+                    onChange(currentSelectedKeys);
+                    renderPills();
+                }
+            });
+
+            pill.appendChild(txt);
+            pill.appendChild(closeBtn);
+            pillBox.appendChild(pill);
+        });
+
+        // 渲染下拉选择菜单按钮
+        const unselectedOptions = allOptions.filter(o => !currentSelectedKeys.includes(o.key));
+        if (unselectedOptions.length > 0) {
+            const addSelect = document.createElement('select');
+            addSelect.className = 'da-select';
+            addSelect.style.fontSize = '0.8em';
+            addSelect.style.padding = '2px 6px';
+            addSelect.style.borderRadius = '4px';
+            addSelect.style.cursor = 'pointer';
+            addSelect.style.width = 'auto';
+
+            let defaultOptHtml = `<option value="" disabled selected>${placeholder}</option>`;
+            unselectedOptions.forEach(o => {
+                defaultOptHtml += `<option value="${o.key}">+ ${o.label}</option>`;
+            });
+            addSelect.innerHTML = defaultOptHtml;
+
+            addSelect.addEventListener('change', () => {
+                const val = addSelect.value;
+                if (val && !currentSelectedKeys.includes(val)) {
+                    currentSelectedKeys.push(val);
+                    onChange(currentSelectedKeys);
+                    renderPills();
+                }
+            });
+
+            pillBox.appendChild(addSelect);
+        }
+    };
+
+    renderPills();
+    container.appendChild(pillBox);
+    return container;
+}
+
+/**
+ * 渲染子界面 5：动态提示词匹配与替换规则内容
  */
 function renderMacroRulesPane(): HTMLElement {
     const root = document.createElement('div');
@@ -2005,209 +2109,487 @@ function renderMacroRulesPane(): HTMLElement {
     root.style.flexDirection = 'column';
     root.style.gap = '16px';
 
-    let currentScheme: MacroTreeScheme = getMacroTreeScheme();
+    let activeScheme: MacroTreeScheme = getActiveMacroTreeScheme();
+    let currentBlock: 'character' | 'outfit' = 'character';
 
-    // ── 1. 顶部控制卡片 ───────────────────────────────────────────────────────
-    const cardHeader = document.createElement('div');
-    cardHeader.className = 'da-section-card';
-    cardHeader.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    cardHeader.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    cardHeader.style.borderRadius = '8px';
-    cardHeader.style.padding = '16px';
+    // 文件导入 hidden input
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.style.display = 'none';
+    root.appendChild(fileInput);
 
-    const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.justifyContent = 'space-between';
-    topRow.style.alignItems = 'center';
+    // ── 1. 方案管理工具栏 (Scheme Management Toolbar) ───────────────────────────
+    const cardToolbar = document.createElement('div');
+    cardToolbar.className = 'da-section-card';
+    cardToolbar.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    cardToolbar.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    cardToolbar.style.borderRadius = '8px';
+    cardToolbar.style.padding = '14px 16px';
 
-    const title = document.createElement('h3');
-    title.style.margin = '0';
-    title.style.fontSize = '1.05em';
-    title.style.color = 'var(--da-primary-color, #a855f7)';
-    title.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 2 层树形宏模板匹配规则与时序配置';
+    const renderToolbar = () => {
+        cardToolbar.innerHTML = '';
 
-    const btnGroup = document.createElement('div');
-    btnGroup.style.display = 'flex';
-    btnGroup.style.gap = '8px';
+        const barRow = document.createElement('div');
+        barRow.style.display = 'flex';
+        barRow.style.justifyContent = 'space-between';
+        barRow.style.alignItems = 'center';
+        barRow.style.flexWrap = 'wrap';
+        barRow.style.gap = '10px';
 
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'da-btn secondary';
-    resetBtn.style.fontSize = '0.85em';
-    resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 恢复默认树预设';
-    resetBtn.addEventListener('click', () => {
-        if (confirm('确定要重置当前树形宏规则方案为 Wai/Standard 默认预设吗？')) {
-            currentScheme = resetMacroTreeScheme();
+        const leftBox = document.createElement('div');
+        leftBox.style.display = 'flex';
+        leftBox.style.alignItems = 'center';
+        leftBox.style.gap = '10px';
+
+        const barTitle = document.createElement('span');
+        barTitle.style.fontWeight = 'bold';
+        barTitle.style.color = 'var(--da-primary-color, #a855f7)';
+        barTitle.style.fontSize = '0.95em';
+        barTitle.innerHTML = '<i class="fa-solid fa-diagram-project"></i> 动态提示词匹配方案:';
+
+        const schemeSelect = document.createElement('select');
+        schemeSelect.className = 'da-select';
+        schemeSelect.style.fontSize = '0.85em';
+        schemeSelect.style.minWidth = '180px';
+
+        const allSchemes = getMacroTreeSchemes();
+        schemeSelect.innerHTML = allSchemes.map(s =>
+            `<option value="${s.id}" ${s.id === activeScheme.id ? 'selected' : ''}>${s.name}${s.isDefault ? ' (默认)' : ''}</option>`
+        ).join('');
+
+        schemeSelect.addEventListener('change', () => {
+            setActiveMacroTreeSchemeId(schemeSelect.value);
+            activeScheme = getActiveMacroTreeScheme();
             refreshAll();
+        });
+
+        leftBox.appendChild(barTitle);
+        leftBox.appendChild(schemeSelect);
+
+        const rightBtns = document.createElement('div');
+        rightBtns.style.display = 'flex';
+        rightBtns.style.gap = '6px';
+        rightBtns.style.flexWrap = 'wrap';
+
+        // 新建方案
+        const newBtn = document.createElement('button');
+        newBtn.className = 'da-btn secondary';
+        newBtn.style.fontSize = '0.82em';
+        newBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 新建方案';
+        newBtn.addEventListener('click', () => {
+            const name = prompt('请输入新匹配方案名称:', '自定义匹配方案');
+            if (name && name.trim()) {
+                const newScheme: MacroTreeScheme = {
+                    ...JSON.parse(JSON.stringify(DEFAULT_MACRO_TREE_SCHEME)),
+                    id: `macro-scheme-${Date.now()}`,
+                    name: name.trim(),
+                    isDefault: false
+                };
+                saveMacroTreeScheme(newScheme);
+                activeScheme = newScheme;
+                refreshAll();
+            }
+        });
+
+        // 复制方案
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'da-btn secondary';
+        copyBtn.style.fontSize = '0.82em';
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> 复制';
+        copyBtn.addEventListener('click', () => {
+            const copyScheme: MacroTreeScheme = {
+                ...JSON.parse(JSON.stringify(activeScheme)),
+                id: `macro-scheme-${Date.now()}`,
+                name: `${activeScheme.name} (副本)`,
+                isDefault: false
+            };
+            saveMacroTreeScheme(copyScheme);
+            activeScheme = copyScheme;
+            refreshAll();
+        });
+
+        // 导入方案
+        const importBtn = document.createElement('button');
+        importBtn.className = 'da-btn secondary';
+        importBtn.style.fontSize = '0.82em';
+        importBtn.innerHTML = '<i class="fa-solid fa-file-import"></i> 导入';
+        importBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 导出方案
+        const exportBtn = document.createElement('button');
+        exportBtn.className = 'da-btn secondary';
+        exportBtn.style.fontSize = '0.82em';
+        exportBtn.innerHTML = '<i class="fa-solid fa-file-export"></i> 导出';
+        exportBtn.addEventListener('click', () => {
+            const jsonStr = exportMacroTreeScheme(activeScheme.id);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `macro-scheme-${activeScheme.name}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 恢复默认预设
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'da-btn secondary';
+        resetBtn.style.fontSize = '0.82em';
+        resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 恢复预设';
+        resetBtn.addEventListener('click', () => {
+            if (confirm('确定要将当前匹配方案重置为 Wai/Standard 默认预设吗？')) {
+                activeScheme = resetMacroTreeScheme();
+                refreshAll();
+            }
+        });
+
+        // 保存方案
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'da-btn primary';
+        saveBtn.style.fontSize = '0.82em';
+        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存方案';
+        saveBtn.addEventListener('click', () => {
+            saveMacroTreeScheme(activeScheme);
+            updateLivePreview();
+            const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+            if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+                winToastr.toastr.success('匹配替换规则方案保存成功！', '绘画助手');
+            }
+        });
+
+        // 删除方案
+        const delBtn = document.createElement('button');
+        delBtn.className = 'da-btn secondary';
+        delBtn.style.fontSize = '0.82em';
+        delBtn.style.color = '#ef4444';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i> 删除';
+        if (activeScheme.isDefault) {
+            delBtn.disabled = true;
+            delBtn.style.opacity = '0.4';
+            delBtn.title = '默认预设方案不能删除';
+        } else {
+            delBtn.addEventListener('click', () => {
+                if (confirm(`确定要删除方案“${activeScheme.name}”吗？`)) {
+                    deleteMacroTreeScheme(activeScheme.id);
+                    activeScheme = getActiveMacroTreeScheme();
+                    refreshAll();
+                }
+            });
+        }
+
+        rightBtns.appendChild(newBtn);
+        rightBtns.appendChild(copyBtn);
+        rightBtns.appendChild(importBtn);
+        rightBtns.appendChild(exportBtn);
+        rightBtns.appendChild(resetBtn);
+        rightBtns.appendChild(saveBtn);
+        rightBtns.appendChild(delBtn);
+
+        barRow.appendChild(leftBox);
+        barRow.appendChild(rightBtns);
+        cardToolbar.appendChild(barRow);
+    };
+
+    fileInput.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files[0]) {
+            const file = target.files[0];
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const content = evt.target?.result as string;
+                    activeScheme = importMacroTreeScheme(content);
+                    refreshAll();
+                    const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
+                    if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
+                        winToastr.toastr.success(`方案“${activeScheme.name}”导入成功！`, '绘画助手');
+                    }
+                } catch (err) {
+                    alert(`导入失败：${(err as Error).message}`);
+                }
+            };
+            reader.readAsText(file);
         }
     });
 
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'da-btn primary';
-    saveBtn.style.fontSize = '0.85em';
-    saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存树形规则方案';
-    saveBtn.addEventListener('click', () => {
-        saveMacroTreeScheme(currentScheme);
-        updateLivePreview();
-        const winToastr = window as unknown as { toastr?: { success: (msg: string, title?: string) => void } };
-        if (winToastr.toastr && typeof winToastr.toastr.success === 'function') {
-            winToastr.toastr.success('树形宏模板匹配规则保存成功！', '绘画助手');
+    root.appendChild(cardToolbar);
+
+    // ── 2. 区块切换 Pill 分栏 (Character vs Outfit Tabs) ───────────────────────
+    const sectionNav = document.createElement('div');
+    sectionNav.style.display = 'flex';
+    sectionNav.style.gap = '8px';
+
+    const charTabBtn = document.createElement('button');
+    charTabBtn.className = 'da-btn primary';
+    charTabBtn.style.fontSize = '0.88em';
+    charTabBtn.innerHTML = '<i class="fa-solid fa-user"></i> 👤 角色提示词匹配规则';
+
+    const outfitTabBtn = document.createElement('button');
+    outfitTabBtn.className = 'da-btn secondary';
+    outfitTabBtn.style.fontSize = '0.88em';
+    outfitTabBtn.innerHTML = '<i class="fa-solid fa-shirt"></i> 👗 服装提示词匹配规则';
+
+    const updateNavState = () => {
+        if (currentBlock === 'character') {
+            charTabBtn.className = 'da-btn primary';
+            outfitTabBtn.className = 'da-btn secondary';
+            charBlockCard.style.display = 'flex';
+            outfitBlockCard.style.display = 'none';
+        } else {
+            charTabBtn.className = 'da-btn secondary';
+            outfitTabBtn.className = 'da-btn primary';
+            charBlockCard.style.display = 'none';
+            outfitBlockCard.style.display = 'flex';
         }
+    };
+
+    charTabBtn.addEventListener('click', () => {
+        currentBlock = 'character';
+        updateNavState();
     });
 
-    btnGroup.appendChild(resetBtn);
-    btnGroup.appendChild(saveBtn);
-    topRow.appendChild(title);
-    topRow.appendChild(btnGroup);
+    outfitTabBtn.addEventListener('click', () => {
+        currentBlock = 'outfit';
+        updateNavState();
+    });
 
-    const tip = document.createElement('p');
-    tip.style.fontSize = '0.85em';
-    tip.style.opacity = '0.8';
-    tip.style.lineHeight = '1.5';
-    tip.style.margin = '8px 0 0 0';
-    tip.textContent = '严格执行处理时序：① 先精准匹配 Name 实体（未找到擦除为 0 字符）；② 优先插入【固定注入内容】；③ 再遍历【2 层条件分支规则树】压入叶子节点变量 Tag。父节点与变量列表严格互斥。';
+    sectionNav.appendChild(charTabBtn);
+    sectionNav.appendChild(outfitTabBtn);
+    root.appendChild(sectionNav);
 
-    cardHeader.appendChild(topRow);
-    cardHeader.appendChild(tip);
-    root.appendChild(cardHeader);
-
-    // ── 2. 固定注入内容配置卡片 (Fixed Injections) ───────────────────────────
-    const cardFixed = document.createElement('div');
-    cardFixed.className = 'da-section-card';
-    cardFixed.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    cardFixed.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    cardFixed.style.borderRadius = '8px';
-    cardFixed.style.padding = '16px';
-    cardFixed.style.display = 'flex';
-    cardFixed.style.flexDirection = 'column';
-    cardFixed.style.gap = '12px';
-
-    const fixedTitle = document.createElement('div');
-    fixedTitle.style.fontWeight = 'bold';
-    fixedTitle.style.color = 'var(--da-primary-color, #c084fc)';
-    fixedTitle.style.fontSize = '0.92em';
-    fixedTitle.textContent = '📌 优先处理：固定注入内容配置 (无论是否命中分支均生效)';
-    cardFixed.appendChild(fixedTitle);
-
-    // 角色固定变量列表
-    const charFixedRow = document.createElement('div');
-    charFixedRow.style.fontSize = '0.85em';
-    charFixedRow.innerHTML = '<span style="opacity:0.85; margin-right:8px;">角色固定注入 Tag 列表:</span>';
-    
-    const charFixedList = currentScheme.characterFixedVariables || ['nameEN', 'characterTraits'];
-    const charVarOptions = [
-        { label: '角色英文名 (nameEN)', key: 'nameEN' },
-        { label: '角色特征 (characterTraits)', key: 'characterTraits' },
-        { label: '角色中文名 (nameCN)', key: 'nameCN' }
+    // ── 可选固定变量注册表 (只含实体标准属性，无 customTag) ─────────────────────
+    const charFixedOptions = [
+        { key: 'nameEN', label: '角色英文名 (nameEN)' },
+        { key: 'characterTraits', label: '角色特征 (characterTraits)' },
+        { key: 'nameCN', label: '角色中文名 (nameCN)' }
     ];
 
-    charVarOptions.forEach(opt => {
-        const lbl = document.createElement('label');
-        lbl.style.marginRight = '12px';
-        lbl.style.cursor = 'pointer';
-        const chk = document.createElement('input');
-        chk.type = 'checkbox';
-        chk.checked = charFixedList.includes(opt.key);
-        chk.addEventListener('change', () => {
-            if (chk.checked) {
-                if (!charFixedList.includes(opt.key)) charFixedList.push(opt.key);
-            } else {
-                const idx = charFixedList.indexOf(opt.key);
-                if (idx >= 0) charFixedList.splice(idx, 1);
-            }
-            currentScheme.characterFixedVariables = charFixedList;
-            updateLivePreview();
-        });
-        lbl.appendChild(chk);
-        lbl.appendChild(document.createTextNode(` ${opt.label}`));
-        charFixedRow.appendChild(lbl);
-    });
-    cardFixed.appendChild(charFixedRow);
-
-    // 服装固定变量列表
-    const outfitFixedRow = document.createElement('div');
-    outfitFixedRow.style.fontSize = '0.85em';
-    outfitFixedRow.innerHTML = '<span style="opacity:0.85; margin-right:8px;">服装固定注入 Tag 列表:</span>';
-
-    const outfitFixedList = currentScheme.outfitFixedVariables || ['nameEN'];
-    const outfitVarOptions = [
-        { label: '服装英文名 (nameEN)', key: 'nameEN' },
-        { label: '服装中文名 (nameCN)', key: 'nameCN' }
+    const outfitFixedOptions = [
+        { key: 'nameEN', label: '服装英文名 (nameEN)' },
+        { key: 'nameCN', label: '服装中文名 (nameCN)' }
     ];
 
-    outfitVarOptions.forEach(opt => {
-        const lbl = document.createElement('label');
-        lbl.style.marginRight = '12px';
-        lbl.style.cursor = 'pointer';
-        const chk = document.createElement('input');
-        chk.type = 'checkbox';
-        chk.checked = outfitFixedList.includes(opt.key);
-        chk.addEventListener('change', () => {
-            if (chk.checked) {
-                if (!outfitFixedList.includes(opt.key)) outfitFixedList.push(opt.key);
-            } else {
-                const idx = outfitFixedList.indexOf(opt.key);
-                if (idx >= 0) outfitFixedList.splice(idx, 1);
-            }
-            currentScheme.outfitFixedVariables = outfitFixedList;
-            updateLivePreview();
+    // ── 可选条件变量注册表 (叶子节点勾选，可含 customTag) ──────────────────────
+    const charBranchOptions = [
+        { key: 'nameEN', label: '英文名 (nameEN)' },
+        { key: 'characterTraits', label: '角色特征 (characterTraits)' },
+        { key: 'facialFeatures', label: '五官外貌-正面 (facialFeatures)' },
+        { key: 'facialFeaturesBack', label: '五官外貌-背面 (facialFeaturesBack)' },
+        { key: 'upperBodySFW', label: '上半身SFW-正面 (upperBodySFW)' },
+        { key: 'upperBodySFWBack', label: '上半身SFW-背面 (upperBodySFWBack)' },
+        { key: 'fullBodySFW', label: '下半身SFW-正面 (fullBodySFW)' },
+        { key: 'fullBodySFWBack', label: '下半身SFW-背面 (fullBodySFWBack)' },
+        { key: 'upperBodyNSFW', label: '上半身NSFW (upperBodyNSFW)' },
+        { key: 'fullBodyNSFW', label: '下半身NSFW (fullBodyNSFW)' },
+        { key: 'customTag', label: '自定义 Tag 字符串' }
+    ];
+
+    const outfitBranchOptions = [
+        { key: 'nameEN', label: '服装英文名 (nameEN)' },
+        { key: 'nameCN', label: '服装中文名 (nameCN)' },
+        { key: 'upperBody', label: '上半身服装-正面 (upperBody)' },
+        { key: 'upperBodyBack', label: '上半身服装-背面 (upperBodyBack)' },
+        { key: 'fullBody', label: '全身服装-正面 (fullBody)' },
+        { key: 'fullBodyBack', label: '全身服装-背面 (fullBodyBack)' },
+        { key: 'customTag', label: '自定义 Tag 字符串' }
+    ];
+
+    // ── 3. 区块 A：角色提示词匹配规则 ────────────────────────────────────────
+    const charBlockCard = document.createElement('div');
+    charBlockCard.className = 'da-section-card';
+    charBlockCard.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    charBlockCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    charBlockCard.style.borderRadius = '8px';
+    charBlockCard.style.padding = '16px';
+    charBlockCard.style.display = 'flex';
+    charBlockCard.style.flexDirection = 'column';
+    charBlockCard.style.gap = '14px';
+
+    const renderCharBlock = () => {
+        charBlockCard.innerHTML = '';
+
+        // 3.1 角色固定匹配内容
+        const charFixedBox = document.createElement('div');
+        charFixedBox.style.display = 'flex';
+        charFixedBox.style.flexDirection = 'column';
+        charFixedBox.style.gap = '8px';
+
+        const fixedTitle = document.createElement('div');
+        fixedTitle.style.fontWeight = 'bold';
+        fixedTitle.style.color = 'var(--da-primary-color, #c084fc)';
+        fixedTitle.style.fontSize = '0.9em';
+        fixedTitle.textContent = '📌 角色固定匹配内容 (匹配该角色时必定优先生效，不可用自定义 Tag):';
+
+        const charFixedList = activeScheme.characterFixedVariables || ['nameEN', 'characterTraits'];
+        const charFixedSelector = renderPillListSelector(
+            charFixedList,
+            charFixedOptions,
+            (updated) => {
+                activeScheme.characterFixedVariables = updated;
+                updateLivePreview();
+            },
+            '+ 添加固定匹配变量'
+        );
+
+        charFixedBox.appendChild(fixedTitle);
+        charFixedBox.appendChild(charFixedSelector);
+        charBlockCard.appendChild(charFixedBox);
+
+        // 3.2 角色 2 层条件匹配规则树
+        const charTreeBox = document.createElement('div');
+        charTreeBox.style.display = 'flex';
+        charTreeBox.style.flexDirection = 'column';
+        charTreeBox.style.gap = '10px';
+
+        const charTreeHeader = document.createElement('div');
+        charTreeHeader.style.display = 'flex';
+        charTreeHeader.style.justifyContent = 'space-between';
+        charTreeHeader.style.alignItems = 'center';
+
+        const charTreeTitle = document.createElement('div');
+        charTreeTitle.style.fontWeight = 'bold';
+        charTreeTitle.style.color = 'var(--da-primary-color, #c084fc)';
+        charTreeTitle.style.fontSize = '0.9em';
+        charTreeTitle.textContent = '🌿 角色 2 层条件分支匹配树 (根据提示词后缀动态触发):';
+
+        const addCharRootBtn = document.createElement('button');
+        addCharRootBtn.className = 'da-btn secondary';
+        addCharRootBtn.style.fontSize = '0.8em';
+        addCharRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加 Level 1 角色主分支';
+        addCharRootBtn.addEventListener('click', () => {
+            activeScheme.characterRootNodes = activeScheme.characterRootNodes || [];
+            activeScheme.characterRootNodes.push({
+                id: `node-char-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                name: '主分支',
+                pattern: '-pattern',
+                enabled: true,
+                variables: ['facialFeatures', 'upperBodySFW']
+            });
+            refreshAll();
         });
-        lbl.appendChild(chk);
-        lbl.appendChild(document.createTextNode(` ${opt.label}`));
-        outfitFixedRow.appendChild(lbl);
-    });
-    cardFixed.appendChild(outfitFixedRow);
 
-    root.appendChild(cardFixed);
+        charTreeHeader.appendChild(charTreeTitle);
+        charTreeHeader.appendChild(addCharRootBtn);
+        charTreeBox.appendChild(charTreeHeader);
 
-    // ── 3. 2 层限制规则树构建器卡片 (Capped 2-Level Tree Builder) ─────────────
-    const cardTree = document.createElement('div');
-    cardTree.className = 'da-section-card';
-    cardTree.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
-    cardTree.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-    cardTree.style.borderRadius = '8px';
-    cardTree.style.padding = '16px';
+        const charTreeContainer = document.createElement('div');
+        charTreeContainer.style.display = 'flex';
+        charTreeContainer.style.flexDirection = 'column';
+        charTreeContainer.style.gap = '8px';
 
-    const treeHeader = document.createElement('div');
-    treeHeader.style.display = 'flex';
-    treeHeader.style.justifyContent = 'space-between';
-    treeHeader.style.alignItems = 'center';
-    treeHeader.style.marginBottom = '12px';
+        const charNodes = activeScheme.characterRootNodes || [];
+        if (charNodes.length === 0) {
+            charTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“添加 Level 1 角色主分支”开始配置</div>';
+        } else {
+            charTreeContainer.appendChild(render2LevelNodeTree(charNodes, charBranchOptions, 0));
+        }
 
-    const treeTitle = document.createElement('div');
-    treeTitle.style.fontWeight = 'bold';
-    treeTitle.style.color = 'var(--da-primary-color, #c084fc)';
-    treeTitle.style.fontSize = '0.92em';
-    treeTitle.textContent = '🌿 2 层条件分支规则树 (最多 2 层，父分支与叶子变量列表互斥)';
+        charTreeBox.appendChild(charTreeContainer);
+        charBlockCard.appendChild(charTreeBox);
+    };
 
-    const addRootBtn = document.createElement('button');
-    addRootBtn.className = 'da-btn secondary';
-    addRootBtn.style.fontSize = '0.82em';
-    addRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加 Level 1 主分支';
-    addRootBtn.addEventListener('click', () => {
-        const newNode: MacroRuleNode = {
-            id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            name: '主分支',
-            pattern: '-pattern',
-            enabled: true,
-            variables: ['facialFeatures', 'upperBodySFW']
-        };
-        currentScheme.rootNodes.push(newNode);
-        refreshAll();
-    });
+    root.appendChild(charBlockCard);
 
-    treeHeader.appendChild(treeTitle);
-    treeHeader.appendChild(addRootBtn);
-    cardTree.appendChild(treeHeader);
+    // ── 4. 区块 B：服装提示词匹配规则 ────────────────────────────────────────
+    const outfitBlockCard = document.createElement('div');
+    outfitBlockCard.className = 'da-section-card';
+    outfitBlockCard.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    outfitBlockCard.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    outfitBlockCard.style.borderRadius = '8px';
+    outfitBlockCard.style.padding = '16px';
+    outfitBlockCard.style.display = 'none';
+    outfitBlockCard.style.flexDirection = 'column';
+    outfitBlockCard.style.gap = '14px';
 
-    const treeContainer = document.createElement('div');
-    treeContainer.style.display = 'flex';
-    treeContainer.style.flexDirection = 'column';
-    treeContainer.style.gap = '8px';
-    cardTree.appendChild(treeContainer);
+    const renderOutfitBlock = () => {
+        outfitBlockCard.innerHTML = '';
 
-    root.appendChild(cardTree);
+        // 4.1 服装固定匹配内容
+        const outfitFixedBox = document.createElement('div');
+        outfitFixedBox.style.display = 'flex';
+        outfitFixedBox.style.flexDirection = 'column';
+        outfitFixedBox.style.gap = '8px';
 
-    // ── 4. 实时多分支调试预览卡片 ─────────────────────────────────────────────
+        const fixedTitle = document.createElement('div');
+        fixedTitle.style.fontWeight = 'bold';
+        fixedTitle.style.color = 'var(--da-primary-color, #c084fc)';
+        fixedTitle.style.fontSize = '0.9em';
+        fixedTitle.textContent = '📌 服装固定匹配内容 (匹配该服装时必定优先生效):';
+
+        const outfitFixedList = activeScheme.outfitFixedVariables || ['nameEN'];
+        const outfitFixedSelector = renderPillListSelector(
+            outfitFixedList,
+            outfitFixedOptions,
+            (updated) => {
+                activeScheme.outfitFixedVariables = updated;
+                updateLivePreview();
+            },
+            '+ 添加固定匹配变量'
+        );
+
+        outfitFixedBox.appendChild(fixedTitle);
+        outfitFixedBox.appendChild(outfitFixedSelector);
+        outfitBlockCard.appendChild(outfitFixedBox);
+
+        // 4.2 服装 2 层条件匹配规则树
+        const outfitTreeBox = document.createElement('div');
+        outfitTreeBox.style.display = 'flex';
+        outfitTreeBox.style.flexDirection = 'column';
+        outfitTreeBox.style.gap = '10px';
+
+        const outfitTreeHeader = document.createElement('div');
+        outfitTreeHeader.style.display = 'flex';
+        outfitTreeHeader.style.justifyContent = 'space-between';
+        outfitTreeHeader.style.alignItems = 'center';
+
+        const outfitTreeTitle = document.createElement('div');
+        outfitTreeTitle.style.fontWeight = 'bold';
+        outfitTreeTitle.style.color = 'var(--da-primary-color, #c084fc)';
+        outfitTreeTitle.style.fontSize = '0.9em';
+        outfitTreeTitle.textContent = '🌿 服装 2 层条件分支匹配树 (根据提示词后缀动态触发):';
+
+        const addOutfitRootBtn = document.createElement('button');
+        addOutfitRootBtn.className = 'da-btn secondary';
+        addOutfitRootBtn.style.fontSize = '0.8em';
+        addOutfitRootBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 添加 Level 1 服装主分支';
+        addOutfitRootBtn.addEventListener('click', () => {
+            activeScheme.outfitRootNodes = activeScheme.outfitRootNodes || [];
+            activeScheme.outfitRootNodes.push({
+                id: `node-outfit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                name: '主分支',
+                pattern: '-pattern',
+                enabled: true,
+                variables: ['upperBody']
+            });
+            refreshAll();
+        });
+
+        outfitTreeHeader.appendChild(outfitTreeTitle);
+        outfitTreeHeader.appendChild(addOutfitRootBtn);
+        outfitTreeBox.appendChild(outfitTreeHeader);
+
+        const outfitTreeContainer = document.createElement('div');
+        outfitTreeContainer.style.display = 'flex';
+        outfitTreeContainer.style.flexDirection = 'column';
+        outfitTreeContainer.style.gap = '8px';
+
+        const outfitNodes = activeScheme.outfitRootNodes || [];
+        if (outfitNodes.length === 0) {
+            outfitTreeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无分支，点击右上角“添加 Level 1 服装主分支”开始配置</div>';
+        } else {
+            outfitTreeContainer.appendChild(render2LevelNodeTree(outfitNodes, outfitBranchOptions, 0));
+        }
+
+        outfitTreeBox.appendChild(outfitTreeContainer);
+        outfitBlockCard.appendChild(outfitTreeBox);
+    };
+
+    root.appendChild(outfitBlockCard);
+
+    // ── 5. 实时双区块解包调试预览卡片 ─────────────────────────────────────────
     const cardPreview = document.createElement('div');
     cardPreview.className = 'da-section-card';
     cardPreview.style.background = 'rgba(168, 85, 247, 0.05)';
@@ -2220,10 +2602,10 @@ function renderMacroRulesPane(): HTMLElement {
     prevTitle.style.color = 'var(--da-primary-color, #c084fc)';
     prevTitle.style.fontSize = '0.92em';
     prevTitle.style.marginBottom = '8px';
-    prevTitle.textContent = '⚡ 实时 2 层树形解包调试预览 (0 字符擦除测试)';
+    prevTitle.textContent = '⚡ 实时提示词替换测试预览 (0 字符空擦除测试)';
 
     const prevInputGroup = createTextInput('测试输入 Prompt:', 'macro-debug-input', '1girl, $rikka_takarada_(ssss.gridman)-from_front-sfw-upperbody$, $rikka_takarada_default_uniform-sfw-upperbody$, standing, daylight');
-    
+
     const prevResultBox = document.createElement('div');
     prevResultBox.style.marginTop = '8px';
     prevResultBox.style.padding = '10px';
@@ -2234,10 +2616,10 @@ function renderMacroRulesPane(): HTMLElement {
     prevResultBox.style.wordBreak = 'break-all';
 
     const updateLivePreview = () => {
-        saveMacroTreeScheme(currentScheme);
+        saveMacroTreeScheme(activeScheme);
         const testInput = prevInputGroup.input.value;
         const rendered = processCharacterPrompt(testInput);
-        prevResultBox.textContent = rendered || '(占位符未匹配，已擦除替换为 0 字符空字符串)';
+        prevResultBox.textContent = rendered || '(标记未匹配，已擦除替换为 0 字符空字符串)';
     };
 
     prevInputGroup.input.addEventListener('input', updateLivePreview);
@@ -2247,22 +2629,12 @@ function renderMacroRulesPane(): HTMLElement {
     cardPreview.appendChild(prevResultBox);
     root.appendChild(cardPreview);
 
-    // ── 可选变量字段注册表 ────────────────────────────────────────────────────
-    const availableVarList = [
-        { key: 'nameEN', label: '英文名 (nameEN)' },
-        { key: 'characterTraits', label: '角色特征 (characterTraits)' },
-        { key: 'facialFeatures', label: '五官外貌-正面 (facialFeatures)' },
-        { key: 'facialFeaturesBack', label: '五官外貌-背面 (facialFeaturesBack)' },
-        { key: 'upperBodySFW', label: '上半身SFW-正面 (upperBodySFW)' },
-        { key: 'upperBodySFWBack', label: '上半身SFW-背面 (upperBodySFWBack)' },
-        { key: 'fullBodySFW', label: '下半身SFW-正面 (fullBodySFW)' },
-        { key: 'fullBodySFWBack', label: '下半身SFW-背面 (fullBodySFWBack)' },
-        { key: 'upperBodyNSFW', label: '上半身NSFW (upperBodyNSFW)' },
-        { key: 'fullBodyNSFW', label: '下半身NSFW (fullBodyNSFW)' }
-    ];
-
-    // ── 2 层树节点渲染递推例程 ────────────────────────────────────────────────
-    const renderNodeTree = (nodes: MacroRuleNode[], depth = 0): HTMLElement => {
+    // ── 2 层树节点通用递推渲染器 ───────────────────────────────────────────────
+    const render2LevelNodeTree = (
+        nodes: MacroRuleNode[],
+        branchVarOptions: Array<{ key: string; label: string }>,
+        depth = 0
+    ): HTMLElement => {
         const listContainer = document.createElement('div');
         listContainer.style.display = 'flex';
         listContainer.style.flexDirection = 'column';
@@ -2312,12 +2684,12 @@ function renderMacroRulesPane(): HTMLElement {
             nodeActions.style.display = 'flex';
             nodeActions.style.gap = '6px';
 
-            // 约束 1：最多只支持 2 层！即 depth 只能为 0 时允许添加 Level 2 子分支
+            // 约束 1：最多 2 层 (depth 为 0 时可添加 L2 子分支)
             if (depth === 0) {
                 const addChildBtn = createIconButton('<i class="fa-solid fa-plus"></i>', '添加 L2 子分支 (转为路由分支)', () => {
                     node.children = node.children || [];
                     node.children.push({
-                        id: `node-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                        id: `node-sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                         name: 'L2 子分支',
                         pattern: '--sub-pattern',
                         enabled: true,
@@ -2342,53 +2714,51 @@ function renderMacroRulesPane(): HTMLElement {
             row1.appendChild(nodeActions);
             nodeEl.appendChild(row1);
 
-            // 约束 3：互斥展示! 若有 children，展示子分支；若无 children，展示叶子节点【变量列表勾选框】
+            // 约束 3：互斥展示! 有 children 展子分支，无 children 展叶子节点【变量列表类 LoRA 选择器】
             if (Array.isArray(node.children) && node.children.length > 0) {
-                const childContainer = renderNodeTree(node.children, depth + 1);
+                const childContainer = render2LevelNodeTree(node.children, branchVarOptions, depth + 1);
                 childContainer.style.marginTop = '8px';
                 nodeEl.appendChild(childContainer);
             } else {
-                // 叶子节点变量列表复选框
                 const varBox = document.createElement('div');
                 varBox.style.marginTop = '8px';
                 varBox.style.padding = '8px';
                 varBox.style.background = 'rgba(0,0,0,0.15)';
                 varBox.style.borderRadius = '4px';
                 varBox.style.display = 'flex';
-                varBox.style.flexWrap = 'wrap';
-                varBox.style.gap = '8px 12px';
-                varBox.style.fontSize = '0.8em';
+                varBox.style.flexDirection = 'column';
+                varBox.style.gap = '6px';
 
                 const varTitle = document.createElement('div');
-                varTitle.style.width = '100%';
                 varTitle.style.fontWeight = 'bold';
-                varTitle.style.opacity = '0.7';
-                varTitle.textContent = '🍃 叶子节点绑定的变量列表 {变量内容}:';
+                varTitle.style.opacity = '0.75';
+                varTitle.style.fontSize = '0.8em';
+                varTitle.textContent = '🍃 命中此分支时包含的变量列表:';
                 varBox.appendChild(varTitle);
 
                 const currentVars = node.variables || [];
+                const pillSelector = renderPillListSelector(
+                    currentVars,
+                    branchVarOptions,
+                    (updatedVars) => {
+                        node.variables = updatedVars;
+                        updateLivePreview();
+                    },
+                    '+ 添加匹配变量'
+                );
 
-                availableVarList.forEach(vOpt => {
-                    const lbl = document.createElement('label');
-                    lbl.style.cursor = 'pointer';
-                    const chk = document.createElement('input');
-                    chk.type = 'checkbox';
-                    chk.checked = currentVars.includes(vOpt.key);
-                    chk.addEventListener('change', () => {
-                        node.variables = node.variables || [];
-                        if (chk.checked) {
-                            if (!node.variables.includes(vOpt.key)) node.variables.push(vOpt.key);
-                        } else {
-                            const idx = node.variables.indexOf(vOpt.key);
-                            if (idx >= 0) node.variables.splice(idx, 1);
-                        }
+                // 若包含 customTag，提供输入框
+                if (currentVars.includes('customTag')) {
+                    const customTagInputGroup = createTextInput('自定义 Tag 文本:', 'node-custom-tag-input', node.customTag || '');
+                    customTagInputGroup.input.style.fontSize = '0.85em';
+                    customTagInputGroup.input.addEventListener('change', () => {
+                        node.customTag = customTagInputGroup.input.value;
                         updateLivePreview();
                     });
-                    lbl.appendChild(chk);
-                    lbl.appendChild(document.createTextNode(` ${vOpt.label}`));
-                    varBox.appendChild(lbl);
-                });
+                    varBox.appendChild(customTagInputGroup.wrapper);
+                }
 
+                varBox.appendChild(pillSelector);
                 nodeEl.appendChild(varBox);
             }
 
@@ -2399,12 +2769,10 @@ function renderMacroRulesPane(): HTMLElement {
     };
 
     const refreshAll = () => {
-        treeContainer.innerHTML = '';
-        if (currentScheme.rootNodes.length === 0) {
-            treeContainer.innerHTML = '<div style="opacity:0.6; font-size:0.85em; padding:8px;">暂无根节点，点击右上角“添加 Level 1 主分支”开始配置</div>';
-        } else {
-            treeContainer.appendChild(renderNodeTree(currentScheme.rootNodes, 0));
-        }
+        renderToolbar();
+        renderCharBlock();
+        renderOutfitBlock();
+        updateNavState();
         updateLivePreview();
     };
 

@@ -292,44 +292,45 @@ export function deleteInjectionTemplate(id: string): void {
 
 // ─── 树形宏模板匹配规则方案存储 ──────────────────────────────────────────────
 
+// ─── 树形宏模板匹配规则方案存储 ──────────────────────────────────────────────
+
+const ACTIVE_MACRO_SCHEME_ID_KEY = 'st_da_active_macro_scheme_id_v1';
+
 export const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme = {
     id: 'default-macro-tree-v1',
-    name: 'Wai/Standard 2层树形宏匹配默认预设',
+    name: 'Wai/Standard 默认匹配方案',
     isDefault: true,
     characterFixedVariables: ['nameEN', 'characterTraits'],
-    outfitFixedVariables: ['nameEN'],
-    characterTemplate: '{nameEN}, {facial}, {upperBody}, {fullBody}, {traits}',
-    outfitTemplate: '{nameEN}, {upperBody}, {fullBody}',
-    rootNodes: [
+    characterRootNodes: [
         {
-            id: 'node-behind',
-            name: '背面视角路由分支',
+            id: 'node-char-behind',
+            name: '背面视角路由',
             pattern: '-from_behind',
             enabled: true,
             children: [
                 {
-                    id: 'node-behind-upper-sfw',
+                    id: 'node-char-behind-upper-sfw',
                     name: '背面 SFW 上半身',
                     pattern: '-sfw-upperbody',
                     enabled: true,
                     variables: ['facialFeaturesBack', 'upperBodySFWBack']
                 },
                 {
-                    id: 'node-behind-upper-nsfw',
+                    id: 'node-char-behind-upper-nsfw',
                     name: '背面 NSFW 上半身',
                     pattern: '-nsfw-upperbody',
                     enabled: true,
                     variables: ['facialFeaturesBack', 'upperBodyNSFWBack']
                 },
                 {
-                    id: 'node-behind-lower-sfw',
+                    id: 'node-char-behind-lower-sfw',
                     name: '背面 SFW 下半身',
                     pattern: '-sfw-lowerbody',
                     enabled: true,
                     variables: ['fullBodySFWBack']
                 },
                 {
-                    id: 'node-behind-lower-nsfw',
+                    id: 'node-char-behind-lower-nsfw',
                     name: '背面 NSFW 下半身',
                     pattern: '-nsfw-lowerbody',
                     enabled: true,
@@ -338,55 +339,172 @@ export const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme = {
             ]
         },
         {
-            id: 'node-front-upper-sfw',
+            id: 'node-char-front-upper-sfw',
             name: '正面 SFW 上半身',
             pattern: '-sfw-upperbody',
             enabled: true,
             variables: ['facialFeatures', 'upperBodySFW']
         },
         {
-            id: 'node-front-upper-nsfw',
+            id: 'node-char-front-upper-nsfw',
             name: '正面 NSFW 上半身',
             pattern: '-nsfw-upperbody',
             enabled: true,
             variables: ['facialFeatures', 'upperBodyNSFW']
         },
         {
-            id: 'node-front-lower-sfw',
+            id: 'node-char-front-lower-sfw',
             name: '正面 SFW 下半身',
             pattern: '-sfw-lowerbody',
             enabled: true,
             variables: ['fullBodySFW']
         },
         {
-            id: 'node-front-lower-nsfw',
+            id: 'node-char-front-lower-nsfw',
             name: '正面 NSFW 下半身',
             pattern: '-nsfw-lowerbody',
             enabled: true,
             variables: ['fullBodyNSFW']
         }
+    ],
+    outfitFixedVariables: ['nameEN'],
+    outfitRootNodes: [
+        {
+            id: 'node-outfit-behind',
+            name: '背面视角路由',
+            pattern: '-from_behind',
+            enabled: true,
+            children: [
+                {
+                    id: 'node-outfit-behind-upper',
+                    name: '背面服装上半身',
+                    pattern: '-upperbody',
+                    enabled: true,
+                    variables: ['upperBodyBack']
+                },
+                {
+                    id: 'node-outfit-behind-full',
+                    name: '背面服装全身',
+                    pattern: '-lowerbody',
+                    enabled: true,
+                    variables: ['fullBodyBack']
+                }
+            ]
+        },
+        {
+            id: 'node-outfit-front-upper',
+            name: '正面服装上半身',
+            pattern: '-upperbody',
+            enabled: true,
+            variables: ['upperBody']
+        },
+        {
+            id: 'node-outfit-front-full',
+            name: '正面服装全身',
+            pattern: '-lowerbody',
+            enabled: true,
+            variables: ['fullBody']
+        }
     ]
 };
 
-export function getMacroTreeScheme(): MacroTreeScheme {
+export function getMacroTreeSchemes(): MacroTreeScheme[] {
     try {
         const raw = localStorage.getItem(MACRO_TREE_SCHEME_KEY);
         if (!raw) {
-            saveMacroTreeScheme(DEFAULT_MACRO_TREE_SCHEME);
-            return DEFAULT_MACRO_TREE_SCHEME;
+            saveMacroTreeSchemes([DEFAULT_MACRO_TREE_SCHEME]);
+            return [DEFAULT_MACRO_TREE_SCHEME];
         }
-        const scheme = JSON.parse(raw) as MacroTreeScheme;
-        return scheme || DEFAULT_MACRO_TREE_SCHEME;
+        const list = JSON.parse(raw) as MacroTreeScheme[];
+        if (!list || list.length === 0) {
+            saveMacroTreeSchemes([DEFAULT_MACRO_TREE_SCHEME]);
+            return [DEFAULT_MACRO_TREE_SCHEME];
+        }
+        // 保证默认预设始终存在
+        if (!list.some(s => s.id === DEFAULT_MACRO_TREE_SCHEME.id)) {
+            list.unshift(DEFAULT_MACRO_TREE_SCHEME);
+        }
+        return list;
     } catch {
-        return DEFAULT_MACRO_TREE_SCHEME;
+        return [DEFAULT_MACRO_TREE_SCHEME];
     }
 }
 
+export function saveMacroTreeSchemes(schemes: MacroTreeScheme[]): void {
+    localStorage.setItem(MACRO_TREE_SCHEME_KEY, JSON.stringify(schemes));
+}
+
+export function getActiveMacroTreeSchemeId(): string {
+    return localStorage.getItem(ACTIVE_MACRO_SCHEME_ID_KEY) || DEFAULT_MACRO_TREE_SCHEME.id;
+}
+
+export function setActiveMacroTreeSchemeId(id: string): void {
+    localStorage.setItem(ACTIVE_MACRO_SCHEME_ID_KEY, id);
+}
+
+export function getActiveMacroTreeScheme(): MacroTreeScheme {
+    const list = getMacroTreeSchemes();
+    const activeId = getActiveMacroTreeSchemeId();
+    const found = list.find(s => s.id === activeId);
+    return found || list[0] || DEFAULT_MACRO_TREE_SCHEME;
+}
+
+export function getMacroTreeScheme(): MacroTreeScheme {
+    return getActiveMacroTreeScheme();
+}
+
 export function saveMacroTreeScheme(scheme: MacroTreeScheme): void {
-    localStorage.setItem(MACRO_TREE_SCHEME_KEY, JSON.stringify(scheme));
+    const list = getMacroTreeSchemes();
+    const idx = list.findIndex(s => s.id === scheme.id);
+    if (idx >= 0) {
+        list[idx] = scheme;
+    } else {
+        list.push(scheme);
+    }
+    saveMacroTreeSchemes(list);
+    setActiveMacroTreeSchemeId(scheme.id);
+}
+
+export function upsertMacroTreeScheme(scheme: MacroTreeScheme): void {
+    saveMacroTreeScheme(scheme);
+}
+
+export function deleteMacroTreeScheme(id: string): void {
+    let list = getMacroTreeSchemes();
+    if (id === DEFAULT_MACRO_TREE_SCHEME.id) return; // 默认方案不可删除
+    list = list.filter(s => s.id !== id);
+    saveMacroTreeSchemes(list);
+    if (getActiveMacroTreeSchemeId() === id) {
+        setActiveMacroTreeSchemeId(DEFAULT_MACRO_TREE_SCHEME.id);
+    }
+}
+
+export function exportMacroTreeScheme(id?: string): string {
+    const targetId = id || getActiveMacroTreeSchemeId();
+    const list = getMacroTreeSchemes();
+    const scheme = list.find(s => s.id === targetId) || getActiveMacroTreeScheme();
+    return JSON.stringify(scheme, null, 2);
+}
+
+export function importMacroTreeScheme(jsonStr: string): MacroTreeScheme {
+    const parsed = JSON.parse(jsonStr) as MacroTreeScheme;
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error('格式无效：非合法的 JSON 对象');
+    }
+    const newId = `imported-macro-scheme-${Date.now()}`;
+    const newScheme: MacroTreeScheme = {
+        ...parsed,
+        id: newId,
+        name: parsed.name ? `${parsed.name} (导入)` : `导入方案 ${new Date().toLocaleTimeString()}`,
+        isDefault: false
+    };
+    upsertMacroTreeScheme(newScheme);
+    setActiveMacroTreeSchemeId(newId);
+    return newScheme;
 }
 
 export function resetMacroTreeScheme(): MacroTreeScheme {
-    saveMacroTreeScheme(DEFAULT_MACRO_TREE_SCHEME);
+    saveMacroTreeSchemes([DEFAULT_MACRO_TREE_SCHEME]);
+    setActiveMacroTreeSchemeId(DEFAULT_MACRO_TREE_SCHEME.id);
     return DEFAULT_MACRO_TREE_SCHEME;
 }

@@ -24,7 +24,16 @@ export declare function getInjectionTemplateById(id: string): InjectionTemplateS
 export declare function upsertInjectionTemplate(template: InjectionTemplateScheme): void;
 export declare function deleteInjectionTemplate(id: string): void;
 export declare const DEFAULT_MACRO_TREE_SCHEME: MacroTreeScheme;
+export declare function getMacroTreeSchemes(): MacroTreeScheme[];
+export declare function saveMacroTreeSchemes(schemes: MacroTreeScheme[]): void;
+export declare function getActiveMacroTreeSchemeId(): string;
+export declare function setActiveMacroTreeSchemeId(id: string): void;
+export declare function getActiveMacroTreeScheme(): MacroTreeScheme;
 export declare function getMacroTreeScheme(): MacroTreeScheme;
 export declare function saveMacroTreeScheme(scheme: MacroTreeScheme): void;
+export declare function upsertMacroTreeScheme(scheme: MacroTreeScheme): void;
+export declare function deleteMacroTreeScheme(id: string): void;
+export declare function exportMacroTreeScheme(id?: string): string;
+export declare function importMacroTreeScheme(jsonStr: string): MacroTreeScheme;
 export declare function resetMacroTreeScheme(): MacroTreeScheme;
 //# sourceMappingURL=character-store.d.ts.map

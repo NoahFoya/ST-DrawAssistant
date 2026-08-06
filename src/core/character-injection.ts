@@ -907,7 +907,8 @@ export function processCharacterPrompt(promptText: string): string {
         const lowerContent = rawContent.toLowerCase();
 
         // 收集规则树中的所有关键词用于名字切割剥离
-        const collectPatterns = (nodes: MacroRuleNode[]): string[] => {
+        const collectPatterns = (nodes?: MacroRuleNode[]): string[] => {
+            if (!Array.isArray(nodes)) return [];
             let res: string[] = [];
             for (const n of nodes) {
                 if (n.pattern) res.push(n.pattern);
@@ -916,7 +917,14 @@ export function processCharacterPrompt(promptText: string): string {
             return res;
         };
 
-        const suffixes = collectPatterns(treeScheme.rootNodes);
+        const charNodes = treeScheme.characterRootNodes || treeScheme.rootNodes || [];
+        const outfitNodes = treeScheme.outfitRootNodes || treeScheme.rootNodes || [];
+
+        const suffixes = Array.from(new Set([
+            ...collectPatterns(charNodes),
+            ...collectPatterns(outfitNodes)
+        ]));
+
         let normName = rawContent;
         for (const s of suffixes) {
             const idx = normName.toLowerCase().lastIndexOf(s.toLowerCase());
@@ -940,7 +948,7 @@ export function processCharacterPrompt(promptText: string): string {
         if (matchedChar) {
             const collectedTags: string[] = [];
 
-            // 【Step 2：先处理固定注入内容 (Fixed Injections FIRST)】
+            // 【Step 2：先处理固定匹配内容 (Fixed Injections FIRST)】
             const fixedVars = treeScheme.characterFixedVariables || ['nameEN', 'characterTraits'];
             for (const fVar of fixedVars) {
                 const fVal = resolveVarValue(fVar, matchedChar);
@@ -949,8 +957,8 @@ export function processCharacterPrompt(promptText: string): string {
                 }
             }
 
-            // 【Step 3：再处理条件分支内容 (Conditional Branch Injections SECOND)】
-            evaluate2LevelNodes(treeScheme.rootNodes, lowerContent, matchedChar, collectedTags);
+            // 【Step 3：再处理角色条件分支内容 (Conditional Branch Injections SECOND)】
+            evaluate2LevelNodes(charNodes, lowerContent, matchedChar, collectedTags);
 
             return collectedTags.join(', ');
         }
@@ -967,7 +975,7 @@ export function processCharacterPrompt(promptText: string): string {
         if (matchedOutfit) {
             const collectedTags: string[] = [];
 
-            // 【Step 2：先处理固定注入内容 (Fixed Injections FIRST)】
+            // 【Step 2：先处理固定匹配内容 (Fixed Injections FIRST)】
             const fixedVars = treeScheme.outfitFixedVariables || ['nameEN'];
             for (const fVar of fixedVars) {
                 const fVal = resolveVarValue(fVar, matchedOutfit);
@@ -976,8 +984,8 @@ export function processCharacterPrompt(promptText: string): string {
                 }
             }
 
-            // 【Step 3：再处理条件分支内容 (Conditional Branch Injections SECOND)】
-            evaluate2LevelNodes(treeScheme.rootNodes, lowerContent, matchedOutfit, collectedTags);
+            // 【Step 3：再处理服装条件分支内容 (Conditional Branch Injections SECOND)】
+            evaluate2LevelNodes(outfitNodes, lowerContent, matchedOutfit, collectedTags);
 
             return collectedTags.join(', ');
         }
