@@ -81,7 +81,8 @@ export function renderCharacterTab(): HTMLElement {
         { id: 'ch-sub-tab-character-settings', label: '角色设定', active: true },
         { id: 'ch-sub-tab-outfit-settings', label: '服装设定', active: false },
         { id: 'ch-sub-tab-character-enable', label: '设定启用管理', active: false },
-        { id: 'ch-sub-tab-injection-templates', label: '注入模板管理', active: false }
+        { id: 'ch-sub-tab-injection-templates', label: '注入模板管理', active: false },
+        { id: 'ch-sub-tab-macro-rules', label: '宏模板匹配规则', active: false }
     ];
 
     subTabs.forEach(st => {
@@ -133,6 +134,13 @@ export function renderCharacterTab(): HTMLElement {
     pane4.className = 'da-sub-tab-content';
     pane4.style.display = 'none';
     container.appendChild(pane4);
+
+    // 6. 子界面 5：宏模板匹配规则 (`#ch-sub-tab-macro-rules`)
+    const pane5 = renderMacroRulesPane();
+    pane5.id = 'ch-sub-tab-macro-rules';
+    pane5.className = 'da-sub-tab-content';
+    pane5.style.display = 'none';
+    container.appendChild(pane5);
 
     return container;
 }
@@ -1983,4 +1991,66 @@ function createTextareaInput(label: string, id: string, value: string): { wrappe
     wrapper.appendChild(lbl);
     wrapper.appendChild(textarea);
     return { wrapper, textarea };
+}
+
+/**
+ * 渲染子界面 5：宏模板匹配规则内容
+ */
+function renderMacroRulesPane(): HTMLElement {
+    const root = document.createElement('div');
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '16px';
+
+    const card = document.createElement('div');
+    card.className = 'da-section-card';
+    card.style.background = 'var(--da-bg-secondary, rgba(255,255,255,0.03))';
+    card.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
+    card.style.borderRadius = '8px';
+    card.style.padding = '16px';
+
+    const title = document.createElement('h3');
+    title.style.margin = '0 0 12px 0';
+    title.style.fontSize = '1em';
+    title.style.color = 'var(--da-primary-color, #a855f7)';
+    title.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 绘画 Tag 动态标记与宏解包匹配规则';
+
+    const tip = document.createElement('p');
+    tip.style.fontSize = '0.85em';
+    tip.style.opacity = '0.8';
+    tip.style.lineHeight = '1.5';
+    tip.style.margin = '0 0 16px 0';
+    tip.textContent = '此处的宏匹配规则专用于生图路径中从 AI 消息/楼层词中解析 $角色/服装$ 动态标记，独立于世界书注入路径与绑定方案。';
+
+    const rulesList = document.createElement('div');
+    rulesList.style.display = 'flex';
+    rulesList.style.flexDirection = 'column';
+    rulesList.style.gap = '12px';
+    rulesList.style.fontSize = '0.88em';
+
+    rulesList.innerHTML = `
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">🏷️ 旧格式角色/服装标记语法</div>
+            <div style="font-family: monospace; font-size: 0.9em; opacity: 0.9;">$角色名-视角-sfw-upperBody-sfw-lowerBody$</div>
+            <div style="font-size: 0.82em; opacity: 0.75; margin-top: 4px;">例如：<code>$rikka_takarada-from_front-sfw-upperBody-sfw-lowerBody$</code> 或 <code>$rikka_takarada_default_uniform-upperBody-lowerBody$</code></div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">⚙️ JSON 结构化标记语法</div>
+            <div style="font-family: monospace; font-size: 0.9em; opacity: 0.9;">\${"name":"角色名","angle":"from front","upperBody":"sfw"}\$</div>
+            <div style="font-size: 0.82em; opacity: 0.75; margin-top: 4px;">自动提取 JSON 中的 name 字段匹配实体 Tag，忽略多余参数。</div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+            <div style="font-weight: bold; color: var(--da-primary-color, #c084fc); margin-bottom: 6px;">⚡ 生图多段拼接优先规则</div>
+            <div style="font-size: 0.85em; opacity: 0.85; line-height: 1.5;">系统在多段拼接 (模型前缀 + 全局前缀 + 楼层词 + 全局后缀 + LoRA) 之前，优先完成 $...$ 动态标记解包，确保前缀后缀不干扰实体正则提取，并且出图元数据中将保存最终完整的提示词！</div>
+        </div>
+    `;
+
+    card.appendChild(title);
+    card.appendChild(tip);
+    card.appendChild(rulesList);
+    root.appendChild(card);
+
+    return root;
 }
