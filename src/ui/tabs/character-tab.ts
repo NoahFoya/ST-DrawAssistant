@@ -23,6 +23,7 @@ import {
 } from '../../storage/character-store';
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme, InjectionMatchRule } from '../../types/character';
 import { checkCharacterCardConflict } from '../../core/character-event-listener';
+import { updateGlobalWorldbookPlaceholders } from '../../core/character-injection';
 
 /**
  * 简易 Token 计算辅助函数（基于逗号分割的 tag 粗估）
@@ -1464,12 +1465,14 @@ function renderCharacterEnablePane(): HTMLElement {
         currentScheme.outfitRules = cleanOutfitRules;
 
         upsertEnableScheme(currentScheme);
+        updateGlobalWorldbookPlaceholders();
     };
 
     const populateForm = (scheme: EnableSchemeProfile) => {
         currentScheme = scheme;
         cardBindInput.value = scheme.boundCharacterCards || '';
         renderRulesLists();
+        updateGlobalWorldbookPlaceholders();
     };
 
     selectEl.addEventListener('change', () => {

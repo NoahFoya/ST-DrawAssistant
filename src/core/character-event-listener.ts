@@ -5,6 +5,7 @@
 
 import { getEventBus } from './context';
 import { getEnableSchemes } from '../storage/character-store';
+import { updateGlobalWorldbookPlaceholders } from './character-injection';
 import { logger } from './logger';
 
 /** 跟踪已提示过的角色卡集合，避免重复弹窗打扰 */
@@ -40,7 +41,7 @@ export function checkCharacterCardConflict(lineEntry: string, currentSchemeId: s
 }
 
 /**
- * 监听新角色卡切换事件
+ * 监听新角色卡切换事件与全局世界书预发送文本刷新
  */
 export function registerCharacterEventListeners(): void {
     try {
@@ -48,6 +49,10 @@ export function registerCharacterEventListeners(): void {
 
         const handleChatChanged = () => {
             try {
+                // 1. 动态刷新全局世界书预发送文本视窗中的 {{角色启用列表}} 与 {{服装启用列表}}
+                updateGlobalWorldbookPlaceholders();
+
+                // 2. 检测活动角色卡绑定方案
                 const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
                 const stCtx = win.SillyTavern?.getContext?.();
                 const name2 = stCtx?.name2;
@@ -93,11 +98,20 @@ export function registerCharacterEventListeners(): void {
             }
         };
 
+        const handleMessageSent = (...args: unknown[]) => {
+            const data = args[0] as { message?: { content?: string } } | undefined;
+            updateGlobalWorldbookPlaceholders(data?.message?.content);
+        };
+
+        eventSource.on(event_types.APP_READY || 'app_ready', handleChatChanged);
         eventSource.on(event_types.CHAT_CHANGED || 'chat_changed', handleChatChanged);
         eventSource.on(event_types.CHARACTER_SELECTED || 'character_selected', handleChatChanged);
+        eventSource.on(event_types.MESSAGE_SENT || 'message_sent', handleMessageSent);
+        eventSource.on(event_types.MESSAGE_RECEIVED || 'message_received', handleChatChanged);
 
-        logger.info('[CharacterEventListener] 宿主事件监听与智能检测注册就绪');
+        logger.info('[CharacterEventListener] 宿主事件监听与全局世界书预发送文本刷新就绪');
     } catch (err) {
         logger.warn('[CharacterEventListener] 注册宿主事件监听失败:', err);
     }
 }
+

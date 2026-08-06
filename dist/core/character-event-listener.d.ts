@@ -7,7 +7,7 @@
  */
 export declare function checkCharacterCardConflict(lineEntry: string, currentSchemeId: string): string | null;
 /**
- * 监听新角色卡切换事件
+ * 监听新角色卡切换事件与全局世界书预发送文本刷新
  */
 export declare function registerCharacterEventListeners(): void;
 //# sourceMappingURL=character-event-listener.d.ts.map

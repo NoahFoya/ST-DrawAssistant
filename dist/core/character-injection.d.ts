@@ -41,4 +41,9 @@ export declare function renderCharacterAndOutfitInjection(textContent: string): 
  * 在 Prompt / 文本中容错替换角色与服装占位符
  */
 export declare function injectCharacterPlaceholders(promptText: string, textContent?: string): string;
+/**
+ * 动态刷新全局世界书 (window.world_info) 中的 {{角色启用列表}} 与 {{服装启用列表}} 占位符
+ * 使酒馆原生的 Prompt 预发送视窗 (Inspect Prompt / 提示词预览) 能够直接展示解包渲染后的最新 Tag 实体
+ */
+export declare function updateGlobalWorldbookPlaceholders(textContent?: string): void;
 //# sourceMappingURL=character-injection.d.ts.map

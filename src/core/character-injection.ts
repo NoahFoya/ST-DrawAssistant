@@ -277,3 +277,42 @@ export function injectCharacterPlaceholders(promptText: string, textContent?: st
 
     return result;
 }
+
+/**
+ * 动态刷新全局世界书 (window.world_info) 中的 {{角色启用列表}} 与 {{服装启用列表}} 占位符
+ * 使酒馆原生的 Prompt 预发送视窗 (Inspect Prompt / 提示词预览) 能够直接展示解包渲染后的最新 Tag 实体
+ */
+export function updateGlobalWorldbookPlaceholders(textContent?: string): void {
+    try {
+        const win = window as unknown as {
+            world_info?: { entries?: Record<string, { content?: string; _rawContent?: string }> };
+            world_info_data?: { entries?: Record<string, { content?: string; _rawContent?: string }> };
+        };
+        const wiEntries = win.world_info?.entries || win.world_info_data?.entries;
+        if (!wiEntries) return;
+
+        const { characterListText, outfitListText } = renderCharacterAndOutfitInjection(textContent || '');
+
+        const charRegex = /{{(角色启用列表|角色列表|通用角色启用列表)}}/gi;
+        const outfitRegex = /{{(服装启用列表|服装列表|通用服装启用列表)}}/gi;
+
+        Object.values(wiEntries).forEach(entry => {
+            if (!entry) return;
+            if (typeof entry._rawContent === 'undefined') {
+                entry._rawContent = entry.content || '';
+            }
+
+            const raw = entry._rawContent;
+            if (charRegex.test(raw) || outfitRegex.test(raw)) {
+                let updated = raw.replace(charRegex, characterListText);
+                updated = updated.replace(outfitRegex, outfitListText);
+                entry.content = cleanRenderedText(updated);
+            }
+        });
+
+        logger.debug('[CharacterInjection] 动态刷新全局世界书预发送文本缓冲区成功');
+    } catch (err) {
+        logger.warn('[CharacterInjection] 动态刷新全局世界书失败:', err);
+    }
+}
+
