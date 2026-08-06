@@ -26,12 +26,12 @@ import { getContext } from './context';
 import { logger } from './logger';
 
 /**
- * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案)
+ * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案，无匹配或未选中角色卡时返回 null)
  */
-export function resolveActiveEnableScheme(characterCardName?: string, chatId?: string): EnableSchemeProfile {
+export function resolveActiveEnableScheme(characterCardName?: string, chatId?: string): EnableSchemeProfile | null {
     const schemes = getEnableSchemes();
     if (schemes.length === 0) {
-        throw new Error('[ST-DrawAssistant] 未在系统中发现任何设定启用方案');
+        return null;
     }
 
     let targetCard = characterCardName;
@@ -40,52 +40,60 @@ export function resolveActiveEnableScheme(characterCardName?: string, chatId?: s
     if (!targetCard) {
         try {
             const ctx = getContext();
-            const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
+            const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string; characterId?: number } } };
             const stCtx = win.SillyTavern?.getContext?.();
+            const charId = stCtx?.characterId ?? (ctx as unknown as { characterId?: number })?.characterId;
+
+            // 未选择任何角色卡（characterId 未定义或无效）时直接返回 null
+            if (typeof charId === 'undefined' || charId < 0) {
+                return null;
+            }
+
             targetCard = stCtx?.name2 || (ctx as unknown as { name2?: string })?.name2 || '';
             targetChatId = targetChatId || stCtx?.chatId || (ctx as unknown as { chatId?: string })?.chatId || '';
         } catch {
-            targetCard = '';
+            return null;
         }
     }
 
-    if (targetCard && targetCard.trim()) {
-        const normTargetCard = targetCard.trim().toLowerCase();
-        const normTargetChatId = (targetChatId || '').trim();
-
-        const matched = schemes.find(s => {
-            if (!s.boundCharacterCards) return false;
-            const lines = s.boundCharacterCards
-                .split('\n')
-                .map(l => l.trim())
-                .filter(Boolean);
-
-            for (const line of lines) {
-                if (line.includes('|')) {
-                    const [card, cid] = line.split('|').map(p => p.trim());
-                    if (card.toLowerCase() === normTargetCard && cid === normTargetChatId) {
-                        return true;
-                    }
-                } else if (line.toLowerCase() === normTargetCard) {
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        if (matched) return matched;
+    if (!targetCard || !targetCard.trim()) {
+        return null;
     }
 
-    return schemes[0];
+    const normTargetCard = targetCard.trim().toLowerCase();
+    const normTargetChatId = (targetChatId || '').trim();
+
+    const matched = schemes.find(s => {
+        if (!s.boundCharacterCards) return false;
+        const lines = s.boundCharacterCards
+            .split('\n')
+            .map(l => l.trim())
+            .filter(Boolean);
+
+        for (const line of lines) {
+            if (line.includes('|')) {
+                const [card, cid] = line.split('|').map(p => p.trim());
+                if (card.toLowerCase() === normTargetCard && cid === normTargetChatId) {
+                    return true;
+                }
+            } else if (line.toLowerCase() === normTargetCard) {
+                return true;
+            }
+        }
+        return false;
+    });
+
+    return matched || null;
 }
 
 /**
  * 筛选符合规则且启用的角色实体 (仅当 rule.enabled === true 时为启用)
  */
 export function filterEnabledCharacters(
-    scheme: EnableSchemeProfile,
+    scheme: EnableSchemeProfile | null,
     textContent: string
 ): CharacterProfile[] {
+    if (!scheme) return [];
     const allChars = getCharacterProfiles();
     const rules = scheme.characterRules || {};
     const normText = (textContent || '').toLowerCase();
@@ -116,9 +124,10 @@ export function filterEnabledCharacters(
  * 筛选符合规则且启用的通用服装实体 (仅当 rule.enabled === true 时为启用)
  */
 export function filterEnabledOutfits(
-    scheme: EnableSchemeProfile,
+    scheme: EnableSchemeProfile | null,
     textContent: string
 ): OutfitProfile[] {
+    if (!scheme) return [];
     const allOutfits = getOutfitProfiles();
     const rules = scheme.outfitRules || {};
     const normText = (textContent || '').toLowerCase();
@@ -131,8 +140,14 @@ export function filterEnabledOutfits(
         if (rule === 'ALL') return true;
 
         // match 规则：检索服装中文名或英文名
-        if (outfit.nameCN && normText.includes(outfit.nameCN.trim().toLowerCase())) return true;
-        if (outfit.nameEN && normText.includes(outfit.nameEN.trim().toLowerCase())) return true;
+        if (outfit.nameCN) {
+            const aliasesCN = outfit.nameCN.split('|').map(a => a.trim().toLowerCase()).filter(Boolean);
+            if (aliasesCN.some(alias => normText.includes(alias))) return true;
+        }
+        if (outfit.nameEN) {
+            const aliasesEN = outfit.nameEN.split('|').map(a => a.trim().toLowerCase()).filter(Boolean);
+            if (aliasesEN.some(alias => normText.includes(alias))) return true;
+        }
 
         return false;
     });
@@ -143,37 +158,31 @@ export function filterEnabledOutfits(
  */
 export function resolveInnerOutfits(
     char: CharacterProfile,
-    templateScheme: InjectionTemplateScheme
+    tplScheme: InjectionTemplateScheme
 ): string {
-    if (!char.outfitList || char.outfitList.length === 0) return '';
-    const innerTpl = templateScheme.innerOutfitTemplate || '';
-    if (!innerTpl.trim()) return '';
+    const activeOutfits = char.outfitList || [];
+    const innerTpl = tplScheme.innerOutfitTemplate || '';
 
     const allOutfits = getOutfitProfiles();
-    const renderedLines: string[] = [];
-
-    char.outfitList.forEach(outfitName => {
-        const nameTrim = outfitName.trim().toLowerCase();
-        const matchedOutfit = allOutfits.find(o =>
-            (o.nameCN && o.nameCN.trim().toLowerCase() === nameTrim) ||
-            (o.nameEN && o.nameEN.trim().toLowerCase() === nameTrim)
+    const renderedList = activeOutfits.map(outfitName => {
+        const outfit = allOutfits.find(o => 
+            (o.nameCN && o.nameCN.toLowerCase() === outfitName.toLowerCase()) ||
+            (o.nameEN && o.nameEN.toLowerCase() === outfitName.toLowerCase())
         );
+        if (!outfit) return '';
 
-        if (matchedOutfit) {
-            const line = innerTpl
-                .replace(/{nameCN}/g, matchedOutfit.nameCN || '')
-                .replace(/{nameEN}/g, matchedOutfit.nameEN || '')
-                .replace(/{upperBody}/g, matchedOutfit.upperBody || '')
-                .replace(/{upperBodyBack}/g, matchedOutfit.upperBodyBack || '')
-                .replace(/{fullBody}/g, matchedOutfit.fullBody || '')
-                .replace(/{lowerBody}/g, matchedOutfit.fullBody || '')
-                .replace(/{fullBodyBack}/g, matchedOutfit.fullBodyBack || '')
-                .replace(/{lowerBodyBack}/g, matchedOutfit.fullBodyBack || '');
-            renderedLines.push(line);
-        }
+        return innerTpl
+            .replace(/{nameCN}/g, outfit.nameCN || '')
+            .replace(/{nameEN}/g, outfit.nameEN || '')
+            .replace(/{upperBody}/g, outfit.upperBody || '')
+            .replace(/{upperBodyBack}/g, outfit.upperBodyBack || '')
+            .replace(/{fullBody}/g, outfit.fullBody || '')
+            .replace(/{lowerBody}/g, outfit.fullBody || '')
+            .replace(/{fullBodyBack}/g, outfit.fullBodyBack || '')
+            .replace(/{lowerBodyBack}/g, outfit.fullBodyBack || '');
     });
 
-    return renderedLines.join('\n');
+    return renderedList.map(t => cleanRenderedText(t)).filter(Boolean).join('\n');
 }
 
 /**
@@ -197,7 +206,14 @@ export function renderCharacterAndOutfitInjection(textContent: string): {
     outfitListText: string;
 } {
     const scheme = resolveActiveEnableScheme();
+    if (!scheme) {
+        return { characterListText: '', outfitListText: '' };
+    }
+
     const tplScheme = getInjectionTemplates()[0];
+    if (!tplScheme) {
+        return { characterListText: '', outfitListText: '' };
+    }
 
     const activeChars = filterEnabledCharacters(scheme, textContent);
     const activeOutfits = filterEnabledOutfits(scheme, textContent);
@@ -250,7 +266,7 @@ export function renderCharacterAndOutfitInjection(textContent: string): {
     const outfitListText = outfitRenderedList.filter(Boolean).join('\n\n');
 
     logger.debug('[CharacterInjection] 动态解析结果:', {
-        scheme: scheme.name,
+        scheme: scheme ? scheme.name : '无绑定方案',
         matchedChars: activeChars.map(c => c.nameCN),
         matchedOutfits: activeOutfits.map(o => o.nameCN)
     });

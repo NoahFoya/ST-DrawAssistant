@@ -11,21 +11,21 @@
  */
 import type { CharacterProfile, OutfitProfile, EnableSchemeProfile, InjectionTemplateScheme } from '../types/character';
 /**
- * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案)
+ * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案，无匹配或未选中角色卡时返回 null)
  */
-export declare function resolveActiveEnableScheme(characterCardName?: string, chatId?: string): EnableSchemeProfile;
+export declare function resolveActiveEnableScheme(characterCardName?: string, chatId?: string): EnableSchemeProfile | null;
 /**
  * 筛选符合规则且启用的角色实体 (仅当 rule.enabled === true 时为启用)
  */
-export declare function filterEnabledCharacters(scheme: EnableSchemeProfile, textContent: string): CharacterProfile[];
+export declare function filterEnabledCharacters(scheme: EnableSchemeProfile | null, textContent: string): CharacterProfile[];
 /**
  * 筛选符合规则且启用的通用服装实体 (仅当 rule.enabled === true 时为启用)
  */
-export declare function filterEnabledOutfits(scheme: EnableSchemeProfile, textContent: string): OutfitProfile[];
+export declare function filterEnabledOutfits(scheme: EnableSchemeProfile | null, textContent: string): OutfitProfile[];
 /**
  * 展开角色专属服装列表 {outfits}
  */
-export declare function resolveInnerOutfits(char: CharacterProfile, templateScheme: InjectionTemplateScheme): string;
+export declare function resolveInnerOutfits(char: CharacterProfile, tplScheme: InjectionTemplateScheme): string;
 /**
  * 清洗模板渲染后的多余空行与全空占位符行
  */
