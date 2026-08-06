@@ -1150,22 +1150,26 @@ function renderCharacterEnablePane(): HTMLElement {
     btnGetCardName.innerHTML = '<i class="fa-solid fa-plus"></i> 追加当前角色卡';
 
     btnGetCardName.addEventListener('click', () => {
-        const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
-        const name2 = win.SillyTavern?.getContext?.()?.name2;
+        const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
+        const stCtx = win.SillyTavern?.getContext?.();
+        const name2 = stCtx?.name2;
+        const chatId = stCtx?.chatId || '';
+
         if (name2) {
+            const entry = chatId ? `${name2}|${chatId}` : name2;
             const existingLines = cardBindInput.value.split('\n').map(l => l.trim()).filter(Boolean);
-            if (existingLines.includes(name2)) {
-                alert(`ℹ️ 当前角色卡 "${name2}" 已存在于绑定列表中`);
+            if (existingLines.includes(entry) || existingLines.includes(name2)) {
+                alert(`ℹ️ 当前角色卡 "${entry}" 已存在于绑定列表中`);
                 return;
             }
-            existingLines.push(name2);
+            existingLines.push(entry);
             cardBindInput.value = existingLines.join('\n');
 
-            const conflictScheme = checkCharacterCardConflict(name2, currentScheme.id);
+            const conflictScheme = checkCharacterCardConflict(entry, currentScheme.id);
             if (conflictScheme) {
-                alert(`🎯 已追加当前角色卡: "${name2}"\n⚠️ 注意：该角色卡原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
+                alert(`🎯 已追加当前角色卡: "${entry}"\n⚠️ 注意：该角色卡原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
             } else {
-                alert(`🎯 已追加当前酒馆角色卡名称: "${name2}"`);
+                alert(`🎯 已追加当前酒馆角色卡: "${entry}"`);
             }
         } else {
             alert('ℹ️ 未检测到活动的酒馆角色卡或当前不在聊天视窗中');
@@ -1187,7 +1191,7 @@ function renderCharacterEnablePane(): HTMLElement {
     const chatBindLabel = document.createElement('label');
     chatBindLabel.style.fontSize = '0.85em';
     chatBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
-    chatBindLabel.textContent = '绑定聊天记录 ID (多方案绑定同一角色卡时，指定特定的 chatId 进行独立分流)';
+    chatBindLabel.textContent = '绑定聊天记录 ID (多方案绑定同一角色卡时，可使用 [角色卡|chatId] 格式或在此指定)';
 
     const chatBindSubRow = document.createElement('div');
     chatBindSubRow.style.display = 'flex';
@@ -1276,7 +1280,8 @@ function renderCharacterEnablePane(): HTMLElement {
             characterRulesContainer.innerHTML = '<div style="color:#888; font-size:0.85em;">暂无保存的角色预设</div>';
         } else {
             allChars.forEach(char => {
-                const ruleConfig = currentScheme.characterRules[char.id] || { enabled: true, rule: 'ALL' };
+                // 默认策略：若规则字典中未找到，则默认为 enabled: false (禁用)
+                const ruleConfig = currentScheme.characterRules[char.id] || { enabled: false, rule: 'ALL' };
 
                 const row = document.createElement('div');
                 row.style.display = 'flex';
@@ -1292,7 +1297,6 @@ function renderCharacterEnablePane(): HTMLElement {
                 left.style.alignItems = 'center';
                 left.style.gap = '10px';
 
-                // 统一风格的 da-btn 切换开关 (替代原生 checkbox)
                 const toggleBtn = document.createElement('button');
                 const updateToggleStyle = () => {
                     if (ruleConfig.enabled) {
@@ -1363,7 +1367,8 @@ function renderCharacterEnablePane(): HTMLElement {
             outfitRulesContainer.innerHTML = '<div style="color:#888; font-size:0.85em;">暂无保存的服装预设</div>';
         } else {
             allOutfits.forEach(outfit => {
-                const ruleConfig = currentScheme.outfitRules[outfit.id] || { enabled: true, rule: 'match' };
+                // 默认策略：若规则字典中未找到，则默认为 enabled: false (禁用)
+                const ruleConfig = currentScheme.outfitRules[outfit.id] || { enabled: false, rule: 'match' };
 
                 const row = document.createElement('div');
                 row.style.display = 'flex';
@@ -1379,7 +1384,6 @@ function renderCharacterEnablePane(): HTMLElement {
                 left.style.alignItems = 'center';
                 left.style.gap = '10px';
 
-                // 统一风格的 da-btn 切换开关 (替代原生 checkbox)
                 const toggleBtn = document.createElement('button');
                 const updateToggleStyle = () => {
                     if (ruleConfig.enabled) {
@@ -1450,6 +1454,24 @@ function renderCharacterEnablePane(): HTMLElement {
     const saveCurrentForm = () => {
         currentScheme.boundCharacterCards = cardBindInput.value;
         currentScheme.boundChatId = chatBindInput.value;
+
+        // 极简存储策略：只记录 enabled: true 的实体
+        const cleanCharRules: Record<string, { enabled: boolean; rule: InjectionMatchRule }> = {};
+        Object.entries(currentScheme.characterRules || {}).forEach(([id, cfg]) => {
+            if (cfg && cfg.enabled) {
+                cleanCharRules[id] = cfg;
+            }
+        });
+        currentScheme.characterRules = cleanCharRules;
+
+        const cleanOutfitRules: Record<string, { enabled: boolean; rule: InjectionMatchRule }> = {};
+        Object.entries(currentScheme.outfitRules || {}).forEach(([id, cfg]) => {
+            if (cfg && cfg.enabled) {
+                cleanOutfitRules[id] = cfg;
+            }
+        });
+        currentScheme.outfitRules = cleanOutfitRules;
+
         upsertEnableScheme(currentScheme);
     };
 

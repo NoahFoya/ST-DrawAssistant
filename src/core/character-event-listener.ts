@@ -11,24 +11,29 @@ import { logger } from './logger';
 const warnedCardNames = new Set<string>();
 
 /**
- * 校验指定角色卡名称是否已被其他方案关联（防冲突提醒）
+ * 校验指定角色卡名称/chatId 是否已被其他方案关联（防冲突提醒）
  */
-export function checkCharacterCardConflict(cardName: string, currentSchemeId: string): string | null {
-    if (!cardName || !cardName.trim()) return null;
-    const norm = cardName.trim().toLowerCase();
+export function checkCharacterCardConflict(lineEntry: string, currentSchemeId: string): string | null {
+    if (!lineEntry || !lineEntry.trim()) return null;
+
+    const normEntry = lineEntry.trim().toLowerCase();
+    const rawCardName = normEntry.includes('|') ? normEntry.split('|')[0].trim() : normEntry;
     const schemes = getEnableSchemes();
 
     for (const scheme of schemes) {
         if (scheme.id === currentSchemeId) continue;
         if (!scheme.boundCharacterCards) continue;
 
-        const boundNames = scheme.boundCharacterCards
-            .split(/,|\n/)
-            .map(c => c.trim().toLowerCase())
+        const boundLines = scheme.boundCharacterCards
+            .split('\n')
+            .map(l => l.trim().toLowerCase())
             .filter(Boolean);
 
-        if (boundNames.includes(norm)) {
-            return scheme.name;
+        for (const boundLine of boundLines) {
+            const cardNameInBound = boundLine.includes('|') ? boundLine.split('|')[0].trim() : boundLine;
+            if (cardNameInBound === rawCardName) {
+                return scheme.name;
+            }
         }
     }
     return null;
@@ -43,28 +48,42 @@ export function registerCharacterEventListeners(): void {
 
         const handleChatChanged = () => {
             try {
-                const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
-                const name2 = win.SillyTavern?.getContext?.()?.name2;
+                const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
+                const stCtx = win.SillyTavern?.getContext?.();
+                const name2 = stCtx?.name2;
+                const chatId = stCtx?.chatId || '';
+
                 if (!name2 || warnedCardNames.has(name2)) return;
 
-                const norm = name2.trim().toLowerCase();
+                const normCard = name2.trim().toLowerCase();
+                const normChat = chatId.trim();
                 const schemes = getEnableSchemes();
+
                 const hasMatch = schemes.some(s => {
                     if (!s.boundCharacterCards) return false;
-                    const cards = s.boundCharacterCards
-                        .split(/,|\n/)
-                        .map(c => c.trim().toLowerCase())
+                    const lines = s.boundCharacterCards
+                        .split('\n')
+                        .map(l => l.trim())
                         .filter(Boolean);
-                    return cards.includes(norm);
+
+                    for (const line of lines) {
+                        if (line.includes('|')) {
+                            const [c, cid] = line.split('|').map(p => p.trim());
+                            if (c.toLowerCase() === normCard && cid === normChat) return true;
+                        } else if (line.toLowerCase() === normCard) {
+                            return true;
+                        }
+                    }
+                    return false;
                 });
 
                 if (!hasMatch) {
                     warnedCardNames.add(name2);
-                    logger.info(`[CharacterEventListener] 检测到新角色卡 "${name2}" 未关联启用方案`);
+                    logger.info(`[CharacterEventListener] 检测到新角色卡 "${name2}" 未关联任何设定启用方案`);
                     const winToastr = window as unknown as { toastr?: { info: (msg: string, title: string) => void } };
                     if (winToastr.toastr && typeof winToastr.toastr.info === 'function') {
                         winToastr.toastr.info(
-                            `未发现针对角色卡 [${name2}] 的设定启用方案，可在【角色管理 ➔ 设定启用管理】中关联或新建方案。`,
+                            `未发现角色卡 [${name2}] 的绑定方案。可在【角色管理 ➔ 设定启用管理】中为其指定或新建方案。`,
                             'Starlight DrawAssistant'
                         );
                     }

@@ -3,8 +3,8 @@
  * @description 角色与服装提示词注入引擎
  *
  * 职责：
- * - 动态解析活动的设定启用方案 (EnableSchemeProfile)
- * - 根据规则 (ALL / match) 过滤匹配的角色与服装实体
+ * - 动态解析活动的设定启用方案 (EnableSchemeProfile)，匹配多行 角色卡名称|chatId
+ * - 根据规则 (ALL / match) 过滤仅为 enabled: true 的角色与服装实体
  * - 展开角色专属服装列表 {outfits}
  * - 容错匹配与替换占位符 ({{角色启用列表}}, {{服装启用列表}} 等别名)
  * - 空变量行与多余空行二次正则清洗
@@ -26,35 +26,53 @@ import { getContext } from './context';
 import { logger } from './logger';
 
 /**
- * 根据当前角色卡名称获取活动的设定启用方案 (匹配第一个)
+ * 根据当前角色卡名称与 chatId 获取活动的设定启用方案 (匹配第一个符合条件的方案)
  */
-export function resolveActiveEnableScheme(characterCardName?: string): EnableSchemeProfile {
+export function resolveActiveEnableScheme(characterCardName?: string, chatId?: string): EnableSchemeProfile {
     const schemes = getEnableSchemes();
     if (schemes.length === 0) {
         throw new Error('[ST-DrawAssistant] 未在系统中发现任何设定启用方案');
     }
 
     let targetCard = characterCardName;
+    let targetChatId = chatId;
+
     if (!targetCard) {
         try {
             const ctx = getContext();
-            const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
-            targetCard = win.SillyTavern?.getContext?.()?.name2 || (ctx as unknown as { name2?: string })?.name2 || '';
+            const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string; chatId?: string } } };
+            const stCtx = win.SillyTavern?.getContext?.();
+            targetCard = stCtx?.name2 || (ctx as unknown as { name2?: string })?.name2 || '';
+            targetChatId = targetChatId || stCtx?.chatId || (ctx as unknown as { chatId?: string })?.chatId || '';
         } catch {
             targetCard = '';
         }
     }
 
     if (targetCard && targetCard.trim()) {
-        const normTarget = targetCard.trim().toLowerCase();
+        const normTargetCard = targetCard.trim().toLowerCase();
+        const normTargetChatId = (targetChatId || '').trim();
+
         const matched = schemes.find(s => {
             if (!s.boundCharacterCards) return false;
-            const cardNames = s.boundCharacterCards
-                .split(/,|\n/)
-                .map(c => c.trim().toLowerCase())
+            const lines = s.boundCharacterCards
+                .split('\n')
+                .map(l => l.trim())
                 .filter(Boolean);
-            return cardNames.includes(normTarget);
+
+            for (const line of lines) {
+                if (line.includes('|')) {
+                    const [card, cid] = line.split('|').map(p => p.trim());
+                    if (card.toLowerCase() === normTargetCard && cid === normTargetChatId) {
+                        return true;
+                    }
+                } else if (line.toLowerCase() === normTargetCard) {
+                    return true;
+                }
+            }
+            return false;
         });
+
         if (matched) return matched;
     }
 
@@ -62,7 +80,7 @@ export function resolveActiveEnableScheme(characterCardName?: string): EnableSch
 }
 
 /**
- * 筛选符合规则且启用的角色实体
+ * 筛选符合规则且启用的角色实体 (仅当 rule.enabled === true 时为启用)
  */
 export function filterEnabledCharacters(
     scheme: EnableSchemeProfile,
@@ -74,11 +92,10 @@ export function filterEnabledCharacters(
 
     return allChars.filter(char => {
         const config = rules[char.id];
-        // 默认若未单独设置规则则视为启用全量匹配
-        const enabled = config ? config.enabled : true;
-        if (!enabled) return false;
+        // 默认新建方案时所有卡全禁用，仅存储了 enabled: true 的为启用
+        if (!config || config.enabled !== true) return false;
 
-        const rule = config ? config.rule : 'ALL';
+        const rule = config.rule || 'ALL';
         if (rule === 'ALL') return true;
 
         // match 规则：检索姓名或以 "|" 分隔的别名
@@ -96,7 +113,7 @@ export function filterEnabledCharacters(
 }
 
 /**
- * 筛选符合规则且启用的通用服装实体
+ * 筛选符合规则且启用的通用服装实体 (仅当 rule.enabled === true 时为启用)
  */
 export function filterEnabledOutfits(
     scheme: EnableSchemeProfile,
@@ -108,10 +125,9 @@ export function filterEnabledOutfits(
 
     return allOutfits.filter(outfit => {
         const config = rules[outfit.id];
-        const enabled = config ? config.enabled : true;
-        if (!enabled) return false;
+        if (!config || config.enabled !== true) return false;
 
-        const rule = config ? config.rule : 'match';
+        const rule = config.rule || 'match';
         if (rule === 'ALL') return true;
 
         // match 规则：检索服装中文名或英文名
@@ -167,7 +183,6 @@ export function cleanRenderedText(text: string): string {
     if (!text) return '';
     const lines = text.split('\n');
     const cleaned = lines.filter(line => {
-        // 如果整行包含未选中的 {xxx} 或全为空白符号，则过滤该行
         if (/{[a-zA-Z0-9_]+}/.test(line)) return false;
         return line.trim() !== '';
     });
@@ -182,7 +197,7 @@ export function renderCharacterAndOutfitInjection(textContent: string): {
     outfitListText: string;
 } {
     const scheme = resolveActiveEnableScheme();
-    const tplScheme = getInjectionTemplates()[0]; // 默认取当前启用的注入模板方案
+    const tplScheme = getInjectionTemplates()[0];
 
     const activeChars = filterEnabledCharacters(scheme, textContent);
     const activeOutfits = filterEnabledOutfits(scheme, textContent);
@@ -245,10 +260,6 @@ export function renderCharacterAndOutfitInjection(textContent: string): {
 
 /**
  * 在 Prompt / 文本中容错替换角色与服装占位符
- *
- * 容错别名规则：
- * - 角色占位符别名：{{角色启用列表}}, {{角色列表}}, {{通用角色启用列表}}
- * - 服装占位符别名：{{服装启用列表}}, {{服装列表}}, {{通用服装启用列表}}
  */
 export function injectCharacterPlaceholders(promptText: string, textContent?: string): string {
     if (!promptText) return '';
@@ -258,11 +269,9 @@ export function injectCharacterPlaceholders(promptText: string, textContent?: st
 
     let result = promptText;
 
-    // 容错匹配替换 {{角色启用列表}} 及其别名
     const charRegex = /{{(角色启用列表|角色列表|通用角色启用列表)}}/gi;
     result = result.replace(charRegex, characterListText);
 
-    // 容错匹配替换 {{服装启用列表}} 及其别名
     const outfitRegex = /{{(服装启用列表|服装列表|通用服装启用列表)}}/gi;
     result = result.replace(outfitRegex, outfitListText);
 
