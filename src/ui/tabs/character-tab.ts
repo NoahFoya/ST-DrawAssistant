@@ -1120,43 +1120,52 @@ function renderCharacterEnablePane(): HTMLElement {
     const cardBindLabel = document.createElement('label');
     cardBindLabel.style.fontSize = '0.85em';
     cardBindLabel.style.color = 'var(--da-text-secondary, #aaa)';
-    cardBindLabel.textContent = '绑定角色卡名称（在列表中匹配的角色卡自动启用本方案，每行一个）';
+    cardBindLabel.textContent = '绑定角色卡列表（在列表中匹配的角色卡自动启用本方案，每行一个）';
 
     const cardBindSubRow = document.createElement('div');
     cardBindSubRow.style.display = 'flex';
     cardBindSubRow.style.gap = '8px';
 
-    const cardBindInput = document.createElement('input');
-    cardBindInput.type = 'text';
-    cardBindInput.className = 'da-input';
+    const cardBindInput = document.createElement('textarea');
+    cardBindInput.className = 'da-textarea';
+    cardBindInput.rows = 4;
     cardBindInput.style.flex = '1';
+    cardBindInput.placeholder = '输入要绑定的酒馆角色卡名称，每行一个';
     cardBindInput.value = currentScheme.boundCharacterCards || '';
 
     cardBindInput.addEventListener('change', () => {
-        const val = cardBindInput.value.trim();
-        if (val) {
+        const lines = cardBindInput.value.split('\n').map(l => l.trim()).filter(Boolean);
+        lines.forEach(val => {
             const conflictScheme = checkCharacterCardConflict(val, currentScheme.id);
             if (conflictScheme) {
-                alert(`⚠️ 绑定冲突提醒：角色卡 "${val}" 已在另一方案 "${conflictScheme}" 中绑定！`);
+                alert(`⚠️ 改绑冲突提醒：角色卡 "${val}" 原本已在另一方案 "${conflictScheme}" 中绑定！保存后将改绑至当前方案。`);
             }
-        }
+        });
     });
 
     const btnGetCardName = document.createElement('button');
     btnGetCardName.className = 'da-btn secondary';
     btnGetCardName.style.whiteSpace = 'nowrap';
-    btnGetCardName.innerHTML = '<i class="fa-solid fa-bullseye"></i> 获取当前角色卡';
+    btnGetCardName.style.alignSelf = 'flex-start';
+    btnGetCardName.innerHTML = '<i class="fa-solid fa-plus"></i> 追加当前角色卡';
 
     btnGetCardName.addEventListener('click', () => {
         const win = window as unknown as { SillyTavern?: { getContext?: () => { name2?: string } } };
         const name2 = win.SillyTavern?.getContext?.()?.name2;
         if (name2) {
-            cardBindInput.value = name2;
+            const existingLines = cardBindInput.value.split('\n').map(l => l.trim()).filter(Boolean);
+            if (existingLines.includes(name2)) {
+                alert(`ℹ️ 当前角色卡 "${name2}" 已存在于绑定列表中`);
+                return;
+            }
+            existingLines.push(name2);
+            cardBindInput.value = existingLines.join('\n');
+
             const conflictScheme = checkCharacterCardConflict(name2, currentScheme.id);
             if (conflictScheme) {
-                alert(`🎯 已获取当前角色卡: "${name2}"\n⚠️ 注意：该角色卡已被另一方案 "${conflictScheme}" 绑定！`);
+                alert(`🎯 已追加当前角色卡: "${name2}"\n⚠️ 注意：该角色卡原本已被另一方案 "${conflictScheme}" 绑定！保存后将改绑至当前方案。`);
             } else {
-                alert(`🎯 已获取当前酒馆角色卡名称: "${name2}"`);
+                alert(`🎯 已追加当前酒馆角色卡名称: "${name2}"`);
             }
         } else {
             alert('ℹ️ 未检测到活动的酒馆角色卡或当前不在聊天视窗中');
@@ -1278,25 +1287,42 @@ function renderCharacterEnablePane(): HTMLElement {
                 row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
                 row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
-                const left = document.createElement('label');
+                const left = document.createElement('div');
                 left.style.display = 'flex';
                 left.style.alignItems = 'center';
-                left.style.gap = '8px';
-                left.style.cursor = 'pointer';
-                left.style.fontSize = '0.9em';
+                left.style.gap = '10px';
 
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = ruleConfig.enabled;
-                checkbox.addEventListener('change', () => {
-                    ruleConfig.enabled = checkbox.checked;
+                // 统一风格的 da-btn 切换开关 (替代原生 checkbox)
+                const toggleBtn = document.createElement('button');
+                const updateToggleStyle = () => {
+                    if (ruleConfig.enabled) {
+                        toggleBtn.className = 'da-btn primary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-on"></i> 已启用';
+                    } else {
+                        toggleBtn.className = 'da-btn secondary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.opacity = '0.6';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-off"></i> 已禁用';
+                    }
+                };
+                updateToggleStyle();
+
+                toggleBtn.addEventListener('click', () => {
+                    ruleConfig.enabled = !ruleConfig.enabled;
                     currentScheme.characterRules[char.id] = ruleConfig;
+                    updateToggleStyle();
                 });
 
                 const nameSpan = document.createElement('span');
+                nameSpan.style.fontSize = '0.9em';
                 nameSpan.textContent = char.nameCN ? `${char.nameCN} (${char.nameEN || '未命名'})` : char.nameEN;
 
-                left.appendChild(checkbox);
+                left.appendChild(toggleBtn);
                 left.appendChild(nameSpan);
 
                 const right = document.createElement('div');
@@ -1348,25 +1374,42 @@ function renderCharacterEnablePane(): HTMLElement {
                 row.style.background = 'var(--da-bg-secondary, rgba(0,0,0,0.2))';
                 row.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.08))';
 
-                const left = document.createElement('label');
+                const left = document.createElement('div');
                 left.style.display = 'flex';
                 left.style.alignItems = 'center';
-                left.style.gap = '8px';
-                left.style.cursor = 'pointer';
-                left.style.fontSize = '0.9em';
+                left.style.gap = '10px';
 
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = ruleConfig.enabled;
-                checkbox.addEventListener('change', () => {
-                    ruleConfig.enabled = checkbox.checked;
+                // 统一风格的 da-btn 切换开关 (替代原生 checkbox)
+                const toggleBtn = document.createElement('button');
+                const updateToggleStyle = () => {
+                    if (ruleConfig.enabled) {
+                        toggleBtn.className = 'da-btn primary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-on"></i> 已启用';
+                    } else {
+                        toggleBtn.className = 'da-btn secondary';
+                        toggleBtn.style.padding = '3px 10px';
+                        toggleBtn.style.fontSize = '0.8em';
+                        toggleBtn.style.opacity = '0.6';
+                        toggleBtn.style.minWidth = '75px';
+                        toggleBtn.innerHTML = '<i class="fa-solid fa-toggle-off"></i> 已禁用';
+                    }
+                };
+                updateToggleStyle();
+
+                toggleBtn.addEventListener('click', () => {
+                    ruleConfig.enabled = !ruleConfig.enabled;
                     currentScheme.outfitRules[outfit.id] = ruleConfig;
+                    updateToggleStyle();
                 });
 
                 const nameSpan = document.createElement('span');
+                nameSpan.style.fontSize = '0.9em';
                 nameSpan.textContent = outfit.nameCN ? `${outfit.nameCN} (${outfit.nameEN || '未命名'})` : outfit.nameEN;
 
-                left.appendChild(checkbox);
+                left.appendChild(toggleBtn);
                 left.appendChild(nameSpan);
 
                 const right = document.createElement('div');
