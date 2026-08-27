@@ -1,10 +1,10 @@
 /**
- * ImageDriver 统一接口定义
+ * @module drivers/types
+ * @description ImageDriver 统一接口定义
  *
  * 所有图像生成后端驱动必须实现此接口。
- * 通过接口隔离，上层业务逻辑无需关心具体的后端协议差异。
- *
- * 参考：.agents/Skills/st-image-generation-patterns/SKILL.md §2.1
+ * 通过接口隔离，上层业务逻辑（TaskManager、楼层按鈕）无需关心具体后端协议差异，
+ * 实现与后端引擎的完全解耦。
  */
 /**
  * 图像生成请求参数
@@ -37,6 +37,10 @@ export interface GenerateOptions {
     seed?: number;
     /** 重噪系数 (0.0 - 1.0) */
     denoise?: number;
+    /** 蒙版羽化/模糊度 (0 - 64 px) */
+    maskBlur?: number;
+    /** 蒙版膨胀扩展 (0 - 64 px) */
+    growMaskBy?: number;
     /** 后端特有的扩展参数（透传给驱动，不做类型约束） */
     extra?: Record<string, unknown>;
 }
@@ -63,15 +67,14 @@ export interface GenerateProgress {
     currentStep: number;
     /** 总步骤数 */
     totalSteps: number;
-    /** 进度百分比（0-100） */
+    /** 进度百分比（0-100，若后端不支持为 -1） */
     percentage: number;
     /** 人类可读的状态描述 */
     statusMessage?: string;
-    /** 预览图（base64，仅部分后端支持） */
-    previewImage?: string;
 }
 /** 进度回调函数类型 */
 export type ProgressCallback = (progress: GenerateProgress) => void;
+import type { IDisposable } from '../core/disposable';
 /**
  * 后端连接状态信息
  */
@@ -88,7 +91,7 @@ export interface ConnectionInfo {
 /**
  * 图像生成驱动统一接口
  *
- * 所有后端驱动（ComfyUI、SD WebUI、NovelAI 等）必须实现此接口。
+ * 所有后端驱动（ComfyUI、SD WebUI、NovelAI 等）必须实现此接口并提供资源销毁实现。
  * 通过驱动工厂（factory.ts）获取实例，上层代码不应直接 new 驱动类。
  *
  * @example
@@ -98,7 +101,7 @@ export interface ConnectionInfo {
  *   const result = await driver.generate(options, progressCallback);
  * }
  */
-export interface ImageDriver {
+export interface ImageDriver extends IDisposable {
     /** 驱动标识名（与 ImageProvider 类型对应） */
     readonly name: string;
     /**
@@ -122,6 +125,11 @@ export interface ImageDriver {
      * 此时驱动应实现"客户端丢弃模式"——标记取消状态并忽略后续结果。
      */
     cancel(): void;
+    /**
+     * 释放驱动占用的网络连接与资源 (如 WebSocket 句柄、定时器等)
+     * 在更换 Backend Driver 或插件卸载时显式调用
+     */
+    dispose(): void;
     /**
      * 获取后端支持的采样器列表
      * 用于设置面板动态填充下拉选项

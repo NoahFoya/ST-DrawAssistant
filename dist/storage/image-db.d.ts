@@ -1,15 +1,10 @@
 /**
  * @module storage/image-db
- * @description 图像 IndexedDB 存储管理器 (ImageDB)
+ * @description 图像数据库存储与图库服务 (ImageDB)
  *
  * 职责：
- * - 将生图二进制/Base64 数据存储在 IndexedDB 中
- * - 宿主 chat.json 的 msg.extra.da_images 中仅保留轻量 UUID 引用
- * - 避免 chat.json 序列化膨胀，规避 100MB+ 磁盘卡顿与存储配额崩溃
- * - 提供缩略图 WebP 高效缓存表 (THUMBNAILS_STORE_NAME)
- *
- * 规范参考：
- * - .agents/Skills/browser-storage/SKILL.md §3 (IndexedDB 存储范式)
+ * - 将生图 Base64 数据与 WebP 缩略图存储在 IndexedDB 中，宿主聊天记录仅保留 UUID 引用，防止聊天文件膨胀导致卡顿
+ * - 提供图库数据的查询、分页、检索、导出与物理清理方法
  */
 export declare const IMAGES_STORE_NAME = "images";
 export declare const STATS_STORE_NAME = "statistics";
@@ -25,27 +20,38 @@ export interface ThumbnailRecord {
 export interface ImageMetadata {
     provider?: string;
     ckptName?: string;
+    clipName?: string;
+    vaeName?: string;
     samplerName?: string;
+    scheduler?: string;
     steps?: number;
     cfgScale?: number;
     width?: number;
     height?: number;
     durationMs?: number;
+    fullPositivePrompt?: string;
+    fullNegativePrompt?: string;
     negativePrompt?: string;
+    seed?: number;
+    denoise?: number;
+    maskBlur?: number;
+    growMaskBy?: number;
 }
 export interface StoredImageRecord {
     uuid: string;
     data: string;
     mime: string;
     prompt: string;
+    rawNegativePrompt?: string;
     timestamp: number;
+    seed?: number;
     metadata?: ImageMetadata;
 }
 export declare function getDB(): Promise<IDBDatabase>;
 /**
- * 将图像数据存储至 IndexedDB (支持元数据)
+ * 将图像数据存储至 IndexedDB (支持元数据与配额溢出处理)
  */
-export declare function saveImageToDB(uuid: string, data: string, mime: string, prompt: string, metadata?: ImageMetadata): Promise<string>;
+export declare function saveImageToDB(uuid: string, data: string, mime: string, prompt: string, metadata?: ImageMetadata, rawNegativePrompt?: string): Promise<string>;
 /**
  * 根据 UUID 从 IndexedDB 获取图像记录
  */
@@ -54,6 +60,10 @@ export declare function getImageFromDB(uuid: string): Promise<StoredImageRecord 
  * 删除指定 UUID 的图像 (同时删除对应的缩略图)
  */
 export declare function deleteImageFromDB(uuid: string): Promise<void>;
+/**
+ * 批量高效删除指定 UUID 列表的图像及缩略图 (在单个 readwrite 事务内完成)
+ */
+export declare function deleteImagesBatchFromDB(uuids: Iterable<string>): Promise<number>;
 /**
  * 保存 WebP 缩略图至 IndexedDB
  */
@@ -88,4 +98,38 @@ export declare function getGalleryImages(options: {
  * 物理清空 IndexedDB 中的全量生成图片与缩略图
  */
 export declare function clearAllImagesFromDB(): Promise<void>;
+/**
+ * 订阅图库数据变动
+ * @returns unsubscribe 函数，配合 DisposableBag 使用
+ */
+export declare function subscribeGalleryChange(listener: () => void): () => void;
+/**
+ * 获取当前 IndexedDB 存储空间与图片数量统计
+ */
+export declare function galleryGetStats(): Promise<{
+    totalCount: number;
+    totalSizeBytes: number;
+    usageBytes: number;
+    quotaBytes: number;
+}>;
+/**
+ * 删除指定 UUID 的单张图像并广播变更通知
+ */
+export declare function galleryDeleteImage(uuid: string): Promise<void>;
+/**
+ * 批量删除图像并广播变更通知
+ */
+export declare function galleryDeleteBatch(uuids: Iterable<string>): Promise<number>;
+/**
+ * 扫描全库未被聊天引用的孤立废图
+ */
+export declare function galleryScanIsolated(): Promise<string[]>;
+/**
+ * 物理清理全库孤立废图并广播变更通知
+ */
+export declare function galleryCleanIsolated(): Promise<number>;
+/**
+ * 物理重置并清空所有存储的图像数据，广播变更通知
+ */
+export declare function galleryResetAllStorage(): Promise<void>;
 //# sourceMappingURL=image-db.d.ts.map

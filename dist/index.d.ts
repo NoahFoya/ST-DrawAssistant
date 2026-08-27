@@ -1,18 +1,11 @@
 /**
  * @module index
- * @description ST-DrawAssistant 绘画助手扩展主入口文件
+ * @description 绘画助手扩展主入口
  *
- * 初始化模式：遵循 ST 宿主推荐的"顶层仅注册监听，APP_READY 内完成所有初始化"模式
- *
- * 关键约束：
- * - 模块顶层调用 getContext() 存在时序风险（若扩展加载较早，宿主可能尚未初始化），
- *   因此顶层的 getContext() 调用应始终包裹在 try-catch 中，
- *   真正的初始化逻辑应在 APP_READY 事件回调内执行
- * - extension_settings 访问必须在 APP_READY 后执行（此时设置已加载完毕）
- * - CHARACTER_MESSAGE_RENDERED 事件数据含 { message, element }，直接用 element
- *
- * 规范参考：
- * - .agents/Skills/sillytavern-extension-host/SKILL.md §4.2 (扩展入口生命周期与事件总线)
+ * 职责：
+ * - 监听宿主 APP_READY 事件，在应用加载完成后执行全量初始化
+ * - 初始化驱动实例与任务队列管理器，挂载快捷悬浮球与主设置面板
+ * - 监听消息渲染、Swipe 切换及聊天文件切换事件，自动识别占位符并注入楼层生图按钮
  */
 export {};
 //# sourceMappingURL=index.d.ts.map

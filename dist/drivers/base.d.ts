@@ -5,11 +5,9 @@
  * 封装所有驱动共用的基础逻辑：
  * - URL 拼接与规范化
  * - 通用 HTTP 请求方法（含超时控制与 Fetch API 封装）
- * - 取消状态管理
- * - 统一错误包装
- *
- * 规范参考：
- * - .agents/Skills/st-image-generation-patterns/SKILL.md (ImageDriver 统一接口模式)
+ * - 取消状态管理：_abortController 信号与局部请求延迟控制器联来，
+ *   调用 cancel() 将立即中止当前正在进行的 fetch 请求
+ * - 统一错误包装 (DriverError)
  */
 import { type ConnectionInfo, type GenerateOptions, type GenerateResult, type ImageDriver, type ProgressCallback } from './types';
 import type { DrawAssistantSettings } from '../settings/types';
@@ -23,10 +21,8 @@ export declare abstract class BaseDriver implements ImageDriver {
     /**
      * 当前请求的 AbortController
      *
-     * 设计说明：此实例属性由 `resetCancelState()` 赋値，由子类的 `cancel()` 提前中止。
-     * 注意：`request()` 方法内部使用局部的 `new AbortController()` 做超时控制，
-     * 而非此实例属性——因此此属性只用于子类主动 abort()，无法取消运行中的 request() 调用。
-     * 如需支持主动取消 HTTP 请求，应将 `request()` 改为使用此属性并在 cancel() 中中止。
+     * 设计说明：此实例属性由 `resetCancelState()` 赋值，由 `cancel()` 提前中止。
+     * `request()` 方法会将此信号与其局部的超时控制器链接，实现 HTTP 请求的即时取消。
      */
     protected _abortController: AbortController | null;
     constructor(settings: DrawAssistantSettings);
@@ -38,6 +34,11 @@ export declare abstract class BaseDriver implements ImageDriver {
      * 同时中止 fetch 请求并设置取消标志
      */
     cancel(): void;
+    /**
+     * 释放驱动占用的所有资源
+     * 基类默认实现：触发 cancel() 中止进行中的 HTTP 请求
+     */
+    dispose(): void;
     /**
      * 重置取消状态（在新任务开始前调用）
      */
@@ -69,6 +70,8 @@ export declare abstract class BaseDriver implements ImageDriver {
      * @param body 请求体（将被 JSON 序列化）
      * @param timeoutMs 超时时间（毫秒）
      * @param headers 可选的额外 HTTP 请求头
+     * @returns 解析后的响应 JSON 数据 Promise
+     * @throws {DriverError} 网络错误、超时、HTTP 响应非 2xx 时抛出异常
      */
     protected postJson<T = unknown>(path: string, body: unknown, timeoutMs?: number, headers?: Record<string, string>): Promise<T>;
     /**

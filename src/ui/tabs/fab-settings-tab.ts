@@ -7,10 +7,13 @@
  * - 提供拖拽记忆重置与交互响应设置
  */
 
-import { createFieldRow } from '../components/field-row';
-import { loadSettings, updateSettings } from '../../settings/manager';
+import { createFieldRow } from '../components/controls';
+import { loadSettings } from '../../settings/manager';
+import { patchSettings } from '../../state/app-store';
+
 import { applyFABStylesFromSettings, resetFABPosition, FAB_PRESET_ICONS } from '../fab';
-import { openImageCropperModal } from '../components/image-cropper-modal';
+import { openImageCropperModal } from '../components/modals';
+import { showToastNotice } from '../../utils/toast';
 
 /**
  * 渲染悬浮窗设置 Tab 内容节点
@@ -28,9 +31,9 @@ export function renderFABSettingsTab(): HTMLElement {
     hintCard.style.marginBottom = '12px';
     hintCard.style.padding = '8px 14px';
     hintCard.style.borderRadius = '8px';
-    hintCard.style.background = 'rgba(0, 242, 254, 0.1)';
-    hintCard.style.border = '1px solid rgba(0, 242, 254, 0.25)';
-    hintCard.style.color = '#00f2fe';
+    hintCard.style.background = 'rgba(var(--da-accent-rgb, 0, 242, 254), 0.1)';
+    hintCard.style.border = '1px solid rgba(var(--da-accent-rgb, 0, 242, 254), 0.25)';
+    hintCard.style.color = 'var(--da-accent-color, #00f2fe)';
     hintCard.style.fontSize = '0.85em';
     hintCard.style.fontWeight = '500';
     hintCard.style.transition = 'opacity 0.2s ease';
@@ -73,13 +76,14 @@ export function renderFABSettingsTab(): HTMLElement {
     toggleLabel.appendChild(sliderSpan);
 
     toggleInput.addEventListener('change', () => {
-        updateSettings({ fabVisible: toggleInput.checked });
+        patchSettings({ fabVisible: toggleInput.checked });
         applyFABStylesFromSettings();
         notifyChange();
     });
 
     card.appendChild(createFieldRow({
         label: '启用快捷悬浮球',
+        helpTooltip: '控制界面快捷悬浮球的显示与隐藏。',
         control: toggleLabel,
     }));
 
@@ -101,13 +105,14 @@ export function renderFABSettingsTab(): HTMLElement {
     opacityInput.addEventListener('input', () => {
         const val = parseFloat(opacityInput.value);
         opacityValueSpan.textContent = `${Math.round(val * 100)}%`;
-        updateSettings({ fabOpacity: val });
+        patchSettings({ fabOpacity: val });
         applyFABStylesFromSettings();
         notifyChange();
     });
 
     card.appendChild(createFieldRow({
         label: '悬浮球透明度',
+        helpTooltip: '调节悬浮球在未交互时的半透明不透明度 (30% - 100%)。',
         control: [opacityInput, opacityValueSpan],
     }));
 
@@ -125,7 +130,7 @@ export function renderFABSettingsTab(): HTMLElement {
             chip.className = `da-fab-icon-chip ${activeKey === key ? 'is-active' : ''}`;
             chip.innerHTML = `${item.svg}<span>${item.name}</span>`;
             chip.addEventListener('click', () => {
-                updateSettings({ fabIcon: key, fabCustomIcon: undefined });
+                patchSettings({ fabIcon: key, fabCustomIcon: undefined });
                 applyFABStylesFromSettings();
                 updateCustomIconPreview();
                 renderIconChips();
@@ -139,6 +144,7 @@ export function renderFABSettingsTab(): HTMLElement {
 
     card.appendChild(createFieldRow({
         label: '预设图标',
+        helpTooltip: '选择悬浮球内置的矢量图标风格。',
         control: iconGrid,
     }));
 
@@ -194,7 +200,7 @@ export function renderFABSettingsTab(): HTMLElement {
             openImageCropperModal({
                 imageSrc: rawBase64,
                 onConfirm: (croppedBase64) => {
-                    updateSettings({ fabCustomIcon: croppedBase64 });
+                    patchSettings({ fabCustomIcon: croppedBase64 });
                     applyFABStylesFromSettings();
                     updateCustomIconPreview();
                     renderIconChips();
@@ -207,7 +213,7 @@ export function renderFABSettingsTab(): HTMLElement {
     });
 
     resetCustomIconBtn.addEventListener('click', () => {
-        updateSettings({ fabCustomIcon: undefined });
+        patchSettings({ fabCustomIcon: undefined });
         applyFABStylesFromSettings();
         updateCustomIconPreview();
         renderIconChips();
@@ -228,10 +234,7 @@ export function renderFABSettingsTab(): HTMLElement {
     resetBtn.addEventListener('click', () => {
         resetFABPosition();
         notifyChange();
-        const win = window as unknown as { toastr?: { success?: (m: string, t?: string) => void } };
-        if (win.toastr && typeof win.toastr.success === 'function') {
-            win.toastr.success('悬浮球位置已恢复至右下角。', '快捷悬浮球');
-        }
+        showToastNotice('悬浮球位置已恢复至右下角。', '快捷悬浮球', true);
     });
 
     card.appendChild(createFieldRow({

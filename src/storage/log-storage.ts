@@ -12,7 +12,10 @@ import { logger, type StructuredLogEntry } from '../core/logger';
 import { getDB, LOGS_STORE_NAME } from './image-db';
 
 /**
- * 异步保存一条结构化日志到 IndexedDB
+ * 异步保存一条结构化日志记录到 IndexedDB
+ *
+ * @param entry 日志对象
+ * @returns 保存完成 Promise
  */
 export async function saveLogToDB(entry: StructuredLogEntry): Promise<void> {
     try {
@@ -26,13 +29,16 @@ export async function saveLogToDB(entry: StructuredLogEntry): Promise<void> {
             req.onerror = () => reject(req.error);
         });
     } catch (err) {
-        // 保存日志错误仅做静默降级，避免死循环触发 logger.error
+        // 保存日志错误仅做控制台警告，避免二次调用 logger.error 产生死循环
         console.warn('[ST-DA] 结构化日志保存到 IndexedDB 失败:', err);
     }
 }
 
 /**
- * 从 IndexedDB 查询历史日志
+ * 从 IndexedDB 查询历史日志列表
+ *
+ * @param limit 最多返回的日志条数，默认为 200
+ * @returns 日志数组 Promise
  */
 export async function loadLogsFromDB(limit = 200): Promise<StructuredLogEntry[]> {
     try {
@@ -60,7 +66,10 @@ export async function loadLogsFromDB(limit = 200): Promise<StructuredLogEntry[]>
 }
 
 /**
- * 清理超过 maxDays 天数 (默认 7 天) 的旧日志
+ * 清理早于指定天数的历史日志记录
+ *
+ * @param maxDays 日志保留的最大天数，默认为 7 天
+ * @returns 清理完成 Promise
  */
 export async function cleanExpiredLogsInDB(maxDays = 7): Promise<void> {
     try {

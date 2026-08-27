@@ -8,8 +8,10 @@
  */
 
 import { EXTENSION_DISPLAY_NAME, VERSION } from '../../core/constants';
-import { logger } from '../../core/logger';
-import changelogData from '../../presets/changelog.json';
+import { showToastNotice } from '../../utils/toast';
+import { escapeHtml } from '../../utils/html';
+import aboutConfig from '../../config/about.json';
+import changelogData from '../../config/changelog.json';
 
 export function renderAboutTab(): HTMLElement {
     const container = document.createElement('div');
@@ -20,26 +22,28 @@ export function renderAboutTab(): HTMLElement {
     cardInfo.className = 'da-section-card da-about-card-hero';
     cardInfo.style.padding = '20px 22px';
 
+    const highlightsHtml = (aboutConfig.highlights || [])
+        .map(h => `<span style="font-size: 0.75em; background: rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 6px; color: var(--da-text-secondary); border: 1px solid var(--da-border-color);">${escapeHtml(h)}</span>`)
+        .join('');
+
     cardInfo.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <h2 class="da-about-title" style="margin: 0;">${EXTENSION_DISPLAY_NAME}</h2>
-            <span class="da-header-version-badge" style="fontSize: 0.85em; padding: 2px 8px;">V${VERSION}</span>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
+            <h2 class="da-about-title" style="margin: 0; font-size: 1.5em;">${escapeHtml(EXTENSION_DISPLAY_NAME)}</h2>
+            <span class="da-header-version-badge" style="font-size: 0.85em; padding: 2px 10px;">V${escapeHtml(VERSION)}</span>
         </div>
-        <p class="da-about-desc" style="line-height: 1.6; margin-bottom: 14px;">
-            Starlight DrawAssistant 专为 SillyTavern 酒馆对话场景打造，完美融合角色上下文与 AI 文生图能力。
-            支持 AI 消息楼层标识符自动解析、ComfyUI 双向 WebSocket 进度预览、WebP 物理独立存储与一键脱敏诊断。
+        <p class="da-about-desc" style="line-height: 1.65; margin-bottom: 14px; width: 100%; text-align: left;">
+            ${escapeHtml(aboutConfig.description)}
         </p>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-            <span style="font-size: 0.75em; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; color: var(--da-text-secondary);">✨ AI 楼层自动感知</span>
-            <span style="font-size: 0.75em; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; color: var(--da-text-secondary);">⚡ 流式 WebSocket 预览</span>
-            <span style="font-size: 0.75em; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; color: var(--da-text-secondary);">💾 IndexedDB 独立存储</span>
-            <span style="font-size: 0.75em; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; color: var(--da-text-secondary);">📊 脱敏诊断与统计看板</span>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+            ${highlightsHtml}
         </div>
-        <div class="da-about-author" style="font-size: 0.85em;">
-            作者：<strong style="color: var(--da-text-primary);">NoahFoya with AICode</strong>
-        </div>
-        <div class="da-about-copyright" style="font-size: 0.8em; margin-top: 4px;">
-            Copyright © 2026 ST-DrawAssistant Team. All Rights Reserved.
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-top: 1px dashed var(--da-border-color); padding-top: 10px; margin-top: 6px;">
+            <div class="da-about-author" style="font-size: 0.85em;">
+                作者：<strong style="color: var(--da-text-primary);">${escapeHtml(aboutConfig.author)}</strong>
+            </div>
+            <div class="da-about-copyright" style="font-size: 0.8em;">
+                ${escapeHtml(aboutConfig.copyright)}
+            </div>
         </div>
     `;
     container.appendChild(cardInfo);
@@ -47,7 +51,6 @@ export function renderAboutTab(): HTMLElement {
     // ── Card 2: 版本与更新日志 ──────────────────────────────────────────────
     const cardUpdate = document.createElement('div');
     cardUpdate.className = 'da-section-card';
-    cardUpdate.style.marginTop = '15px';
 
     const headerUpdate = document.createElement('div');
     headerUpdate.className = 'da-section-header';
@@ -85,7 +88,7 @@ export function renderAboutTab(): HTMLElement {
     versionCheckRow.appendChild(checkUpdateBtn);
     cardUpdate.appendChild(versionCheckRow);
 
-    // 更新日志明细内容框 (从 changelog.json 动态读取)
+    // 更新日志明细内容框 (从 src/config/changelog.json 动态读取)
     const changelogBox = document.createElement('div');
     changelogBox.className = 'da-changelog-box';
 
@@ -104,10 +107,9 @@ export function renderAboutTab(): HTMLElement {
     cardUpdate.appendChild(changelogBox);
     container.appendChild(cardUpdate);
 
-    // ── Card 3: 社区与开源阵地 (彩色大卡片网格) ─────────────────────────────
+    // ── Card 3: 社区与开源阵地 (彩色大卡片网格，从 src/config/about.json 动态渲染) ──
     const cardLinks = document.createElement('div');
     cardLinks.className = 'da-section-card';
-    cardLinks.style.marginTop = '15px';
 
     const headerLinks = document.createElement('div');
     headerLinks.className = 'da-section-header';
@@ -120,32 +122,15 @@ export function renderAboutTab(): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'da-about-card-grid';
 
-    // 1. GitHub 卡片
-    grid.appendChild(createRichCard({
-        icon: '🐙',
-        title: 'GitHub 官方仓库',
-        subtitle: '查阅开源源码、提交 Issue 反馈或 Star 本项目',
-        href: 'https://github.com/NoahFoya/ST-DrawAssistant',
-        themeClass: 'da-about-rich-card--github',
-    }));
-
-    // 2. ComfyUI 卡片
-    grid.appendChild(createRichCard({
-        icon: '⚙️',
-        title: 'ComfyUI 官方生态',
-        subtitle: '查阅工作流节点构造、API 服务与节点开发文档',
-        href: 'https://github.com/comfyanonymous/ComfyUI',
-        themeClass: 'da-about-rich-card--comfy',
-    }));
-
-    // 3. SillyTavern 卡片
-    grid.appendChild(createRichCard({
-        icon: '🍷',
-        title: 'SillyTavern 宿主社区',
-        subtitle: '探索酒馆扩展生态、角色卡制作与 Roleplay 灵感',
-        href: 'https://github.com/SillyTavern/SillyTavern',
-        themeClass: 'da-about-rich-card--st',
-    }));
+    (aboutConfig.communityLinks || []).forEach(linkItem => {
+        grid.appendChild(createRichCard({
+            icon: linkItem.icon,
+            title: linkItem.title,
+            subtitle: linkItem.subtitle,
+            href: linkItem.href,
+            themeClass: linkItem.themeClass,
+        }));
+    });
 
     cardLinks.appendChild(grid);
     container.appendChild(cardLinks);
@@ -174,30 +159,4 @@ function createRichCard(options: {
     `;
 
     return card;
-}
-
-/** 辅助函数：安全转义 HTML */
-function escapeHtml(str: string): string {
-    return (str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-/** 辅助函数：显示 ST 全局 Toast 通知 */
-function showToastNotice(message: string, title = '关于扩展', isSuccess = true): void {
-    const win = window as unknown as { toastr?: { success?: (m: string, t?: string) => void; error?: (m: string, t?: string) => void; info?: (m: string, t?: string) => void } };
-    if (win.toastr) {
-        if (isSuccess && typeof win.toastr.success === 'function') {
-            win.toastr.success(message, title);
-            return;
-        }
-        if (!isSuccess && typeof win.toastr.info === 'function') {
-            win.toastr.info(message, title);
-            return;
-        }
-    }
-    logger.info(`[${title}] ${message}`);
 }

@@ -2,8 +2,12 @@
  * @module core/constants
  * @description ST-DrawAssistant 扩展全局常量定义模块
  *
- * 规范参考：
- * - .agents/Skills/sillytavern-extension-host/SKILL.md §2 (manifest.json 结构与路径规范)
+ * 职责：
+ * - 为全库提供唯一真实来源，避免各模块散落硬编码字符串
+ * - 声明扩展名称、命名空间、路径及版本号
+ *
+ * 宿主契约要求：
+ * - MODULE_NAME、EXTENSION_NAME、VERSION 必须与扩展目录名及 manifest.json 保持完全一致
  */
 
 /** 用于 extension_settings 命名空间隔离 (存储 Key) */
@@ -19,5 +23,5 @@ export const EXTENSION_PATH = `third-party/${EXTENSION_NAME}` as const;
 export const EXTENSION_DISPLAY_NAME = 'Starlight DrawAssistant' as const;
 
 /** 版本号，与 manifest.json 的 version 保持一致 */
-export const VERSION = '0.2.0' as const;
+export const VERSION = '0.3.0' as const;
 

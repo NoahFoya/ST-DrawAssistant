@@ -80,32 +80,26 @@ class Logger {
         return this.currentLogLevel;
     }
 
-    /** TRACE 细粒度协议追溯 */
     public trace(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('TRACE', message, context, moduleName, taskId);
     }
 
-    /** DEBUG 调试信息 */
     public debug(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('DEBUG', message, context, moduleName, taskId);
     }
 
-    /** INFO 运行状态信息 */
     public info(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('INFO', message, context, moduleName, taskId);
     }
 
-    /** WARN 业务警告信息 */
     public warn(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('WARN', message, context, moduleName, taskId);
     }
 
-    /** ERROR 异常与操作失败 */
     public error(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('ERROR', message, context, moduleName, taskId);
     }
 
-    /** FATAL 致命错误 */
     public fatal(message: string, context?: unknown, moduleName = 'App', taskId?: string): void {
         this.log('FATAL', message, context, moduleName, taskId);
     }
@@ -137,7 +131,8 @@ class Logger {
             };
         } else if (typeof rawContext === 'object' && rawContext !== null) {
             contextObj = rawContext as Record<string, unknown>;
-            if (rawContext instanceof Error || (rawContext as { stack?: string }).stack) {
+            // 检测 Error-like 对象（如含 .stack 属性的普通对象）
+            if ((rawContext as { stack?: string }).stack) {
                 const err = rawContext as Error;
                 errorObj = {
                     name: err.name || 'Error',

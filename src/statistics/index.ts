@@ -352,6 +352,11 @@ export class StatisticsCollector {
     private _markDirty(): void {
         this._dirtyCount++;
         if (this._dirtyCount >= 10) {
+            // 变更满 10 次时清除待执行的延迟 Timer 并立即刷盘
+            if (this._saveTimer) {
+                clearTimeout(this._saveTimer);
+                this._saveTimer = null;
+            }
             void this.flush();
             return;
         }

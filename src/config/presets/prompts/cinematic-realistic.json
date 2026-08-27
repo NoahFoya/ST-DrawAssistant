@@ -1,0 +1,11 @@
+{
+  "id": "cinematic_realistic",
+  "name": "电影写实摄影通用提示词预设",
+  "isBuiltIn": true,
+  "data": {
+    "promptPrefix": "photorealistic, 8k uhd, masterpiece, cinematic lighting, professional photography, soft lighting",
+    "negativePrefix": "cartoon, anime, illustration, 3d render, cgi, bad anatomy, blurry, oversaturated, watermark, signature",
+    "promptSuffix": "",
+    "loras": []
+  }
+}

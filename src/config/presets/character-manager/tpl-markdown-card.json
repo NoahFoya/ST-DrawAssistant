@@ -1,0 +1,9 @@
+{
+  "id": "tpl-markdown-card",
+  "name": "Markdown 极简卡片 (系统预置)",
+  "isSystemPreset": true,
+  "characterListTemplate": "### 👤 {nameCN} ({nameEN})\n- 特征: {traits}\n- 五官: {facial}\n- 着装: {upperSFW}, {lowerSFW}\n- 专属服装:\n{outfits}",
+  "innerOutfitTemplate": "  - [{nameCN}]: {upperBody}, {lowerBody}",
+  "commonCharacterListTemplate": "",
+  "enableOutfitListTemplate": "### 👗 服装: {nameCN} ({nameEN})\n- 样式: {upperBody}, {lowerBody}"
+}

@@ -1,21 +1,11 @@
 /**
  * @module task/manager
- * @description TaskManager — 生图任务状态机与队列并发调度器
+ * @description 生图任务队列与状态调度管理器
  *
  * 职责：
- * - 管理生图任务的完整生命周期（PENDING → RUNNING → COMPLETED/ERROR/DISCARDED）
- * - 提供事件订阅接口，供楼层按钮与统计收集器订阅状态变更
- * - 串行并发控制（默认 maxConcurrent=1）
- *
- * 事件流：
- *   submit() → PENDING → generate() → RUNNING
- *     ↓ onProgress 回调 → emit('progress')
- *     ↓ 完成 → COMPLETED → emit('complete')
- *     ↓ 错误 → ERROR → emit('error')
- *   cancel(taskId) → DISCARDED → emit('cancelled')
- *
- * 规范参考：
- * - .agents/Skills/st-image-generation-patterns/SKILL.md §3 (并发任务队列与取消丢弃策略)
+ * - 维护任务生命周期状态（排队中、执行中、已完成、失败、已取消）
+ * - 控制任务串行执行，避免同时发起多个生图请求导致显存超限 (OOM)
+ * - 广播生成进度、完成与错误事件，供楼层按钮和统计模块使用
  */
 import type { ImageDriver } from '../drivers/types';
 import type { GenerateOptions } from '../drivers/types';
@@ -28,9 +18,11 @@ export declare class TaskManager {
     private _activeTaskId;
     /** 等待队列（当活跃任务未完成时排队） */
     private readonly _queue;
-    on<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): void;
+    on<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): () => void;
     off<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): void;
     private _emit;
+    /** 保持 _tasks 缓存容量控制在 50 条以内 */
+    private _cleanOldTasks;
     /**
      * 提交一个生图任务
      *
@@ -42,21 +34,17 @@ export declare class TaskManager {
     submit(params: GenerateOptions, driver: ImageDriver, messageIndex?: number): Promise<string>;
     private _run;
     /**
-     * 仅标记任务为 DISCARDED 状态（内部辅助）
+     * 仅标记任务为取消状态（内部辅助）
      *
-     * ⚠️ 此方法**不调用 driver.cancel()**，不会向 ComfyUI 后端发送取消请求。
-     * 外部代码应使用 `cancelWithDriver(taskId, driver)` 完成完整取消流程。
-     * 此方法保留仅供部分无法直接引用 driver 的内部场景使用。
+     * - PENDING 状态：标记 CANCELLED（任务尚未移交驱动），即时触发 cancelled 广播
+     * - RUNNING 状态：标记 DISCARDED（已交驱动尚在执行）
      */
     cancel(taskId: string): void;
     /**
      * 完整取消任务（推荐使用此方法）
      *
-     * - PENDING 状态：标记 DISCARDED + 调用 driver.cancel() 向后端发送 /queue delete
-     * - RUNNING 状态：标记 DISCARDED + 调用 driver.cancel() 触发客户端丢弃模式
-     *
-     * 取消完成信号（'cancelled' 事件）由 _run() 的 catch 分支在 driver.generate()
-     * reject 后自动触发，无需在此处手动 emit。
+     * - PENDING 状态：标记 CANCELLED + 调用 driver.cancel() + 即时 emit cancelled 信号
+     * - RUNNING 状态：标记 DISCARDED + 调用 driver.cancel()
      */
     cancelWithDriver(taskId: string, driver: ImageDriver): void;
     getTask(taskId: string): TaskRecord | undefined;

@@ -1,12 +1,16 @@
 /**
- * 驱动工厂
+ * @module drivers/factory
+ * @description 图像生成驱动对象简单工厂 (Driver Factory)
  *
- * 根据 settings.provider 动态实例化对应的驱动类。
- * 上层业务逻辑通过此工厂获取驱动实例，无需直接 import 具体驱动类。
+ * 设计模式：简单工厂模式 (Simple Factory Pattern)
  *
- * 扩展新后端的方式：
- *   1. 新建 src/drivers/xxx.ts，继承 BaseDriver 实现 ImageDriver
- *   2. 在此工厂的 switch 中注册
+ * 核心职责：
+ * - 根据 settings.provider 动态实例化对应的 ImageDriver 驱动实现类
+ * - 隔离驱动创建过程，使 TaskManager 与 UI 上层视图解耦
+ *
+ * 扩展新后端规范：
+ * 1. 在 src/drivers/ 下新建子类继承 BaseDriver 并实现 ImageDriver 契约
+ * 2. 在此工厂 createDriver 的 switch 分支中完成注册
  */
 import type { ImageDriver } from './types';
 import type { DrawAssistantSettings } from '../settings/types';

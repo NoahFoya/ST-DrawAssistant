@@ -1,18 +1,20 @@
 /**
  * @module ui/components/blueprint-modal
- * @description 蓝图可视化节点编辑器弹窗组件 (Blueprint Modal Canvas & Inspector)
+ * @description 工作流蓝图可视化编辑弹窗组件
  *
  * 职责：
- * - 解析 ComfyUI API Format Workflow JSON 结构
- * - 呈现可缩放/平移的点阵画布 (Zoomable Point-matrix Canvas) 与精致节点小卡片 (Node Mini Cards)
- * - 点击节点小卡片后唤出右侧专属属性编辑面板 (Node Inspector Panel)
- * - 提供智能搜索、5 大分类 Tab 切片与快捷变量胶囊绑定 (%positive%, %seed% 等)
+ * - 解析 ComfyUI API 格式工作流 JSON，绘制可视化节点列表与参数编辑器
+ * - 提供节点分类过滤、实时搜索及占位变量快捷插入
+ * - 支持修改节点输入参数后重新导出更新的工作流 JSON
  */
 
 import { loadSettings } from '../../settings/manager';
+import { patchSettings } from '../../state/app-store';
 import { PARAMETER_VARIABLES } from '../../core/variables';
 import { logger } from '../../core/logger';
 import { escapeHtml } from '../../utils/html';
+import { showToastNotice } from '../../utils/toast';
+import { applyPluginTheme, applyCurrentThemeToNode } from '../tabs/theme-tab';
 
 export interface WorkflowNodeData {
     class_type: string;
@@ -29,11 +31,16 @@ let currentCategoryFilter = 'ALL';
 let currentSearchQuery = '';
 
 /**
- * 弹出蓝图可视化节点编辑器弹窗
+ * 打开工作流蓝图可视化编辑弹窗
+ *
+ * @param workflowJsonStr 要编辑的工作流 JSON 字符串
+ * @param onSaveCallback 保存修改后的工作流 JSON 字符串回调
+ * @param targetType 目标工作流类型
  */
 export function openBlueprintModal(
     workflowJsonStr: string,
-    onSaveCallback?: (updatedJsonStr: string) => void
+    onSaveCallback?: (updatedJsonStr: string) => void,
+    targetType: 'txt2img' | 'inpaint' = 'txt2img'
 ): void {
     let parsed: WorkflowJsonObj = {};
     try {
@@ -46,23 +53,24 @@ export function openBlueprintModal(
         return;
     }
 
-    if (modalOverlayEl) {
-        modalOverlayEl.remove();
-        modalOverlayEl = null;
-    }
-
     currentZoom = 1.0;
     selectedNodeId = null;
     currentCategoryFilter = 'ALL';
     currentSearchQuery = '';
 
+    if (modalOverlayEl) {
+        modalOverlayEl.remove();
+        modalOverlayEl = null;
+    }
+
     modalOverlayEl = document.createElement('div');
-    modalOverlayEl.className = 'da-blueprint-backdrop da-modal-backdrop';
+    modalOverlayEl.className = 'da-blueprint-backdrop da-modal-backdrop st-da-root';
     modalOverlayEl.style.display = 'flex';
     modalOverlayEl.style.zIndex = '100050';
+    applyCurrentThemeToNode(modalOverlayEl);
 
     const modalInner = document.createElement('div');
-    modalInner.className = 'da-settings-panel da-blueprint-container';
+    modalInner.className = 'da-settings-panel da-blueprint-container st-da-root';
     modalInner.style.width = '94%';
     modalInner.style.maxWidth = '1180px';
     modalInner.style.height = '88vh';
@@ -71,11 +79,14 @@ export function openBlueprintModal(
     modalInner.style.flexDirection = 'column';
     modalInner.addEventListener('click', (e) => e.stopPropagation());
 
+    // 主题全景同步：确保蓝图模态框即刻刷新应用当前皮肤
+    const settings = loadSettings();
+    applyPluginTheme(settings.themePreset || 'luminous-obsidian');
+    applyCurrentThemeToNode(modalInner);
+
     // 1. 顶栏
     const header = document.createElement('div');
-    header.className = 'da-header-bar';
-    header.style.minHeight = '56px';
-    header.style.padding = '12px 18px';
+    header.className = 'da-header-bar da-blueprint-header';
 
     const headerLeft = document.createElement('div');
     headerLeft.style.display = 'flex';
@@ -86,7 +97,7 @@ export function openBlueprintModal(
     titleSt.style.fontWeight = 'bold';
     titleSt.style.fontSize = '1.1em';
     titleSt.style.color = 'var(--da-text-primary)';
-    titleSt.textContent = 'ComfyUI 蓝图可视化节点编辑器';
+    titleSt.textContent = targetType === 'inpaint' ? 'ComfyUI 局部重绘工作流蓝图编辑器' : 'ComfyUI 文生图工作流蓝图编辑器';
 
     const countBadge = document.createElement('span');
     countBadge.className = 'da-header-version-badge';
@@ -188,9 +199,17 @@ export function openBlueprintModal(
     zoomGroup.appendChild(zoomResetBtn);
     zoomGroup.appendChild(zoomInBtn);
 
-    toolbar.appendChild(searchInput);
-    toolbar.appendChild(catTabs);
-    toolbar.appendChild(zoomGroup);
+    const toolbarLeft = document.createElement('div');
+    toolbarLeft.className = 'da-blueprint-toolbar-left';
+    toolbarLeft.appendChild(searchInput);
+    toolbarLeft.appendChild(catTabs);
+
+    const toolbarRight = document.createElement('div');
+    toolbarRight.className = 'da-blueprint-toolbar-right';
+    toolbarRight.appendChild(zoomGroup);
+
+    toolbar.appendChild(toolbarLeft);
+    toolbar.appendChild(toolbarRight);
     modalInner.appendChild(toolbar);
 
     // 3. 画布与右侧属性抽屉主工作区
@@ -442,12 +461,25 @@ export function openBlueprintModal(
             const updatedStr = JSON.stringify(parsed, null, 2);
             const activeSettings = loadSettings();
 
-            const currentWorkflowId = activeSettings.comfyWorkflowProfileId;
-            const updatedWorkflows = [...(activeSettings.comfyWorkflows ?? [])];
-            if (currentWorkflowId) {
-                const item = updatedWorkflows.find(w => w.id === currentWorkflowId);
-                if (item) {
-                    item.data = { json: updatedStr };
+            if (targetType === 'txt2img') {
+                const currentId = activeSettings.comfyTxt2ImgWorkflowId;
+                const list = [...(activeSettings.comfyTxt2ImgWorkflows ?? [])];
+                if (currentId) {
+                    const item = list.find(w => w.id === currentId);
+                    if (item) {
+                        item.data = { json: updatedStr };
+                        patchSettings({ comfyTxt2ImgWorkflows: list });
+                    }
+                }
+            } else {
+                const currentId = activeSettings.comfyInpaintWorkflowId;
+                const list = [...(activeSettings.comfyInpaintWorkflows ?? [])];
+                if (currentId) {
+                    const item = list.find(w => w.id === currentId);
+                    if (item) {
+                        item.data = { json: updatedStr };
+                        patchSettings({ comfyInpaintWorkflows: list });
+                    }
                 }
             }
 
@@ -532,20 +564,4 @@ function getNodeBadgeMeta(nodeId: string, nodeData: WorkflowNodeData) {
         category: 'GENERIC',
         isCore: false,
     };
-}
-
-/** 辅助函数：显示 ST 全局 Toast 通知 */
-function showToastNotice(message: string, title = '蓝图编辑器', isSuccess = true): void {
-    const win = window as unknown as { toastr?: { success?: (m: string, t?: string) => void; error?: (m: string, t?: string) => void; info?: (m: string, t?: string) => void } };
-    if (win.toastr) {
-        if (isSuccess && typeof win.toastr.success === 'function') {
-            win.toastr.success(message, title);
-            return;
-        }
-        if (!isSuccess && typeof win.toastr.error === 'function') {
-            win.toastr.error(message, title);
-            return;
-        }
-    }
-    logger.info(`[${title}] ${message}`);
 }

@@ -1,18 +1,15 @@
 /**
  * @module storage/image-db
- * @description 图像 IndexedDB 存储管理器 (ImageDB)
+ * @description 图像数据库存储与图库服务 (ImageDB)
  *
  * 职责：
- * - 将生图二进制/Base64 数据存储在 IndexedDB 中
- * - 宿主 chat.json 的 msg.extra.da_images 中仅保留轻量 UUID 引用
- * - 避免 chat.json 序列化膨胀，规避 100MB+ 磁盘卡顿与存储配额崩溃
- * - 提供缩略图 WebP 高效缓存表 (THUMBNAILS_STORE_NAME)
- *
- * 规范参考：
- * - .agents/Skills/browser-storage/SKILL.md §3 (IndexedDB 存储范式)
+ * - 将生图 Base64 数据与 WebP 缩略图存储在 IndexedDB 中，宿主聊天记录仅保留 UUID 引用，防止聊天文件膨胀导致卡顿
+ * - 提供图库数据的查询、分页、检索、导出与物理清理方法
  */
 
 import { logger } from '../core/logger';
+import { globalEventBus, DA_EVENTS } from '../core/event-bus';
+import { FeedbackService } from '../ui/feedback-service';
 
 const DB_NAME = 'ST_DrawAssistant_DB';
 export const IMAGES_STORE_NAME = 'images';
@@ -31,37 +28,82 @@ export interface ThumbnailRecord {
 export interface ImageMetadata {
     provider?: string;
     ckptName?: string;
+    clipName?: string;
+    vaeName?: string;
     samplerName?: string;
+    scheduler?: string;
     steps?: number;
     cfgScale?: number;
     width?: number;
     height?: number;
     durationMs?: number;
+    fullPositivePrompt?: string;
+    fullNegativePrompt?: string;
     negativePrompt?: string;
+    seed?: number;
+    denoise?: number;
+    maskBlur?: number;
+    growMaskBy?: number;
 }
 
 export interface StoredImageRecord {
     uuid: string;
     data: string; // Base64 数据串或 DataURL
     mime: string;
-    prompt: string;
+    prompt: string; // 原生正向词 (rawPositive)
+    rawNegativePrompt?: string; // 原生反向词 (rawNegative，无则为空)
     timestamp: number;
+    seed?: number;
     metadata?: ImageMetadata;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+function setupObjectStores(db: IDBDatabase): void {
+    if (!db.objectStoreNames.contains(IMAGES_STORE_NAME)) {
+        const newStore = db.createObjectStore(IMAGES_STORE_NAME, { keyPath: 'uuid' });
+        newStore.createIndex('by_timestamp', 'timestamp', { unique: false });
+    }
+    if (!db.objectStoreNames.contains(STATS_STORE_NAME)) {
+        db.createObjectStore(STATS_STORE_NAME, { keyPath: 'id' });
+    }
+    if (!db.objectStoreNames.contains(LOGS_STORE_NAME)) {
+        const logStore = db.createObjectStore(LOGS_STORE_NAME, { keyPath: 'id' });
+        logStore.createIndex('by_timestamp', 'timestamp', { unique: false });
+    }
+    if (!db.objectStoreNames.contains(THUMBNAILS_STORE_NAME)) {
+        db.createObjectStore(THUMBNAILS_STORE_NAME, { keyPath: 'uuid' });
+    }
+}
+
 export function getDB(): Promise<IDBDatabase> {
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
+        return Promise.reject(new Error('IndexedDB 在当前无 DOM 环境 (Node.js/Vitest) 不可用'));
+    }
     if (dbPromise) return dbPromise;
 
     dbPromise = new Promise((resolve, reject) => {
+        // 不指定版本号，打开存量数据库的既有版本 (若不存在则默认以 Version 1 创建)
         const req = indexedDB.open(DB_NAME);
+
+        req.onupgradeneeded = (e) => {
+            const db = (e.target as IDBOpenDBRequest).result;
+            setupObjectStores(db);
+            logger.info('IndexedDB 数据表 (images / statistics / logs / thumbnails) 初始化建表/升级完成');
+        };
 
         req.onerror = (e) => {
             dbPromise = null;
             const err = (e.target as IDBOpenDBRequest).error;
             logger.error('IndexedDB 打开失败', err);
             reject(err);
+        };
+
+        req.onblocked = () => {
+            dbPromise = null;
+            logger.error('IndexedDB 打开被其他页面阻塞');
+            FeedbackService.toastWarning('数据库打开被其他酒馆页签阻塞，请关闭多余标签页后刷新', '数据库锁定');
+            reject(new Error('IndexedDB 被阻塞'));
         };
 
         req.onsuccess = (e) => {
@@ -74,32 +116,10 @@ export function getDB(): Promise<IDBDatabase> {
                 db.objectStoreNames.contains(LOGS_STORE_NAME) &&
                 db.objectStoreNames.contains(THUMBNAILS_STORE_NAME)
             ) {
-                try {
-                    const txImg = db.transaction(IMAGES_STORE_NAME, 'readonly');
-                    const storeImg = txImg.objectStore(IMAGES_STORE_NAME);
-                    const txStat = db.transaction(STATS_STORE_NAME, 'readonly');
-                    const storeStat = txStat.objectStore(STATS_STORE_NAME);
-                    const txLog = db.transaction(LOGS_STORE_NAME, 'readonly');
-                    const storeLog = txLog.objectStore(LOGS_STORE_NAME);
-                    const txThumb = db.transaction(THUMBNAILS_STORE_NAME, 'readonly');
-                    const storeThumb = txThumb.objectStore(THUMBNAILS_STORE_NAME);
-
-                    if (
-                        storeImg.keyPath === 'uuid' &&
-                        storeStat.keyPath === 'id' &&
-                        storeLog.keyPath === 'id' &&
-                        storeThumb.keyPath === 'uuid'
-                    ) {
-                        isValidSchema = true;
-                    }
-                } catch (err) {
-                    logger.debug('IndexedDB Schema 预检检测到演进，准备升级版本重建', err);
-                    isValidSchema = false;
-                }
+                isValidSchema = true;
             }
 
             if (isValidSchema) {
-                // 监听其他 Tab 发起的版本升级请求，主动关闭旧连接
                 db.onversionchange = () => {
                     db.close();
                     dbPromise = null;
@@ -109,7 +129,7 @@ export function getDB(): Promise<IDBDatabase> {
                 return;
             }
 
-            // Schema 不相符（不存在 images, statistics, logs 或 thumbnails 表）：关闭连接并升级版本重建
+            // 若已有数据库缺少建表，关闭连接并以 currentVer + 1 递增升级
             const currentVer = db.version || 1;
             db.close();
 
@@ -118,30 +138,14 @@ export function getDB(): Promise<IDBDatabase> {
 
             upgradeReq.onupgradeneeded = (upgradeEvent) => {
                 const upgradeDb = (upgradeEvent.target as IDBOpenDBRequest).result;
-                if (!upgradeDb.objectStoreNames.contains(IMAGES_STORE_NAME)) {
-                    const newStore = upgradeDb.createObjectStore(IMAGES_STORE_NAME, { keyPath: 'uuid' });
-                    newStore.createIndex('by_timestamp', 'timestamp', { unique: false });
-                }
-                if (!upgradeDb.objectStoreNames.contains(STATS_STORE_NAME)) {
-                    upgradeDb.createObjectStore(STATS_STORE_NAME, { keyPath: 'id' });
-                }
-                if (!upgradeDb.objectStoreNames.contains(LOGS_STORE_NAME)) {
-                    const logStore = upgradeDb.createObjectStore(LOGS_STORE_NAME, { keyPath: 'id' });
-                    logStore.createIndex('by_timestamp', 'timestamp', { unique: false });
-                }
-                if (!upgradeDb.objectStoreNames.contains(THUMBNAILS_STORE_NAME)) {
-                    upgradeDb.createObjectStore(THUMBNAILS_STORE_NAME, { keyPath: 'uuid' });
-                }
-                logger.info('IndexedDB 数据表 (images / statistics / logs / thumbnails) 重建升级完成');
+                setupObjectStores(upgradeDb);
             };
 
             upgradeReq.onsuccess = (upgradeEvent) => {
                 const upgradeDb = (upgradeEvent.target as IDBOpenDBRequest).result;
-                // 升级后的新连接同样需要监听 versionchange
                 upgradeDb.onversionchange = () => {
                     upgradeDb.close();
                     dbPromise = null;
-                    logger.warn('IndexedDB 版本被其他页面升级，已主动关闭连接');
                 };
                 resolve(upgradeDb);
             };
@@ -149,14 +153,14 @@ export function getDB(): Promise<IDBDatabase> {
             upgradeReq.onerror = (upgradeEvent) => {
                 dbPromise = null;
                 const err = (upgradeEvent.target as IDBOpenDBRequest).error;
-                logger.error('IndexedDB 升级重置失败', err);
+                logger.error('IndexedDB 升级失败', err);
                 reject(err);
             };
 
-            // 处理升级被阅塞的情况（其他 Tab 没有响应 onversionchange 并关闭连接）
             upgradeReq.onblocked = () => {
                 dbPromise = null;
-                logger.error('IndexedDB 版本升级被其他页面阻塞，请关闭其他 SillyTavern 标签页后刷新');
+                logger.error('IndexedDB 升级被其他页面阻塞');
+                FeedbackService.toastWarning('数据库升级被其他酒馆页签阻塞，请关闭多余标签页后刷新', '数据库锁定');
                 reject(new Error('IndexedDB 升级被阻塞'));
             };
         };
@@ -166,14 +170,15 @@ export function getDB(): Promise<IDBDatabase> {
 }
 
 /**
- * 将图像数据存储至 IndexedDB (支持元数据)
+ * 将图像数据存储至 IndexedDB (支持元数据与配额溢出处理)
  */
 export async function saveImageToDB(
     uuid: string,
     data: string,
     mime: string,
     prompt: string,
-    metadata?: ImageMetadata
+    metadata?: ImageMetadata,
+    rawNegativePrompt?: string
 ): Promise<string> {
     const db = await getDB();
     return new Promise((resolve, reject) => {
@@ -185,18 +190,25 @@ export async function saveImageToDB(
             data,
             mime,
             prompt,
+            rawNegativePrompt,
             timestamp: Date.now(),
+            seed: metadata?.seed,
             metadata,
         };
 
         const req = store.put(record);
         req.onsuccess = () => {
             logger.info(`图像数据成功保存至 IndexedDB: uuid=${uuid}`);
+            globalEventBus.emit(DA_EVENTS.GALLERY_CHANGED);
             resolve(uuid);
         };
         req.onerror = () => {
-            logger.error(`保存图像到 IndexedDB 失败: uuid=${uuid}`, req.error);
-            reject(req.error);
+            const err = req.error;
+            if (err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+                FeedbackService.toastError('浏览器存储配额已满，图像无法保存！请清理历史图库或孤立图片。', '存储空间不足');
+            }
+            logger.error(`保存图像到 IndexedDB 失败: uuid=${uuid}`, err);
+            reject(err);
         };
     });
 }
@@ -256,6 +268,40 @@ export async function deleteImageFromDB(uuid: string): Promise<void> {
 }
 
 /**
+ * 批量高效删除指定 UUID 列表的图像及缩略图 (在单个 readwrite 事务内完成)
+ */
+export async function deleteImagesBatchFromDB(uuids: Iterable<string>): Promise<number> {
+    const uuidList = Array.from(uuids);
+    if (uuidList.length === 0) return 0;
+
+    try {
+        const db = await getDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([IMAGES_STORE_NAME, THUMBNAILS_STORE_NAME], 'readwrite');
+            const storeImg = tx.objectStore(IMAGES_STORE_NAME);
+            const storeThumb = tx.objectStore(THUMBNAILS_STORE_NAME);
+
+            for (const uuid of uuidList) {
+                storeImg.delete(uuid);
+                storeThumb.delete(uuid);
+            }
+
+            tx.oncomplete = () => {
+                logger.info(`已从 IndexedDB 成功单事务批量删除 ${uuidList.length} 张图像及缩略图`);
+                resolve(uuidList.length);
+            };
+            tx.onerror = () => {
+                logger.error('从 IndexedDB 批量删除图像失败', tx.error);
+                reject(tx.error);
+            };
+        });
+    } catch (err) {
+        logger.error('从 IndexedDB 批量删除图像抛出致命异常', err);
+        throw err;
+    }
+}
+
+/**
  * 保存 WebP 缩略图至 IndexedDB
  */
 export async function saveThumbnailToDB(record: ThumbnailRecord): Promise<void> {
@@ -271,6 +317,7 @@ export async function saveThumbnailToDB(record: ThumbnailRecord): Promise<void> 
         });
     } catch (err) {
         logger.warn(`保存 WebP 缩略图失败: uuid=${record.uuid}`, err);
+        throw err;
     }
 }
 
@@ -434,4 +481,71 @@ export async function clearAllImagesFromDB(): Promise<void> {
         logger.error('物理清空图库数据库失败', err);
         throw err;
     }
+}
+
+// ─── 图库门面服务（原 gallery-service.ts，已合并）────────────────────────────
+//
+// 所有图库高层操作通过此区块暴露，内部自动广播 DA_EVENTS.GALLERY_CHANGED 通知 UI 刷新。
+// 导入路径：import { galleryDeleteImage, galleryGetStats, ... } from './image-db';
+
+/**
+ * 订阅图库数据变动
+ * @returns unsubscribe 函数，配合 DisposableBag 使用
+ */
+export function subscribeGalleryChange(listener: () => void): () => void {
+    return globalEventBus.on(DA_EVENTS.GALLERY_CHANGED, listener);
+}
+
+/**
+ * 获取当前 IndexedDB 存储空间与图片数量统计
+ */
+export async function galleryGetStats() {
+    return getGalleryStats();
+}
+
+/**
+ * 删除指定 UUID 的单张图像并广播变更通知
+ */
+export async function galleryDeleteImage(uuid: string): Promise<void> {
+    await deleteImageFromDB(uuid);
+    logger.info(`图库: 成功物理删除图像 [${uuid}]`);
+    globalEventBus.emit(DA_EVENTS.GALLERY_CHANGED);
+}
+
+/**
+ * 批量删除图像并广播变更通知
+ */
+export async function galleryDeleteBatch(uuids: Iterable<string>): Promise<number> {
+    const count = await deleteImagesBatchFromDB(uuids);
+    logger.info(`图库: 成功批量物理删除 ${count} 张图像`);
+    globalEventBus.emit(DA_EVENTS.GALLERY_CHANGED);
+    return count;
+}
+
+/**
+ * 扫描全库未被聊天引用的孤立废图
+ */
+export async function galleryScanIsolated(): Promise<string[]> {
+    const { findIsolatedImages } = await import('./chat-scanner');
+    return findIsolatedImages();
+}
+
+/**
+ * 物理清理全库孤立废图并广播变更通知
+ */
+export async function galleryCleanIsolated(): Promise<number> {
+    const { deleteIsolatedImages } = await import('./chat-scanner');
+    const count = await deleteIsolatedImages();
+    logger.info(`图库: 成功彻底清理 ${count} 张孤立废图`);
+    globalEventBus.emit(DA_EVENTS.GALLERY_CHANGED);
+    return count;
+}
+
+/**
+ * 物理重置并清空所有存储的图像数据，广播变更通知
+ */
+export async function galleryResetAllStorage(): Promise<void> {
+    await clearAllImagesFromDB();
+    logger.info('图库: 已清空 IndexedDB 中的所有图库数据');
+    globalEventBus.emit(DA_EVENTS.GALLERY_CHANGED);
 }

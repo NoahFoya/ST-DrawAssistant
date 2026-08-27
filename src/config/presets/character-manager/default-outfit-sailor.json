@@ -1,0 +1,11 @@
+{
+  "id": "default-outfit-1",
+  "nameCN": "水手制服",
+  "nameEN": "Sailor Uniform",
+  "upperBody": "sailor collar, white shirt, necktie",
+  "upperBodyBack": "sailor collar back",
+  "fullBody": "pleated skirt, knee high socks",
+  "fullBodyBack": "pleated skirt back",
+  "createdAt": 0,
+  "updatedAt": 0
+}

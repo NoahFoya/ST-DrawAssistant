@@ -6,11 +6,14 @@
  * - 页面悬浮球挂载与视口边界守护
  * - 自动记忆最后拖拽位置 (Position Persistence)，防止超出视口
  * - 拖拽/放开即时保存配置，支持样式与图标动态实时更新
+ * - 订阅 DA_EVENTS.SETTINGS_CHANGED 实现设置变更后样式自动同步（响应式）
  */
 
 
 import { EXTENSION_DISPLAY_NAME } from '../core/constants';
-import { loadSettings, updateSettings } from '../settings/manager';
+import { patchSettings } from '../state/app-store';
+import { settingsStore } from '../state/app-store';
+import { globalEventBus, DA_EVENTS } from '../core/event-bus';
 import { logger } from '../core/logger';
 import { escapeHtmlAttr } from '../utils/html';
 
@@ -112,7 +115,12 @@ export function initFAB(onToggleClick?: (open: boolean) => void): HTMLElement {
         clampFABPositionToViewport();
     });
 
-    logger.info('FAB 快捷悬浮球挂载成功 ✅');
+    // 订阅 settingsStore，设置变更时自动刷新悬浮球样式
+    globalEventBus.on(DA_EVENTS.SETTINGS_CHANGED, () => {
+        applyFABStylesFromSettings();
+    });
+
+    logger.info('FAB 快捷悬浮球挂载成功');
 
     return fabElement;
 }
@@ -123,7 +131,8 @@ export function initFAB(onToggleClick?: (open: boolean) => void): HTMLElement {
  */
 export function applyFABStylesFromSettings(): void {
     if (!fabElement) return;
-    const settings = loadSettings();
+    // 使用 Store 快照，零开销读取，不再触发 extension_settings 解析
+    const settings = settingsStore.getState();
 
     // 1. 显隐
     fabElement.style.display = (settings.fabVisible ?? true) ? 'flex' : 'none';
@@ -154,7 +163,7 @@ export function resetFABPosition(): void {
     fabElement.style.bottom = '24px';
 
     const rect = fabElement.getBoundingClientRect();
-    updateSettings({ fabPosition: { x: Math.round(rect.left), y: Math.round(rect.top) } });
+    patchSettings({ fabPosition: { x: Math.round(rect.left), y: Math.round(rect.top) } });
 }
 
 /**
@@ -166,7 +175,7 @@ export function toggleFABPanelState(forceState?: boolean): void {
     isPanelOpen = forceState !== undefined ? forceState : !isPanelOpen;
 
     if (fabElement) {
-        const settings = loadSettings();
+        const settings = settingsStore.getState();
         const iconEl = fabElement.querySelector('.da-fab-icon');
         if (isPanelOpen) {
             fabElement.classList.add('da-fab-btn--active');
@@ -192,7 +201,7 @@ export function toggleFABPanelState(forceState?: boolean): void {
 /** 恢复保存的位置（带视口防护） */
 function restoreFABPosition(): void {
     if (!fabElement) return;
-    const settings = loadSettings();
+    const settings = settingsStore.getState();
     const pos = settings.fabPosition;
 
     if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
@@ -244,7 +253,7 @@ function enableDrag(el: HTMLElement): void {
             x: Math.round(finalRect.left),
             y: Math.round(finalRect.top),
         };
-        updateSettings({ fabPosition: newPos });
+        patchSettings({ fabPosition: newPos });
     };
 
     const handleStart = (clientX: number, clientY: number) => {

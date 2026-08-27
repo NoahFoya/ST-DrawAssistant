@@ -8,15 +8,24 @@
  */
 import { type StructuredLogEntry } from '../core/logger';
 /**
- * 异步保存一条结构化日志到 IndexedDB
+ * 异步保存一条结构化日志记录到 IndexedDB
+ *
+ * @param entry 日志对象
+ * @returns 保存完成 Promise
  */
 export declare function saveLogToDB(entry: StructuredLogEntry): Promise<void>;
 /**
- * 从 IndexedDB 查询历史日志
+ * 从 IndexedDB 查询历史日志列表
+ *
+ * @param limit 最多返回的日志条数，默认为 200
+ * @returns 日志数组 Promise
  */
 export declare function loadLogsFromDB(limit?: number): Promise<StructuredLogEntry[]>;
 /**
- * 清理超过 maxDays 天数 (默认 7 天) 的旧日志
+ * 清理早于指定天数的历史日志记录
+ *
+ * @param maxDays 日志保留的最大天数，默认为 7 天
+ * @returns 清理完成 Promise
  */
 export declare function cleanExpiredLogsInDB(maxDays?: number): Promise<void>;
 /**

@@ -1,0 +1,34 @@
+{
+  "themes": [
+    "blue-sky.json",
+    "cyberpunk-neon.json",
+    "emerald-forest.json",
+    "luminous-obsidian.json",
+    "mac-dusk.json"
+  ],
+  "models": [
+    "wai-sdxl.json"
+  ],
+  "prompts": [
+    "cinematic-realistic.json",
+    "concept-lineart.json",
+    "wai-illustrious.json"
+  ],
+  "global": [],
+  "workflows-txt2img": [
+    "standard-txt2img.json",
+    "wai-txt2img.json"
+  ],
+  "workflows-inpaint": [
+    "standard-inpaint.json",
+    "wai-inpaint.json"
+  ],
+  "character-manager": [
+    "default-character.json",
+    "default-enable-scheme.json",
+    "default-outfit-maid.json",
+    "default-outfit-sailor.json",
+    "tpl-markdown-card.json",
+    "tpl-tavern-xml.json"
+  ]
+}

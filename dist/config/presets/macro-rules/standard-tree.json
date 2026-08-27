@@ -1,0 +1,111 @@
+{
+  "id": "default-macro-tree-v1",
+  "name": "Wai/Standard 角色匹配方案",
+  "isDefault": true,
+  "characterFixedVariables": ["nameEN", "characterTraits"],
+  "characterRootNodes": [
+    {
+      "id": "node-char-behind",
+      "name": "背面视角路由",
+      "pattern": "-from_behind",
+      "enabled": true,
+      "children": [
+        {
+          "id": "node-char-behind-upper-sfw",
+          "name": "背面 SFW 上半身",
+          "pattern": "-sfw-upperbody",
+          "enabled": true,
+          "variables": ["facialFeaturesBack", "upperBodySFWBack"]
+        },
+        {
+          "id": "node-char-behind-upper-nsfw",
+          "name": "背面 NSFW 上半身",
+          "pattern": "-nsfw-upperbody",
+          "enabled": true,
+          "variables": ["facialFeaturesBack", "upperBodyNSFWBack"]
+        },
+        {
+          "id": "node-char-behind-lower-sfw",
+          "name": "背面 SFW 下半身",
+          "pattern": "-sfw-lowerbody",
+          "enabled": true,
+          "variables": ["fullBodySFWBack"]
+        },
+        {
+          "id": "node-char-behind-lower-nsfw",
+          "name": "背面 NSFW 下半身",
+          "pattern": "-nsfw-lowerbody",
+          "enabled": true,
+          "variables": ["fullBodyNSFWBack"]
+        }
+      ]
+    },
+    {
+      "id": "node-char-front-upper-sfw",
+      "name": "正面 SFW 上半身",
+      "pattern": "-sfw-upperbody",
+      "enabled": true,
+      "variables": ["facialFeatures", "upperBodySFW"]
+    },
+    {
+      "id": "node-char-front-upper-nsfw",
+      "name": "正面 NSFW 上半身",
+      "pattern": "-nsfw-upperbody",
+      "enabled": true,
+      "variables": ["facialFeatures", "upperBodyNSFW"]
+    },
+    {
+      "id": "node-char-front-lower-sfw",
+      "name": "正面 SFW 下半身",
+      "pattern": "-sfw-lowerbody",
+      "enabled": true,
+      "variables": ["fullBodySFW"]
+    },
+    {
+      "id": "node-char-front-lower-nsfw",
+      "name": "正面 NSFW 下半身",
+      "pattern": "-nsfw-lowerbody",
+      "enabled": true,
+      "variables": ["fullBodyNSFW"]
+    }
+  ],
+  "outfitFixedVariables": ["nameEN"],
+  "outfitRootNodes": [
+    {
+      "id": "node-outfit-behind",
+      "name": "背面视角路由",
+      "pattern": "-from_behind",
+      "enabled": true,
+      "children": [
+        {
+          "id": "node-outfit-behind-upper",
+          "name": "背面服装上半身",
+          "pattern": "-upperbody",
+          "enabled": true,
+          "variables": ["upperBodyBack"]
+        },
+        {
+          "id": "node-outfit-behind-full",
+          "name": "背面服装全身",
+          "pattern": "-lowerbody",
+          "enabled": true,
+          "variables": ["fullBodyBack"]
+        }
+      ]
+    },
+    {
+      "id": "node-outfit-front-upper",
+      "name": "正面服装上半身",
+      "pattern": "-upperbody",
+      "enabled": true,
+      "variables": ["upperBody"]
+    },
+    {
+      "id": "node-outfit-front-full",
+      "name": "正面服装全身",
+      "pattern": "-lowerbody",
+      "enabled": true,
+      "variables": ["fullBody"]
+    }
+  ]
+}

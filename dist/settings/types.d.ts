@@ -8,7 +8,25 @@
  * - 声明工作流变量注入配置 WorkflowInjectionConfig
  */
 /** 支持的图像生成后端类型 */
-export type ImageProvider = 'comfyui' | 'webui' | 'novelai';
+export type ImageProvider = 'comfyui' | 'sd-webui' | 'novelai';
+/** 进阶扩展运行状态配置 */
+export interface ExtensionState {
+    enabled: boolean;
+    config?: Record<string, unknown>;
+}
+/** 图像在消息楼层中的显示样式配置 */
+export interface ImageDisplayConfig {
+    /** 对齐方式：'left' | 'center' | 'right' */
+    align: 'left' | 'center' | 'right';
+    /** 缩放模式：'contain' | 'cover' | 'fill' | 'none' */
+    objectFit: 'contain' | 'cover' | 'fill' | 'none';
+    /** 最大显示高度（px），0 表示不限制 */
+    maxHeight: number;
+    /** 最大显示宽度百分比 (5-100) */
+    maxWidthPct: number;
+    /** 是否圆角边框 */
+    rounded: boolean;
+}
 /**
  * ComfyUI Workflow 中各参数注入点配置
  * 以节点 ID + 字段名 定位需要替换的位置
@@ -52,8 +70,12 @@ export interface DrawAssistantSettings {
     enabled: boolean;
     /** 是否在设置项标题旁边显示 ❓ 帮助说明图标 */
     showHelp: boolean;
+    /** 删除聊天记录时是否自动擦除关联的废弃图像 Blob (默认 false，不开启自动删除) */
+    autoCleanupOnChatDelete?: boolean;
     /** 调试日志级别：TRACE / DEBUG / INFO / WARN / ERROR */
     logLevel?: 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+    /** 进阶扩展运行状态表 (键名对应扩展唯一的 id，如 'character-manager') */
+    extensions?: Record<string, ExtensionState>;
     /**
      * ComfyUI Workflow 的 API 格式 JSON 字符串
      * 在设置面板中粘贴从 ComfyUI 导出的 API 格式工作流
@@ -87,10 +109,27 @@ export interface DrawAssistantSettings {
     samplerName: string;
     /** 调度器名称 */
     scheduler: string;
+    /** ComfyUI 后端拉取到的已缓存模型/模型/CLIP/VAE/采样器/调度器/Lora 列表 */
+    cachedModels?: string[];
+    cachedClips?: string[];
+    cachedVaes?: string[];
+    cachedSamplers?: string[];
+    cachedSchedulers?: string[];
+    cachedLoras?: string[];
     /** 全局正向提示词前缀（追加在 AI 生成提示词之前） */
     promptPrefix: string;
     /** 全局负向提示词 */
     negativePrefix: string;
+    /** 自动清洗提示词中的多余空格与连续空行 (默认开启) */
+    cleanExtraSpacesAndLines?: boolean;
+    /** 是否启用图片长按/右键快捷操作面板 (默认开启) */
+    enableActionPanel?: boolean;
+    /** 局部重绘与图生图重噪比 (Denoise Scale, 0.05 - 1.0, 默认 0.75) */
+    inpaintDenoise?: number;
+    /** 局部重绘蒙版羽化/模糊度 (Mask Blur, 0 - 64 px, 默认 8) */
+    inpaintMaskBlur?: number;
+    /** 局部重绘蒙版膨胀扩展 (Mask Padding / Grow Mask, 0 - 64 px, 默认 6) */
+    inpaintGrowMask?: number;
     /** 是否在 AI 消息生成完毕后自动触发楼层生图（默认关闭） */
     autoGenerate: boolean;
     /** 是否在点击生成图像时触发全屏大图 Lightbox 弹出 */
@@ -103,6 +142,8 @@ export interface DrawAssistantSettings {
     imageFormat?: 'original' | 'webp' | 'jpeg';
     /** 压缩质量系数 (0.1 ~ 1.0，仅当格式为 webp/jpeg 时生效) */
     imageQuality?: number;
+    /** 图像在消息楼层中的显示样式配置 */
+    imageDisplay?: ImageDisplayConfig;
     /** 并发任务数上限（推荐 1，避免 CUDA OOM） */
     maxConcurrent: number;
     /** 请求超时时间（毫秒） */
@@ -122,22 +163,16 @@ export interface DrawAssistantSettings {
         x: number;
         y: number;
     } | null;
-    /** 用户保存的自定义主题方案列表 */
-    customThemes?: CustomThemeScheme[];
-    /** 当前选中的全局方案预设 ID */
-    globalProfileId?: string;
-    /** 保存的全局方案预设列表 */
-    globalProfiles?: PresetProfileItem<GlobalProfileData>[];
+    /** 用户保存的自定义主题方案列表（统一 PresetProfileItem 包装） */
+    customThemes?: PresetProfileItem<ThemeData>[];
     /** 绑定的模型参数预设 ID */
     comfyModelProfileId?: string;
     /** 绑定的提示词预设 ID */
     comfyPromptProfileId?: string;
     /** 绑定的文生图工作流预设 ID */
     comfyTxt2ImgWorkflowId?: string;
-    /** 绑定的重绘工作流预设 ID */
+    /** 绑定的局部重绘工作流预设 ID */
     comfyInpaintWorkflowId?: string;
-    /** 选中的通用工作流预设 ID (C5 方案库选中项) */
-    comfyWorkflowProfileId?: string;
     /** Checkpoint 专属正向起手式 */
     checkpointPositivePrefix?: string;
     /** Checkpoint 专属负向起手式 */
@@ -156,8 +191,10 @@ export interface DrawAssistantSettings {
     comfyModelProfiles?: PresetProfileItem<ModelProfileData>[];
     /** 保存的提示词预设列表 */
     comfyPromptProfiles?: PresetProfileItem<PromptProfileData>[];
-    /** 保存的统一工作流预设列表（文生图与重绘共用） */
-    comfyWorkflows?: PresetProfileItem<WorkflowProfileData>[];
+    /** 保存的文生图工作流预设列表 */
+    comfyTxt2ImgWorkflows?: PresetProfileItem<WorkflowProfileData>[];
+    /** 保存的局部重绘工作流预设列表 */
+    comfyInpaintWorkflows?: PresetProfileItem<WorkflowProfileData>[];
 }
 /** 全局组合方案预设数据结构 */
 export interface GlobalProfileData {
@@ -179,11 +216,16 @@ export interface ModelProfileData {
     scheduler?: string;
     checkpointPositivePrefix?: string;
     checkpointNegativePrefix?: string;
+    inpaintDenoise?: number;
+    inpaintMaskBlur?: number;
+    inpaintGrowMask?: number;
 }
 /** Lora 项配置 */
 export interface LoraItem {
     name: string;
     weight: number;
+    textWeight?: number;
+    triggerWeight?: number;
 }
 /** 提示词预设数据结构 */
 export interface PromptProfileData {
@@ -201,17 +243,25 @@ export interface PresetProfileItem<T = Record<string, unknown>> {
     id: string;
     name: string;
     isBuiltIn?: boolean;
+    isSystemPreset?: boolean;
     data: T;
 }
-/** 自定义主题方案结构 */
-export interface CustomThemeScheme {
-    id: string;
-    name: string;
-    isBuiltIn?: boolean;
+/**
+ * 主题方案纯视觉数据（颜色、圆角、模糊度等 UI 参数）
+ *
+ * 与 id/name/isBuiltIn 元信息分离，存储于 PresetProfileItem<ThemeData>.data 中
+ */
+export interface ThemeData {
+    /** 背景起始色 (主背景色) */
     bgPrimary: string;
+    /** 背景终止色 (若与 bgPrimary 相同则为纯色背景，不同则呈现平滑渐变) */
+    bgGradientEnd?: string;
+    /** 背景渐变流向角度 (0° ~ 360°，默认 135) */
+    bgGradientAngle?: number;
+    /** @deprecated 仅用于兼容历史旧版导出的 CSS 渐变字符串 */
+    bgGradient?: string;
     bgSecondary: string;
-    bgInput: string;
-    bgHover: string;
+    bgOpacity?: number;
     textPrimary: string;
     textSecondary: string;
     borderColor: string;

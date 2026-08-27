@@ -13,8 +13,10 @@
  *   默认结束：###
  *   示例：image###1girl, cityscape, night###
  *
- * 规范参考：
- * - .agents/Skills/st-image-generation-patterns/SKILL.md §5 (楼层按钮交互模式与生命周期)
+ * DOM 注入生命周期：
+ * 每次 CHARACTER_MESSAGE_RENDERED 事件触发时，扫描新渲染的消息楼层，
+ * 识别占位符并注入按钮 DOM。按钮与 TaskManager 通过 taskId 绑定，
+ * 任务完成后 ImageDB 落盘，图片原位挂载到消息楼层容器。
  */
 import { TaskManager } from '../task/manager';
 import type { ImageDriver } from '../drivers/types';

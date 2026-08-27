@@ -1,15 +1,16 @@
 /**
  * @module storage/chat-scanner
- * @description 聊天消息图片引用扫描器 (ChatScanner)
+ * @description 聊天记录图片引用与孤立文件清理分析器 (ChatScanner)
  *
  * 职责：
- * - 遍历 SillyTavern 宿主 getContext().chat 消息节点
- * - 收集当前聊天包含的所有有效 da_images 图片 UUID 引用
- * - 对比 IndexedDB 储存仓库，精确判定与清理无聊天引用的“孤立垃圾数据”
- *
- * 规范参考：
- * - .agents/Skills/browser-storage/SKILL.md §3 (存储配额与废弃垃圾清理策略)
+ * - 扫描宿主当前聊天消息中引用的所有图片 UUID 集合
+ * - 响应宿主 CHAT_DELETED 事件（当且仅当用户开启 autoCleanupOnChatDelete 时执行即时物理擦除）
+ * - 对比 IndexedDB 中的全量图片，找出未被任何消息引用的废弃图片并提供清理方法，释放存储空间
  */
+/**
+ * 从消息列表中解析提取所有 da_images 图片 UUID 集合
+ */
+export declare function extractUuidsFromMessages(messages: unknown[]): Set<string>;
 /**
  * 扫描当前聊天面板中被引用的全部 UUID 集合
  */
@@ -23,7 +24,11 @@ export declare function getAllStoredUuids(): Promise<string[]>;
  */
 export declare function findIsolatedImages(): Promise<string[]>;
 /**
- * 一键清理删除所有孤立图片数据，释放无用磁盘占用
+ * 一键清理删除所有孤立图片数据，释放无用磁盘占用 (单事务高效处理)
  */
 export declare function deleteIsolatedImages(): Promise<number>;
+/**
+ * 处理 CHAT_DELETED 宿主事件（仅在用户开启 autoCleanupOnChatDelete 配置时执行即时擦除）
+ */
+export declare function handleChatDeleted(chatId: string, deletedMessages?: unknown[]): Promise<number>;
 //# sourceMappingURL=chat-scanner.d.ts.map

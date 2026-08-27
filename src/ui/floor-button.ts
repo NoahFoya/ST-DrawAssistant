@@ -13,20 +13,26 @@
  *   默认结束：###
  *   示例：image###1girl, cityscape, night###
  *
- * 规范参考：
- * - .agents/Skills/st-image-generation-patterns/SKILL.md §5 (楼层按钮交互模式与生命周期)
+ * DOM 注入生命周期：
+ * 每次 CHARACTER_MESSAGE_RENDERED 事件触发时，扫描新渲染的消息楼层，
+ * 识别占位符并注入按钮 DOM。按钮与 TaskManager 通过 taskId 绑定，
+ * 任务完成后 ImageDB 落盘，图片原位挂载到消息楼层容器。
  */
 
 
 import { TaskManager } from '../task/manager';
 import type { ImageDriver } from '../drivers/types';
 import type { DrawAssistantSettings } from '../settings/types';
-import { renderImageToMessage, renderPreviewToMessage, clearPreview } from './image-renderer';
+import { renderImageToMessage } from './image-renderer';
 import { getContext } from '../core/context';
 import { saveImageToDB, getImageFromDB } from '../storage/image-db';
 import { logger } from '../core/logger';
+import { showToastError } from '../utils/toast';
 
 import { escapeHtmlAttr } from '../utils/html';
+import { buildFinalPrompt } from '../core/prompt-pipeline';
+import type { GenerateOptions } from '../drivers/types';
+import { FeedbackService } from './feedback-service';
 
 interface SavedImageMeta {
     uuid?: string;
@@ -45,6 +51,10 @@ interface FloorButtonContext {
     wrapperEl: HTMLElement;
     imageSlot: HTMLElement;
     promptText: string;
+    rawNegativePrompt?: string;
+    overridePrompt?: string;
+    overrideNegativePrompt?: string;
+    overrideInpaintData?: Record<string, unknown>;
     currentTaskId: string | null;
     state: ButtonState;
     messageElement: HTMLElement;
@@ -128,11 +138,19 @@ export function injectFloorButtons(
     // 为每个占位符创建实际按钮
     const placeholders = mesTextEl.querySelectorAll<HTMLElement>('.da-floor-btn-placeholder');
     logger.debug(`injectFloorButtons[${messageIndex}]: replacing ${placeholders.length} placeholder(s) with button(s)`);
-    placeholders.forEach((placeholder, idx) => {
+    placeholders.forEach(async (placeholder, idx) => {
         const promptText = placeholder.getAttribute('data-prompt') ?? '';
         const ctx = createButton(placeholder, promptText, messageElement, messageIndex, idx);
-        restoreSavedImage(ctx);
-        bindButtonEvents(ctx, taskManager, driver, settings);
+        const callbacks = createActionCallbacks(ctx, settings);
+        const hasRestored = await restoreSavedImage(ctx, callbacks);
+        bindButtonEvents(ctx, taskManager, driver, settings, callbacks);
+
+        if (!hasRestored && settings.autoGenerate) {
+            logger.info(`autoGenerate 已开启，自动触发楼层生图: messageIndex=${messageIndex}, buttonIndex=${idx}`);
+            setTimeout(() => {
+                ctx.buttonEl.click();
+            }, 800);
+        }
     });
 }
 
@@ -187,28 +205,129 @@ function createButton(
     return ctx;
 }
 
+/**
+ * 创建与当前楼层关联的图像手势与操作栏回调映射
+ *
+ * @param ctx 楼层按钮上下文对象
+ * @param settings 扩展全局设置
+ * @returns 包含提示词、重新生成、局部重绘等动作回调的服务对象
+ */
+function createActionCallbacks(
+    ctx: FloorButtonContext,
+    _settings: DrawAssistantSettings
+): import('./image-renderer').ImageActionCallbacks {
+    const triggerInpaint = () => {
+        const imgEl = ctx.imageSlot.querySelector<HTMLImageElement>('.da-generated-img');
+        if (imgEl?.src) {
+            import('./components/inpaint-canvas-modal').then(({ openInpaintCanvasModal }) => {
+                openInpaintCanvasModal({
+                    imageSrc: imgEl.src,
+                    initialPrompt: ctx.overridePrompt || ctx.promptText,
+                    onConfirm: (result) => {
+                        logger.info('局部重绘请求就绪，准备触发生图', result.prompt);
+                        ctx.overridePrompt = result.prompt;
+                        ctx.overrideInpaintData = {
+                            isInpaint: true,
+                            initImage: result.initImage,
+                            maskImage: result.maskImage,
+                        };
+                        ctx.buttonEl.click();
+                    }
+                });
+            }).catch(err => logger.error('加载 InpaintCanvasModal 失败', err));
+        }
+    };
+
+    const getCurrentImageSrc = (): string => {
+        const imgEl = ctx.imageSlot.querySelector<HTMLImageElement>('.da-generated-img');
+        return imgEl?.src || '';
+    };
+
+    const getSavedUuid = (): string | undefined => {
+        try {
+            const stCtx = getContext();
+            const msg = stCtx.chat?.[ctx.messageIndex];
+            if (!msg) return undefined;
+
+            const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
+            const daImagesRoot = msg.extra?.da_images as Record<string | number, unknown> | undefined;
+            if (!daImagesRoot) return undefined;
+
+            const swipeObj = (daImagesRoot[swipeId] ?? daImagesRoot[String(swipeId)]) as Record<string | number, SavedImageMeta> | undefined;
+            if (swipeObj && typeof swipeObj === 'object') {
+                return swipeObj[ctx.buttonIndex]?.uuid ?? swipeObj[String(ctx.buttonIndex)]?.uuid;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return undefined;
+    };
+
+    return {
+        promptText: ctx.overridePrompt || ctx.promptText,
+        negativePrompt: ctx.overrideNegativePrompt ?? ctx.rawNegativePrompt ?? '',
+        messageIndex: ctx.messageIndex,
+        buttonIndex: ctx.buttonIndex,
+        get imageSrc() {
+            return getCurrentImageSrc();
+        },
+        get uuid() {
+            return getSavedUuid();
+        },
+        onConfirm: (newPrompt, newNegativePrompt) => {
+            ctx.overridePrompt = newPrompt;
+            if (newNegativePrompt !== undefined) {
+                ctx.overrideNegativePrompt = newNegativePrompt;
+            }
+            ctx.buttonEl.click();
+        },
+        onRegenerate: () => {
+            ctx.buttonEl.click();
+        },
+        onInpaint: triggerInpaint,
+        onDelete: () => {
+            import('./components/modals').then(({ showConfirmDialog }) => {
+                showConfirmDialog({
+                    title: '删除图像确认',
+                    message: '确定要移除当前导出的生成的图像吗？',
+                    isDangerous: true,
+                }).then(confirmed => {
+                    if (confirmed) {
+                        ctx.imageSlot.innerHTML = '';
+                        setButtonState(ctx, 'default');
+                        logger.info(`已移除第 #${ctx.messageIndex} 条消息的已生成图像卡片`);
+                    }
+                });
+            }).catch(err => logger.error('加载 ConfirmDialog 失败', err));
+        }
+    };
+}
+
 /** 尝试从 IndexedDB (及旧 extra 结构) 恢复历史生成的图像 */
-async function restoreSavedImage(ctx: FloorButtonContext): Promise<void> {
+async function restoreSavedImage(
+    ctx: FloorButtonContext,
+    callbacks?: import('./image-renderer').ImageActionCallbacks
+): Promise<boolean> {
     try {
         const stCtx = getContext();
         const msg = stCtx.chat?.[ctx.messageIndex];
-        if (!msg) return;
+        if (!msg) return false;
 
         const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
         const daImagesRoot = msg.extra?.da_images as Record<string | number, unknown> | undefined;
-        if (!daImagesRoot) return;
+        if (!daImagesRoot) return false;
 
         let savedMeta: SavedImageMeta | undefined;
 
-        if (daImagesRoot[swipeId] && typeof daImagesRoot[swipeId] === 'object') {
-            const swipeImages = daImagesRoot[swipeId] as Record<number, SavedImageMeta>;
-            savedMeta = swipeImages[ctx.buttonIndex];
-        } else if (daImagesRoot[ctx.buttonIndex]) {
+        const swipeObj = (daImagesRoot[swipeId] ?? daImagesRoot[String(swipeId)]) as Record<string | number, SavedImageMeta> | undefined;
+        if (swipeObj && typeof swipeObj === 'object') {
+            savedMeta = swipeObj[ctx.buttonIndex] ?? swipeObj[String(ctx.buttonIndex)];
+        } else if (daImagesRoot[ctx.buttonIndex] !== undefined || daImagesRoot[String(ctx.buttonIndex)] !== undefined) {
             // 兼容回退旧格式
-            savedMeta = daImagesRoot[ctx.buttonIndex] as SavedImageMeta;
+            savedMeta = (daImagesRoot[ctx.buttonIndex] ?? daImagesRoot[String(ctx.buttonIndex)]) as SavedImageMeta;
         }
 
-        if (!savedMeta) return;
+        if (!savedMeta) return false;
 
         let imageDataStr: string | null = null;
         let mime = savedMeta.mime || 'image/png';
@@ -219,6 +338,9 @@ async function restoreSavedImage(ctx: FloorButtonContext): Promise<void> {
             if (record) {
                 imageDataStr = record.data;
                 mime = record.mime || mime;
+                if (record.rawNegativePrompt !== undefined) {
+                    ctx.rawNegativePrompt = record.rawNegativePrompt;
+                }
             }
         }
         // 2. 旧数据平滑无缝迁移：若读到存量 Base64，自动存入 IndexedDB 并把 chat.json 中的 Base64 擦除
@@ -241,12 +363,14 @@ async function restoreSavedImage(ctx: FloorButtonContext): Promise<void> {
         }
 
         if (imageDataStr) {
-            renderImageToMessage(ctx.imageSlot, imageDataStr, mime);
+            renderImageToMessage(ctx.imageSlot, imageDataStr, mime, callbacks);
             setButtonState(ctx, 'done');
+            return true;
         }
     } catch (err) {
         logger.warn('恢复历史图像失败', err);
     }
+    return false;
 }
 
 // ─── 事件绑定 ─────────────────────────────────────────────────────────────────
@@ -255,7 +379,8 @@ function bindButtonEvents(
     ctx: FloorButtonContext,
     taskManager: TaskManager,
     driver: ImageDriver,
-    settings: DrawAssistantSettings
+    settings: DrawAssistantSettings,
+    callbacks?: import('./image-renderer').ImageActionCallbacks
 ): void {
 
     ctx.buttonEl.addEventListener('click', async () => {
@@ -269,12 +394,15 @@ function bindButtonEvents(
             return;
         }
 
+        // 使用楼层专属编辑后的提示词（若有）或原生抽取提示词（注：overridePrompt 保持持久，重新生成继续沿用）
+        const effectivePrompt = ctx.overridePrompt ?? ctx.promptText;
+
         // 开始生图
-        logger.info(`用户触发楼层生图: messageIndex=${ctx.messageIndex}, prompt="${ctx.promptText.slice(0, 50)}..."`);
+        logger.info(`用户触发楼层生图: messageIndex=${ctx.messageIndex}, prompt="${effectivePrompt.slice(0, 50)}..."`);
         setButtonState(ctx, 'loading');
 
         try {
-            const params = buildGenerateParams(ctx.promptText, settings);
+            const params = await buildGenerateParams(effectivePrompt, settings, ctx.messageIndex, ctx.buttonIndex, ctx);
             const taskId = await taskManager.submit(params, driver, ctx.messageIndex);
             ctx.currentTaskId = taskId;
             setButtonState(ctx, 'progress');
@@ -285,24 +413,22 @@ function bindButtonEvents(
                 ctx.cleanupTaskListeners = undefined;
             }
 
-            // 订阅任务事件与注册清理例程
+            const unbinds: Array<() => void> = [];
+
             const cleanup = () => {
-                taskManager.off('progress', onProgress);
-                taskManager.off('complete', onComplete);
-                taskManager.off('error', onError);
-                taskManager.off('cancelled', onCancelled);
+                unbinds.forEach(fn => {
+                    try { fn(); } catch { /* ignore */ }
+                });
+                unbinds.length = 0;
                 if (ctx.cleanupTaskListeners === cleanup) {
                     ctx.cleanupTaskListeners = undefined;
                 }
             };
             ctx.cleanupTaskListeners = cleanup;
 
-            const onProgress = (tid: string, percent: number, msg?: string, previewUrl?: string) => {
+            const onProgress = (tid: string, percent: number, msg?: string) => {
                 if (tid !== taskId) return;
                 updateProgress(ctx, percent, msg);
-                if (previewUrl) {
-                    renderPreviewToMessage(ctx.imageSlot, previewUrl);
-                }
             };
 
             const onComplete = (tid: string, result: import('../drivers/types').GenerateResult) => {
@@ -310,13 +436,12 @@ function bindButtonEvents(
                 cleanup();
 
                 logger.info(`楼层生图任务完成: messageIndex=${ctx.messageIndex}, taskId=${taskId}`);
-                clearPreview(ctx.imageSlot);
-                renderImageToMessage(ctx.imageSlot, result.imageData, result.mimeType);
+                renderImageToMessage(ctx.imageSlot, result.imageData, result.mimeType, callbacks);
                 setButtonState(ctx, 'done');
                 ctx.currentTaskId = null;
 
                 // 持久化保存图像到聊天记录 extra 字段（若已启用）
-                void persistImageToChat(ctx, result.imageData, result.mimeType, settings);
+                void persistImageToChat(ctx, result.imageData, result.mimeType, settings, result.seed);
             };
 
             const onError = (tid: string, error: Error) => {
@@ -324,7 +449,6 @@ function bindButtonEvents(
                 cleanup();
 
                 logger.error(`楼层生图任务失败: messageIndex=${ctx.messageIndex}, taskId=${taskId}`, error);
-                clearPreview(ctx.imageSlot);
                 setButtonState(ctx, 'error');
                 ctx.buttonEl.title = `错误：${error.message}`;
                 ctx.currentTaskId = null;
@@ -337,15 +461,16 @@ function bindButtonEvents(
                 if (tid !== taskId) return;
                 cleanup();
 
-                clearPreview(ctx.imageSlot);
                 setButtonState(ctx, 'default');
                 ctx.currentTaskId = null;
             };
 
-            taskManager.on('progress', onProgress);
-            taskManager.on('complete', onComplete);
-            taskManager.on('error', onError);
-            taskManager.on('cancelled', onCancelled);
+            unbinds.push(
+                taskManager.on('progress', onProgress),
+                taskManager.on('complete', onComplete),
+                taskManager.on('error', onError),
+                taskManager.on('cancelled', onCancelled)
+            );
 
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
@@ -355,14 +480,6 @@ function bindButtonEvents(
             showToastError(errorMsg);
         }
     });
-}
-
-/** 辅助函数：显示 ST 全局 Toast 错误弹窗 */
-function showToastError(message: string): void {
-    const win = window as unknown as { toastr?: { error: (msg: string, title?: string) => void } };
-    if (win.toastr && typeof win.toastr.error === 'function') {
-        win.toastr.error(message, '绘画助手 生图失败');
-    }
 }
 
 /** 辅助转码工具：根据设置转码图片 */
@@ -436,7 +553,8 @@ async function persistImageToChat(
     ctx: FloorButtonContext,
     rawImageData: string,
     rawMimeType: string,
-    settings: DrawAssistantSettings
+    settings: DrawAssistantSettings,
+    seed?: number
 ): Promise<void> {
     if (!settings.persistToChat) return;
 
@@ -453,29 +571,47 @@ async function persistImageToChat(
             settings.imageQuality
         );
 
-        // 1. 始终存入 IndexedDB（独立高效且防止聊天记录膨胀）
+        // 1. 优先存入 IndexedDB（实现二进制媒体与聊天 JSON 的解耦）
         const uuid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
             : `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-        const params = buildGenerateParams(ctx.promptText, settings);
+        const params = await buildGenerateParams(ctx.promptText, settings, ctx.messageIndex, ctx.buttonIndex, ctx);
         const fullPositivePrompt = params.prompt;
         const fullNegativePrompt = params.negativePrompt;
 
         const metadata = {
             provider: settings.provider ?? 'comfyui',
             ckptName: settings.ckptName,
+            clipName: settings.clipName,
+            vaeName: settings.vaeName,
             samplerName: settings.samplerName,
+            scheduler: settings.scheduler,
             steps: settings.steps,
             cfgScale: settings.cfgScale,
             width: settings.width,
             height: settings.height,
+            fullPositivePrompt,
+            fullNegativePrompt,
             negativePrompt: fullNegativePrompt,
+            seed: seed ?? (params.seed !== -1 ? params.seed : undefined),
+            denoise: params.denoise,
+            maskBlur: params.maskBlur,
+            growMaskBy: params.growMaskBy,
         };
 
-        await saveImageToDB(uuid, imageData, mimeType, fullPositivePrompt, metadata);
+        const rawPos = ctx.overridePrompt || ctx.promptText;
+        const rawNeg = ctx.overrideNegativePrompt ?? ctx.rawNegativePrompt ?? '';
 
-        // 2. msg.extra.da_images 中保存 UUID 引用（以及可选的额外 Base64 副本）
+        try {
+            await saveImageToDB(uuid, imageData, mimeType, rawPos, metadata, rawNeg);
+        } catch (dbErr) {
+            logger.error('保存图像数据至 IndexedDB 失败', dbErr);
+            FeedbackService.toastWarning('图像渲染成功，但本地 IndexedDB 存储失败（可能存储配额已满）', '存储异常');
+            return;
+        }
+
+        // 2. 宿主聊天记录 message.extra.da_images 中仅持久化 UUID 引用
         const swipeId = msg.swipe_id ?? (msg.extra?.swipe_id as number | undefined) ?? 0;
         const extra = { ...(msg.extra ?? {}) };
         const daImagesRoot = { ...(extra.da_images as Record<string | number, unknown> ?? {}) };
@@ -498,12 +634,13 @@ async function persistImageToChat(
         extra.da_images = daImagesRoot;
         msg.extra = extra;
 
-        const saveFn = stCtx.saveChatConditional ?? (window as unknown as { saveChatConditional?: () => void }).saveChatConditional;
+        const saveFn = stCtx.saveChat ?? stCtx.saveChatConditional ?? (window as unknown as { saveChat?: () => void }).saveChat;
         if (typeof saveFn === 'function') {
             saveFn();
         }
     } catch (err) {
-        logger.warn('持久化图片引用到聊天记录失败（若 saveImageToDB 已成功，图像数据在 IndexedDB 中仍存在，但 chat 引用丢失，下次会话可能无法通过 UUID 恢复图像）', err);
+        logger.warn('持久化图片 UUID 引用至聊天记录失败', err);
+        FeedbackService.toastWarning('图像已存入本地图库，但写入聊天记录失败，刷新后图像可能从楼层解绑', '存储警告');
     }
 }
 
@@ -533,42 +670,34 @@ function updateProgress(ctx: FloorButtonContext, percent: number, _message?: str
     }
 }
 
-// ─── 参数构建 ─────────────────────────────────────────────────────────────────
-
-function buildGenerateParams(
+async function buildGenerateParams(
     promptText: string,
-    settings: DrawAssistantSettings
-): import('../drivers/types').GenerateOptions {
-    let positive = promptText;
-    let negativeFromPrompt = '';
+    settings: DrawAssistantSettings,
+    messageIndex = 0,
+    buttonIndex = 0,
+    ctx?: FloorButtonContext
+): Promise<GenerateOptions> {
+    const effectivePrompt = ctx?.overridePrompt || promptText;
+    const { positive, negative, rawPositive, rawNegative } = await buildFinalPrompt(effectivePrompt, settings, {
+        messageIndex,
+        buttonIndex,
+        rawPrompt: effectivePrompt,
+    });
 
-    if (promptText.includes('|')) {
-        const parts = promptText.split('|');
-        positive = parts[0].trim();
-        negativeFromPrompt = parts.slice(1).join('|').trim();
+    if (ctx) {
+        if (!ctx.overridePrompt) ctx.promptText = rawPositive;
+        if (ctx.overrideNegativePrompt === undefined) ctx.rawNegativePrompt = rawNegative;
     }
 
-    const loraSuffix = (settings.loras && settings.loras.length > 0)
-        ? settings.loras.filter(l => l.name).map(l => `<lora:${l.name}:${l.weight}>`).join(', ')
-        : '';
+    const inpaintData = ctx?.overrideInpaintData;
+    if (ctx) {
+        // 重置单次重绘瞬态数据，确保后续重新生图自动切回常规文生图，而 overridePrompt 则持续有效
+        ctx.overrideInpaintData = undefined;
+    }
 
-    const fullPositive = [
-        settings.checkpointPositivePrefix,
-        settings.promptPrefix,
-        positive,
-        settings.promptSuffix,
-        loraSuffix
-    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
-
-    const fullNegative = [
-        settings.checkpointNegativePrefix,
-        settings.negativePrefix,
-        negativeFromPrompt
-    ].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
-
-    return {
-        prompt: fullPositive,
-        negativePrompt: fullNegative,
+    const options: GenerateOptions = {
+        prompt: positive,
+        negativePrompt: negative,
         ckptName: settings.ckptName,
         clipName: settings.clipName,
         vaeName: settings.vaeName,
@@ -578,8 +707,17 @@ function buildGenerateParams(
         cfgScale: settings.cfgScale,
         samplerName: settings.samplerName,
         scheduler: settings.scheduler,
-        seed: -1, // 随机种子
+        seed: -1,
     };
+
+    if (inpaintData) {
+        options.denoise = settings.inpaintDenoise ?? 0.75;
+        options.maskBlur = settings.inpaintMaskBlur ?? 8;
+        options.growMaskBy = settings.inpaintGrowMask ?? 6;
+        options.extra = { ...inpaintData };
+    }
+
+    return options;
 }
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
@@ -589,11 +727,13 @@ function escapeRegex(str: string): string {
 }
 
 /**
- * 构建占位符正则，兼容 `#` 和 HTML 实体转义符 `&#35;` / `&num;`
+ * 构建占位符正则，支持简洁高效匹配与 `#` / HTML 实体兼容
  */
 function buildPlaceholderRegex(start: string, end: string): RegExp {
-    const startPattern = escapeRegex(start).replace(/#/g, '(?:#|&#35;|&num;)');
-    const endPattern = escapeRegex(end).replace(/#/g, '(?:#|&#35;|&num;)');
+    const s = (start && start.trim()) ? start.trim() : 'image###';
+    const e = (end && end.trim()) ? end.trim() : '###';
+    const startPattern = escapeRegex(s).replace(/#/g, '(?:#|&#35;|&num;)');
+    const endPattern = escapeRegex(e).replace(/#/g, '(?:#|&#35;|&num;)');
     return new RegExp(`${startPattern}([\\s\\S]*?)${endPattern}`, 'gi');
 }
 

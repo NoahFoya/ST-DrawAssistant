@@ -40,9 +40,9 @@ export declare class PerformanceCollector {
      * 开始段落计时打点，返回直接结束计时的回调闭包
      */
     startTimer(name: string, taskId?: string): () => number;
-    /** 兼容性方法：开始 Span */
+    /** 兼容性方法：开始 Span（_attributes 留待扩展 OpenTelemetry 语义） */
     startSpan(name: string, taskId?: string, _attributes?: Record<string, unknown>): PerformanceSpan;
-    /** 兼容性方法：结束 Span */
+    /** 兼容性方法：结束 Span（_extraAttributes 留待扩展 OpenTelemetry 语义） */
     endSpan(span: PerformanceSpan, _extraAttributes?: Record<string, unknown>): void;
     /**
      * 记录 segment 耗时

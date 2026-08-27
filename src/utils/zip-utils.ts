@@ -12,6 +12,15 @@ import type { StoredImageRecord } from '../storage/image-db';
 import { getImageFromDB } from '../storage/image-db';
 import { logger } from '../core/logger';
 
+/**
+ * 将指定 UUID 列表的图片及生成元数据打包导出为 ZIP 文件并触发下载
+ *
+ * 当环境中存在 JSZip 时打包为包含图片、独立 JSON 元数据和清单的 ZIP 压缩包；
+ * 当无 JSZip 时自动降级为导出包含完整记录的 JSON 格式文件。
+ *
+ * @param uuids 要打包导出的图像 UUID 列表
+ * @returns 打包或导出完成的 Promise
+ */
 export async function exportImagesToZip(uuids: string[]): Promise<void> {
     if (uuids.length === 0) return;
 

@@ -3,9 +3,38 @@
  *
  * 核心原则：
  * 1. 样式 100% 独立于 SillyTavern，不跟随酒馆主题变化
- * 2. 自包含 --da-* 独立色彩与材质 Token 系统
- * 3. iOS / macOS 设计语言：毛玻璃、圆角、SF 字体、弹性动画
- * 4. 弹性高度链：模态框高度由视口决定，内容区自由滚动
+ * 2. 统一样式管理：优先在 CSS 中定义 .da-* 类，减少非必要 TS 内联样式
+ * 3. 强绑定 Token：严禁硬编码色值 (#hex 或 rgb/rgba)，统一引用 var(--da-*) 变量
+ * 4. 规范注释：严禁残留 // TODO, // FIXME 等临时性注释及废弃代码
+ * 5. iOS / macOS 设计语言：毛玻璃、圆角、SF 字体、弹性动画
+ *
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  可用 Token 速查（使用 var(--da-xxx) 引用，禁止硬编码色值）  │
+ * ├──────────────┬──────────────────────────────────────────────┤
+ * │ 背景         │ --da-bg-primary  --da-bg-secondary           │
+ * │              │ --da-bg-card  --da-bg-input  --da-bg-hover   │
+ * │              │ --da-bg-terminal  --da-bg-active             │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 文字         │ --da-text-primary  --da-text-secondary       │
+ * │              │ --da-text-muted                              │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 边框         │ --da-border-color  --da-separator            │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 强调色       │ --da-accent-color  --da-accent-hover         │
+ * │              │ --da-accent-rgb（用于 rgba() 混合）          │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 状态色       │ --da-status-warning  --da-status-warning-border │
+ * │              │ --da-color-success  --da-color-error         │
+ * │              │ --da-color-warn                              │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 圆角         │ --da-radius-modal  --da-radius-card          │
+ * │              │ --da-radius-input  --da-radius-btn           │
+ * │              │ --da-radius-pill  --da-radius-small          │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 阴影         │ --da-shadow-sm  --da-shadow-md  --da-shadow-lg │
+ * ├──────────────┼──────────────────────────────────────────────┤
+ * │ 字体         │ --da-font-family  --da-font-mono             │
+ * └──────────────┴──────────────────────────────────────────────┘
  */
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -13,49 +42,60 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 .st-da-root,
-.da-settings-panel,
-.da-lightbox-overlay {
-    /* ── 背景层次 (iOS Dark Mode: #1C1C1E → #2C2C2E → #3A3A3C) ── */
-    --da-bg-primary:    #0f1014;           /* 深底色 */
-    --da-bg-secondary:  #1a1d24;           /* 侧边栏 / 顶栏 */
-    --da-bg-card:       rgba(255,255,255,0.04); /* 卡片半透明 */
-    --da-bg-input:      #1e2128;           /* 输入框 */
-    --da-bg-hover:      rgba(255,255,255,0.07);
-    --da-bg-active:     rgba(0, 242, 254, 0.12);
+.da-settings-panel {
+    /* 背景与材质 */
+    --da-bg-primary: #0f1014;
+    --da-bg-secondary: #1a1d24;
+    --da-bg-card: rgba(255, 255, 255, 0.04);
+    --da-bg-input: #1e2128;
+    --da-bg-hover: rgba(255, 255, 255, 0.07);
+    --da-bg-active: rgba(0, 242, 254, 0.12);
 
-    /* ── 文字 ── */
-    --da-text-primary:   #f2f2f7;           /* iOS Label */
-    --da-text-secondary: #8e8e93;           /* iOS Secondary Label */
-    --da-text-muted:     #636366;           /* iOS Tertiary Label */
+    /* 文字色彩 */
+    --da-text-primary: #f2f2f7;
+    --da-text-secondary: #8e8e93;
+    --da-text-muted: #636366;
 
-    /* ── 边框（iOS 使用极细半透明分隔线） ── */
-    --da-border-color:    rgba(255,255,255,0.09);
-    --da-separator:       rgba(255,255,255,0.06);
+    /* 边框与分隔线 */
+    --da-border-color: rgba(255, 255, 255, 0.09);
+    --da-separator: rgba(255, 255, 255, 0.06);
 
-    /* ── Accent ── */
-    --da-accent-color:  #00f2fe;           /* 极光青 */
-    --da-accent-hover:  #00d8e6;
-    --da-accent-rgb:    0, 242, 254;
+    /* 品牌与高亮 Accent */
+    --da-accent-color: #00f2fe;
+    --da-accent-hover: #00d8e6;
+    --da-accent-rgb: 0, 242, 254;
 
-    /* ── 阴影 ── */
-    --da-shadow-sm:  0 2px 8px  rgba(0,0,0,0.35);
-    --da-shadow-md:  0 8px 24px rgba(0,0,0,0.50);
-    --da-shadow-lg:  0 20px 60px rgba(0,0,0,0.65);
+    /* 阴影层次 */
+    --da-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --da-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.50);
+    --da-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.65);
 
-    /* ── 圆角（iOS 风格，更大的圆角半径） ── */
-    --da-radius-modal:  18px;
-    --da-radius-card:   14px;
-    --da-radius-input:  10px;
-    --da-radius-btn:    10px;
-    --da-radius-pill:   100px;
-    --da-radius-small:  8px;
+    /* 圆角半径 */
+    --da-radius-modal: 18px;
+    --da-radius-card: 14px;
+    --da-radius-input: 10px;
+    --da-radius-btn: 10px;
+    --da-radius-pill: 100px;
+    --da-radius-small: 8px;
 
-    /* ── 字体（SF Pro 优先，匹配 iOS 系统字体） ── */
+    /* 动态衍生 Token 兜底（动态值由 applySchemeCSSVariables 运行时注入） */
+    --da-bg-subtle: rgba(255, 255, 255, 0.05);
+    --da-status-warning: #ff9f0a;
+    --da-status-warning-bg: rgba(255, 159, 10, 0.18);
+    --da-status-warning-border: rgba(255, 159, 10, 0.45);
+
+    /* 语义化状态色彩 Token */
+    --da-color-success: #30d158;
+    --da-color-error: #ff453a;
+    --da-color-warn: #ffbd2e;
+    --da-bg-terminal: #0a0c10;
+
+    /* 字体族定义 */
     --da-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
                       'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
     --da-font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'Fira Code', monospace;
 
-    /* ── 动画（iOS spring-like easing） ── */
+    /* 动画曲线 */
     --da-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
     --da-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -79,15 +119,15 @@
 
 .da-fab-btn {
     position: fixed;
-    right: 24px;
-    bottom: 24px;
-    width: 52px;
-    height: 52px;
+    right: clamp(14px, 2.2vw, 32px);
+    top: clamp(90px, 30vh, 360px);
+    width: clamp(44px, 4.2vw, 54px);
+    height: clamp(44px, 4.2vw, 54px);
     border-radius: 50%;
-    background: #181b22 !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
+    background: var(--da-bg-secondary, #181b22) !important;
+    color: var(--da-text-primary, #ffffff) !important;
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.16)) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -103,8 +143,8 @@
 
 .da-fab-btn:hover {
     transform: scale(1.08);
-    background: #232733 !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px #00f2fe !important;
+    background: var(--da-bg-hover, #232733) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--da-accent-color, #00f2fe) !important;
 }
 
 .da-fab-btn:active {
@@ -146,11 +186,11 @@
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #d1d5db;
+    color: var(--da-text-secondary);
     cursor: pointer;
     font-size: 0.85em;
     user-select: none;
-    transition: all 0.2s ease;
+    transition: background 0.2s var(--da-ease), border-color 0.2s var(--da-ease), color 0.2s var(--da-ease);
 }
 
 .da-fab-icon-chip:hover {
@@ -177,15 +217,15 @@
 
 .da-cropper-modal {
     width: 320px;
-    background: #181b22;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--da-bg-secondary, #181b22);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.15));
     border-radius: 14px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    box-shadow: var(--da-shadow-lg);
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    color: #f3f4f6;
+    color: var(--da-text-primary, #f3f4f6);
 }
 
 .da-cropper-header {
@@ -202,13 +242,13 @@
 .da-cropper-close-btn {
     background: none;
     border: none;
-    color: #9ca3af;
+    color: var(--da-text-secondary);
     cursor: pointer;
     font-size: 1.1em;
 }
 
 .da-cropper-close-btn:hover {
-    color: #ffffff;
+    color: var(--da-text-primary);
 }
 
 .da-cropper-body {
@@ -223,7 +263,7 @@
     height: 260px;
     border-radius: 10px;
     overflow: hidden;
-    background: #0f1015;
+    background: var(--da-bg-primary);
     border: 1px solid rgba(255, 255, 255, 0.1);
     touch-action: none;
     cursor: grab;
@@ -242,7 +282,7 @@
 
 .da-cropper-label {
     font-size: 0.85em;
-    color: #9ca3af;
+    color: var(--da-text-secondary);
 }
 
 .da-cropper-footer {
@@ -251,13 +291,45 @@
     gap: 8px;
 }
 
+/* 通用对话框组件 (showConfirmDialog / showPromptDialog / showTripleChoiceDialog) */
+.da-dialog-panel {
+    width: 90%;
+    max-width: 420px;
+    padding: 22px 26px;
+    border-radius: 14px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-radius, 20px));
+    border: 1px solid var(--da-border-color);
+}
+
+.da-dialog-title {
+    font-size: 1.08em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    margin-bottom: 12px;
+}
+
+.da-dialog-message {
+    font-size: 0.9em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 20px;
+    word-break: break-word;
+}
+
+.da-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    3. 主面板模态框 — 弹性高度链（核心布局修复）
    ═══════════════════════════════════════════════════════════════════ */
 
 /* 遮罩背景（设置面板 & 蓝图编辑器）
-   注意：当与 da-lightbox-overlay 同时存在时，此样式须覆盖其 cursor/background/z-index
-   解决方案：对含 da-modal-backdrop 的元素强制重置 */
+   注：与 da-lightbox-overlay 重叠时重置层级与默认光标 */
 .da-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -288,7 +360,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;               /* ← 保留以实现圆角裁剪 */
-    background: var(--da-bg-primary);
+    background: var(--da-bg-gradient, var(--da-bg-primary));
     backdrop-filter: blur(28px) saturate(200%);
     -webkit-backdrop-filter: blur(28px) saturate(200%);
     border: 1px solid var(--da-border-color);
@@ -569,32 +641,50 @@
 }
 
 .da-status-dot {
-    font-size: 0.75em;
-    transition: color 0.3s ease;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.3s var(--da-ease), box-shadow 0.3s var(--da-ease);
 }
 
 .da-status-dot.da-status-ok {
-    color: #30d158;     /* iOS green */
-    text-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+    background: #30d158;
+    box-shadow: 0 0 6px rgba(48, 209, 88, 0.55);
 }
 
 .da-status-dot.da-status-error {
-    color: #ff453a;     /* iOS red */
-    text-shadow: 0 0 8px rgba(255, 69, 58, 0.6);
+    background: #ff453a;
+    box-shadow: 0 0 6px rgba(255, 69, 58, 0.55);
 }
 
 .da-status-dot.da-status-checking {
-    color: #ffd60a;     /* iOS yellow */
-    animation: da-pulse 1.5s infinite ease-in-out;
+    background: #ffd60a;
+    animation: da-pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes da-pulse-dot {
+    0%, 100% { box-shadow: 0 0 4px rgba(255, 214, 10, 0.4); }
+    50%       { box-shadow: 0 0 10px rgba(255, 214, 10, 0.8); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    4. Section 卡片（iOS 分组列表风格）
    ═══════════════════════════════════════════════════════════════════ */
 
+/* 通用 Tab 面板卡片垂直间距流 */
+.da-tab-pane > .da-section-card {
+    margin-top: 14px;
+}
+.da-tab-pane > .da-section-card:first-child {
+    margin-top: 0;
+}
+
 .da-section-card {
     position: relative;
-    background: var(--da-bg-card);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-radius, 20px));
     border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-card);
     padding: 0 0 0 4px;         /* 左侧 accent bar 偏移 */
@@ -777,16 +867,27 @@
     min-width: 80px;
 }
 
+.da-input[type="text"],
+.da-input[type="password"],
+.da-input[type="url"] {
+    text-align: left;
+}
+
 .da-input-narrow {
     width: 90px;
     flex: 0 0 auto;
 }
 
-.da-control-fixed-180,
+.da-control-fixed-180 {
+    width: 180px;
+    max-width: 180px;
+    flex: 0 0 auto;
+}
+
 .da-control-fixed-240 {
-    width: 180px !important;
-    max-width: 180px !important;
-    flex: 0 0 auto !important;
+    width: 240px;
+    max-width: 240px;
+    flex: 0 0 auto;
 }
 
 .da-select {
@@ -802,9 +903,75 @@
 }
 
 .da-select option {
-    background: #1e2128;
-    color: var(--da-text-primary);
+    background-color: var(--da-bg-secondary, #1a1d24) !important;
+    color: var(--da-text-primary, #f2f2f7) !important;
+    font-size: 0.95em;
+    padding: 6px 10px;
     text-align: center;
+}
+
+.da-select option:checked {
+    background-color: var(--da-bg-hover, rgba(255, 255, 255, 0.12));
+    color: var(--da-accent-color, #00f2fe);
+    font-weight: 600;
+}
+
+/* 预设内容失配/缺失时的标红警告样式 */
+.da-select.da-select-error,
+.da-input.da-select-error {
+    border-color: #ef4444 !important;
+    background-color: rgba(239, 68, 68, 0.08) !important;
+    color: #f87171 !important;
+}
+
+.da-select.da-select-error:focus,
+.da-input.da-select-error:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+}
+
+/* ── 折叠收纳组件 (Collapsible Accordion Component) ── */
+.da-collapsible-section {
+    margin-top: 10px;
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-small, 8px);
+    padding: 10px 14px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.04));
+    transition: border-color 0.2s var(--da-ease), background 0.2s var(--da-ease);
+}
+
+.da-collapsible-summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--da-accent-color);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    outline: none;
+}
+
+.da-collapsible-summary:hover {
+    color: var(--da-accent-hover);
+}
+
+/* ── 顶层独立悬浮未保存提示栏 (Floating Viewport Banner) ── */
+.da-floating-unsaved-banner {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: var(--da-status-warning-bg, rgba(255, 159, 10, 0.18));
+    backdrop-filter: blur(var(--da-blur-radius, 10px));
+    -webkit-backdrop-filter: blur(var(--da-blur-radius, 10px));
+    border-bottom: 1px solid var(--da-status-warning-border, rgba(255, 159, 10, 0.45));
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--da-status-warning, #ff9f0a);
+    font-size: 0.85em;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .da-input:focus,
@@ -1207,14 +1374,39 @@ input[type='range'].da-input:focus {
 .da-preset-toolbar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 5px;
-    padding: 10px 18px 8px 18px;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
     border-bottom: 1px solid var(--da-separator);
+    background: var(--da-bg-secondary, rgba(255,255,255,0.04));
+    border: 1px solid var(--da-border-color, rgba(255,255,255,0.1));
+    border-radius: 8px;
+}
+
+.da-preset-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.da-preset-toolbar-title {
+    font-weight: 600;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.da-preset-toolbar-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   12. 通用设置图标与标题（兼容老代码）
+   12. 通用设置图标与标题
    ═══════════════════════════════════════════════════════════════════ */
 
 .da-settings-icon {
@@ -1245,7 +1437,91 @@ input[type='range'].da-input:focus {
 
 .da-help-btn {
     flex-shrink: 0;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: rgba(var(--da-accent-rgb, 0, 242, 254), 0.14);
+    border: 1px solid var(--da-accent-color, #00f2fe);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--da-accent-color, #00f2fe);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.18s var(--da-ease), transform 0.15s var(--da-ease-spring);
+    line-height: 1;
+    user-select: none;
 }
+
+.da-help-btn:hover {
+    background: rgba(var(--da-accent-rgb, 0, 242, 254), 0.28);
+    transform: scale(1.12);
+}
+
+.da-help-btn:active {
+    transform: scale(0.92);
+}
+
+/* 徽章 Badge */
+.da-badge {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    border-radius: var(--da-radius-pill, 100px);
+    padding: 1px 8px;
+    font-size: 0.78em;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.da-badge.dirty {
+    color: var(--da-status-warning, #ff9f0a);
+    background: var(--da-status-warning-bg, rgba(255, 159, 10, 0.12));
+    border: 1px solid var(--da-status-warning-border, rgba(255, 159, 10, 0.35));
+}
+
+/* ── 通用 Tag 标签组件 ── */
+.da-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 100px);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--da-border-color);
+    font-size: 0.8em;
+    color: var(--da-text-primary);
+}
+
+.da-tag--error {
+    background: rgba(255, 69, 58, 0.1);
+    border-color: rgba(255, 69, 58, 0.35);
+    color: var(--da-color-error, #ff453a);
+}
+
+/* ── 诊断日志终端组件 ── */
+.da-log-terminal {
+    background: var(--da-bg-terminal, #0a0c10);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--da-font-mono);
+    font-size: 0.82em;
+    height: 240px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border: 1px solid var(--da-border-color);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.da-log-ts { color: #64748b; }
+.da-log-module { color: #818cf8; }
+.da-log-level[data-level="INFO"] { color: var(--da-accent-color, #00f2fe); font-weight: bold; }
+.da-log-level[data-level="WARN"] { color: var(--da-color-warn, #ffbd2e); font-weight: bold; }
+.da-log-level[data-level="ERROR"],
+.da-log-level[data-level="FATAL"] { color: var(--da-color-error, #ff453a); font-weight: bold; }
 
 /* 帮助气泡（挂到 document.body，用 fixed 定位） */
 .da-field-help-bubble {
@@ -1254,7 +1530,7 @@ input[type='range'].da-input:focus {
     width: 240px;
     max-width: calc(100vw - 24px);
     padding: 10px 13px;
-    background: rgba(28, 28, 32, 0.95);
+    background: var(--da-bg-secondary-rgba, rgba(28, 28, 32, 0.95));
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     color: var(--da-text-primary);
@@ -1286,7 +1562,7 @@ input[type='range'].da-input:focus {
    ═══════════════════════════════════════════════════════════════════ */
 
 .da-log-console {
-    font-family: var(--da-font-mono) !important;
+    font-family: var(--da-font-mono);
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
@@ -1306,59 +1582,177 @@ input[type='range'].da-input:focus {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   16. 响应式：窄屏适配（< 640px）
+   16. 蓝图编辑器专用 CSS 布局类
    ═══════════════════════════════════════════════════════════════════ */
+
+.da-blueprint-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 52px !important;
+    height: auto !important;
+    padding: 12px 18px !important;
+}
+
+.da-blueprint-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.da-blueprint-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* 全局输入框与盒模型强制重置 */
+.da-input,
+.da-textarea,
+.da-select,
+.da-field-row,
+.da-section-card {
+    box-sizing: border-box !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   17. 响应式与多端适配体系 (Tablet ≤ 768px, Mobile ≤ 640px)
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .da-blueprint-workspace {
+        flex-direction: column !important;
+    }
+
+    .da-blueprint-canvas-wrapper {
+        flex: 1 !important;
+        min-height: 280px !important;
+        height: 50vh !important;
+    }
+
+    .da-blueprint-inspector-panel {
+        width: 100% !important;
+        max-height: 40vh !important;
+        border-left: none !important;
+        border-top: 1px solid var(--da-border-color) !important;
+        box-shadow: 0 -4px 16px rgba(0,0,0,0.4) !important;
+    }
+}
 
 @media (max-width: 640px) {
     .da-main-modal-inner {
-        width: 100vw;
-        height: 100vh;
-        max-height: 100vh;
-        border-radius: 0;
-        border: none;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    .da-modal-body {
+        flex-direction: column !important;
     }
 
     .da-sidebar-tabs {
-        flex: 0 0 100px;
-        width: 100px;
+        flex: 0 0 48px !important;
+        width: 100% !important;
+        height: 48px !important;
+        flex-direction: row !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--da-border-color) !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 4px 8px !important;
+        gap: 6px !important;
+        scrollbar-width: none;
     }
 
-    .da-field-control {
-        max-width: 100%;
+    .da-sidebar-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-sidebar-item {
+        height: 38px !important;
+        padding: 0 12px !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        border-radius: 20px !important;
+    }
+
+    .da-sidebar-item--active::before {
+        display: none !important;
     }
 
     .da-field-row {
-        flex-wrap: wrap;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        gap: 8px !important;
+        padding: 10px 14px !important;
     }
 
-    .da-field-row .da-field-control {
-        flex-basis: 100%;
-        justify-content: flex-start;
-        max-width: 100%;
+    .da-field-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        justify-content: flex-start !important;
+    }
+
+    .da-field-control > .da-input,
+    .da-field-control > .da-select,
+    .da-control-fixed-180,
+    .da-control-fixed-240 {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .da-gallery-grid-container {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    .da-about-card-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .da-blueprint-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+    .da-blueprint-toolbar-left,
+    .da-blueprint-toolbar-right {
+        width: 100% !important;
+        justify-content: space-between !important;
     }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   17. 规范语义化组件 CSS 类沉淀 (全量替代 TS 内联样式硬编码)
+   18. 规范语义化组件 CSS 类沉淀 (全量替代 TS 内联样式硬编码)
    ═══════════════════════════════════════════════════════════════════ */
 
-/* 控件宽度统一控制 */
-.da-control-fixed-240 {
-    width: 240px !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+/* 控件分割线 */
+.da-section-divider {
+    margin: 12px 0 6px 0;
+    border-bottom: 1px dashed var(--da-border-color);
+    opacity: 0.5;
 }
 
+/* 控件宽度统一控制 */
 .da-control-fixed-140 {
-    width: 140px !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+    width: 140px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .da-control-full {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* 顶栏排版与下拉 */
@@ -1420,28 +1814,14 @@ input[type='range'].da-input:focus {
 }
 
 .da-dropdown-item--danger {
-    color: #f44336;
+    color: #ff453a;
 }
 
 .da-dropdown-item--danger:hover {
-    background: rgba(244,67,54,0.15);
+    background: rgba(255, 69, 58, 0.12);
 }
 
 /* 图库界面 CSS 类 */
-.da-gallery-search-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 18px;
-}
-
-.da-gallery-batch-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 18px;
-    flex-wrap: wrap;
-}
 
 .da-gallery-grid-container {
     display: grid;
@@ -1505,8 +1885,7 @@ input[type='range'].da-input:focus {
 
 /* 关于页面 CSS 类 */
 .da-about-card-hero {
-    text-align: center;
-    padding: 28px 20px;
+    padding: 24px 22px;
 }
 
 .da-about-title {
@@ -1524,23 +1903,22 @@ input[type='range'].da-input:focus {
 }
 
 .da-about-desc {
-    max-width: 560px;
-    margin: 0 auto 16px auto;
+    width: 100%;
+    margin: 0 0 16px 0;
     color: var(--da-text-secondary);
     font-size: 0.9em;
-    line-height: 1.6;
+    line-height: 1.65;
 }
 
 .da-about-author {
     font-size: 0.85em;
     color: var(--da-text-secondary);
-    margin-bottom: 6px;
 }
 
 .da-about-copyright {
-    font-size: 0.8e;
+    font-size: 0.8em;
     color: var(--da-text-secondary);
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
 .da-changelog-box {
@@ -1560,37 +1938,6 @@ input[type='range'].da-input:focus {
     padding: 12px 18px;
 }
 
-/* ── 独占解耦的大图全屏查看器 ── */
-.da-image-lightbox-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100000;
-    cursor: zoom-out;
-    animation: da-fadein 0.2s var(--da-ease);
-}
-
-.da-image-lightbox-overlay .da-lightbox-inner {
-    max-width: 92vw;
-    max-height: 92vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: default;
-}
-
-.da-image-lightbox-overlay .da-lightbox-inner img {
-    max-width: 100%;
-    max-height: 92vh;
-    object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-}
 
 /* ── 图库 查找与批量管理 左右两端对齐分流 ── */
 .da-gallery-search-row,
@@ -1728,9 +2075,10 @@ input[type='range'].da-input:focus {
 }
 
 .da-blueprint-mini-card {
-    background: var(--da-bg-secondary);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-radius, 20px));
     border: 1px solid var(--da-border-color);
-    border-radius: 10px;
+    border-radius: var(--da-radius-card, 10px);
     padding: 12px;
     cursor: pointer;
     transition: all 0.2s var(--da-ease-spring);
@@ -1765,7 +2113,8 @@ input[type='range'].da-input:focus {
 .da-blueprint-inspector-panel {
     width: 320px;
     flex-shrink: 0;
-    background: var(--da-bg-secondary);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-radius, 20px));
     border-left: 1px solid var(--da-border-color);
     display: flex;
     flex-direction: column;
@@ -1804,4 +2153,305 @@ input[type='range'].da-input:focus {
     color: #94a3b8;
     border: 1px solid rgba(148, 163, 184, 0.3);
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   18. 图像长按/右键操作栏控件 (ImageActionPanel)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-action-panel {
+    width: 92%;
+    max-width: 580px;
+    padding: 22px;
+    border-radius: var(--da-radius-modal, 16px);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary, #1a1d26));
+    backdrop-filter: blur(var(--da-blur-radius, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-radius, 20px));
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-lg);
+    color: var(--da-text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+}
+
+.da-action-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--da-border-color);
+    padding-bottom: 12px;
+}
+
+.da-action-panel__title {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--da-text-primary);
+}
+
+.da-action-panel__body {
+    max-height: 64vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 4px;
+}
+
+.da-action-panel__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--da-border-color);
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.da-action-panel__footer-left {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-tag-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-tag-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.da-tag-card__label {
+    font-size: 0.86em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+}
+
+.da-tag-card__btn-group {
+    display: flex;
+    gap: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   19. 宏观生图数据统计面板 (Macro Statistics Dashboard)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-macro-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-macro-stats__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.da-macro-stats__card {
+    padding: 12px 10px;
+    border-radius: var(--da-radius-card, 12px);
+    background: var(--da-bg-secondary, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    text-align: center;
+}
+
+.da-macro-stats__card-label {
+    font-size: 0.78em;
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+.da-macro-stats__card-val {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+}
+
+.da-macro-stats__card-sub {
+    font-size: 0.72em;
+    color: var(--da-text-muted);
+}
+
+.da-macro-stats__section {
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-macro-stats__section-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.da-macro-stats__model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-macro-stats__model-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.da-macro-stats__model-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8em;
+    color: var(--da-text-secondary);
+}
+
+.da-macro-stats__model-name {
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+.da-macro-stats__progress-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.da-macro-stats__progress-fill {
+    height: 100%;
+    background: var(--da-accent-color, #00f2fe);
+    border-radius: 4px;
+    transition: width 0.3s var(--da-ease);
+}
+
+.da-macro-stats__trend-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 90px;
+    padding-top: 10px;
+    gap: 6px;
+}
+
+.da-macro-stats__trend-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.da-macro-stats__trend-bar-wrapper {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.da-macro-stats__trend-bar {
+    width: 60%;
+    max-width: 24px;
+    background: linear-gradient(180deg, var(--da-accent-color, #00f2fe), rgba(0, 242, 254, 0.2));
+    border-radius: 4px 4px 0 0;
+    min-height: 4px;
+    transition: height 0.3s var(--da-ease);
+}
+
+.da-macro-stats__trend-count {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: var(--da-accent-color, #00f2fe);
+}
+
+.da-macro-stats__trend-date {
+    font-size: 0.7em;
+    color: var(--da-text-muted);
+}
+
+.da-macro-stats__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   20. 主题实时预览条 (Theme Live Preview Bar)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-theme-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--da-separator);
+    flex-wrap: wrap;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.da-theme-preview-box {
+    flex: 1;
+    min-width: 220px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.da-theme-preview-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-theme-preview-primary-text {
+    font-size: 0.88em;
+    font-weight: 600;
+}
+
+.da-theme-preview-secondary-text {
+    font-size: 0.76em;
+}
+
+.da-theme-preview-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+
+
 

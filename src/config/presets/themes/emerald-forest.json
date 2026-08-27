@@ -1,0 +1,18 @@
+{
+  "id": "emerald-forest",
+  "name": "🌲 翡翠深林",
+  "isBuiltIn": true,
+  "data": {
+    "bgPrimary": "#091412",
+    "bgGradientEnd": "#122a24",
+    "bgGradientAngle": 150,
+    "bgSecondary": "#122420",
+    "bgOpacity": 0.95,
+    "textPrimary": "#f0fdf4",
+    "textSecondary": "#86efac",
+    "borderColor": "rgba(16, 185, 129, 0.25)",
+    "accentColor": "#10b981",
+    "blurRadius": 18,
+    "borderRadius": 12
+  }
+}

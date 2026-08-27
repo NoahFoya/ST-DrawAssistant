@@ -1,21 +1,11 @@
 /**
  * @module task/manager
- * @description TaskManager — 生图任务状态机与队列并发调度器
+ * @description 生图任务队列与状态调度管理器
  *
  * 职责：
- * - 管理生图任务的完整生命周期（PENDING → RUNNING → COMPLETED/ERROR/DISCARDED）
- * - 提供事件订阅接口，供楼层按钮与统计收集器订阅状态变更
- * - 串行并发控制（默认 maxConcurrent=1）
- *
- * 事件流：
- *   submit() → PENDING → generate() → RUNNING
- *     ↓ onProgress 回调 → emit('progress')
- *     ↓ 完成 → COMPLETED → emit('complete')
- *     ↓ 错误 → ERROR → emit('error')
- *   cancel(taskId) → DISCARDED → emit('cancelled')
- *
- * 规范参考：
- * - .agents/Skills/st-image-generation-patterns/SKILL.md §3 (并发任务队列与取消丢弃策略)
+ * - 维护任务生命周期状态（排队中、执行中、已完成、失败、已取消）
+ * - 控制任务串行执行，避免同时发起多个生图请求导致显存超限 (OOM)
+ * - 广播生成进度、完成与错误事件，供楼层按钮和统计模块使用
  */
 
 
@@ -40,11 +30,14 @@ export class TaskManager {
 
     // ─── 事件订阅 ─────────────────────────────────────────────────────────────
 
-    on<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): void {
+    // ─── 事件订阅 ─────────────────────────────────────────────────────────────
+
+    on<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): () => void {
         if (!this._listeners[event]) {
             this._listeners[event] = [];
         }
         (this._listeners[event] as Array<EventHandler<T>>).push(handler);
+        return () => this.off(event, handler);
     }
 
     off<T extends keyof TaskManagerEvents>(event: T, handler: EventHandler<T>): void {
@@ -63,6 +56,18 @@ export class TaskManager {
                 (handler as (...a: any[]) => void)(...args);
             } catch (err) {
                 logger.error(`TaskManager 事件处理器异常 (${event})`, err);
+            }
+        }
+    }
+
+    /** 保持 _tasks 缓存容量控制在 50 条以内 */
+    private _cleanOldTasks(): void {
+        if (this._tasks.size <= 50) return;
+        const now = Date.now();
+        for (const [id, record] of this._tasks.entries()) {
+            if (record.status !== 'PENDING' && record.status !== 'RUNNING' && now - record.createdAt > 5000) {
+                this._tasks.delete(id);
+                if (this._tasks.size <= 50) break;
             }
         }
     }
@@ -110,15 +115,21 @@ export class TaskManager {
 
     private async _run(record: TaskRecord, driver: ImageDriver): Promise<void> {
         try {
-            if (record.status === 'DISCARDED') {
-                this._emit('cancelled', record.id);
+            if (record.status === 'DISCARDED' || record.status === 'CANCELLED') {
+                logger.debug(`任务 ${record.id} 在进入执行前已被取消，跳过生成`);
                 return;
             }
             record.status = 'RUNNING';
 
             const result = await driver.generate(record.params, (progress) => {
-                const percent = progress.percentage >= 0 ? progress.percentage : -1;
-                this._emit('progress', record.id, percent, progress.statusMessage, progress.previewImage);
+                let percent = progress.percentage;
+                if ((percent === undefined || percent < 0) && progress.totalSteps > 0) {
+                    percent = Math.round((progress.currentStep / progress.totalSteps) * 100);
+                }
+                const statusMsg = progress.statusMessage || (progress.totalSteps > 0
+                    ? `采样中 (${progress.currentStep}/${progress.totalSteps})... ${Math.max(0, percent)}%`
+                    : '生图渲染中...');
+                this._emit('progress', record.id, percent !== undefined && percent >= 0 ? percent : -1, statusMsg);
             });
 
             record.status = 'COMPLETED';
@@ -127,13 +138,8 @@ export class TaskManager {
         } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
 
-            // 判断是否为取消/丢弃（DriverError CANCELLED）
-            // 取消链路：cancelWithDriver() 设置 DISCARDED + 调用 driver.cancel()
-            //   → driver.cancel() 内部 reject _pendingTasks
-            //   → driver.generate() 的 await Promise reject
-            //   → 进入此 catch 分支
-            //   → record.status === 'DISCARDED' → emit('cancelled') ✅
-            if (record.status === 'DISCARDED') {
+            // 取消/丢弃状态判定 (cancelWithDriver 或 cancel 触发)
+            if (record.status === 'DISCARDED' || record.status === 'CANCELLED') {
                 this._emit('cancelled', record.id);
             } else {
                 record.status = 'ERROR';
@@ -146,6 +152,7 @@ export class TaskManager {
             if (record.result) {
                 record.result = { ...record.result, imageData: '' };
             }
+            this._cleanOldTasks();
             setTimeout(() => {
                 this._tasks.delete(record.id);
             }, 30000);
@@ -159,17 +166,19 @@ export class TaskManager {
     // ─── 任务取消 ─────────────────────────────────────────────────────────────
 
     /**
-     * 仅标记任务为 DISCARDED 状态（内部辅助）
+     * 仅标记任务为取消状态（内部辅助）
      *
-     * ⚠️ 此方法**不调用 driver.cancel()**，不会向 ComfyUI 后端发送取消请求。
-     * 外部代码应使用 `cancelWithDriver(taskId, driver)` 完成完整取消流程。
-     * 此方法保留仅供部分无法直接引用 driver 的内部场景使用。
+     * - PENDING 状态：标记 CANCELLED（任务尚未移交驱动），即时触发 cancelled 广播
+     * - RUNNING 状态：标记 DISCARDED（已交驱动尚在执行）
      */
     cancel(taskId: string): void {
         const record = this._tasks.get(taskId);
         if (!record) return;
 
-        if (record.status === 'PENDING' || record.status === 'RUNNING') {
+        if (record.status === 'PENDING') {
+            record.status = 'CANCELLED';
+            this._emit('cancelled', taskId);
+        } else if (record.status === 'RUNNING') {
             record.status = 'DISCARDED';
         }
     }
@@ -177,17 +186,18 @@ export class TaskManager {
     /**
      * 完整取消任务（推荐使用此方法）
      *
-     * - PENDING 状态：标记 DISCARDED + 调用 driver.cancel() 向后端发送 /queue delete
-     * - RUNNING 状态：标记 DISCARDED + 调用 driver.cancel() 触发客户端丢弃模式
-     *
-     * 取消完成信号（'cancelled' 事件）由 _run() 的 catch 分支在 driver.generate()
-     * reject 后自动触发，无需在此处手动 emit。
+     * - PENDING 状态：标记 CANCELLED + 调用 driver.cancel() + 即时 emit cancelled 信号
+     * - RUNNING 状态：标记 DISCARDED + 调用 driver.cancel()
      */
     cancelWithDriver(taskId: string, driver: ImageDriver): void {
         const record = this._tasks.get(taskId);
         if (!record) return;
 
-        if (record.status === 'PENDING' || record.status === 'RUNNING') {
+        if (record.status === 'PENDING') {
+            record.status = 'CANCELLED';
+            driver.cancel();
+            this._emit('cancelled', taskId);
+        } else if (record.status === 'RUNNING') {
             record.status = 'DISCARDED';
             driver.cancel();
         }

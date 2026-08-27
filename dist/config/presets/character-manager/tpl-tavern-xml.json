@@ -1,0 +1,9 @@
+{
+  "id": "tpl-default-xml",
+  "name": "Tavern XML 格式 (系统预置)",
+  "isSystemPreset": true,
+  "characterListTemplate": "<character name=\"{nameCN}\">\n  <name_en>{nameEN}</name_en>\n  <traits>{traits}</traits>\n  <facial>{facial}</facial>\n  <upper_sfw>{upperSFW}</upper_sfw>\n  <lower_sfw>{lowerSFW}</lower_sfw>\n  <outfits>\n{outfits}\n  </outfits>\n</character>",
+  "innerOutfitTemplate": "    <outfit name=\"{nameCN}\">\n      <upper>{upperBody}</upper>\n      <lower>{lowerBody}</lower>\n    </outfit>",
+  "commonCharacterListTemplate": "",
+  "enableOutfitListTemplate": "<outfit name=\"{nameCN}\">\n  <name_en>{nameEN}</name_en>\n  <upper>{upperBody}</upper>\n  <lower>{lowerBody}</lower>\n</outfit>"
+}

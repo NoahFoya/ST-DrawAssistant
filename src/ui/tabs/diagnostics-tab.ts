@@ -7,8 +7,7 @@
  * - 检索与导出结构化运行日志，辅助排查异常
  */
 
-import { renderStatisticsCard } from '../components/statistics-card';
-import { createFieldRow } from '../components/field-row';
+import { renderStatisticsCard, createFieldRow } from '../components/controls';
 import { loadSettings } from '../../settings/manager';
 import { createDriver } from '../../drivers/factory';
 import { logger, type LogLevel, type StructuredLogEntry } from '../../core/logger';
@@ -16,6 +15,7 @@ import { PerformanceCollector } from '../../core/performance';
 import { StatisticsCollector } from '../../statistics';
 import { EXTENSION_DISPLAY_NAME, VERSION } from '../../core/constants';
 import { escapeHtml } from '../../utils/html';
+import { showToastNotice } from '../../utils/toast';
 
 function downloadBlobFile(content: string, filename: string, mime: string): void {
     const blob = new Blob([content], { type: mime });
@@ -41,11 +41,13 @@ export function renderDiagnosticsTab(): HTMLElement {
     cardHealth.className = 'da-section-card';
     cardHealth.style.marginTop = '15px';
 
+    const activeProviderName = settings.provider === 'sd-webui' ? 'SD-WebUI' : (settings.provider === 'novelai' ? 'NovelAI' : 'ComfyUI');
+
     const headerHealth = document.createElement('div');
     headerHealth.className = 'da-section-header';
     headerHealth.innerHTML = `
         <span class="da-section-title">服务与运行环境健康诊断</span>
-        <span class="da-section-desc">即时检测 ComfyUI 服务响应延迟、硬件渲染引擎状态与本地存储数据库健康度</span>
+        <span class="da-section-desc">即时检测 ${activeProviderName} 服务响应延迟、硬件渲染引擎状态与本地存储数据库健康度</span>
     `;
     cardHealth.appendChild(headerHealth);
 
@@ -71,14 +73,14 @@ export function renderDiagnosticsTab(): HTMLElement {
             const driver = createDriver(activeSettings.provider, activeSettings);
             const res = await driver.checkConnection();
             if (res.connected) {
-                connStatusSpan.style.color = '#4caf50';
+                connStatusSpan.style.color = 'var(--da-color-success, #30d158)';
                 connStatusSpan.textContent = `服务连通正常 (延迟 ${res.latencyMs ?? 0}ms)`;
             } else {
-                connStatusSpan.style.color = '#ff5f56';
+                connStatusSpan.style.color = 'var(--da-color-error, #ff453a)';
                 connStatusSpan.textContent = `服务连接异常: ${res.error ?? '无法访问'}`;
             }
         } catch (err) {
-            connStatusSpan.style.color = '#ff5f56';
+            connStatusSpan.style.color = 'var(--da-color-error, #ff453a)';
             connStatusSpan.textContent = `诊断失败: ${err instanceof Error ? err.message : String(err)}`;
         } finally {
             testConnBtn.disabled = false;
@@ -203,15 +205,7 @@ export function renderDiagnosticsTab(): HTMLElement {
 
     // 日志流终端 DOM
     const terminalBox = document.createElement('div');
-    terminalBox.style.background = '#0a0c10';
-    terminalBox.style.borderRadius = '6px';
-    terminalBox.style.padding = '10px 12px';
-    terminalBox.style.fontFamily = 'var(--monoFontFamily, monospace)';
-    terminalBox.style.fontSize = '0.82em';
-    terminalBox.style.height = '240px';
-    terminalBox.style.overflowY = 'auto';
-    terminalBox.style.marginTop = '10px';
-    terminalBox.style.border = '1px solid var(--da-border-color)';
+    terminalBox.className = 'da-log-terminal';
 
     const renderLogsStream = () => {
         terminalBox.innerHTML = '';
@@ -239,12 +233,7 @@ export function renderDiagnosticsTab(): HTMLElement {
             line.style.lineHeight = '1.4';
             line.style.wordBreak = 'break-all';
 
-            let color = '#94a3b8';
-            if (entry.level === 'ERROR' || entry.level === 'FATAL') color = '#ff5f56';
-            else if (entry.level === 'WARN') color = '#ffbd2e';
-            else if (entry.level === 'INFO') color = '#00f2fe';
-
-            line.innerHTML = `<span style="color:#64748b;">[${escapeHtml(entry.timestamp.substring(11, 19))}]</span> <span style="color:${color}; font-weight:bold;">[${escapeHtml(entry.level)}]</span> <span style="color:#818cf8;">[${escapeHtml(entry.module)}]</span> ${escapeHtml(entry.message)}`;
+            line.innerHTML = `<span class="da-log-ts">[${escapeHtml(entry.timestamp.substring(11, 19))}]</span> <span class="da-log-level" data-level="${escapeHtml(entry.level)}">[${escapeHtml(entry.level)}]</span> <span class="da-log-module">[${escapeHtml(entry.module)}]</span> ${escapeHtml(entry.message)}`;
             fragment.appendChild(line);
         });
 
@@ -310,20 +299,4 @@ export function renderDiagnosticsTab(): HTMLElement {
     container.appendChild(cardLogs);
 
     return container;
-}
-
-/** 辅助函数：显示 ST 全局 Toast 通知 */
-function showToastNotice(message: string, title = '系统诊断', isSuccess = true): void {
-    const win = window as unknown as { toastr?: { success?: (m: string, t?: string) => void; error?: (m: string, t?: string) => void; info?: (m: string, t?: string) => void } };
-    if (win.toastr) {
-        if (isSuccess && typeof win.toastr.success === 'function') {
-            win.toastr.success(message, title);
-            return;
-        }
-        if (!isSuccess && typeof win.toastr.error === 'function') {
-            win.toastr.error(message, title);
-            return;
-        }
-    }
-    logger.info(`[${title}] ${message}`);
 }

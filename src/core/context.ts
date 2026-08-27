@@ -6,12 +6,11 @@
  * - 声明宿主环境接口类型定义 (ChatMessage, EventSource, EventTypes, SillyTavernContext)
  * - 提供访问宿主上下文环境的统一入口函数 getContext()
  *
- * 宿主环境约束：
- * - getContext() 必须在宿主 APP_READY 事件触发后调用。
- * - 在模块顶层直接调用会导致访问到未初始化的宿主对象。
- *
- * 规范参考：
- * - .agents/Skills/sillytavern-extension-host/SKILL.md §2 (宿主 API 契约)
+ * 调用时序约束：
+ * - getContext() 必须在 SillyTavern 触发 APP_READY 事件后调用。
+ * - 在模块顶层（全局作用域）直接调用会导致访问未初始化的宿主对象，产生空引用错误。
+ * - SillyTavern 宿主扩展入口模块加载时宿主可能尚未完成初始化，
+ *   因此所有真正的初始化逻辑应放在 APP_READY 事件回调内执行。
  */
 
 // ─── SillyTavern 宿主全局类型声明 ────────────────────────────────────────────
@@ -45,7 +44,9 @@ export interface EventTypes {
     APP_SYSTEM_MENU_READY: string;
     MESSAGE_SENT: string;
     MESSAGE_RECEIVED: string;
+    /** 用户消息已渲染进 DOM */
     USER_MESSAGE_RENDERED: string;
+    /** AI 消息已渲染进 DOM */
     CHARACTER_MESSAGE_RENDERED: string;
     GENERATION_STARTED: string;
     GENERATION_ENDED: string;
@@ -55,7 +56,15 @@ export interface EventTypes {
     GROUP_UPDATED: string;
     EXTENSIONS_LOADED: string;
     EXTENSION_SETTINGS_UPDATED: string;
-    [key: string]: string;
+    MESSAGE_SWIPED: string;
+    WORLDINFO_ENTRIES_LOADED: string;
+    /** 当前角色卡切换（部分 ST 版本支持） */
+    CHARACTER_SELECTED?: string;
+    /** 消息内容被编辑后触发 */
+    MESSAGE_EDITED?: string;
+    /** 消息更新后触发（部分 ST 版本支持） */
+    MESSAGE_UPDATED?: string;
+    [key: string]: string | undefined;
 }
 
 /** 事件总线订阅与触发接口 */
@@ -115,6 +124,10 @@ export interface SillyTavernContext {
     characterId: number;
     groupId?: string;
     chatMetadata: Record<string, unknown>;
+    /** 当前选中的角色卡显示名称 */
+    name2?: string;
+    /** 当前对话 ID */
+    chatId?: string;
     /** 官方扩展设置持久化对象树 (按扩展模块名分区) */
     extensionSettings: Record<string, unknown>;
     onlineStatus: 'online' | 'offline';
@@ -126,6 +139,7 @@ export interface SillyTavernContext {
     // 核心方法
     saveSettingsDebounced(): void;
     saveMetadata(): void;
+    saveChat?(): void;
     saveChatConditional?(): void;
     getTokenCountAsync(text: string): Promise<number>;
     renderExtensionTemplateAsync(
@@ -152,25 +166,42 @@ declare global {
 // ─── 上下文访问函数 ────────────────────────────────────────────────────────────
 
 /**
+ * 检查 SillyTavern 宿主上下文及其扩展配置对象是否已准备就绪
+ *
+ * @returns {boolean} 若 window.SillyTavern.getContext() 可用且配置对象已加载返回 true，否则返回 false
+ */
+export function isContextReady(): boolean {
+    try {
+        if (typeof window === 'undefined' || typeof window.SillyTavern?.getContext !== 'function') {
+            return false;
+        }
+        const ctx = window.SillyTavern.getContext() as SillyTavernContext | undefined;
+        return Boolean(ctx && ctx.extensionSettings && typeof ctx.extensionSettings === 'object');
+    } catch {
+        return false;
+    }
+}
+
+/**
  * 安全获取 SillyTavern 宿主上下文
  *
  * @returns {SillyTavernContext} 类型安全的宿主上下文对象
  * @throws {Error} 如果在 window.SillyTavern 未就绪之前调用抛出环境异常
  *
  * @example
- * // ✅ 正确用法：在 APP_READY 事件回调中调用
+ * // 标准用法：在 APP_READY 事件回调中调用
  * eventSource.on(event_types.APP_READY, () => {
  *   const ctx = getContext();
  *   // 安全使用 ctx
  * });
  */
 export function getContext(): SillyTavernContext {
-    if (typeof window.SillyTavern?.getContext !== 'function') {
+    if (typeof window === 'undefined' || typeof window.SillyTavern?.getContext !== 'function') {
         throw new Error('[ST-DrawAssistant] 无法获取 SillyTavern 宿主上下文：window.SillyTavern.getContext() 未就绪');
     }
     const ctx = window.SillyTavern.getContext() as SillyTavernContext;
     if (!ctx.extensionSettings || typeof ctx.extensionSettings !== 'object') {
-        throw new Error('[ST-DrawAssistant] 宿主上下文契约破坏：getContext().extensionSettings 为空或无效');
+        throw new Error('[ST-DrawAssistant] 无法读取扩展配置：getContext().extensionSettings 对象为空或未正确加载');
     }
     return ctx;
 }

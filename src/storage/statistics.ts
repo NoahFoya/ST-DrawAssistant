@@ -28,8 +28,10 @@ export async function loadStatisticsFromDB(): Promise<StatisticsRecord> {
 
             req.onsuccess = () => {
                 const res = req.result as StatisticsRecord | undefined;
-                if (res && res.version === 1) {
-                    resolve(res);
+                if (res && typeof res === 'object') {
+                    // 合并历史保存记录与默认对象结构，确保 Schema 演进时的向前兼容
+                    const merged = { ...createDefaultStatisticsRecord(), ...res };
+                    resolve(merged);
                 } else {
                     const defaultRecord = createDefaultStatisticsRecord();
                     resolve(defaultRecord);

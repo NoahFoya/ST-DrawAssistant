@@ -1,13 +1,14 @@
 {
   "name": "st-drawassistant",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Generate context-aware images in SillyTavern chat using AI backends (ComfyUI, SD WebUI)",
   "main": "dist/index.js",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
     "build:dev": "webpack --mode development",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "keywords": [
     "sillytavern",
@@ -20,6 +21,7 @@
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.5.0",
+    "vitest": "^2.0.5",
     "webpack": "^5.95.0",
     "webpack-cli": "^5.1.4",
     "ts-loader": "^9.5.1"

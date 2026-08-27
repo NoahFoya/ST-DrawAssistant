@@ -6,26 +6,27 @@
  * - 从 IndexedDB 检索历史生成图片，支持关键词过滤与排序
  * - 呈现全局存储空间使用配额与清除废弃垃圾垃圾数据
  *
- * 规范参考：
- * - .agents/Skills/browser-storage/SKILL.md §3 (IndexedDB 存储配额与垃圾清理)
+ * IndexedDB 图库读取策略：
+ * 优先读取 thumbnails 表的 WebP 缩略图用于列表展示，
+ * 按需从 images 表读取原图；删除操作同时清理两张表中的记录。
  */
 
 import {
     getGalleryImages,
     getThumbnailFromDB,
     saveThumbnailToDB,
-    deleteImageFromDB,
     getImageFromDB,
     type StoredImageRecord,
 } from '../../storage/image-db';
 import { generateThumbnail } from '../../utils/image-utils';
-import { findIsolatedImages } from '../../storage/chat-scanner';
 import { exportImagesToZip } from '../../utils/zip-utils';
-import { renderStorageBar } from '../components/storage-bar';
-import { openImageInfoPanel } from '../components/image-info-panel';
-import { logger } from '../../core/logger';
+import { renderStorageBar } from '../components/controls';
+import { openImageInfoPanel } from '../components/modals';
+import { FeedbackService } from '../feedback-service';
+import { galleryDeleteBatch, galleryScanIsolated, subscribeGalleryChange } from '../../storage/image-db';
+import { DisposableBag, type IDisposable } from '../../core/disposable';
 
-export function renderGalleryTab(): HTMLElement {
+export function renderGalleryTab(): [HTMLElement, IDisposable] {
     const container = document.createElement('div');
     container.className = 'da-tab-pane da-gallery-tab';
 
@@ -193,7 +194,7 @@ export function renderGalleryTab(): HTMLElement {
 
         batchExportBtn.addEventListener('click', () => {
             if (selectedUuids.size === 0) {
-                showToastNotice('请先在下方网格中勾选需要导出的图片卡片。', '批量导出提醒', false);
+                FeedbackService.toastError('请先在下方网格中勾选需要导出的图片卡片。', '批量导出提醒');
                 return;
             }
             void exportImagesToZip(Array.from(selectedUuids));
@@ -201,16 +202,14 @@ export function renderGalleryTab(): HTMLElement {
 
         batchDeleteBtn.addEventListener('click', async () => {
             if (selectedUuids.size === 0) {
-                showToastNotice('请先在下方网格中勾选需要删除的图片卡片。', '批量删除提醒', false);
+                FeedbackService.toastError('请先在下方网格中勾选需要删除的图片卡片。', '批量删除提醒');
                 return;
             }
             const count = selectedUuids.size;
-            if (confirm(`确认批量永久删除选中的 ${count} 张图片吗？`)) {
-                for (const uuid of selectedUuids) {
-                    await deleteImageFromDB(uuid);
-                }
-                logger.info(`已成功批量删除 ${count} 张图像`);
-                showToastNotice(`已成功删除 ${count} 张历史图片。`, '批量删除完成', true);
+            const ok = await FeedbackService.confirmDelete('gallery_batch', count);
+            if (ok) {
+                await galleryDeleteBatch(selectedUuids);
+                FeedbackService.toastSuccess(`已成功删除 ${count} 张历史图片。`, '批量删除完成');
                 refreshGallery();
             }
         });
@@ -219,10 +218,10 @@ export function renderGalleryTab(): HTMLElement {
             batchSelectIsolatedBtn.disabled = true;
             batchSelectIsolatedBtn.textContent = '查找中...';
             try {
-                const isolated = await findIsolatedImages();
+                const isolated = await galleryScanIsolated();
                 selectedUuids.clear();
                 isolated.forEach(id => selectedUuids.add(id));
-                showToastNotice(`已成功勾选 ${isolated.length} 张未在当前聊天引用的孤立废图。`, '孤立废图查找', true);
+                FeedbackService.toastSuccess(`已成功勾选 ${isolated.length} 张未在当前聊天引用的孤立废图。`, '孤立废图查找');
                 currentSearch = '';
                 searchInput.value = '';
                 currentPage = 1;
@@ -312,8 +311,14 @@ export function renderGalleryTab(): HTMLElement {
         await renderGridSection();
     };
 
-    refreshGallery();
-    return container;
+    // 订阅图库变更事件，自动刷新（新图生成/删除后无需手动刷新）
+    const bag = new DisposableBag();
+    bag.add(subscribeGalleryChange(() => {
+        void refreshGallery();
+    }));
+
+    void refreshGallery();
+    return [container, bag];
 }
 
 /**
@@ -367,10 +372,19 @@ async function createGalleryCard(
         });
     }
 
-    imgContainer.addEventListener('click', async () => {
+    const handleOpenInfo = async () => {
         const fullRecord = await getImageFromDB(record.uuid);
-        openImageInfoPanel(fullRecord ?? record, () => onRefresh());
-    });
+        openImageInfoPanel(fullRecord ?? record, {
+            onRefresh,
+            onDelete: async (uuid: string) => {
+                await galleryDeleteBatch([uuid]);
+                FeedbackService.toastSuccess(`已彻底删除图像 #${uuid.slice(0, 8)}`, '删除成功');
+                onRefresh();
+            },
+        });
+    };
+
+    imgContainer.addEventListener('click', handleOpenInfo);
 
     imgContainer.appendChild(img);
     card.appendChild(imgContainer);
@@ -397,8 +411,7 @@ async function createGalleryCard(
 
     infoBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const fullRecord = await getImageFromDB(record.uuid);
-        openImageInfoPanel(fullRecord ?? record, () => onRefresh());
+        await handleOpenInfo();
     });
 
     subInfo.appendChild(timeSpan);
@@ -409,20 +422,4 @@ async function createGalleryCard(
     card.appendChild(footer);
 
     return card;
-}
-
-/** 辅助函数：显示 ST 全局 Toast 通知 */
-function showToastNotice(message: string, title = '图库管理', isSuccess = true): void {
-    const win = window as unknown as { toastr?: { success?: (m: string, t?: string) => void; error?: (m: string, t?: string) => void; info?: (m: string, t?: string) => void } };
-    if (win.toastr) {
-        if (isSuccess && typeof win.toastr.success === 'function') {
-            win.toastr.success(message, title);
-            return;
-        }
-        if (!isSuccess && typeof win.toastr.info === 'function') {
-            win.toastr.info(message, title);
-            return;
-        }
-    }
-    logger.info(`[${title}] ${message}`);
 }

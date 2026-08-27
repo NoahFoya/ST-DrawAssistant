@@ -6,6 +6,7 @@
  * - 页面悬浮球挂载与视口边界守护
  * - 自动记忆最后拖拽位置 (Position Persistence)，防止超出视口
  * - 拖拽/放开即时保存配置，支持样式与图标动态实时更新
+ * - 订阅 DA_EVENTS.SETTINGS_CHANGED 实现设置变更后样式自动同步（响应式）
  */
 export interface FabPresetIcon {
     name: string;

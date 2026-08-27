@@ -1,20 +1,11 @@
 /**
  * @module drivers/comfyui
- * @description ComfyUIDriver — ComfyUI 后端生图驱动实现类
+ * @description ComfyUI 生图驱动实现类
  *
  * 职责：
- * - 封装 ComfyUI REST API 与 WebSocket 双通道通信逻辑
- * - 提交工作流任务、监听实时进度推流与提取生成结果图像
- * - 自动管理二进制预览图 Blob Object URL 生命周期，防范内存泄漏
- *
- * 通信协议与约束：
- * - 提交任务：POST /prompt（带 JSON 工作流与 client_id）
- * - 进度追踪：WebSocket ws://host/ws?clientId={clientId}
- * - 取消策略：PENDING 状态 POST /queue 删除，RUNNING 状态由客户端丢弃响应
- *
- * 规范参考：
- * - .agents/Skills/comfyui-api-reference/SKILL.md (ComfyUI API 与 WebSocket 协议)
- * - .agents/Skills/browser-storage/SKILL.md §4 (Blob Object URL 声明与释放规范)
+ * - 封装 ComfyUI API 与 WebSocket 实时消息通信
+ * - 支持提交工作流、监听推流进度与提取最终生成的图片 Base64
+ * - 自动管理二进制预览图 Object URL 生命周期，防范内存泄露
  */
 
 import { logger } from '../core/logger';
@@ -28,8 +19,116 @@ import {
     type GenerateResult,
     type ProgressCallback,
 } from './types';
-import { substituteWorkflowVariables, extractFirstOutputImage } from './comfyui-workflow';
+import { DEFAULT_WAI_WORKFLOW_JSON } from '../settings/defaults';
 import type { DrawAssistantSettings } from '../settings/types';
+
+// ─── 工作流节点与工具 ─────────────────────────────────────────────────────────
+
+export interface WorkflowNode {
+    inputs: Record<string, unknown>;
+    class_type: string;
+    _meta?: Record<string, unknown>;
+}
+
+export type WorkflowJson = Record<string, WorkflowNode>;
+
+/**
+ * 获取工作流 JSON 对象
+ * - 若 workflowJsonStr 非空，解析用户自定义工作流
+ * - 否则使用内置 Wai 工作流
+ */
+export function loadWorkflow(workflowJsonStr: string): WorkflowJson {
+    const rawJson = workflowJsonStr && workflowJsonStr.trim() ? workflowJsonStr : DEFAULT_WAI_WORKFLOW_JSON;
+    try {
+        return JSON.parse(rawJson) as WorkflowJson;
+    } catch (err) {
+        logger.error('致命错误: 工作流 JSON 解析失败!', err);
+        throw new Error(`工作流 JSON 语法错误: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+/**
+ * 使用正则与类型解析将工作流 JSON 字符串中的 %xxx% 变量替换为实际运行参数
+ */
+export function substituteWorkflowVariables(
+    workflowJsonStr: string,
+    options: GenerateOptions
+): WorkflowJson {
+    const rawJson = workflowJsonStr && workflowJsonStr.trim() ? workflowJsonStr : DEFAULT_WAI_WORKFLOW_JSON;
+
+    const seed = (options.seed !== undefined && options.seed >= 0)
+        ? options.seed
+        : Math.floor(Math.random() * 1000000000000000);
+
+    const stringVarMap: Record<string, string> = {
+        '%prompt%': options.prompt || '',
+        '%negative_prompt%': options.negativePrompt || '',
+        '%ckpt_name%': options.ckptName || '',
+        '%clip_name%': options.clipName || '',
+        '%vae_name%': options.vaeName || '',
+        '%sampler_name%': options.samplerName || 'euler_ancestral',
+        '%scheduler%': options.scheduler || 'normal',
+        '%init_image%': typeof options.extra?.initImage === 'string' ? options.extra.initImage : '',
+        '%mask_image%': typeof options.extra?.maskImage === 'string' ? options.extra.maskImage : '',
+    };
+
+    const numVarMap: Record<string, number> = {
+        '%width%': options.width,
+        '%height%': options.height,
+        '%steps%': options.steps,
+        '%cfg%': options.cfgScale,
+        '%seed%': seed,
+        '%denoise%': options.denoise ?? (options.extra?.denoise as number) ?? 0.75,
+        '%mask_blur%': options.maskBlur ?? (options.extra?.maskBlur as number) ?? 8,
+        '%grow_mask_by%': options.growMaskBy ?? (options.extra?.growMaskBy as number) ?? 6,
+    };
+
+    let processed = rawJson;
+
+    for (const [key, numVal] of Object.entries(numVarMap)) {
+        const quotedKeyRegex = new RegExp(`"\\${key}"`, 'g');
+        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        const numStr = String(numVal);
+        processed = processed.replace(quotedKeyRegex, numStr);
+        processed = processed.replace(rawKeyRegex, numStr);
+    }
+
+    for (const [key, strVal] of Object.entries(stringVarMap)) {
+        const escapedStr = JSON.stringify(strVal).slice(1, -1);
+        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        processed = processed.replace(rawKeyRegex, () => escapedStr);
+    }
+
+    try {
+        return JSON.parse(processed) as WorkflowJson;
+    } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const snippet = processed.length > 200 ? `${processed.slice(0, 200)}...` : processed;
+        logger.error('工作流 JSON 解析失败:', { error: errMsg, snippet });
+        throw new Error(`工作流 JSON 语法或变量解析失败 (${errMsg})。请检查 JSON 格式与节点映射是否符合 API 规范。`);
+    }
+}
+
+/**
+ * 从 /history 响应的 outputs 中提取输出图像信息
+ */
+export function extractFirstOutputImage(
+    outputs: Record<string, { images?: Array<{ filename: string; subfolder: string; type: string }> }>,
+    saveImageNodeId: string
+): { filename: string; subfolder: string; type: string } | null {
+    const saveNode = outputs[saveImageNodeId];
+    if (saveNode?.images?.[0]) {
+        return saveNode.images[0];
+    }
+
+    for (const nodeOutput of Object.values(outputs)) {
+        if (nodeOutput.images?.[0]) {
+            return nodeOutput.images[0];
+        }
+    }
+
+    return null;
+}
 
 // ─── WebSocket 消息类型 ───────────────────────────────────────────────────────
 
@@ -76,15 +175,6 @@ export class ComfyUIDriver extends BaseDriver {
     /** 当前 WebSocket 连接 */
     private _ws: WebSocket | null = null;
 
-    /**
-     * 当前正在执行的 prompt_id
-     * 用于将二进制预览图路由给正确的任务（二进制消息不含 prompt_id）
-     */
-    private _activePromptId: string | null = null;
-
-    /** 当前活跃且尚未释放的二进制预览图 Object URL 句柄（用于及时撤销规避 Blob 内存泄漏） */
-    private _activePreviewUrl: string | null = null;
-
     /** 用于追踪当前后端 KSampler 执行环节的 PerformanceSpan */
     private _executionSpanMap: Map<string, PerformanceSpan> = new Map();
 
@@ -106,7 +196,7 @@ export class ComfyUIDriver extends BaseDriver {
 
     // ─── /object_info 缓存 ──────────────────────────────────────────────────────────
 
-    /** /object_info 内存缓存，以 nodeClass 为键（SKILL.md §7.2） */
+    /** /object_info 内存缓存，以 nodeClass 为键（TTL=5min，避免重复请求） */
     private readonly _objectInfoCache = new Map<string, {
         data: Record<string, unknown>;
         fetchedAt: number;
@@ -134,19 +224,26 @@ export class ComfyUIDriver extends BaseDriver {
 
     private _getOrCreateClientId(): string {
         const key = '__da_comfyui_client_id__';
-        let id = localStorage.getItem(key);
-        if (!id) {
-            id = crypto.randomUUID();
-            localStorage.setItem(key, id);
+        try {
+            if (typeof localStorage !== 'undefined') {
+                let id = localStorage.getItem(key);
+                if (!id) {
+                    id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `da_${Math.random().toString(36).slice(2, 11)}`;
+                    localStorage.setItem(key, id);
+                }
+                return id;
+            }
+        } catch {
+            // 环境不支持 localStorage 时退回到内存 ID
         }
-        return id;
+        return `da_${Math.random().toString(36).slice(2, 11)}`;
     }
 
     // ─── WebSocket 管理 ───────────────────────────────────────────────────────
 
     /**
      * 建立 WebSocket 连接
-     * 连接建立后发送 feature_flags 消息进行能力协商（SKILL.md §8.3）
+     * 连接建立后发送 feature_flags 消息进行能力协商（开启二进制预览帧传输）
      */
     private _connectWebSocket(): void {
         if (this._ws) {
@@ -161,15 +258,13 @@ export class ComfyUIDriver extends BaseDriver {
             this._ws = null;
         }
 
-        // SKILL.md §8.1：WebSocket URL 只接受 clientId 参数
+        // ComfyUI WebSocket 协议约束：URL 仅接受 clientId 查询参数，其余参数通过连接后发送 JSON 消息传递
         const wsUrl = this._buildWebSocketUrl(`/ws?clientId=${this._clientId}`);
 
         this._ws = new WebSocket(wsUrl);
 
         this._ws.onmessage = (event: MessageEvent) => {
-            if (event.data instanceof Blob) {
-                this._handleBinaryMessage(event.data);
-            } else if (typeof event.data === 'string') {
+            if (typeof event.data === 'string') {
                 try {
                     const msg = JSON.parse(event.data) as WsJsonMessage;
                     this._handleJsonMessage(msg);
@@ -179,20 +274,13 @@ export class ComfyUIDriver extends BaseDriver {
             }
         };
 
-        // 使用 addEventListener 注册永久日志 handler，避免属性赋値被后续调用覆盖
-        // _waitForWebSocketOpen 会单独注册一次性连接监听器，不干扰此处
+        // 注册持续性错误日志监听器
         this._ws.addEventListener('error', (event) => {
             logger.error('WebSocket 发生错误', event);
         });
 
-        // 连接建立后发送 feature_flags 协商消息（SKILL.md §8.3）
-        // 这是开启二进制预览图的正确方式（而非将其放入 URL QueryString）
         this._ws.addEventListener('open', () => {
-            this._ws?.send(JSON.stringify({
-                type: 'feature_flags',
-                data: { supports_binary_preview: true },
-            }));
-            logger.debug('WebSocket 已连接，已发送 feature_flags 协商消息');
+            logger.debug('WebSocket 已连接');
         }, { once: true });
 
         this._ws.onclose = () => {
@@ -273,50 +361,7 @@ export class ComfyUIDriver extends BaseDriver {
         }
     }
 
-    /** 释放当前追踪的活跃预览图 Object URL 句柄 */
-    private _clearActivePreviewUrl(): void {
-        if (this._activePreviewUrl) {
-            URL.revokeObjectURL(this._activePreviewUrl);
-            this._activePreviewUrl = null;
-        }
-    }
 
-    /** 处理二进制消息（预览图） */
-    private _handleBinaryMessage(blob: Blob): void {
-        // 前 4 字节为事件类型 ID（大端序 uint32），事件类型 1 = 预览图
-        blob.arrayBuffer().then(buffer => {
-            const view = new DataView(buffer);
-            const eventType = view.getUint32(0);
-            if (eventType === 1) {
-                const imageData = buffer.slice(4);
-                const previewBlob = new Blob([imageData], { type: 'image/png' });
-                
-                // 每次创建新预览图前，主动撤销上一次未被 UI 消费的旧预览图 URL，防范内存泄漏
-                this._clearActivePreviewUrl();
-
-                const previewUrl = URL.createObjectURL(previewBlob);
-                this._activePreviewUrl = previewUrl;
-
-                // 二进制消息格式不含 prompt_id（SKILL.md §8.5）
-                // 使用 _activePromptId 将预览图路由给当前正在执行的任务
-                if (this._activePromptId) {
-                    const task = this._pendingTasks.get(this._activePromptId);
-                    if (task) {
-                        task.onProgress?.({
-                            currentStep: 0,
-                            totalSteps: 0,
-                            percentage: -1, // -1 表示仅有预览图，无精确步数
-                            statusMessage: '预览图',
-                            previewImage: previewUrl,
-                        });
-                    }
-                } else {
-                    logger.debug('收到二进制预览图但当前无活跃任务 prompt_id，已即时撤销');
-                    this._clearActivePreviewUrl();
-                }
-            }
-        }).catch((err) => { logger.debug('WebSocket 二进制预览图消息解析失败（非致命错误，展示会正常进行）', err); });
-    }
 
     // ─── 结果获取 ─────────────────────────────────────────────────────────────
 
@@ -327,23 +372,29 @@ export class ComfyUIDriver extends BaseDriver {
         reject: (err: Error) => void
     ): Promise<void> {
         this._pendingTasks.delete(promptId);
-        this._activePromptId = null; // 任务完成，清除活跃 prompt_id
-        this._clearActivePreviewUrl(); // 清除残留预览图 Object URL
 
         const perf = PerformanceCollector.getInstance();
         const fetchSpan = perf.startSpan('comfyui.fetch_result', promptId);
 
         try {
-            // 轮询 /history/{promptId}（通常第一次就能取到）
-            const history = await this._fetchHistory(promptId);
-            const entry = history[promptId];
+            // 轮询 /history/{promptId}（最多重试 3 次，处理服务端写入延迟）
+            let history = await this._fetchHistory(promptId);
+            let entry = history[promptId];
+            if (!entry) {
+                for (let i = 0; i < 3; i++) {
+                    await new Promise(r => setTimeout(r, 200));
+                    history = await this._fetchHistory(promptId);
+                    entry = history[promptId];
+                    if (entry) break;
+                }
+            }
 
             if (!entry) {
                 reject(new DriverError(DriverErrorType.BACKEND_ERROR, `任务 ${promptId} 在 history 中不存在`));
                 return;
             }
 
-            // 对不同终态做差异化处理（SKILL.md §3.4）
+            // /history 返回的 status_str 枚举值：'success' | 'interrupted' | 'cancelled' | 其他错误字符串
             const statusStr = entry.status.status_str;
             if (statusStr === 'interrupted') {
                 reject(new DriverError(DriverErrorType.CANCELLED, '任务被中断（/interrupt 触发）'));
@@ -446,38 +497,36 @@ export class ComfyUIDriver extends BaseDriver {
 
         this.checkCancelled();
 
-        // 3. 运行变量替换引擎将参数注入工作流 (包含 Lora 格式化追加)
-        const loraSuffix = (this.settings.loras ?? [])
-            .filter(l => l.name)
-            .map(l => `<lora:${l.name}:${l.weight}>`)
-            .join(', ');
-
-        const finalSuffix = [this.settings.promptSuffix ?? '', loraSuffix].filter(Boolean).join(', ');
+        // 3. 确定具体使用的 Workflow（文生图 vs 局部重绘），未配置时明确抛错，拒绝隐性降级
+        let rawWorkflowJson = this.settings.workflowJson;
+        if (options.extra?.isInpaint) {
+            const inpaintJson = this.settings.inpaintWorkflowJson?.trim();
+            if (!inpaintJson) {
+                throw new DriverError(
+                    DriverErrorType.INVALID_PARAMS,
+                    '未配置局部重绘工作流 JSON！请先在 ComfyUI 设置中导入或粘贴局部重绘 API Workflow JSON。'
+                );
+            }
+            rawWorkflowJson = inpaintJson;
+        } else if (!rawWorkflowJson?.trim()) {
+            throw new DriverError(
+                DriverErrorType.INVALID_PARAMS,
+                '未配置文生图工作流 JSON！请先在 ComfyUI 设置中导入或粘贴文生图 API Workflow JSON。'
+            );
+        }
 
         const workflow = substituteWorkflowVariables(
-            this.settings.workflowJson,
-            options,
-            this.settings.promptPrefix,
-            this.settings.negativePrefix,
-            this.settings.checkpointPositivePrefix ?? '',
-            this.settings.checkpointNegativePrefix ?? '',
-            finalSuffix
+            rawWorkflowJson,
+            options
         );
 
         // 4. 提交任务
         const perf = PerformanceCollector.getInstance();
         const submitSpan = perf.startSpan('comfyui.submit');
 
-        const extraHeaders: Record<string, string> = {};
-        if (this.settings.requestMode === 'server') {
-            // server 模式：可在此处添加宿主鉴权 Header（如有）
-        }
-
         const submitResult = await this.postJson<{ prompt_id: string; number: number; node_errors: Record<string, unknown> }>(
             '/prompt',
-            { prompt: workflow, client_id: this._clientId },
-            undefined,
-            Object.keys(extraHeaders).length > 0 ? extraHeaders : undefined
+            { prompt: workflow, client_id: this._clientId }
         );
 
         perf.endSpan(submitSpan, { promptId: submitResult?.prompt_id });
@@ -498,15 +547,12 @@ export class ComfyUIDriver extends BaseDriver {
 
         // 5. 等待 WebSocket 推送完成信号
         return new Promise<GenerateResult>((resolve, reject) => {
-            this._activePromptId = promptId; // 记录当前活跃任务，用于二进制预览图路由
             this._pendingTasks.set(promptId, { resolve, reject, onProgress });
         });
     }
 
     cancel(): void {
         this._cancelled = true;
-        this._activePromptId = null; // 清除活跃任务，后续二进制消息不再路由
-        this._clearActivePreviewUrl(); // 释放未清理的预览图 Object URL
 
         // 对 PENDING 任务：发送 /queue delete（对 RUNNING 状态无效）
         const promptIds = Array.from(this._pendingTasks.keys());
@@ -518,7 +564,7 @@ export class ComfyUIDriver extends BaseDriver {
             });
         }
 
-        // 对 RUNNING 任务：发送 /interrupt 通知后端中断当前执行（SKILL.md §6）
+        // 对 RUNNING 任务：POST /interrupt 通知 ComfyUI 中断当前执行
         // ⚠️ /interrupt 是全局操作，会中断当前正在执行的任何任务，不区分 prompt_id。
         //    本扩展 maxConcurrent=1，等价于精确取消当前任务。
         void this.postJson('/interrupt', {}).catch((err) => {
@@ -535,6 +581,31 @@ export class ComfyUIDriver extends BaseDriver {
             this._abortController.abort();
             this._abortController = null;
         }
+    }
+
+    /**
+     * 显式销毁 ComfyUIDriver 实例
+     * 关闭 WebSocket 连接、释放预览图 Object URL、拒绝所有未完成的任务 Promise 并清理监听句柄
+     */
+    override dispose(): void {
+        this.cancel();
+        if (this._ws) {
+            try {
+                this._ws.onclose = null;
+                this._ws.onerror = null;
+                this._ws.onmessage = null;
+                if (this._ws.readyState === WebSocket.OPEN || this._ws.readyState === WebSocket.CONNECTING) {
+                    this._ws.close();
+                }
+            } catch (err) {
+                logger.debug('关闭 WebSocket 产生异常', err);
+            }
+            this._ws = null;
+        }
+        for (const task of this._pendingTasks.values()) {
+            task.reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUIDriver 已被释放销毁'));
+        }
+        this._pendingTasks.clear();
     }
 
     async getSamplers(): Promise<string[]> {
@@ -655,7 +726,11 @@ export class ComfyUIDriver extends BaseDriver {
                 reject(new DriverError(DriverErrorType.TIMEOUT, `WebSocket 连接超时（${timeoutMs}ms）`));
             }, timeoutMs);
 
-            // 使用一次性 handler，用完后立即移除，不影响 _connectWebSocket 注册的永久日志 handler
+            // 注册单次连接握手回调
+            const onClose = () => {
+                cleanup();
+                reject(new DriverError(DriverErrorType.NETWORK_ERROR, 'WebSocket 连接已被服务端关闭'));
+            };
             const onError = () => {
                 cleanup();
                 reject(new DriverError(DriverErrorType.NETWORK_ERROR, `WebSocket 连接失败，请确认 ComfyUI 以 --enable-cors-header 参数启动`));
@@ -666,10 +741,12 @@ export class ComfyUIDriver extends BaseDriver {
             };
             const cleanup = () => {
                 clearTimeout(timeout);
+                this._ws?.removeEventListener('close', onClose);
                 this._ws?.removeEventListener('error', onError);
                 this._ws?.removeEventListener('open', onOpen);
             };
 
+            this._ws.addEventListener('close', onClose);
             this._ws.addEventListener('error', onError);
             this._ws.addEventListener('open', onOpen);
         });

@@ -1,64 +1,67 @@
 /**
  * @module storage/chat-scanner
- * @description 聊天消息图片引用扫描器 (ChatScanner)
+ * @description 聊天记录图片引用与孤立文件清理分析器 (ChatScanner)
  *
  * 职责：
- * - 遍历 SillyTavern 宿主 getContext().chat 消息节点
- * - 收集当前聊天包含的所有有效 da_images 图片 UUID 引用
- * - 对比 IndexedDB 储存仓库，精确判定与清理无聊天引用的“孤立垃圾数据”
- *
- * 规范参考：
- * - .agents/Skills/browser-storage/SKILL.md §3 (存储配额与废弃垃圾清理策略)
+ * - 扫描宿主当前聊天消息中引用的所有图片 UUID 集合
+ * - 响应宿主 CHAT_DELETED 事件（当且仅当用户开启 autoCleanupOnChatDelete 时执行即时物理擦除）
+ * - 对比 IndexedDB 中的全量图片，找出未被任何消息引用的废弃图片并提供清理方法，释放存储空间
  */
-
 
 import { getContext } from '../core/context';
 import { logger } from '../core/logger';
-import { getDB, IMAGES_STORE_NAME, deleteImageFromDB } from './image-db';
+import { loadSettings } from '../settings/manager';
+import { getDB, IMAGES_STORE_NAME, deleteImagesBatchFromDB } from './image-db';
 
 /**
- * 扫描当前聊天面板中被引用的全部 UUID 集合
+ * 从消息列表中解析提取所有 da_images 图片 UUID 集合
  */
-export async function scanChatReferences(): Promise<Set<string>> {
-    const referencedUuids = new Set<string>();
+export function extractUuidsFromMessages(messages: unknown[]): Set<string> {
+    const uuids = new Set<string>();
+    if (!Array.isArray(messages)) return uuids;
 
-    try {
-        const ctx = getContext();
-        if (!ctx.chat || !Array.isArray(ctx.chat)) {
-            return referencedUuids;
-        }
+    for (const msg of messages) {
+        if (!msg || typeof msg !== 'object') continue;
+        const extra = (msg as { extra?: Record<string, unknown> }).extra;
+        if (!extra || typeof extra !== 'object') continue;
 
-        for (const msg of ctx.chat) {
-            if (!msg || typeof msg !== 'object') continue;
-            const extra = (msg as { extra?: Record<string, unknown> }).extra;
-            if (!extra || typeof extra !== 'object') continue;
+        const daImages = extra['da_images'] as Record<string | number, unknown> | undefined;
+        if (!daImages || typeof daImages !== 'object') continue;
 
-            const daImages = extra['da_images'] as Record<string | number, unknown> | undefined;
-            if (!daImages || typeof daImages !== 'object') continue;
-
-            // 遍历每个 Swipe 变体组或直接节点
-            for (const swipeData of Object.values(daImages)) {
-                if (typeof swipeData === 'object' && swipeData !== null) {
-                    const directUuid = (swipeData as { uuid?: string }).uuid;
-                    if (directUuid && typeof directUuid === 'string') {
-                        referencedUuids.add(directUuid);
-                    }
-                    for (const imgItem of Object.values(swipeData as Record<string, unknown>)) {
-                        if (typeof imgItem === 'object' && imgItem !== null) {
-                            const uuid = (imgItem as { uuid?: string }).uuid;
-                            if (uuid && typeof uuid === 'string') {
-                                referencedUuids.add(uuid);
-                            }
+        for (const swipeData of Object.values(daImages)) {
+            if (typeof swipeData === 'object' && swipeData !== null) {
+                const directUuid = (swipeData as { uuid?: string }).uuid;
+                if (directUuid && typeof directUuid === 'string') {
+                    uuids.add(directUuid);
+                }
+                for (const imgItem of Object.values(swipeData as Record<string, unknown>)) {
+                    if (typeof imgItem === 'object' && imgItem !== null) {
+                        const uuid = (imgItem as { uuid?: string }).uuid;
+                        if (uuid && typeof uuid === 'string') {
+                            uuids.add(uuid);
                         }
                     }
                 }
             }
         }
+    }
+    return uuids;
+}
+
+/**
+ * 扫描当前聊天面板中被引用的全部 UUID 集合
+ */
+export async function scanChatReferences(): Promise<Set<string>> {
+    try {
+        const ctx = getContext();
+        if (!ctx.chat || !Array.isArray(ctx.chat)) {
+            return new Set<string>();
+        }
+        return extractUuidsFromMessages(ctx.chat);
     } catch (err) {
         logger.error('扫描聊天消息图片引用失败', err, 'ChatScanner');
+        return new Set<string>();
     }
-
-    return referencedUuids;
 }
 
 /**
@@ -104,21 +107,46 @@ export async function findIsolatedImages(): Promise<string[]> {
 }
 
 /**
- * 一键清理删除所有孤立图片数据，释放无用磁盘占用
+ * 一键清理删除所有孤立图片数据，释放无用磁盘占用 (单事务高效处理)
  */
 export async function deleteIsolatedImages(): Promise<number> {
     const isolatedUuids = await findIsolatedImages();
-    let deletedCount = 0;
+    if (isolatedUuids.length === 0) return 0;
 
-    for (const uuid of isolatedUuids) {
-        try {
-            await deleteImageFromDB(uuid);
-            deletedCount++;
-        } catch (err) {
-            logger.warn(`删除孤立图片失败: uuid=${uuid}`, err, 'ChatScanner');
-        }
+    try {
+        const deletedCount = await deleteImagesBatchFromDB(isolatedUuids);
+        logger.info(`一键清理孤立数据完成，成功单事务批量删除 ${deletedCount} 张孤立垃圾图片`);
+        return deletedCount;
+    } catch (err) {
+        logger.error('清理孤立图片失败', err, 'ChatScanner');
+        return 0;
+    }
+}
+
+/**
+ * 处理 CHAT_DELETED 宿主事件（仅在用户开启 autoCleanupOnChatDelete 配置时执行即时擦除）
+ */
+export async function handleChatDeleted(chatId: string, deletedMessages?: unknown[]): Promise<number> {
+    const settings = loadSettings();
+    if (!settings.autoCleanupOnChatDelete) {
+        logger.debug(`CHAT_DELETED 触发 [chatId=${chatId}]，但 autoCleanupOnChatDelete 未开启，跳过自动删除。`);
+        return 0;
     }
 
-    logger.info(`一键清理孤立数据完成，成功删除 ${deletedCount} 张孤立垃圾图片`);
-    return deletedCount;
+    if (!deletedMessages || !Array.isArray(deletedMessages)) {
+        logger.debug(`CHAT_DELETED 触发 [chatId=${chatId}]，未提供 deletedMessages 数据，跳过清理。`);
+        return 0;
+    }
+
+    const uuids = extractUuidsFromMessages(deletedMessages);
+    if (uuids.size === 0) return 0;
+
+    try {
+        const deletedCount = await deleteImagesBatchFromDB(uuids);
+        logger.info(`CHAT_DELETED 自动擦除完成: chatId=${chatId}, 单事务批量擦除图片 ${deletedCount} 张`);
+        return deletedCount;
+    } catch (err) {
+        logger.error(`删除聊天废图失败: chatId=${chatId}`, err, 'ChatScanner');
+        return 0;
+    }
 }

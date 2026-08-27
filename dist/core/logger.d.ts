@@ -47,17 +47,11 @@ declare class Logger {
      * 获取当前系统生效的日志级别
      */
     getLogLevel(): LogLevel;
-    /** TRACE 细粒度协议追溯 */
     trace(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
-    /** DEBUG 调试信息 */
     debug(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
-    /** INFO 运行状态信息 */
     info(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
-    /** WARN 业务警告信息 */
     warn(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
-    /** ERROR 异常与操作失败 */
     error(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
-    /** FATAL 致命错误 */
     fatal(message: string, context?: unknown, moduleName?: string, taskId?: string): void;
     /**
      * 核心日志记录入口

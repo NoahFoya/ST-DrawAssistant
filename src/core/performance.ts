@@ -71,14 +71,14 @@ export class PerformanceCollector {
         };
     }
 
-    /** 兼容性方法：开始 Span */
+    /** 兼容性方法：开始 Span（_attributes 留待扩展 OpenTelemetry 语义） */
     startSpan(name: string, taskId?: string, _attributes?: Record<string, unknown>): PerformanceSpan {
         const id = `span_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const startTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
         return { id, name, startTime, taskId };
     }
 
-    /** 兼容性方法：结束 Span */
+    /** 兼容性方法：结束 Span（_extraAttributes 留待扩展 OpenTelemetry 语义） */
     endSpan(span: PerformanceSpan, _extraAttributes?: Record<string, unknown>): void {
         const endTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
         const durationMs = Math.round(endTime - span.startTime);
