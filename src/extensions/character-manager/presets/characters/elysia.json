@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "id": "char-elysia",
+    "name": "elysia.json",
+    "category": "characters",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "char-elysia",
+    "nameCN": "爱莉希雅",
+    "nameEN": "elysia",
+    "charOrigin": "elysia (honkai), honkai (series), honkai impact 3rd",
+    "bodyTraits": "pale_skin, slender, delicate_build, pointy_ears, elf_ears",
+    "facialFeatures": "pink_hair, long_hair, blue_eyes, smiling, parted_bangs",
+    "facialFeaturesBack": "long_pink_hair_from_behind, back_hair",
+    "upperBodySFW": "large_breasts, collarbone, slender_arms, cleavage",
+    "upperBodySFWBack": "slender_back, bare_shoulders, shoulder_blades",
+    "sideBodySFW": "side_boob, arching_back, narrow_waist, deep_cleavage",
+    "lowerBodySFW": "slender_legs, thigh_gap, smooth_thighs",
+    "lowerBodySFWBack": "round_butt, gluteal_fold, slender_calves",
+    "upperBodyNSFW": "pink_nipples, large_areolae, exposed_breasts",
+    "upperBodyNSFWBack": "waist_dimples, bare_back",
+    "lowerBodyNSFW": "pussy, shaved_pussy, exposed_groin",
+    "lowerBodyNSFWBack": "spread_butt, detailed_anus, under_butt",
+    "negativePrompt": "masculine, 1boy, flat_chest",
+    "outfitList": [
+      "粉色礼服"
+    ]
+  }
+}

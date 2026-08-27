@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "id": "outfit-student-female",
+    "name": "student-female.json",
+    "category": "outfits",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "outfit-student-female",
+    "nameCN": "学生制服女",
+    "nameEN": "student_uniform_female",
+    "headAccessory": "red_hair_ribbon",
+    "upperBody": "sailor_suit, white_shirt, navy_blue_sailor_collar, red_neckerchief, short_sleeves",
+    "upperBodyBack": "sailor_collar_from_behind, white_shirt_from_behind",
+    "lowerBody": "navy_blue_skirt, pleated_skirt, high_waist",
+    "lowerBodyBack": "pleated_skirt_from_behind",
+    "footwear": "black_thighhighs, brown_loafers",
+    "accessories": ""
+  }
+}

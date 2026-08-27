@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "id": "standard-tree",
+    "name": "标准宏规则树方案",
+    "category": "macro-rules",
+    "version": "1.0.0"
+  },
+  "data": {
+    "rules": []
+  }
+}

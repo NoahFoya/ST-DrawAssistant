@@ -1,7 +1,11 @@
 {
-  "id": "cyberpunk-neon",
-  "name": "🔮 赛博霓虹",
-  "isBuiltIn": true,
+  "metadata": {
+    "id": "cyberpunk-neon",
+    "name": "🔮 赛博霓虹",
+    "driver": "common",
+    "category": "themes",
+    "version": "1.0.0"
+  },
   "data": {
     "bgPrimary": "#130f1c",
     "bgGradientEnd": "#2a153b",

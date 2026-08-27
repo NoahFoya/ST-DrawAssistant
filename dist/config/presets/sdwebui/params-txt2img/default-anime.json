@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "id": "default-anime-params",
+    "name": "二次元动漫推荐参数",
+    "driver": "sdwebui",
+    "category": "params-txt2img",
+    "version": "1.0.0"
+  },
+  "data": {
+    "samplerName": "DPM++ 2M Karras",
+    "steps": 28,
+    "cfgScale": 7.0,
+    "width": 512,
+    "height": 768
+  }
+}

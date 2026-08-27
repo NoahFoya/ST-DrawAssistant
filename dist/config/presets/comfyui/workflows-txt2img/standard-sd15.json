@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "id": "standard-sd15-txt2img",
+    "name": "标准 SD1.5 文生图工作流",
+    "driver": "comfyui",
+    "category": "workflows-txt2img",
+    "version": "1.0.0"
+  },
+  "data": {
+    "mapping": {
+      "promptNodeId": "6",
+      "negativeNodeId": "7",
+      "samplerNodeId": "3",
+      "latentNodeId": "5",
+      "outputNodeId": "9"
+    }
+  }
+}

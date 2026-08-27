@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "id": "outfit-pink-dress",
+    "name": "pink-dress.json",
+    "category": "outfits",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "outfit-pink-dress",
+    "nameCN": "粉色礼服",
+    "nameEN": "pink_dress",
+    "headAccessory": "crystal_hairclip, flower_earrings",
+    "upperBody": "pink_dress, strapless_dress, white_frills, bare_shoulders",
+    "upperBodyBack": "backless_dress, pink_ribbon_from_behind",
+    "lowerBody": "long_dress, side_slit, layered_skirt",
+    "lowerBodyBack": "layered_skirt_from_behind",
+    "footwear": "white_thighhighs, pink_high_heels",
+    "accessories": "white_elbow_gloves, crystal_necklace"
+  }
+}

@@ -1,7 +1,11 @@
 {
-  "id": "blue-sky",
-  "name": "☀️ 蓝天白云",
-  "isBuiltIn": true,
+  "metadata": {
+    "id": "blue-sky",
+    "name": "☀️ 蓝天白云",
+    "driver": "common",
+    "category": "themes",
+    "version": "1.0.0"
+  },
   "data": {
     "bgPrimary": "#e0f2fe",
     "bgGradientEnd": "#bae6fd",

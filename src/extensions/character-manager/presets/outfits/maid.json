@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "maid",
+    "name": "经典女仆装 (Maid)",
+    "category": "outfits",
+    "version": "1.0.0"
+  },
+  "data": {
+    "nameCN": "女仆装",
+    "nameEN": "maid dress",
+    "headAccessory": "maid headdress",
+    "upperBody": "black maid apron dress, white frills",
+    "upperBodyBack": "back apron ribbon",
+    "lowerBody": "maid skirt",
+    "lowerBodyBack": "maid skirt back",
+    "footwear": "white thighhighs, mary janes",
+    "accessories": "lace wrist cuffs"
+  }
+}

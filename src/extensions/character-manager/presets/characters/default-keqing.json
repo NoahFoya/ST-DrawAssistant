@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "id": "default-keqing",
+    "name": "刻晴 (Keqing)",
+    "category": "characters",
+    "version": "1.0.0"
+  },
+  "data": {
+    "nameCN": "刻晴",
+    "nameEN": "keqing (genshin impact)",
+    "charOrigin": "genshin impact",
+    "bodyTraits": "purple hair, twin braids, purple eyes",
+    "facialFeatures": "ahoge, hairpin",
+    "facialFeaturesBack": "long hair back",
+    "upperBodySFW": "purple dress",
+    "upperBodySFWBack": "bare back dress",
+    "sideBodySFW": "slender waist",
+    "lowerBodySFW": "black pantyhose",
+    "lowerBodySFWBack": "black pantyhose back",
+    "upperBodyNSFW": "medium breasts",
+    "upperBodyNSFWBack": "smooth back",
+    "lowerBodyNSFW": "pussy",
+    "lowerBodyNSFWBack": "ass",
+    "negativePrompt": "monochrome",
+    "outfitList": ["Default Outfit"]
+  }
+}

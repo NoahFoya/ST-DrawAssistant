@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "id": "tpl-tavern-xml",
+    "name": "Tavern XML 标签风格",
+    "category": "card-templates",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "tpl-tavern-xml",
+    "name": "Tavern XML 标签风格",
+    "characterListTemplate": "<人物设定>\n<人物>\n中文名称: {nameCN}\n英文名称: {nameEN}\n作品来源: {origin}\n固有特征: {bodyTraits}\n五官外貌: {facial}\n五官外貌背面: {facialBack}\n上半身SFW: {upperSFW}\n上半身SFW背面: {upperSFWBack}\n侧身SFW: {sideSFW}\n下半身SFW: {lowerSFW}\n下半身SFW背面: {lowerSFWBack}\n上半身NSFW: {upperNSFW}\n上半身NSFW背面: {upperNSFWBack}\n下半身NSFW: {lowerNSFW}\n下半身NSFW背面: {lowerNSFWBack}\n负面: {negative}\n{outfits}\n</人物>\n</人物设定>",
+    "innerOutfitTemplate": "<服装>\n中文名称: {nameCN}\n英文名称: {nameEN}\n头部饰品: {headAcc}\n上半身: {upperBody}\n上半身背面: {upperBodyBack}\n下半身: {lowerBody}\n下半身背面: {lowerBodyBack}\n鞋袜: {footwear}\n配饰: {accessories}\n</服装>",
+    "enableOutfitListTemplate": "<服装设定>\n<服装>\n中文名称: {nameCN}\n英文名称: {nameEN}\n头部饰品: {headAcc}\n上半身: {upperBody}\n上半身背面: {upperBodyBack}\n下半身: {lowerBody}\n下半身背面: {lowerBodyBack}\n鞋袜: {footwear}\n配饰: {accessories}\n</服装>\n</服装设定>"
+  }
+}

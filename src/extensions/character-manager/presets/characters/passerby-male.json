@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "id": "char-passerby-male",
+    "name": "passerby-male.json",
+    "category": "characters",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "char-passerby-male",
+    "nameCN": "路人男",
+    "nameEN": "passerby_male",
+    "charOrigin": "",
+    "bodyTraits": "average_build, fair_skin, healthy_body",
+    "facialFeatures": "short_hair, black_hair, brown_eyes, neat_eyebrows",
+    "facialFeaturesBack": "short_hair_from_behind, nape",
+    "upperBodySFW": "male_chest, collarbone, defined_torso",
+    "upperBodySFWBack": "male_back, shoulder_blades, broad_shoulders",
+    "sideBodySFW": "side_profile, flat_chest, athletic_torso",
+    "lowerBodySFW": "straight_legs, male_thighs, calves",
+    "lowerBodySFWBack": "male_butt, back_of_legs",
+    "upperBodyNSFW": "shirtless_male, pectoral_muscles, small_nipples",
+    "upperBodyNSFWBack": "bare_back_male, spinal_groove",
+    "lowerBodyNSFW": "penis, testicles, pubic_hair",
+    "lowerBodyNSFWBack": "male_buttocks, gluteal_cleft",
+    "negativePrompt": "feminine, breasts, 1girl, female_features",
+    "outfitList": [
+      "学生制服男"
+    ]
+  }
+}

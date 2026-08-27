@@ -4,7 +4,7 @@
     "js": "dist/index.js",
     "css": "styles/main.css",
     "author": "NoahFoya with AICode",
-    "version": "0.3.0",
+    "version": "0.3.5",
     "description": "Generate context-aware images in SillyTavern chat using AI backends (ComfyUI, SD WebUI)",
     "loading_order": 10,
     "homePage": "https://github.com/NoahFoya/ST-DrawAssistant"

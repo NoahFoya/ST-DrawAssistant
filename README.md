@@ -2,7 +2,7 @@
 
 > **SillyTavern 上下文感知 AI 绘图扩展** — 为酒馆对话场景打造的智能化 AI 图像生成插件。
 
-[![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](./src/config/changelog.json)
+[![Version](https://img.shields.io/badge/version-v0.3.4-blue.svg)](./src/config/changelog.json)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Author](https://img.shields.io/badge/Author-NoahFoya-orange.svg)](https://github.com/NoahFoya)
 

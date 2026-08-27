@@ -1,7 +1,11 @@
 {
-  "id": "mac-dusk",
-  "name": "🌙 macOS 暮光",
-  "isBuiltIn": true,
+  "metadata": {
+    "id": "mac-dusk",
+    "name": "🌙 macOS 暮光",
+    "driver": "common",
+    "category": "themes",
+    "version": "1.0.0"
+  },
   "data": {
     "bgPrimary": "#1c1c1e",
     "bgGradientEnd": "#2c2c2e",

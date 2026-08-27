@@ -1,5 +1,47 @@
 [
   {
+    "version": "0.3.4",
+    "date": "2026-08-16",
+    "title": "v0.3.4 — 全局常量集中管理、全套底层控件模板与 ComfyUI/SD-WebUI 深度对齐",
+    "items": [
+      "【架构常量集中与自动化维护】创建 src/core/constants.ts 单一版本源，实现 scripts/bump-version.js 全自动全链路版本原子升级 (npm run bump)。",
+      "【底层控件模板库全量对齐】重构 preset-toolbar.ts (支持 7 大图标、脏状态 Badge 与 bindPresetToolbar 适配器)、blueprint-modal.ts (工作流可视化蓝图模态框) 及 controls.ts (存储容量条与统计卡片)。",
+      "【ComfyUI 与 SD-WebUI 深度还原】彻底对齐旧版 6 大卡片所有精细化参数与工作流蓝图/节点插槽映射体系，绑定通用预设适配器。"
+    ]
+  },
+  {
+    "version": "0.3.3",
+    "date": "2026-08-16",
+    "title": "v0.3.3 — 生图引擎专有页 (ComfyUI & SD-WebUI) 标准卡片与并发探测全量重构",
+    "items": [
+      "【ComfyUI 引擎 6 大标准卡片重构】落地 API 服务连接测试、局部方案快捷切换、模型与采样参数（预设工具栏/Checkpoint/CLIP/VAE/宽高/Steps/CFG/Sampler/Scheduler/前缀）、提示词模板与 LoRA 动态管理、文生图 API 工作流与局部重绘配置。",
+      "【SD-WebUI (A1111) 4 大卡片重构】落地 API 服务连接拉取、模型与采样参数（预设工具栏/Checkpoint/宽高/Steps/CFG/Sampler/CLIP Skip）、提示词模板与二阶段高清修复 (Hires.fix) 放大算法与倍数控制。",
+      "【样式布局对齐与后端逻辑闭环】全面打通底层并发限制、超时控制、占位符动态正则提取、空格换行清洗、图片显示样式 (align/fit/height/width/radius)、全屏 Lightbox 与长按/右键操作面板。"
+    ]
+  },
+  {
+    "version": "0.3.2",
+    "date": "2026-08-16",
+    "title": "v0.3.2 — 主模态框调度器精细化重构与主要设置页 5 大卡片全中文对齐",
+    "items": [
+      "【主模态框调度器全面升级】重构 settings-modal.ts，引入 macOS 极简双行顶栏（红点关闭、快速主题切换与全量设置导入导出/重置）、侧边栏动态联动与底栏 10s 连通性/3s 内存双指标状态栏。",
+      "【主要设置页 5 大卡片全量重构】对齐历史命名与中文习惯，落地运行模式与请求控制、楼层生图触发与交互、图像显示样式与对齐、进阶扩展管理及数据持久化与缓存清理。",
+      "【原子控件库与强类型拓展】升级 ControlFactory 扩展 createToggle 并强类型化布尔/数字响应式事件，确保全链路类型零错误。"
+    ]
+  },
+  {
+    "version": "0.3.1",
+    "date": "2026-08-16",
+    "title": "v0.3.1 — 现代化微内核架构规范全面对齐、角色树形宏引擎与全功能就绪",
+    "items": [
+      "【微内核架构规范与单向依赖重构】全面落地 Extensions -> UI -> Domain -> Core Kernel 四层单向依赖架构，核心暴露 KernelContext 统一只读门面与 14 大子系统，彻底清理过时设计与第三方认知污染。",
+      "【树形宏规则与多格式角色卡转换器】独立业务扩展 CharacterManager 增加 MacroEngine 递归展开引擎与 CardConverter（支持 SillyTavern 标准 XML、YAML 与 Markdown 角色卡双向转换解析）。",
+      "【宿主沙箱安全与官方契约对齐】IHostBridge 优先支持官方 saveMetadata() 与精准角色消息生命周期拦截，阻断业务代码直接访问原生全局变量。",
+      "【声明式预设资产物理隔离】核心预设按 themes/、comfyui/、sdwebui/ 物理分包，角色管理专属预设就地闭环管理。",
+      "【画廊交互与全套测试套件】画廊视图支持收藏切换、删除与过滤；全套自动化测试扩展至 23 个用例全部绿灯。"
+    ]
+  },
+  {
     "version": "0.3.0",
     "date": "2026-08-13",
     "title": "v0.3.0 — 全链路类型安全重构、WeiLin LoRA 语法集成与底层架构健壮性升级",

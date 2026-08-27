@@ -1,22 +1,23 @@
 /**
  * @module core/constants
- * @description ST-DrawAssistant 扩展全局常量定义模块
- *
- * 职责：
- * - 为全库提供唯一真实来源，避免各模块散落硬编码字符串
- * - 声明扩展名称、命名空间、路径及版本号
- *
- * 宿主契约要求：
- * - MODULE_NAME、EXTENSION_NAME、VERSION 必须与扩展目录名及 manifest.json 保持完全一致
+ * @description 插件全局常量集中定义 (单一事实来源，严禁在业务代码中硬编码常量与版本号)
  */
-/** 用于 extension_settings 命名空间隔离 (存储 Key) */
-export declare const MODULE_NAME: "ST-DrawAssistant";
-/** 等于扩展文件夹名，必须与 manifest.json 的 name 字段和目录名 100% 完全一致 */
-export declare const EXTENSION_NAME: "ST-DrawAssistant";
-/** 第三方扩展相对宿主 scripts/extensions/ 的标准基准路径常量 */
-export declare const EXTENSION_PATH: "third-party/ST-DrawAssistant";
-/** 扩展 UI 界面与模态框呈现名称，与 manifest.json 的 display_name 保持一致 */
-export declare const EXTENSION_DISPLAY_NAME: "Starlight DrawAssistant";
-/** 版本号，与 manifest.json 的 version 保持一致 */
-export declare const VERSION: "0.3.0";
+/** 当前插件系统版本号 (全系统单一事实来源) */
+export declare const VERSION = "0.3.5";
+/** 插件模块名称与唯一标识 */
+export declare const MODULE_NAME = "st-drawassistant";
+export declare const EXTENSION_KEY = "st-drawassistant";
+/** 扩展设置持久化键名 */
+export declare const STORAGE_KEY = "st_drawassistant_settings";
+/** 本地图库 IndexedDB 数据库名称 */
+export declare const DB_NAME = "ST_DRAWASSISTANT_DB";
+/** 默认服务地址 */
+export declare const DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188";
+export declare const DEFAULT_SDWEBUI_URL = "http://127.0.0.1:7860";
+/** 默认生图与请求控制门限 */
+export declare const DEFAULT_TIMEOUT_MS = 120000;
+export declare const DEFAULT_MAX_CONCURRENT = 1;
+/** 默认生图指令起止占位符 */
+export declare const DEFAULT_PLACEHOLDER_START = "image###";
+export declare const DEFAULT_PLACEHOLDER_END = "###";
 //# sourceMappingURL=constants.d.ts.map

@@ -1,10 +1,8 @@
 /**
  * @module extensions/character-manager/character-tab
- * @description 角色管理主面板 UI 组件 (角色设定 + 服装设定 + 设定启用管理 + 注入模板管理)
+ * @description 角色与服装设定管理主面板 (5 大独立子页面 + 专属预设工具栏)
  */
-/**
- * 渲染角色管理 Tab 节点
- */
-export declare function renderCharacterTab(): HTMLElement;
-export declare function renderEnableSchemeSettingsPane(): HTMLElement;
+import { CharacterStorage } from './storage';
+import { ControlFactory } from '../../ui/components/controls';
+export declare function createCharacterTabView(storage: CharacterStorage, controls?: ControlFactory): HTMLElement;
 //# sourceMappingURL=character-tab.d.ts.map

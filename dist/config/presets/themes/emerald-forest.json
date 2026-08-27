@@ -1,7 +1,11 @@
 {
-  "id": "emerald-forest",
-  "name": "🌲 翡翠深林",
-  "isBuiltIn": true,
+  "metadata": {
+    "id": "emerald-forest",
+    "name": "🌲 翡翠深林",
+    "driver": "common",
+    "category": "themes",
+    "version": "1.0.0"
+  },
   "data": {
     "bgPrimary": "#091412",
     "bgGradientEnd": "#122a24",

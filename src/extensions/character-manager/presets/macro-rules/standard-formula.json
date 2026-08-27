@@ -1,0 +1,342 @@
+{
+  "metadata": {
+    "id": "standard-formula",
+    "name": "标准正则公式方案",
+    "category": "macro-rules",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "standard-formula",
+    "name": "标准正则公式方案",
+    "characterMacroRules": {
+      "fixedVars": [
+        "nameEN",
+        "charOrigin",
+        "bodyTraits"
+      ],
+      "formulas": [
+        {
+          "id": "char-front-upper-sfw",
+          "name": "正面 SFW 上半身",
+          "enabled": true,
+          "pattern": "-sfw-upperbody",
+          "outputVars": [
+            "facialFeatures",
+            "upperBodySFW"
+          ]
+        },
+        {
+          "id": "char-front-upper-nsfw",
+          "name": "正面 NSFW 上半身",
+          "enabled": true,
+          "pattern": "-nsfw-upperbody",
+          "outputVars": [
+            "facialFeatures",
+            "upperBodyNSFW"
+          ]
+        },
+        {
+          "id": "char-front-lower-sfw",
+          "name": "正面 SFW 下半身",
+          "enabled": true,
+          "pattern": "-sfw-lowerbody",
+          "outputVars": [
+            "lowerBodySFW"
+          ]
+        },
+        {
+          "id": "char-front-lower-nsfw",
+          "name": "正面 NSFW 下半身",
+          "enabled": true,
+          "pattern": "-nsfw-lowerbody",
+          "outputVars": [
+            "lowerBodyNSFW"
+          ]
+        },
+        {
+          "id": "char-side-sfw",
+          "name": "侧身曲线 SFW",
+          "enabled": true,
+          "pattern": "-sfw-sidebody",
+          "outputVars": [
+            "facialFeatures",
+            "sideBodySFW"
+          ]
+        },
+        {
+          "id": "char-behind-upper-sfw",
+          "name": "背面 SFW 上半身",
+          "enabled": true,
+          "pattern": "-from_behind-sfw-upperbody",
+          "outputVars": [
+            "facialFeaturesBack",
+            "upperBodySFWBack"
+          ]
+        },
+        {
+          "id": "char-behind-upper-nsfw",
+          "name": "背面 NSFW 上半身",
+          "enabled": true,
+          "pattern": "-from_behind-nsfw-upperbody",
+          "outputVars": [
+            "facialFeaturesBack",
+            "upperBodyNSFWBack"
+          ]
+        },
+        {
+          "id": "char-behind-lower-sfw",
+          "name": "背面 SFW 下半身",
+          "enabled": true,
+          "pattern": "-from_behind-sfw-lowerbody",
+          "outputVars": [
+            "lowerBodySFWBack"
+          ]
+        },
+        {
+          "id": "char-behind-lower-nsfw",
+          "name": "背面 NSFW 下半身",
+          "enabled": true,
+          "pattern": "-from_behind-nsfw-lowerbody",
+          "outputVars": [
+            "lowerBodyNSFWBack"
+          ]
+        }
+      ]
+    },
+    "outfitMacroRules": {
+      "fixedVars": [
+        "nameEN"
+      ],
+      "formulas": [
+        {
+          "id": "outfit-front-upper",
+          "name": "正面上半身穿着",
+          "enabled": true,
+          "pattern": "-upperbody",
+          "outputVars": [
+            "headAccessory",
+            "upperBody"
+          ]
+        },
+        {
+          "id": "outfit-front-lower",
+          "name": "正面下半身穿着",
+          "enabled": true,
+          "pattern": "-lowerbody",
+          "outputVars": [
+            "lowerBody",
+            "footwear"
+          ]
+        },
+        {
+          "id": "outfit-behind-upper",
+          "name": "背面上半身穿着",
+          "enabled": true,
+          "pattern": "-from_behind-upperbody",
+          "outputVars": [
+            "upperBodyBack"
+          ]
+        },
+        {
+          "id": "outfit-behind-lower",
+          "name": "背面下半身穿着",
+          "enabled": true,
+          "pattern": "-from_behind-lowerbody",
+          "outputVars": [
+            "lowerBodyBack",
+            "footwear"
+          ]
+        },
+        {
+          "id": "outfit-accessories",
+          "name": "全身饰品与配件",
+          "enabled": true,
+          "pattern": "-accessories",
+          "outputVars": [
+            "headAccessory",
+            "accessories"
+          ]
+        }
+      ]
+    },
+    "characterExtractRules": [
+      {
+        "id": "ext-c-1",
+        "name": "中文名称",
+        "enabled": true,
+        "pattern": "中文名称",
+        "targetField": "nameCN"
+      },
+      {
+        "id": "ext-c-2",
+        "name": "英文名称",
+        "enabled": true,
+        "pattern": "英文名称",
+        "targetField": "nameEN"
+      },
+      {
+        "id": "ext-c-3",
+        "name": "作品来源",
+        "enabled": true,
+        "pattern": "作品来源",
+        "targetField": "charOrigin"
+      },
+      {
+        "id": "ext-c-4",
+        "name": "固有特征",
+        "enabled": true,
+        "pattern": "(固有特征|角色特征)",
+        "targetField": "bodyTraits"
+      },
+      {
+        "id": "ext-c-5",
+        "name": "五官外貌",
+        "enabled": true,
+        "pattern": "五官外貌",
+        "targetField": "facialFeatures"
+      },
+      {
+        "id": "ext-c-6",
+        "name": "五官外貌背面",
+        "enabled": true,
+        "pattern": "五官外貌背面",
+        "targetField": "facialFeaturesBack"
+      },
+      {
+        "id": "ext-c-7",
+        "name": "上半身SFW",
+        "enabled": true,
+        "pattern": "上半身SFW",
+        "targetField": "upperBodySFW"
+      },
+      {
+        "id": "ext-c-8",
+        "name": "上半身SFW背面",
+        "enabled": true,
+        "pattern": "上半身SFW背面",
+        "targetField": "upperBodySFWBack"
+      },
+      {
+        "id": "ext-c-9",
+        "name": "侧身SFW",
+        "enabled": true,
+        "pattern": "(侧身SFW|侧身曲线SFW)",
+        "targetField": "sideBodySFW"
+      },
+      {
+        "id": "ext-c-10",
+        "name": "下半身SFW",
+        "enabled": true,
+        "pattern": "下半身SFW",
+        "targetField": "lowerBodySFW"
+      },
+      {
+        "id": "ext-c-11",
+        "name": "下半身SFW背面",
+        "enabled": true,
+        "pattern": "下半身SFW背面",
+        "targetField": "lowerBodySFWBack"
+      },
+      {
+        "id": "ext-c-12",
+        "name": "上半身NSFW",
+        "enabled": true,
+        "pattern": "上半身NSFW",
+        "targetField": "upperBodyNSFW"
+      },
+      {
+        "id": "ext-c-13",
+        "name": "上半身NSFW背面",
+        "enabled": true,
+        "pattern": "上半身NSFW背面",
+        "targetField": "upperBodyNSFWBack"
+      },
+      {
+        "id": "ext-c-14",
+        "name": "下半身NSFW",
+        "enabled": true,
+        "pattern": "下半身NSFW",
+        "targetField": "lowerBodyNSFW"
+      },
+      {
+        "id": "ext-c-15",
+        "name": "下半身NSFW背面",
+        "enabled": true,
+        "pattern": "下半身NSFW背面",
+        "targetField": "lowerBodyNSFWBack"
+      },
+      {
+        "id": "ext-c-16",
+        "name": "负面提示词",
+        "enabled": true,
+        "pattern": "(负面|负面提示词|负面排斥)",
+        "targetField": "negativePrompt"
+      }
+    ],
+    "outfitExtractRules": [
+      {
+        "id": "ext-o-1",
+        "name": "中文名称",
+        "enabled": true,
+        "pattern": "中文名称",
+        "targetField": "nameCN"
+      },
+      {
+        "id": "ext-o-2",
+        "name": "英文名称",
+        "enabled": true,
+        "pattern": "英文名称",
+        "targetField": "nameEN"
+      },
+      {
+        "id": "ext-o-3",
+        "name": "头部饰品",
+        "enabled": true,
+        "pattern": "(头部饰品|头部)",
+        "targetField": "headAccessory"
+      },
+      {
+        "id": "ext-o-4",
+        "name": "上半身",
+        "enabled": true,
+        "pattern": "(上半身|上衣穿着)",
+        "targetField": "upperBody"
+      },
+      {
+        "id": "ext-o-5",
+        "name": "上半身背面",
+        "enabled": true,
+        "pattern": "上半身背面",
+        "targetField": "upperBodyBack"
+      },
+      {
+        "id": "ext-o-6",
+        "name": "下半身",
+        "enabled": true,
+        "pattern": "(下半身|裙裤穿着|裙裤下装)",
+        "targetField": "lowerBody"
+      },
+      {
+        "id": "ext-o-7",
+        "name": "下半身背面",
+        "enabled": true,
+        "pattern": "下半身背面",
+        "targetField": "lowerBodyBack"
+      },
+      {
+        "id": "ext-o-8",
+        "name": "鞋袜",
+        "enabled": true,
+        "pattern": "(鞋袜|腿部鞋袜)",
+        "targetField": "footwear"
+      },
+      {
+        "id": "ext-o-9",
+        "name": "配饰",
+        "enabled": true,
+        "pattern": "(配饰|配饰配件|全身饰品)",
+        "targetField": "accessories"
+      }
+    ]
+  }
+}

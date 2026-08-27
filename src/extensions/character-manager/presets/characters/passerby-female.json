@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "id": "char-passerby-female",
+    "name": "passerby-female.json",
+    "category": "characters",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "char-passerby-female",
+    "nameCN": "路人女",
+    "nameEN": "passerby_female",
+    "charOrigin": "",
+    "bodyTraits": "slender, fair_skin, delicate_build",
+    "facialFeatures": "medium_hair, black_hair, black_eyes, soft_facial_features",
+    "facialFeaturesBack": "medium_hair_from_behind, smooth_nape",
+    "upperBodySFW": "medium_breasts, collarbone, slender_arms, defined_navel",
+    "upperBodySFWBack": "slender_back, shoulder_blades, delicate_spine",
+    "sideBodySFW": "side_boob, arching_back, narrow_waist, hip_curve",
+    "lowerBodySFW": "slender_legs, thigh_gap, smooth_thighs",
+    "lowerBodySFWBack": "round_butt, gluteal_fold, slender_calves",
+    "upperBodyNSFW": "pink_nipples, small_areolae, bare_breasts",
+    "upperBodyNSFWBack": "waist_dimples, bare_back",
+    "lowerBodyNSFW": "pussy, shaved_pussy, exposed_groin",
+    "lowerBodyNSFWBack": "spread_butt, detailed_anus, under_butt",
+    "negativePrompt": "masculine, 1boy, muscular, flat_chest",
+    "outfitList": [
+      "学生制服女"
+    ]
+  }
+}

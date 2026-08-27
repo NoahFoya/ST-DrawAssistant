@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "id": "wai_illustrious_default",
+    "name": "二次元动漫通用提示词预设",
+    "driver": "comfyui",
+    "category": "prompts",
+    "version": "1.0.0"
+  },
+  "data": {
+    "promptPrefix": "masterpiece, best quality, highly detailed, aesthetic",
+    "negativePrefix": "lowres, worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, cropped",
+    "promptSuffix": "",
+    "loras": []
+  }
+}

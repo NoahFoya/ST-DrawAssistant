@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "id": "outfit-student-male",
+    "name": "student-male.json",
+    "category": "outfits",
+    "version": "1.0.0"
+  },
+  "data": {
+    "id": "outfit-student-male",
+    "nameCN": "学生制服男",
+    "nameEN": "student_uniform_male",
+    "headAccessory": "",
+    "upperBody": "school_uniform, black_gakuran, high_collar, gold_buttons, white_shirt_underneath",
+    "upperBodyBack": "black_jacket_from_behind, high_collar_from_behind",
+    "lowerBody": "black_pants, straight_trousers, black_belt",
+    "lowerBodyBack": "black_pants_from_behind",
+    "footwear": "black_socks, brown_loafers",
+    "accessories": ""
+  }
+}

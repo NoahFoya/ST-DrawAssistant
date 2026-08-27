@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 /**
- * 自定义 Webpack 插件：自动将 src/config/ 完整复制至 dist/config/ 并写出 manifest.json 索引文件
+ * 自定义 Webpack 插件：将 src/config/ 配置文件同步复制至 dist/config/，并自动扫描子目录生成 manifest.json 索引文件
  */
 class GeneratePresetManifestPlugin {
     apply(compiler) {
@@ -15,30 +15,21 @@ class GeneratePresetManifestPlugin {
 
             if (!fs.existsSync(srcConfigDir)) return;
 
-            // 1. 将 src/config/ 文件夹整体递归物理复制至 dist/config/
+            // 1. 将 src/config/ 目录完整递归复制到 dist/config/
             fs.mkdirSync(distConfigDir, { recursive: true });
             fs.cpSync(srcConfigDir, distConfigDir, { recursive: true });
 
-            // 2. 自动扫描子目录 JSON 文件名列表，生成 manifest.json
-            // 顶层分类（单层扫描）
-            const categories = ['themes', 'models', 'prompts', 'global', 'workflows-txt2img', 'workflows-inpaint'];
+            // 2. 动态扫描 presets 目录下所有预设子目录，自动生成 manifest.json
             const manifest = {};
+            if (fs.existsSync(srcPresetsDir)) {
+                const subDirs = fs.readdirSync(srcPresetsDir, { withFileTypes: true })
+                    .filter(dirent => dirent.isDirectory())
+                    .map(dirent => dirent.name);
 
-            categories.forEach(cat => {
-                const catDir = path.join(srcPresetsDir, cat);
-                if (fs.existsSync(catDir)) {
-                    manifest[cat] = fs.readdirSync(catDir).filter(f => f.endsWith('.json'));
-                } else {
-                    manifest[cat] = [];
-                }
-            });
-
-            // character-manager 子目录（独立命名空间，单层扫描）
-            const charManagerDir = path.join(srcPresetsDir, 'character-manager');
-            if (fs.existsSync(charManagerDir)) {
-                manifest['character-manager'] = fs.readdirSync(charManagerDir).filter(f => f.endsWith('.json'));
-            } else {
-                manifest['character-manager'] = [];
+                subDirs.forEach(subDir => {
+                    const fullSubDir = path.join(srcPresetsDir, subDir);
+                    manifest[subDir] = fs.readdirSync(fullSubDir).filter(f => f.endsWith('.json'));
+                });
             }
 
             fs.writeFileSync(path.join(distPresetsDir, 'manifest.json'), JSON.stringify(manifest, null, 2));

@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "id": "cyberpunk",
+    "name": "赛博朋克霓虹 (Cyberpunk)",
+    "driver": "common",
+    "category": "themes",
+    "version": "1.0.0"
+  },
+  "data": {
+    "bgPrimary": "#0d0d1a",
+    "bgGradientEnd": "#1a0b2e",
+    "bgGradientAngle": 145,
+    "bgSecondary": "#1e1136",
+    "bgOpacity": 0.92,
+    "textPrimary": "#ff71ce",
+    "textSecondary": "#01cdfe",
+    "borderColor": "#7a04eb",
+    "accentColor": "#05ffa1",
+    "blurRadius": 24,
+    "borderRadius": 8
+  }
+}
