@@ -1,0 +1,15 @@
+{
+  "id": "wai_sdxl_default",
+  "name": "Wai Illustrious SDXL 默认模型预设",
+  "data": {
+    "ckptName": "waiIllustriousSDXL_v170.safetensors",
+    "clipName": "",
+    "vaeName": "",
+    "width": 1024,
+    "height": 1344,
+    "steps": 18,
+    "cfgScale": 6,
+    "samplerName": "euler_ancestral",
+    "scheduler": "normal"
+  }
+}

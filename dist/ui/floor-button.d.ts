@@ -1,5 +1,6 @@
 /**
- * 楼层生图按钮控制器
+ * @module ui/floor-button
+ * @description 楼层生图按钮控制器
  *
  * 职责：
  * 1. 扫描 AI 消息文本，识别 `image###提示词###` 占位符
@@ -12,7 +13,8 @@
  *   默认结束：###
  *   示例：image###1girl, cityscape, night###
  *
- * 参考：.agents/Skills/st-image-generation-patterns/SKILL.md §5
+ * 规范参考：
+ * - .agents/Skills/st-image-generation-patterns/SKILL.md §5 (楼层按钮交互模式与生命周期)
  */
 import { TaskManager } from '../task/manager';
 import type { ImageDriver } from '../drivers/types';

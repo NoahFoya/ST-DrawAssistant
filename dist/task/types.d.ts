@@ -1,5 +1,6 @@
 /**
- * 任务状态类型定义
+ * @module task/types
+ * @description TaskManager 任务状态与事件监听器类型声明
  */
 import type { GenerateOptions, GenerateResult } from '../drivers/types';
 /** 任务状态枚举 */
@@ -19,6 +20,7 @@ export interface TaskRecord {
 }
 /** TaskManager 事件映射 */
 export interface TaskManagerEvents {
+    submit: (taskId: string, params: GenerateOptions, driverName: string) => void;
     progress: (taskId: string, percent: number, message?: string, previewUrl?: string) => void;
     complete: (taskId: string, result: GenerateResult) => void;
     error: (taskId: string, error: Error) => void;

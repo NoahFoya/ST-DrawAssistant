@@ -1,50 +1,43 @@
 /**
- * 设置管理器
+ * @module settings/manager
+ * @description 设置管理器 (Settings Manager)
  *
- * 负责从 SillyTavern extension_settings 读取、合并默认值、持久化设置。
+ * 职责：
+ * - 绑定 `extension_settings[MODULE_NAME]` 宿主全局配置节点
+ * - 确保设置修改后直接更新宿主反序列化对象
+ * - 调用宿主 `saveSettingsDebounced()` 将配置自动保存至服务器
  *
- * 生命周期：
- *   APP_READY → loadSettings() → 用户交互 → saveSettings() → 落盘
- *
- * 参考：.agents/Skills/sillytavern-extension-host/SKILL.md §7
+ * 规范参考：
+ * - .agents/Skills/sillytavern-extension-host/SKILL.md §7 (extension_settings 持久化规范)
  */
 import type { DrawAssistantSettings } from './types';
 /**
- * 从 extension_settings 加载设置，与默认值合并后返回
+ * 官方规范：获取扩展设置对象引用（直接绑定宿主 extensionSettings[MODULE_NAME] 指针）
  *
- * 合并策略：以持久化设置为优先，缺失字段由默认值补全。
- * 这确保扩展升级新增字段时，老用户不会因缺少字段而崩溃。
- *
- * ⚠️ 必须在 APP_READY 后调用（依赖 getContext()）
- *
- * @returns 合并后的完整设置对象
+ * 遵循 SillyTavern 官方规范 SKILL §2.2 & §7.1
  */
 export declare function loadSettings(): DrawAssistantSettings;
+/** 兼容导出 ensureExtensionSettings */
+export declare const ensureExtensionSettings: typeof loadSettings;
+export declare const getExtensionSettingsNode: () => Record<string, unknown>;
 /**
- * 将设置对象写入 extension_settings 并触发防抖持久化
- *
- * @param settings 要持久化的完整设置对象
- *
- * @example
- * const settings = loadSettings();
- * settings.provider = 'webui';
- * saveSettings(settings);
+ * 官方标准：将设置对象持久化并安全保存
  */
 export declare function saveSettings(settings: DrawAssistantSettings): void;
 /**
- * 更新部分设置字段（便捷方法）
- *
- * @param patch 要更新的字段（Partial<DrawAssistantSettings>）
- * @returns 更新后的完整设置对象
- *
- * @example
- * updateSettings({ provider: 'comfyui', serverUrl: 'http://127.0.0.1:8188' });
+ * 官方标准：更新部分设置字段并保存
  */
 export declare function updateSettings(patch: Partial<DrawAssistantSettings>): DrawAssistantSettings;
 /**
- * 重置设置为默认值
- *
- * @returns 默认设置对象
+ * 重置设置到默认值
  */
 export declare function resetSettings(): DrawAssistantSettings;
+/**
+ * 导出当前完整设置的 JSON 字符串
+ */
+export declare function exportSettingsJson(): string;
+/**
+ * 导入设置 JSON 字符串并安全保存并更新应用配置
+ */
+export declare function importSettingsJson(jsonStr: string): boolean;
 //# sourceMappingURL=manager.d.ts.map

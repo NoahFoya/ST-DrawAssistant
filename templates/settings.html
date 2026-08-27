@@ -1,134 +1,26 @@
 <!-- templates/settings.html -->
-<!--
-  ST DrawAssistant 设置面板模板
-  由 renderExtensionTemplateAsync('ST-DrawAssistant', 'settings') 加载
-
-  注意：
-  - 此文件会经过 DOMPurify 净化，避免使用 script 标签
-  - 所有控件绑定在 src/ui/settings-panel.ts 中通过 JS 完成
-  - 样式引用 styles/main.css 中的 CSS 变量（继承 ST 主题）
-  - TODO（P1）：完善所有设置项的 HTML 控件
--->
-
-<div class="da-settings-panel">
-    <div class="da-settings-header">
-        <span class="da-settings-icon">🎨</span>
-        <h3 class="da-settings-title">ST DrawAssistant</h3>
-        <span class="da-settings-version" id="da-version-badge">v0.1.0-dev</span>
+<!-- SillyTavern 原生扩展侧边栏抽屉菜单模板 -->
+<div class="inline-drawer da-st-settings-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header da-st-drawer-header">
+        <div class="da-st-drawer-title" style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 1.1em;">✨</span>
+            <b class="da-st-drawer-name" style="font-size: 0.95em;">Starlight 绘图助手</b>
+            <span class="da-st-version-tag" style="font-size: 0.72em; padding: 1px 6px; border-radius: 4px; background: rgba(0, 242, 254, 0.15); color: var(--da-accent-color, #00f2fe); border: 1px solid rgba(0, 242, 254, 0.3); font-family: monospace; font-weight: 600;">V0.2.0</span>
+        </div>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
-
-    <!-- ── 后端配置 ─────────────────────────────────────────────────────── -->
-    <div class="da-section">
-        <div class="da-section-title">后端配置</div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-provider">图像生成引擎</label>
-            <select id="da-provider" class="da-select">
-                <option value="comfyui">ComfyUI</option>
-                <option value="webui">Stable Diffusion WebUI (A1111)</option>
-                <option value="novelai">NovelAI（暂未实现）</option>
-            </select>
-        </div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-server-url">服务地址</label>
-            <input
-                type="text"
-                id="da-server-url"
-                class="da-input"
-                placeholder="http://127.0.0.1:8188"
-            />
-        </div>
-
-        <div class="da-field-row da-api-key-row" style="display: none;">
-            <label class="da-label" for="da-api-key">API Key</label>
-            <input
-                type="password"
-                id="da-api-key"
-                class="da-input"
-                placeholder="仅云端 API 需要"
-            />
-        </div>
-
-        <div class="da-field-row">
-            <button id="da-test-connection" class="da-btn da-btn-secondary">
-                测试连接
+    <div class="inline-drawer-content da-st-drawer-body" style="padding: 10px 4px 6px 4px;">
+        <div class="da-st-row" style="margin-bottom: 10px;">
+            <button id="da-open-main-modal-btn" class="menu_button da-btn primary" style="width: 100%; height: 36px; font-weight: 600; font-size: 0.88em; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px;">
+                <span>⚙️</span> 打开绘图助手主面板
             </button>
-            <span id="da-connection-status" class="da-status-text"></span>
         </div>
-    </div>
-
-    <!-- ── 图像参数 ─────────────────────────────────────────────────────── -->
-    <div class="da-section">
-        <div class="da-section-title">图像参数</div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-width">宽度</label>
-            <input type="number" id="da-width" class="da-input da-input-narrow"
-                   min="64" max="2048" step="64" value="512" />
-            <span class="da-unit">px</span>
+        <div class="da-st-row" style="display: flex; align-items: center; justify-content: space-between; padding: 4px 2px;">
+            <label class="da-label" for="da-enable-fab-toggle" style="font-size: 0.85em; color: var(--SmartThemeBodyColor, var(--da-text-primary, #fff)); font-weight: 500;">显示桌面悬浮球 (FAB)</label>
+            <label class="da-toggle">
+                <input type="checkbox" id="da-enable-fab-toggle" checked />
+                <span class="da-slider"></span>
+            </label>
         </div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-height">高度</label>
-            <input type="number" id="da-height" class="da-input da-input-narrow"
-                   min="64" max="2048" step="64" value="768" />
-            <span class="da-unit">px</span>
-        </div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-steps">采样步数</label>
-            <input type="number" id="da-steps" class="da-input da-input-narrow"
-                   min="1" max="150" step="1" value="20" />
-        </div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-cfg-scale">CFG Scale</label>
-            <input type="number" id="da-cfg-scale" class="da-input da-input-narrow"
-                   min="1" max="30" step="0.5" value="7" />
-        </div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-sampler">采样器</label>
-            <select id="da-sampler" class="da-select">
-                <option value="euler">euler</option>
-                <option value="euler_ancestral">euler_ancestral</option>
-                <option value="dpm_2">dpm_2</option>
-                <option value="ddim">ddim</option>
-            </select>
-        </div>
-    </div>
-
-    <!-- ── 提示词配置 ───────────────────────────────────────────────────── -->
-    <div class="da-section">
-        <div class="da-section-title">提示词配置</div>
-
-        <div class="da-field-col">
-            <label class="da-label" for="da-prompt-prefix">全局正向前缀</label>
-            <textarea id="da-prompt-prefix" class="da-textarea" rows="2"
-                      placeholder="masterpiece, best quality"></textarea>
-        </div>
-
-        <div class="da-field-col">
-            <label class="da-label" for="da-negative-prefix">全局负向前缀</label>
-            <textarea id="da-negative-prefix" class="da-textarea" rows="2"
-                      placeholder="lowres, bad anatomy, ..."></textarea>
-        </div>
-    </div>
-
-    <!-- ── 行为配置 ─────────────────────────────────────────────────────── -->
-    <div class="da-section">
-        <div class="da-section-title">行为配置</div>
-
-        <div class="da-field-row">
-            <label class="da-label" for="da-auto-generate">AI 回复后自动生图</label>
-            <input type="checkbox" id="da-auto-generate" class="da-checkbox" />
-            <span class="da-hint">⚠️ 开启后每次 AI 回复都会触发生图，请注意配额消耗</span>
-        </div>
-    </div>
-
-    <!-- ── 状态信息 ─────────────────────────────────────────────────────── -->
-    <div class="da-section da-section-footer">
-        <span class="da-hint">设置将在修改后自动保存</span>
     </div>
 </div>

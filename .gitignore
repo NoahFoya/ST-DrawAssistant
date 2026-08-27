@@ -1,4 +1,6 @@
 # ST-DrawAssistant 项目专属忽略规则
+docs/
+
 
 # TypeScript 增量构建缓存
 *.tsbuildinfo

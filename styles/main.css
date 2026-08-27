@@ -1,357 +1,1194 @@
 /**
- * ST DrawAssistant — 扩展样式
+ * ST DrawAssistant — 插件独立 Design System 基础样式库
  *
- * 设计原则：
- * 1. 全部颜色通过 --SmartTheme* CSS 变量，自动适配 ST 亮/暗色主题
- * 2. 动画时长引用 --animation-duration，与 ST 全局动画节奏一致
- * 3. da- 类名前缀，避免与 ST 核心样式冲突
+ * 核心原则：
+ * 1. 样式 100% 独立于 SillyTavern，不跟随酒馆主题变化
+ * 2. 自包含 --da-* 独立色彩与材质 Token 系统
+ * 3. iOS / macOS 设计语言：毛玻璃、圆角、SF 字体、弹性动画
+ * 4. 弹性高度链：模态框高度由视口决定，内容区自由滚动
  */
 
 /* ═══════════════════════════════════════════════════════════════════
-   1. 设置面板
+   1. 插件独立 Design Token 体系（iOS Dark Mode 调色板）
    ═══════════════════════════════════════════════════════════════════ */
 
-.da-settings-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    width: 100%;
-    font-family: var(--mainFontFamily, sans-serif);
-    font-size: var(--mainFontSize, 0.9rem);
-    color: var(--SmartThemeBodyColor);
+.st-da-root,
+.da-settings-panel,
+.da-lightbox-overlay {
+    /* ── 背景层次 (iOS Dark Mode: #1C1C1E → #2C2C2E → #3A3A3C) ── */
+    --da-bg-primary:    #0f1014;           /* 深底色 */
+    --da-bg-secondary:  #1a1d24;           /* 侧边栏 / 顶栏 */
+    --da-bg-card:       rgba(255,255,255,0.04); /* 卡片半透明 */
+    --da-bg-input:      #1e2128;           /* 输入框 */
+    --da-bg-hover:      rgba(255,255,255,0.07);
+    --da-bg-active:     rgba(0, 242, 254, 0.12);
+
+    /* ── 文字 ── */
+    --da-text-primary:   #f2f2f7;           /* iOS Label */
+    --da-text-secondary: #8e8e93;           /* iOS Secondary Label */
+    --da-text-muted:     #636366;           /* iOS Tertiary Label */
+
+    /* ── 边框（iOS 使用极细半透明分隔线） ── */
+    --da-border-color:    rgba(255,255,255,0.09);
+    --da-separator:       rgba(255,255,255,0.06);
+
+    /* ── Accent ── */
+    --da-accent-color:  #00f2fe;           /* 极光青 */
+    --da-accent-hover:  #00d8e6;
+    --da-accent-rgb:    0, 242, 254;
+
+    /* ── 阴影 ── */
+    --da-shadow-sm:  0 2px 8px  rgba(0,0,0,0.35);
+    --da-shadow-md:  0 8px 24px rgba(0,0,0,0.50);
+    --da-shadow-lg:  0 20px 60px rgba(0,0,0,0.65);
+
+    /* ── 圆角（iOS 风格，更大的圆角半径） ── */
+    --da-radius-modal:  18px;
+    --da-radius-card:   14px;
+    --da-radius-input:  10px;
+    --da-radius-btn:    10px;
+    --da-radius-pill:   100px;
+    --da-radius-small:  8px;
+
+    /* ── 字体（SF Pro 优先，匹配 iOS 系统字体） ── */
+    --da-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+                      'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    --da-font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'Fira Code', monospace;
+
+    /* ── 动画（iOS spring-like easing） ── */
+    --da-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
+    --da-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.da-settings-header {
+/* ── 设计系统通用布局辅助 CSS 类 ── */
+.da-flex-center-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 0 8px;
-    border-bottom: 1px solid var(--SmartThemeBorderColor);
-    margin-bottom: 4px;
 }
 
-.da-settings-icon { font-size: 1.2em; }
+.da-card-grid-2col {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
 
-.da-settings-title {
-    margin: 0;
-    font-size: 1em;
+/* ═══════════════════════════════════════════════════════════════════
+   2. FAB 悬浮球
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-fab-btn {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #181b22 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9999;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.2s ease,
+                box-shadow 0.2s ease;
+}
+
+.da-fab-btn:hover {
+    transform: scale(1.08);
+    background: #232733 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px #00f2fe !important;
+}
+
+.da-fab-btn:active {
+    transform: scale(0.94);
+    transition-duration: 0.1s;
+}
+
+.da-fab-btn--active {
+    background: #00f2fe !important;
+    color: #0b0c10 !important;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.5) !important;
+}
+
+.da-fab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.da-fab-icon svg {
+    display: block;
+}
+
+/* ── 预设图标可视化选择栅格 ── */
+.da-fab-icon-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-fab-icon-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #d1d5db;
+    cursor: pointer;
+    font-size: 0.85em;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.da-fab-icon-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.da-fab-icon-chip.is-active {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: #00f2fe;
+    color: #00f2fe;
     font-weight: 600;
-    color: var(--SmartThemeTextColor);
-    flex: 1;
 }
 
-.da-settings-version {
-    font-size: 0.75em;
-    color: var(--SmartThemeTextColor);
-    opacity: 0.5;
-    background: var(--SmartThemeInputBg);
-    padding: 2px 6px;
-    border-radius: 4px;
+.da-fab-icon-chip svg {
+    width: 18px;
+    height: 18px;
 }
 
-.da-section {
-    padding: 10px 0;
-    border-bottom: 1px solid var(--SmartThemeBorderColor);
+/* ── 交互式圆形图片裁剪模态框 ── */
+.da-cropper-backdrop {
+    z-index: 10005 !important;
+}
+
+.da-cropper-modal {
+    width: 320px;
+    background: #181b22;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    padding: 16px;
     display: flex;
     flex-direction: column;
+    gap: 14px;
+    color: #f3f4f6;
+}
+
+.da-cropper-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.da-cropper-title {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.da-cropper-close-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 1.1em;
+}
+
+.da-cropper-close-btn:hover {
+    color: #ffffff;
+}
+
+.da-cropper-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.da-cropper-canvas-wrapper {
+    width: 260px;
+    height: 260px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0f1015;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    touch-action: none;
+    cursor: grab;
+}
+
+.da-cropper-canvas-wrapper:active {
+    cursor: grabbing;
+}
+
+.da-cropper-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.da-cropper-label {
+    font-size: 0.85em;
+    color: #9ca3af;
+}
+
+.da-cropper-footer {
+    display: flex;
+    justify-content: flex-end;
     gap: 8px;
 }
 
-.da-section:last-child { border-bottom: none; }
+/* ═══════════════════════════════════════════════════════════════════
+   3. 主面板模态框 — 弹性高度链（核心布局修复）
+   ═══════════════════════════════════════════════════════════════════ */
 
-.da-section-title {
-    font-size: 0.8em;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--SmartThemeTextColor);
-    opacity: 0.6;
-    margin-bottom: 2px;
+/* 遮罩背景（设置面板 & 蓝图编辑器）
+   注意：当与 da-lightbox-overlay 同时存在时，此样式须覆盖其 cursor/background/z-index
+   解决方案：对含 da-modal-backdrop 的元素强制重置 */
+.da-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(8px) saturate(150%);
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    cursor: default !important; /* ← 强制覆盖 da-lightbox-overlay 的 zoom-out cursor */
+    animation: da-fadein 0.2s var(--da-ease);
 }
 
-.da-section-footer { padding-top: 8px; }
+/* 当 da-lightbox-overlay 与 da-modal-backdrop 同时出现时，重置冲突属性 */
+.da-lightbox-overlay.da-modal-backdrop {
+    background: rgba(0, 0, 0, 0.62) !important;
+    cursor: default !important;
+    z-index: 10000 !important;
+}
+
+/* 模态框主体 ── 关键：使用视口高度，不固定死 */
+.da-main-modal-inner {
+    width: min(1040px, 94vw);
+    height: min(86vh, 820px);  /* ← 最大化可用高度 */
+    max-height: calc(100vh - 24px);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;               /* ← 保留以实现圆角裁剪 */
+    background: var(--da-bg-primary);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal);
+    box-shadow: var(--da-shadow-lg), 0 0 0 1px rgba(255,255,255,0.08);
+    animation: da-modal-slide-in 0.28s var(--da-ease-spring);
+}
+
+@keyframes da-modal-slide-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ── 顶栏 ── */
+.da-header-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    height: auto;
+    min-height: 84px;
+    padding: 14px 22px 12px 22px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+.da-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.da-header-icon {
+    font-size: 1.6em;
+    flex-shrink: 0;
+}
+
+.da-header-title {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+    font-family: var(--da-font-family);
+}
+
+.da-header-version {
+    font-size: 0.72em;
+    color: var(--da-text-secondary);
+    background: rgba(255,255,255,0.06);
+    padding: 1px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.da-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.da-header-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--da-border-color);
+    border-radius: 1px;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+/* macOS 风格关闭圆点 */
+.da-close-red-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ff5f56;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s var(--da-ease-spring),
+                box-shadow 0.15s var(--da-ease);
+    user-select: none;
+    flex-shrink: 0;
+    outline: none;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.da-close-red-dot:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 12px rgba(255, 95, 86, 0.75);
+}
+
+.da-close-red-dot:active {
+    transform: scale(0.9);
+}
+
+/* 快速主题选择框（顶栏内） */
+.da-quick-theme-select {
+    min-width: 95px;
+    max-width: 135px !important;
+    width: auto !important;
+}
+
+/* ── 主体容器 ── */
+.da-modal-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;      /* ← 关键：允许 flex 子元素收缩 */
+    overflow: hidden;
+}
+
+/* ── 左侧 Sidebar（iOS 侧边导航风格） ── */
+.da-sidebar-tabs {
+    flex: 0 0 184px;
+    width: 184px;
+    background: var(--da-bg-secondary);
+    border-right: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 10px;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.da-sidebar-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;  /* ← 靠左对齐 */
+    gap: 10px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.18s var(--da-ease),
+                color 0.18s var(--da-ease),
+                transform 0.12s var(--da-ease);
+    box-sizing: border-box;
+    letter-spacing: -0.01em;
+    width: 100%;
+}
+
+.da-sidebar-item:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-sidebar-item:active {
+    transform: scale(0.97);
+}
+
+/* iOS 风格 active：实色背景 pill */
+.da-sidebar-item--active {
+    background: rgba(var(--da-accent-rgb), 0.18) !important;
+    color: var(--da-accent-color) !important;
+    font-weight: 600 !important;
+}
+
+.da-sidebar-item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    background: var(--da-accent-color);
+    border-radius: 0 3px 3px 0;
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.5);
+}
+
+.da-tab-icon {
+    font-size: 1.1em;
+    flex: 0 0 20px;
+    text-align: center;
+}
+
+.da-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── 右侧内容区 ── 关键修复：overflow-y 接管滚动 */
+.da-modal-content {
+    flex: 1;
+    min-height: 0;
+    padding: 18px 22px 22px 22px;
+    overflow-y: auto;       /* ← 内容区滚动 */
+    overflow-x: hidden;
+    background: var(--da-bg-primary);
+    box-sizing: border-box;
+    /* 自定义滚动条 */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+
+.da-modal-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.da-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.da-modal-content::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+}
+
+/* ── Tab 内容区 ── 关键修复：移除 flex:1 使内容自由伸展 */
+.da-tab-pane {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;                  /* ← 减少间距，节省纵向空间 */
+    /* 不再有 flex:1; min-height:0 — 让内容自然撑开高度 */
+    box-sizing: border-box;
+    padding-bottom: 4px;
+}
+
+/* ── 底栏 ── */
+.da-footer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 18px;
+    background: var(--da-bg-secondary);
+    border-top: 1px solid var(--da-border-color);
+    font-size: 0.75em;
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    font-family: var(--da-font-family);
+}
+
+.da-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-status-dot {
+    font-size: 0.75em;
+    transition: color 0.3s ease;
+}
+
+.da-status-dot.da-status-ok {
+    color: #30d158;     /* iOS green */
+    text-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+}
+
+.da-status-dot.da-status-error {
+    color: #ff453a;     /* iOS red */
+    text-shadow: 0 0 8px rgba(255, 69, 58, 0.6);
+}
+
+.da-status-dot.da-status-checking {
+    color: #ffd60a;     /* iOS yellow */
+    animation: da-pulse 1.5s infinite ease-in-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   4. Section 卡片（iOS 分组列表风格）
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-section-card {
+    position: relative;
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card);
+    padding: 0 0 0 4px;         /* 左侧 accent bar 偏移 */
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    box-shadow: var(--da-shadow-sm);
+    transition: box-shadow 0.2s var(--da-ease), border-color 0.2s var(--da-ease);
+    overflow: visible;          /* ← 修复：允许帮助气泡弹出 */
+}
+
+/* 左侧极光竖线 */
+.da-section-card::before {
+    content: '';
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, var(--da-accent-color), #4facfe);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.35);
+}
+
+.da-section-card:hover {
+    box-shadow: var(--da-shadow-md), 0 0 0 1px rgba(var(--da-accent-rgb), 0.12);
+    border-color: rgba(var(--da-accent-rgb), 0.2);
+}
+
+/* 卡片直接子元素（非标准 da-* 类）自动获得内边距，避免紧贴卡片边框 */
+.da-section-card > *:not(.da-section-header):not(.da-field-row):not(.da-preset-toolbar) {
+    margin: 0 14px 12px 14px;
+}
+.da-section-card > *:not(.da-section-header):not(.da-field-row):not(.da-preset-toolbar):first-child {
+    margin-top: 12px;
+}
+
+/* 卡片头部 */
+.da-section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 16px 10px 18px;
+    border-bottom: 1px solid var(--da-separator);
+}
+
+.da-section-title {
+    font-size: 0.82em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+}
+
+.da-section-desc {
+    font-size: 0.75em;
+    color: var(--da-text-secondary);
+    line-height: 1.35;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   5. 字段行 (Field Row) — iOS Settings 列表行样式
+   ═══════════════════════════════════════════════════════════════════ */
 
 .da-field-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 16px 9px 18px;
+    border-bottom: 1px solid var(--da-separator);
+    transition: background 0.15s var(--da-ease);
+    min-height: 44px;           /* iOS 最小触控高度 44pt */
+    box-sizing: border-box;
 }
 
-.da-field-col {
+.da-field-row:hover {
+    background: var(--da-bg-hover);
+}
+
+.da-field-row:last-child {
+    border-bottom: none;
+}
+
+/* 全宽块状排列（如 textarea 行） */
+.da-field-row--block {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: unset;
+    padding-bottom: 12px;
+}
+
+.da-field-row--block .da-field-control {
+    width: 100%;
+    max-width: 100%;
+    justify-content: stretch;
+}
+
+.da-field-row--block .da-input,
+.da-field-row--block .da-textarea {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* 左侧标签区 */
+.da-field-label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
 }
 
-.da-label {
-    flex: 0 0 auto;
-    min-width: 90px;
-    font-size: 0.85em;
-    color: var(--SmartThemeBodyColor);
+.da-label-text {
+    font-size: 0.875em;
+    font-weight: 500;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    letter-spacing: -0.005em;
 }
+
+.da-label-desc {
+    font-size: 0.74em;
+    color: var(--da-text-secondary);
+    line-height: 1.3;
+}
+
+/* 右侧控件区 ── 关键修复：允许自由换行 */
+.da-field-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;            /* ← 允许多控件换行 */
+    gap: 6px;
+    flex: 0 1 auto;             /* ← 允许收缩，不再锁定 auto */
+    min-width: 0;
+    max-width: 58%;             /* ← 限制最大占比，留足标签空间 */
+}
+
+/* 控件区内的纯文本 span（如 " ms"、" × "） */
+.da-field-control > span:not([class]),
+.da-unit {
+    display: flex;
+    align-items: center;
+    font-size: 0.8em;
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-family: var(--da-font-family);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   6. 表单控件（iOS 风格）
+   ═══════════════════════════════════════════════════════════════════ */
 
 .da-input,
-.da-select,
-.da-textarea {
-    background: var(--SmartThemeInputBg);
-    color: var(--SmartThemeBodyColor);
-    border: 1px solid var(--SmartThemeBorderColor);
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-family: var(--mainFontFamily, sans-serif);
-    font-size: 0.85em;
-    transition: border-color var(--animation-duration, 0.2s) ease,
-                box-shadow var(--animation-duration, 0.2s) ease;
+.da-select {
+    height: 34px;
+    padding: 0 10px;
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-input);
+    font-family: var(--da-font-family);
+    font-size: 0.84em;
+    text-align: center;
+    text-align-last: center;
     outline: none;
+    transition: border-color 0.18s var(--da-ease),
+                box-shadow 0.18s var(--da-ease),
+                background 0.18s var(--da-ease);
+    box-sizing: border-box;
+}
+
+.da-input {
+    flex: 1;
+    min-width: 80px;
+}
+
+.da-input-narrow {
+    width: 90px;
+    flex: 0 0 auto;
+}
+
+.da-control-fixed-180,
+.da-control-fixed-240 {
+    width: 180px !important;
+    max-width: 180px !important;
+    flex: 0 0 auto !important;
+}
+
+.da-select {
+    flex: 1;
+    min-width: 100px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238e8e93' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 26px;
+}
+
+.da-select option {
+    background: #1e2128;
+    color: var(--da-text-primary);
+    text-align: center;
 }
 
 .da-input:focus,
 .da-select:focus,
 .da-textarea:focus {
-    border-color: var(--interactable-outline-color, #7289da);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactable-outline-color, #7289da) 25%, transparent);
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 0 3px rgba(var(--da-accent-rgb), 0.18);
+    background: rgba(var(--da-accent-rgb), 0.04);
 }
 
-.da-input { flex: 1; min-width: 0; }
-.da-input-narrow { width: 80px; flex: 0 0 auto; }
-.da-select { flex: 1; cursor: pointer; }
-.da-textarea { width: 100%; resize: vertical; min-height: 50px; box-sizing: border-box; }
-.da-unit { font-size: 0.8em; opacity: 0.6; flex: 0 0 auto; }
-
-.da-checkbox {
-    width: 16px;
-    height: 16px;
+/* range 滑块 */
+input[type='range'].da-input {
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     cursor: pointer;
-    accent-color: var(--SmartThemeButtonBg);
+    accent-color: var(--da-accent-color);
+    align-self: center;
 }
 
-.da-btn {
-    padding: 4px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    font-family: var(--mainFontFamily, sans-serif);
-    font-size: 0.85em;
+input[type='range'].da-input:focus {
+    box-shadow: none;
+    border: none;
+}
+
+/* color 选取器 */
+.da-input-color {
+    width: 44px;
+    height: 34px;
+    padding: 2px 4px;
+    background: var(--da-bg-input);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-input);
     cursor: pointer;
-    transition: opacity var(--animation-duration, 0.2s) ease,
-                background var(--animation-duration, 0.2s) ease;
+    flex: 0 0 auto;
+    outline: none;
 }
 
-.da-btn:hover { opacity: 0.85; }
-.da-btn:active { opacity: 0.7; }
-
-.da-btn-secondary {
-    background: var(--SmartThemeInputBg);
-    color: var(--SmartThemeBodyColor);
+.da-textarea {
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 12px;
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-input);
+    font-family: var(--da-font-mono);
+    font-size: 0.83em;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
 }
 
-.da-status-text { font-size: 0.8em; flex: 1; }
-.da-status-text.da-status-ok { color: #43b581; }
-.da-status-text.da-status-error { color: #f04747; }
-.da-status-text.da-status-checking { opacity: 0.6; }
+/* ── iOS 胶囊开关 ── */
+.da-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    flex: 0 0 auto;
+}
 
-.da-hint { font-size: 0.75em; opacity: 0.55; line-height: 1.4; }
+.da-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.da-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: all 0.28s var(--da-ease);
+    border-radius: 28px;
+}
+
+.da-slider:before {
+    position: absolute;
+    content: '';
+    height: 22px;
+    width: 22px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #fff;
+    transition: all 0.28s var(--da-ease-spring);
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.da-toggle input:checked + .da-slider {
+    background-color: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.3);
+}
+
+.da-toggle input:checked + .da-slider:before {
+    transform: translateX(22px);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
-   2. 楼层生图按钮（内联于消息文本中）
+   7. 按钮系统（iOS 风格）
    ═══════════════════════════════════════════════════════════════════ */
 
-/* 按钮外层容器（换行自适应块） */
-.da-floor-btn-wrapper {
+.da-btn {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--da-radius-btn);
+    border: 1px solid var(--da-border-color);
+    background: rgba(255,255,255,0.06);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: 0.84em;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s var(--da-ease),
+                border-color 0.15s var(--da-ease),
+                transform 0.12s var(--da-ease-spring),
+                box-shadow 0.15s var(--da-ease);
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+}
+
+.da-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.18);
+}
+
+.da-btn:active {
+    transform: scale(0.96);
+    background: rgba(255,255,255,0.04);
+}
+
+.da-btn.primary {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    color: #000;
+    font-weight: 600;
+}
+
+.da-btn.primary:hover {
+    background: var(--da-accent-hover);
+    border-color: var(--da-accent-hover);
+    box-shadow: 0 4px 14px rgba(var(--da-accent-rgb), 0.35);
+}
+
+.da-btn.secondary {
+    background: rgba(255,255,255,0.06);
+    border-color: var(--da-border-color);
+    color: var(--da-text-primary);
+}
+
+.da-btn.danger {
+    background: rgba(255, 69, 58, 0.12);
+    border-color: rgba(255, 69, 58, 0.45);
+    color: #ff453a;
+}
+
+.da-btn.danger:hover {
+    background: rgba(255, 69, 58, 0.22);
+    box-shadow: 0 0 10px rgba(255, 69, 58, 0.2);
+}
+
+/* 图标按钮 */
+.da-icon-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--da-radius-small);
+    border: 1px solid var(--da-border-color);
+    background: rgba(255,255,255,0.06);
+    color: var(--da-text-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s var(--da-ease),
+                border-color 0.15s var(--da-ease),
+                transform 0.12s var(--da-ease-spring);
+}
+
+.da-icon-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.18);
+}
+
+.da-icon-btn:active {
+    transform: scale(0.93);
+}
+
+/* 危险操作图标按钮（如删除） */
+.da-icon-btn.danger {
+    background: rgba(255, 69, 58, 0.1);
+    border-color: rgba(255, 69, 58, 0.35);
+    color: #ff453a;
+}
+
+.da-icon-btn.danger:hover {
+    background: rgba(255, 69, 58, 0.22);
+    border-color: rgba(255, 69, 58, 0.6);
+    box-shadow: 0 0 8px rgba(255, 69, 58, 0.2);
+}
+
+/* 状态文本 */
+.da-status-text {
+    font-size: 0.82em;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+}
+
+.da-status-text.da-status-ok    { color: #30d158; }
+.da-status-text.da-status-error { color: #ff453a; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   8. 楼层生图按钮 (Floor Button)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-floor-btn-wrapper {
+    display: flex;           /* ← 改为 flex block 而非 inline-flex */
+    flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    margin: 6px 0;
-    width: 100%;
+    margin: 8px 0;
 }
 
-/* 按钮专属图像 Slot（挂载在按钮下方） */
-.da-floor-btn-img-slot {
-    display: block;
-    width: 100%;
-    margin-top: 6px;
-}
-
-/* 主按钮 */
 .da-floor-btn {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    border: 1px solid var(--SmartThemeBorderColor);
-    font-family: var(--mainFontFamily, sans-serif);
+    padding: 5px 14px;
+    border-radius: var(--da-radius-pill);
+    border: 1px solid var(--da-border-color);
+    background: rgba(255,255,255,0.07);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
     font-size: 0.82em;
     font-weight: 500;
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
-    transition:
-        background var(--animation-duration, 0.2s) ease,
-        border-color var(--animation-duration, 0.2s) ease,
-        transform var(--animation-duration, 0.15s) ease,
-        box-shadow var(--animation-duration, 0.2s) ease;
+    transition: background 0.18s var(--da-ease),
+                border-color 0.18s var(--da-ease),
+                transform 0.15s var(--da-ease-spring);
     outline: none;
-    vertical-align: middle;
+}
+
+.da-floor-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(var(--da-accent-rgb), 0.5);
 }
 
 .da-floor-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.95);
 }
 
-/* ── 状态：默认 ── */
 .da-floor-btn--default {
-    background: var(--SmartThemeInputBg);
-    color: var(--SmartThemeBodyColor);
-    border-color: var(--SmartThemeBorderColor);
+    background: rgba(255,255,255,0.07);
+    color: var(--da-text-primary);
 }
 
-.da-floor-btn--default:hover {
-    background: color-mix(in srgb, var(--interactable-outline-color, #7289da) 15%, var(--SmartThemeInputBg));
-    border-color: var(--interactable-outline-color, #7289da);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactable-outline-color, #7289da) 15%, transparent);
-}
-
-/* ── 状态：提交中（防抖） ── */
 .da-floor-btn--loading {
-    background: var(--SmartThemeInputBg);
-    color: var(--SmartThemeBodyColor);
-    opacity: 0.6;
+    opacity: 0.55;
     cursor: not-allowed;
-    border-color: var(--SmartThemeBorderColor);
 }
 
-/* ── 状态：生成中（带进度，点击取消） ── */
 .da-floor-btn--progress {
-    background: color-mix(in srgb, #f0a500 18%, var(--SmartThemeInputBg));
-    color: var(--SmartThemeBodyColor);
-    border-color: #f0a500;
-    cursor: pointer;
+    background: rgba(255, 159, 10, 0.15);
+    color: #ff9f0a;
+    border-color: rgba(255, 159, 10, 0.5);
     animation: da-pulse 1.8s ease-in-out infinite;
 }
 
-.da-floor-btn--progress:hover {
-    background: color-mix(in srgb, #f04747 18%, var(--SmartThemeInputBg));
-    border-color: #f04747;
-}
-
-.da-floor-btn--progress:hover::before {
-    content: "点击取消 ";
-}
-
-/* ── 状态：完成 ── */
 .da-floor-btn--done {
-    background: color-mix(in srgb, #43b581 18%, var(--SmartThemeInputBg));
-    color: var(--SmartThemeBodyColor);
-    border-color: #43b581;
+    background: rgba(48, 209, 88, 0.12);
+    color: #30d158;
+    border-color: rgba(48, 209, 88, 0.45);
 }
 
-.da-floor-btn--done:hover {
-    background: color-mix(in srgb, #43b581 30%, var(--SmartThemeInputBg));
-}
-
-/* ── 状态：错误 ── */
 .da-floor-btn--error {
-    background: color-mix(in srgb, #f04747 18%, var(--SmartThemeInputBg));
-    color: var(--SmartThemeBodyColor);
-    border-color: #f04747;
+    background: rgba(255, 69, 58, 0.12);
+    color: #ff453a;
+    border-color: rgba(255, 69, 58, 0.45);
 }
 
-.da-floor-btn--error:hover {
-    background: color-mix(in srgb, #f04747 30%, var(--SmartThemeInputBg));
-}
-
-/* 提示词预览文本（按钮右侧） */
 .da-floor-btn-prompt {
     font-size: 0.76em;
-    opacity: 0.45;
+    color: var(--da-text-secondary);
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    vertical-align: middle;
-    display: inline-block;
     font-style: italic;
+    align-self: center;
 }
 
-/* ── 脉冲动画（生成中） ── */
-@keyframes da-pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.7; }
+/* 图片挂载槽 ── 关键修复：独占一行，不与按钮横排 */
+.da-floor-btn-img-slot {
+    display: block;
+    width: 100%;
+    flex-basis: 100%;       /* ← 强制换行 */
+    margin-top: 6px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   3. 图像容器与生成图像展示
+   9. 图像容器与生成图像展示
    ═══════════════════════════════════════════════════════════════════ */
 
-/* 图像容器（插入在 .mes_text 之后） */
 .da-image-container {
     display: block;
     margin-top: 10px;
     max-width: 100%;
-    border-radius: 8px;
+    border-radius: var(--da-radius-small);
     overflow: hidden;
     position: relative;
 }
 
-/* 生成完成的图像 */
 .da-generated-img {
     display: block;
     max-width: 100%;
-    max-height: 600px;
+    max-height: 580px;
     width: auto;
     height: auto;
-    border-radius: 8px;
+    border-radius: var(--da-radius-small);
     cursor: zoom-in;
-    transition: opacity var(--animation-duration, 0.2s) ease,
-                transform var(--animation-duration, 0.25s) ease;
-    border: 1px solid var(--SmartThemeBorderColor);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.22s var(--da-ease), opacity 0.2s var(--da-ease);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-sm);
 }
 
 .da-generated-img:hover {
-    transform: scale(1.01);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    transform: scale(1.015);
+    box-shadow: var(--da-shadow-md);
 }
 
-/* 生成中的预览图（低质量，模糊处理） */
 .da-preview-img {
     display: block;
     max-width: 100%;
-    max-height: 400px;
+    max-height: 380px;
     width: auto;
     height: auto;
-    border-radius: 8px;
-    filter: blur(1px);
-    opacity: 0.8;
-    border: 1px dashed var(--SmartThemeBorderColor);
+    border-radius: var(--da-radius-small);
+    filter: blur(2px);
+    opacity: 0.7;
+    border: 1px dashed var(--da-border-color);
     transition: opacity 0.3s ease;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   4. Lightbox 全屏查看器
+   10. Lightbox 全屏查看器
    ═══════════════════════════════════════════════════════════════════ */
 
 .da-lightbox-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.88);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 99999;
     cursor: zoom-out;
-    backdrop-filter: blur(4px);
-    animation: da-fadein 0.15s ease;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: da-fadein 0.18s var(--da-ease);
 }
 
 .da-lightbox-inner {
     max-width: 92vw;
     max-height: 92vh;
-    border-radius: 10px;
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    box-shadow: var(--da-shadow-lg);
 }
 
 .da-lightbox-inner img {
@@ -363,7 +1200,608 @@
     object-fit: contain;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   11. 预设工具栏 (Preset Toolbar)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-preset-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 10px 18px 8px 18px;
+    border-bottom: 1px solid var(--da-separator);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   12. 通用设置图标与标题（兼容老代码）
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-settings-icon {
+    font-size: 1.2em;
+}
+
+.da-settings-title {
+    margin: 0;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    flex: 1;
+    font-family: var(--da-font-family);
+}
+
+.da-settings-version {
+    font-size: 0.72em;
+    color: var(--da-text-secondary);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill);
+    border: 1px solid var(--da-border-color);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   13. 帮助按钮（❓ 图标）
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-help-btn {
+    flex-shrink: 0;
+}
+
+/* 帮助气泡（挂到 document.body，用 fixed 定位） */
+.da-field-help-bubble {
+    position: fixed;
+    z-index: 200000;
+    width: 240px;
+    max-width: calc(100vw - 24px);
+    padding: 10px 13px;
+    background: rgba(28, 28, 32, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    color: var(--da-text-primary);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.22);
+    border-radius: 12px;
+    box-shadow: var(--da-shadow-md), 0 0 0 0.5px rgba(var(--da-accent-rgb), 0.1);
+    font-size: 0.82em;
+    line-height: 1.55;
+    pointer-events: none;
+    animation: da-fadein 0.15s var(--da-ease);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   14. 键帧动画
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes da-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.65; }
+}
+
 @keyframes da-fadein {
     from { opacity: 0; }
     to   { opacity: 1; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   15. 诊断控制台样式
+   ═══════════════════════════════════════════════════════════════════ */
+
+.da-log-console {
+    font-family: var(--da-font-mono) !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.da-log-console::-webkit-scrollbar {
+    width: 4px;
+}
+
+.da-log-console::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+}
+
+.da-diagnostic-output {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   16. 响应式：窄屏适配（< 640px）
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+    .da-main-modal-inner {
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .da-sidebar-tabs {
+        flex: 0 0 100px;
+        width: 100px;
+    }
+
+    .da-field-control {
+        max-width: 100%;
+    }
+
+    .da-field-row {
+        flex-wrap: wrap;
+    }
+
+    .da-field-row .da-field-control {
+        flex-basis: 100%;
+        justify-content: flex-start;
+        max-width: 100%;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   17. 规范语义化组件 CSS 类沉淀 (全量替代 TS 内联样式硬编码)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 控件宽度统一控制 */
+.da-control-fixed-240 {
+    width: 240px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.da-control-fixed-140 {
+    width: 140px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.da-control-full {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 顶栏排版与下拉 */
+.da-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.da-header-title-st {
+    font-size: 1.25em;
+    font-weight: bold;
+    color: var(--da-text-primary);
+    letter-spacing: 0.5px;
+}
+
+.da-header-app-name {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-header-version-badge {
+    font-size: 0.72em;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    color: var(--da-text-secondary);
+    border: 1px solid var(--da-border-color, rgba(255,255,255,0.1));
+}
+
+.da-header-actions-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    background: var(--da-bg-secondary, #1e1e2e);
+    border: 1px solid var(--da-border-color, rgba(255,255,255,0.15));
+    border-radius: 8px;
+    box-shadow: var(--da-shadow-md);
+    z-index: 1000;
+    min-width: 160px;
+    padding: 4px 0;
+    overflow: hidden;
+}
+
+.da-dropdown-item {
+    padding: 8px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+    color: var(--da-text-primary);
+    transition: background 0.15s ease;
+}
+
+.da-dropdown-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.da-dropdown-item--danger {
+    color: #f44336;
+}
+
+.da-dropdown-item--danger:hover {
+    background: rgba(244,67,54,0.15);
+}
+
+/* 图库界面 CSS 类 */
+.da-gallery-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+}
+
+.da-gallery-batch-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    flex-wrap: wrap;
+}
+
+.da-gallery-grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.da-gallery-card {
+    background: var(--da-bg-input);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--da-border-color, rgba(255,255,255,0.08));
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.da-gallery-check-overlay {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 5;
+}
+
+.da-gallery-img-container {
+    width: 100%;
+    height: 140px;
+    background: #000;
+    cursor: pointer;
+    position: relative;
+}
+
+.da-gallery-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.da-gallery-card-footer {
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-gallery-prompt-text {
+    font-size: 0.75em;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-gallery-card-subinfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7em;
+    color: var(--da-text-secondary);
+}
+
+/* 关于页面 CSS 类 */
+.da-about-card-hero {
+    text-align: center;
+    padding: 28px 20px;
+}
+
+.da-about-title {
+    margin: 0 0 6px 0;
+    color: var(--da-text-primary);
+    font-size: 1.6em;
+    font-weight: 700;
+}
+
+.da-about-version {
+    font-size: 0.9em;
+    color: var(--da-accent-color);
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.da-about-desc {
+    max-width: 560px;
+    margin: 0 auto 16px auto;
+    color: var(--da-text-secondary);
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.da-about-author {
+    font-size: 0.85em;
+    color: var(--da-text-secondary);
+    margin-bottom: 6px;
+}
+
+.da-about-copyright {
+    font-size: 0.8e;
+    color: var(--da-text-secondary);
+    opacity: 0.8;
+}
+
+.da-changelog-box {
+    background: var(--da-bg-input);
+    padding: 14px 16px;
+    margin: 0 18px 14px 18px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    color: var(--da-text-secondary);
+    line-height: 1.7;
+}
+
+.da-about-link-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 18px;
+}
+
+/* ── 独占解耦的大图全屏查看器 ── */
+.da-image-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    cursor: zoom-out;
+    animation: da-fadein 0.2s var(--da-ease);
+}
+
+.da-image-lightbox-overlay .da-lightbox-inner {
+    max-width: 92vw;
+    max-height: 92vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+}
+
+.da-image-lightbox-overlay .da-lightbox-inner img {
+    max-width: 100%;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* ── 图库 查找与批量管理 左右两端对齐分流 ── */
+.da-gallery-search-row,
+.da-gallery-batch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+}
+
+.da-gallery-row-left,
+.da-gallery-row-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-gallery-row-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-gallery-row-right {
+    flex-shrink: 0;
+}
+
+/* ── 关于页 彩色大卡片网格 ── */
+.da-about-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    padding: 14px 18px;
+    box-sizing: border-box;
+}
+
+.da-about-rich-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 18px;
+    border-radius: 12px;
+    text-decoration: none !important;
+    color: #ffffff !important;
+    transition: transform 0.22s var(--da-ease-spring),
+                box-shadow 0.22s var(--da-ease);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.da-about-rich-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.da-about-rich-card--github {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%);
+}
+
+.da-about-rich-card--comfy {
+    background: linear-gradient(135deg, #581c87 0%, #7c3aed 100%);
+}
+
+.da-about-rich-card--st {
+    background: linear-gradient(135deg, #881337 0%, #e11d48 100%);
+}
+
+.da-about-card-icon {
+    font-size: 1.8em;
+    margin-bottom: 8px;
+}
+
+.da-about-card-title {
+    font-size: 1.05em;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
+}
+
+.da-about-card-subtitle {
+    font-size: 0.78em;
+    opacity: 0.88;
+    line-height: 1.4;
+}
+
+/* ── 蓝图编辑器 可缩放画布与属性抽屉 ── */
+.da-blueprint-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--da-bg-primary);
+}
+
+.da-blueprint-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.da-blueprint-workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.da-blueprint-canvas-wrapper {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    background-color: var(--da-bg-primary);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.da-blueprint-canvas-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    transform-origin: 0 0;
+    transition: transform 0.18s ease-out;
+}
+
+.da-blueprint-mini-card {
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s var(--da-ease-spring);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.da-blueprint-mini-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--da-accent-color);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.da-blueprint-mini-card.active {
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 0 2px var(--da-accent-color), 0 8px 24px rgba(var(--da-accent-rgb), 0.35);
+    background: rgba(var(--da-accent-rgb), 0.08);
+}
+
+.da-blueprint-node-badge {
+    font-size: 0.72em;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    align-self: flex-start;
+    white-space: nowrap;
+}
+
+.da-blueprint-inspector-panel {
+    width: 320px;
+    flex-shrink: 0;
+    background: var(--da-bg-secondary);
+    border-left: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 14px;
+    box-sizing: border-box;
+}
+
+.da-blueprint-badge--prompt {
+    background: rgba(0, 242, 254, 0.15);
+    color: #00f2fe;
+    border: 1px solid rgba(0, 242, 254, 0.3);
+}
+
+.da-blueprint-badge--sampler {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.da-blueprint-badge--model {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.da-blueprint-badge--size {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.da-blueprint-badge--generic {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+

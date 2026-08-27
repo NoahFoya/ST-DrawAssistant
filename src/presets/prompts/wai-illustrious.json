@@ -1,0 +1,11 @@
+{
+  "id": "wai_illustrious_prompt",
+  "name": "Wai Illustrious 官方推荐提示词预设",
+  "data": {
+    "promptPrefix": "masterpiece, best quality, 1girl",
+    "negativePrefix": "score_1, score_2, score_3, bad anatomy, bad proportions, deformed anatomy, deformed face, deformed eyes, text, multiple fingers, watermark, artist name",
+    "promptSuffix": "",
+    "checkpointPositivePrefix": "",
+    "checkpointNegativePrefix": ""
+  }
+}
