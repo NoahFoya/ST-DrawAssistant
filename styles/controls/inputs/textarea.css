@@ -1,0 +1,46 @@
+/**
+ * @module styles/controls/inputs/textarea
+ * @description 多行文本域与提示词编辑框样式
+ *
+ * 尺寸规范：Full 级控件 (width: 100%; min-height: 84px;)
+ */
+
+.da-textarea {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    display: block;
+    min-height: 84px;
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-input, 8px);
+    font-family: var(--da-font-mono, monospace);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-textarea:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+}
+
+.da-textarea:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 0 1px var(--da-accent-color), 0 0 0 3px rgba(var(--da-accent-rgb), 0.18);
+    background: var(--da-bg-input);
+}
+
+.da-textarea::placeholder {
+    color: var(--da-text-muted);
+    opacity: 0.7;
+}
+
+.da-textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

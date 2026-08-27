@@ -1,0 +1,118 @@
+/**
+ * @module styles/controls/toolbars/preset-toolbar
+ * @description 预设方案选择、保存、复制、重置与脏数据标记工具栏
+ */
+
+.da-preset-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-md, 12px);
+    padding: var(--da-space-sm, 8px) var(--da-space-lg, 16px);
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 14px);
+    margin: var(--da-space-sm, 8px) 0 var(--da-space-md, 12px) 0;
+    box-sizing: border-box;
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+/* 嵌在卡片或行内部时：消除双重卡片背景嵌套与内边距冲突 */
+.da-card > .da-card__body > .da-preset-toolbar {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--da-separator);
+    border-radius: 0;
+    padding: 14px var(--da-space-xl, 20px);
+    margin: 0;
+    box-shadow: none;
+}
+
+.da-row .da-preset-toolbar {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+}
+
+.da-preset-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    flex: 1;
+    min-width: 180px;
+}
+
+.da-preset-select {
+    flex: 1;
+    min-width: 140px;
+    height: 34px;
+}
+
+.da-preset-toolbar-right {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.da-preset-btn {
+    height: 34px;
+    padding: 0 var(--da-space-md, 12px);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    border-radius: var(--da-radius-btn, 8px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--da-space-xs, 4px);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.da-preset-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    border-color: rgba(var(--da-accent-rgb), 0.35);
+}
+
+.da-preset-btn.danger {
+    border-color: rgba(255, 69, 58, 0.3);
+    color: var(--da-color-error, #ff453a);
+}
+
+.da-preset-btn.danger:hover {
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+    border-color: var(--da-color-error, #ff453a);
+}
+
+.da-preset-btn--save.is-dirty {
+    background: var(--da-status-warning, #ff9f0a);
+    border-color: var(--da-status-warning, #ff9f0a);
+    color: #000000;
+    font-weight: 600;
+    box-shadow: 0 0 10px rgba(255, 159, 10, 0.4);
+    animation: da-pulse-dirty 1.6s ease-in-out infinite;
+}
+
+.da-preset-btn--dirty-pulse {
+    animation: da-pulse-dirty 1.6s ease-in-out infinite;
+}
+
+@keyframes da-pulse-dirty {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 159, 10, 0.4);
+    }
+    50% {
+        transform: scale(1.03);
+        box-shadow: 0 0 0 6px rgba(255, 159, 10, 0);
+    }
+}

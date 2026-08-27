@@ -1,0 +1,148 @@
+/**
+ * workflow.css
+ * 层级：features
+ * 职责：工作流卡片状态、工作流变量格式化诊断弹窗与宏标签
+ * 字号约定：em
+ */
+
+.da-workflow-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-workflow-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--da-radius-pill);
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.da-workflow-status-badge.matched {
+    background: rgba(48, 209, 88, 0.15);
+    color: var(--da-color-success);
+    border: 1px solid rgba(48, 209, 88, 0.35);
+}
+
+.da-workflow-status-badge.unmatched {
+    background: rgba(255, 159, 10, 0.15);
+    color: var(--da-status-warning);
+    border: 1px solid rgba(255, 159, 10, 0.35);
+}
+
+/* ════ 工作流变量格式化诊断弹窗 ════ */
+.da-workflow-format-modal {
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.da-workflow-format-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.da-workflow-format-summary {
+    font-size: 0.9em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+    padding: 10px 14px;
+    background: var(--da-bg-card);
+    border-radius: var(--da-radius-small, 8px);
+    border: 1px solid var(--da-border-color);
+}
+
+.da-workflow-format-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-workflow-format-section-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-workflow-format-section-title.success {
+    color: var(--da-color-success, #30d158);
+}
+
+.da-workflow-format-section-title.warning {
+    color: var(--da-status-warning, #ff9f0a);
+}
+
+.da-workflow-var-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-workflow-var-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.84em;
+    box-sizing: border-box;
+}
+
+.da-workflow-var-item.matched {
+    background: rgba(48, 209, 88, 0.08);
+    border: 1px solid rgba(48, 209, 88, 0.2);
+}
+
+.da-workflow-var-item.unmatched {
+    background: rgba(255, 159, 10, 0.08);
+    border: 1px solid rgba(255, 159, 10, 0.2);
+}
+
+.da-macro-tag {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.12);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
+    flex-shrink: 0;
+}
+
+.da-macro-tag.warning {
+    color: var(--da-status-warning, #ff9f0a);
+    background: rgba(255, 159, 10, 0.12);
+    border-color: rgba(255, 159, 10, 0.3);
+}
+
+.da-workflow-var-target {
+    font-size: 0.88em;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-workflow-var-label {
+    font-weight: 600;
+    color: var(--da-text-primary);
+    flex-shrink: 0;
+}
+
+.da-workflow-var-tip {
+    font-size: 0.82em;
+    color: var(--da-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

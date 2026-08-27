@@ -1,0 +1,67 @@
+/**
+ * dialog.css
+ * 层级：controls/feedback
+ * 职责：模态确认对话框、Portal 全屏毛玻璃遮罩与操作面板
+ */
+
+/* ════ 全屏毛玻璃遮罩 Backdrop ════ */
+.da-dialog-backdrop,
+.da-main-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-dialog, 30000);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    animation: da-fadein 0.18s var(--da-ease);
+}
+
+.da-portal-host {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-overlay, 40000);
+    pointer-events: none;
+}
+
+.da-portal-host > * {
+    pointer-events: auto;
+}
+
+/* ════ 对话框主体面板 ════ */
+.da-dialog-panel {
+    width: 90%;
+    max-width: 420px;
+    padding: 22px 26px;
+    border-radius: var(--da-radius-card, 14px);
+    box-shadow: var(--da-shadow-lg);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-panel, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px));
+    border: 1px solid var(--da-border-color);
+    z-index: var(--da-z-dialog, 30000);
+    animation: da-modal-slide-in 0.2s var(--da-ease-spring);
+}
+
+.da-dialog-title {
+    font-size: 1.08em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    margin: 0 0 12px 0;
+}
+
+.da-dialog-message {
+    font-size: 0.9em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 20px;
+    word-break: break-word;
+}
+
+.da-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}

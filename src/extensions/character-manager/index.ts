@@ -3,19 +3,22 @@
  * @description 角色与服装管理独立业务扩展 (CharacterManagerExtension)
  */
 
-import { IExtension } from '../../core/registry/extension-registry';
-import { KernelContext } from '../../core/context';
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
-import { CharacterStorage } from './storage';
-import { createCharacterPromptHook } from './prompt-hook';
-import { createCharacterTabView } from './character-tab';
+import {
+    IExtension,
+    KernelContext,
+    IDisposable,
+    DisposableStore
+} from '../../core';
+import { CharacterStorage } from './data/storage';
+import { createCharacterPromptHook } from './domain/prompt-hook';
+import { createCharacterTabView } from './ui/character-tab';
 import { CHARACTER_MANAGER_EXTENSION_ID } from './constants';
-import { VERSION } from '../../core/constants';
 
 export class CharacterManagerExtension implements IExtension {
     public readonly id = CHARACTER_MANAGER_EXTENSION_ID;
     public readonly name = '角色与服装预设管理';
-    public readonly version = VERSION;
+    public readonly version = '1.0.0';
+    public readonly description = '开启后在设置面板中显示【角色管理】Tab，支持管理角色与服装特征预设。关闭后自动隐藏该 Tab。';
 
     private readonly _disposables = new DisposableStore();
 
@@ -90,9 +93,11 @@ export class CharacterManagerExtension implements IExtension {
 }
 
 export * from './types';
-export * from './storage';
-export * from './adapters';
-export * from './prompt-hook';
-export * from './character-tab';
-export * from './macro-engine';
-export * from './card-converter';
+export * from './constants';
+export * from './data/storage';
+export * from './data/preset-loader';
+export * from './ui/adapters';
+export * from './domain/prompt-hook';
+export * from './ui/character-tab';
+export * from './domain/macro-engine';
+

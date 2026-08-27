@@ -3,10 +3,15 @@
  * @description 提示词流水线拦截钩子与实现 (PipelineHooks, AsyncSeriesWaterfallHook)
  */
 
-import { IDisposable, toDisposable } from '../../core/foundation/disposable';
-import { GenerationPayload, PipelineHookContext, IPipelineHooksContract } from '../../core/contracts';
+import {
+    IDisposable,
+    toDisposable,
+    GenerationPayload,
+    PipelineHookContext,
+    IPipelineHooks
+} from '../../core';
 
-export type { PipelineHookContext } from '../../core/contracts';
+export type { PipelineHookContext } from '../../core';
 
 export type HookCallback<T, C> = (data: T, context: C) => Promise<T> | T;
 
@@ -38,12 +43,12 @@ export class AsyncSeriesWaterfallHook<T, C = PipelineHookContext> {
     }
 }
 
-export interface PipelineHooks extends IPipelineHooksContract {
+export interface PipelineHooks extends IPipelineHooks {
     /** 阶段 1：原始文本清洗前阶段钩子 */
     readonly beforeClean: AsyncSeriesWaterfallHook<string, PipelineHookContext>;
     /** 阶段 2：提示词组装前阶段钩子 (通用扩展挂载点，支持自定义宏替换与标签注入) */
     readonly beforePromptBuild: AsyncSeriesWaterfallHook<string, PipelineHookContext>;
-    /** 阶段 3：派发生图驱动前的最终 Payload 终态拦截阶段钩子 */
+    /** 阶段 3：提交生图驱动前的请求数据拦截钩子 */
     readonly beforeSubmit: AsyncSeriesWaterfallHook<GenerationPayload, PipelineHookContext>;
 }
 

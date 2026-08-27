@@ -4,8 +4,7 @@
  * 解决在各个 onChange 中手动闭包打补丁与 refreshTab() 的反模式，实现 Store 与 UI 控件的声明式双向联动
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
+import { ObservableStore, IDisposable, DisposableStore } from '../../core';
 
 export interface BindingDefinition<TState, K extends keyof TState> {
     /** 绑定的 Store 属性键名 */

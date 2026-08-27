@@ -1,0 +1,100 @@
+/**
+ * @module styles/core/tokens
+ * @description 全局 CSS Design Tokens 变量定义
+ *
+ * 设计准则：现代、柔和、克制、层级清晰
+ */
+
+:root {
+    /* ════ 1. 背景与材质 (Surfaces & Backgrounds) ════ */
+    --da-color-scheme: dark;
+    --da-bg-primary: #0f1014;
+    --da-bg-secondary: #181a20;
+    --da-bg-card: rgba(255, 255, 255, 0.035);
+    --da-bg-card-hover: rgba(255, 255, 255, 0.05);
+    --da-bg-input: #1a1d24;
+    --da-bg-input-hover: #222630;
+    --da-bg-hover: rgba(255, 255, 255, 0.035);
+    --da-bg-active: rgba(0, 242, 254, 0.12);
+    --da-bg-modal: rgba(20, 22, 28, 0.96);
+    --da-bg-gradient: linear-gradient(145deg, #14161d 0%, #0d0e13 100%);
+    --da-bg-overlay-modal: rgba(0, 0, 0, 0.65);
+    --da-bg-overlay-heavy: rgba(0, 0, 0, 0.88);
+
+    /* ════ 2. 文字色彩 (Typography Colors) ════ */
+    --da-text-primary: #f2f2f7;
+    --da-text-secondary: #98989f;
+    --da-text-muted: #686870;
+    --da-text-on-accent: #000000;
+
+    /* ════ 3. 边框与微弱分割线 (Borders & Separators) ════ */
+    --da-border-color: rgba(255, 255, 255, 0.08);
+    --da-border-focus: var(--da-accent-color);
+    --da-separator: rgba(255, 255, 255, 0.045);
+
+    /* ════ 4. 品牌主色 (Brand Accent) ════ */
+    --da-accent-color: #00f2fe;
+    --da-accent-hover: #00d8e6;
+    --da-accent-rgb: 0, 242, 254;
+
+    /* ════ 5. 语义状态色彩 (Status Colors) ════ */
+    --da-color-success: #30d158;
+    --da-color-error: #ff453a;
+    --da-color-warn: #ff9f0a;
+    --da-status-warning: #ff9f0a;
+    --da-color-fav: #eab308;
+
+    /* ════ 6. 终端日志主题 (Terminal) ════ */
+    --da-terminal-bg: #0c0e12;
+    --da-terminal-text: #e6edf3;
+    --da-terminal-muted: #8b949e;
+    --da-terminal-blue: #58a6ff;
+    --da-terminal-purple: #bc8cff;
+    --da-terminal-teal: #39c5bb;
+    --da-terminal-yellow: #d29922;
+    --da-terminal-red: #f85149;
+
+    /* ════ 7. 间距系统 (Spacing Scale) ════ */
+    --da-space-xs: 4px;
+    --da-space-sm: 8px;
+    --da-space-md: 12px;
+    --da-space-lg: 16px;
+    --da-space-xl: 20px;
+    --da-space-2xl: 24px;
+    --da-space-3xl: 32px;
+
+    /* ════ 8. 字号阶梯 (Typography Scale) ════ */
+    --da-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --da-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --da-font-size-xs: 0.75rem;
+    --da-font-size-sm: 0.82rem;
+    --da-font-size-base: 0.90rem;
+    --da-font-size-md: 1.00rem;
+    --da-font-size-lg: 1.20rem;
+
+    /* ════ 9. 圆角系统 (Border Radius Scale) ════ */
+    --da-radius-modal: 16px;
+    --da-radius-card: 14px;
+    --da-radius-input: 8px;
+    --da-radius-btn: 8px;
+    --da-radius-pill: 100px;
+    --da-radius-sm: 6px;
+    --da-radius-small: 6px;
+    --da-radius-xs: 4px;
+
+    /* ════ 10. 阴影系统 (Elevation & Shadows) ════ */
+    --da-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --da-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.40);
+    --da-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+    --da-shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.60);
+
+    /* ════ 11. 缓动曲线 (Transitions & Easing) ════ */
+    --da-ease: cubic-bezier(0.25, 1, 0.5, 1);
+    --da-ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+
+    /* ════ 12. 毛玻璃与层级 (Glassmorphism & Z-Index) ════ */
+    --da-blur-modal: 12px;
+    --da-blur-panel: 20px;
+    --da-z-fab: 9999;
+    --da-z-modal: 10000;
+}

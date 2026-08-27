@@ -130,10 +130,20 @@ export interface IStorageAdapter extends IDisposable {
     getAllImages(): Promise<StoredImageRecord[]>;
     /** 根据 UUID 删除指定图像记录 */
     deleteImage(id: string): Promise<void>;
+    /** 批量删除指定 ID 列表的图像记录 */
+    deleteImages(ids: string[]): Promise<number>;
     /** 切换图像的收藏状态 (Star) */
     toggleFavorite(id: string): Promise<boolean>;
     /** 清空所有存储的图像记录 */
     clear(): Promise<void>;
+    /** 清理指定天数之前的非收藏历史图片并返回清理数量 */
+    cleanOldImages(retentionDays: number): Promise<number>;
+    /** 清理所有非收藏历史图片并返回清理数量 */
+    cleanNonFavorites(): Promise<number>;
+    /** 清理未被当前引用的非收藏孤立图片并返回清理数量 */
+    cleanIsolatedImages(referencedIds: Set<string>): Promise<number>;
+    /** 获取图库统计指标（总数、收藏数、孤立数） */
+    getStorageStats(referencedIds?: Set<string>): Promise<{ totalCount: number; favoriteCount: number; isolatedCount: number }>;
     /** 计算图像二进制数据或 Base64 的 SHA-256 哈希值 */
     calculateHash(data: string | Blob | ArrayBuffer): Promise<string>;
 }
@@ -185,6 +195,14 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         });
     }
 
+    /**
+     * 计算图像数据的确定性内容哈希 (用于存储去重)
+     * 
+     * 机制说明：
+     * 1. 优先使用标准 WebCrypto API 计算 SHA-256 摘要；
+     * 2. 在非安全上下文 (如 HTTP 环境) 或单测 Mock 环境中，平滑回退到确定性的 FNV-1a 32位二进制哈希算法，
+     *    避免退化为常数哈希导致不同图片被错误去重覆盖。
+     */
     public async calculateHash(data: string | Blob | ArrayBuffer): Promise<string> {
         let binaryBuffer: Uint8Array;
 
@@ -238,12 +256,12 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
 
         const hash = record.hash || (await this.calculateHash(record.data));
 
-        // 1. 内容寻址去重：若已存在相同 SHA-256 哈希，直接更新访问时间并复用已有 ID
+        // 1. 哈希去重：若已存在相同哈希的图片记录，更新访问时间并复用已有 ID
         const existing = await this.getImageByHash(hash);
         if (existing) {
             existing.lastAccessedAt = Date.now();
             await this.updateRecord(existing);
-            this._logger.info(`命中 SHA-256 去重索引 (${hash.substring(0, 8)}...)，复用已有图片记录: ${existing.id}`);
+            this._logger.info(`命中图片哈希去重 (${hash.substring(0, 8)}...)，复用已有图片记录: ${existing.id}`);
             return existing.id;
         }
 
@@ -382,6 +400,102 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         });
     }
 
+    /**
+     * 清理指定保留天数之前的非收藏历史图片
+     *
+     * @param retentionDays 保留天数 (例如 7, 30, 90；<= 0 表示不执行基于时间的清理)
+     * @returns 实际清理删除的图片数量
+     */
+    public async cleanOldImages(retentionDays: number): Promise<number> {
+        if (!retentionDays || retentionDays <= 0) return 0;
+        await this.init();
+
+        const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+        const all = await this.getAllImages();
+        const toDelete = all.filter((img) => !img.isFavorite && (img.timestamp < cutoffTime || (img.lastAccessedAt && img.lastAccessedAt < cutoffTime)));
+
+        for (const img of toDelete) {
+            await this.deleteImage(img.id);
+        }
+
+        if (toDelete.length > 0) {
+            this._logger.info(`已按过期淘汰策略清理 ${toDelete.length} 张 ${retentionDays} 天前的历史图片`);
+        }
+
+        return toDelete.length;
+    }
+
+    /**
+     * 批量删除指定 ID 的图像记录
+     */
+    public async deleteImages(ids: string[]): Promise<number> {
+        if (!ids || ids.length === 0) return 0;
+        await this.init();
+        let deleted = 0;
+        for (const id of ids) {
+            try {
+                await this.deleteImage(id);
+                deleted++;
+            } catch {
+                // 忽略单张删除失败
+            }
+        }
+        return deleted;
+    }
+
+    /**
+     * 清理所有未标星收藏的历史图片缓存
+     */
+    public async cleanNonFavorites(): Promise<number> {
+        await this.init();
+        const all = await this.getAllImages();
+        const toDelete = all.filter((img) => !img.isFavorite);
+        for (const img of toDelete) {
+            await this.deleteImage(img.id);
+        }
+        if (toDelete.length > 0) {
+            this._logger.info(`已清空全部非收藏历史图片缓存，共释放 ${toDelete.length} 张图片`);
+        }
+        return toDelete.length;
+    }
+
+    /**
+     * 清理未被当前引用的非收藏孤立历史图片
+     */
+    public async cleanIsolatedImages(referencedIds: Set<string>): Promise<number> {
+        await this.init();
+        const all = await this.getAllImages();
+        const toDelete = all.filter((img) => !img.isFavorite && !referencedIds.has(img.id));
+        for (const img of toDelete) {
+            await this.deleteImage(img.id);
+        }
+        if (toDelete.length > 0) {
+            this._logger.info(`已清理未引用的孤立历史图片，共清理 ${toDelete.length} 张图片`);
+        }
+        return toDelete.length;
+    }
+
+    /**
+     * 获取图库统计指标
+     */
+    public async getStorageStats(referencedIds?: Set<string>): Promise<{ totalCount: number; favoriteCount: number; isolatedCount: number }> {
+        await this.init();
+        const all = await this.getAllImages();
+        const totalCount = all.length;
+        let favoriteCount = 0;
+        let isolatedCount = 0;
+
+        for (const img of all) {
+            if (img.isFavorite) {
+                favoriteCount++;
+            } else if (referencedIds && !referencedIds.has(img.id)) {
+                isolatedCount++;
+            }
+        }
+
+        return { totalCount, favoriteCount, isolatedCount };
+    }
+
     private async updateRecord(record: StoredImageRecord): Promise<void> {
         if (!this._db) {
             this._memoryStore.set(record.id, record);
@@ -397,6 +511,14 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         });
     }
 
+    /**
+     * 自动执行存储配额检查与淘汰清理 (LRU 策略)
+     *
+     * 保护与淘汰规则：
+     * 1. 保护收藏图片：严格过滤排除 isFavorite 为 true 的图片记录，防止珍贵生图被系统误删；
+     * 2. 按访问时间排序：优先淘汰最早生成或最久未被点击查看的历史图片；
+     * 3. 双重触发条件：当图片总数达到 maxStoredImages 上限，或浏览器存储配额使用率超过 90% 时触发。
+     */
     private async ensureStorageQuota(maxStoredImages?: number): Promise<void> {
         let shouldEvict = false;
         let evictCount = 0;

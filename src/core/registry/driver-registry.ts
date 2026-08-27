@@ -5,10 +5,10 @@
 
 import { IDisposable, toDisposable } from '../foundation/disposable';
 import { Logger } from '../diagnostics/logger';
-import { IDrawDriverContract } from '../contracts';
+import { IDrawDriver } from '../contracts';
 
 /** 生图后端驱动注册中心强类型接口 */
-export interface IDriverRegistry<T extends IDrawDriverContract = IDrawDriverContract> extends IDisposable {
+export interface IDriverRegistry<T extends IDrawDriver = IDrawDriver> extends IDisposable {
     /** 注册生图驱动实例 */
     register(driver: T): IDisposable;
     /** 获取指定 ID 的驱动实例 */
@@ -17,7 +17,7 @@ export interface IDriverRegistry<T extends IDrawDriverContract = IDrawDriverCont
     getAll(): readonly T[];
 }
 
-export class DriverRegistry<T extends IDrawDriverContract = IDrawDriverContract> implements IDriverRegistry<T> {
+export class DriverRegistry<T extends IDrawDriver = IDrawDriver> implements IDriverRegistry<T> {
     private readonly _drivers = new Map<string, T>();
     private readonly _logger = new Logger('DriverRegistry');
     private _isDisposed = false;

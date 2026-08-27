@@ -1,0 +1,102 @@
+/**
+ * @module styles/layout/sidebar-tabs
+ * @description 弹窗侧边导航选项卡、高亮光标指示与脏数据红点 (Sidebar Navigation Styles)
+ */
+
+.da-sidebar-tabs {
+    flex: 0 0 184px;
+    width: 184px;
+    background: var(--da-bg-secondary);
+    border-right: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 4px);
+    padding: var(--da-space-lg, 16px) var(--da-space-sm, 8px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--da-border-color) transparent;
+}
+
+.da-sidebar-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--da-space-sm, 8px);
+    height: 42px;
+    min-height: 42px;
+    padding: 0 var(--da-space-md, 12px);
+    border-radius: var(--da-radius-input, 10px);
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-base, 0.92rem);
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.18s var(--da-ease), color 0.18s var(--da-ease), transform 0.12s var(--da-ease);
+    box-sizing: border-box;
+    letter-spacing: -0.01em;
+    width: 100%;
+}
+
+.da-sidebar-item:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-sidebar-item:active {
+    transform: scale(0.98);
+}
+
+.da-sidebar-item--active {
+    background: rgba(var(--da-accent-rgb), 0.16) !important;
+    color: var(--da-accent-color) !important;
+    font-weight: 600 !important;
+}
+
+.da-sidebar-item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    background: var(--da-accent-color);
+    border-radius: 0 3px 3px 0;
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.5);
+}
+
+.da-sidebar-item__icon {
+    font-size: 1.1em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.da-sidebar-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-sidebar-item__dirty-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--da-color-error, #ff453a);
+    box-shadow: 0 0 6px rgba(255, 69, 58, 0.6);
+    flex-shrink: 0;
+    display: inline-block;
+    animation: da-pulse 1.8s infinite;
+}
+

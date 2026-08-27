@@ -14,7 +14,7 @@ export interface CoreEventMap {
     /** 主题变动 */
     'theme:changed': { themeId: string };
     /** 任务状态流转 */
-    'task:state_changed': { taskId: string; status: string; progress?: number; error?: string };
+    'task:state_changed': { taskId: string; status: string; error?: string };
     /** 任务执行成功 */
     'task:completed': { taskId: string; imageBlobs: Blob[]; metadata?: Record<string, unknown> };
     /** 任务执行失败 */

@@ -1,0 +1,46 @@
+/**
+ * lightbox.css
+ * 层级：controls/feedback
+ * 职责：全屏沉浸式图像灯箱放大查看器
+ */
+
+.da-lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-lightbox, 100100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    background: var(--da-bg-overlay-heavy, rgba(0, 0, 0, 0.88));
+    backdrop-filter: blur(var(--da-blur-lightbox, 14px));
+    -webkit-backdrop-filter: blur(var(--da-blur-lightbox, 14px));
+    animation: da-fadein 0.18s var(--da-ease);
+}
+
+.da-lightbox-img {
+    max-width: 94vw;
+    max-height: 94vh;
+    object-fit: contain;
+    border-radius: var(--da-radius-small, 8px);
+    box-shadow: var(--da-shadow-lightbox);
+    transition: transform 0.2s ease;
+}
+
+.da-lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    color: #ffffff;
+    font-size: 1.4em;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: background 0.15s ease;
+}
+
+.da-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.22);
+}

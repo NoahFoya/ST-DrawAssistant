@@ -1,26 +1,38 @@
 /**
  * @module ui/controls/form-renderer
- * @description 声明式表单渲染引擎 (FormRenderer)
- * 将表单配置从命令式的 DOM 创建解耦为纯数据 Schema 结构，自动衔接 FormBinder 实现数据与视图双向响应。
- * 支持 fromStore/toStore 值映射转换，以及 keyPath 嵌套对象路径绑定。
+ * @description 表单配置渲染器 (FormRenderer)
+ *
+ * 职责：
+ * 解析表单配置结构 (FormRowSchema / SectionCardSchema)，完成表单项的构建与数据绑定：
+ * 1. 使用布局容器构建卡片与行列结构；
+ * 2. 填充字段标签与输入控件；
+ * 3. 绑定 Store 状态数据，处理动态显示/禁用与生命周期释放。
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
+import { ObservableStore, IDisposable, DisposableStore } from '../../core';
 import { FormBinder } from '../foundation/form-binder';
 import {
-    createFieldRow,
-    createToggleRow,
-    createSelectRow,
-    createInputRow,
-    createNumberRow,
-    createSliderRow,
-    createColorPickerRow,
-    createSectionCard,
-    SelectOptionItem
-} from './controls';
+    createRow,
+    createCol,
+    createCard,
+    createFieldLabel,
+    createCardHeader
+} from '../layout/container-factory';
+import {
+    createToggle,
+    createSelect,
+    createTextInput,
+    createNumberInput,
+    createTextarea,
+    createColorPicker,
+    createSlider,
+    createSegmentedControl,
+    IControlHandle,
+    SelectOptionItem,
+    SegmentedItem
+} from './input-controls';
 
-export type FormFieldType = 'toggle' | 'select' | 'input' | 'number' | 'slider' | 'color' | 'custom' | 'component';
+export type FormFieldType = 'toggle' | 'select' | 'input' | 'textarea' | 'number' | 'color' | 'slider' | 'segmented' | 'custom' | 'component';
 
 export interface FormRowSchema<TState extends object> {
     /** 绑定的 Store 属性键（与 keyPath 互斥） */
@@ -29,6 +41,8 @@ export interface FormRowSchema<TState extends object> {
     type: FormFieldType;
     /** 主标签名称 */
     label: string;
+    /** 次要详细描述文本 */
+    description?: string;
     /** 帮助说明气泡提示文本 */
     helpTooltip?: string;
     /** 下拉框选项列表 (type === 'select') */
@@ -39,44 +53,32 @@ export interface FormRowSchema<TState extends object> {
     max?: number;
     /** 步长 */
     step?: number;
-    /** 单位徽标 (如 'px', '%', 's') */
+    /** 单位徽标 (如 'px', '%', 's', '°') */
     unit?: string;
     /** 占位提示符 */
     placeholder?: string;
-    /** 是否固定 180px 宽度 */
-    fixedWidth?: boolean;
-    /** 自定义输入控件装配器 (type === 'custom') */
+    /** 分段控制器选项列表 (type === 'segmented') */
+    segmentedItems?: SegmentedItem[];
+    /** 是否采用块级上下垂直排布 (全宽展示如图标选择网格、多选标签组等复合控件) */
+    isBlock?: boolean;
+    /** 自定义输入控件渲染函数 (type === 'custom') */
     renderCustom?: (container: HTMLElement, binder: FormBinder<TState>) => HTMLElement;
     /** 动态显隐条件谓词 */
     visibleWhen?: (state: TState) => boolean;
+    /** 动态禁用条件谓词 (如随模型切换或高级开关动态启用/置灰) */
+    disabledWhen?: (state: TState) => boolean;
     /** 额外自定义变更钩子（在值写入 Store 之后触发） */
     onChangeHook?: (val: any, state: TState) => void;
 
-    /**
-     * Store → UI 值映射函数（读取时转换）
-     *
-     * 用于 Store 中存储的单位与 UI 显示单位不一致的场景。
-     * 示例：`(v) => Math.round(v / 1000)`（ms → 秒）
-     * 仅在 `key` 或 `keyPath` 存在时生效。
-     */
+    /** Store → UI 值映射函数（读取时转换） */
     fromStore?: (storeValue: any) => any;
-
-    /**
-     * UI → Store 值映射函数（写入时转换）
-     *
-     * 用于将 UI 控件值转换回 Store 存储格式。
-     * 示例：`(v) => v * 1000`（秒 → ms）
-     * 仅在 `key` 或 `keyPath` 存在时生效。
-     */
+    /** UI → Store 值映射函数（写入时转换） */
     toStore?: (uiValue: any) => any;
 
-    /**
-     * 嵌套对象路径绑定，格式 `['imageDisplay', 'align'] as const`
-     *
-     * 与 `key` 互斥，不可同时使用。
-     * 写入时做浅合并：`store.set(keyPath[0], { ...existing, [keyPath[1]]: val })`
-     * 订阅时监听 `keyPath[0]` 的整体变更，从中提取 `keyPath[1]` 字段同步 UI。
-     */
+    /** 控件 DOM/Handle 渲染完成回调 */
+    onCreated?: (handle: any) => void;
+
+    /** 嵌套对象路径绑定，格式 `['imageDisplay', 'align'] as const` */
     keyPath?: readonly [keyof TState, string];
 }
 
@@ -97,14 +99,13 @@ export interface SectionCardSchema<TState extends object> {
 
 /**
  * 声明式表单渲染引擎
- *
- * @description 通过 Schema 声明驱动 UI 渲染，内置 fromStore/toStore/keyPath 支持，
- * 消除视图层中手动 DOM 绕路。
  */
 export class FormRenderer<TState extends object> implements IDisposable {
     private readonly _store: ObservableStore<TState>;
     private readonly _binder: FormBinder<TState>;
     private readonly _disposables = new DisposableStore();
+    /** 控件 Handle 注册表：key → IControlHandle，供外部通过 getHandle() 查询 */
+    private readonly _handles = new Map<keyof TState | string, any>();
 
     constructor(store: ObservableStore<TState>) {
         this._store = store;
@@ -117,134 +118,242 @@ export class FormRenderer<TState extends object> implements IDisposable {
     }
 
     /**
-     * 根据卡片 Schema 渲染标准 SectionCard
-     *
-     * @param schema 卡片配置描述对象
-     * @returns 渲染完成的卡片 DOM 节点
+     * 获取指定 key 对应的输入控件 Handle
      */
-    public renderCard(schema: SectionCardSchema<TState>): HTMLElement {
-        const card = createSectionCard({
-            title: schema.title,
-            description: schema.description,
-            headerExtra: schema.headerExtra ? schema.headerExtra(this._binder) : undefined,
-            renderBody: (body) => {
-                schema.rows.forEach((rowSchema) => {
-                    const rowEl = this.renderRow(rowSchema);
-                    body.appendChild(rowEl);
-                });
-            }
-        });
-
-        return card;
+    public getHandle<T = IControlHandle<any>>(key: keyof TState | string): T | undefined {
+        return this._handles.get(key) as T | undefined;
     }
 
     /**
-     * 根据单行 Schema 渲染标准 FormRow
-     *
-     * @param schema 表单行配置描述对象
-     * @returns 渲染完成的行 DOM 节点
+     * 根据卡片 Schema 渲染标准卡片
+     */
+    public renderCard(schema: SectionCardSchema<TState>): HTMLElement {
+        const card = createCard({ hoverable: true });
+        const headerContent = createCardHeader({
+            title: schema.title,
+            description: schema.description,
+            action: schema.headerExtra ? schema.headerExtra(this._binder) : undefined
+        });
+        card.header.appendChild(headerContent);
+
+        schema.rows.forEach((rowSchema) => {
+            const rowEl = this.renderRow(rowSchema);
+            card.body.appendChild(rowEl);
+        });
+
+        // 可折叠卡片：header 点击切换 body 展开/折叠
+        if (schema.collapsible) {
+            const isInitiallyOpen = schema.defaultOpen !== false;
+            card.header.classList.add('da-card__header--collapsible');
+            card.root.classList.toggle('da-card--collapsed', !isInitiallyOpen);
+            if (!isInitiallyOpen) {
+                card.body.style.display = 'none';
+            }
+            card.header.addEventListener('click', () => {
+                const isCollapsed = card.root.classList.toggle('da-card--collapsed');
+                card.body.style.display = isCollapsed ? 'none' : '';
+            });
+        }
+
+        return card.root;
+    }
+
+    /**
+     * 根据单行 Schema 渲染标准表单行
+     * 表单装配：1. 容器空间划分 ➔ 2. 字段标签与输入控件填充 ➔ 3. 数据流绑定
      */
     public renderRow(schema: FormRowSchema<TState>): HTMLElement {
-        let rowEl: HTMLElement;
-        const curState = this._store.getState();
+        const currentState = this._store.getState();
+
+        // 1. 垂直堆叠全宽行 (Textarea 或 isBlock 块级字段)
+        if (schema.type === 'textarea' || schema.isBlock) {
+            const col = createCol(2, { gap: '6px' });
+            col.root.classList.add('da-row--divided');
+
+            const fieldLabel = createFieldLabel({
+                title: schema.label,
+                description: schema.description,
+                helpTooltip: schema.helpTooltip
+            });
+            col.slots[0].appendChild(fieldLabel);
+
+            if (schema.type === 'textarea') {
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
+
+                const textarea = createTextarea({
+                    value: initialValue,
+                    placeholder: schema.placeholder,
+                    onChange: (value) => {
+                        this._writeVal(schema, value);
+                    }
+                });
+
+                this._subscribeToStore(schema, (value) => textarea.setValue(String(value ?? '')));
+                this._disposables.add(textarea);
+                col.slots[1].appendChild(textarea);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, textarea);
+                schema.onCreated?.(textarea);
+            } else if (schema.type === 'custom' && schema.renderCustom) {
+                const customElement = schema.renderCustom(col.slots[1], this._binder);
+                if (customElement && customElement !== col.slots[1] && !col.slots[1].contains(customElement)) {
+                    col.slots[1].appendChild(customElement);
+                }
+            }
+
+            this._setupReactivity(col.root, schema);
+            return col.root;
+        }
+
+        // 2. 单插槽全宽组件行 (无标题标签的大型控件，如 PresetToolbar / LoraManager)
+        if ((schema.type === 'component' || schema.type === 'custom') && !schema.label) {
+            const row = createRow(['full'], {
+                align: 'center',
+                divided: true
+            });
+            const controlSlot = row.slots[0];
+            if (schema.renderCustom) {
+                const customEl = schema.renderCustom(controlSlot, this._binder);
+                if (customEl && customEl !== controlSlot && !controlSlot.contains(customEl)) {
+                    controlSlot.appendChild(customEl);
+                }
+            }
+            this._setupReactivity(row.root, schema);
+            return row.root;
+        }
+
+        // 3. 水平双栏标准行 (左侧标题描述向左对齐，右侧控件靠右紧贴对齐，统一垂直居中)
+        const row = createRow(['left', 'right'], {
+            align: 'center',
+            divided: true
+        });
+
+        const fieldLabel = createFieldLabel({
+            title: schema.label,
+            description: schema.description,
+            helpTooltip: schema.helpTooltip
+        });
+        row.slots[0].appendChild(fieldLabel);
+
+        // 4. 实例化具体输入控件并挂载到右侧操作区 (slots[1])
+        const controlSlot = row.slots[1];
 
         switch (schema.type) {
             case 'toggle': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = Boolean(rawVal ?? false);
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = Boolean(rawValue ?? false);
 
-                const toggleHandle = createToggleRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
-                    onChange: (val) => {
-                        this._writeVal(schema, val);
+                const toggle = createToggle({
+                    value: initialValue,
+                    onChange: (checked) => {
+                        this._writeVal(schema, checked);
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => {
-                    const checkbox = toggleHandle.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                    if (checkbox && checkbox.checked !== Boolean(v)) {
-                        checkbox.checked = Boolean(v);
-                    }
+                this._subscribeToStore(schema, (value) => {
+                    toggle.setValue(Boolean(value));
                 });
-
-                rowEl = toggleHandle;
+                this._disposables.add(toggle);
+                controlSlot.appendChild(toggle);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, toggle);
+                schema.onCreated?.(toggle);
                 break;
             }
 
             case 'select': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
 
-                const selectHandle = createSelectRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
+                const select = createSelect({
+                    value: initialValue,
                     options: schema.options || [],
-                    onChange: (val) => {
-                        this._writeVal(schema, val);
+                    onChange: (value) => {
+                        this._writeVal(schema, value);
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => selectHandle.setValue(String(v ?? '')));
-
-                rowEl = selectHandle;
+                this._subscribeToStore(schema, (value) => select.setValue(String(value ?? '')));
+                this._disposables.add(select);
+                controlSlot.appendChild(select);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, select);
+                schema.onCreated?.(select);
                 break;
             }
 
             case 'input': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
 
-                const inputHandle = createInputRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
+                const input = createTextInput({
+                    value: initialValue,
                     placeholder: schema.placeholder,
-                    fixedWidth: schema.fixedWidth,
-                    onChange: (val) => {
-                        this._writeVal(schema, val);
+                    onChange: (value) => {
+                        this._writeVal(schema, value);
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => inputHandle.setValue(String(v ?? '')));
-
-                rowEl = inputHandle;
+                this._subscribeToStore(schema, (value) => input.setValue(String(value ?? '')));
+                this._disposables.add(input);
+                controlSlot.appendChild(input);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, input);
+                schema.onCreated?.(input);
                 break;
             }
 
             case 'number': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = rawVal !== undefined ? Number(rawVal) : (schema.min ?? 0);
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = typeof rawValue === 'number' ? rawValue : (schema.min ?? 0);
 
-                const numHandle = createNumberRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
-                    min: schema.min ?? 0,
-                    max: schema.max ?? 10000,
-                    step: schema.step ?? 1,
+                const numberComp = createNumberInput({
+                    value: initialValue,
+                    min: schema.min,
+                    max: schema.max,
+                    step: schema.step,
                     unit: schema.unit,
                     onChange: (val) => {
                         this._writeVal(schema, val);
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => numHandle.setValue(Number(v ?? 0)));
+                this._subscribeToStore(schema, (value) => numberComp.setValue(Number(value ?? 0)));
+                this._disposables.add(numberComp);
+                controlSlot.appendChild(numberComp);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, numberComp);
+                schema.onCreated?.(numberComp);
+                break;
+            }
 
-                rowEl = numHandle;
+            case 'color': {
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
+
+                const colorPicker = createColorPicker({
+                    value: initialValue,
+                    onChange: (hexColor) => {
+                        this._writeVal(schema, hexColor);
+                    }
+                });
+
+                this._subscribeToStore(schema, (value) => colorPicker.setValue(String(value ?? '')));
+                this._disposables.add(colorPicker);
+                controlSlot.appendChild(colorPicker);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, colorPicker);
+                schema.onCreated?.(colorPicker);
                 break;
             }
 
             case 'slider': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = rawVal !== undefined ? Number(rawVal) : (schema.min ?? 0);
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = typeof rawValue === 'number' ? rawValue : (schema.min ?? 0);
 
-                const sliderHandle = createSliderRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
+                const slider = createSlider({
+                    value: initialValue,
                     min: schema.min ?? 0,
                     max: schema.max ?? 100,
                     step: schema.step ?? 1,
@@ -254,55 +363,59 @@ export class FormRenderer<TState extends object> implements IDisposable {
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => sliderHandle.setValue(Number(v ?? 0)));
-
-                rowEl = sliderHandle;
+                this._subscribeToStore(schema, (value) => slider.setValue(Number(value ?? 0)));
+                this._disposables.add(slider);
+                controlSlot.appendChild(slider);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, slider);
+                schema.onCreated?.(slider);
                 break;
             }
 
-            case 'color': {
-                const rawVal = this._readVal(schema, curState);
-                const initialVal = rawVal !== undefined ? String(rawVal) : '#00f2fe';
+            case 'segmented': {
+                const rawValue = this._readVal(schema, currentState);
+                const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : (schema.segmentedItems?.[0]?.value ?? '');
 
-                const colorHandle = createColorPickerRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    value: initialVal,
+                const segmented = createSegmentedControl({
+                    value: initialValue,
+                    items: schema.segmentedItems || [],
                     onChange: (val) => {
                         this._writeVal(schema, val);
                     }
                 });
 
-                this._subscribeToStore(schema, (v) => colorHandle.setValue(String(v ?? '#00f2fe')));
-
-                rowEl = colorHandle;
+                this._subscribeToStore(schema, (value) => segmented.setValue(String(value ?? '')));
+                this._disposables.add(segmented);
+                controlSlot.appendChild(segmented);
+                const handleKey = schema.key || (schema.keyPath?.length ? schema.keyPath.join('.') : undefined);
+                if (handleKey) this._handles.set(handleKey, segmented);
+                schema.onCreated?.(segmented);
                 break;
             }
 
-            case 'component': {
-                const container = document.createElement('div');
-                rowEl = schema.renderCustom ? schema.renderCustom(container, this._binder) : container;
-                break;
-            }
-
+            case 'component':
             case 'custom':
             default: {
-                const container = document.createElement('div');
-                const customEl = schema.renderCustom ? schema.renderCustom(container, this._binder) : container;
-                rowEl = createFieldRow({
-                    label: schema.label,
-                    helpTooltip: schema.helpTooltip,
-                    control: customEl
-                });
+                if (schema.renderCustom) {
+                    const customEl = schema.renderCustom(controlSlot, this._binder);
+                    if (customEl && customEl !== controlSlot && !controlSlot.contains(customEl)) {
+                        controlSlot.appendChild(customEl);
+                    }
+                }
                 break;
             }
         }
 
-        // 响应式条件显隐订阅（display 切换为合法动态内联样式）
+        this._setupReactivity(row.root, schema);
+        return row.root;
+    }
+
+    private _setupReactivity(el: HTMLElement, schema: FormRowSchema<TState>): void {
+        // 响应式显隐
         if (schema.visibleWhen) {
             const updateVisibility = (state: TState) => {
                 const isVisible = schema.visibleWhen!(state);
-                rowEl.style.display = isVisible ? '' : 'none';
+                el.style.display = isVisible ? '' : 'none';
             };
 
             updateVisibility(this._store.getState());
@@ -310,42 +423,35 @@ export class FormRenderer<TState extends object> implements IDisposable {
             this._disposables.add(sub);
         }
 
-        return rowEl;
+        // 响应式禁用
+        if (schema.disabledWhen) {
+            const updateDisabled = (state: TState) => {
+                const isDisabled = Boolean(schema.disabledWhen!(state));
+                el.classList.toggle('is-disabled', isDisabled);
+                el.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>(
+                    'input, select, textarea, button'
+                ).forEach((input) => {
+                    input.disabled = isDisabled;
+                });
+            };
+
+            updateDisabled(this._store.getState());
+            const sub = this._store.subscribe((state) => updateDisabled(state));
+            this._disposables.add(sub);
+        }
     }
 
-    /**
-     * 销毁渲染器持有的所有响应式订阅与绑定
-     */
-    public dispose(): void {
-        this._disposables.dispose();
-    }
-
-    // ── 私有辅助方法 ─────────────────────────────────────────────────────
-
-    /**
-     * 从 Store 读取初始值，支持 key / keyPath 两种模式，并应用 fromStore 转换。
-     *
-     * @param schema 表单行 Schema
-     * @param state 当前 Store 快照
-     * @returns 经 fromStore 转换后的 UI 显示值
-     */
-    private _readVal(schema: FormRowSchema<TState>, state: Readonly<TState>): any {
+    private _readVal(schema: FormRowSchema<TState>, state: TState): any {
         let raw: any;
         if (schema.keyPath) {
-            raw = (state[schema.keyPath[0]] as any)?.[schema.keyPath[1]];
+            const [parentKey, fieldKey] = schema.keyPath;
+            raw = (state[parentKey] as Record<string, any> | undefined)?.[fieldKey];
         } else if (schema.key) {
             raw = state[schema.key];
         }
         return schema.fromStore ? schema.fromStore(raw) : raw;
     }
 
-    /**
-     * 将 UI 控件值写入 Store，支持 key / keyPath 两种模式，并应用 toStore 转换。
-     * 写入后若存在 onChangeHook，则随即触发。
-     *
-     * @param schema 表单行 Schema
-     * @param uiValue UI 控件输出的原始值
-     */
     private _writeVal(schema: FormRowSchema<TState>, uiValue: any): void {
         const storeVal = schema.toStore ? schema.toStore(uiValue) : uiValue;
 
@@ -356,19 +462,11 @@ export class FormRenderer<TState extends object> implements IDisposable {
         } else if (schema.key) {
             this._store.set(schema.key, storeVal);
         }
-        // key/keyPath 均未声明时：仅触发 onChangeHook（纯触发型控件，如分辨率预设下拉）
         if (schema.onChangeHook) {
             schema.onChangeHook(storeVal, this._store.getState());
         }
     }
 
-    /**
-     * 订阅 Store 中对应 key/keyPath 的变更，将新值同步到 UI 回调。
-     * 无 key/keyPath 时（纯触发型）不订阅，避免空订阅。
-     *
-     * @param schema 表单行 Schema
-     * @param updateUI UI 更新回调，接收经 fromStore 转换后的值
-     */
     private _subscribeToStore(schema: FormRowSchema<TState>, updateUI: (displayVal: any) => void): void {
         if (schema.keyPath) {
             const [parentKey] = schema.keyPath;
@@ -383,5 +481,15 @@ export class FormRenderer<TState extends object> implements IDisposable {
             });
             this._disposables.add(sub);
         }
+    }
+
+    public dispose(): void {
+        this._handles.forEach((handle) => {
+            if (handle && typeof handle.dispose === 'function') {
+                handle.dispose();
+            }
+        });
+        this._handles.clear();
+        this._disposables.dispose();
     }
 }

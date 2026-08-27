@@ -1,0 +1,275 @@
+/**
+ * @module styles/layout/layout-system
+ * @description 基础行列与网格布局样式系统 (Flex & Grid Layout System)
+ *
+ * 设计原则：
+ * 1. 容器只负责划分空间（行/列/插槽），不包含任何业务逻辑；
+ * 2. 严禁使用通配符或 !important 干预子元素尺寸；
+ * 3. 颜色、圆角、间距统一使用 var(--da-*) 设计 Token。
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 1. 基础流式容器 (Flex Containers)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 水平行容器：两端对齐，垂直居中，拉伸占满 100% */
+.da-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--da-space-lg, 16px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 行内垂直居中显式声明 */
+.da-row--center-y {
+  align-items: center;
+}
+
+/* 行内顶部对齐 (如多行文本域行) */
+.da-row--align-top {
+  align-items: flex-start;
+}
+
+/* 卡片内置分割线行 (支持悬停高亮与底部边框) */
+.da-row--divided {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--da-separator);
+  transition: background 0.15s var(--da-ease);
+}
+
+.da-row--divided:last-child {
+  border-bottom: none;
+}
+
+.da-row--divided:hover:not(.is-disabled) {
+  background: var(--da-bg-hover);
+}
+
+.da-row.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* 垂直列容器：垂直排列，拉伸占满宽度 */
+.da-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--da-space-sm, 8px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.da-col--center {
+  align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 2. 几何插槽策略与对齐规范 (Slots & Sizing Policies)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* 基础插槽单元：自适应无约束 */
+.da-slot {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* 全宽插槽 (100% 撑满宽度，自适应纵向流动) */
+.da-slot--full,
+.da-slot--fill {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* 左侧自适应插槽 (向左对齐，弹性填充分配) */
+.da-slot--left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  flex: 1 1 auto;
+}
+
+/* 右侧自适应插槽 (向右对齐，靠右紧贴) */
+.da-slot--right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* 半宽插槽-左 (50% 宽度，向左对齐) */
+.da-slot--half-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  flex: 0 0 50%;
+  max-width: 50%;
+}
+
+/* 半宽插槽-右 (50% 宽度，向右对齐) */
+.da-slot--half-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  flex: 0 0 50%;
+  max-width: 50%;
+}
+
+/* 三分之一宽插槽 (33.333% 宽度) */
+.da-slot--third {
+  flex: 0 0 33.333%;
+  max-width: 33.333%;
+}
+
+/* 三分之二宽插槽 (66.666% 宽度) */
+.da-slot--two-third {
+  flex: 0 0 66.666%;
+  max-width: 66.666%;
+}
+
+/* 流动自适应插槽 (尺寸完全由内部控件自身决定) */
+.da-slot--auto {
+  flex: 0 0 auto;
+}
+
+/* 居中插槽 (水平与垂直居中) */
+.da-slot--center {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* 兼容别名类 */
+.da-slot--half {
+  flex: 0 0 50%;
+  max-width: 50%;
+}
+
+.da-slot--start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  flex: 1 1 auto;
+}
+
+.da-slot--end {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 3. 卡片外壳结构 (Card Shell)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+.da-card {
+  position: relative;
+  background: var(--da-bg-card);
+  backdrop-filter: blur(var(--da-blur-panel, 20px));
+  -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px));
+  border: 1px solid var(--da-border-color);
+  border-radius: var(--da-radius-card, 14px);
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--da-shadow-sm);
+  transition: box-shadow 0.2s var(--da-ease), border-color 0.2s var(--da-ease), transform 0.2s var(--da-ease);
+}
+
+.da-card--hoverable:hover {
+  box-shadow: var(--da-shadow-md);
+  border-color: rgba(var(--da-accent-rgb), 0.22);
+  transform: translateY(-1px);
+}
+
+/* 可折叠卡片：header 鼠标指针与折叠展开箭头指示器 */
+.da-card__header--collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.da-card__header--collapsible::after {
+  content: '▾';
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--da-text-secondary);
+  transition: transform 0.2s var(--da-ease);
+  display: inline-block;
+}
+
+.da-card--collapsed .da-card__header--collapsible::after {
+  transform: rotate(-90deg);
+}
+
+.da-card__header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--da-separator);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--da-space-sm, 8px);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.da-card__body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 4. 弹性布局通用工具类 (Layout Utilities)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+.da-gap-xs { gap: var(--da-space-xs, 4px); }
+.da-gap-sm { gap: var(--da-space-sm, 8px); }
+.da-gap-md { gap: var(--da-space-md, 12px); }
+.da-gap-lg { gap: var(--da-space-lg, 16px); }
+
+.da-pad-sm { padding: var(--da-space-sm, 8px); }
+.da-pad-md { padding: var(--da-space-md, 12px); }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 5. 全局悬浮与下拉容器类 (Portal Dropdown)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+.da-portal-dropdown {
+  position: fixed;
+  z-index: 100060;
+  box-sizing: border-box;
+}
+
+.da-pad-lg { padding: var(--da-space-lg, 16px); }
+
+.da-w-full { width: 100%; box-sizing: border-box; }
+.da-flex-center { display: flex; align-items: center; justify-content: center; }

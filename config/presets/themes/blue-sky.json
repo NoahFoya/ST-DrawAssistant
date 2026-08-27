@@ -1,18 +1,18 @@
 {
   "id": "blue-sky",
-  "name": "☀️ 蓝天白云",
+  "name": "蓝天白云",
   "isBuiltIn": true,
   "data": {
-    "bgPrimary": "#e0f2fe",
-    "bgGradientEnd": "#bae6fd",
+    "bgPrimary": "#f0f9ff",
+    "bgGradientEnd": "#dbeafe",
     "bgGradientAngle": 135,
     "bgSecondary": "#ffffff",
     "bgOpacity": 0.98,
-    "textPrimary": "#0369a1",
-    "textSecondary": "#0284c7",
-    "borderColor": "rgba(2, 132, 199, 0.25)",
+    "textPrimary": "#0f172a",
+    "textSecondary": "#334155",
+    "borderColor": "rgba(2, 132, 199, 0.18)",
     "accentColor": "#0284c7",
-    "blurRadius": 14,
+    "blurRadius": 16,
     "borderRadius": 12
   }
 }

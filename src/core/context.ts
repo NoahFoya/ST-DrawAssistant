@@ -1,9 +1,9 @@
 /**
  * @module core/context
- * @description 核心全局上下文 (KernelContext) 与初始化装配
+ * @description 核心全局上下文 (KernelContext) 与基础设施服务容器
  */
 
-import { VERSION } from './constants';
+import { VERSION, EXTENSION_NAME } from './constants';
 import { IDisposable, DisposableStore } from './foundation/disposable';
 import { ITypedEventBus, TypedEventBus, CoreEventMap } from './foundation/event-bus';
 import { IHostBridge, SillyTavernHostBridge } from './foundation/host-bridge';
@@ -18,11 +18,9 @@ import { IPresetRegistry, PresetRegistry } from './registry/preset-registry';
 import { loadAllPresetsToRegistry } from './config/config-loader';
 import { IDriverRegistry, DriverRegistry } from './registry/driver-registry';
 import type {
-    IThemeContract,
-    ITaskContract,
-    IPipelineHooksContract,
-    IModalContract,
-    IFeedbackContract
+    IThemeService,
+    ITaskManager,
+    IPipelineHooks
 } from './contracts';
 
 /**
@@ -50,17 +48,15 @@ export interface KernelContext extends IDisposable {
     /** 诊断日志器 */
     readonly logger: ILogger;
 
-    // 领域与 UI 层子系统 (通过下沉接口解耦注入)
+    // 领域与 UI 层服务实例
     /** 外观主题服务 */
-    theme?: IThemeContract;
+    theme?: IThemeService;
     /** 提示词流水线拦截钩子 */
-    hooks?: IPipelineHooksContract;
+    hooks?: IPipelineHooks;
     /** 生图任务调度状态机 */
-    tasks?: ITaskContract;
-    /** 模态框调度服务 */
-    modals?: IModalContract;
-    /** 用户反馈交互服务 */
-    feedback?: IFeedbackContract;
+    tasks?: ITaskManager;
+    /** 注册跟随核心上下文生命周期一同销毁的可清理资源 */
+    addDisposable<T extends IDisposable>(disposable: T): T;
 }
 
 /**
@@ -77,13 +73,13 @@ export function createKernelContext(version = VERSION): KernelContext {
     const events = disposables.add(new TypedEventBus<CoreEventMap>());
 
     // 初始化全局配置与响应式 Store
-    const rawSettings = host.getExtensionSettings<Record<string, unknown>>('st-drawassistant');
+    const rawSettings = host.getExtensionSettings<Record<string, unknown>>(EXTENSION_NAME);
     const initialSettings = migrateSettings(rawSettings);
 
     const store = disposables.add(
         new ObservableStore<DrawAssistantSettings>(initialSettings, {
             onSave: (state) => {
-                host.saveExtensionSettings('st-drawassistant', state as unknown as Record<string, unknown>);
+                host.saveExtensionSettings(EXTENSION_NAME, state as unknown as Record<string, unknown>);
                 host.saveExtensionSettingsDebounced();
             }
         })
@@ -118,6 +114,9 @@ export function createKernelContext(version = VERSION): KernelContext {
         presets,
         drivers,
         logger,
+        addDisposable: <T extends IDisposable>(disposable: T): T => {
+            return disposables.add(disposable);
+        },
         dispose: () => {
             if (isDisposed) return;
             isDisposed = true;
@@ -126,3 +125,5 @@ export function createKernelContext(version = VERSION): KernelContext {
         }
     };
 }
+
+

@@ -1,16 +1,16 @@
 {
   "id": "luminous-obsidian",
-  "name": "💎 黑曜极光",
+  "name": "流光黑曜",
   "isBuiltIn": true,
   "data": {
     "bgPrimary": "#0b0f19",
-    "bgGradientEnd": "#1a2333",
+    "bgGradientEnd": "#162032",
     "bgGradientAngle": 140,
     "bgSecondary": "#151c2c",
-    "bgOpacity": 0.96,
+    "bgOpacity": 0.95,
     "textPrimary": "#f8fafc",
     "textSecondary": "#94a3b8",
-    "borderColor": "rgba(255, 255, 255, 0.1)",
+    "borderColor": "rgba(255, 255, 255, 0.09)",
     "accentColor": "#38bdf8",
     "blurRadius": 20,
     "borderRadius": 12

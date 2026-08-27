@@ -3,10 +3,19 @@
  * @description 生图驱动抽象基类 (BaseDriver) 与统一异常模型 (DriverError)
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import { Logger } from '../../core/diagnostics/logger';
-import { IDrawDriver, GenerationPayload, DriverBuildPayloadOptions, DriverAssetSyncResult } from './driver-contract';
+import {
+    ObservableStore,
+    DrawAssistantSettings,
+    LoraItem,
+    DEFAULT_HTTP_TIMEOUT_MS,
+    DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    Logger,
+    IDrawDriver,
+    GenerationPayload,
+    DriverBuildPayloadOptions,
+    DriverAssetSyncResult,
+    DriverCapabilities
+} from '../../core';
 
 export enum DriverErrorType {
     NETWORK_ERROR = 'NETWORK_ERROR',
@@ -38,6 +47,7 @@ export class DriverError extends Error {
 export abstract class BaseDriver implements IDrawDriver {
     public abstract readonly id: string;
     public abstract readonly name: string;
+    public abstract readonly capabilities: DriverCapabilities;
 
     protected readonly store: ObservableStore<DrawAssistantSettings>;
     protected readonly logger: Logger;
@@ -67,7 +77,7 @@ export abstract class BaseDriver implements IDrawDriver {
     public abstract formatPrompt(rawPrompt: string): string;
 
     /** 适配目标后端的 LoRA 标签语法 (通用基类默认实现) */
-    public formatLoraTag(lora: { name: string; weight?: number; clipWeight?: number; textWeight?: number; triggerWeight?: number }): string {
+    public formatLoraTag(lora: LoraItem): string {
         const cleanName = (lora.name || '').replace(/\.(safetensors|pt|ckpt|pth)$/i, '');
         if (!cleanName) return '';
         const weight = lora.weight ?? 1.0;
@@ -85,10 +95,34 @@ export abstract class BaseDriver implements IDrawDriver {
         };
     }
 
+    /**
+     * 根据当前引擎设置组装生图载荷 (GenerationPayload)
+     *
+     * @param options 参数组装选项
+     * @returns 统一生图请求载荷
+     */
     public abstract buildPayload(options: DriverBuildPayloadOptions): GenerationPayload;
-    public abstract generate(
-        payload: GenerationPayload,
-        onProgress: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void
+
+    /**
+     * 执行生图流程：统一处理取消状态重置并调用底层 doGenerate 实现
+     *
+     * @param payload 统一生图请求数据 (txt2img / inpaint)
+     * @returns 生成的图像 Blob 数组与元数据
+     */
+    public async generate(
+        payload: GenerationPayload
+    ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }> {
+        this.resetCancelState();
+        return this.doGenerate(payload);
+    }
+
+    /**
+     * 各生图引擎专属的底层生图实现
+     *
+     * @param payload 统一生图请求数据
+     */
+    protected abstract doGenerate(
+        payload: GenerationPayload
     ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }>;
 
     public async getModels(): Promise<string[]> { return []; }
@@ -116,17 +150,19 @@ export abstract class BaseDriver implements IDrawDriver {
         return (rawUrl || 'http://127.0.0.1:8188').replace(/\/+$/, '');
     }
 
-    /** 构建目标请求 URL (支持同源服务端代理模式) */
-    protected buildUrl(path: string): string {
+    /** 构建目标请求 URL (支持相对路径、绝对 URL 与同源服务端代理模式) */
+    protected buildUrl(pathOrUrl: string): string {
         const settings = this.store.getState();
-        const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-        const baseUrl = this.getBaseUrl();
+        const isAbsolute = /^https?:\/\//i.test(pathOrUrl);
+        const targetUrl = isAbsolute
+            ? pathOrUrl
+            : `${this.getBaseUrl()}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
 
         if (settings.requestMode === 'server') {
-            return `/api/plugins/st-drawassistant/proxy?target=${encodeURIComponent(`${baseUrl}${normalizedPath}`)}`;
+            return `/api/plugins/st-drawassistant/proxy?target=${encodeURIComponent(targetUrl)}`;
         }
 
-        return `${baseUrl}${normalizedPath}`;
+        return targetUrl;
     }
 
     public async interrupt(): Promise<void> {
@@ -141,32 +177,93 @@ export abstract class BaseDriver implements IDrawDriver {
         void this.interrupt();
     }
 
-    protected async getJson<T = unknown>(path: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<T> {
+    protected async getJson<T = unknown>(path: string, timeoutMs = DEFAULT_HTTP_TIMEOUT_MS, headers?: Record<string, string>): Promise<T> {
         return this.request<T>('GET', path, undefined, timeoutMs, headers);
     }
 
-    protected async getBlob(path: string, timeoutMs = 15000): Promise<Blob> {
+    /**
+     * 创建级联超时与父级中断的 AbortSignal
+     */
+    private _createScopedSignal(timeoutMs: number): { signal: AbortSignal; cleanup: () => void } {
+        const controller = new AbortController();
+        const effectiveTimeout = timeoutMs > 0 ? timeoutMs : DEFAULT_HTTP_TIMEOUT_MS;
+        const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+
+        const parentSignal = this._abortController?.signal;
+        const onParentAbort = () => controller.abort();
+
+        if (parentSignal) {
+            if (parentSignal.aborted) {
+                controller.abort();
+            } else {
+                parentSignal.addEventListener('abort', onParentAbort, { once: true });
+            }
+        }
+
+        const cleanup = () => {
+            clearTimeout(timeoutId);
+            if (parentSignal) {
+                parentSignal.removeEventListener('abort', onParentAbort);
+            }
+        };
+
+        return { signal: controller.signal, cleanup };
+    }
+
+    /** 获取 SillyTavern 宿主环境认证与 CSRF Token 请求头 */
+    protected getHostRequestHeaders(): Record<string, string> {
+        if (typeof window !== 'undefined') {
+            const st = (window as any).SillyTavern?.getContext?.();
+            if (typeof st?.getRequestHeaders === 'function') {
+                try {
+                    return st.getRequestHeaders();
+                } catch {}
+            }
+            if (typeof (window as any).getRequestHeaders === 'function') {
+                try {
+                    return (window as any).getRequestHeaders();
+                } catch {}
+            }
+        }
+        return {};
+    }
+
+    protected async getBlob(path: string, timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS): Promise<Blob> {
         this.checkCancelled();
         const url = this.buildUrl(path);
-        const settings = this.store.getState();
-        const effectiveTimeout = timeoutMs || settings.requestTimeout || 120000;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+        const effectiveTimeout = timeoutMs > 0 ? timeoutMs : DEFAULT_DOWNLOAD_TIMEOUT_MS;
+        const { signal, cleanup } = this._createScopedSignal(effectiveTimeout);
+
+        const headers: Record<string, string> = {};
+        if (url.startsWith('/api/')) {
+            Object.assign(headers, this.getHostRequestHeaders());
+        }
+
         try {
-            const resp = await fetch(url, { signal: controller.signal });
+            const resp = await fetch(url, { headers, signal });
             if (!resp.ok) {
+                if (resp.status === 404 && url.includes('/api/plugins/st-drawassistant/proxy')) {
+                    throw new DriverError(
+                        DriverErrorType.NOT_FOUND,
+                        '未检测到 SillyTavern 服务端插件代理路由 (/api/plugins/st-drawassistant/proxy)。请确认 SillyTavern 的 config.yaml 中已开启 enableServerPlugins: true，或在设置中将请求模式切换为【直接请求 (client)】。',
+                        404
+                    );
+                }
                 throw new DriverError(DriverErrorType.BACKEND_ERROR, `获取图片 Blob 失败 (HTTP ${resp.status}): ${url}`);
             }
             return await resp.blob();
         } catch (err: any) {
             if (err instanceof DriverError) throw err;
+            if (signal.aborted || this._cancelled) {
+                throw new DriverError(DriverErrorType.CANCELLED, '获取图片 Blob 请求已被取消或超时');
+            }
             throw new DriverError(DriverErrorType.NETWORK_ERROR, `获取 Blob 失败: ${err.message}`);
         } finally {
-            clearTimeout(timeoutId);
+            cleanup();
         }
     }
 
-    protected async postJson<T = unknown>(path: string, body: unknown, timeoutMs = 15000, headers?: Record<string, string>): Promise<T> {
+    protected async postJson<T = unknown>(path: string, body: unknown, timeoutMs = DEFAULT_HTTP_TIMEOUT_MS, headers?: Record<string, string>): Promise<T> {
         return this.request<T>('POST', path, body, timeoutMs, headers);
     }
 
@@ -175,27 +272,17 @@ export abstract class BaseDriver implements IDrawDriver {
         method: string,
         path: string,
         body?: unknown,
-        timeoutMs?: number,
+        timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS,
         customHeaders?: Record<string, string>
     ): Promise<T> {
         this.checkCancelled();
 
         const url = this.buildUrl(path);
-        const settings = this.store.getState();
-        const effectiveTimeout = timeoutMs || settings.requestTimeout || 120000;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-            controller.abort();
-        }, effectiveTimeout);
-
-        const onParentAbort = () => controller.abort();
-        if (this._abortController) {
-            this._abortController.signal.addEventListener('abort', onParentAbort);
-        }
+        const { signal, cleanup } = this._createScopedSignal(timeoutMs);
 
         const headers: Record<string, string> = {
             Accept: 'application/json',
+            ...(url.startsWith('/api/') ? this.getHostRequestHeaders() : {}),
             ...(customHeaders || {})
         };
 
@@ -210,7 +297,7 @@ export abstract class BaseDriver implements IDrawDriver {
                 method,
                 headers,
                 body: requestBody,
-                signal: controller.signal
+                signal
             });
 
             if (!response.ok) {
@@ -231,6 +318,14 @@ export abstract class BaseDriver implements IDrawDriver {
                 }
 
                 if (response.status === 404) {
+                    if (url.includes('/api/plugins/st-drawassistant/proxy')) {
+                        throw new DriverError(
+                            DriverErrorType.NOT_FOUND,
+                            '未检测到 SillyTavern 服务端插件代理路由 (/api/plugins/st-drawassistant/proxy)。请确认 SillyTavern 的 config.yaml 中已开启 enableServerPlugins: true，或在设置中将请求模式切换为【直接请求 (client)】。',
+                            404,
+                            errorDetails
+                        );
+                    }
                     throw new DriverError(
                         DriverErrorType.NOT_FOUND,
                         `接口未找到 (HTTP 404): ${url}`,
@@ -251,7 +346,7 @@ export abstract class BaseDriver implements IDrawDriver {
         } catch (error: any) {
             if (error instanceof DriverError) throw error;
 
-            if (controller.signal.aborted || this._cancelled) {
+            if (signal.aborted || this._cancelled) {
                 throw new DriverError(DriverErrorType.CANCELLED, '请求已被取消或超时');
             }
 
@@ -260,10 +355,7 @@ export abstract class BaseDriver implements IDrawDriver {
                 `网络请求失败: ${error?.message || '未知错误'}`
             );
         } finally {
-            clearTimeout(timeoutId);
-            if (this._abortController) {
-                this._abortController.signal.removeEventListener('abort', onParentAbort);
-            }
+            cleanup();
         }
     }
 

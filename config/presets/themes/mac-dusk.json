@@ -1,18 +1,18 @@
 {
   "id": "mac-dusk",
-  "name": "🌙 macOS 暮光",
+  "name": "暮色深灰",
   "isBuiltIn": true,
   "data": {
-    "bgPrimary": "#1c1c1e",
-    "bgGradientEnd": "#2c2c2e",
+    "bgPrimary": "#18181b",
+    "bgGradientEnd": "#27272a",
     "bgGradientAngle": 180,
-    "bgSecondary": "#2c2c2e",
-    "bgOpacity": 0.92,
-    "textPrimary": "#ffffff",
-    "textSecondary": "#98989d",
-    "borderColor": "rgba(255, 255, 255, 0.15)",
-    "accentColor": "#0a84ff",
-    "blurRadius": 24,
-    "borderRadius": 14
+    "bgSecondary": "#202024",
+    "bgOpacity": 0.95,
+    "textPrimary": "#fafafa",
+    "textSecondary": "#a1a1aa",
+    "borderColor": "rgba(255, 255, 255, 0.1)",
+    "accentColor": "#818cf8",
+    "blurRadius": 20,
+    "borderRadius": 12
   }
 }

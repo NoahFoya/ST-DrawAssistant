@@ -6,10 +6,10 @@
 import { ObservableStore } from './store';
 import { DrawAssistantSettings } from './store-types';
 import { migrateSettings } from './schema-migrator';
-import { VERSION } from '../constants';
+import { VERSION, EXTENSION_NAME } from '../constants';
 
 export interface SettingsBackupPackage {
-    plugin: 'st-drawassistant';
+    plugin: string;
     version: string;
     exportedAt: number;
     sanitized: boolean;
@@ -46,17 +46,13 @@ export function exportSettingsPackage(
     const settings = { ...raw };
 
     if (sanitize) {
-        settings.apiKey = '';
-        settings.serverUrl = '';
-        settings.sdWebUrl = '';
-        settings.naiApiKey = '';
-        settings.naiUrl = '';
-        settings.openaiApiKey = '';
-        settings.openaiBaseUrl = '';
+        for (const key of SENSITIVE_SETTING_KEYS) {
+            (settings as any)[key] = '';
+        }
     }
 
     const pkg: SettingsBackupPackage = {
-        plugin: 'st-drawassistant',
+        plugin: EXTENSION_NAME,
         version: VERSION,
         exportedAt: Date.now(),
         sanitized: sanitize,
@@ -104,26 +100,24 @@ export function importSettingsPackage(
         let pkgVersion = VERSION;
         let isSanitized = false;
 
-        if (raw && typeof raw === 'object' && raw.plugin === 'st-drawassistant' && raw.settings) {
+        if (raw && typeof raw === 'object' && (raw.plugin === EXTENSION_NAME || raw.plugin === 'st-drawassistant') && raw.settings) {
             isPackage = true;
             settingsToMigrate = raw.settings;
             pkgVersion = raw.version || VERSION;
             isSanitized = Boolean(raw.sanitized);
         }
 
-        // 使用 migrateSettings 做全面结构迁移与防呆清洗
+        // 使用 migrateSettings 执行配置结构版本迁移与字段校验清洗
         const cleanSettings = migrateSettings(settingsToMigrate);
 
         // 如果导入的是脱敏配置，保留原有的密钥和私有端点不被覆盖清空
         if (isSanitized) {
             const current = store.getState();
-            if (current.apiKey && !cleanSettings.apiKey) cleanSettings.apiKey = current.apiKey;
-            if (current.serverUrl && !cleanSettings.serverUrl) cleanSettings.serverUrl = current.serverUrl;
-            if (current.sdWebUrl && !cleanSettings.sdWebUrl) cleanSettings.sdWebUrl = current.sdWebUrl;
-            if (current.naiApiKey && !cleanSettings.naiApiKey) cleanSettings.naiApiKey = current.naiApiKey;
-            if (current.naiUrl && !cleanSettings.naiUrl) cleanSettings.naiUrl = current.naiUrl;
-            if (current.openaiApiKey && !cleanSettings.openaiApiKey) cleanSettings.openaiApiKey = current.openaiApiKey;
-            if (current.openaiBaseUrl && !cleanSettings.openaiBaseUrl) cleanSettings.openaiBaseUrl = current.openaiBaseUrl;
+            for (const key of SENSITIVE_SETTING_KEYS) {
+                if ((current as any)[key] && !(cleanSettings as any)[key]) {
+                    (cleanSettings as any)[key] = (current as any)[key];
+                }
+            }
         }
 
         // 全量热更新 Store

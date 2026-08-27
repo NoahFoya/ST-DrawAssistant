@@ -5,7 +5,7 @@
  * 设计意图：
  * - 声明角色管理扩展全局唯一标识符；
  * - 集中管理角色、服装、规则方案在宿主中的持久化存储键名；
- * - 集中声明扩展层专属示范预设文件清单常量，与核心层物理隔离。
+ * - 集中声明扩展层专属示范预设文件清单常量，与核心层保持配置解耦与命名空间独立。
  */
 
 /** 角色管理扩展全局唯一标识符 */
@@ -23,8 +23,4 @@ export const CHARACTER_STORAGE_KEYS = Object.freeze({
     FORMULAS: 'st_da_regex_formula_schemes_v1',
     ACTIVE_FORMULA_ID: 'st_da_active_regex_formula_scheme_id_v1'
 });
-
-/** 角色与服装设置持久化在酒馆中的独立存储键名 (兼容别名) */
-export const CHARACTER_STORAGE_KEY = CHARACTER_STORAGE_KEYS.CHARACTERS;
-export const OUTFIT_STORAGE_KEY = CHARACTER_STORAGE_KEYS.OUTFITS;
 

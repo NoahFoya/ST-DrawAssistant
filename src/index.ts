@@ -1,75 +1,81 @@
 /**
  * @module index
- * @description ST-DrawAssistant 插件引导与生命周期装配入口 (Bootstrap)
+ * @description ST-DrawAssistant 插件系统引导与生命周期管理入口 (Bootstrap)
  */
 
-import { createKernelContext, KernelContext, VERSION, CORE_TAB_IDS } from './core';
-import { hydrateSettingsFromPresets } from './core/state/store-types';
+import {
+    createKernelContext,
+    KernelContext,
+    VERSION,
+    CORE_TAB_IDS,
+    hydrateSettingsFromPresets
+} from './core';
 import { createPipelineHooks, PromptPipeline, ComfyUIDriver, SDWebUIDriver, OpenAIDriver, NovelAIDriver, TaskManager } from './domain';
 
 import {
     ModalService,
-    FeedbackService,
     ThemeService,
     SettingsModal,
     FloorButtonContainer,
     FABContainer,
-    createGeneralTabView,
-    createComfyUITabView,
-    createSDWebUITabView,
-    createOpenAITabView,
-    createNovelAITabView,
-    createThemeTabView,
-    createDiagnosticsTabView,
-    createGalleryTabView,
-    createFABSettingsTabView,
-    createAboutTabView
+    GeneralTabView,
+    OpenAITabView,
+    NovelAITabView,
+    GalleryTabView,
+    FABSettingsTabView,
+    DiagnosticsTabView,
+    AboutTabView,
+    ThemeTabView,
+    SDWebUITabView,
+    ComfyUITabView
 } from './ui';
 import { CharacterManagerExtension } from './extensions/character-manager';
 
 export * from './core';
-export {
-    createGeneralTabView,
-    createComfyUITabView,
-    createSDWebUITabView,
-    createOpenAITabView,
-    createNovelAITabView,
-    createThemeTabView,
-    createDiagnosticsTabView,
-    createGalleryTabView,
-    createFABSettingsTabView,
-    createAboutTabView
-} from './ui';
 
-let _globalKernel: KernelContext | null = null;
+let _activeKernelInstance: KernelContext | null = null;
 
 /**
- * 获取当前全局核心内核上下文单例 (若插件未初始化完成则返回 null)
- *
- * @returns 核心上下文实例或 null
+ * 获取当前插件核心上下文实例（仅供调试或测试断言使用）
  */
-export function getKernelContext(): KernelContext | null {
-    return _globalKernel;
+export function getActiveKernel(): KernelContext | null {
+    return _activeKernelInstance;
 }
 
 /**
- * 插件全局引导装配入口函数 (Bootstrap)
+ * 插件全局引导入口函数 (Bootstrap)
  *
- * 执行全链路系统装配流程：
+ * 执行系统初始化与服务注册流程：
  * 1. 创建核心上下文环境与响应式配置 Store；
- * 2. 初始化核心基础组件 (I18n, Logger, EventBus, Storage, PresetRegistry)；
- * 3. 注册四大核心生图引擎驱动 (ComfyUI / SD-WebUI / NovelAI / OpenAI)；
- * 4. 注册内置功能扩展 (角色预设、负向词库、提示词模板、Inpaint 局部重绘)；
- * 5. 初始化交互容器 (FloorButton, FAB 悬浮球, SettingsModal 设置弹窗)；
- * 6. 注册内置视图面板 (TabSlotDescriptor 格式)；
+ * 2. 初始化基础设施服务 (I18n, Logger, EventBus, Storage, PresetRegistry)；
+ * 3. 注册内置生图驱动 (ComfyUI / SD-WebUI / NovelAI / OpenAI)；
+ * 4. 注册内置扩展模块 (角色与服装预设管理)；
+ * 5. 初始化交互控制器 (FloorButton, FAB 悬浮球, SettingsModal 设置弹窗)；
+ * 6. 注册内置设置面板视图 (TabSlotDescriptor 格式)；
  *
- * @returns 初始化装配完成的 KernelContext 实例
+ * @returns 初始化完成的 KernelContext 实例
  */
 export async function bootstrap(): Promise<KernelContext> {
+    // 0. 若存在先前初始化的上下文实例，先执行清理
+    if (_activeKernelInstance) {
+        try {
+            _activeKernelInstance.dispose();
+        } catch {}
+        _activeKernelInstance = null;
+    }
+
     // 1. 初始化核心全局上下文
     const context = createKernelContext(VERSION);
-    _globalKernel = context;
-    context.logger.info('ST-DrawAssistant 插件正在启动初始化装配...');
+    _activeKernelInstance = context;
+    context.addDisposable({
+        dispose: () => {
+            if (_activeKernelInstance === context) {
+                _activeKernelInstance = null;
+            }
+        }
+    });
+
+    context.logger.info('ST-DrawAssistant 插件正在启动初始化...');
 
     // 2. 宿主连接与 IndexedDB 存储初始化
     await context.host.whenReady();
@@ -78,7 +84,7 @@ export async function bootstrap(): Promise<KernelContext> {
     await context.storage.init();
     context.logger.info('IndexedDB 存储层初始化就绪');
 
-    // 同步装载出厂预设方案充实配置中心
+    // 加载预设配置
     await hydrateSettingsFromPresets(context.store, context.presets, false);
 
     // 3. 注册生图后端驱动
@@ -110,31 +116,35 @@ export async function bootstrap(): Promise<KernelContext> {
     context.hooks = hooks;
 
     const pipeline = new PromptPipeline(hooks);
-    const taskManager = new TaskManager({
-        events: context.events,
-        store: context.store,
-        drivers: context.drivers,
-        storage: context.storage
-    });
+    const taskManager = context.addDisposable(
+        new TaskManager({
+            events: context.events,
+            store: context.store,
+            drivers: context.drivers,
+            storage: context.storage
+        })
+    );
     context.tasks = taskManager;
 
+    // 5. 注册内置扩展模块并激活
+    context.extensions.register(new CharacterManagerExtension());
+    await context.extensions.activateAll(context);
 
-    // 5. 初始化交互与设计系统层服务
-    const modalService = new ModalService();
-    const feedbackService = new FeedbackService(modalService);
-    const themeService = new ThemeService(context.store);
-    context.modals = modalService;
-    context.feedback = feedbackService;
+    // 6. 初始化交互与设计系统层服务
+    const modalService = context.addDisposable(new ModalService());
+    const themeService = context.addDisposable(new ThemeService(context.store));
     context.theme = themeService;
 
-    // 6. 注册内置视图面板 (TabSlotDescriptor 格式)
+    // 7. 注册内置视图面板 (TabSlotDescriptor 格式)
     context.ui.registerTab({
         id: CORE_TAB_IDS.GENERAL,
-        title: '主要',
+        title: '通用设置',
         order: 10,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createGeneralTabView(context.store, context.extensions));
+            const view = new GeneralTabView(context.store, context.extensions);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -144,7 +154,9 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 20,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createComfyUITabView(context.store, context.drivers));
+            const view = new ComfyUITabView(context.store, context.drivers);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -154,7 +166,9 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 30,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createSDWebUITabView(context.store, context.drivers));
+            const view = new SDWebUITabView(context.store, context.drivers);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -164,7 +178,9 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 35,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createOpenAITabView(context.store, context.drivers));
+            const view = new OpenAITabView(context.store, context.drivers);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -174,27 +190,33 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 38,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createNovelAITabView(context.store, context.drivers));
+            const view = new NovelAITabView(context.store, context.drivers);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
     context.ui.registerTab({
         id: CORE_TAB_IDS.THEME,
-        title: '外观',
+        title: '外观主题',
         order: 40,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createThemeTabView(context.store));
+            const view = new ThemeTabView(context.store);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
     context.ui.registerTab({
         id: CORE_TAB_IDS.GALLERY,
-        title: '画廊',
+        title: '历史图库',
         order: 50,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createGalleryTabView(context.storage, context.host));
+            const view = new GalleryTabView(context.storage, context.host);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -204,17 +226,21 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 60,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createFABSettingsTabView(context.store));
+            const view = new FABSettingsTabView(context.store);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
     context.ui.registerTab({
         id: CORE_TAB_IDS.DIAGNOSTICS,
-        title: '诊断',
+        title: '日志与统计',
         order: 70,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createDiagnosticsTabView(context.store));
+            const view = new DiagnosticsTabView(context.store);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
@@ -224,50 +250,103 @@ export async function bootstrap(): Promise<KernelContext> {
         order: 80,
         isBuiltIn: true,
         render: (container) => {
-            container.appendChild(createAboutTabView(context.store));
+            const view = new AboutTabView(context.store);
+            container.appendChild(view.element);
+            return view;
         }
     });
 
-    // 7. 初始化外壳与容器
-    const settingsModal = new SettingsModal({
-        uiRegistry: context.ui,
-        modalService,
-        store: context.store,
-        drivers: context.drivers
-    });
+    // 8. 初始化外壳与容器
+    const settingsModal = context.addDisposable(
+        new SettingsModal({
+            uiRegistry: context.ui,
+            modalService,
+            store: context.store,
+            drivers: context.drivers
+        })
+    );
 
-    new FloorButtonContainer({
-        hostBridge: context.host,
-        events: context.events,
-        store: context.store,
-        taskManager,
-        pipeline,
-        storage: context.storage
-    });
+    context.addDisposable(
+        new FloorButtonContainer({
+            hostBridge: context.host,
+            events: context.events,
+            store: context.store,
+            taskManager,
+            pipeline,
+            storage: context.storage
+        })
+    );
 
-    new FABContainer({
-        store: context.store,
-        settingsModal
-    });
+    context.addDisposable(
+        new FABContainer({
+            store: context.store,
+            settingsModal,
+            events: context.events
+        })
+    );
 
+    // 9. 挂载 SillyTavern 原生扩展设置抽屉入口
     if (typeof document !== 'undefined') {
-        document.addEventListener('click', (e) => {
+        const mountDrawer = async () => {
+            const drawerContainer = context.host.getExtensionDrawerContainer();
+            if (!drawerContainer || document.getElementById('da-drawer-entry-root')) return;
+
+            const html = await context.host.renderTemplate('settings');
+            if (!html) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.id = 'da-drawer-entry-root';
+            wrapper.innerHTML = html;
+            drawerContainer.appendChild(wrapper);
+
+            const fabCheckbox = wrapper.querySelector<HTMLInputElement>('#da-drawer-toggle-fab');
+            if (fabCheckbox) {
+                fabCheckbox.checked = context.store.get('fabVisible') !== false;
+                fabCheckbox.addEventListener('change', () => {
+                    context.store.set('fabVisible', fabCheckbox.checked);
+                });
+            }
+
+            const openSettingsBtn = wrapper.querySelector<HTMLButtonElement>('#da-drawer-open-settings');
+            if (openSettingsBtn) {
+                openSettingsBtn.addEventListener('click', () => {
+                    settingsModal.open();
+                });
+            }
+        };
+
+        void mountDrawer();
+
+        const onDocClick = (e: MouseEvent) => {
             const target = (e.target as HTMLElement | null)?.closest('#da-open-main-modal-btn');
             if (target) {
                 e.preventDefault();
                 settingsModal.open();
             }
+        };
+
+        const unsubFab = context.store.subscribeKey('fabVisible', (val) => {
+            const fabCheckbox = document.getElementById('da-drawer-toggle-fab') as HTMLInputElement | null;
+            if (fabCheckbox && fabCheckbox.checked !== (val !== false)) {
+                fabCheckbox.checked = val !== false;
+            }
+        });
+
+        document.addEventListener('click', onDocClick);
+
+        context.addDisposable({
+            dispose: () => {
+                document.removeEventListener('click', onDocClick);
+                unsubFab.dispose();
+                document.getElementById('da-drawer-entry-root')?.remove();
+            }
         });
     }
 
-    // 8. 注册并激活独立扩展业务层
-    context.extensions.register(new CharacterManagerExtension());
-    await context.extensions.activateAll(context);
-
-    // 9. 监听卸载事件
+    // 10. 监听页面隐藏与生命周期清理
     if (typeof window !== 'undefined') {
         window.addEventListener(
-            'unload',
+            'pagehide',
             () => {
                 context.dispose();
             },
@@ -275,7 +354,7 @@ export async function bootstrap(): Promise<KernelContext> {
         );
     }
 
-    context.logger.info('ST-DrawAssistant 插件初始化装配完成！');
+    context.logger.info('ST-DrawAssistant 插件初始化完成');
     return context;
 }
 

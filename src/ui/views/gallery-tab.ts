@@ -1,55 +1,71 @@
 /**
  * @module ui/views/gallery-tab
- * @description 本地历史图库管理面板视图 (GalleryTab)
+ * @description 本地历史图库管理面板视图 (GalleryTabView)
+ *
+ * 架构范式：继承 BaseTabView，实现 ITabView 接口
  */
 
-import { IStorageAdapter } from '../../core/state/storage-adapter';
-import { IHostBridge } from '../../core/foundation/host-bridge';
-import { createSectionCard } from '../controls';
+import { IStorageAdapter, IHostBridge } from '../../core';
+import { createCard, createCardHeader } from '../layout/container-factory';
 import {
     renderStorageBar,
     createGalleryManager,
-    GalleryManagerHandle
+    GalleryManagerHandle,
+    StorageCardHandle
 } from '../media';
-import { IDisposable } from '../../core/foundation/disposable';
+import { BaseTabView } from '../foundation/tab-view';
 
 /**
- * 构建并渲染本地历史图库面板
- *
- * @param storage 本地持久化存储适配器实例
- * @param hostBridge 可选宿主桥接适配器
- * @returns 包含生命周期清理能力的图库面板 DOM 根节点
+ * 本地历史图库面板视图
  */
-export function createGalleryTabView(storage: IStorageAdapter, hostBridge?: IHostBridge): HTMLElement & IDisposable {
-    const container = document.createElement('div') as unknown as HTMLElement & IDisposable;
-    container.className = 'da-tab-pane da-gallery-tab';
+export class GalleryTabView extends BaseTabView {
+    private _galleryManagerHandle: GalleryManagerHandle | null = null;
+    private _storageBarHandle: StorageCardHandle | null = null;
 
-    let galleryManagerHandle: GalleryManagerHandle | null = null;
+    constructor(
+        private readonly _storage: IStorageAdapter,
+        private readonly _hostBridge?: IHostBridge
+    ) {
+        super('da-gallery-tab');
+        this._buildCards();
+    }
 
-    // ── G1: 本地存储配额概览 ───────────────────────────
-    const cardStorage = createSectionCard({
-        title: '本地存储概览',
-        description: '监控本地数据库存储占用情况，空间不足时将自动清理非收藏历史图片',
-        renderBody: (body) => {
-            body.appendChild(renderStorageBar());
-        }
-    });
-    container.appendChild(cardStorage);
+    private _buildCards(): void {
+        // ── G1: 本地存储与图库统计 ───────────────────────────
+        const cardStorage = createCard({ hoverable: true });
+        const headerStorage = createCardHeader({
+            title: '本地存储概览',
+            description: '监控本地数据库存储占用情况，空间不足时将自动清理非收藏历史图片'
+        });
+        cardStorage.header.appendChild(headerStorage);
 
-    // ── G2: 历史画廊与管理 ───────────────────
-    const cardManager = createSectionCard({
-        title: '历史图库管理',
-        description: '支持按提示词与模型筛选、批量导出与管理历史生图',
-        renderBody: (body) => {
-            galleryManagerHandle = createGalleryManager(storage, hostBridge);
-            body.appendChild(galleryManagerHandle);
-        }
-    });
-    container.appendChild(cardManager);
+        this._storageBarHandle = renderStorageBar(this._storage, this._hostBridge, async () => {
+            await this._galleryManagerHandle?.reload();
+        });
+        this._disposables.add(this._storageBarHandle);
+        cardStorage.body.appendChild(this._storageBarHandle);
+        this._root.appendChild(cardStorage.root);
 
-    container.dispose = () => {
-        galleryManagerHandle?.dispose();
-    };
+        // ── G2: 历史画廊与管理 ───────────────────
+        const cardManager = createCard({ hoverable: true });
+        const headerManager = createCardHeader({
+            title: '历史图库管理',
+            description: '支持按提示词与模型筛选、批量导出与管理历史生图'
+        });
+        cardManager.header.appendChild(headerManager);
 
-    return container;
+        this._galleryManagerHandle = createGalleryManager(this._storage, this._hostBridge, async () => {
+            await this._storageBarHandle?.refresh();
+        });
+        this._disposables.add(this._galleryManagerHandle);
+        cardManager.body.appendChild(this._galleryManagerHandle);
+        this._root.appendChild(cardManager.root);
+    }
+
+    override dispose(): void {
+        this._galleryManagerHandle = null;
+        this._storageBarHandle = null;
+        super.dispose();
+    }
 }
+

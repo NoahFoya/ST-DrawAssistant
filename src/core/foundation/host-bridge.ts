@@ -45,12 +45,16 @@ export interface IHostBridge {
     getMessageElement(messageId: number): HTMLElement | null;
     /** 获取插件主面板挂载的根容器 */
     getMainContainer(): HTMLElement | null;
+    /** 获取 SillyTavern 原生扩展设置抽屉挂载容器 (#extensions_settings) */
+    getExtensionDrawerContainer(): HTMLElement | null;
+    /** 渲染扩展 HTML 模板 (基于 SillyTavern context.renderExtensionTemplateAsync) */
+    renderTemplate(templateName: string, data?: Record<string, unknown>): Promise<string>;
 
     /** 读取指定楼层的原始聊天消息对象 */
     getChatMessage(messageId: number): Record<string, any> | null;
-    /** 向指定楼层的 extra 字段写入数据并安全持久化 */
+    /** 向指定楼层的 extra 字段写入数据并持久化保存 */
     writeChatMessageExtra(messageId: number, key: string, value: unknown): void;
-    /** 原子化补丁更新指定楼层的 extra 字段并安全持久化 */
+    /** 增量补丁更新指定楼层的 extra 字段并持久化保存 */
     patchChatMessageExtra<T = unknown>(messageId: number, key: string, updater: (prev: T | undefined) => T): void;
     /** 获取当前聊天中所有被引用的图像 UUID 集合 */
     getReferencedImageIds(): Set<string>;
@@ -65,6 +69,8 @@ export interface IHostBridge {
     getExtensionSettings<T = Record<string, unknown>>(moduleName: string): T | null;
     /** 直接保存扩展设置 */
     saveExtensionSettings(moduleName: string, settings: Record<string, unknown>): void;
+    /** 获取附带 CSRF Token 和认证凭据的宿主 API 请求头 */
+    getRequestHeaders(): Record<string, string>;
 }
 
 export class SillyTavernHostBridge implements IHostBridge, IDisposable {
@@ -88,9 +94,16 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         }
     }
 
+    /**
+     * 获取 SillyTavern 宿主全局上下文
+     *
+     * 设计意图：
+     * - SillyTavern.getContext() 调用轻量且稳定，每次实时获取可避免 chatMetadata 在 CHAT_CHANGED 等事件后被替换导致的过期引用问题；
+     * - 当宿主全局对象未就绪时降级使用初始化阶段捕获的实例引用。
+     */
     private getST(): any {
-        if (!this._stContext && typeof window !== 'undefined' && (window as any).SillyTavern?.getContext) {
-            this._stContext = (window as any).SillyTavern.getContext();
+        if (typeof window !== 'undefined' && (window as any).SillyTavern?.getContext) {
+            return (window as any).SillyTavern.getContext();
         }
         return this._stContext;
     }
@@ -310,14 +323,38 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         });
     }
 
+    /**
+     * 获取指定楼层的 DOM 根节点
+     *
+     * 优先采用 SillyTavern 官方标准的 `.mes[mesid="..."]` 类选择器，
+     * 同时降级兼容 `div[mesid="..."]`。
+     */
     public getMessageElement(messageId: number): HTMLElement | null {
         if (typeof document === 'undefined') return null;
-        return document.querySelector(`div[mesid="${messageId}"]`) as HTMLElement | null;
+        return (document.querySelector(`.mes[mesid="${messageId}"]`) ||
+            document.querySelector(`div[mesid="${messageId}"]`)) as HTMLElement | null;
     }
 
     public getMainContainer(): HTMLElement | null {
         if (typeof document === 'undefined') return null;
         return (document.getElementById('sheld') || document.body) as HTMLElement | null;
+    }
+
+    public getExtensionDrawerContainer(): HTMLElement | null {
+        if (typeof document === 'undefined') return null;
+        return document.getElementById('extensions_settings');
+    }
+
+    public async renderTemplate(templateName: string, data?: Record<string, unknown>): Promise<string> {
+        const ctx = this.getST();
+        if (ctx && typeof ctx.renderExtensionTemplateAsync === 'function') {
+            try {
+                return await ctx.renderExtensionTemplateAsync('third-party/ST-DrawAssistant', templateName, data);
+            } catch {
+                return await ctx.renderExtensionTemplateAsync('ST-DrawAssistant', templateName, data);
+            }
+        }
+        return '';
     }
 
     public getChatMessage(messageId: number): Record<string, any> | null {
@@ -443,6 +480,35 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
             }
         }
         return (this._memorySettings.get(moduleName) as T) || null;
+    }
+
+    public getRequestHeaders(): Record<string, string> {
+        const ctx = this.getST();
+        if (typeof ctx?.getRequestHeaders === 'function') {
+            try {
+                return ctx.getRequestHeaders();
+            } catch {
+                // 忽略异常并降级
+            }
+        }
+        if (typeof (window as any).getRequestHeaders === 'function') {
+            try {
+                return (window as any).getRequestHeaders();
+            } catch {
+                // 忽略异常并降级
+            }
+        }
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        const csrfToken = (window as any).csrfToken ||
+            document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+            (document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] || '');
+        if (csrfToken) {
+            headers['X-CSRF-Token'] = csrfToken;
+        }
+        return headers;
     }
 
     public dispose(): void {

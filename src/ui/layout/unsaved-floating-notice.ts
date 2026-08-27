@@ -3,7 +3,7 @@
  * @description 顶置居中独立浮动未保存提示通知条 (UnsavedFloatingNotice)
  */
 
-import { IDisposable } from '../../core/foundation/disposable';
+import { IDisposable } from '../../core';
 import { unsavedStateManager, FeedbackService } from '../feedback/feedback';
 
 export interface FloatingNoticeComponent extends IDisposable {
@@ -33,8 +33,8 @@ export function createUnsavedFloatingNotice(): FloatingNoticeComponent {
                 <span class="da-floating-notice-text">检测到 ${names} 存在未保存修改 <span class="da-floating-notice-sub">(仅当前会话生效)</span></span>
             </div>
             <div class="da-floating-notice-actions">
-                <button class="da-btn primary da-btn-pill-small" id="da-floating-save-btn">保存修改</button>
-                <button class="da-btn secondary da-btn-pill-small" id="da-floating-discard-btn">放弃改动</button>
+                <button class="da-btn da-btn--primary da-btn--sm" id="da-floating-save-btn">保存修改</button>
+                <button class="da-btn da-btn--secondary da-btn--sm" id="da-floating-discard-btn">放弃改动</button>
             </div>
         `;
 

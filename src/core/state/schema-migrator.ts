@@ -4,7 +4,7 @@
  */
 
 import { DrawAssistantSettings, createDefaultSettings } from './store-types';
-import { VERSION } from '../constants';
+import { VERSION, TASK_TIMEOUT_LIMITS } from '../constants';
 
 /**
  * 校验并平滑迁移历史设置对象至最新数据模型
@@ -15,7 +15,7 @@ import { VERSION } from '../constants';
  */
 export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
     const defaults = createDefaultSettings();
-    if (!rawSettings || typeof rawSettings !== 'object') {
+    if (!rawSettings || typeof rawSettings !== 'object' || Object.keys(rawSettings).length === 0) {
         return defaults;
     }
 
@@ -32,10 +32,6 @@ export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
         version: VERSION,
         enabled: bool(raw.enabled, defaults.enabled),
         showHelp: bool(raw.showHelp, defaults.showHelp),
-        autoCleanupOnChatDelete: bool(raw.autoCleanupOnChatDelete, defaults.autoCleanupOnChatDelete ?? false),
-        logLevel: (['debug', 'info', 'warn', 'error'].includes(String(raw.logLevel).toLowerCase())
-            ? String(raw.logLevel).toLowerCase()
-            : defaults.logLevel) as 'debug' | 'info' | 'warn' | 'error',
         provider: str(raw.provider, defaults.provider),
         requestMode: raw.requestMode === 'server' ? 'server' : 'browser',
         serverUrl: str(raw.serverUrl, defaults.serverUrl),
@@ -65,14 +61,19 @@ export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
         // 行为控制
         autoGenerate: bool(raw.autoGenerate, defaults.autoGenerate),
         lightboxEnabled: bool(raw.lightboxEnabled, defaults.lightboxEnabled),
-        persistToChat: bool(raw.persistToChat, defaults.persistToChat),
-        extraSaveToChat: bool(raw.extraSaveToChat, defaults.extraSaveToChat ?? false),
         enableActionPanel: bool(raw.enableActionPanel, defaults.enableActionPanel ?? true),
+        hideButtonOnDone: bool(raw.hideButtonOnDone, defaults.hideButtonOnDone ?? false),
+        autoCleanupOnChatDelete: bool(raw.autoCleanupOnChatDelete, defaults.autoCleanupOnChatDelete ?? false),
         imageFormat: (['original', 'webp', 'jpeg'].includes(raw.imageFormat) ? raw.imageFormat : defaults.imageFormat) as any,
         imageQuality: num(raw.imageQuality, defaults.imageQuality ?? 0.85),
         maxStoredImages: num(raw.maxStoredImages, defaults.maxStoredImages ?? 500),
         maxConcurrent: num(raw.maxConcurrent, defaults.maxConcurrent),
-        requestTimeout: num(raw.requestTimeout, defaults.requestTimeout),
+        taskTimeout: (() => {
+            const val = num(raw.taskTimeout ?? raw.requestTimeout, defaults.taskTimeout);
+            return val >= TASK_TIMEOUT_LIMITS.MIN_SEC * 1000 && val <= TASK_TIMEOUT_LIMITS.MAX_SEC * 1000
+                ? val
+                : defaults.taskTimeout;
+        })(),
 
         // 外观与主题
         themePreset: str(raw.themePreset, defaults.themePreset || ''),
@@ -85,15 +86,14 @@ export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
                   objectFit: ['contain', 'cover', 'fill', 'none'].includes(raw.imageDisplay.objectFit) ? raw.imageDisplay.objectFit : defaults.imageDisplay?.objectFit ?? 'contain',
                   maxHeight: num(raw.imageDisplay.maxHeight, defaults.imageDisplay?.maxHeight ?? 600),
                   maxWidthPct: num(raw.imageDisplay.maxWidthPct, defaults.imageDisplay?.maxWidthPct ?? 100),
-                  rounded: bool(raw.imageDisplay.rounded, defaults.imageDisplay?.rounded ?? true)
+                  rounded: bool(raw.imageDisplay.rounded, defaults.imageDisplay?.rounded ?? true),
+                  collapsed: bool(raw.imageDisplay.collapsed, defaults.imageDisplay?.collapsed ?? false)
               }
             : defaults.imageDisplay,
 
         // 悬浮球 (FAB)
-        fabEnabled: bool(raw.fabEnabled, defaults.fabEnabled ?? true),
-        fabVisible: bool(raw.fabVisible, defaults.fabVisible ?? true),
+        fabVisible: bool(raw.fabVisible, bool(raw.fabEnabled, defaults.fabVisible ?? true)),
         fabOpacity: num(raw.fabOpacity, defaults.fabOpacity ?? 0.9),
-        fabIcon: str(raw.fabIcon, defaults.fabIcon || '🎨'),
         fabPresetIcon: str(raw.fabPresetIcon, defaults.fabPresetIcon || ''),
         fabCustomIcon: str(raw.fabCustomIcon, defaults.fabCustomIcon || ''),
         fabPosition: raw.fabPosition && typeof raw.fabPosition === 'object' ? raw.fabPosition : defaults.fabPosition,
@@ -101,12 +101,9 @@ export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
         // 扩展与预设状态
         extensions: raw.extensions && typeof raw.extensions === 'object' ? raw.extensions : defaults.extensions || {},
 
-        // ComfyUI Workflow 与节点注入映射
+        // ComfyUI Workflow
         workflowJson: str(raw.workflowJson, defaults.workflowJson),
         inpaintWorkflowJson: str(raw.inpaintWorkflowJson, defaults.inpaintWorkflowJson || ''),
-        workflowInjection: raw.workflowInjection && typeof raw.workflowInjection === 'object'
-            ? { ...defaults.workflowInjection, ...raw.workflowInjection }
-            : defaults.workflowInjection,
 
         // ComfyUI 缓存列表
         cachedModels: arr(raw.cachedModels, defaults.cachedModels || []),
@@ -179,12 +176,7 @@ export function migrateSettings(rawSettings: unknown): DrawAssistantSettings {
         openaiSize: str(raw.openaiSize, defaults.openaiSize || '1024x1024'),
         openaiQuality: str(raw.openaiQuality, defaults.openaiQuality || 'standard'),
         openaiStyle: str(raw.openaiStyle, defaults.openaiStyle || 'vivid'),
-        openaiPromptPrefix: str(raw.openaiPromptPrefix, defaults.openaiPromptPrefix || ''),
-        openaiNegativePrefix: str(raw.openaiNegativePrefix, defaults.openaiNegativePrefix || ''),
-
-        // 提示词模板
-        promptTemplate: str(raw.promptTemplate, defaults.promptTemplate || ''),
-        negativePromptTemplate: str(raw.negativePromptTemplate, defaults.negativePromptTemplate || '')
+        openaiPromptPrefix: str(raw.openaiPromptPrefix, defaults.openaiPromptPrefix || '')
     };
 
     return migrated;

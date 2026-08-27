@@ -58,6 +58,7 @@ export interface CommunityLinkItem {
 export interface AboutConfig {
     name: string;
     version: string;
+    license?: string;
     description: string;
     highlights: string[];
     author: string;
@@ -81,10 +82,11 @@ export function getAboutConfig(): AboutConfig {
     return {
         name: EXTENSION_DISPLAY_NAME,
         version: VERSION,
+        license: raw.license || 'GPL-3.0',
         description: raw.description || 'SillyTavern 全功能 AI 绘画增强助手',
         highlights: Array.isArray(raw.highlights) ? raw.highlights : [],
         author: raw.author || 'NoahFoya with AICode',
-        copyright: raw.copyright || `Copyright © 2026 ${EXTENSION_DISPLAY_NAME}. All Rights Reserved.`,
+        copyright: raw.copyright || `Copyright © 2026 ${EXTENSION_DISPLAY_NAME}. Released under GPL-3.0 License.`,
         communityLinks: Array.isArray(raw.communityLinks) ? raw.communityLinks : []
     };
 }
@@ -303,9 +305,6 @@ export interface MacroVariableDef {
     /** 提示与用途说明 */
     tip: string;
 }
-
-/** 兼容历史接口定义别名 */
-export type WorkflowMacroVariableDef = MacroVariableDef;
 
 /**
  * 获取工作流宏变量完整配置列表

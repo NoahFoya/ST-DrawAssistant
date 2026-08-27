@@ -15,8 +15,9 @@ import {
     DEFAULT_SDWEBUI_URL,
     DEFAULT_PLACEHOLDER_START,
     DEFAULT_PLACEHOLDER_END,
-    DEFAULT_TIMEOUT_MS,
+    DEFAULT_TASK_TIMEOUT_MS,
     DEFAULT_MAX_CONCURRENT,
+    DEFAULT_IMAGE_RETENTION_DAYS,
     DEFAULT_THEME_DATA,
     IMAGE_DISPLAY_DEFAULTS,
     PROVIDERS,
@@ -30,15 +31,15 @@ import {
     fetchComfyUIInpaintWorkflows,
     fetchSDWebUIModels
 } from '../config/config-loader';
-import { PRESET_REGISTRY } from '../presets/preset-definitions';
+import { PRESET_SCHEMA_BINDINGS } from '../registry/preset-definitions';
 import type { IPresetRegistry } from '../registry/preset-registry';
 import { ObservableStore } from './store';
 
 import type { ThemeData } from '../contracts';
 export type { ThemeData } from '../contracts';
 
-/** 支持的图像生成后端类型枚举 (开放联合类型，允许扩展第三方新模型驱动) */
-export type ImageProvider = 'comfyui' | 'sdwebui' | (string & {});
+/** 支持的图像生成后端类型枚举 (与 PROVIDERS 常量表单一事实来源对齐，同时支持扩展第三方驱动) */
+export type ImageProvider = (typeof PROVIDERS)[keyof typeof PROVIDERS] | (string & {});
 
 /** 方案项通用包装结构 */
 export interface PresetProfileItem<T = any> {
@@ -79,14 +80,36 @@ export interface WorkflowProfileData {
     json: string;
 }
 
+/** SD-WebUI 参数方案数据结构 */
+export interface SDProfileData {
+    sdModelCheckpoint?: string;
+    sdSamplerName?: string;
+    sdSteps?: number;
+    sdCfgScale?: number;
+    sdWidth?: number;
+    sdHeight?: number;
+    sdClipSkip?: number;
+    sdDenoisingStrength?: number;
+    sdEnableHires?: boolean;
+    sdHiresUpscaler?: string;
+    sdHiresUpscaleBy?: number;
+    sdHiresSteps?: number;
+    sdHiresDenoise?: number;
+    sdPromptPrefix?: string;
+    sdNegativePrefix?: string;
+    sdPromptSuffix?: string;
+    loras?: LoraItem[];
+}
+
 /** LoRA 触发词与权重项 */
 export interface LoraItem {
     name: string;
-    weight: number;
+    weight?: number;
     clipWeight?: number;
     textWeight?: number;
     triggerWeight?: number;
     triggerWords?: string;
+    enabled?: boolean;
 }
 
 /** 图像展示样式配置 */
@@ -96,26 +119,13 @@ export interface ImageDisplayConfig {
     maxHeight: number;
     maxWidthPct: number;
     rounded: boolean;
+    collapsed?: boolean;
 }
 
 /** 扩展功能状态 */
 export interface ExtensionState {
     enabled: boolean;
     config?: Record<string, any>;
-}
-
-/** 工作流节点注入映射配置 */
-export interface WorkflowInjectionConfig {
-    positiveNodeId: string;
-    positiveField: string;
-    negativeNodeId: string;
-    negativeField: string;
-    widthNodeId: string;
-    widthField: string;
-    heightNodeId: string;
-    heightField: string;
-    kSamplerNodeId: string;
-    saveImageNodeId: string;
 }
 
 /**
@@ -127,7 +137,9 @@ export interface DrawAssistantSettings {
     showHelp: boolean;
     provider: ImageProvider;
     requestMode: 'browser' | 'server';
+    /** ComfyUI 后端服务地址 (默认 http://127.0.0.1:8188) */
     serverUrl: string;
+    /** ComfyUI API Key (若服务配置了反代鉴权) */
     apiKey?: string;
 
     placeholderStart: string;
@@ -150,23 +162,22 @@ export interface DrawAssistantSettings {
 
     autoGenerate: boolean;
     lightboxEnabled: boolean;
-    persistToChat: boolean;
-    extraSaveToChat?: boolean;
     enableActionPanel?: boolean;
+    hideButtonOnDone?: boolean;
+    autoCleanupOnChatDelete?: boolean;
+    imageRetentionDays?: number;
     imageFormat?: 'original' | 'webp' | 'jpeg';
     imageQuality?: number;
     maxStoredImages?: number;
     maxConcurrent: number;
-    requestTimeout: number;
+    taskTimeout: number;
     themePreset?: string;
     customThemes?: PresetProfileItem<ThemeData>[];
 
     imageDisplay?: ImageDisplayConfig;
 
-    fabEnabled?: boolean;
     fabVisible?: boolean;
     fabOpacity?: number;
-    fabIcon?: string;
     fabPresetIcon?: string;
     fabCustomIcon?: string;
     fabPosition?: { x?: number; y?: number; top?: number; left?: number } | null;
@@ -175,7 +186,6 @@ export interface DrawAssistantSettings {
 
     workflowJson: string;
     inpaintWorkflowJson?: string;
-    workflowInjection: WorkflowInjectionConfig;
 
     cachedModels?: string[];
     cachedClips?: string[];
@@ -222,7 +232,7 @@ export interface DrawAssistantSettings {
     sdHiresUpscaler?: string;
     sdHiresSteps?: number;
     sdHiresDenoise?: number;
-    sdProfiles?: PresetProfileItem<any>[];
+    sdProfiles?: PresetProfileItem<SDProfileData>[];
     sdProfileId?: string;
 
     // NovelAI 引擎专属设置
@@ -250,16 +260,10 @@ export interface DrawAssistantSettings {
     openaiQuality?: string;
     openaiStyle?: string;
     openaiPromptPrefix?: string;
-    openaiNegativePrefix?: string;
-
-    logLevel?: 'debug' | 'info' | 'warn' | 'error';
-    promptTemplate?: string;
-    negativePromptTemplate?: string;
-    autoCleanupOnChatDelete?: boolean;
 }
 
 /**
- * 创建基准出厂默认设置对象 (同步防呆兜底，保障离线冷启动绝对可用)
+ * 创建基准出厂默认设置对象 (同步默认值初始化，保障离线冷启动可用)
  */
 export function createDefaultSettings(): DrawAssistantSettings {
     const fallbackThemeList: PresetProfileItem<ThemeData>[] = [
@@ -295,20 +299,17 @@ export function createDefaultSettings(): DrawAssistantSettings {
         inpaintGrowMask: 6,
         autoGenerate: false,
         lightboxEnabled: true,
-        persistToChat: true,
-        extraSaveToChat: false,
         enableActionPanel: true,
-        imageFormat: 'webp',
+        hideButtonOnDone: false,
+        imageFormat: 'original',
         imageQuality: 0.85,
         maxStoredImages: 500,
         maxConcurrent: DEFAULT_MAX_CONCURRENT,
-        requestTimeout: DEFAULT_TIMEOUT_MS,
+        taskTimeout: DEFAULT_TASK_TIMEOUT_MS,
         themePreset: 'luminous-obsidian',
         customThemes: fallbackThemeList,
-        fabEnabled: true,
         fabVisible: true,
         fabOpacity: 0.9,
-        fabIcon: '🎨',
         fabPresetIcon: '',
         fabCustomIcon: '',
         fabPosition: null,
@@ -341,21 +342,11 @@ export function createDefaultSettings(): DrawAssistantSettings {
             objectFit: IMAGE_DISPLAY_DEFAULTS.OBJECT_FIT,
             maxHeight: IMAGE_DISPLAY_DEFAULTS.MAX_HEIGHT,
             maxWidthPct: IMAGE_DISPLAY_DEFAULTS.MAX_WIDTH_PCT,
-            rounded: IMAGE_DISPLAY_DEFAULTS.ROUNDED
+            rounded: IMAGE_DISPLAY_DEFAULTS.ROUNDED,
+            collapsed: IMAGE_DISPLAY_DEFAULTS.COLLAPSED
         },
         autoCleanupOnChatDelete: false,
-        workflowInjection: {
-            positiveNodeId: '6',
-            positiveField: 'text',
-            negativeNodeId: '7',
-            negativeField: 'text',
-            widthNodeId: '5',
-            widthField: 'width',
-            heightNodeId: '5',
-            heightField: 'height',
-            kSamplerNodeId: '3',
-            saveImageNodeId: '9'
-        },
+        imageRetentionDays: DEFAULT_IMAGE_RETENTION_DAYS,
 
         // SD-WebUI 引擎专属默认参数
         sdWebUrl: DEFAULT_SDWEBUI_URL,
@@ -383,41 +374,23 @@ export function createDefaultSettings(): DrawAssistantSettings {
         naiApiKey: '',
         naiModel: 'nai-diffusion-4-full',
         naiSampler: 'k_euler_ancestral',
-        naiSteps: 28,
-        naiScale: 6.0,
-        naiWidth: 832,
-        naiHeight: 1216,
-        naiNegativePrefix: 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
-        naiPromptPrefix: 'masterpiece, best quality',
-        naiPromptSuffix: '',
-        naiSmea: true,
-        naiSmeaDyn: false,
-        naiDecrisper: false,
-        naiUncondScale: 1.0,
 
-        // OpenAI / Grok / Banana 图像专属默认参数
+        // OpenAI / Grok 图像专属默认参数
         openaiBaseUrl: 'https://api.openai.com/v1',
         openaiApiKey: '',
         openaiModel: 'dall-e-3',
         openaiSize: '1024x1024',
         openaiQuality: 'standard',
-        openaiStyle: 'vivid',
-        openaiPromptPrefix: '',
-        openaiNegativePrefix: '',
-
-        // 提示词模板别名字段
-        logLevel: 'info',
-        promptTemplate: '',
-        negativePromptTemplate: ''
+        openaiStyle: 'vivid'
     };
 }
 
 /**
- * 从预设注册表中读取预设列表，并将默认项参数注入全局配置
+ * 异步加载静态预设并初始化插件配置
  *
- * @param store 全局状态 Store 实例
- * @param registryOrOverwrite 预设注册中心实例或是否强制覆盖标识
- * @param overwriteExisting 是否覆盖现有配置（全量出厂重置时为 true）
+ * @param store 目标响应式配置 Store 实例
+ * @param registryOrOverwrite 预设注册中心实例（可选）或是否覆盖现有配置的布尔标志
+ * @param overwriteExisting 是否覆盖现有配置（全量重置为默认值时为 true）
  */
 export async function hydrateSettingsFromPresets(
     store: ObservableStore<DrawAssistantSettings>,
@@ -447,54 +420,60 @@ export async function hydrateSettingsFromPresets(
         const current = store.getState();
         const patch: Partial<DrawAssistantSettings> = {};
 
-        // 1. 外观主题
-        if (themes.length > 0 && (overwrite || !current.customThemes || current.customThemes.length <= 1)) {
-            patch.customThemes = themes;
-            if (!current.themePreset || overwrite) patch.themePreset = themes[0].id;
+        // 1. 外观主题 (若无预设文件则以 DEFAULT_THEME_DATA 作为默认回退)
+        const safeThemes: PresetProfileItem<ThemeData>[] = themes.length > 0
+            ? themes
+            : [{ id: 'luminous-obsidian', name: '流光黑曜', data: { ...DEFAULT_THEME_DATA } }];
+
+        if (overwrite || !current.customThemes || current.customThemes.length === 0) {
+            patch.customThemes = safeThemes;
+            if (!current.themePreset || overwrite || !safeThemes.some(t => t.id === current.themePreset)) {
+                patch.themePreset = safeThemes[0].id;
+            }
         }
 
-        // 2. ComfyUI 模型参数方案
-        if (comfyModels.length > 0 && (overwrite || !current.comfyModelProfiles || current.comfyModelProfiles.length === 0)) {
+        // 2. ComfyUI 模型参数方案 (零假设：允许为空数组)
+        if (overwrite || !current.comfyModelProfiles) {
             patch.comfyModelProfiles = comfyModels;
-            patch.comfyModelProfileId = comfyModels[0].id;
-            if (comfyModels[0].data) {
-                Object.assign(patch, PRESET_REGISTRY.model.applyToSettings(comfyModels[0].data));
+            patch.comfyModelProfileId = comfyModels[0]?.id || '';
+            if (comfyModels[0]?.data) {
+                Object.assign(patch, PRESET_SCHEMA_BINDINGS.model.applyToSettings(comfyModels[0].data));
             }
         }
 
-        // 3. ComfyUI 提示词方案
-        if (comfyPrompts.length > 0 && (overwrite || !current.comfyPromptProfiles || current.comfyPromptProfiles.length === 0)) {
+        // 3. ComfyUI 提示词方案 (零假设：允许为空数组)
+        if (overwrite || !current.comfyPromptProfiles) {
             patch.comfyPromptProfiles = comfyPrompts;
-            patch.comfyPromptProfileId = comfyPrompts[0].id;
-            if (comfyPrompts[0].data) {
-                Object.assign(patch, PRESET_REGISTRY.prompt.applyToSettings(comfyPrompts[0].data));
+            patch.comfyPromptProfileId = comfyPrompts[0]?.id || '';
+            if (comfyPrompts[0]?.data) {
+                Object.assign(patch, PRESET_SCHEMA_BINDINGS.prompt.applyToSettings(comfyPrompts[0].data));
             }
         }
 
-        // 4. ComfyUI 文生图工作流
-        if (comfyTxt2imgWorkflows.length > 0 && (overwrite || !current.comfyTxt2ImgWorkflows || current.comfyTxt2ImgWorkflows.length === 0 || !current.workflowJson)) {
+        // 4. ComfyUI 文生图工作流 (零假设：允许为空数组)
+        if (overwrite || !current.comfyTxt2ImgWorkflows) {
             patch.comfyTxt2ImgWorkflows = comfyTxt2imgWorkflows;
-            patch.comfyTxt2ImgWorkflowId = comfyTxt2imgWorkflows[0].id;
-            if (comfyTxt2imgWorkflows[0].data) {
-                Object.assign(patch, PRESET_REGISTRY.txt2imgWorkflow.applyToSettings(comfyTxt2imgWorkflows[0].data));
+            patch.comfyTxt2ImgWorkflowId = comfyTxt2imgWorkflows[0]?.id || '';
+            if (comfyTxt2imgWorkflows[0]?.data) {
+                Object.assign(patch, PRESET_SCHEMA_BINDINGS.txt2imgWorkflow.applyToSettings(comfyTxt2imgWorkflows[0].data));
             }
         }
 
-        // 5. ComfyUI 重绘工作流
-        if (comfyInpaintWorkflows.length > 0 && (overwrite || !current.comfyInpaintWorkflows || current.comfyInpaintWorkflows.length === 0 || !current.inpaintWorkflowJson)) {
+        // 5. ComfyUI 重绘工作流 (零假设：允许为空数组)
+        if (overwrite || !current.comfyInpaintWorkflows) {
             patch.comfyInpaintWorkflows = comfyInpaintWorkflows;
-            patch.comfyInpaintWorkflowId = comfyInpaintWorkflows[0].id;
-            if (comfyInpaintWorkflows[0].data) {
-                Object.assign(patch, PRESET_REGISTRY.inpaintWorkflow.applyToSettings(comfyInpaintWorkflows[0].data));
+            patch.comfyInpaintWorkflowId = comfyInpaintWorkflows[0]?.id || '';
+            if (comfyInpaintWorkflows[0]?.data) {
+                Object.assign(patch, PRESET_SCHEMA_BINDINGS.inpaintWorkflow.applyToSettings(comfyInpaintWorkflows[0].data));
             }
         }
 
-        // 6. SD-WebUI 方案
-        if (sdModels.length > 0 && (overwrite || !current.sdProfiles || current.sdProfiles.length === 0)) {
+        // 6. SD-WebUI 方案 (零假设：允许为空数组)
+        if (overwrite || !current.sdProfiles) {
             patch.sdProfiles = sdModels;
-            patch.sdProfileId = sdModels[0].id;
-            if (sdModels[0].data) {
-                Object.assign(patch, PRESET_REGISTRY.sdProfile.applyToSettings(sdModels[0].data));
+            patch.sdProfileId = sdModels[0]?.id || '';
+            if (sdModels[0]?.data) {
+                Object.assign(patch, PRESET_SCHEMA_BINDINGS.sdProfile.applyToSettings(sdModels[0].data));
             }
         }
 

@@ -1,18 +1,18 @@
 {
   "id": "cyberpunk-neon",
-  "name": "🔮 赛博霓虹",
+  "name": "赛博霓虹",
   "isBuiltIn": true,
   "data": {
-    "bgPrimary": "#130f1c",
-    "bgGradientEnd": "#2a153b",
+    "bgPrimary": "#120d1c",
+    "bgGradientEnd": "#231238",
     "bgGradientAngle": 135,
-    "bgSecondary": "#1f182c",
+    "bgSecondary": "#1d142d",
     "bgOpacity": 0.94,
-    "textPrimary": "#fae8ff",
+    "textPrimary": "#fdf4ff",
     "textSecondary": "#d8b4fe",
-    "borderColor": "rgba(236, 72, 153, 0.28)",
+    "borderColor": "rgba(244, 63, 94, 0.22)",
     "accentColor": "#f43f5e",
     "blurRadius": 20,
-    "borderRadius": 14
+    "borderRadius": 12
   }
 }

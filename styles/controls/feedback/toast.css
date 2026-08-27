@@ -1,0 +1,96 @@
+/**
+ * toast.css
+ * 层级：controls/feedback
+ * 职责：全局轻量消息 Toast 与顶部未保存脏数据浮动提醒条
+ */
+
+/* ════ 全局轻量 Toast 提示 ════ */
+.da-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 18px;
+    border-radius: var(--da-radius-small, 8px);
+    background: var(--da-bg-secondary, #1a1d24);
+    color: var(--da-text-primary, #ffffff);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    z-index: var(--da-z-toast, 50000);
+    pointer-events: none;
+    animation: da-fadein 0.2s ease;
+}
+
+/* ════ 顶部未保存脏数据浮动提醒条 ════ */
+.da-floating-unsaved-notice {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-6px);
+    z-index: var(--da-z-toast, 100200);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 16px;
+    background: var(--da-bg-secondary-rgba, rgba(26, 29, 36, 0.92));
+    backdrop-filter: blur(var(--da-blur-panel, 20px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px)) saturate(180%);
+    border: 1px solid var(--da-status-warning-border, rgba(255, 159, 10, 0.45));
+    border-radius: var(--da-radius-pill, 100px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 159, 10, 0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s var(--da-ease), transform 0.22s var(--da-ease-spring);
+}
+
+.da-floating-unsaved-notice.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.da-floating-notice-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88em;
+    color: var(--da-text-primary);
+}
+
+.da-floating-notice-icon {
+    font-size: 16px;
+    color: var(--da-status-warning, #ff9f0a);
+}
+
+.da-floating-notice-text {
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-floating-notice-sub {
+    font-size: 0.82em;
+    color: var(--da-text-secondary);
+}
+
+.da-floating-notice-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-floating-save-btn {
+    height: 28px !important;
+    padding: 0 12px !important;
+    font-size: 0.8em !important;
+    background: var(--da-status-warning, #ff9f0a) !important;
+    border-color: var(--da-status-warning, #ff9f0a) !important;
+    color: #000000 !important;
+    font-weight: 600 !important;
+}
+
+.da-floating-discard-btn {
+    height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 0.8em !important;
+}

@@ -1,0 +1,37 @@
+/**
+ * @module styles/core/reset
+ * @description 插件局部样式重置与宿主环境隔离
+ */
+
+.da-modal-backdrop *,
+.da-main-modal-inner *,
+.da-overlay-host * {
+    box-sizing: border-box;
+}
+
+.da-main-modal-inner button,
+.da-main-modal-inner input,
+.da-main-modal-inner select,
+.da-main-modal-inner textarea {
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+.da-main-modal-inner h1,
+.da-main-modal-inner h2,
+.da-main-modal-inner h3,
+.da-main-modal-inner h4,
+.da-main-modal-inner p {
+    margin: 0;
+    padding: 0;
+}
+
+.da-main-modal-inner ul,
+.da-main-modal-inner ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}

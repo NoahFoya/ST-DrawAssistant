@@ -1,20 +1,29 @@
 {
-  "description": "Starlight DrawAssistant 专为 SillyTavern 酒馆对话场景打造，完美融合角色上下文与 AI 文生图能力。支持 AI 消息楼层标识符自动解析、ComfyUI 双向 WebSocket 进度预览、WebP 物理独立存储与一键脱敏诊断。",
+  "description": "Starlight DrawAssistant 专为 SillyTavern 酒馆对话场景打造，深度融合角色上下文、LoRA 触发词与 AI 多后端生图能力。支持消息楼层自动感知、ComfyUI 双向 WebSocket 进度流、SD-WebUI/NovelAI/OpenAI 多驱动兼容、本地安全存储与全量脱敏诊断。",
+  "license": "GPL-3.0",
   "highlights": [
     "✨ AI 楼层自动感知",
     "⚡ 流式 WebSocket 预览",
     "💾 IndexedDB 独立存储",
-    "📊 脱敏诊断与统计看板"
+    "📊 脱敏诊断与统计大盘",
+    "📜 GPL-3.0 自由开源"
   ],
   "author": "NoahFoya with AICode",
-  "copyright": "Copyright © 2026 ST-DrawAssistant Team. All Rights Reserved.",
+  "copyright": "Copyright © 2026 ST-DrawAssistant Team. Released under GPL-3.0 License.",
   "communityLinks": [
     {
       "icon": "🐙",
-      "title": "GitHub 官方仓库",
-      "subtitle": "查阅开源源码、提交 Issue 反馈或 Star 本项目",
+      "title": "GitHub 官方开源仓库",
+      "subtitle": "查阅开放源码、提交 Issue 建议或提交 Pull Request",
       "href": "https://github.com/NoahFoya/ST-DrawAssistant",
       "themeClass": "da-about-rich-card--github"
+    },
+    {
+      "icon": "📜",
+      "title": "GPL-3.0 开源协议",
+      "subtitle": "GNU 通用公共许可证 v3.0 自由软件保障",
+      "href": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "themeClass": "da-about-rich-card--license"
     },
     {
       "icon": "⚙️",
@@ -24,9 +33,23 @@
       "themeClass": "da-about-rich-card--comfy"
     },
     {
+      "icon": "🎨",
+      "title": "SD WebUI (AUTOMATIC1111)",
+      "subtitle": "探索经典 WebUI 生图驱动、采样算法与扩展生态",
+      "href": "https://github.com/AUTOMATIC1111/stable-diffusion-webui",
+      "themeClass": "da-about-rich-card--sd"
+    },
+    {
+      "icon": "🌐",
+      "title": "Civitai 模型素材社区",
+      "subtitle": "发现精美 Checkpoint 底模、LoRA 与生图提示词灵感",
+      "href": "https://civitai.com",
+      "themeClass": "da-about-rich-card--civitai"
+    },
+    {
       "icon": "🍷",
       "title": "SillyTavern 宿主社区",
-      "subtitle": "探索酒馆扩展生态、角色卡制作与 Roleplay 灵感",
+      "subtitle": "探索酒馆扩展生态、角色卡制作与 Roleplay 交流",
       "href": "https://github.com/SillyTavern/SillyTavern",
       "themeClass": "da-about-rich-card--st"
     }

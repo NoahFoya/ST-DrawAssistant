@@ -7,12 +7,10 @@
  * 2. 调度提示词构建前置钩子 (beforePromptBuild)，允许已注册的扩展模块介入处理正向提示词；
  * 3. 委托目标生图后端驱动组装专属 Payload 并派发提交。
  *
- * 遵循原则：默认信任输入内容，不做过度清洗与破坏性拆解，各后端驱动自主维护参数装配。
+ * 遵循原则：默认信任输入内容，不做过度清洗与破坏性拆解，各后端驱动自主维护请求载荷构建。
  */
 
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import { GenerationPayload, IDrawDriver } from '../drivers/driver-contract';
-import { IDrawDriverContract } from '../../core/contracts';
+import { DrawAssistantSettings, GenerationPayload, IDrawDriver } from '../../core';
 import { PipelineHooks, PipelineHookContext } from './pipeline-hooks';
 
 export interface PipelineProcessOptions {
@@ -23,7 +21,8 @@ export interface PipelineProcessOptions {
     initImageBlob?: Blob;
     maskImageBlob?: Blob;
     denoiseStrength?: number;
-    driver?: IDrawDriverContract | IDrawDriver;
+    driver?: IDrawDriver;
+    overrides?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
 }
 
@@ -128,7 +127,8 @@ export class PromptPipeline {
             initImageBlob: options.initImageBlob,
             maskImageBlob: options.maskImageBlob,
             denoiseStrength: options.denoiseStrength,
-            settings
+            settings,
+            overrides: options.overrides
         });
 
         // 6. 触发提交前终态拦截 Hook

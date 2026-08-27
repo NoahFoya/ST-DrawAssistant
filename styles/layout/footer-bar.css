@@ -1,0 +1,83 @@
+/**
+ * @module styles/layout/footer-bar
+ * @description 弹窗底部状态栏、就绪状态指示器与状态指示标签
+ */
+
+.da-footer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 var(--da-space-lg, 16px);
+    background: var(--da-bg-secondary);
+    border-top: 1px solid var(--da-border-color);
+    font-size: var(--da-font-size-xs, 0.75rem);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    font-family: var(--da-font-family);
+}
+
+.da-status-item,
+.da-status-info,
+.da-server-status-container,
+.da-memory-status-container {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-server-status-text,
+.da-memory-status-text,
+.da-memory-info {
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 0.75rem);
+}
+
+.da-status-indicator,
+.da-status-dot,
+.da-server-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.3s var(--da-ease), box-shadow 0.3s var(--da-ease);
+}
+
+.da-status-indicator.da-status-ok,
+.da-status-indicator--ready,
+.da-status-dot--ready,
+.da-server-status-dot--ready {
+    background: var(--da-color-success, #30d158);
+    box-shadow: 0 0 6px rgba(48, 209, 88, 0.55);
+}
+
+.da-status-indicator.da-status-error,
+.da-status-indicator--error,
+.da-status-dot--error,
+.da-server-status-dot--error {
+    background: var(--da-color-error, #ff453a);
+    box-shadow: 0 0 6px rgba(255, 69, 58, 0.55);
+}
+
+.da-status-indicator.da-status-checking,
+.da-status-indicator--checking,
+.da-status-dot--checking,
+.da-server-status-dot--checking {
+    background: var(--da-color-warn, #ffd60a);
+    box-shadow: 0 0 6px rgba(255, 214, 10, 0.6);
+    animation: da-pulse-dot 1.4s ease-in-out infinite;
+}
+
+.da-status-indicator--warn {
+    background: var(--da-status-warning, #ff9f0a);
+    box-shadow: 0 0 6px rgba(255, 159, 10, 0.6);
+}
+
+.da-status-indicator--idle {
+    background: var(--da-text-muted, #636366);
+    box-shadow: none;
+}

@@ -1,0 +1,80 @@
+/**
+ * image-collapse.css
+ * 层级：features
+ * 职责：消息区图像折叠与展开组件、楼层生图插槽容器与生成图像渲染规范
+ */
+
+.da-image-collapse-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-image-collapse-wrapper--left {
+    align-items: flex-start;
+}
+
+.da-image-collapse-wrapper--center {
+    align-items: center;
+}
+
+.da-image-collapse-wrapper--right {
+    align-items: flex-end;
+}
+
+.da-image-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.da-image-collapse-toggle:hover {
+    transform: translateY(-1px);
+}
+
+.da-image-collapse-toggle:active {
+    transform: translateY(0);
+}
+
+.da-floor-btn-img-slot {
+    display: flex;
+    width: 100%;
+    flex-basis: 100%;
+    margin-top: 6px;
+}
+
+.da-floor-btn-img-slot--center {
+    justify-content: center;
+}
+
+.da-floor-btn-img-slot--right {
+    justify-content: flex-end;
+}
+
+.da-floor-btn-img-slot--left {
+    justify-content: flex-start;
+}
+
+/* ════ 渲染的生成图像实体 ════ */
+.da-generated-img {
+    box-shadow: var(--da-shadow-sm);
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease-spring), box-shadow 0.18s var(--da-ease);
+}
+
+.da-generated-img:hover {
+    box-shadow: var(--da-shadow-md);
+}
+
+.da-generated-img--rounded {
+    border-radius: var(--da-radius-small, 8px);
+}

@@ -1,13 +1,8 @@
-/**
- * @module ui/media/image-action-panel
- * @description 图像操作浮动面板 (ImageActionPanel)
- */
-
 import { ThemeService } from '../foundation/theme-service';
 import { FeedbackService } from '../feedback/feedback';
 import { openImageInfoPanel } from './image-info-panel';
-import { IndexedDBStorageAdapter } from '../../core/state/storage-adapter';
-import { Logger } from '../../core/diagnostics/logger';
+import { Logger, IDisposable, IStorageAdapter } from '../../core';
+import { ModalService } from '../layout/modal-service';
 
 const logger = new Logger('ImageActionPanel');
 
@@ -19,6 +14,7 @@ export interface ImageActionCallbacks {
     messageIndex?: number;
     buttonIndex?: number;
     uuid?: string;
+    storage?: IStorageAdapter;
     onConfirm?: (newPrompt: string, newNegativePrompt?: string) => void;
     onLightbox?: () => void;
     onRegen?: () => void;
@@ -30,7 +26,7 @@ export interface ImageActionCallbacks {
     [key: string]: unknown;
 }
 
-export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: ImageActionCallbacks): void {
+export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: ImageActionCallbacks): IDisposable {
     const overlay = document.createElement('div');
     overlay.className = 'da-modal-backdrop st-da-root';
     ThemeService.applyCurrentThemeToNode(overlay);
@@ -38,6 +34,11 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     const panel = document.createElement('div');
     panel.className = 'da-action-panel st-da-root';
     ThemeService.applyCurrentThemeToNode(panel);
+
+    const modalHandle = ModalService.getInstance().open(overlay, {
+        closeOnBackdrop: true,
+        closeOnEscape: true
+    });
 
     // 1. Header 顶栏
     const header = document.createElement('div');
@@ -49,9 +50,9 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
         callbacks.messageIndex !== undefined ? `图像操作栏 (#${callbacks.messageIndex})` : '图像操作栏';
 
     const btnClose = document.createElement('button');
-    btnClose.className = 'da-btn secondary da-btn-sm';
+    btnClose.className = 'da-btn da-btn--secondary da-btn--sm';
     btnClose.textContent = '✕';
-    btnClose.onclick = () => overlay.remove();
+    btnClose.onclick = () => modalHandle.dispose();
 
     header.appendChild(headerTitle);
     header.appendChild(btnClose);
@@ -81,17 +82,17 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
         btnGroup.className = 'da-tag-card__btn-group';
 
         const copyBtn = document.createElement('button');
-        copyBtn.className = 'da-btn secondary da-btn-sm';
-        copyBtn.textContent = '📋 复制';
+        copyBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        copyBtn.textContent = '复制';
 
         const editBtn = document.createElement('button');
-        editBtn.className = 'da-btn secondary da-btn-sm';
-        editBtn.textContent = '✏️ 编辑';
+        editBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        editBtn.textContent = '编辑';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'da-btn secondary da-btn-sm';
+        cancelBtn.className = 'da-btn da-btn--secondary da-btn--sm';
         cancelBtn.style.display = 'none';
-        cancelBtn.textContent = '✕ 取消';
+        cancelBtn.textContent = '取消';
 
         btnGroup.appendChild(copyBtn);
         btnGroup.appendChild(editBtn);
@@ -122,15 +123,15 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
                 backupText = textarea.value;
                 textarea.readOnly = false;
                 textarea.focus();
-                editBtn.textContent = '💾 锁定';
-                editBtn.className = 'da-btn primary da-btn-sm';
+                editBtn.textContent = '锁定';
+                editBtn.className = 'da-btn da-btn--primary da-btn--sm';
                 cancelBtn.style.display = 'inline-block';
             } else {
                 isEditing = false;
                 backupText = textarea.value;
                 textarea.readOnly = true;
-                editBtn.textContent = '✏️ 编辑';
-                editBtn.className = 'da-btn secondary da-btn-sm';
+                editBtn.textContent = '编辑';
+                editBtn.className = 'da-btn da-btn--secondary da-btn--sm';
                 cancelBtn.style.display = 'none';
             }
         };
@@ -140,8 +141,8 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
                 isEditing = false;
                 textarea.value = backupText;
                 textarea.readOnly = true;
-                editBtn.textContent = '✏️ 编辑';
-                editBtn.className = 'da-btn secondary da-btn-sm';
+                editBtn.textContent = '编辑';
+                editBtn.className = 'da-btn da-btn--secondary da-btn--sm';
                 cancelBtn.style.display = 'none';
             }
         };
@@ -151,14 +152,14 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     };
 
     const posCard = createTagCard(
-        '🔤 提取正向提示词 (Positive Tags)',
+        '提取正向提示词 (Positive Tags)',
         callbacks.promptText || '',
         '输入正向生图提示词...',
         '已成功复制正向提示词'
     );
 
     const negCard = createTagCard(
-        '🚫 反向提示词 (Negative Tags)',
+        '反向提示词 (Negative Tags)',
         callbacks.negativePrompt || '',
         '输入反向过滤提示词...',
         '已成功复制反向提示词'
@@ -168,20 +169,18 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     body.appendChild(negCard.card);
 
     if (callbacks.uuid && !callbacks.negativePrompt) {
-        const storage = new IndexedDBStorageAdapter();
-        storage.init().then(() => {
-            storage.getImage(callbacks.uuid!).then((rec) => {
+        const targetStorage = callbacks.storage;
+        if (targetStorage) {
+            targetStorage.getImage(callbacks.uuid).then((rec) => {
                 const meta = rec?.metadata as Record<string, any> | undefined;
                 const rawNeg = meta?.negativePrompt || meta?.fullNegativePrompt || (rec as any)?.negativePrompt;
                 if (rawNeg && !negCard.textarea.value) {
                     negCard.textarea.value = String(rawNeg);
                 }
             }).catch((err) => {
-                logger.debug('从 IndexedDB 获取反向提示词失败:', err);
+                logger.debug('从数据库获取反向提示词失败:', err);
             });
-        }).catch((err) => {
-            logger.debug('初始化 IndexedDB 失败:', err);
-        });
+        }
     }
 
     panel.appendChild(body);
@@ -194,8 +193,8 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     footerLeft.className = 'da-action-panel__footer-left';
 
     const btnInpaint = document.createElement('button');
-    btnInpaint.className = 'da-btn secondary da-btn-sm';
-    btnInpaint.textContent = '🖌️ 局部重绘';
+    btnInpaint.className = 'da-btn da-btn--secondary da-btn--sm';
+    btnInpaint.textContent = '局部重绘';
     btnInpaint.onclick = () => {
         overlay.remove();
         if (callbacks.onInpaint) {
@@ -207,21 +206,21 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     footerLeft.appendChild(btnInpaint);
 
     const btnInfo = document.createElement('button');
-    btnInfo.className = 'da-btn secondary da-btn-sm';
-    btnInfo.textContent = 'ℹ️ 元数据';
+    btnInfo.className = 'da-btn da-btn--secondary da-btn--sm';
+    btnInfo.textContent = '元数据';
     btnInfo.onclick = () => {
         overlay.remove();
         if (callbacks.onInfo) {
             callbacks.onInfo();
         } else {
-            openImageInfoPanel(callbacks.uuid || callbacks);
+            openImageInfoPanel(callbacks.uuid || callbacks, { storage: callbacks.storage });
         }
     };
     footerLeft.appendChild(btnInfo);
 
     const btnDownload = document.createElement('button');
-    btnDownload.className = 'da-btn secondary da-btn-sm';
-    btnDownload.textContent = '💾 下载';
+    btnDownload.className = 'da-btn da-btn--secondary da-btn--sm';
+    btnDownload.textContent = '下载';
     btnDownload.onclick = () => {
         if (callbacks.onDownload) {
             callbacks.onDownload();
@@ -240,8 +239,8 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     footerLeft.appendChild(btnDownload);
 
     const btnDelete = document.createElement('button');
-    btnDelete.className = 'da-btn danger da-btn-sm';
-    btnDelete.textContent = '🗑️ 删除';
+    btnDelete.className = 'da-btn da-btn--danger da-btn--sm';
+    btnDelete.textContent = '删除';
     btnDelete.onclick = async () => {
         overlay.remove();
         if (callbacks.onDelete) {
@@ -260,12 +259,12 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     footerLeft.appendChild(btnDelete);
 
     const btnRegen = document.createElement('button');
-    btnRegen.className = 'da-btn primary da-btn-sm';
-    btnRegen.textContent = '🚀 重新生成';
+    btnRegen.className = 'da-btn da-btn--primary da-btn--sm';
+    btnRegen.textContent = '重新生成';
     btnRegen.onclick = () => {
         const newPos = posCard.textarea.value.trim();
         const newNeg = negCard.textarea.value.trim();
-        overlay.remove();
+        modalHandle.dispose();
         if (callbacks.onConfirm) {
             callbacks.onConfirm(newPos, newNeg);
         } else if (callbacks.onRegenerate) {
@@ -278,9 +277,5 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     panel.appendChild(footer);
 
     overlay.appendChild(panel);
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.remove();
-    });
-
-    document.body.appendChild(overlay);
+    return modalHandle;
 }

@@ -1,0 +1,143 @@
+/**
+ * buttons.css
+ * 层级：controls/buttons
+ * 职责：核心通用按钮及其语义化变体 (Primary / Secondary / Danger / 楼层按钮)
+ */
+
+.da-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--da-radius-btn, 10px);
+    border: 1px solid var(--da-border-color);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: 0.84em;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s var(--da-ease), border-color 0.15s var(--da-ease), transform 0.12s var(--da-ease-spring), box-shadow 0.15s var(--da-ease);
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+}
+
+.da-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.da-btn:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Primary 主要按钮 */
+.da-btn--primary {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    color: var(--da-text-on-accent, #000000);
+    font-weight: 600;
+}
+
+.da-btn--primary:hover {
+    background: var(--da-accent-hover);
+    border-color: var(--da-accent-hover);
+    box-shadow: 0 4px 14px rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* Secondary 次要按钮 */
+.da-btn--secondary {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--da-border-color);
+    color: var(--da-text-primary);
+}
+
+/* Danger 危险按钮 */
+.da-btn--danger {
+    background: rgba(255, 69, 58, 0.12);
+    border-color: rgba(255, 69, 58, 0.45);
+    color: var(--da-color-error, #ff453a);
+}
+
+.da-btn--danger:hover {
+    background: rgba(255, 69, 58, 0.22);
+    box-shadow: 0 0 10px rgba(255, 69, 58, 0.2);
+}
+
+/* 尺寸变体 */
+.da-btn--sm {
+    height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 0.8em !important;
+}
+
+.da-btn-pill-small {
+    padding: 3px 12px !important;
+    font-size: 0.82em !important;
+    border-radius: var(--da-radius-pill, 100px) !important;
+    min-height: 26px !important;
+    height: 26px !important;
+}
+
+/* 楼层生图触发按钮 */
+.da-floor-btn-wrapper {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.da-floor-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 14px;
+    border-radius: var(--da-radius-pill, 100px);
+    border: 1px solid var(--da-border-color);
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: 0.82em;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.18s var(--da-ease), border-color 0.18s var(--da-ease), transform 0.15s var(--da-ease-spring);
+    outline: none;
+}
+
+.da-floor-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(var(--da-accent-rgb), 0.5);
+}
+
+.da-floor-btn:active {
+    transform: scale(0.95);
+}
+
+.da-floor-btn--loading {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.da-floor-btn--default {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--da-text-primary);
+}
+
+.da-floor-btn-placeholder {
+    font-size: 0.8em;
+    color: var(--da-text-muted);
+}
+
+.da-floor-btn-prompt {
+    font-weight: 500;
+    color: var(--da-text-primary);
+}

@@ -3,26 +3,40 @@
  * @description 任务调度系统与状态机管理器 (支持排队调度、并发控制、取消与客户端丢弃)
  */
 
-import { TaskState, TaskStatus, TaskContextIdentity, MutableTaskState } from './task-types';
-import { GenerationPayload } from '../drivers/driver-contract';
-import { ITypedEventBus } from '../../core/foundation/event-bus';
+import {
+    TaskState,
+    TaskStatus,
+    TaskContextIdentity,
+    GenerationPayload,
+    ITypedEventBus,
+    ObservableStore,
+    DrawAssistantSettings,
+    IDriverRegistry,
+    IStorageAdapter,
+    Logger,
+    StatisticsCollector,
+    ITaskManager as ITaskManagerContract,
+    IDrawDriver
+} from '../../core';
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import { IDriverRegistry } from '../../core/registry/driver-registry';
-import { IStorageAdapter } from '../../core/state/storage-adapter';
-import { Logger } from '../../core/diagnostics/logger';
-import { StatisticsCollector } from '../../core/diagnostics/statistics-collector';
-import { ITaskContract, IDrawDriverContract } from '../../core/contracts';
+/** 任务内部可变状态 (仅供 TaskManager 内部流转) */
+interface MutableTaskState {
+    identity: TaskContextIdentity;
+    status: TaskStatus;
+    payload?: GenerationPayload;
+    error?: string;
+    resultBlobs?: Blob[];
+    createdAt: number;
+}
 
 export interface TaskManagerOptions {
     events: ITypedEventBus;
     store: ObservableStore<DrawAssistantSettings>;
-    drivers: IDriverRegistry<IDrawDriverContract>;
+    drivers: IDriverRegistry<IDrawDriver>;
     storage?: IStorageAdapter;
 }
 
-export interface ITaskManager extends ITaskContract {
+export interface ITaskManager extends ITaskManagerContract {
     submit(options: {
         chatId: string;
         messageId: number;
@@ -32,20 +46,29 @@ export interface ITaskManager extends ITaskContract {
     cancelTask(taskId: string): Promise<void>;
     getTask(taskId: string): TaskState | undefined;
     getTasksByMessage(chatId: string, messageId: number): TaskState[];
-    getActiveDriver(): IDrawDriverContract | undefined;
+    getActiveDriver(): IDrawDriver | undefined;
 }
 
-/** 任务调度管理器实现 */
+/**
+ * 任务调度管理器实现
+ *
+ * 核心设计规则：
+ * 1. 状态流转模型：PENDING (排队中) -> RUNNING (执行中) -> COMPLETED (成功) / ERROR (失败) / CANCELLED (取消) / DISCARDED (丢弃)；
+ * 2. 客户端丢弃模式 (Client-side Discard)：当执行中的任务被用户取消时，状态置为 DISCARDED 并向后端发出中断请求，
+ *    即使后端驱动因网络延迟仍返回了图片数据，调度器也会静默丢弃，绝不会写入图库或触发完成事件（状态机幂等性保证）；
+ * 3. 并发配额自平衡：在 finally 块中递减活跃计数并自动触发 processQueue() 消费下一个排队任务。
+ */
 export class TaskManager implements ITaskManager {
     private readonly _events: ITypedEventBus;
     private readonly _store: ObservableStore<DrawAssistantSettings>;
-    private readonly _drivers: IDriverRegistry<IDrawDriverContract>;
+    private readonly _drivers: IDriverRegistry<IDrawDriver>;
     private readonly _logger = new Logger('TaskManager');
 
 
     private readonly _tasks = new Map<string, MutableTaskState>();
     private readonly _queue: string[] = [];
     private _activeCount = 0;
+    private _isProcessingQueue = false;
     private _isDisposed = false;
     private static readonly MAX_TASK_HISTORY = 150;
 
@@ -140,16 +163,22 @@ export class TaskManager implements ITaskManager {
      * 每次任务状态变更后均应调用此方法以驱动队列消费
      */
     private processQueue(): void {
-        if (this._isDisposed) return;
-        const maxConcurrent = this._store.getState().maxConcurrent || 1;
+        if (this._isDisposed || this._isProcessingQueue) return;
+        this._isProcessingQueue = true;
 
-        while (this._activeCount < maxConcurrent && this._queue.length > 0) {
-            const nextTaskId = this._queue.shift()!;
-            const task = this._tasks.get(nextTaskId);
-            if (!task || task.status !== 'PENDING') continue;
+        try {
+            const maxConcurrent = this._store.getState().maxConcurrent || 1;
 
-            this._activeCount++;
-            this.executeTask(nextTaskId);
+            while (this._activeCount < maxConcurrent && this._queue.length > 0) {
+                const nextTaskId = this._queue.shift()!;
+                const task = this._tasks.get(nextTaskId);
+                if (!task || task.status !== 'PENDING') continue;
+
+                this._activeCount++;
+                this.executeTask(nextTaskId);
+            }
+        } finally {
+            this._isProcessingQueue = false;
         }
     }
 
@@ -171,7 +200,7 @@ export class TaskManager implements ITaskManager {
         }
 
         this.updateTaskStatus(taskId, 'RUNNING');
-        this.emitState(taskId, 'RUNNING', 0);
+        this.emitState(taskId, 'RUNNING');
 
         const driver = this.getActiveDriver();
         if (!driver) {
@@ -180,29 +209,19 @@ export class TaskManager implements ITaskManager {
         }
 
         try {
-            const res = await driver.generate(task.payload, (progress) => {
-                const currentTask = this._tasks.get(taskId);
-                if (currentTask?.status === 'DISCARDED') return;
-
-                if (currentTask?.status === 'RUNNING') {
-                    currentTask.progress = progress;
-                    this.emitState(taskId, 'RUNNING', progress.percent);
-                }
-            });
+            const res = await driver.generate(task.payload);
 
             const currentTask = this._tasks.get(taskId);
-            // 状态机幂等性保护：任务在异步等待期间若已被外部丢弃，则丢弃结果，不触发落库与事件
+            // 若任务在等待期间已被取消或丢弃，则忽略本次结果，不触发后续写入与事件
             if (currentTask?.status === 'DISCARDED') {
                 this._logger.info(`丢弃的任务 [${taskId}] 异步结果到达，已静默丢弃`);
-                this._activeCount--;
-                this.processQueue();
                 return;
             }
 
             task.status = 'COMPLETED';
             task.resultBlobs = res.imageBlobs;
 
-            this.emitState(taskId, 'COMPLETED', 100);
+            this.emitState(taskId, 'COMPLETED');
             StatisticsCollector.getInstance().recordTaskSuccess(taskId);
             this._logger.info(`任务执行成功: ${taskId}`);
         } catch (err: any) {
@@ -242,7 +261,7 @@ export class TaskManager implements ITaskManager {
         if (task && this.isValidTransition(task.status, 'ERROR')) {
             task.status = 'ERROR';
             task.error = errorMsg;
-            this.emitState(taskId, 'ERROR', undefined, errorMsg);
+            this.emitState(taskId, 'ERROR', errorMsg);
             StatisticsCollector.getInstance().recordTaskFailure(taskId, false);
             this._logger.error(`任务执行失败 [${taskId}]: ${errorMsg}`);
         }
@@ -255,18 +274,17 @@ export class TaskManager implements ITaskManager {
         }
     }
 
-    /** 广播任务状态变更事件，供 UI 层楼层按键和进度条订阅 */
-    private emitState(taskId: string, status: TaskStatus, progress?: number, error?: string): void {
+    /** 广播任务状态变更事件，供 UI 层楼层按键订阅 */
+    private emitState(taskId: string, status: TaskStatus, error?: string): void {
         this._events.emit('task:state_changed', {
             taskId,
             status,
-            progress,
             error
         });
     }
 
     /** 根据全局设置中的 provider 字段获取当前活跃的生图驱动实例 */
-    public getActiveDriver(): IDrawDriverContract | undefined {
+    public getActiveDriver(): IDrawDriver | undefined {
         const settings = this._store.getState();
         const provider = settings.provider || 'comfyui';
         return this._drivers.get(provider);

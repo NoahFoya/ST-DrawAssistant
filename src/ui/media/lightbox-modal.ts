@@ -4,13 +4,16 @@
  */
 
 import { ThemeService } from '../foundation/theme-service';
+import { ModalService } from '../layout/modal-service';
+import { IDisposable } from '../../core';
 
 /**
- * 弹出全屏 Lightbox 图像放大全景查看器
+ * 弹出全屏 Lightbox 图像放大全景查看器（由 ModalService 统一管理 Z-Index 与 ESC 退出）
  *
  * @param imgSrc 图像 Base64 数据串、DataURL 或 ObjectURL
+ * @returns 销毁关闭句柄
  */
-export function openLightboxModal(imgSrc: string): void {
+export function openLightboxModal(imgSrc: string): IDisposable {
     const backdrop = document.createElement('div');
     backdrop.className = 'da-lightbox-backdrop st-da-root';
     ThemeService.applyCurrentThemeToNode(backdrop);
@@ -27,6 +30,16 @@ export function openLightboxModal(imgSrc: string): void {
 
     backdrop.appendChild(img);
     backdrop.appendChild(closeBadge);
-    backdrop.onclick = () => backdrop.remove();
-    document.body.appendChild(backdrop);
+
+    const modalHandle = ModalService.getInstance().open(backdrop, {
+        closeOnBackdrop: true,
+        closeOnEscape: true
+    });
+
+    closeBadge.onclick = (e) => {
+        e.stopPropagation();
+        modalHandle.dispose();
+    };
+
+    return modalHandle;
 }

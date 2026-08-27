@@ -1,19 +1,27 @@
 /**
  * @module ui/layout/floor-button-container
- * @description 楼层生图按钮扫描与交互控制器 (FloorButtonContainer)
+ * @description 楼层生图按钮注入与交互管理 (FloorButtonContainer)
+ *
+ * 设计意图：
+ * - 监听宿主消息渲染与变更事件；
+ * - 识别消息中的提示词占位符并渲染为生图按钮；
+ * - 协调生图任务触发、进度反馈与图片展示。
  */
 
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
-import { IHostBridge, HostMessageEvent } from '../../core/foundation/host-bridge';
-import { ITypedEventBus } from '../../core/foundation/event-bus';
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import { IStorageAdapter } from '../../core/state/storage-adapter';
-import { ITaskManager } from '../../domain/task/task-manager';
-import { PromptPipeline } from '../../domain/pipeline/prompt-pipeline';
+import {
+    IDisposable,
+    DisposableStore,
+    IHostBridge,
+    HostMessageEvent,
+    ITypedEventBus,
+    ObservableStore,
+    DrawAssistantSettings,
+    IStorageAdapter,
+    Logger
+} from '../../core';
+import { ITaskManager, PromptPipeline } from '../../domain';
 import { openInpaintCanvasModal } from '../media/image-editor';
-import { renderImageToMessage, ImageActionCallbacks } from '../media/image-renderer';
-import { Logger } from '../../core/diagnostics/logger';
+import { renderImageToMessage, ImageActionCallbacks, transcodeImage, dataURLtoBlob } from '../media/image-renderer';
 import { FeedbackService } from '../feedback/feedback';
 
 export interface FloorButtonContainerOptions {
@@ -40,8 +48,6 @@ interface FloorButtonContext {
     state: ButtonState;
     messageId: number;
     buttonIndex: number;
-    rafId: number | null;
-    pendingPercent: number;
 }
 
 export class FloorButtonContainer implements IDisposable {
@@ -54,16 +60,18 @@ export class FloorButtonContainer implements IDisposable {
     private readonly _logger = new Logger('FloorButtonContainer');
     private readonly _disposables = new DisposableStore();
     private readonly _contextMap = new Map<string, FloorButtonContext>();
+    private readonly _trackedObjectUrls = new Set<string>();
+    private readonly _activeTaskUnbinds = new Map<string, () => void>();
     private _isDisposed = false;
     private _isChatLoading = false;
     private _scanDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     private static readonly BUTTON_LABELS: Record<ButtonState, string> = {
-        default: '🎨 生成图像',
-        loading: '⏳ 提交中...',
-        progress: '⚙️ 生成中',
-        done: '🔄 重新生成',
-        error: '❌ 重试'
+        default: '生成图像',
+        loading: '提交中...',
+        progress: '生成中 (点击取消)',
+        done: '重新生成',
+        error: '重试'
     };
 
     constructor(options: FloorButtonContainerOptions) {
@@ -175,20 +183,34 @@ export class FloorButtonContainer implements IDisposable {
 
     private clearAllContexts(): void {
         for (const ctx of this._contextMap.values()) {
-            if (ctx.rafId !== null) {
-                cancelAnimationFrame(ctx.rafId);
-                ctx.rafId = null;
+            const oldImg = ctx.imgSlot?.querySelector<HTMLImageElement>('.da-generated-img');
+            if (oldImg?.src?.startsWith('blob:')) {
+                URL.revokeObjectURL(oldImg.src);
+                this._trackedObjectUrls.delete(oldImg.src);
             }
         }
         this._contextMap.clear();
+
+        for (const url of this._trackedObjectUrls) {
+            try {
+                URL.revokeObjectURL(url);
+            } catch {}
+        }
+        this._trackedObjectUrls.clear();
+
+        for (const cleanup of this._activeTaskUnbinds.values()) {
+            try { cleanup(); } catch {}
+        }
+        this._activeTaskUnbinds.clear();
     }
 
     private removeMessageContexts(messageId: number, cancelRunning = false): void {
         for (const [key, ctx] of this._contextMap.entries()) {
             if (key.startsWith(`${messageId}_`)) {
-                if (ctx.rafId !== null) {
-                    cancelAnimationFrame(ctx.rafId);
-                    ctx.rafId = null;
+                const oldImg = ctx.imgSlot?.querySelector<HTMLImageElement>('.da-generated-img');
+                if (oldImg?.src?.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldImg.src);
+                    this._trackedObjectUrls.delete(oldImg.src);
                 }
                 if (cancelRunning && ctx.currentTaskId) {
                     void this._taskManager.cancelTask(ctx.currentTaskId);
@@ -255,6 +277,29 @@ export class FloorButtonContainer implements IDisposable {
         if (hasActiveTask) {
             this._logger.debug(`楼层 ${messageId} 存在正在执行的生图任务，跳过重复的 DOM 重置`);
             return;
+        }
+
+        // 状态与提示词指纹比对：若当前已有按钮且提取的提示词完全一致，直接跳过 DOM 重构
+        const existingWrappers = mesTextEl.querySelectorAll('.da-floor-btn-wrapper');
+        const matches: string[] = [];
+        let m: RegExpExecArray | null;
+        while ((m = regex.exec(rawHtml)) !== null) {
+            matches.push(m[1].replace(/<[^>]+>/g, ' ').trim());
+        }
+        regex.lastIndex = 0;
+
+        if (existingWrappers.length === matches.length && matches.length > 0) {
+            let isExactMatch = true;
+            for (let idx = 0; idx < matches.length; idx++) {
+                const ctx = this._contextMap.get(`${messageId}_${idx}`);
+                if (!ctx || ctx.promptText !== matches[idx]) {
+                    isExactMatch = false;
+                    break;
+                }
+            }
+            if (isExactMatch) {
+                return;
+            }
         }
 
         this.removeMessageContexts(messageId, false);
@@ -325,9 +370,7 @@ export class FloorButtonContainer implements IDisposable {
             currentTaskId: null,
             state: 'default',
             messageId,
-            buttonIndex,
-            rafId: null,
-            pendingPercent: 0
+            buttonIndex
         };
 
         this._contextMap.set(contextKey, ctx);
@@ -342,6 +385,7 @@ export class FloorButtonContainer implements IDisposable {
             messageIndex: ctx.messageId,
             buttonIndex: ctx.buttonIndex,
             promptText: ctx.overridePrompt || ctx.promptText,
+            storage: this._storage,
             onConfirm: (newPos: string) => {
                 this._logger.info(`从图像操作栏触发重新生成: msgId=${ctx.messageId}, newPrompt="${newPos.slice(0, 40)}..."`);
                 ctx.overridePrompt = newPos;
@@ -448,8 +492,9 @@ export class FloorButtonContainer implements IDisposable {
                     if (evt.taskId !== taskId) return;
 
                     if (evt.status === 'RUNNING' || (evt.status as string) === 'GENERATING') {
-                        this.updateProgress(ctx, evt.progress ?? 0);
+                        this.setButtonState(ctx, 'progress');
                     } else if (evt.status === 'COMPLETED') {
+                        this._activeTaskUnbinds.delete(taskId);
                         unbind.dispose();
                         ctx.currentTaskId = null;
                         this.setButtonState(ctx, 'done');
@@ -457,23 +502,30 @@ export class FloorButtonContainer implements IDisposable {
                         const task = this._taskManager.getTask(taskId);
                         if (task?.resultBlobs?.[0]) {
                             const blob = task.resultBlobs[0];
-                            renderImageToMessage(ctx.imgSlot, blob, this._store.getState(), callbacks);
+                            const renderedImg = renderImageToMessage(ctx.imgSlot, blob, this._store.getState(), callbacks);
+                            if (renderedImg?.src?.startsWith('blob:')) {
+                                this._trackedObjectUrls.add(renderedImg.src);
+                            }
 
                             setTimeout(() => {
-                                void this.persistImageToChat(ctx, blob, effectivePrompt, pipelineResult.payload);
+                                void this.persistGeneratedImage(ctx, blob, effectivePrompt, pipelineResult.payload);
                             }, 0);
                         }
                     } else if (evt.status === 'DISCARDED' || evt.status === 'CANCELLED') {
+                        this._activeTaskUnbinds.delete(taskId);
                         unbind.dispose();
                         ctx.currentTaskId = null;
                         this.setButtonState(ctx, 'default');
                     } else if (evt.status === 'ERROR' || (evt.status as string) === 'FAILED') {
+                        this._activeTaskUnbinds.delete(taskId);
                         unbind.dispose();
                         ctx.currentTaskId = null;
                         this.setButtonState(ctx, 'error');
                         FeedbackService.toast(evt.error || '生图任务执行失败', true);
                     }
                 });
+
+                this._activeTaskUnbinds.set(taskId, () => unbind.dispose());
             } catch (err: any) {
                 this.setButtonState(ctx, 'error');
                 ctx.currentTaskId = null;
@@ -489,30 +541,23 @@ export class FloorButtonContainer implements IDisposable {
         ctx.btn.className = `da-floor-btn da-floor-btn--${state}`;
         ctx.btn.disabled = state === 'loading';
 
+        const settings = this._store.getState();
+
         if (state === 'progress') {
+            ctx.btn.style.display = '';
             ctx.btn.title = '点击可取消生成';
         } else if (state === 'done') {
             ctx.btn.title = '点击重新生成图像';
+            if (settings.hideButtonOnDone) {
+                ctx.btn.style.display = 'none';
+            } else {
+                ctx.btn.style.display = '';
+            }
         } else if (state === 'error') {
+            ctx.btn.style.display = '';
             ctx.btn.title = '生图失败，点击重试';
-        }
-
-        if (ctx.rafId !== null) {
-            cancelAnimationFrame(ctx.rafId);
-            ctx.rafId = null;
-        }
-    }
-
-    private updateProgress(ctx: FloorButtonContext, percent: number): void {
-        if (ctx.state !== 'progress') return;
-        ctx.pendingPercent = percent;
-
-        if (ctx.rafId === null) {
-            ctx.rafId = requestAnimationFrame(() => {
-                ctx.rafId = null;
-                if (ctx.state !== 'progress') return;
-                ctx.btn.textContent = `⚙️ ${ctx.pendingPercent}% (点击取消)`;
-            });
+        } else {
+            ctx.btn.style.display = '';
         }
     }
 
@@ -546,9 +591,10 @@ export class FloorButtonContainer implements IDisposable {
             if (savedMeta.uuid) {
                 const record = await this._storage.getImage(savedMeta.uuid);
                 if (record?.data) {
-                    finalBlob = record.data instanceof Blob ? record.data : this.dataURLtoBlob(record.data);
+                    finalBlob = record.data instanceof Blob ? record.data : dataURLtoBlob(record.data);
                 }
             } else if (savedMeta.base64) {
+                // 历史 Base64 结构自动无损迁移至 IndexedDB UUID 引用体系
                 const uuid = crypto.randomUUID?.() ?? `migrated_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
                 const mime = savedMeta.mime || 'image/png';
                 const dataURL = savedMeta.base64.startsWith('data:')
@@ -561,15 +607,28 @@ export class FloorButtonContainer implements IDisposable {
                     data: dataURL
                 });
 
-                delete savedMeta.base64;
-                savedMeta.uuid = uuid;
+                // 增量写回楼层 extra，移除冗余的 base64 字符串以精简聊天文件体积
+                this._hostBridge.patchChatMessageExtra(ctx.messageId, 'da_images', (prevRoot: any) => {
+                    const root = { ...(prevRoot ?? {}) };
+                    const swipeImages = { ...(root[swipeId] ?? {}) };
+                    swipeImages[ctx.buttonIndex] = {
+                        uuid,
+                        mime,
+                        prompt: savedMeta?.prompt || ctx.promptText,
+                        timestamp: savedMeta?.timestamp || Date.now()
+                    };
+                    root[swipeId] = swipeImages;
+                    return root;
+                });
 
-                this._hostBridge.writeChatMessageExtra(ctx.messageId, 'da_images', daImagesRoot);
-                finalBlob = this.dataURLtoBlob(dataURL);
+                finalBlob = dataURLtoBlob(dataURL);
             }
 
             if (finalBlob) {
-                renderImageToMessage(ctx.imgSlot, finalBlob, this._store.getState(), callbacks);
+                const renderedImg = renderImageToMessage(ctx.imgSlot, finalBlob, this._store.getState(), callbacks);
+                if (renderedImg?.src?.startsWith('blob:')) {
+                    this._trackedObjectUrls.add(renderedImg.src);
+                }
                 this.setButtonState(ctx, 'done');
                 return true;
             }
@@ -579,20 +638,22 @@ export class FloorButtonContainer implements IDisposable {
         return false;
     }
 
-    private async persistImageToChat(
+    /**
+     * 将生成的图像转码、哈希去重并存入 IndexedDB 本地图库，同时将 UUID 关联写入会话消息元数据
+     */
+    private async persistGeneratedImage(
         ctx: FloorButtonContext,
         rawBlob: Blob,
         prompt: string,
         payload: any
     ): Promise<void> {
-        const settings = this._store.getState();
-        if (!settings.persistToChat) return;
-
         const currentChatId = this._hostBridge.getCurrentChatId();
         if (!currentChatId) return;
 
+        const settings = this._store.getState();
+
         try {
-            const { blob: finalBlob, mime } = await this.transcodeImage(
+            const { blob: finalBlob, mime } = await transcodeImage(
                 rawBlob,
                 settings.imageFormat,
                 settings.imageQuality
@@ -626,10 +687,6 @@ export class FloorButtonContainer implements IDisposable {
                 timestamp: Date.now()
             };
 
-            if (settings.extraSaveToChat) {
-                imageEntry.base64 = await this.blobToDataURL(finalBlob);
-            }
-
             this._hostBridge.patchChatMessageExtra(ctx.messageId, 'da_images', (prevRoot: any) => {
                 const root = { ...(prevRoot ?? {}) };
                 const swipeImages = { ...(root[swipeId] ?? {}) };
@@ -637,98 +694,10 @@ export class FloorButtonContainer implements IDisposable {
                 root[swipeId] = swipeImages;
                 return root;
             });
-            this._logger.info(`已成功将图像 UUID 引用原子化持久化至楼层 #${ctx.messageId} (Swipe: ${swipeId})`);
+            this._logger.info(`已成功将图像 UUID 引用持久化至楼层 #${ctx.messageId} (Swipe: ${swipeId})`);
         } catch (err) {
             this._logger.error('持久化图像至聊天记录失败:', err);
         }
-    }
-
-    private async transcodeImage(
-        blob: Blob,
-        format?: 'original' | 'webp' | 'jpeg',
-        quality = 0.85
-    ): Promise<{ blob: Blob; mime: string }> {
-        if (!format || format === 'original' || typeof window === 'undefined') {
-            return { blob, mime: blob.type || 'image/png' };
-        }
-
-        const targetMime = format === 'webp' ? 'image/webp' : 'image/jpeg';
-        if (blob.type === targetMime) {
-            return { blob, mime: targetMime };
-        }
-
-        return new Promise((resolve) => {
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            let isSettled = false;
-
-            const cleanupAndResolve = (outResult: { blob: Blob; mime: string }) => {
-                if (!isSettled) {
-                    isSettled = true;
-                    clearTimeout(timer);
-                    URL.revokeObjectURL(url);
-                    resolve(outResult);
-                }
-            };
-
-            const timer = setTimeout(() => {
-                cleanupAndResolve({ blob, mime: blob.type || 'image/png' });
-            }, 5000);
-
-            img.onload = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = Math.max(1, img.naturalWidth || img.width);
-                    canvas.height = Math.max(1, img.naturalHeight || img.height);
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(img, 0, 0);
-                        canvas.toBlob(
-                            (outBlob) => {
-                                if (outBlob) {
-                                    cleanupAndResolve({ blob: outBlob, mime: targetMime });
-                                } else {
-                                    cleanupAndResolve({ blob, mime: blob.type || 'image/png' });
-                                }
-                            },
-                            targetMime,
-                            quality
-                        );
-                        return;
-                    }
-                } catch {
-                    // 转码异常降级
-                }
-                cleanupAndResolve({ blob, mime: blob.type || 'image/png' });
-            };
-
-            img.onerror = () => {
-                cleanupAndResolve({ blob, mime: blob.type || 'image/png' });
-            };
-
-            img.src = url;
-        });
-    }
-
-    private dataURLtoBlob(dataURL: string): Blob {
-        const arr = dataURL.split(',');
-        const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-        }
-        return new Blob([u8arr], { type: mime });
-    }
-
-    private async blobToDataURL(blob: Blob): Promise<string> {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
     }
 
     public dispose(): void {

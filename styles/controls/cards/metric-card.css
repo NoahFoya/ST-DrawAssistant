@@ -1,0 +1,100 @@
+/**
+ * metric-card.css
+ * 层级：controls/cards
+ * 职责：指标与统计数据卡片网格 (宏观大盘指标、环境诊断网格、双列分析区框架)
+ */
+
+.da-macro-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.da-macro-stats__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    width: 100%;
+}
+
+.da-macro-stats__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 14px 10px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    text-align: center;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.da-macro-stats__card:hover {
+    border-color: var(--da-accent-color);
+    transform: translateY(-2px);
+}
+
+.da-macro-stats__card.is-success .da-macro-stats__card-val {
+    color: var(--da-color-success, #30d158);
+}
+
+.da-macro-stats__card-label {
+    font-size: 11px;
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+
+.da-macro-stats__card-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--da-accent-color);
+    line-height: 1.2;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-macro-stats__card-sub {
+    font-size: 10px;
+    color: var(--da-text-secondary);
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+/* ════ 双列并排分析区 ════ */
+.da-macro-stats__analytics-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-macro-stats__section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    box-sizing: border-box;
+}
+
+.da-macro-stats__section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-macro-stats__section--trend,
+.da-macro-stats__section--models {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}

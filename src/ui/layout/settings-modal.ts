@@ -3,23 +3,24 @@
  * @description 主设置弹窗控制器 (SettingsModal)
  */
 
-import { IUIRegistry } from '../../core/registry/ui-registry';
-import { IModalService } from '../feedback/modal-service';
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings, createDefaultSettings, hydrateSettingsFromPresets } from '../../core/state/store-types';
-import type { IDriverRegistry } from '../../core/registry/driver-registry';
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
 import {
-    VERSION,
-    DEFAULT_THEME_DATA,
+    IUIRegistry,
+    ObservableStore,
+    DrawAssistantSettings,
+    IDriverRegistry,
+    IDisposable,
+    DisposableStore,
     CORE_TAB_IDS,
     PROVIDERS
-} from '../../core/constants';
+} from '../../core';
+import { UpdateService } from '../../domain';
+import { IModalService } from './modal-service';
 import { ThemeService } from '../foundation/theme-service';
 import { FeedbackService } from '../feedback/feedback';
 import { TelemetryService } from '../foundation/telemetry-service';
 import { createUnsavedFloatingNotice } from './unsaved-floating-notice';
 import { OverlayHost } from '../foundation/overlay-host';
+import { createVersionCapsule } from '../controls/version-capsule';
 
 export interface SettingsModalOptions {
     uiRegistry: IUIRegistry;
@@ -34,12 +35,12 @@ export class SettingsModal implements IDisposable {
     private readonly _modalService: IModalService;
     private readonly _store: ObservableStore<DrawAssistantSettings>;
     private readonly _drivers?: IDriverRegistry;
-    private readonly _version: string;
     private readonly _disposables = new DisposableStore();
 
     private _modalHandle?: IDisposable;
     private _activeTabId = 'general';
     private _sidebarEl?: HTMLElement;
+    private _contentAreaEl?: HTMLElement;
     private _currentTabDisposable?: IDisposable;
     private _isDisposed = false;
 
@@ -48,7 +49,6 @@ export class SettingsModal implements IDisposable {
         this._modalService = options.modalService;
         this._store = options.store;
         this._drivers = options.drivers;
-        this._version = options.version || VERSION;
     }
 
     public open(initialTabId?: string): void {
@@ -62,13 +62,6 @@ export class SettingsModal implements IDisposable {
         dialog.className = 'da-settings-panel da-main-modal-inner';
         dialog.addEventListener('click', (e) => {
             e.stopPropagation();
-            const menuDropdown = dialog.querySelector('.da-modal-dropdown-menu') as HTMLElement | null;
-            const actionsBtn = dialog.querySelector('.da-header-right .da-icon-btn') as HTMLElement | null;
-            if (menuDropdown && menuDropdown.style.display !== 'none') {
-                if (actionsBtn && !actionsBtn.contains(e.target as Node) && !menuDropdown.contains(e.target as Node)) {
-                    menuDropdown.style.display = 'none';
-                }
-            }
         });
 
         // 1. 顶栏
@@ -86,6 +79,7 @@ export class SettingsModal implements IDisposable {
         const contentArea = document.createElement('div');
         contentArea.id = 'da-modal-content-area';
         contentArea.className = 'da-modal-content';
+        this._contentAreaEl = contentArea;
 
         bodyContainer.appendChild(sidebar);
         bodyContainer.appendChild(contentArea);
@@ -101,10 +95,11 @@ export class SettingsModal implements IDisposable {
         const floatingNotice = createUnsavedFloatingNotice();
         backdrop.appendChild(floatingNotice.element);
 
-        // 5. 挂载统一浮层宿主
+        // 5. 挂载统一浮层宿主并注入当前激活主题
         OverlayHost.getInstance().mount(backdrop);
+        ThemeService.applyCurrentThemeToNode(backdrop);
 
-        // 动态装配 Sidebar Tabs
+        // 动态渲染侧边栏 Tab 列表
         const refreshTabs = () => {
             sidebar.innerHTML = '';
             const allTabs = this._uiRegistry.getTabs();
@@ -120,25 +115,25 @@ export class SettingsModal implements IDisposable {
                 if (tab.id === 'character-manager' && extState['character-manager']?.enabled === false) return;
 
                 const itemBtn = document.createElement('button');
-                itemBtn.className = `da-tab-item da-sidebar-item ${tab.id === this._activeTabId ? 'active da-sidebar-item--active' : ''}`;
+                itemBtn.className = `da-sidebar-item ${tab.id === this._activeTabId ? 'da-sidebar-item--active' : ''}`;
                 itemBtn.setAttribute('role', 'tab');
                 itemBtn.setAttribute('aria-selected', String(tab.id === this._activeTabId));
                 itemBtn.id = `da-tab-btn-${tab.id}`;
 
                 const icon = document.createElement('span');
-                icon.className = 'da-tab-icon';
+                icon.className = 'da-sidebar-item__icon';
                 icon.textContent = tab.icon || '';
                 itemBtn.appendChild(icon);
 
                 const label = document.createElement('span');
-                label.className = 'da-tab-label';
+                label.className = 'da-sidebar-item__label';
                 label.textContent = tab.title;
                 itemBtn.appendChild(label);
 
                 const isTabDirty = FeedbackService.unsavedStateManager.getDirtyProviders().some((p) => p.tabId === tab.id);
                 if (isTabDirty) {
                     const dirtyDot = document.createElement('span');
-                    dirtyDot.className = 'da-tab-dirty-dot';
+                    dirtyDot.className = 'da-sidebar-item__dirty-dot';
                     dirtyDot.title = '此面板有尚未落盘的更改';
                     itemBtn.appendChild(dirtyDot);
                 }
@@ -172,12 +167,21 @@ export class SettingsModal implements IDisposable {
             }
         });
 
+        const themeSub = this._store.subscribeKey('themePreset', () => {
+            ThemeService.applyCurrentThemeToNode(backdrop);
+        });
+
         this._activeTabId = initialTabId || CORE_TAB_IDS.GENERAL;
         void this.switchTab(this._activeTabId, contentArea);
 
         TelemetryService.start(footer, this._store, this._drivers);
+        void UpdateService.getInstance().checkUpdate();
 
-        backdrop.addEventListener('click', () => void this.close());
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) {
+                void this.close();
+            }
+        });
 
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && this._modalHandle) {
@@ -199,6 +203,7 @@ export class SettingsModal implements IDisposable {
                 unsavedUnsub();
                 providerSub.dispose();
                 extensionsSub.dispose();
+                themeSub.dispose();
                 showHelpSub.dispose();
                 floatingNotice.dispose();
                 OverlayHost.getInstance().dispose();
@@ -222,20 +227,27 @@ export class SettingsModal implements IDisposable {
         appName.className = 'da-header-title';
         appName.innerHTML = '✨ Starlight DrawAssistant';
 
-        const versionBadge = document.createElement('span');
-        versionBadge.className = 'da-header-version-badge';
-        versionBadge.textContent = `V${this._version}`;
+        const versionCapsule = createVersionCapsule({
+            onClick: () => {
+                void this.switchTab(CORE_TAB_IDS.ABOUT);
+            }
+        });
+        this._disposables.add(versionCapsule);
 
         headerLeft.appendChild(appName);
-        headerLeft.appendChild(versionBadge);
+        headerLeft.appendChild(versionCapsule);
 
         const headerRight = document.createElement('div');
         headerRight.className = 'da-header-right';
 
+        const quickThemeCapsule = document.createElement('div');
+        quickThemeCapsule.className = 'da-quick-theme-capsule';
+        quickThemeCapsule.title = '快速切换界面主题配色';
+
         const quickThemeSelect = document.createElement('select');
         quickThemeSelect.id = 'da-quick-theme-select';
-        quickThemeSelect.className = 'da-select da-quick-theme-select';
-        quickThemeSelect.title = '快速切换界面主题';
+        quickThemeSelect.className = 'da-quick-theme-select';
+        quickThemeSelect.title = '快速切换界面主题配色';
 
         const populateThemeOptions = () => {
             const themes = this._store.get('customThemes') || [];
@@ -282,101 +294,18 @@ export class SettingsModal implements IDisposable {
             })
         );
 
-        const actionsBtn = document.createElement('button');
-        actionsBtn.className = 'da-icon-btn';
-        actionsBtn.title = '全局设置与帮助菜单';
-        actionsBtn.innerHTML = '<i class="fa-solid fa-ellipsis-vertical"></i>';
-
-        const menuDropdown = document.createElement('div');
-        menuDropdown.className = 'da-modal-dropdown-menu';
-        menuDropdown.style.display = 'none';
-
-        const createMenuItem = (iconHtml: string, text: string, onClick: () => void) => {
-            const item = document.createElement('div');
-            item.className = 'da-modal-dropdown-item';
-            item.innerHTML = `${iconHtml} <span>${text}</span>`;
-            item.onclick = (e) => {
-                e.stopPropagation();
-                menuDropdown.style.display = 'none';
-                onClick();
-            };
-            return item;
-        };
-
-        menuDropdown.appendChild(createMenuItem('<i class="fa-solid fa-circle-question"></i>', '使用帮助与版本日志', () => {
-            const contentArea = document.getElementById('da-modal-content-area');
-            if (contentArea) {
-                void this.switchTab(CORE_TAB_IDS.ABOUT, contentArea);
-            }
-        }));
-
-        menuDropdown.appendChild(createMenuItem('<i class="fa-solid fa-download"></i>', '导出全量设置 JSON', () => {
-            const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this._store.getState(), null, 2));
-            const dl = document.createElement('a');
-            dl.setAttribute('href', dataStr);
-            dl.setAttribute('download', `st-drawassistant-settings-v${this._version}.json`);
-            dl.click();
-        }));
-
-        menuDropdown.appendChild(createMenuItem('<i class="fa-solid fa-upload"></i>', '导入全量设置 JSON', () => {
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.json';
-            fileInput.onchange = () => {
-                const file = fileInput.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    try {
-                        const parsed = JSON.parse(ev.target?.result as string);
-                        this._store.update(parsed);
-                        FeedbackService.toastSuccess('全量设置已成功恢复导入！');
-                    } catch {
-                        FeedbackService.toastError('配置文件格式错误，导入失败');
-                    }
-                };
-                reader.readAsText(file);
-            };
-            fileInput.click();
-        }));
-
-        menuDropdown.appendChild(createMenuItem('<i class="fa-solid fa-rotate-left"></i>', '重置全量扩展设置', async () => {
-            const confirmed = await FeedbackService.confirm({
-                title: '重置全量设置确认',
-                message: '确定要将 ST-DrawAssistant 的全量配置恢复为出厂示范配置吗？此操作将重置所有生图参数、主题配色与工作流映射。',
-                confirmText: '确认重置',
-                isDangerous: true
-            });
-            if (confirmed) {
-                const defaults = createDefaultSettings();
-                this._store.reset(defaults);
-                ThemeService.applyThemeVariables(defaults.customThemes?.[0]?.data || DEFAULT_THEME_DATA);
-                await hydrateSettingsFromPresets(this._store, true);
-                FeedbackService.toastSuccess('全量设置已成功恢复为出厂示范配置！');
-                const contentArea = document.getElementById('da-modal-content-area');
-                if (contentArea) {
-                    void this.switchTab(this._activeTabId, contentArea);
-                }
-            }
-        }));
-
-        actionsBtn.onclick = (e) => {
-            e.stopPropagation();
-            menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
-        };
-
-        document.addEventListener('click', () => {
-            menuDropdown.style.display = 'none';
-        });
+        quickThemeCapsule.appendChild(quickThemeSelect);
 
         const closeBtn = document.createElement('button');
-        closeBtn.className = 'da-close-red-dot';
-        closeBtn.title = '关闭设置面板';
-        closeBtn.onclick = () => void this.close();
+        closeBtn.className = 'da-btn da-icon-btn da-modal-close-btn';
+        closeBtn.title = '关闭设置面板 (Esc)';
+        closeBtn.setAttribute('aria-label', '关闭设置面板');
+        closeBtn.innerHTML = '✕';
+        closeBtn.onclick = () => {
+            void this.close();
+        };
 
-        headerRight.appendChild(quickThemeSelect);
-        headerRight.appendChild(actionsBtn);
-        headerRight.appendChild(menuDropdown);
+        headerRight.appendChild(quickThemeCapsule);
         headerRight.appendChild(closeBtn);
 
         header.appendChild(headerLeft);
@@ -405,7 +334,25 @@ export class SettingsModal implements IDisposable {
         return footer;
     }
 
-    public async switchTab(tabId: string, container: HTMLElement): Promise<boolean> {
+    /**
+     * 切换主弹窗的内容选项卡 (Tab)
+     *
+     * 处理逻辑：
+     * 1. 检查是否存在未保存草稿，必要时拦截并提示用户确认；
+     * 2. 清理上一个活动 Tab 的注册句柄 (IDisposable)；
+     * 3. 彻底注销可能处于激活状态的帮助说明气泡 (OverlayHost.dismissAll)，防止浮层残留；
+     * 4. 同步切换侧边栏高亮类名 (包含 active 与 da-sidebar-item--active)，根治样式残留；
+     * 5. 重置内容区域滚动条至顶部 (scrollTop = 0)；
+     * 6. 渲染并挂载新 Tab 视图。
+     *
+     * @param tabId 目标选项卡标识
+     * @param container 内容承载区域 DOM 容器
+     * @returns 是否成功完成切换
+     */
+    public async switchTab(tabId: string, container?: HTMLElement): Promise<boolean> {
+        const targetContainer = container || this._contentAreaEl || (typeof document !== 'undefined' ? (document.getElementById('da-modal-content-area') as HTMLElement) : null);
+        if (!targetContainer) return false;
+
         if (tabId !== this._activeTabId) {
             const decision = await FeedbackService.unsavedStateManager.checkUnsavedBeforeAction('切换选项卡');
             if (decision === 'cancel') {
@@ -413,16 +360,21 @@ export class SettingsModal implements IDisposable {
             }
         }
 
+        // 1. 清理旧 Tab 句柄与全局活动浮层
         this._currentTabDisposable?.dispose();
         this._currentTabDisposable = undefined;
+        OverlayHost.getInstance().dismissAll();
 
-        container.innerHTML = '';
+        // 2. 重置容器内容与滚动条位置
+        targetContainer.innerHTML = '';
+        targetContainer.scrollTop = 0;
         this._activeTabId = tabId;
 
+        // 3. 同步侧边栏激活状态类名，杜绝样式残留
         if (this._sidebarEl) {
-            this._sidebarEl.querySelectorAll('.da-tab-item').forEach((btn) => {
+            this._sidebarEl.querySelectorAll('.da-sidebar-item').forEach((btn) => {
                 const isCurrent = btn.id === `da-tab-btn-${tabId}`;
-                btn.classList.toggle('active', isCurrent);
+                btn.classList.toggle('da-sidebar-item--active', isCurrent);
                 btn.setAttribute('aria-selected', String(isCurrent));
             });
         }
@@ -431,16 +383,13 @@ export class SettingsModal implements IDisposable {
 
         if (!tab) {
             const placeholder = document.createElement('div');
-            placeholder.className = 'da-section-card da-tab-placeholder';
+            placeholder.className = 'da-card da-tab-placeholder';
             placeholder.textContent = `Tab [${tabId}] 暂未挂载`;
-            container.appendChild(placeholder);
+            targetContainer.appendChild(placeholder);
             return true;
         }
 
-        const pane = document.createElement('div');
-        pane.className = 'da-tab-pane';
-        const res = tab.render(pane);
-        container.appendChild(pane);
+        const res = tab.render(targetContainer);
 
         if (res && typeof res.dispose === 'function') {
             this._currentTabDisposable = res;

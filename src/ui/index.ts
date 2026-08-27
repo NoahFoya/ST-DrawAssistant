@@ -12,16 +12,13 @@ export * from './controls';
 // 3. 核心交互与反馈域 (Feedback Domain)
 export * from './feedback';
 
-// 4. 预设与工作流管理域 (Presets Domain)
-export * from './presets';
-
 // 5. 媒体与画廊域 (Media Domain)
 export * from './media';
 
-// 6. 宿主布局骨架域 (Layout Domain)
+// 6. 布局与容器组件 (Layout & Containers)
 export * from './layout';
 
-// 7. 各 Tab 装配视图 (Views)
+// 7. 各 Tab 面板视图 (Views)
 export * from './views/general-tab';
 export * from './views/comfyui-tab';
 export * from './views/sdwebui-tab';

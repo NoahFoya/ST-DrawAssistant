@@ -4,16 +4,24 @@
  */
 
 import { BaseDriver, DriverError, DriverErrorType } from './base-driver';
-import { GenerationPayload, DriverAssetSyncResult } from './driver-contract';
-import { ObservableStore } from '../../core/state/store';
-import type { DrawAssistantSettings } from '../../core/state/store-types';
-import { getMacroVariables } from '../../core/config/config-loader';
+import {
+    GenerationPayload,
+    DriverAssetSyncResult,
+    DriverCapabilities,
+    ObservableStore,
+    DrawAssistantSettings,
+    LoraItem,
+    DEFAULT_COMFYUI_URL,
+    DEFAULT_TASK_TIMEOUT_MS,
+    DEFAULT_HTTP_TIMEOUT_MS,
+    DEFAULT_UPLOAD_TIMEOUT_MS,
+    getMacroVariables
+} from '../../core';
 import { joinPromptParts } from '../pipeline/prompt-pipeline';
 
 interface PendingTask {
     resolve: (result: { imageBlobs: Blob[]; metadata: Record<string, unknown> }) => void;
     reject: (err: Error) => void;
-    onProgress: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void;
     payload: GenerationPayload;
     timeoutTimer: ReturnType<typeof setTimeout>;
 }
@@ -95,22 +103,27 @@ export function substituteWorkflowVariables(
 
     let processed = rawJson;
 
-    // 替换数字变量 (支持带引号与不带引号)
+    // 安全转义正则表达式中的特殊字符 (如 %, ., +, (, ), [ 等)
+    const escapeReg = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // 替换数字变量 (支持带引号与不带引号，例如 "%steps%" 或 %steps%)
     for (const [key, numVal] of Object.entries(numVarMap)) {
-        const quotedKeyRegex = new RegExp(`"\\${key}"`, 'g');
-        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        const escapedKey = escapeReg(key);
+        const quotedKeyRegex = new RegExp(`"${escapedKey}"`, 'g');
+        const rawKeyRegex = new RegExp(escapedKey, 'g');
         const numStr = String(numVal);
         processed = processed.replace(quotedKeyRegex, numStr);
         processed = processed.replace(rawKeyRegex, numStr);
     }
 
-    // 替换字符串变量 (安全转义)
+    // 替换字符串变量 (通过 JSON.stringify 安全转义内部引号与换行)
     for (const [key, strVal] of Object.entries(stringVarMap)) {
-        const quotedKeyRegex = new RegExp(`"\\${key}"`, 'g');
-        const rawKeyRegex = new RegExp(`\\${key}`, 'g');
+        const escapedKey = escapeReg(key);
+        const quotedKeyRegex = new RegExp(`"${escapedKey}"`, 'g');
+        const rawKeyRegex = new RegExp(escapedKey, 'g');
         const escaped = JSON.stringify(strVal);
         processed = processed.replace(quotedKeyRegex, escaped);
-        // 若在非引号区直接内嵌，仅去掉首尾双引号
+        // 若在非引号区直接内嵌，仅去掉首尾双引号后进行替换
         processed = processed.replace(rawKeyRegex, escaped.substring(1, escaped.length - 1));
     }
 
@@ -127,15 +140,21 @@ export function substituteWorkflowVariables(
 export class ComfyUIDriver extends BaseDriver {
     public readonly id = 'comfyui';
     public readonly name = 'ComfyUI';
+    public readonly capabilities: DriverCapabilities = {
+        supportsInterrupt: true,
+        supportsInpaint: true,
+        supportsAssetSync: true,
+        promptSyntax: 'wlr'
+    };
 
     private readonly _clientId = `st_da_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-    /** 常驻 WebSocket 连接与多任务并发路由表 */
+    /** WebSocket 连接与挂起任务表 */
     private _ws: WebSocket | null = null;
     private _wsConnectingPromise: Promise<void> | null = null;
     private readonly _pendingTasks = new Map<string, PendingTask>();
 
-    /** /object_info 内存缓存 (TTL: 5分钟) */
+    /** 节点模型资产缓存 (TTL: 5分钟) */
     private readonly _objectInfoCache = new Map<string, { data: Record<string, any>; fetchedAt: number }>();
     private readonly _objectInfoTTL = 300_000;
 
@@ -144,7 +163,7 @@ export class ComfyUIDriver extends BaseDriver {
     }
 
     protected override getEndpointUrl(): string {
-        return this.store.getState().serverUrl || 'http://127.0.0.1:8188';
+        return this.store.getState().serverUrl || DEFAULT_COMFYUI_URL;
     }
 
     public async ping(): Promise<boolean> {
@@ -186,7 +205,7 @@ export class ComfyUIDriver extends BaseDriver {
      * @param lora LoRA 配置项
      * @returns 格式化后的 WeiLin LoRA 标签字符串
      */
-    public override formatLoraTag(lora: { name: string; weight?: number; clipWeight?: number; textWeight?: number; triggerWeight?: number }): string {
+    public override formatLoraTag(lora: LoraItem): string {
         const cleanName = stripExt(lora.name);
         if (!cleanName) return '';
         const modelWeight = lora.weight ?? 1.0;
@@ -241,6 +260,7 @@ export class ComfyUIDriver extends BaseDriver {
 
         // 1. 组装正向提示词：模型起手词 + 全局前缀 + AI楼层正向词 + 全局后缀 + LoRA 标签 (WeiLin 格式)
         const loraTags = (settings.loras || [])
+            .filter((item) => item.enabled !== false)
             .map((item) => this.formatLoraTag(item))
             .filter(Boolean)
             .join(', ');
@@ -290,9 +310,8 @@ export class ComfyUIDriver extends BaseDriver {
         };
     }
 
-    public async generate(
-        payload: GenerationPayload,
-        onProgress?: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void
+    protected override async doGenerate(
+        payload: GenerationPayload
     ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }> {
         const settings = this.store.getState();
 
@@ -342,7 +361,7 @@ export class ComfyUIDriver extends BaseDriver {
                 prompt: promptJson,
                 client_id: this._clientId
             },
-            settings.requestTimeout || 120_000
+            DEFAULT_HTTP_TIMEOUT_MS
         );
 
         if (!promptResp?.prompt_id) {
@@ -367,6 +386,7 @@ export class ComfyUIDriver extends BaseDriver {
         }
 
         const promptId = promptResp.prompt_id;
+        const taskTimeout = settings.taskTimeout || DEFAULT_TASK_TIMEOUT_MS;
 
         return new Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }>((resolve, reject) => {
             const timeoutTimer = setTimeout(() => {
@@ -374,15 +394,14 @@ export class ComfyUIDriver extends BaseDriver {
                 reject(
                     new DriverError(
                         DriverErrorType.TIMEOUT,
-                        `ComfyUI 生成任务执行超时 (${Math.round((settings.requestTimeout || 120_000) / 1000)}s)`
+                        `ComfyUI 生成任务执行超时 (${Math.round(taskTimeout / 1000)}s)`
                     )
                 );
-            }, settings.requestTimeout || 120_000);
+            }, taskTimeout);
 
             this._pendingTasks.set(promptId, {
                 resolve,
                 reject,
-                onProgress: onProgress || (() => {}),
                 payload,
                 timeoutTimer
             });
@@ -404,9 +423,15 @@ export class ComfyUIDriver extends BaseDriver {
         }
     }
 
-    /** 兼容历史 cancel 别名调用 */
-    public async cancel(): Promise<void> {
-        return this.interrupt();
+    public override dispose(): void {
+        super.dispose();
+        if (this._ws) {
+            try {
+                this._ws.close();
+            } catch {}
+            this._ws = null;
+        }
+        this._wsConnectingPromise = null;
     }
 
     // ─── WebSocket 管理与消息分发 ─────────────────────────────────────────────
@@ -454,12 +479,8 @@ export class ComfyUIDriver extends BaseDriver {
                 };
 
                 this._ws.onmessage = async (evt) => {
-                    if (evt.data instanceof Blob) {
-                        // 二进制消息通常为实时预览图 (PNG/JPEG)
-                        const previewBlob = evt.data.slice(8); // 前 8 字节为头部
-                        for (const task of this._pendingTasks.values()) {
-                            task.onProgress({ percent: -1, previewBlob });
-                        }
+                    // 若收到非字符串二进制消息（如服务端发送的预览流），静默忽略，不占用前端编解码与内存
+                    if (typeof evt.data !== 'string') {
                         return;
                     }
 
@@ -482,14 +503,7 @@ export class ComfyUIDriver extends BaseDriver {
     private async handleWebSocketMessage(msg: { type: string; data: any }): Promise<void> {
         const { type, data } = msg;
 
-        if (type === 'progress') {
-            const promptId = data?.prompt_id;
-            const task = promptId ? this._pendingTasks.get(promptId) : Array.from(this._pendingTasks.values())[0];
-            if (task && data?.max > 0) {
-                const percent = Math.round((data.value / data.max) * 100);
-                task.onProgress({ percent, nodeName: data?.node });
-            }
-        } else if (type === 'executing') {
+        if (type === 'executing') {
             const promptId = data?.prompt_id;
             const node = data?.node;
 
@@ -572,7 +586,7 @@ export class ComfyUIDriver extends BaseDriver {
         const resp = await fetch(url, {
             method: 'POST',
             body: formData,
-            signal: AbortSignal.timeout(30000)
+            signal: AbortSignal.timeout(DEFAULT_UPLOAD_TIMEOUT_MS)
         });
 
         if (!resp.ok) {

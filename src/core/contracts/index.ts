@@ -1,9 +1,11 @@
 /**
  * @module core/contracts
- * @description 基础服务与调度接口定义 (规范分层依赖)
+ * @description 核心服务与调度接口定义
  */
 
 import { IDisposable } from '../foundation/disposable';
+import type { ObservableStore } from '../state/store';
+import type { DrawAssistantSettings, LoraItem } from '../state/store-types';
 
 /** 外观主题色彩与毛玻璃配置 */
 export interface ThemeData {
@@ -22,7 +24,7 @@ export interface ThemeData {
 }
 
 /** 外观主题服务接口 */
-export interface IThemeContract extends IDisposable {
+export interface IThemeService extends IDisposable {
     /** 注入主题配色变量至指定 DOM 节点或根节点 */
     applyTheme(themeData?: Partial<ThemeData>, targetNode?: HTMLElement): void;
     /** 获取当前生效的主题数据 */
@@ -30,7 +32,7 @@ export interface IThemeContract extends IDisposable {
     /** 切换并应用指定预设主题 */
     setThemePreset(presetId: string): void;
 }
-
+export type IThemeContract = IThemeService;
 
 /** 提示词流水线上下文 */
 export interface PipelineHookContext {
@@ -97,7 +99,7 @@ export type GenerationPayload =
       };
 
 /** 提示词流水线钩子接口 */
-export interface IPipelineHooksContract {
+export interface IPipelineHooks {
     /** 阶段 1：文本基础清洗前钩子 */
     readonly beforeClean: IPipelineHookRegistration<string, PipelineHookContext>;
     /** 阶段 2：提示词组装前钩子 (通用扩展挂载点) */
@@ -105,6 +107,7 @@ export interface IPipelineHooksContract {
     /** 阶段 3：提交生图驱动前的请求数据拦截钩子 */
     readonly beforeSubmit: IPipelineHookRegistration<GenerationPayload, PipelineHookContext>;
 }
+export type IPipelineHooksContract = IPipelineHooks;
 
 /** 任务状态枚举 */
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'DISCARDED' | 'ERROR';
@@ -123,14 +126,12 @@ export interface TaskState {
     readonly status: TaskStatus;
     readonly payload?: GenerationPayload;
     readonly createdAt: number;
-    readonly progress?: { percent: number; nodeName?: string; previewBlob?: Blob };
     readonly resultBlobs?: Blob[];
     readonly error?: string;
 }
 
-
-/** 生图任务调度系统接口 */
-export interface ITaskContract extends IDisposable {
+/** 生图任务管理器接口 */
+export interface ITaskManager extends IDisposable {
     /** 提交异步生图任务 */
     submit(options: {
         chatId: string;
@@ -148,27 +149,18 @@ export interface ITaskContract extends IDisposable {
     /** 获取指定楼层的所有任务 */
     getTasksByMessage(chatId: string, messageId: number): TaskState[];
 }
+export type ITaskContract = ITaskManager;
 
-/** 模态框管理服务接口 */
-export interface IModalContract extends IDisposable {
-    /** 打开模态框并管理层级 */
-    open(element: HTMLElement, options?: { onClose?: () => void; isDismissible?: boolean }): IDisposable;
-    /** 根据 ID 关闭指定模态框 */
-    close(modalId: string): void;
-    /** 关闭栈顶模态框 */
-    closeTop(): boolean;
-    /** 获取当前打开的模态框数量 */
-    getOpenCount(): number;
-}
-
-/** 用户交互反馈服务接口 (Toast 提示与对话框) */
-export interface IFeedbackContract {
-    /** 显示浮动 Toast 消息提示 */
-    showToast?(message: string, isError?: boolean): void;
-    /** 弹出确认对话框 */
-    confirm?(options: { title?: string; message: string; confirmText?: string; cancelText?: string }): Promise<boolean>;
-    /** 弹出文本输入对话框 */
-    prompt?(options: { title?: string; message: string; defaultValue?: string; placeholder?: string }): Promise<string | null>;
+/** 驱动后端特性配置声明 */
+export interface DriverCapabilities {
+    /** 是否支持即时打断生图任务 */
+    readonly supportsInterrupt: boolean;
+    /** 是否支持局部重绘模式 (Inpaint) */
+    readonly supportsInpaint: boolean;
+    /** 是否支持从后端拉取模型与采样器列表 (资产同步) */
+    readonly supportsAssetSync: boolean;
+    /** 提示词与权重格式 ('wlr' ComfyUI格式 | 'parentheses' SD括号格式 | 'plain' 纯文本) */
+    readonly promptSyntax: 'wlr' | 'parentheses' | 'plain';
 }
 
 /** 驱动后端资产同步结果 */
@@ -189,30 +181,31 @@ export interface DriverBuildPayloadOptions {
     initImageBlob?: Blob;
     maskImageBlob?: Blob;
     denoiseStrength?: number;
-    settings: any;
+    settings: DrawAssistantSettings;
     overrides?: Record<string, unknown>;
 }
 
 /**
- * 生图后端驱动核心接口
- * 供驱动注册中心（DriverRegistry）、调度器与 UI 转接层统一使用
+ * 生图后端驱动统一接口
+ * 供驱动注册中心（DriverRegistry）、调度器与 UI 视图层统一使用
  */
-export interface IDrawDriverContract {
+export interface IDrawDriver {
     readonly id: string;
     readonly name: string;
+    readonly capabilities: DriverCapabilities;
     ping(): Promise<boolean>;
     checkConnection(): Promise<{ connected: boolean; latencyMs?: number; error?: string }>;
-    syncAssets(store: any): Promise<DriverAssetSyncResult>;
+    syncAssets(store: ObservableStore<DrawAssistantSettings>): Promise<DriverAssetSyncResult>;
     formatPrompt(rawPrompt: string): string;
-    formatLoraTag(lora: { name: string; weight?: number; clipWeight?: number; textWeight?: number; triggerWeight?: number }): string;
+    formatLoraTag(lora: LoraItem): string;
     buildPayload(options: DriverBuildPayloadOptions): GenerationPayload;
+    /**
+     * 执行生图流程并返回生成的图片与元数据
+     *
+     * @param payload 统一生图请求数据
+     */
     generate(
-        payload: GenerationPayload,
-        onProgress: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void
+        payload: GenerationPayload
     ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }>;
     interrupt(): Promise<void>;
 }
-
-
-
-

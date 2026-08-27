@@ -11,6 +11,7 @@ export interface IExtension {
     readonly id: string;
     readonly name: string;
     readonly version: string;
+    readonly description?: string;
     /** 激活生命周期 (挂载 Tab 插槽、注册拦截钩子、加载专属预设) */
     activate(context: any): void | Promise<void>;
     /** 停用生命周期 (清理资源与事件监听) */
@@ -20,6 +21,7 @@ export interface IExtension {
 export interface IExtensionRegistry extends IDisposable {
     register(extension: IExtension): IDisposable;
     get(id: string): IExtension | undefined;
+    has(id: string): boolean;
     getAll(): readonly IExtension[];
     activateAll(context: any): Promise<void>;
     deactivateAll(): Promise<void>;
@@ -53,6 +55,10 @@ export class ExtensionRegistry implements IExtensionRegistry {
 
     public get(id: string): IExtension | undefined {
         return this._extensions.get(id);
+    }
+
+    public has(id: string): boolean {
+        return this._extensions.has(id);
     }
 
     public getAll(): readonly IExtension[] {

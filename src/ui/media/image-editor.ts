@@ -5,6 +5,8 @@
 
 import { ThemeService } from '../foundation/theme-service';
 import { FeedbackService } from '../feedback/feedback';
+import { ModalService } from '../layout/modal-service';
+import { IDisposable } from '../../core';
 
 export interface ImageCropperOptions {
     imageSrc: string;
@@ -17,18 +19,16 @@ export interface ImageCropperOptions {
 /**
  * 弹出图像裁剪与图标预览模态框
  */
-export function openImageCropperModal(options: ImageCropperOptions): void {
+export function openImageCropperModal(options: ImageCropperOptions): IDisposable {
     const { imageSrc, onCrop, onConfirm, onCancel } = options;
     const cropCallback = onConfirm || onCrop;
 
     const backdrop = document.createElement('div');
     backdrop.className = 'da-modal-backdrop st-da-root da-cropper-backdrop';
-    backdrop.style.zIndex = '100085';
     ThemeService.applyCurrentThemeToNode(backdrop);
 
     const panel = document.createElement('div');
-    panel.className = 'da-settings-panel da-dialog-panel';
-    panel.style.maxWidth = '460px';
+    panel.className = 'da-settings-panel da-dialog-panel da-cropper-panel';
 
     const title = document.createElement('h3');
     title.className = 'da-dialog-title';
@@ -47,16 +47,32 @@ export function openImageCropperModal(options: ImageCropperOptions): void {
     const btnGroup = document.createElement('div');
     btnGroup.className = 'da-dialog-actions';
 
+    let isSettled = false;
+
+    const modalHandle = ModalService.getInstance().open(backdrop, {
+        closeOnBackdrop: true,
+        closeOnEscape: true,
+        onClose: () => {
+            if (!isSettled) {
+                isSettled = true;
+                onCancel?.();
+            }
+        }
+    });
+
     const btnCancel = document.createElement('button');
-    btnCancel.className = 'da-btn secondary';
+    btnCancel.className = 'da-btn da-btn--secondary';
     btnCancel.textContent = '取消';
     btnCancel.onclick = () => {
-        backdrop.remove();
-        if (onCancel) onCancel();
+        if (!isSettled) {
+            isSettled = true;
+            onCancel?.();
+        }
+        modalHandle.dispose();
     };
 
     const btnConfirm = document.createElement('button');
-    btnConfirm.className = 'da-btn primary';
+    btnConfirm.className = 'da-btn da-btn--primary';
     btnConfirm.textContent = '保存图标';
     btnConfirm.onclick = () => {
         try {
@@ -65,19 +81,24 @@ export function openImageCropperModal(options: ImageCropperOptions): void {
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext('2d');
-            if (ctx) {
-                const minSide = Math.min(img.naturalWidth, img.naturalHeight);
-                const sx = (img.naturalWidth - minSide) / 2;
-                const sy = (img.naturalHeight - minSide) / 2;
-                ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-                const croppedData = canvas.toDataURL('image/png');
-                if (cropCallback) cropCallback(croppedData);
-                FeedbackService.toastSuccess('悬浮球图标裁剪保存成功');
+            if (!ctx) {
+                FeedbackService.toastError('无法获取 Canvas 2D 绘图上下文');
+                isSettled = true;
+                modalHandle.dispose();
+                return;
             }
+            const minSide = Math.min(img.naturalWidth, img.naturalHeight);
+            const sx = (img.naturalWidth - minSide) / 2;
+            const sy = (img.naturalHeight - minSide) / 2;
+            ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+            const croppedData = canvas.toDataURL('image/png');
+            if (cropCallback) cropCallback(croppedData);
+            FeedbackService.toastSuccess('悬浮球图标裁剪保存成功');
         } catch {
             FeedbackService.toastError('图像裁剪失败，请尝试更换图片');
         }
-        backdrop.remove();
+        isSettled = true;
+        modalHandle.dispose();
     };
 
     btnGroup.appendChild(btnCancel);
@@ -85,7 +106,8 @@ export function openImageCropperModal(options: ImageCropperOptions): void {
     panel.appendChild(btnGroup);
 
     backdrop.appendChild(panel);
-    document.body.appendChild(backdrop);
+
+    return modalHandle;
 }
 
 export interface InpaintModalOptions {
@@ -98,31 +120,54 @@ export interface InpaintModalOptions {
 /**
  * 打开局部重绘 Canvas 画布涂抹模态框
  */
-export function openInpaintCanvasModal(options: InpaintModalOptions): void {
+export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposable {
     const { imageSrc, initialPrompt, onConfirm, onCancel } = options;
 
     const backdrop = document.createElement('div');
     backdrop.className = 'da-modal-backdrop st-da-root da-inpaint-backdrop';
-    backdrop.style.zIndex = '100095';
     ThemeService.applyCurrentThemeToNode(backdrop);
 
     const modal = document.createElement('div');
     modal.className = 'da-settings-panel da-inpaint-modal-panel';
     modal.addEventListener('click', (e) => e.stopPropagation());
 
+    let isSettled = false;
+
+    const stopDrawing = () => {
+        isDrawing = false;
+    };
+
+    const cleanupResources = () => {
+        window.removeEventListener('mouseup', stopDrawing);
+        window.removeEventListener('touchend', stopDrawing);
+        if (!isSettled) {
+            isSettled = true;
+            onCancel?.();
+        }
+    };
+
+    const modalHandle = ModalService.getInstance().open(backdrop, {
+        closeOnBackdrop: true,
+        closeOnEscape: true,
+        onClose: cleanupResources
+    });
+
     const header = document.createElement('div');
     header.className = 'da-header-bar';
 
     const title = document.createElement('h3');
     title.className = 'da-header-title';
-    title.textContent = '🖌️ 局部重绘画布涂抹';
+    title.textContent = '局部重绘画布涂抹';
 
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'da-close-red-dot';
+    closeBtn.className = 'da-modal-close-btn';
     closeBtn.title = '关闭画布';
     closeBtn.onclick = () => {
-        backdrop.remove();
-        onCancel?.();
+        if (!isSettled) {
+            isSettled = true;
+            onCancel?.();
+        }
+        modalHandle.dispose();
     };
 
     header.appendChild(title);
@@ -170,6 +215,14 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
         };
     };
 
+    /**
+     * 局部重绘画笔涂抹核心渲染逻辑
+     *
+     * 双层画布机制：
+     * 1. 隐式黑白蒙版 (maskCanvas)：纯黑代表保留区域，纯白代表重绘区域，最终转为 PNG Base64 提交给生图驱动；
+     * 2. 可视化预览层 (canvas)：先重绘底图，再将 maskCanvas 中的白色重绘区域映射为半透明红色覆盖层 (rgba(255, 0, 0, 0.45))，
+     *    提供符合用户直觉的直观涂抹视觉反馈。
+     */
     const draw = (pos: { x: number; y: number }) => {
         if (!isDrawing) return;
 
@@ -223,9 +276,7 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
         draw(getPos(e));
     });
 
-    window.addEventListener('mouseup', () => {
-        isDrawing = false;
-    });
+    window.addEventListener('mouseup', stopDrawing);
 
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
@@ -242,35 +293,34 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
         }
     });
 
-    window.addEventListener('touchend', () => {
-        isDrawing = false;
-    });
+    window.addEventListener('touchend', stopDrawing);
 
     const toolbar = document.createElement('div');
     toolbar.className = 'da-inpaint-toolbar';
 
     const brushSizeInput = document.createElement('input');
-    brushSizeInput.type = 'range';
+    brushSizeInput.type = 'number';
     brushSizeInput.min = '5';
     brushSizeInput.max = '120';
     brushSizeInput.value = String(brushSize);
-    brushSizeInput.className = 'da-range-slider';
-    brushSizeInput.title = '调节画笔大小';
-    brushSizeInput.oninput = () => {
-        brushSize = parseInt(brushSizeInput.value, 10);
+    brushSizeInput.className = 'da-input da-input-num-small da-brush-size-input';
+    brushSizeInput.title = '调节画笔大小 (5-120px)';
+    brushSizeInput.onchange = () => {
+        brushSize = Math.max(5, Math.min(120, parseInt(brushSizeInput.value, 10) || 20));
+        brushSizeInput.value = String(brushSize);
     };
 
     const eraserToggleBtn = document.createElement('button');
-    eraserToggleBtn.className = 'da-btn secondary';
-    eraserToggleBtn.innerHTML = '🧹 橡皮擦';
+    eraserToggleBtn.className = 'da-btn da-btn--secondary';
+    eraserToggleBtn.innerHTML = '橡皮擦';
     eraserToggleBtn.onclick = () => {
         isEraser = !isEraser;
-        eraserToggleBtn.className = isEraser ? 'da-btn primary' : 'da-btn secondary';
+        eraserToggleBtn.className = isEraser ? 'da-btn da-btn--primary' : 'da-btn da-btn--secondary';
     };
 
     const clearBtn = document.createElement('button');
-    clearBtn.className = 'da-btn secondary';
-    clearBtn.innerHTML = '🗑️ 清空';
+    clearBtn.className = 'da-btn da-btn--secondary';
+    clearBtn.innerHTML = '清空';
     clearBtn.onclick = () => {
         maskCtx.fillStyle = '#000000';
         maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
@@ -294,16 +344,19 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
     footerActions.className = 'da-dialog-actions';
 
     const cancelFooterBtn = document.createElement('button');
-    cancelFooterBtn.className = 'da-btn secondary';
+    cancelFooterBtn.className = 'da-btn da-btn--secondary';
     cancelFooterBtn.textContent = '取消';
     cancelFooterBtn.onclick = () => {
-        backdrop.remove();
-        onCancel?.();
+        if (!isSettled) {
+            isSettled = true;
+            onCancel?.();
+        }
+        modalHandle.dispose();
     };
 
     const confirmFooterBtn = document.createElement('button');
-    confirmFooterBtn.className = 'da-btn primary';
-    confirmFooterBtn.textContent = '🎨 提交局部重绘';
+    confirmFooterBtn.className = 'da-btn da-btn--primary';
+    confirmFooterBtn.textContent = '提交局部重绘';
     confirmFooterBtn.onclick = () => {
         const maskBase64 = maskCanvas.toDataURL('image/png');
         onConfirm({
@@ -311,7 +364,8 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
             maskImage: maskBase64,
             prompt: promptInput.value.trim()
         });
-        backdrop.remove();
+        isSettled = true;
+        modalHandle.dispose();
         FeedbackService.toastSuccess('已将局部重绘任务提交至队列');
     };
 
@@ -320,5 +374,6 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): void {
     modal.appendChild(footerActions);
 
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+
+    return modalHandle;
 }

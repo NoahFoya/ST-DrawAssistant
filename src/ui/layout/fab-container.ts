@@ -3,36 +3,47 @@
  * @description 屏幕悬浮快捷动作按钮控制器 (FABContainer)
  */
 
-import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
+import {
+    IDisposable,
+    DisposableStore,
+    ObservableStore,
+    DrawAssistantSettings,
+    ITypedEventBus,
+    CoreEventMap
+} from '../../core';
 import { SettingsModal } from './settings-modal';
 import { ThemeService } from '../foundation/theme-service';
 
 export interface FabPresetIcon {
     name: string;
+    emoji: string;
     svg: string;
 }
 
 export const FAB_PRESET_ICONS: Record<string, FabPresetIcon> = {
     palette: {
-        name: '艺术调色盘',
+        name: '调色盘',
+        emoji: '🎨',
         svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.21-1.79 4-4 4h-1.5c-.83 0-1.5.67-1.5 1.5 0 .39.15.74.39 1.01l.4.45c.4.45.61 1.05.61 1.66 0 1.29-1.04 2.38-2.4 2.38z"/><circle cx="7.5" cy="7.5" r=".75" fill="currentColor"/><circle cx="12" cy="6" r=".75" fill="currentColor"/><circle cx="16.5" cy="7.5" r=".75" fill="currentColor"/><circle cx="6" cy="12" r=".75" fill="currentColor"/></svg>`,
     },
     sparkles: {
-        name: '闪烁灵感',
+        name: '星芒',
+        emoji: '✨',
         svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg>`,
     },
     wand: {
         name: '魔法棒',
+        emoji: '🪄',
         svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4-2 2 4 4 2-2a2 2 0 0 0 0-2.83l-1.17-1.17a2 2 0 0 0-2.83 0z"/><path d="M13 6 3 16v4h4L17 10"/><path d="M9 13 4 18"/><path d="m19 13 2 2"/><path d="m14 18 2 2"/></svg>`,
     },
     image: {
-        name: '艺术画框',
+        name: '画框',
+        emoji: '🖼️',
         svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`,
     },
     brush: {
-        name: '绘图画笔',
+        name: '画笔',
+        emoji: '🖌️',
         svg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></svg>`,
     },
 };
@@ -48,19 +59,23 @@ export function getPresetSvg(key?: string): string {
 export interface FABContainerOptions {
     store: ObservableStore<DrawAssistantSettings>;
     settingsModal: SettingsModal;
+    events?: ITypedEventBus<CoreEventMap>;
 }
 
 export class FABContainer implements IDisposable {
     private readonly _store: ObservableStore<DrawAssistantSettings>;
     private readonly _settingsModal: SettingsModal;
+    private readonly _events?: ITypedEventBus<CoreEventMap>;
     private _fabElement?: HTMLElement;
     private readonly _disposables = new DisposableStore();
     private _isDisposed = false;
     private _justDragged = false;
+    private _activeTaskCount = 0;
 
     constructor(options: FABContainerOptions) {
         this._store = options.store;
         this._settingsModal = options.settingsModal;
+        this._events = options.events;
         this.init();
     }
 
@@ -79,11 +94,45 @@ export class FABContainer implements IDisposable {
             this._store.subscribeKey('fabCustomIcon', () => this.applyStyles())
         );
 
+        if (this._events) {
+            this._disposables.add(
+                this._events.on('task:state_changed', (ev) => {
+                    if (ev.status === 'queued' || ev.status === 'processing') {
+                        this._activeTaskCount = Math.max(1, this._activeTaskCount);
+                    } else if (ev.status === 'completed' || ev.status === 'failed' || ev.status === 'cancelled') {
+                        this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
+                    }
+                    this.updateGeneratingState();
+                })
+            );
+            this._disposables.add(
+                this._events.on('task:completed', () => {
+                    this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
+                    this.updateGeneratingState();
+                })
+            );
+            this._disposables.add(
+                this._events.on('task:failed', () => {
+                    this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
+                    this.updateGeneratingState();
+                })
+            );
+        }
+
         if (typeof window !== 'undefined') {
             const onResize = () => this.clampToViewport();
             window.addEventListener('resize', onResize);
             this._disposables.add({ dispose: () => window.removeEventListener('resize', onResize) });
         }
+    }
+
+    private updateGeneratingState(): void {
+        if (!this._fabElement) return;
+        const isGenerating = this._activeTaskCount > 0;
+        this._fabElement.classList.toggle('is-generating', isGenerating);
+        this._fabElement.title = isGenerating
+            ? `正在生成图像中 (${this._activeTaskCount} 个任务)...`
+            : '绘画助手快捷面板 (点击展开)';
     }
 
     private renderFAB(): void {
@@ -94,14 +143,19 @@ export class FABContainer implements IDisposable {
             this._fabElement = undefined;
         }
 
+        const existingFab = document.getElementById('da-fab-button');
+        if (existingFab) {
+            existingFab.remove();
+        }
+
         const settings = this._store.getState();
-        const isVisible = settings.fabVisible !== false && (settings.fabEnabled ?? true);
+        const isVisible = settings.fabVisible !== false;
         if (!isVisible) return;
 
         const fab = document.createElement('div');
         fab.id = 'da-fab-button';
-        fab.className = 'da-fab-btn st-da-root';
-        fab.title = '✨ 绘画助手快捷面板 (点击展开)';
+        fab.className = 'da-fab-btn da-root';
+        fab.title = '绘画助手快捷面板 (点击展开)';
         fab.innerHTML = `
             <span class="da-fab-icon"></span>
             <span class="da-fab-badge" style="display: none;"></span>

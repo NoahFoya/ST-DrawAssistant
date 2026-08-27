@@ -1,0 +1,205 @@
+/**
+ * @module styles/layout/fab
+ * @description 全局悬浮球控件 (FAB)、生图状态指示、微标及设置面板图标选择器
+ */
+
+/* ════ 1. 全局生图悬浮球核心外观 ════ */
+.da-fab-btn,
+.da-fab-button,
+#da-fab-button {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--da-bg-secondary-rgba, rgba(26, 29, 36, 0.9)) !important;
+    backdrop-filter: blur(var(--da-blur-panel, 16px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 16px));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.15)) !important;
+    box-shadow: var(--da-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.45)), 0 0 0 1px rgba(var(--da-accent-rgb, 0, 242, 254), 0.2) !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    z-index: var(--da-z-fab, 9999);
+    touch-action: none;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: visible;
+    transition: transform 0.15s var(--da-ease-spring), box-shadow 0.2s var(--da-ease), border-color 0.2s var(--da-ease);
+}
+
+.da-fab-btn:hover,
+.da-fab-button:hover,
+#da-fab-button:hover {
+    transform: scale(1.08);
+    border-color: var(--da-accent-color) !important;
+    box-shadow: var(--da-shadow-lg), 0 0 16px rgba(var(--da-accent-rgb), 0.4) !important;
+}
+
+.da-fab-btn:active,
+.da-fab-button:active,
+#da-fab-button:active {
+    transform: scale(0.94);
+    cursor: grabbing;
+}
+
+.da-fab-btn.dragging {
+    transition: none !important;
+    cursor: grabbing !important;
+}
+
+/* ════ 2. 正在生图时的呼吸光晕与旋转动画 ════ */
+.da-fab-btn.is-generating,
+.da-fab-btn.is-busy {
+    border-color: var(--da-accent-color) !important;
+    box-shadow: 0 0 18px rgba(var(--da-accent-rgb, 99, 102, 241), 0.75) !important;
+    animation: da-fab-pulse 1.8s infinite ease-in-out;
+}
+
+.da-fab-btn.is-generating .da-fab-icon {
+    animation: da-fab-spin 3s linear infinite;
+}
+
+/* ════ 3. 悬浮球内部图标与微标 ════ */
+.da-fab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    pointer-events: none;
+}
+
+.da-fab-icon svg {
+    display: block;
+    width: 26px;
+    height: 26px;
+}
+
+.da-fab-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--da-font-mono, monospace);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 6px rgba(255, 69, 58, 0.8);
+    border: 1.5px solid var(--da-bg-primary, #0f1014);
+    pointer-events: none;
+}
+
+/* ════ 4. 悬浮球设置面板：预设矢量图标选择网格 ════ */
+.da-fab-icon-grid {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.da-fab-icon-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-small, 10px);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.18s var(--da-ease);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.da-fab-icon-chip svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    transition: transform 0.18s var(--da-ease-spring), stroke 0.18s ease;
+}
+
+.da-fab-icon-chip:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    color: var(--da-accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.da-fab-icon-chip:hover svg {
+    transform: scale(1.1);
+}
+
+.da-fab-icon-chip.is-active {
+    background: rgba(var(--da-accent-rgb), 0.16);
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+    box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* ════ 5. 悬浮球设置面板：自定义头像预览 ════ */
+.da-fab-custom-icon-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.da-fab-preview-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--da-accent-color);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.da-fab-preview-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ════ 6. ST 原生侧边栏抽屉条目 ════ */
+.da-drawer-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--da-separator);
+}
+
+.da-drawer-entry:last-child {
+    border-bottom: none;
+}
+
+.da-drawer-entry-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88em;
+    color: var(--da-text-primary);
+}
+
+.da-drawer-icon {
+    color: var(--da-accent-color);
+    font-size: 1.1em;
+}

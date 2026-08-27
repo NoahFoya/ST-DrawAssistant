@@ -7,10 +7,17 @@
  * - 支持 Base64 JSON 与 URL 图像异步下载，自动处理跨源安全拉取。
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
+import {
+    ObservableStore,
+    DrawAssistantSettings,
+    DEFAULT_TASK_TIMEOUT_MS,
+    DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    GenerationPayload,
+    DriverBuildPayloadOptions,
+    DriverAssetSyncResult,
+    DriverCapabilities
+} from '../../core';
 import { BaseDriver, DriverError, DriverErrorType } from './base-driver';
-import type { GenerationPayload, DriverBuildPayloadOptions, DriverAssetSyncResult } from './driver-contract';
 import { joinPromptParts } from '../pipeline/prompt-pipeline';
 
 interface OpenAIImageResponse {
@@ -30,6 +37,12 @@ interface OpenAIImageResponse {
 export class OpenAIDriver extends BaseDriver {
     public readonly id = 'openai';
     public readonly name = 'OpenAI / Grok / Banana';
+    public readonly capabilities: DriverCapabilities = {
+        supportsInterrupt: false,
+        supportsInpaint: false,
+        supportsAssetSync: false,
+        promptSyntax: 'plain'
+    };
 
     constructor(store: ObservableStore<DrawAssistantSettings>) {
         super(store, 'OpenAIDriver');
@@ -128,30 +141,39 @@ export class OpenAIDriver extends BaseDriver {
             cleanPositive
         );
 
+        // 解析 OpenAI 专有尺寸字符串 (如 "1024x1792" 或 "1792x1024")
+        const overrides = options.overrides || {};
+        let targetWidth = typeof overrides.width === 'number' ? overrides.width : (settings.width || 1024);
+        let targetHeight = typeof overrides.height === 'number' ? overrides.height : (settings.height || 1024);
+        if (!overrides.width && !overrides.height && settings.openaiSize && settings.openaiSize.includes('x')) {
+            const [wStr, hStr] = settings.openaiSize.split('x');
+            const parsedW = parseInt(wStr, 10);
+            const parsedH = parseInt(hStr, 10);
+            if (!isNaN(parsedW) && parsedW > 0) targetWidth = parsedW;
+            if (!isNaN(parsedH) && parsedH > 0) targetHeight = parsedH;
+        }
+
         return {
             mode: 'txt2img',
             prompt: finalPositive,
             negativePrompt: '',
             params: {
-                seed: -1,
-                steps: 1,
-                cfgScale: 1,
-                samplerName: 'default',
-                width: settings.width || 1024,
-                height: settings.height || 1024,
-                model: settings.openaiModel || 'dall-e-3'
+                seed: typeof overrides.seed === 'number' ? overrides.seed : -1,
+                steps: typeof overrides.steps === 'number' ? overrides.steps : 1,
+                cfgScale: typeof overrides.cfgScale === 'number' ? overrides.cfgScale : 1,
+                samplerName: (overrides.samplerName as string) || 'default',
+                width: targetWidth,
+                height: targetHeight,
+                model: (overrides.model as string) || settings.openaiModel || 'dall-e-3'
             }
         };
     }
 
-    public async generate(
-        payload: GenerationPayload,
-        onProgress?: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void
+    protected override async doGenerate(
+        payload: GenerationPayload
     ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }> {
         const settings = this.store.getState();
-        const timeoutMs = settings.requestTimeout || 120000;
-
-        onProgress?.({ percent: 10, nodeName: '提交生图请求' });
+        const timeoutMs = settings.taskTimeout || DEFAULT_TASK_TIMEOUT_MS;
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json'
@@ -178,11 +200,7 @@ export class OpenAIDriver extends BaseDriver {
             if (settings.openaiStyle) body.style = settings.openaiStyle;
         }
 
-        this.resetCancelState();
-
         try {
-            onProgress?.({ percent: 30, nodeName: '等待模型生成' });
-
             const response = await this.postJson<OpenAIImageResponse>(
                 '/images/generations',
                 body,
@@ -209,17 +227,10 @@ export class OpenAIDriver extends BaseDriver {
             if (item.b64_json) {
                 imageBlob = this.base64ToBlob(item.b64_json, 'image/png');
             } else if (item.url) {
-                onProgress?.({ percent: 80, nodeName: '下载生成图像' });
-                const fetchResp = await fetch(item.url, { signal: AbortSignal.timeout(30000) });
-                if (!fetchResp.ok) {
-                    throw new DriverError(DriverErrorType.NETWORK_ERROR, `下载图片链接失败: ${fetchResp.statusText}`);
-                }
-                imageBlob = await fetchResp.blob();
+                imageBlob = await this.getBlob(item.url, DEFAULT_DOWNLOAD_TIMEOUT_MS);
             } else {
                 throw new DriverError(DriverErrorType.BACKEND_ERROR, '响应中未包含有效图像数据 (b64_json / url 均为空)');
             }
-
-            onProgress?.({ percent: 100 });
 
             return {
                 imageBlobs: [imageBlob],

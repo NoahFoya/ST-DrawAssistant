@@ -1,0 +1,56 @@
+/**
+ * @module styles/skin/responsive
+ * @description 移动端与紧凑屏幕自适应响应式规则
+ */
+
+/* 平板与中等屏幕 (<= 900px) */
+@media (max-width: 900px) {
+    .da-settings-panel {
+        width: 95vw;
+        height: 90vh;
+    }
+
+    .da-sidebar-tabs {
+        width: 170px;
+        flex: 0 0 170px;
+    }
+}
+
+/* 紧凑与移动端小屏 (<= 680px) */
+@media (max-width: 680px) {
+    .da-settings-panel {
+        width: 98vw;
+        height: 96vh;
+        border-radius: var(--da-radius-panel, 12px);
+    }
+
+    .da-modal-body {
+        flex-direction: column;
+    }
+
+    .da-sidebar-tabs {
+        width: 100%;
+        flex: 0 0 auto;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: var(--da-space-xs, 4px) var(--da-space-sm, 8px);
+        border-right: none;
+        border-bottom: 1px solid var(--da-separator);
+        gap: var(--da-space-xs, 4px);
+    }
+
+    .da-tab-item {
+        padding: 6px 12px;
+        white-space: nowrap;
+    }
+
+    .da-modal-content {
+        padding: var(--da-space-md, 12px);
+    }
+
+    /* 仅对显式声明 .da-control--fluid 的控件自适应全宽 */
+    .da-control--fluid {
+        width: 100%;
+        max-width: 100%;
+    }
+}

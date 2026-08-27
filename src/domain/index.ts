@@ -5,10 +5,11 @@
 
 export * from './pipeline/pipeline-hooks';
 export * from './pipeline/prompt-pipeline';
-export * from './drivers/driver-contract';
+export * from './drivers/base-driver';
 export * from './drivers/comfyui-driver';
-export * from './drivers/webui-driver';
+export * from './drivers/sdwebui-driver';
 export * from './drivers/openai-driver';
 export * from './drivers/novelai-driver';
-export * from './task/task-types';
 export * from './task/task-manager';
+export * from './presets/profile-service';
+export * from './system/update-service';

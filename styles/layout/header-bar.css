@@ -1,0 +1,127 @@
+/**
+ * @module styles/layout/header-bar
+ * @description 弹窗顶部标题栏、版本胶囊、极简主题切换与关闭按钮
+ */
+
+.da-header-bar {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 56px;
+    min-height: 56px;
+    padding: 0 var(--da-space-xl, 20px);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    backdrop-filter: blur(var(--da-blur-panel, 20px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px)) saturate(180%);
+}
+
+.da-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+}
+
+.da-header-title {
+    font-size: var(--da-font-size-md, 1.05rem);
+    font-weight: 700;
+    color: var(--da-text-primary);
+    letter-spacing: -0.015em;
+    font-family: var(--da-font-family);
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-xs, 4px);
+    margin: 0;
+    background: linear-gradient(135deg, var(--da-text-primary) 0%, var(--da-accent-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.da-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-md, 12px);
+    position: relative;
+}
+
+.da-quick-theme-capsule {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-input, var(--da-bg-subtle));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-pill);
+    padding: 3px var(--da-space-md, 12px);
+    transition: border-color 0.18s var(--da-ease), background 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-quick-theme-capsule:hover {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-hover);
+    box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.15);
+}
+
+.da-quick-theme-select {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: var(--da-text-primary) !important;
+    font-size: var(--da-font-size-sm, 0.82rem) !important;
+    font-weight: 600;
+    text-align: center !important;
+    text-align-last: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    line-height: 1.4 !important;
+    cursor: pointer;
+    min-width: 72px;
+    max-width: 120px !important;
+    width: auto !important;
+    appearance: none;
+    -webkit-appearance: none;
+    color-scheme: var(--da-color-scheme, dark);
+}
+
+.da-quick-theme-select option {
+    background-color: var(--da-bg-secondary, #1c1c1e) !important;
+    color: var(--da-text-primary, #ffffff) !important;
+    font-size: var(--da-font-size-sm, 0.82rem);
+    padding: 6px 10px;
+    text-align: center;
+}
+
+.da-modal-close-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 8px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.05));
+    color: var(--da-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1;
+    transition: background 0.18s var(--da-ease), color 0.18s var(--da-ease), border-color 0.18s var(--da-ease), transform 0.12s var(--da-ease);
+}
+
+.da-modal-close-btn:hover {
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+    border-color: var(--da-color-error, #ff453a);
+    transform: scale(1.05);
+}
+
+.da-modal-close-btn:active {
+    transform: scale(0.95);
+}

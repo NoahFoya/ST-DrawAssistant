@@ -1,6 +1,6 @@
 /**
  * @module ui/feedback/feedback
- * @description 核心交互与反馈域：统一模态对话框、Toast 通知与未保存状态拦截中枢 (Feedback Domain)
+ * @description 核心交互与反馈域：统一模态确认框、Toast 提示通知与脏数据未保存状态管理服务 (Feedback Domain)
  */
 
 export interface ConfirmDialogOptions {
@@ -36,10 +36,11 @@ export type TripleChoiceResult = 'save' | 'discard' | 'cancel';
 export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
     return new Promise((resolve) => {
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
+        backdrop.style.zIndex = '100500';
 
         const dialog = document.createElement('div');
-        dialog.className = 'da-dialog-panel da-main-modal-inner';
+        dialog.className = 'da-dialog-panel';
         dialog.addEventListener('click', (e) => e.stopPropagation());
 
         const title = document.createElement('div');
@@ -54,17 +55,26 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
         actions.className = 'da-dialog-actions';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'da-btn secondary';
+        cancelBtn.className = 'da-btn da-btn--secondary';
         cancelBtn.textContent = options.cancelText || '取消';
 
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = options.isDangerous ? 'da-btn danger' : 'da-btn primary';
+        confirmBtn.className = options.isDangerous ? 'da-btn da-btn--danger' : 'da-btn da-btn--primary';
         confirmBtn.textContent = options.confirmText || '确定';
 
         const cleanup = (result: boolean) => {
+            window.removeEventListener('keydown', onKeyDown);
             backdrop.remove();
             resolve(result);
         };
+
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                cleanup(false);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
 
         cancelBtn.onclick = () => cleanup(false);
         confirmBtn.onclick = () => cleanup(true);
@@ -89,10 +99,11 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
 export function showPromptDialog(options: PromptDialogOptions): Promise<string | null> {
     return new Promise((resolve) => {
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
+        backdrop.style.zIndex = '100500';
 
         const dialog = document.createElement('div');
-        dialog.className = 'da-dialog-panel da-main-modal-inner';
+        dialog.className = 'da-dialog-panel';
         dialog.addEventListener('click', (e) => e.stopPropagation());
 
         const title = document.createElement('div');
@@ -113,17 +124,26 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
         actions.className = 'da-dialog-actions';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'da-btn secondary';
+        cancelBtn.className = 'da-btn da-btn--secondary';
         cancelBtn.textContent = options.cancelText || '取消';
 
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'da-btn primary';
+        confirmBtn.className = 'da-btn da-btn--primary';
         confirmBtn.textContent = options.confirmText || '确定';
 
         const cleanup = (val: string | null) => {
+            window.removeEventListener('keydown', onKeyDown);
             backdrop.remove();
             resolve(val);
         };
+
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                cleanup(null);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
 
         cancelBtn.onclick = () => cleanup(null);
         confirmBtn.onclick = () => cleanup(input.value.trim());
@@ -155,10 +175,11 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
 export function showTripleChoiceDialog(options: TripleChoiceDialogOptions): Promise<TripleChoiceResult> {
     return new Promise((resolve) => {
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
+        backdrop.style.zIndex = '100500';
 
         const dialog = document.createElement('div');
-        dialog.className = 'da-dialog-panel da-main-modal-inner';
+        dialog.className = 'da-dialog-panel';
         dialog.addEventListener('click', (e) => e.stopPropagation());
 
         const title = document.createElement('div');
@@ -173,21 +194,30 @@ export function showTripleChoiceDialog(options: TripleChoiceDialogOptions): Prom
         actions.className = 'da-dialog-actions';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'da-btn secondary';
+        cancelBtn.className = 'da-btn da-btn--secondary';
         cancelBtn.textContent = options.cancelText || '取消';
 
         const discardBtn = document.createElement('button');
-        discardBtn.className = 'da-btn danger';
+        discardBtn.className = 'da-btn da-btn--danger';
         discardBtn.textContent = options.discardText || '放弃修改';
 
         const saveBtn = document.createElement('button');
-        saveBtn.className = 'da-btn primary';
+        saveBtn.className = 'da-btn da-btn--primary';
         saveBtn.textContent = options.saveText || '保存修改';
 
         const cleanup = (result: TripleChoiceResult) => {
+            window.removeEventListener('keydown', onKeyDown);
             backdrop.remove();
             resolve(result);
         };
+
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                cleanup('cancel');
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
 
         cancelBtn.onclick = () => cleanup('cancel');
         discardBtn.onclick = () => cleanup('discard');
@@ -302,7 +332,7 @@ interface ToastrApi {
 }
 
 /**
- * 统一交互反馈与通知中枢 (FeedbackService)
+ * 统一交互反馈与提示通知服务 (FeedbackService)
  */
 export class FeedbackService {
     public static readonly unsavedStateManager = unsavedStateManager;
@@ -327,19 +357,6 @@ export class FeedbackService {
         const toast = document.createElement('div');
         toast.className = `da-toast da-toast-${type}`;
         toast.textContent = message;
-        toast.style.position = 'fixed';
-        toast.style.bottom = '24px';
-        toast.style.left = '50%';
-        toast.style.transform = 'translateX(-50%)';
-        toast.style.padding = '10px 18px';
-        toast.style.borderRadius = '8px';
-        toast.style.background = 'var(--da-bg-secondary, #1a1d24)';
-        toast.style.color = 'var(--da-text-primary, #ffffff)';
-        toast.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
-        toast.style.border = '1px solid var(--da-border-color, rgba(255,255,255,0.1))';
-        toast.style.zIndex = '999999';
-        toast.style.pointerEvents = 'none';
-        toast.style.animation = 'da-fadein 0.2s ease';
         document.body.appendChild(toast);
         setTimeout(() => {
             toast.style.animation = 'da-fade-out 0.2s ease forwards';

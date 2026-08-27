@@ -1,24 +1,34 @@
 /**
  * @module ui/views/theme-tab
- * @description 外观主题定制面板视图 (ThemeTab) - 规范化 controls 架构版
+ * @description 主题定制面板视图 (ThemeTabView)
+ *
+ * 架构范式：继承 BaseTabView，实现 ITabView 接口
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings, ThemeData, PresetProfileItem } from '../../core/state/store-types';
 import {
-    createSectionCard,
-    createFieldRow,
-    createNumberRow
-} from '../controls';
+    ObservableStore,
+    DrawAssistantSettings,
+    ThemeData,
+    PresetProfileItem,
+    DEFAULT_THEME_DATA
+} from '../../core';
+import { ProfileService } from '../../domain';
 import {
+    createCard,
+    createCardHeader,
+    createRow,
+    createFieldLabel
+} from '../layout/container-factory';
+import {
+    createColorPicker,
+    createNumberInput,
     bindPresetToolbar,
-    PresetToolbarAdapter,
-    PresetToolbarElement
-} from '../presets';
+    PresetToolbarElement,
+    createPresetToolbarAdapter
+} from '../controls';
 import { ThemeService, FALLBACK_SAFE_THEME } from '../foundation/theme-service';
 import { FeedbackService } from '../feedback/feedback';
-import { fetchThemes } from '../../core/config/config-loader';
-import { IDisposable } from '../../core/foundation/disposable';
+import { BaseTabView } from '../foundation/tab-view';
 
 /** 主题控件索引对象类型定义 */
 interface ThemeControls {
@@ -29,53 +39,64 @@ interface ThemeControls {
     textPrimary?: { colorInput: HTMLInputElement; hexInput: HTMLInputElement };
     textSecondary?: { colorInput: HTMLInputElement; hexInput: HTMLInputElement };
     borderColor?: { colorInput: HTMLInputElement; hexInput: HTMLInputElement };
-    bgGradientAngle?: { rangeInput: HTMLInputElement; valLabel: HTMLSpanElement };
-    bgOpacity?: { rangeInput: HTMLInputElement; valLabel: HTMLSpanElement };
+    bgGradientAngle?: { inputEl: HTMLInputElement };
+    bgOpacity?: { inputEl: HTMLInputElement };
     blurRadius?: { inputEl: HTMLInputElement };
     borderRadius?: { inputEl: HTMLInputElement };
 }
 
 /**
- * 构建并渲染外观主题定制面板
- *
- * @param store 全局响应式状态配置中心实例
- * @returns 包含生命周期清理能力的主题定制面板 DOM 根节点
+ * 主题定制面板视图
  */
-export function createThemeTabView(store: ObservableStore<DrawAssistantSettings>): HTMLElement & IDisposable {
-    const container = document.createElement('div') as unknown as HTMLElement & IDisposable;
-    container.className = 'da-tab-pane da-theme-tab';
+export class ThemeTabView extends BaseTabView {
+    private _currentThemeData: ThemeData;
+    private _toolbarEl?: PresetToolbarElement;
+    private readonly _controls: ThemeControls = {};
+    private _rafHandle: number | null = null;
+    private readonly _profileService: ProfileService;
 
-    const getProfiles = (): PresetProfileItem<ThemeData>[] => {
-        return store.get('customThemes') || [];
-    };
+    constructor(private readonly _store: ObservableStore<DrawAssistantSettings>) {
+        super('da-theme-tab');
+        this._profileService = new ProfileService(_store);
+        this._currentThemeData = { ...this._getActiveThemeData() };
 
-    const getActiveThemeId = (): string => {
-        return store.get('themePreset') || '';
-    };
+        this._buildCards();
+        this._setupReactivity();
+    }
 
-    const getActiveThemeData = (): ThemeData => {
-        const id = getActiveThemeId();
-        const profiles = getProfiles();
+    private _getProfiles(): PresetProfileItem<ThemeData>[] {
+        return this._store.get('customThemes') || [];
+    }
+
+    private _getActiveThemeId(): string {
+        return this._store.get('themePreset') || '';
+    }
+
+    private _getActiveThemeData(): ThemeData {
+        const id = this._getActiveThemeId();
+        const profiles = this._getProfiles();
         const found = profiles.find((p) => p.id === id);
         return found?.data || profiles[0]?.data || FALLBACK_SAFE_THEME;
-    };
+    }
 
-    // 内存草稿状态
-    let currentThemeData: ThemeData = { ...getActiveThemeData() };
-    let toolbarEl: PresetToolbarElement;
-
-    // ── 集中管理所有拾色器、滑块与数值输入控件引用 ──
-    const controls: ThemeControls = {};
-
-    const applyDraftTheme = (theme: ThemeData) => {
-        ThemeService.applyThemeVariables(theme);
-    };
+    private _applyDraftThemeDebounced(theme: ThemeData): void {
+        if (typeof window === 'undefined') {
+            ThemeService.applyThemeVariables(theme);
+            return;
+        }
+        if (this._rafHandle !== null) {
+            cancelAnimationFrame(this._rafHandle);
+        }
+        this._rafHandle = requestAnimationFrame(() => {
+            ThemeService.applyThemeVariables(theme);
+            this._rafHandle = null;
+        });
+    }
 
     /**
      * 将当前草稿数据同步回所有 UI 控件
      */
-    const syncControls = () => {
-        // 1. 同步颜色拾取与十六进制输入框
+    private _syncControls(): void {
         const colorKeys: (keyof ThemeData & keyof ThemeControls)[] = [
             'accentColor',
             'bgPrimary',
@@ -87,379 +108,241 @@ export function createThemeTabView(store: ObservableStore<DrawAssistantSettings>
         ];
 
         colorKeys.forEach((key) => {
-            const ctrl = controls[key] as { colorInput: HTMLInputElement; hexInput: HTMLInputElement } | undefined;
+            const ctrl = this._controls[key] as { colorInput: HTMLInputElement; hexInput: HTMLInputElement } | undefined;
             if (!ctrl) return;
-            let val = (currentThemeData[key] as string) || '';
+            let val = (this._currentThemeData[key] as string) || '';
             if (!val) {
-                if (key === 'accentColor') val = '#00f2fe';
-                else if (key === 'bgPrimary' || key === 'bgGradientEnd') val = '#0f1014';
-                else if (key === 'bgSecondary') val = '#1a1d24';
-                else if (key === 'textPrimary') val = '#f2f2f7';
-                else if (key === 'textSecondary') val = '#8e8e93';
-                else if (key === 'borderColor') val = '#282b33';
+                val = (DEFAULT_THEME_DATA as any)[key] || '#282b33';
             }
             ctrl.colorInput.value = val.startsWith('#') && val.length === 7 ? val : '#282b33';
-            ctrl.hexInput.value = val;
+            ctrl.hexInput.value = val.toUpperCase();
         });
 
-        // 2. 同步背景渐变角度滑块
-        if (controls.bgGradientAngle) {
-            const angle = currentThemeData.bgGradientAngle ?? 135;
-            controls.bgGradientAngle.rangeInput.value = String(angle);
-            controls.bgGradientAngle.valLabel.textContent = `${angle}°`;
+        if (this._controls.bgGradientAngle?.inputEl) {
+            this._controls.bgGradientAngle.inputEl.value = String(this._currentThemeData.bgGradientAngle ?? 135);
         }
 
-        // 3. 同步背景透明度滑块
-        if (controls.bgOpacity) {
-            const opacity = currentThemeData.bgOpacity ?? 0.95;
-            controls.bgOpacity.rangeInput.value = String(opacity);
-            controls.bgOpacity.valLabel.textContent = `${Math.round(opacity * 100)}%`;
+        if (this._controls.bgOpacity?.inputEl) {
+            this._controls.bgOpacity.inputEl.value = String(Math.round((this._currentThemeData.bgOpacity ?? 0.95) * 100));
         }
 
-        // 4. 同步毛玻璃与圆角数值输入框
-        if (controls.blurRadius?.inputEl) {
-            controls.blurRadius.inputEl.value = String(currentThemeData.blurRadius ?? 20);
+        if (this._controls.blurRadius?.inputEl) {
+            this._controls.blurRadius.inputEl.value = String(this._currentThemeData.blurRadius ?? 20);
         }
-        if (controls.borderRadius?.inputEl) {
-            controls.borderRadius.inputEl.value = String(currentThemeData.borderRadius ?? 14);
+        if (this._controls.borderRadius?.inputEl) {
+            this._controls.borderRadius.inputEl.value = String(this._currentThemeData.borderRadius ?? 14);
         }
-    };
+    }
+
+    private _buildCards(): void {
+        this._root.appendChild(this._buildSpecCard());
+        this._root.appendChild(this._buildPaletteCard());
+    }
 
     // ── 1. 主题方案管理卡片 ──────────────────────────────────────────────────
-    const cardScheme = createSectionCard({
-        title: '主题方案管理',
-        description: '快速切换或保存不同的外观主题风格，支持导入、导出与恢复出厂默认方案',
-        renderBody: (body) => {
-            const adapter: PresetToolbarAdapter<ThemeData> = {
-                label: '外观主题',
-                getProfiles,
-                getInitialId: getActiveThemeId,
-                createProfile: (name, data) => {
-                    const list = [...getProfiles()];
-                    const newId = `theme_${Date.now()}`;
-                    list.push({ id: newId, name, data });
-                    store.set('customThemes', list);
-                    store.set('themePreset', newId);
-                    return newId;
-                },
-                saveProfile: (id, data) => {
-                    const list = getProfiles().map((p) => (p.id === id ? { ...p, data } : p));
-                    store.set('customThemes', list);
-                    store.set('themePreset', id);
-                    FeedbackService.toastSuccess('主题方案保存成功！');
-                },
-                renameProfile: (id, newName) => {
-                    const list = getProfiles().map((p) => (p.id === id ? { ...p, name: newName } : p));
-                    store.set('customThemes', list);
-                },
-                deleteProfile: (id) => {
-                    const list = getProfiles().filter((p) => p.id !== id);
-                    store.set('customThemes', list);
-                    const nextId = list.length > 0 ? list[0].id : '';
-                    store.set('themePreset', nextId);
-                    return nextId;
-                },
-                resetToDefault: async () => {
-                    try {
-                        const defaultList = await fetchThemes();
-                        if (defaultList.length > 0) {
-                            store.set('customThemes', defaultList);
-                            store.set('themePreset', defaultList[0].id);
-                            currentThemeData = { ...defaultList[0].data };
-                            applyDraftTheme(currentThemeData);
-                            syncControls();
-                            FeedbackService.toastSuccess('已成功恢复出厂默认主题预设！');
-                        }
-                    } catch (err: any) {
-                        FeedbackService.toastError(`恢复默认预设失败: ${err?.message || err}`);
-                    }
-                },
-                onSelect: (id) => {
-                    store.set('themePreset', id);
-                }
-            };
+    private _buildSpecCard(): HTMLElement {
+        const cardScheme = createCard({ hoverable: true });
+        const header = createCardHeader({
+            title: '主题预设方案',
+            description: '快速切换、导入导出或保存不同的外观视觉方案，支持一键还原出厂默认'
+        });
+        cardScheme.header.appendChild(header);
 
-            toolbarEl = bindPresetToolbar({
-                adapter,
-                getCurrentData: () => currentThemeData,
-                applyData: (id) => {
-                    const target = getProfiles().find((p) => p.id === id);
-                    if (target?.data) {
-                        currentThemeData = { ...target.data };
-                        applyDraftTheme(currentThemeData);
-                        syncControls();
-                    }
-                },
-                onRefresh: () => {
-                    applyDraftTheme(currentThemeData);
-                }
-            });
+        const adapter = createPresetToolbarAdapter(this._profileService, 'theme', {
+            onSave: () => {
+                FeedbackService.toastSuccess('主题方案保存成功！');
+            }
+        });
 
-            body.appendChild(toolbarEl);
-        }
-    });
-    container.appendChild(cardScheme);
+        this._toolbarEl = bindPresetToolbar({
+            adapter,
+            getCurrentData: () => this._currentThemeData,
+            applyData: (id) => {
+                const target = this._getProfiles().find((p) => p.id === id);
+                if (target?.data) {
+                    this._currentThemeData = { ...target.data };
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                    this._syncControls();
+                }
+            },
+            onRefresh: () => {
+                this._applyDraftThemeDebounced(this._currentThemeData);
+            }
+        });
+
+        cardScheme.body.appendChild(this._toolbarEl);
+        return cardScheme.root;
+    }
 
     // ── 2. 主题配色与视觉效果卡片 ─────────────────────────────────────────────
-    const cardPalette = createSectionCard({
-        title: '主题配色与视觉效果',
-        description: '实时调节界面核心强调色、渐变背景、文字排版、毛玻璃与几何圆角。修改后可点击上方保存',
-        renderBody: (body) => {
-            /** 辅助创建颜色拾取与 HEX 双向同步表单行 */
-            const createColorRow = (
-                label: string,
-                initialVal: string,
-                helpTooltip: string,
-                onUpdate: (hex: string) => void
-            ): [HTMLElement, HTMLInputElement, HTMLInputElement] => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'da-color-picker-wrapper da-control-fixed-180';
+    private _buildPaletteCard(): HTMLElement {
+        const cardPalette = createCard({ hoverable: true });
+        const header = createCardHeader({
+            title: '主题色彩与视觉效果',
+            description: '实时调节插件核心强调色、渐变背景、文字颜色、毛玻璃与圆角。修改后可点击上方工具栏保存'
+        });
+        cardPalette.header.appendChild(header);
 
-                const colorInput = document.createElement('input');
-                colorInput.type = 'color';
-                colorInput.className = 'da-input-color';
-                colorInput.value = initialVal.startsWith('#') && initialVal.length === 7 ? initialVal : '#00f2fe';
+        // 辅助装配颜色行
+        const addColorRow = (title: string, val: string, onUpdate: (hex: string) => void) => {
+            const row = createRow(['left', 'right'], { align: 'center', divided: true });
+            const label = createFieldLabel({ title });
+            row.slots[0].appendChild(label);
 
-                const hexInput = document.createElement('input');
-                hexInput.type = 'text';
-                hexInput.className = 'da-input da-input-hex';
-                hexInput.value = initialVal;
+            const picker = createColorPicker({
+                value: val,
+                onChange: onUpdate
+            });
+            row.slots[1].appendChild(picker);
+            this._disposables.add(picker);
+            cardPalette.body.appendChild(row.root);
+            return picker;
+        };
 
-                colorInput.oninput = () => {
-                    hexInput.value = colorInput.value;
-                    onUpdate(colorInput.value);
-                };
+        // 辅助装配数值行
+        const addNumberRow = (options: { title: string; value: number; min?: number; max?: number; step?: number; unit?: string }, onUpdate: (num: number) => void) => {
+            const row = createRow(['left', 'right'], { align: 'center', divided: true });
+            const label = createFieldLabel({ title: options.title });
+            row.slots[0].appendChild(label);
 
-                hexInput.onchange = () => {
-                    let val = hexInput.value.trim();
-                    if (!val.startsWith('#')) val = '#' + val;
-                    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-                        colorInput.value = val;
-                        onUpdate(val);
-                    }
-                };
+            const numberControl = createNumberInput({
+                value: options.value,
+                min: options.min,
+                max: options.max,
+                step: options.step,
+                unit: options.unit,
+                onChange: onUpdate
+            });
+            row.slots[1].appendChild(numberControl);
+            this._disposables.add(numberControl);
+            cardPalette.body.appendChild(row.root);
+            return numberControl;
+        };
 
-                wrapper.appendChild(colorInput);
-                wrapper.appendChild(hexInput);
-
-                const row = createFieldRow({
-                    label,
-                    helpTooltip,
-                    control: wrapper
+                // 1. 主题强调色
+                const accent = addColorRow('主题强调色', this._currentThemeData.accentColor || '#00f2fe', (val) => {
+                    this._currentThemeData.accentColor = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
                 });
+                this._controls.accentColor = { colorInput: accent.colorInputElement, hexInput: accent.hexInputElement };
 
-                return [row, colorInput, hexInput];
-            };
+                // 2. 背景渐变起始色
+                const bgPrim = addColorRow('背景渐变起始色', this._currentThemeData.bgPrimary || '#0f1014', (val) => {
+                    this._currentThemeData.bgPrimary = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.bgPrimary = { colorInput: bgPrim.colorInputElement, hexInput: bgPrim.hexInputElement };
 
-            // 1. 主题强调色
-            const [accentRow, aCol, aHex] = createColorRow(
-                '主题强调色 (Accent Color)',
-                currentThemeData.accentColor || '#00f2fe',
-                '控制插件的主要按钮、选中高亮与焦点光晕等核心色彩。',
-                (val) => {
-                    currentThemeData.accentColor = val;
-                    applyDraftTheme(currentThemeData);
+                // 3. 背景渐变结束色
+                const bgGrad = addColorRow('背景渐变结束色', this._currentThemeData.bgGradientEnd || this._currentThemeData.bgPrimary || '#0f1014', (val) => {
+                    this._currentThemeData.bgGradientEnd = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.bgGradientEnd = { colorInput: bgGrad.colorInputElement, hexInput: bgGrad.hexInputElement };
+
+                // 4. 背景渐变角度
+                const angleControl = addNumberRow({
+                    title: '背景渐变角度',
+                    value: this._currentThemeData.bgGradientAngle ?? 135,
+                    min: 0,
+                    max: 360,
+                    step: 5,
+                    unit: '°'
+                }, (num) => {
+                    this._currentThemeData.bgGradientAngle = num;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.bgGradientAngle = { inputEl: angleControl.inputElement };
+
+                // 5. 面板与卡片背景色
+                const bgSec = addColorRow('面板与卡片背景色', this._currentThemeData.bgSecondary || '#1a1d24', (val) => {
+                    this._currentThemeData.bgSecondary = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.bgSecondary = { colorInput: bgSec.colorInputElement, hexInput: bgSec.hexInputElement };
+
+                // 6. 主要文字颜色
+                const textP = addColorRow('主要文字颜色', this._currentThemeData.textPrimary || '#f2f2f7', (val) => {
+                    this._currentThemeData.textPrimary = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.textPrimary = { colorInput: textP.colorInputElement, hexInput: textP.hexInputElement };
+
+                // 7. 次要文字颜色
+                const textS = addColorRow('次要文字颜色', this._currentThemeData.textSecondary || '#8e8e93', (val) => {
+                    this._currentThemeData.textSecondary = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.textSecondary = { colorInput: textS.colorInputElement, hexInput: textS.hexInputElement };
+
+                // 8. 边框与分割线颜色
+                const border = addColorRow('边框与分割线颜色', this._currentThemeData.borderColor || '#282b33', (val) => {
+                    this._currentThemeData.borderColor = val;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.borderColor = { colorInput: border.colorInputElement, hexInput: border.hexInputElement };
+
+                // 9. 背景不透明度
+                const opacityControl = addNumberRow({
+                    title: '毛玻璃不透明度',
+                    value: Math.round((this._currentThemeData.bgOpacity ?? 0.95) * 100),
+                    min: 20,
+                    max: 100,
+                    step: 1,
+                    unit: '%'
+                }, (pct) => {
+                    this._currentThemeData.bgOpacity = pct / 100;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.bgOpacity = { inputEl: opacityControl.inputElement };
+
+                // 10. 毛玻璃模糊半径
+                const blurControl = addNumberRow({
+                    title: '毛玻璃模糊度',
+                    value: this._currentThemeData.blurRadius ?? 20,
+                    min: 0,
+                    max: 40,
+                    step: 1,
+                    unit: 'px'
+                }, (num) => {
+                    this._currentThemeData.blurRadius = num;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.blurRadius = { inputEl: blurControl.inputElement };
+
+                // 11. 界面圆角大小
+                const radiusControl = addNumberRow({
+                    title: '界面圆角',
+                    value: this._currentThemeData.borderRadius ?? 14,
+                    min: 0,
+                    max: 24,
+                    step: 1,
+                    unit: 'px'
+                }, (num) => {
+                    this._currentThemeData.borderRadius = num;
+                    this._applyDraftThemeDebounced(this._currentThemeData);
+                });
+                this._controls.borderRadius = { inputEl: radiusControl.inputElement };
+        return cardPalette.root;
+    }
+
+    private _setupReactivity(): void {
+        this._disposables.add(
+            this._store.subscribe(() => {
+                const themeId = this._getActiveThemeId();
+                if (this._toolbarEl?.refreshPresets) {
+                    this._toolbarEl.refreshPresets(this._getProfiles(), themeId);
                 }
-            );
-            controls.accentColor = { colorInput: aCol, hexInput: aHex };
-            body.appendChild(accentRow);
+            })
+        );
+    }
 
-            // 2. 主界面背景色 (起始色)
-            const [bgPrimRow, bgCol, bgHex] = createColorRow(
-                '主界面背景色 - 起始色 (Primary Background)',
-                currentThemeData.bgPrimary || '#0f1014',
-                '控制主窗口与浮层的底层渐变起始颜色。',
-                (val) => {
-                    currentThemeData.bgPrimary = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.bgPrimary = { colorInput: bgCol, hexInput: bgHex };
-            body.appendChild(bgPrimRow);
-
-            // 3. 主界面背景色 (终止色)
-            const [bgGradRow, bgGCol, bgGHex] = createColorRow(
-                '主界面背景色 - 终止色 (Gradient End)',
-                currentThemeData.bgGradientEnd || currentThemeData.bgPrimary || '#0f1014',
-                '控制背景渐变终止颜色。若与起始色一致则呈现纯色，不同时展现平滑渐变。',
-                (val) => {
-                    currentThemeData.bgGradientEnd = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.bgGradientEnd = { colorInput: bgGCol, hexInput: bgGHex };
-            body.appendChild(bgGradRow);
-
-            // 4. 渐变流向角度
-            const angleWrapper = document.createElement('div');
-            angleWrapper.className = 'da-slider-wrapper da-control-fixed-180';
-
-            const angleRangeInput = document.createElement('input');
-            angleRangeInput.type = 'range';
-            angleRangeInput.min = '0';
-            angleRangeInput.max = '360';
-            angleRangeInput.step = '5';
-            angleRangeInput.className = 'da-range-slider';
-            angleRangeInput.value = String(currentThemeData.bgGradientAngle ?? 135);
-
-            const angleValLabel = document.createElement('span');
-            angleValLabel.className = 'da-slider-value-label';
-            angleValLabel.textContent = `${currentThemeData.bgGradientAngle ?? 135}°`;
-
-            angleRangeInput.oninput = () => {
-                const angle = parseInt(angleRangeInput.value || '135', 10);
-                angleValLabel.textContent = `${angle}°`;
-                currentThemeData.bgGradientAngle = angle;
-                applyDraftTheme(currentThemeData);
-            };
-
-            angleWrapper.appendChild(angleRangeInput);
-            angleWrapper.appendChild(angleValLabel);
-            controls.bgGradientAngle = { rangeInput: angleRangeInput, valLabel: angleValLabel };
-
-            body.appendChild(
-                createFieldRow({
-                    label: '背景渐变流向角度 (Gradient Angle)',
-                    helpTooltip: '控制背景渐变色彩的流向角度 (0° ~ 360°)。',
-                    control: angleWrapper
-                })
-            );
-
-            // 5. 卡片与侧边栏背景色
-            const [bgSecRow, bgSCol, bgSHex] = createColorRow(
-                '卡片与侧边栏背景 (Secondary Background)',
-                currentThemeData.bgSecondary || '#1a1d24',
-                '控制内容卡片、侧边栏及弹窗的背景颜色。',
-                (val) => {
-                    currentThemeData.bgSecondary = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.bgSecondary = { colorInput: bgSCol, hexInput: bgSHex };
-            body.appendChild(bgSecRow);
-
-            // 6. 主要文字颜色
-            const [textPRow, tpCol, tpHex] = createColorRow(
-                '主要文字颜色 (Text Primary)',
-                currentThemeData.textPrimary || '#f2f2f7',
-                '控制主标题、选项名称及高亮正文的文字颜色。',
-                (val) => {
-                    currentThemeData.textPrimary = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.textPrimary = { colorInput: tpCol, hexInput: tpHex };
-            body.appendChild(textPRow);
-
-            // 7. 次要文字颜色
-            const [textSRow, tsCol, tsHex] = createColorRow(
-                '次要说明文字颜色 (Text Secondary)',
-                currentThemeData.textSecondary || '#8e8e93',
-                '控制表单提示说明、副标题及辅助描述的文字颜色。',
-                (val) => {
-                    currentThemeData.textSecondary = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.textSecondary = { colorInput: tsCol, hexInput: tsHex };
-            body.appendChild(textSRow);
-
-            // 8. 轮廓边框与分割线颜色
-            const [borderRow, bCol, bHex] = createColorRow(
-                '轮廓边框与分割线颜色 (Border Color)',
-                currentThemeData.borderColor || '#282b33',
-                '控制卡片外框、输入框边缘及分割线的线条色彩。',
-                (val) => {
-                    currentThemeData.borderColor = val;
-                    applyDraftTheme(currentThemeData);
-                }
-            );
-            controls.borderColor = { colorInput: bCol, hexInput: bHex };
-            body.appendChild(borderRow);
-
-            // 9. 界面背景透明度
-            const opacityWrapper = document.createElement('div');
-            opacityWrapper.className = 'da-slider-wrapper da-control-fixed-180';
-
-            const opacityRangeInput = document.createElement('input');
-            opacityRangeInput.type = 'range';
-            opacityRangeInput.min = '0.20';
-            opacityRangeInput.max = '1.00';
-            opacityRangeInput.step = '0.01';
-            opacityRangeInput.className = 'da-range-slider';
-            opacityRangeInput.value = String(currentThemeData.bgOpacity ?? 0.95);
-
-            const opacityValLabel = document.createElement('span');
-            opacityValLabel.className = 'da-slider-value-label';
-            opacityValLabel.textContent = `${Math.round((currentThemeData.bgOpacity ?? 0.95) * 100)}%`;
-
-            opacityRangeInput.oninput = () => {
-                const opacity = parseFloat(opacityRangeInput.value || '0.95');
-                opacityValLabel.textContent = `${Math.round(opacity * 100)}%`;
-                currentThemeData.bgOpacity = opacity;
-                applyDraftTheme(currentThemeData);
-            };
-
-            opacityWrapper.appendChild(opacityRangeInput);
-            opacityWrapper.appendChild(opacityValLabel);
-            controls.bgOpacity = { rangeInput: opacityRangeInput, valLabel: opacityValLabel };
-
-            body.appendChild(
-                createFieldRow({
-                    label: '界面背景透明度 (Background Opacity)',
-                    helpTooltip: '调节面板与卡片背景的透明程度 (20% ~ 100%)。',
-                    control: opacityWrapper
-                })
-            );
-
-            // 10. 背景毛玻璃模糊度
-            const blurRow = createNumberRow({
-                label: '背景毛玻璃模糊度 (Blur Radius, px)',
-                helpTooltip: '调节面板背后的毛玻璃模糊效果强度 (0 ~ 40px)。',
-                value: currentThemeData.blurRadius ?? 20,
-                min: 0,
-                max: 40,
-                step: 1,
-                unit: 'px',
-                onChange: (num) => {
-                    currentThemeData.blurRadius = num;
-                    applyDraftTheme(currentThemeData);
-                }
-            });
-            controls.blurRadius = { inputEl: blurRow.querySelector('input') as HTMLInputElement };
-            body.appendChild(blurRow);
-
-            // 11. 界面与卡片圆角
-            const radiusRow = createNumberRow({
-                label: '界面与卡片圆角 (Border Radius, px)',
-                helpTooltip: '调节卡片、按钮和输入框边缘的圆角弧度 (0 ~ 24px)。',
-                value: currentThemeData.borderRadius ?? 14,
-                min: 0,
-                max: 24,
-                step: 1,
-                unit: 'px',
-                onChange: (num) => {
-                    currentThemeData.borderRadius = num;
-                    applyDraftTheme(currentThemeData);
-                }
-            });
-            controls.borderRadius = { inputEl: radiusRow.querySelector('input') as HTMLInputElement };
-            body.appendChild(radiusRow);
+    override dispose(): void {
+        if (this._rafHandle !== null) {
+            cancelAnimationFrame(this._rafHandle);
+            this._rafHandle = null;
         }
-    });
-    container.appendChild(cardPalette);
-
-    // ── 响应式数据同步监听 ──
-    const unsubStore = store.subscribe(() => {
-        const themeId = getActiveThemeId();
-        if (toolbarEl?.refreshPresets) {
-            toolbarEl.refreshPresets(getProfiles(), themeId);
-        }
-    });
-
-    container.dispose = () => {
-        unsubStore.dispose();
-    };
-
-    return container;
+        super.dispose();
+    }
 }
+

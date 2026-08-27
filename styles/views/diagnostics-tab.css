@@ -1,0 +1,282 @@
+/**
+ * diagnostics-tab.css
+ * 层级：views
+ * 职责：生图统计分析大盘、近 7 日趋势柱状图、模型分布占比与实时日志终端
+ * 字号约定：px（诊断数据面板）
+ */
+
+.da-macro-stats__empty-tip {
+    font-size: 11px;
+    color: var(--da-text-secondary);
+    text-align: center;
+    padding: 20px 0;
+    user-select: none;
+}
+
+/* ════ 1. 模型分布占比条 ════ */
+.da-macro-stats__model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-macro-stats__model-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.da-macro-stats__model-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+}
+
+.da-macro-stats__model-name {
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.da-macro-stats__model-pct {
+    color: var(--da-text-secondary);
+    font-weight: 600;
+}
+
+.da-macro-stats__progress-track {
+    height: 4px;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.da-macro-stats__progress-fill {
+    height: 100%;
+    background: var(--da-accent-color);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* ════ 2. 近 7 日生图柱状图 ════ */
+.da-macro-stats__trend-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 90px;
+    padding-top: 10px;
+    gap: 6px;
+    box-sizing: border-box;
+}
+
+.da-macro-stats__trend-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    flex: 1;
+    gap: 4px;
+}
+
+.da-macro-stats__trend-bar-wrapper {
+    flex: 1;
+    width: 100%;
+    max-width: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 3px;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+}
+
+.da-macro-stats__trend-bar {
+    width: 100%;
+    min-height: 4px;
+    background: var(--da-accent-color);
+    border-radius: 3px;
+    transition: height 0.3s ease, opacity 0.2s ease;
+}
+
+.da-macro-stats__trend-count {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+    min-height: 12px;
+}
+
+.da-macro-stats__trend-col:hover .da-macro-stats__trend-bar {
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.6);
+}
+
+.da-macro-stats__trend-date {
+    font-size: 9px;
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+}
+
+.da-macro-stats__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* ════ 3. 实时终端日志区与工具栏 (Diagnostic Log Terminal) ════ */
+.da-diagnostics-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.da-diagnostics-toolbar-left,
+.da-diagnostics-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-diagnostics-search {
+    flex: 1;
+    min-width: 140px;
+}
+
+.da-log-terminal {
+    background: var(--da-terminal-bg, #0d1117);
+    color: var(--da-terminal-text, #e6edf3);
+    font-family: var(--da-font-mono, Consolas, monospace);
+    font-size: 11px;
+    padding: 12px 14px;
+    border-radius: var(--da-radius-sm, 8px);
+    border: 1px solid var(--da-separator);
+    max-height: 240px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    user-select: text;
+    line-height: 1.5;
+}
+
+.da-log-empty {
+    color: var(--da-terminal-muted, #8b949e);
+    text-align: center;
+    padding: 24px 0;
+    font-style: italic;
+}
+
+.da-log-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1.5;
+    font-family: var(--da-font-mono, Consolas, monospace);
+}
+
+.da-log-time,
+.da-log-timestamp {
+    color: var(--da-terminal-muted, #8b949e);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.da-log-level {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.da-log-tag,
+.da-log-namespace {
+    color: var(--da-terminal-blue, #58a6ff);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.da-log-msg {
+    color: var(--da-terminal-text, #e6edf3);
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.da-log-level--debug { color: var(--da-terminal-purple, #bc8cff); }
+.da-log-level--info  { color: var(--da-terminal-teal, #39c5bb);   }
+.da-log-level--warn  { color: var(--da-terminal-yellow, #d29922); }
+.da-log-level--error { color: var(--da-terminal-red, #f85149);    }
+
+/* ════ 4. 环境检测网格与卡片 ════ */
+.da-diagnostics-env-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+    .da-diagnostics-env-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 520px) {
+    .da-diagnostics-env-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.da-diagnostics-env-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    box-sizing: border-box;
+    min-height: 78px;
+    transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.da-diagnostics-env-card:hover {
+    border-color: rgba(var(--da-accent-rgb), 0.35);
+    transform: translateY(-1px);
+}
+
+.da-diagnostics-env-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.da-diagnostics-env-icon {
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.da-diagnostics-env-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-diagnostics-env-desc {
+    font-size: 11px;
+    color: var(--da-text-secondary);
+    line-height: 1.4;
+    word-break: break-word;
+}

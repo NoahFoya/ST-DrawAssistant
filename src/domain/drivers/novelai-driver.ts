@@ -3,10 +3,16 @@
  * @description NovelAI 后端生图驱动实现 (支持 NAI v3/v4 专属模型、SMEA 增强采样与 ZIP 二进制响应解包)
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
+import {
+    ObservableStore,
+    DrawAssistantSettings,
+    DEFAULT_TASK_TIMEOUT_MS,
+    GenerationPayload,
+    DriverBuildPayloadOptions,
+    DriverAssetSyncResult,
+    DriverCapabilities
+} from '../../core';
 import { BaseDriver, DriverError, DriverErrorType } from './base-driver';
-import type { GenerationPayload, DriverBuildPayloadOptions, DriverAssetSyncResult } from './driver-contract';
 import { joinPromptParts } from '../pipeline/prompt-pipeline';
 
 /**
@@ -91,6 +97,12 @@ export function convertToNovelAIPromptSyntax(prompt: string): string {
 export class NovelAIDriver extends BaseDriver {
     public readonly id = 'novelai';
     public readonly name = 'NovelAI';
+    public readonly capabilities: DriverCapabilities = {
+        supportsInterrupt: false,
+        supportsInpaint: false,
+        supportsAssetSync: false,
+        promptSyntax: 'plain'
+    };
 
     constructor(store: ObservableStore<DrawAssistantSettings>) {
         super(store, 'NovelAIDriver');
@@ -189,30 +201,28 @@ export class NovelAIDriver extends BaseDriver {
             cleanNegative
         );
 
+        const overrides = options.overrides || {};
         return {
             mode: 'txt2img',
             prompt: this.formatPrompt(finalPositive),
             negativePrompt: this.formatPrompt(finalNegative),
             params: {
-                seed: -1,
-                steps: settings.naiSteps || 28,
-                cfgScale: settings.naiScale || 6.0,
-                samplerName: settings.naiSampler || 'k_euler_ancestral',
-                width: settings.naiWidth || 832,
-                height: settings.naiHeight || 1216,
-                model: settings.naiModel || 'nai-diffusion-4-full'
+                seed: typeof overrides.seed === 'number' ? overrides.seed : -1,
+                steps: typeof overrides.steps === 'number' ? overrides.steps : (settings.naiSteps || 28),
+                cfgScale: typeof overrides.cfgScale === 'number' ? overrides.cfgScale : (settings.naiScale || 6.0),
+                samplerName: (overrides.samplerName as string) || settings.naiSampler || 'k_euler_ancestral',
+                width: typeof overrides.width === 'number' ? overrides.width : (settings.naiWidth || 832),
+                height: typeof overrides.height === 'number' ? overrides.height : (settings.naiHeight || 1216),
+                model: (overrides.model as string) || settings.naiModel || 'nai-diffusion-4-full'
             }
         };
     }
 
-    public async generate(
-        payload: GenerationPayload,
-        onProgress?: (progress: { percent: number; nodeName?: string; previewBlob?: Blob }) => void
+    protected override async doGenerate(
+        payload: GenerationPayload
     ): Promise<{ imageBlobs: Blob[]; metadata: Record<string, unknown> }> {
         const settings = this.store.getState();
-        const timeoutMs = settings.requestTimeout || 120000;
-
-        onProgress?.({ percent: 15, nodeName: '提交 NovelAI 生图请求' });
+        const timeoutMs = settings.taskTimeout || DEFAULT_TASK_TIMEOUT_MS;
 
         const apiKey = settings.naiApiKey || settings.apiKey;
         const headers: Record<string, string> = {
@@ -250,11 +260,7 @@ export class NovelAIDriver extends BaseDriver {
             }
         };
 
-        this.resetCancelState();
-
         try {
-            onProgress?.({ percent: 40, nodeName: 'NovelAI 云端渲染中' });
-
             const url = this.buildUrl('/ai/generate-image');
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -290,11 +296,8 @@ export class NovelAIDriver extends BaseDriver {
                 );
             }
 
-            onProgress?.({ percent: 85, nodeName: '解包图像二进制流' });
             const arrayBuffer = await response.arrayBuffer();
             const imageBlob = await extractImageFromZipBuffer(arrayBuffer);
-
-            onProgress?.({ percent: 100 });
 
             return {
                 imageBlobs: [imageBlob],

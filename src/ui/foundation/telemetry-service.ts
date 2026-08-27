@@ -3,9 +3,7 @@
  * @description 插件实时遥测与通信监控服务 (TelemetryService)
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import type { IDriverRegistry } from '../../core/registry/driver-registry';
+import { ObservableStore, DrawAssistantSettings, IDriverRegistry } from '../../core';
 
 export class TelemetryService {
     private static heartbeatTimer: number | null = null;
@@ -70,12 +68,12 @@ export class TelemetryService {
         const driver = this.driverRegistry?.get(provider);
 
         if (!driver) {
-            if (dotEl) dotEl.className = 'da-status-dot da-status-error';
+            if (dotEl) dotEl.className = 'da-status-indicator da-status-error';
             textEl.textContent = `未挂载 [${provider}]`;
             return;
         }
 
-        if (dotEl) dotEl.className = 'da-status-dot da-status-checking';
+        if (dotEl) dotEl.className = 'da-status-indicator da-status-checking';
         textEl.textContent = `检测 ${driver.name} 连接中...`;
 
         try {
@@ -83,14 +81,14 @@ export class TelemetryService {
 
             if (res.connected) {
                 const latency = res.latencyMs ?? 0;
-                if (dotEl) dotEl.className = 'da-status-dot da-status-ok';
+                if (dotEl) dotEl.className = 'da-status-indicator da-status-ok';
                 textEl.textContent = `${driver.name} 运行正常 (${latency}ms)`;
             } else {
-                if (dotEl) dotEl.className = 'da-status-dot da-status-error';
+                if (dotEl) dotEl.className = 'da-status-indicator da-status-error';
                 textEl.textContent = `${driver.name} (离线或无响应)`;
             }
         } catch {
-            if (dotEl) dotEl.className = 'da-status-dot da-status-error';
+            if (dotEl) dotEl.className = 'da-status-indicator da-status-error';
             textEl.textContent = `${driver.name} (通信异常)`;
         }
     }

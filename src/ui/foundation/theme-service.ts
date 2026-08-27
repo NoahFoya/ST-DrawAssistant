@@ -3,10 +3,13 @@
  * @description 外观主题服务 (单一事实来源，负责动态计算并注入全局 --da-* CSS 设计变量)
  */
 
-import { IDisposable } from '../../core/foundation/disposable';
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings, ThemeData } from '../../core/state/store-types';
-import { DEFAULT_THEME_DATA } from '../../core/constants';
+import {
+    IDisposable,
+    ObservableStore,
+    DrawAssistantSettings,
+    ThemeData,
+    DEFAULT_THEME_DATA
+} from '../../core';
 
 export type { ThemeData };
 
@@ -22,7 +25,7 @@ export const FALLBACK_SAFE_THEME: ThemeData = { ...DEFAULT_THEME_DATA };
 /**
  * 将十六进制色值解析为 [R, G, B] 数字数组
  */
-export function hexToRgbArr(hexStr: string): [number, number, number] {
+export function hexToRgbArray(hexStr: string): [number, number, number] {
     if (!hexStr || typeof hexStr !== 'string') return [0, 242, 254];
     let hex = hexStr.replace(/^#/, '').trim();
     if (hex.length === 3) {
@@ -41,13 +44,13 @@ export function hexToRgbArr(hexStr: string): [number, number, number] {
  * 将十六进制色值解析为 R, G, B 字符串 (如 "0, 242, 254")
  */
 export function hexToRgb(hexStr: string): string {
-    return hexToRgbArr(hexStr).join(', ');
+    return hexToRgbArray(hexStr).join(', ');
 }
 
 /**
  * 将 [R, G, B] 数字数组转换为十六进制 HEX 颜色字符串
  */
-export function rgbArrToHex([r, g, b]: [number, number, number]): string {
+export function rgbArrayToHex([r, g, b]: [number, number, number]): string {
     return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 }
 
@@ -56,16 +59,16 @@ export function rgbArrToHex([r, g, b]: [number, number, number]): string {
  * @param t 插值系数 (t > 1 表示延伸外插)
  */
 export function lerpHex(from: string, to: string, t: number): string {
-    const [r1, g1, b1] = hexToRgbArr(from);
-    const [r2, g2, b2] = hexToRgbArr(to);
-    return rgbArrToHex([r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t]);
+    const [r1, g1, b1] = hexToRgbArray(from);
+    const [r2, g2, b2] = hexToRgbArray(to);
+    return rgbArrayToHex([r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t]);
 }
 
 /**
  * HEX 转 HSL [0-360, 0-1, 0-1]
  */
 export function hexToHsl(hex: string): [number, number, number] {
-    const [r, g, b] = hexToRgbArr(hex).map((v) => v / 255);
+    const [r, g, b] = hexToRgbArray(hex).map((v) => v / 255);
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     const l = (max + min) / 2;
     if (max === min) return [0, 0, l];
@@ -93,11 +96,11 @@ export function hslToHex(h: number, s: number, l: number): string {
     const hN = h / 360;
     if (s === 0) {
         const v = Math.round(l * 255);
-        return rgbArrToHex([v, v, v]);
+        return rgbArrayToHex([v, v, v]);
     }
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
     const p = 2 * l - q;
-    return rgbArrToHex([
+    return rgbArrayToHex([
         hue2rgb(p, q, hN + 1 / 3) * 255,
         hue2rgb(p, q, hN) * 255,
         hue2rgb(p, q, hN - 1 / 3) * 255
@@ -116,14 +119,20 @@ export function deriveAccentHover(accentHex: string): string {
  * 全局统一外观主题服务
  */
 export class ThemeService implements IThemeService {
+    private static _instance: ThemeService | null = null;
     private readonly _store: ObservableStore<DrawAssistantSettings>;
     private _subPreset?: IDisposable;
     private _subCustom?: IDisposable;
     private _isDisposed = false;
 
     constructor(store: ObservableStore<DrawAssistantSettings>) {
+        ThemeService._instance = this;
         this._store = store;
         this.initThemeListener();
+    }
+
+    public static getInstance(): ThemeService | null {
+        return ThemeService._instance;
     }
 
     private initThemeListener(): void {
@@ -153,21 +162,12 @@ export class ThemeService implements IThemeService {
     }
 
     /**
-     * 静态纯函数：向指定 DOM 或全局节点注入全量主题变量及衍生变量
+     * 静态纯函数：向全局根节点 document.documentElement 注入全量主题变量及衍生变量
      */
     public static applyThemeVariables(theme: ThemeData, targetNode?: HTMLElement): void {
         if (typeof document === 'undefined') return;
 
-        const rawNodes = targetNode
-            ? [targetNode]
-            : [
-                document.documentElement,
-                ...Array.from(document.querySelectorAll<HTMLElement>('.da-settings-panel')),
-                ...Array.from(document.querySelectorAll<HTMLElement>('.st-da-root')),
-                ...Array.from(document.querySelectorAll<HTMLElement>('.da-modal-backdrop')),
-                ...Array.from(document.querySelectorAll<HTMLElement>('.da-fab-container'))
-            ];
-        const targetNodes = Array.from(new Set(rawNodes.filter((n): n is HTMLElement => Boolean(n))));
+        const root = document.documentElement;
 
         const accentHex = theme.accentColor || DEFAULT_THEME_DATA.accentColor;
         const accentRgb = hexToRgb(accentHex);
@@ -183,14 +183,15 @@ export class ThemeService implements IThemeService {
         const bgSecondaryRgb = hexToRgb(bgSecondary);
         const bgSecondaryRgba = `rgba(${bgSecondaryRgb}, ${opacity})`;
 
-        const bgInput = lerpHex(bgPrimary, bgSecondary, 2.0);
-        const bgHover = lerpHex(bgPrimary, bgSecondary, 3.0);
-
-        const [pR, pG, pB] = hexToRgbArr(bgPrimary);
+        const [pR, pG, pB] = hexToRgbArray(bgPrimary);
         const isLightMode = (pR * 299 + pG * 587 + pB * 114) / 1000 > 128;
 
-        const bgCard = isLightMode ? '#ffffff' : 'rgba(255, 255, 255, 0.04)';
-        const bgSubtle = isLightMode ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.05)';
+        const bgInput = isLightMode ? '#f1f5f9' : lerpHex(bgPrimary, bgSecondary, 2.0);
+        const bgHover = isLightMode ? 'rgba(0, 0, 0, 0.05)' : lerpHex(bgPrimary, bgSecondary, 3.0);
+        const bgCard = isLightMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.04)';
+        const bgSubtle = isLightMode ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.05)';
+        const separator = isLightMode ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.06)';
+
         const statusWarning = isLightMode ? '#d97706' : '#ff9f0a';
         const statusWarningBg = isLightMode ? 'rgba(217, 119, 6, 0.12)' : 'rgba(255, 159, 10, 0.18)';
         const statusWarningBorder = isLightMode ? 'rgba(217, 119, 6, 0.35)' : 'rgba(255, 159, 10, 0.45)';
@@ -198,9 +199,16 @@ export class ThemeService implements IThemeService {
         const borderRadius = theme.borderRadius ?? DEFAULT_THEME_DATA.borderRadius;
         const blurRadius = theme.blurRadius ?? DEFAULT_THEME_DATA.blurRadius;
 
-        targetNodes.forEach((node) => {
+        const textMuted = isLightMode ? '#64748b' : '#686870';
+        const textOnAccent = isLightMode ? '#ffffff' : '#000000';
+
+        const modalNodes = typeof document !== 'undefined' ? Array.from(document.querySelectorAll<HTMLElement>('.st-da-root')) : [];
+        const allNodes = new Set<HTMLElement>([root, ...(targetNode ? [targetNode] : []), ...modalNodes]);
+
+        allNodes.forEach((node) => {
             node.setAttribute('data-da-mode', isLightMode ? 'light' : 'dark');
 
+            node.style.setProperty('--da-color-scheme', isLightMode ? 'light' : 'dark');
             node.style.setProperty('--da-bg-primary', bgPrimary);
             node.style.setProperty('--da-bg-secondary', bgSecondary);
             node.style.setProperty('--da-bg-secondary-rgba', bgSecondaryRgba);
@@ -213,10 +221,13 @@ export class ThemeService implements IThemeService {
             node.style.setProperty('--da-bg-hover', bgHover);
             node.style.setProperty('--da-bg-active', `rgba(${accentRgb}, 0.12)`);
             node.style.setProperty('--da-bg-opacity', String(opacity));
+            node.style.setProperty('--da-separator', separator);
 
-            node.style.setProperty('--da-text-primary', theme.textPrimary || (isLightMode ? '#1e293b' : '#f8fafc'));
-            node.style.setProperty('--da-text-secondary', theme.textSecondary || (isLightMode ? '#64748b' : '#94a3b8'));
-            node.style.setProperty('--da-border-color', theme.borderColor || (isLightMode ? '#cbd5e1' : 'rgba(255, 255, 255, 0.09)'));
+            node.style.setProperty('--da-text-primary', theme.textPrimary || (isLightMode ? '#0f172a' : '#f8fafc'));
+            node.style.setProperty('--da-text-secondary', theme.textSecondary || (isLightMode ? '#475569' : '#94a3b8'));
+            node.style.setProperty('--da-text-muted', textMuted);
+            node.style.setProperty('--da-text-on-accent', textOnAccent);
+            node.style.setProperty('--da-border-color', theme.borderColor || (isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.09)'));
 
             node.style.setProperty('--da-accent-color', accentHex);
             node.style.setProperty('--da-accent-hover', accentHover);
@@ -232,6 +243,7 @@ export class ThemeService implements IThemeService {
             node.style.setProperty('--da-radius-input', `${Math.max(4, borderRadius - 4)}px`);
             node.style.setProperty('--da-radius-btn', `${Math.max(4, borderRadius - 4)}px`);
             node.style.setProperty('--da-radius-small', `${Math.max(4, borderRadius - 6)}px`);
+            node.style.setProperty('--da-radius-sm', `${Math.max(4, borderRadius - 6)}px`);
             node.style.setProperty('--da-border-radius', `${borderRadius}px`);
         });
     }
@@ -241,13 +253,17 @@ export class ThemeService implements IThemeService {
         ThemeService.applyThemeVariables(theme, targetNode);
     }
 
-    public static applyCurrentThemeToNode(targetNode: HTMLElement): void {
-        ThemeService.applyThemeVariables(DEFAULT_THEME_DATA, targetNode);
+    public static applyCurrentThemeToNode(targetNode?: HTMLElement): void {
+        const currentTheme = ThemeService._instance ? ThemeService._instance.getCurrentTheme() : DEFAULT_THEME_DATA;
+        ThemeService.applyThemeVariables(currentTheme, targetNode);
     }
 
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
+        if (ThemeService._instance === this) {
+            ThemeService._instance = null;
+        }
         this._subPreset?.dispose();
         this._subCustom?.dispose();
     }

@@ -1,21 +1,27 @@
 /**
  * @module ui/views/diagnostics-tab
- * @description 运行诊断与实时日志面板视图 (DiagnosticsTab)
+ * @description 运行诊断与实时日志统计面板视图 (DiagnosticsTabView)
+ *
+ * 核心设计范式 (参考 Grafana + VSCode Output Console)：
+ * 1. 宏观生图数据大盘 (Statistics Dashboard)：4 栏等宽指标卡片 + 双列并排分析区 (常用底模占比 + 近 7 日趋势柱状图) + 报表导出；
+ * 2. 客户端硬件与存储健康诊断 (Environment Health)：2x2 状态徽章网格 (WebGL、Worker 多线程、IndexedDB 数据库读写状态)；
+ * 3. 专业级深色系统日志控制台 (Pro Console Terminal)：全宽搜索、纯净级别过滤、结构化等宽高亮行与一键全量脱敏诊断包。
  */
 
-import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings } from '../../core/state/store-types';
-import { Logger } from '../../core/diagnostics/logger';
-import { LogEntry } from '../../core/diagnostics/log-buffer';
 import {
+    ObservableStore,
+    DrawAssistantSettings,
+    Logger,
+    LogEntry,
     StatisticsCollector,
     exportStatisticsJSON,
-    exportStatisticsCSV
-} from '../../core/diagnostics/statistics-collector';
-import { createSectionCard, createFieldRow } from '../controls';
+    exportStatisticsCSV,
+    EXTENSION_NAME
+} from '../../core';
+import { UpdateService } from '../../domain';
+import { createCard, createCardHeader } from '../layout/container-factory';
 import { FeedbackService } from '../feedback/feedback';
-import { IDisposable } from '../../core/foundation/disposable';
-import { EXTENSION_KEY, VERSION } from '../../core/constants';
+import { BaseTabView } from '../foundation/tab-view';
 
 function downloadFile(content: string, filename: string, mime: string): void {
     const blob = new Blob([content], { type: mime });
@@ -25,6 +31,34 @@ function downloadFile(content: string, filename: string, mime: string): void {
     a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * 递归深度脱敏数据结构（掩码所有 API Key、Token 字段以及日志中包含的 Bearer 授权令牌）
+ */
+export function sanitizeDataForExport(data: any): any {
+    if (data === null || data === undefined) return data;
+    if (typeof data === 'string') {
+        return data
+            .replace(/(Bearer\s+)[A-Za-z0-9_\-\.]{8,}/gi, '$1****[REDACTED]****')
+            .replace(/(pst-[A-Za-z0-9_\-]{8,})/gi, 'pst-****[REDACTED]****')
+            .replace(/(sk-[A-Za-z0-9_\-]{8,})/gi, 'sk-****[REDACTED]****');
+    }
+    if (Array.isArray(data)) {
+        return data.map((item) => sanitizeDataForExport(item));
+    }
+    if (typeof data === 'object') {
+        const result: Record<string, any> = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (/(api)?_?key|token|secret|auth|password/i.test(key)) {
+                result[key] = '****[SENSITIVE_REDACTED]****';
+            } else {
+                result[key] = sanitizeDataForExport(value);
+            }
+        }
+        return result;
+    }
+    return data;
 }
 
 /**
@@ -52,12 +86,13 @@ export function renderStatisticsCard(): HTMLElement {
         else lastTimeStr = new Date(snap.timeStats.lastTaskAt).toISOString().split('T')[0];
     }
 
+    // 1. 四栏核心指标数据卡片
     const grid = document.createElement('div');
     grid.className = 'da-macro-stats__grid';
 
-    const createMetricCard = (label: string, val: string, sub: string, color?: string) => {
+    const createMetricCard = (label: string, val: string, sub: string, isSuccess?: boolean) => {
         const card = document.createElement('div');
-        card.className = 'da-macro-stats__card';
+        card.className = `da-macro-stats__card ${isSuccess ? 'is-success' : ''}`;
 
         const labelEl = document.createElement('div');
         labelEl.className = 'da-macro-stats__card-label';
@@ -65,7 +100,6 @@ export function renderStatisticsCard(): HTMLElement {
 
         const valEl = document.createElement('div');
         valEl.className = 'da-macro-stats__card-val';
-        if (color) valEl.style.color = color;
         valEl.textContent = val;
 
         const subEl = document.createElement('div');
@@ -84,34 +118,42 @@ export function renderStatisticsCard(): HTMLElement {
             '生图成功率',
             totalTasks > 0 ? `${successRate}%` : '100%',
             `成功 ${successCount} / 失败 ${snap.errorCount}`,
-            'var(--da-color-success, #30d158)'
+            true
         )
     );
     grid.appendChild(
         createMetricCard(
             '平均生成耗时',
             `${avgSec} 秒/张`,
-            snap.minDurationMs > 0 ? `最快 ${(snap.minDurationMs / 1000).toFixed(1)}s` : '推理速度',
-            'var(--da-accent-color, #00f2fe)'
+            snap.minDurationMs > 0 ? `最快 ${(snap.minDurationMs / 1000).toFixed(1)}s` : '推理速度'
         )
     );
-    grid.appendChild(createMetricCard('最近生图活动', lastTimeStr, '生成活跃度', 'var(--da-text-primary)'));
-
+    grid.appendChild(createMetricCard('最近生图活动', lastTimeStr, '生成活跃度'));
     container.appendChild(grid);
 
-    const topModels = collector.getTopItems(snap.paramStats.models, 3);
-    if (topModels.length > 0) {
-        const modelSection = document.createElement('div');
-        modelSection.className = 'da-macro-stats__section';
+    // 2. 双列并排分析网格 (左侧：常用模型分布，右侧：近 7 日趋势柱状图)
+    const analyticsRow = document.createElement('div');
+    analyticsRow.className = 'da-macro-stats__analytics-row';
 
-        const sectionTitle = document.createElement('div');
-        sectionTitle.className = 'da-macro-stats__section-title';
-        sectionTitle.innerHTML = '<span>🎨 常用生图模型占比 (Top Checkpoints)</span>';
-        modelSection.appendChild(sectionTitle);
+    // 2.1 常用底模分布占比 (Top Checkpoints)
+    const modelSection = document.createElement('div');
+    modelSection.className = 'da-macro-stats__section da-macro-stats__section--models';
 
-        const modelList = document.createElement('div');
-        modelList.className = 'da-macro-stats__model-list';
+    const modelTitle = document.createElement('div');
+    modelTitle.className = 'da-macro-stats__section-title';
+    modelTitle.textContent = '常用生图模型分布 (Top Models)';
+    modelSection.appendChild(modelTitle);
 
+    const modelList = document.createElement('div');
+    modelList.className = 'da-macro-stats__model-list';
+
+    const topModels = collector.getTopItems(snap.paramStats.models, 4);
+    if (topModels.length === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'da-macro-stats__empty-tip';
+        emptyEl.textContent = '暂无模型使用记录';
+        modelList.appendChild(emptyEl);
+    } else {
         topModels.forEach((item) => {
             const itemEl = document.createElement('div');
             itemEl.className = 'da-macro-stats__model-item';
@@ -124,11 +166,12 @@ export function renderStatisticsCard(): HTMLElement {
             nameEl.textContent = item.name;
             nameEl.title = item.name;
 
-            const countEl = document.createElement('span');
-            countEl.textContent = `${item.percentage}% (${item.count}张)`;
+            const pctEl = document.createElement('span');
+            pctEl.className = 'da-macro-stats__model-pct';
+            pctEl.textContent = `${item.percentage}% (${item.count}次)`;
 
             infoEl.appendChild(nameEl);
-            infoEl.appendChild(countEl);
+            infoEl.appendChild(pctEl);
 
             const trackEl = document.createElement('div');
             trackEl.className = 'da-macro-stats__progress-track';
@@ -142,20 +185,21 @@ export function renderStatisticsCard(): HTMLElement {
             itemEl.appendChild(trackEl);
             modelList.appendChild(itemEl);
         });
-
-        modelSection.appendChild(modelList);
-        container.appendChild(modelSection);
     }
 
+    modelSection.appendChild(modelList);
+    analyticsRow.appendChild(modelSection);
+
+    // 2.2 近 7 日生图产出趋势柱状图
     const dailyTrend = collector.getDailyTrend(7);
     const maxCount = Math.max(...dailyTrend.map((d) => d.count), 1);
 
     const trendSection = document.createElement('div');
-    trendSection.className = 'da-macro-stats__section';
+    trendSection.className = 'da-macro-stats__section da-macro-stats__section--trend';
 
     const trendTitle = document.createElement('div');
     trendTitle.className = 'da-macro-stats__section-title';
-    trendTitle.textContent = '📈 近 7 日生图产出趋势 (7-Day Output Trend)';
+    trendTitle.textContent = '近 7 日生图产出趋势 (7-Day Trend)';
     trendSection.appendChild(trendTitle);
 
     const chartEl = document.createElement('div');
@@ -164,6 +208,7 @@ export function renderStatisticsCard(): HTMLElement {
     dailyTrend.forEach((item, index) => {
         const col = document.createElement('div');
         col.className = 'da-macro-stats__trend-col';
+        col.title = `${item.date}: 生成 ${item.count} 张图片`;
 
         const countText = document.createElement('div');
         countText.className = 'da-macro-stats__trend-count';
@@ -176,7 +221,7 @@ export function renderStatisticsCard(): HTMLElement {
         bar.className = 'da-macro-stats__trend-bar';
         const heightPct = Math.round((item.count / maxCount) * 100);
         bar.style.height = `${Math.max(heightPct, item.count > 0 ? 8 : 4)}%`;
-        if (item.count === 0) bar.style.opacity = '0.25';
+        if (item.count === 0) bar.style.opacity = '0.2';
 
         barWrapper.appendChild(bar);
 
@@ -191,36 +236,32 @@ export function renderStatisticsCard(): HTMLElement {
     });
 
     trendSection.appendChild(chartEl);
-    container.appendChild(trendSection);
+    analyticsRow.appendChild(trendSection);
+    container.appendChild(analyticsRow);
 
+    // 3. 数据报表导出操作栏
     const actionsRow = document.createElement('div');
     actionsRow.className = 'da-macro-stats__actions';
 
     const btnExportJSON = document.createElement('button');
-    btnExportJSON.className = 'da-btn secondary';
-    btnExportJSON.style.fontSize = '0.8em';
-    btnExportJSON.style.padding = '4px 10px';
-    btnExportJSON.textContent = '📥 导出 JSON';
+    btnExportJSON.className = 'da-btn da-btn--secondary da-btn--sm';
+    btnExportJSON.textContent = '导出 JSON';
     btnExportJSON.onclick = () => {
         exportStatisticsJSON(snap);
         FeedbackService.toastSuccess('生图统计报表 JSON 导出完成');
     };
 
     const btnExportCSV = document.createElement('button');
-    btnExportCSV.className = 'da-btn secondary';
-    btnExportCSV.style.fontSize = '0.8em';
-    btnExportCSV.style.padding = '4px 10px';
-    btnExportCSV.textContent = '📊 导出 CSV';
+    btnExportCSV.className = 'da-btn da-btn--secondary da-btn--sm';
+    btnExportCSV.textContent = '导出 CSV';
     btnExportCSV.onclick = () => {
         exportStatisticsCSV(snap);
         FeedbackService.toastSuccess('生图趋势报表 CSV 导出完成');
     };
 
     const btnReset = document.createElement('button');
-    btnReset.className = 'da-btn danger';
-    btnReset.style.fontSize = '0.8em';
-    btnReset.style.padding = '4px 10px';
-    btnReset.textContent = '🗑️ 重置统计';
+    btnReset.className = 'da-btn da-btn--danger da-btn--sm';
+    btnReset.textContent = '重置统计';
     btnReset.onclick = async () => {
         const confirmed = await FeedbackService.confirm({
             title: '重置生图统计确认',
@@ -244,281 +285,296 @@ export function renderStatisticsCard(): HTMLElement {
 }
 
 /**
- * 构建并渲染运行诊断与实时日志面板
- *
- * @param store 全局响应式状态配置中心实例
- * @returns 包含生命周期清理能力的诊断日志面板 DOM 根节点
+ * 运行诊断与实时日志面板视图
  */
-export function createDiagnosticsTabView(store: ObservableStore<DrawAssistantSettings>): HTMLElement & IDisposable {
-    const container = document.createElement('div') as unknown as HTMLElement & IDisposable;
-    container.className = 'da-tab-pane da-diagnostics-tab';
+export class DiagnosticsTabView extends BaseTabView {
+    constructor(private readonly _store: ObservableStore<DrawAssistantSettings>) {
+        super('da-diagnostics-tab');
+        this._buildCards();
+    }
 
-    // ── Module 1: 绘图统计仪表板卡片 (优先置顶呈现) ──────────────────────────
-    container.appendChild(renderStatisticsCard());
+    private _buildCards(): void {
+        const store = this._store;
 
-    // ── Card 1: 客户端环境与存储健康诊断卡片 ─────────────────────────────────
-    const cardEnv = createSectionCard({
-        title: '客户端环境与存储健康诊断',
-        description: '检测当前浏览器渲染引擎 GPU 硬件加速、多线程离屏转码支持与 IndexedDB 数据库健康度',
-        renderBody: (body) => {
-            const isWebGLSupported = (() => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    return !!(
-                        window.WebGLRenderingContext &&
-                        (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-                    );
-                } catch {
-                    return false;
-                }
-            })();
+        // ── Module 1: 生图业务宏观统计看板 ──────────────────────────
+        const cardStats = createCard({ hoverable: true });
+        const headerStats = createCardHeader({
+            title: '生图业务宏观统计看板',
+            description: '实时监控生图成功率、生成耗时与产出趋势，支持导出分析报表'
+        });
+        cardStats.header.appendChild(headerStats);
+        cardStats.body.appendChild(renderStatisticsCard());
+        this._root.appendChild(cardStats.root);
 
-            const webglSpan = document.createElement('span');
-            webglSpan.className = 'da-unit';
-            webglSpan.classList.toggle('da-text-success', isWebGLSupported);
-            webglSpan.classList.toggle('da-text-error', !isWebGLSupported);
-            webglSpan.textContent = isWebGLSupported ? '🟢 GPU 硬件加速已就绪 (WebGL)' : '🔴 不支持或已被禁用';
+        // ── Module 2: 客户端环境与存储健康诊断卡片 ─────────────────────────────────
+        const cardEnv = createCard({ hoverable: true });
+        const headerEnv = createCardHeader({
+            title: '客户端环境与存储健康诊断',
+            description: '检测当前浏览器渲染引擎 GPU 硬件加速、多线程离屏转码支持与 IndexedDB 数据库健康度'
+        });
+        cardEnv.header.appendChild(headerEnv);
 
-            body.appendChild(
-                createFieldRow({
-                    label: 'WebGL 硬件加速状态',
-                    helpTooltip: '浏览器 GPU 渲染加速管线，用于画布物理绘制与图片平滑缩放',
-                    control: webglSpan
-                })
-            );
+        const envGrid = document.createElement('div');
+        envGrid.className = 'da-diagnostics-env-grid';
 
-            const isOffscreenSupported = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined';
-            const isWorkerSupported = typeof window !== 'undefined' && typeof window.Worker !== 'undefined';
+        const isWebGLSupported = (() => {
+            try {
+                const canvas = document.createElement('canvas');
+                return !!(
+                    window.WebGLRenderingContext &&
+                    (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+                );
+            } catch {
+                return false;
+            }
+        })();
 
-            const workerSpan = document.createElement('span');
-            workerSpan.className = 'da-unit';
-            const workerReady = isOffscreenSupported && isWorkerSupported;
-            workerSpan.classList.toggle('da-text-success', workerReady);
-            workerSpan.classList.toggle('da-text-warning', !workerReady);
-            workerSpan.textContent = workerReady
-                ? '🟢 Web Worker & OffscreenCanvas 就绪 (支持后台异步转码)'
-                : '🟡 基础兼容模式 (主线程同步渲染)';
+        const isOffscreenSupported = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined';
+        const isWorkerSupported = typeof window !== 'undefined' && typeof window.Worker !== 'undefined';
+        const workerReady = isOffscreenSupported && isWorkerSupported;
+        const isIndexedDBSupported = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
-            body.appendChild(
-                createFieldRow({
-                    label: '离屏渲染与多线程加速',
-                    helpTooltip: '支持在后台独立 Worker 线程中完成 WebP 图片缩略图转码与哈希计算',
-                    control: workerSpan
-                })
-            );
+        const screenW = typeof window !== 'undefined' ? window.screen?.width || 0 : 0;
+        const screenH = typeof window !== 'undefined' ? window.screen?.height || 0 : 0;
+        const innerW = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
+        const innerH = typeof window !== 'undefined' ? window.innerHeight || 0 : 0;
 
-            const isIndexedDBSupported = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
-            const idbSpan = document.createElement('span');
-            idbSpan.className = 'da-unit';
-            idbSpan.classList.toggle('da-text-success', isIndexedDBSupported);
-            idbSpan.classList.toggle('da-text-error', !isIndexedDBSupported);
-            idbSpan.textContent = isIndexedDBSupported ? '🟢 读写正常 (IndexedDB v2)' : '🔴 存储引擎不可用 (内存降级)';
-
-            body.appendChild(
-                createFieldRow({
-                    label: '本地 IndexedDB 数据库',
-                    helpTooltip: '本地持久化存储数据库状态，负责图库与生成历史的物理保存',
-                    control: idbSpan
-                })
-            );
-
-            const screenW = typeof window !== 'undefined' ? window.screen?.width || 0 : 0;
-            const screenH = typeof window !== 'undefined' ? window.screen?.height || 0 : 0;
-            const innerW = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
-            const innerH = typeof window !== 'undefined' ? window.innerHeight || 0 : 0;
-
-            const resSpan = document.createElement('span');
-            resSpan.className = 'da-unit';
-            resSpan.textContent = `物理屏幕 ${screenW}×${screenH} px (视口: ${innerW}×${innerH} px)`;
-
-            body.appendChild(
-                createFieldRow({
-                    label: '屏幕分辨率与视口规格',
-                    helpTooltip: '当前设备显示屏分辨率与浏览器窗口工作区视口尺寸',
-                    control: resSpan
-                })
-            );
-        }
-    });
-    container.appendChild(cardEnv);
-
-    // ── Card 2: 实时系统日志与脱敏诊断导出卡片 ─────────────────────────────
-    const cardLogs = createSectionCard({
-        title: '实时系统日志与脱敏诊断导出',
-        description: '结构化日志推流查看，支持按级别过滤、实时搜索、日志导出及一键打包脱敏诊断数据',
-        renderBody: (body) => {
-            const toolbar = document.createElement('div');
-            toolbar.className = 'da-gallery-batch-row da-diagnostics-toolbar';
-
-            const leftGroup = document.createElement('div');
-            leftGroup.className = 'da-gallery-batch-left';
-
-            const searchInput = document.createElement('input');
-            searchInput.type = 'text';
-            searchInput.className = 'da-input da-diagnostics-search';
-            searchInput.placeholder = '🔍 搜索过滤日志...';
-
-            const levelSelect = document.createElement('select');
-            levelSelect.className = 'da-select da-control-fixed-120';
-            levelSelect.innerHTML = `
-                <option value="ALL">全部级别</option>
-                <option value="DEBUG">DEBUG</option>
-                <option value="INFO">INFO</option>
-                <option value="WARN">WARN</option>
-                <option value="ERROR">ERROR</option>
+        const createEnvCard = (title: string, desc: string, isOk: boolean, icon: string) => {
+            const card = document.createElement('div');
+            card.className = `da-diagnostics-env-card ${isOk ? 'is-ok' : 'is-warn'}`;
+            card.innerHTML = `
+                <div class="da-diagnostics-env-header">
+                    <span class="da-diagnostics-env-icon">${icon}</span>
+                    <span class="da-diagnostics-env-title">${title}</span>
+                </div>
+                <div class="da-diagnostics-env-desc">${desc}</div>
             `;
+            return card;
+        };
 
-            const refreshBtn = document.createElement('button');
-            refreshBtn.className = 'da-btn secondary da-btn-sm';
-            refreshBtn.textContent = '🔄 刷新日志';
+        envGrid.appendChild(
+            createEnvCard(
+                'WebGL 硬件加速',
+                isWebGLSupported ? 'GPU 渲染加速管线已就绪' : '不支持或已被禁用',
+                isWebGLSupported,
+                isWebGLSupported ? '🟢' : '🔴'
+            )
+        );
 
-            const clearBtn = document.createElement('button');
-            clearBtn.className = 'da-btn secondary da-btn-sm';
-            clearBtn.textContent = '🧹 清空日志';
-            clearBtn.onclick = () => {
-                Logger.getGlobalBuffer().clear();
-                renderLogStream();
-                FeedbackService.toastSuccess('日志缓冲区已清空');
-            };
+        envGrid.appendChild(
+            createEnvCard(
+                '多线程离屏转码',
+                workerReady ? 'Web Worker & OffscreenCanvas 就绪' : '基础兼容模式 (主线程转码)',
+                workerReady,
+                workerReady ? '🟢' : '🟡'
+            )
+        );
 
-            leftGroup.appendChild(searchInput);
-            leftGroup.appendChild(levelSelect);
-            leftGroup.appendChild(refreshBtn);
-            leftGroup.appendChild(clearBtn);
+        envGrid.appendChild(
+            createEnvCard(
+                'IndexedDB 数据库',
+                isIndexedDBSupported ? '本地数据库读写正常 (v2)' : '不可用 (降级为内存存储)',
+                isIndexedDBSupported,
+                isIndexedDBSupported ? '🟢' : '🔴'
+            )
+        );
 
-            const rightGroup = document.createElement('div');
-            rightGroup.className = 'da-gallery-batch-right';
+        const isStConnected = typeof window !== 'undefined' && !!(window as any).SillyTavern?.getContext;
+        const requestMode = store.getState().requestMode || 'client';
+        const requestModeLabel = requestMode === 'server' ? '服务端代理 (Pattern A)' : '客户端直连 (Pattern B)';
 
-            const exportTxtBtn = document.createElement('button');
-            exportTxtBtn.className = 'da-btn secondary da-btn-sm';
-            exportTxtBtn.textContent = '导出 TXT';
-            exportTxtBtn.onclick = () => {
-                const logs = Logger.getGlobalBuffer().getAll();
-                const text = logs
-                    .map((l: LogEntry) => `[${new Date(l.timestamp).toISOString()}] [${l.level}] [${l.namespace}] ${l.message}`)
-                    .join('\n');
-                downloadFile(text, `st-da-logs-${Date.now()}.txt`, 'text/plain;charset=utf-8');
-                FeedbackService.toastSuccess('已导出纯文本日志');
-            };
+        envGrid.appendChild(
+            createEnvCard(
+                'SillyTavern 宿主环境',
+                isStConnected ? 'SillyTavern 上下文已就绪' : '独立测试/离线运行环境',
+                isStConnected,
+                isStConnected ? '🟢' : '⚪'
+            )
+        );
 
-            const exportJsonBtn = document.createElement('button');
-            exportJsonBtn.className = 'da-btn secondary da-btn-sm';
-            exportJsonBtn.textContent = '导出 JSON';
-            exportJsonBtn.onclick = () => {
-                const logs = Logger.getGlobalBuffer().getAll();
-                downloadFile(JSON.stringify(logs, null, 2), `st-da-logs-${Date.now()}.json`, 'application/json;charset=utf-8');
-                FeedbackService.toastSuccess('已导出 JSON 结构化日志');
-            };
+        envGrid.appendChild(
+            createEnvCard(
+                '生图通信请求模式',
+                requestModeLabel,
+                true,
+                '🌐'
+            )
+        );
 
-            const exportBundleBtn = document.createElement('button');
-            exportBundleBtn.className = 'da-btn primary da-btn-sm';
-            exportBundleBtn.textContent = '📦 导出脱敏诊断包';
-            exportBundleBtn.onclick = () => {
-                try {
-                    const rawSettings = store.getState();
-                    const sanitizedSettings = JSON.parse(JSON.stringify(rawSettings)) as Record<string, unknown>;
-                    if (sanitizedSettings['apiKey']) {
-                        sanitizedSettings['apiKey'] = '****[SENSITIVE_REDACTED]****';
-                    }
+        envGrid.appendChild(
+            createEnvCard(
+                '视口与屏幕规格',
+                `屏幕 ${screenW}×${screenH} px (视口: ${innerW}×${innerH} px)`,
+                true,
+                '💻'
+            )
+        );
 
-                    const bundle = {
-                        metadata: {
-                            extension: `${EXTENSION_KEY} v${VERSION}`,
-                            exportedAt: new Date().toISOString(),
-                            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-                            screen: `${window.screen?.width || 0}×${window.screen?.height || 0}`,
-                            viewport: `${window.innerWidth}×${window.innerHeight}`
-                        },
-                        settingsSnapshot: sanitizedSettings,
-                        logs: Logger.getGlobalBuffer().getAll(),
-                        statistics: StatisticsCollector.getInstance().getSnapshot()
-                    };
+        cardEnv.body.appendChild(envGrid);
+        this._root.appendChild(cardEnv.root);
 
-                    const jsonStr = JSON.stringify(bundle, null, 2);
-                    downloadFile(jsonStr, `st-da-diagnostic-bundle-${Date.now()}.json`, 'application/json;charset=utf-8');
-                    FeedbackService.toastSuccess('已成功导出脱敏系统诊断分析包 (.json)！');
-                } catch (err: any) {
-                    FeedbackService.toastError(`导出诊断包失败: ${err.message}`);
-                }
-            };
+        // ── Module 3: 实时系统日志与脱敏诊断导出卡片 ─────────────────────────────
+        const cardLogs = createCard({ hoverable: true });
+        const headerLogs = createCardHeader({
+            title: '实时系统日志与脱敏诊断控制台',
+            description: '结构化实时日志流，支持按级别过滤、即时搜索、日志导出及一键打包脱敏诊断数据'
+        });
+        cardLogs.header.appendChild(headerLogs);
 
-            rightGroup.appendChild(exportTxtBtn);
-            rightGroup.appendChild(exportJsonBtn);
-            rightGroup.appendChild(exportBundleBtn);
+        const toolbar = document.createElement('div');
+        toolbar.className = 'da-diagnostics-toolbar';
 
-            toolbar.appendChild(leftGroup);
-            toolbar.appendChild(rightGroup);
-            body.appendChild(toolbar);
+        const leftGroup = document.createElement('div');
+        leftGroup.className = 'da-diagnostics-toolbar-left';
 
-            const terminalBox = document.createElement('div');
-            terminalBox.className = 'da-log-terminal';
+        const levelSelect = document.createElement('select');
+        levelSelect.className = 'da-select da-select-sm';
+        levelSelect.innerHTML = `
+            <option value="ALL">全部级别 (ALL)</option>
+            <option value="INFO">信息 (INFO)</option>
+            <option value="WARN">警告 (WARN)</option>
+            <option value="ERROR">错误 (ERROR)</option>
+            <option value="DEBUG">调试 (DEBUG)</option>
+        `;
 
-            const renderLogStream = () => {
-                terminalBox.innerHTML = '';
-                const levelVal = levelSelect.value;
-                const searchVal = searchInput.value.trim().toLowerCase();
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'da-input da-input-sm';
+        searchInput.placeholder = '过滤日志关键词 (命名空间/内容)...';
 
-                let entries = [...Logger.getGlobalBuffer().getAll()];
-                if (levelVal !== 'ALL') {
-                    entries = entries.filter((e: LogEntry) => e.level === levelVal);
-                }
-                if (searchVal) {
-                    entries = entries.filter((e: LogEntry) => {
-                        const line = `${e.namespace} ${e.message} ${e.level}`.toLowerCase();
-                        return line.includes(searchVal);
-                    });
-                }
+        leftGroup.appendChild(levelSelect);
+        leftGroup.appendChild(searchInput);
 
-                if (entries.length === 0) {
-                    terminalBox.innerHTML = '<div class="da-log-empty">暂无匹配的系统日志记录</div>';
-                    return;
-                }
+        const rightGroup = document.createElement('div');
+        rightGroup.className = 'da-diagnostics-toolbar-right';
 
-                const fragment = document.createDocumentFragment();
-                entries.forEach((e: LogEntry) => {
-                    const line = document.createElement('div');
-                    line.className = 'da-log-line';
+        const refreshBtn = document.createElement('button');
+        refreshBtn.type = 'button';
+        refreshBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        refreshBtn.textContent = '刷新日志';
 
-                    const ts = new Date(e.timestamp).toTimeString().split(' ')[0];
-                    const levelClass = `da-log-level da-log-level--${e.level.toLowerCase()}`;
+        const exportTxtBtn = document.createElement('button');
+        exportTxtBtn.type = 'button';
+        exportTxtBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        exportTxtBtn.textContent = '导出明文 TXT';
+        exportTxtBtn.onclick = () => {
+            const entries = Logger.getGlobalBuffer().getAll();
+            const text = entries
+                .map((e) => `[${new Date(e.timestamp).toISOString()}] [${e.level}] [${e.namespace}] ${e.message}`)
+                .join('\n');
+            downloadFile(text, `st-da-logs-${Date.now()}.txt`, 'text/plain;charset=utf-8');
+            FeedbackService.toastSuccess('运行日志已成功导出 (.txt)');
+        };
 
-                    const tsSpan = document.createElement('span');
-                    tsSpan.className = 'da-log-timestamp';
-                    tsSpan.textContent = `[${ts}]`;
+        const exportJsonBtn = document.createElement('button');
+        exportJsonBtn.type = 'button';
+        exportJsonBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        exportJsonBtn.textContent = '导出 JSON';
+        exportJsonBtn.onclick = () => {
+            const jsonStr = JSON.stringify(Logger.getGlobalBuffer().getAll(), null, 2);
+            downloadFile(jsonStr, `st-da-logs-${Date.now()}.json`, 'application/json;charset=utf-8');
+            FeedbackService.toastSuccess('运行日志已成功导出 (.json)');
+        };
 
-                    const lvlSpan = document.createElement('span');
-                    lvlSpan.className = levelClass;
-                    lvlSpan.textContent = ` [${e.level}]`;
+        const exportBundleBtn = document.createElement('button');
+        exportBundleBtn.type = 'button';
+        exportBundleBtn.className = 'da-btn da-btn--primary da-btn--sm';
+        exportBundleBtn.textContent = '📦 导出脱敏诊断包';
+        exportBundleBtn.onclick = async () => {
+            try {
+                const rawSettings = store.getState();
+                const sanitizedSettings = sanitizeDataForExport(rawSettings);
+                const sanitizedLogs = sanitizeDataForExport(Logger.getGlobalBuffer().getAll());
+                const statsSnapshot = StatisticsCollector.getInstance().getSnapshot();
 
-                    const nsSpan = document.createElement('span');
-                    nsSpan.className = 'da-log-namespace';
-                    nsSpan.textContent = ` [${e.namespace}]`;
+                const bundle = {
+                    exportedAt: new Date().toISOString(),
+                    extension: EXTENSION_NAME,
+                    versionState: UpdateService.getInstance().getState(),
+                    settings: sanitizedSettings,
+                    statistics: statsSnapshot,
+                    logs: sanitizedLogs
+                };
 
-                    line.appendChild(tsSpan);
-                    line.appendChild(lvlSpan);
-                    line.appendChild(nsSpan);
-                    line.appendChild(document.createTextNode(` ${e.message}`));
+                const jsonStr = JSON.stringify(bundle, null, 2);
+                downloadFile(jsonStr, `st-da-diagnostic-bundle-${Date.now()}.json`, 'application/json;charset=utf-8');
+                FeedbackService.toastSuccess('已成功导出脱敏系统诊断分析包 (.json)！');
+            } catch (err: any) {
+                FeedbackService.toastError(`导出诊断包失败: ${err.message}`);
+            }
+        };
 
-                    fragment.appendChild(line);
+        rightGroup.appendChild(exportTxtBtn);
+        rightGroup.appendChild(exportJsonBtn);
+        rightGroup.appendChild(exportBundleBtn);
+
+        toolbar.appendChild(leftGroup);
+        toolbar.appendChild(rightGroup);
+        cardLogs.body.appendChild(toolbar);
+
+        const terminalBox = document.createElement('div');
+        terminalBox.className = 'da-log-terminal';
+
+        const renderLogStream = () => {
+            terminalBox.innerHTML = '';
+            const levelVal = levelSelect.value;
+            const searchVal = searchInput.value.trim().toLowerCase();
+
+            let entries = [...Logger.getGlobalBuffer().getAll()];
+            if (levelVal !== 'ALL') {
+                entries = entries.filter((e: LogEntry) => e.level === levelVal);
+            }
+            if (searchVal) {
+                entries = entries.filter((e: LogEntry) => {
+                    const line = `${e.namespace} ${e.message} ${e.level}`.toLowerCase();
+                    return line.includes(searchVal);
                 });
+            }
 
-                terminalBox.appendChild(fragment);
-                terminalBox.scrollTop = terminalBox.scrollHeight;
-            };
+            if (entries.length === 0) {
+                terminalBox.innerHTML = '<div class="da-log-empty">暂无匹配的系统日志记录</div>';
+                return;
+            }
 
-            searchInput.oninput = () => renderLogStream();
-            levelSelect.onchange = () => renderLogStream();
-            refreshBtn.onclick = () => renderLogStream();
+            const fragment = document.createDocumentFragment();
+            entries.forEach((e: LogEntry) => {
+                const line = document.createElement('div');
+                line.className = 'da-log-line';
 
-            renderLogStream();
-            body.appendChild(terminalBox);
-        }
-    });
-    container.appendChild(cardLogs);
+                const ts = new Date(e.timestamp).toTimeString().split(' ')[0];
+                const levelClass = `da-log-level da-log-level--${e.level.toLowerCase()}`;
 
-    container.dispose = () => {
-        // 当前无响应式订阅需清理
-    };
+                const tsSpan = document.createElement('span');
+                tsSpan.className = 'da-log-timestamp';
+                tsSpan.textContent = `[${ts}]`;
 
-    return container;
+                const lvlSpan = document.createElement('span');
+                lvlSpan.className = levelClass;
+                lvlSpan.textContent = ` [${e.level}]`;
+
+                const nsSpan = document.createElement('span');
+                nsSpan.className = 'da-log-namespace';
+                nsSpan.textContent = ` [${e.namespace}]`;
+
+                line.appendChild(tsSpan);
+                line.appendChild(lvlSpan);
+                line.appendChild(nsSpan);
+                line.appendChild(document.createTextNode(` ${e.message}`));
+
+                fragment.appendChild(line);
+            });
+
+            terminalBox.appendChild(fragment);
+            terminalBox.scrollTop = terminalBox.scrollHeight;
+        };
+
+        searchInput.oninput = () => renderLogStream();
+        levelSelect.onchange = () => renderLogStream();
+        refreshBtn.onclick = () => renderLogStream();
+
+        renderLogStream();
+        cardLogs.body.appendChild(terminalBox);
+        this._root.appendChild(cardLogs.root);
+    }
 }
+
