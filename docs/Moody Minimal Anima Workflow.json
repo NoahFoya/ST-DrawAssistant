@@ -1,0 +1,357 @@
+{
+  "599": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": [
+        "649",
+        0
+      ],
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 4,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "826",
+        3
+      ],
+      "positive": [
+        "826",
+        1
+      ],
+      "negative": [
+        "827",
+        0
+      ],
+      "latent_image": [
+        "698",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "K采样器（高级）"
+    }
+  },
+  "609": {
+    "inputs": {
+      "samples": [
+        "599",
+        0
+      ],
+      "vae": [
+        "757",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "618": {
+    "inputs": {
+      "image": [
+        "609",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "获取图像尺寸"
+    }
+  },
+  "630": {
+    "inputs": {
+      "value": "(a*b + (96 * 2))/2",
+      "a": [
+        "618",
+        1
+      ],
+      "b": [
+        "637",
+        0
+      ]
+    },
+    "class_type": "SimpleMath+",
+    "_meta": {
+      "title": "Calculate optimized height"
+    }
+  },
+  "631": {
+    "inputs": {
+      "value": "(a*b + (96 * 2))/2",
+      "a": [
+        "618",
+        0
+      ],
+      "b": [
+        "637",
+        0
+      ]
+    },
+    "class_type": "SimpleMath+",
+    "_meta": {
+      "title": "Calculate optimized width"
+    }
+  },
+  "637": {
+    "inputs": {
+      "value": 2
+    },
+    "class_type": "FloatConstant",
+    "_meta": {
+      "title": "SD Upscale Factor (放大大小）"
+    }
+  },
+  "644": {
+    "inputs": {
+      "model_name": "UltraSharp\\4x-UltraSharp.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "加载放大模型"
+    }
+  },
+  "649": {
+    "inputs": {
+      "seed": 662576778125990
+    },
+    "class_type": "Seed (rgthree)",
+    "_meta": {
+      "title": "Seed (1ST)"
+    }
+  },
+  "650": {
+    "inputs": {
+      "images": [
+        "609",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image 1ST (ZIT)"
+    }
+  },
+  "653": {
+    "inputs": {
+      "rgthree_comparer": {
+        "images": [
+          {
+            "name": "A",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_xkhqb_00009_.png&type=temp&subfolder=&rand=0.5277798275403482"
+          }
+        ]
+      },
+      "image_a": [
+        "663",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "SD Upscale Comapre"
+    }
+  },
+  "663": {
+    "inputs": {
+      "upscale_by": [
+        "637",
+        0
+      ],
+      "seed": [
+        "775",
+        0
+      ],
+      "steps": 2,
+      "cfg": 1,
+      "sampler_name": "dpmpp_2m_sde",
+      "scheduler": "beta",
+      "denoise": 0.25,
+      "mode_type": "Linear",
+      "tile_width": [
+        "631",
+        0
+      ],
+      "tile_height": [
+        "630",
+        0
+      ],
+      "mask_blur": 64,
+      "tile_padding": 96,
+      "seam_fix_mode": "None",
+      "seam_fix_denoise": 1,
+      "seam_fix_width": 64,
+      "seam_fix_mask_blur": 8,
+      "seam_fix_padding": 16,
+      "force_uniform_tiles": true,
+      "tiled_decode": false,
+      "batch_size": 1,
+      "image": [
+        "609",
+        0
+      ],
+      "model": [
+        "826",
+        3
+      ],
+      "positive": [
+        "826",
+        1
+      ],
+      "negative": [
+        "827",
+        0
+      ],
+      "vae": [
+        "757",
+        0
+      ],
+      "upscale_model": [
+        "644",
+        0
+      ]
+    },
+    "class_type": "UltimateSDUpscale",
+    "_meta": {
+      "title": "Ultimate SD Upscale"
+    }
+  },
+  "698": {
+    "inputs": {
+      "width": 896,
+      "height": 1600,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image (Base Dimensions) 初始大小"
+    }
+  },
+  "732": {
+    "inputs": {
+      "filename_prefix": "Moody-",
+      "images": [
+        "663",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "737": {
+    "inputs": {
+      "rgthree_comparer": {
+        "images": [
+          {
+            "name": "A",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_engyf_00017_.png&type=temp&subfolder=&rand=0.05295871279364672"
+          },
+          {
+            "name": "B",
+            "selected": true,
+            "url": "/api/view?filename=rgthree.compare._temp_engyf_00018_.png&type=temp&subfolder=&rand=0.4469163823474017"
+          }
+        ]
+      },
+      "image_a": [
+        "663",
+        0
+      ],
+      "image_b": [
+        "609",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "Detailer Compare (with SD upscale) 跟SD放大原图对比"
+    }
+  },
+  "755": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "757": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "761": {
+    "inputs": {
+      "unet_name": "moodyAnimaMix_v10.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "775": {
+    "inputs": {
+      "value": [
+        "649",
+        0
+      ]
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Seed (SD) - Keep 0 by default"
+    }
+  },
+  "826": {
+    "inputs": {
+      "positive": "masterpiece, best quality, absurdres,\n(solo focus:1.2), (pov:1.3), 1girl, Ranbao, (cat ears:1.2), (silver long hair:1.1), (ice blue eyes:1.1), (young girl:1.1), (beautiful maiden:1.1),\nleaning forward, looking at viewer, (sweet smile:1.2), blush,\n(classic deluxe maid outfit:1.4), (white apron:1.2), black bodice, ruffled lace collar, puffy sleeves, (black pleated skirt:1.1),\ndiminutive, (soft lighting:1.2), golden hour, (dappled light:1.1), cinematic lighting, detailed background,",
+      "auto_random": false,
+      "lora_str": "",
+      "temp_str": "",
+      "temp_lora_str": "",
+      "random_template": "",
+      "打开提示词编辑器": "",
+      "打开Lora堆": "",
+      "opt_clip": [
+        "755",
+        0
+      ],
+      "opt_model": [
+        "761",
+        0
+      ]
+    },
+    "class_type": "WeiLinPromptUI",
+    "_meta": {
+      "title": "WeiLin 全能提示词编辑器"
+    }
+  },
+  "827": {
+    "inputs": {
+      "text": "score_1, score_2, score_3,bad anatomy, bad proportions, deformed anatomy, deformed face, deformed eyes, text, multiple fingers,watermark,artist name",
+      "clip": [
+        "826",
+        2
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  }
+}
