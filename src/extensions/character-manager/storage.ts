@@ -1,6 +1,11 @@
 /**
  * @module extensions/character-manager/storage
- * @description 角色设定、服装设定、启用方案、注入模板与正则宏公式的持久化存储管理器 (CharacterStorage)
+ * @description 角色与服装预设扩展专属持久化存储管理器 (CharacterStorage)
+ *
+ * 核心职责：
+ * - 统一管理角色卡、服装预设、启用方案、提示词注入模板及正则公式的持久化存取；
+ * - 首次运行与出厂重置时通过微内核预设注册中心 (PresetRegistry) 自动填充内置示范配置；
+ * - 封装 300ms 防抖持久化写入机制，保护宿主存储 IO 性能。
  */
 
 import {
@@ -11,261 +16,176 @@ import {
     RegexFormulaScheme
 } from './types';
 import { IHostBridge } from '../../core/foundation/host-bridge';
-
-const STORAGE_KEY_INITIALIZED = 'st_da_cm_initialized_v1';
-const STORAGE_KEY_CHARACTERS = 'st_da_character_profiles_v1';
-const STORAGE_KEY_OUTFITS = 'st_da_outfit_profiles_v1';
-const STORAGE_KEY_SCHEMES = 'st_da_enable_schemes_v1';
-const STORAGE_KEY_TEMPLATES = 'st_da_injection_templates_v1';
-const STORAGE_KEY_FORMULAS = 'st_da_regex_formula_schemes_v1';
-const STORAGE_KEY_ACTIVE_FORMULA_ID = 'st_da_active_regex_formula_scheme_id_v1';
-
-export const DEFAULT_CHARACTER_PROFILE: CharacterProfile = {
-    id: 'default-character',
-    nameCN: '默认角色',
-    nameEN: 'default_girl',
-    bodyTraits: '1girl, slender, fair skin',
-    facialFeatures: 'cute face, blue eyes, long silver hair',
-    facialFeaturesBack: 'silver hair from behind, long hair braid',
-    upperBodySFW: 'white shirt, collarbone',
-    upperBodySFWBack: 'white shirt from behind, slender back',
-    sideBodySFW: 'side profile, slender waist',
-    lowerBodySFW: 'pleated skirt, bare legs',
-    lowerBodySFWBack: 'pleated skirt from behind',
-    upperBodyNSFW: 'bare chest, nipples, soft breasts',
-    upperBodyNSFWBack: 'bare back, shoulder blades',
-    lowerBodyNSFW: 'pussy, bare hips, thighs',
-    lowerBodyNSFWBack: 'bare ass, round buttocks',
-    negativePrompt: 'bad anatomy, bad hands, missing fingers',
-    outfitList: ['default-outfit']
-};
-
-export const DEFAULT_OUTFIT_PROFILE: OutfitProfile = {
-    id: 'default-outfit',
-    nameCN: '水手服',
-    nameEN: 'sailor_suit',
-    headAccessory: 'hair ribbon',
-    upperBody: 'navy sailor collar shirt, red necktie',
-    upperBodyBack: 'sailor collar from behind',
-    lowerBody: 'navy pleated skirt',
-    lowerBodyBack: 'pleated skirt back',
-    footwear: 'white socks, brown loafers',
-    accessories: 'school bag'
-};
-
-export const DEFAULT_ENABLE_SCHEME: EnableSchemeProfile = {
-    id: 'default-scheme',
-    name: '全局通用方案',
-    boundCharacterCards: '',
-    characterRules: { 'default-character': 'ALL' },
-    outfitRules: { 'default-outfit': 'ALL' },
-    injectionTemplateId: 'default-template'
-};
-
-export const DEFAULT_INJECTION_TEMPLATE: InjectionTemplateScheme = {
-    id: 'default-template',
-    name: '标准注入模板',
-    characterListTemplate: '{nameEN}, {bodyTraits}, {facial}, {upperSFW}, {lowerSFW}',
-    innerOutfitTemplate: '{headAcc}, {upperBody}, {lowerBody}, {footwear}, {accessories}',
-    commonCharacterListTemplate: '{nameEN}, {bodyTraits}, {facial}',
-    enableOutfitListTemplate: '{upperBody}, {lowerBody}, {accessories}'
-};
-
-export const DEFAULT_REGEX_FORMULA_SCHEME: RegexFormulaScheme = {
-    id: 'standard-formula',
-    name: '标准正则公式方案',
-    characterMacroRules: {
-        fixedVars: ['nameEN'],
-        formulas: [
-            {
-                id: 'char-back',
-                name: '背面特征分支',
-                enabled: true,
-                pattern: '-from_behind',
-                outputVars: ['facialFeaturesBack', 'upperBodySFWBack', 'lowerBodySFWBack']
-            },
-            {
-                id: 'char-nsfw',
-                name: 'NSFW 分支',
-                enabled: true,
-                pattern: '-nsfw',
-                outputVars: ['upperBodyNSFW', 'lowerBodyNSFW']
-            }
-        ]
-    },
-    outfitMacroRules: {
-        fixedVars: ['nameEN'],
-        formulas: [
-            {
-                id: 'outfit-back',
-                name: '背面服装分支',
-                enabled: true,
-                pattern: '-from_behind',
-                outputVars: ['upperBodyBack', 'lowerBodyBack']
-            }
-        ]
-    },
-    characterExtractRules: [],
-    outfitExtractRules: []
-};
+import type { IPresetRegistry } from '../../core/registry/preset-registry';
+import { CHARACTER_STORAGE_KEYS } from './constants';
+import {
+    fetchCharacters,
+    fetchOutfits,
+    fetchEnableSchemes,
+    fetchInjectionTemplates,
+    fetchRegexFormulas
+} from './preset-loader';
 
 export class CharacterStorage {
     private readonly _hostBridge: IHostBridge;
+    private readonly _presets?: IPresetRegistry;
+    private readonly _debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-    constructor(hostBridge: IHostBridge) {
+    /**
+     * 创建角色与服装预设存储管理器实例
+     *
+     * @param hostBridge 宿主通信桥接实例
+     * @param presets 预设方案注册中心 (可选，用于初次启动填充默认数据)
+     */
+    constructor(hostBridge: IHostBridge, presets?: IPresetRegistry) {
         this._hostBridge = hostBridge;
+        this._presets = presets;
         this.ensureInitialized();
     }
 
     /**
-     * 首次安装引导检查：仅在初次安装运行时填充示范数据，后续不再静默兜底
+     * 首次安装引导检查：初次运行时填充内置示范数据
      */
-    private ensureInitialized(): void {
-        const isInitialized = this._hostBridge.getExtensionSettings<boolean>(STORAGE_KEY_INITIALIZED);
+    private async ensureInitialized(): Promise<void> {
+        const isInitialized = this._hostBridge.getExtensionSettings<boolean>(CHARACTER_STORAGE_KEYS.INITIALIZED);
         if (!isInitialized) {
-            this.saveCharacters([DEFAULT_CHARACTER_PROFILE]);
-            this.saveOutfits([DEFAULT_OUTFIT_PROFILE]);
-            this.saveSchemes([DEFAULT_ENABLE_SCHEME]);
-            this.saveTemplates([DEFAULT_INJECTION_TEMPLATE]);
-            this.saveFormulas([DEFAULT_REGEX_FORMULA_SCHEME]);
-            this.setActiveFormulaId('standard-formula');
-            this._hostBridge.saveExtensionSettings(STORAGE_KEY_INITIALIZED, true as any);
+            const [chars, outfits, schemes, templates, formulas] = await Promise.all([
+                fetchCharacters(this._presets),
+                fetchOutfits(this._presets),
+                fetchEnableSchemes(this._presets),
+                fetchInjectionTemplates(this._presets),
+                fetchRegexFormulas(this._presets)
+            ]);
+
+            if (chars.length > 0) this.saveEntities(CHARACTER_STORAGE_KEYS.CHARACTERS, chars);
+            if (outfits.length > 0) this.saveEntities(CHARACTER_STORAGE_KEYS.OUTFITS, outfits);
+            if (schemes.length > 0) this.saveEntities(CHARACTER_STORAGE_KEYS.SCHEMES, schemes);
+            if (templates.length > 0) this.saveEntities(CHARACTER_STORAGE_KEYS.TEMPLATES, templates);
+            if (formulas.length > 0) {
+                this.saveEntities(CHARACTER_STORAGE_KEYS.FORMULAS, formulas);
+                this.setActiveFormulaId(formulas[0]?.id || 'standard-formula');
+            }
+
+            this._hostBridge.saveExtensionSettings(CHARACTER_STORAGE_KEYS.INITIALIZED, true as any);
         }
     }
 
-    // ── 1. 角色预设 ──
+    // ── 通用泛型实体持久化引擎 (含 300ms 防抖保存) ──────────────────────────
+
+    /** 获取指定 Key 的实体列表 */
+    public getEntities<T>(storageKey: string): T[] {
+        const data = this._hostBridge.getExtensionSettings<T[]>(storageKey);
+        return Array.isArray(data) ? data : [];
+    }
+
+    /** 保存指定 Key 的实体列表 (立即写入宿主存储) */
+    public saveEntities<T>(storageKey: string, list: T[]): void {
+        const existingTimer = this._debounceTimers.get(storageKey);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+            this._debounceTimers.delete(storageKey);
+        }
+        this._hostBridge.saveExtensionSettings(storageKey, list as any);
+    }
+
+    /** 防抖保存指定 Key 的实体列表 (默认 300ms 防抖) */
+    public saveEntitiesDebounced<T>(storageKey: string, list: T[], delayMs = 300): void {
+        const existingTimer = this._debounceTimers.get(storageKey);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+        const timer = setTimeout(() => {
+            this._debounceTimers.delete(storageKey);
+            this._hostBridge.saveExtensionSettings(storageKey, list as any);
+        }, delayMs);
+        this._debounceTimers.set(storageKey, timer);
+    }
+
+    /** 插入或更新单个实体 (按 id 匹配) */
+    public upsertEntity<T extends { id: string }>(storageKey: string, item: T): void {
+        const list = this.getEntities<T>(storageKey);
+        const idx = list.findIndex((x) => x.id === item.id);
+        if (idx >= 0) list[idx] = item;
+        else list.push(item);
+        this.saveEntities(storageKey, list);
+    }
+
+    /** 删除单个实体 (按 id 匹配) */
+    public deleteEntity<T extends { id: string }>(storageKey: string, id: string): void {
+        const list = this.getEntities<T>(storageKey).filter((x) => x.id !== id);
+        this.saveEntities(storageKey, list);
+    }
+
+    // ── 语义化业务访问接口 ───────────────────────────────────────────────
+
+    // 1. 角色预设
     public getCharacters(): CharacterProfile[] {
-        const data = this._hostBridge.getExtensionSettings<CharacterProfile[]>(STORAGE_KEY_CHARACTERS);
-        return Array.isArray(data) ? data : [];
+        return this.getEntities<CharacterProfile>(CHARACTER_STORAGE_KEYS.CHARACTERS);
     }
+    public saveCharacters(list: CharacterProfile[]): void { this.saveEntities(CHARACTER_STORAGE_KEYS.CHARACTERS, list); }
+    public upsertCharacter(profile: CharacterProfile): void { this.upsertEntity(CHARACTER_STORAGE_KEYS.CHARACTERS, profile); }
+    public deleteCharacter(id: string): void { this.deleteEntity(CHARACTER_STORAGE_KEYS.CHARACTERS, id); }
 
-    public saveCharacters(characters: CharacterProfile[]): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_CHARACTERS, characters as any);
-    }
-
-    public upsertCharacter(profile: CharacterProfile): void {
-        const list = this.getCharacters();
-        const idx = list.findIndex((c) => c.id === profile.id);
-        if (idx >= 0) list[idx] = profile;
-        else list.push(profile);
-        this.saveCharacters(list);
-    }
-
-    public deleteCharacter(id: string): void {
-        const list = this.getCharacters().filter((c) => c.id !== id);
-        this.saveCharacters(list);
-    }
-
-    // ── 2. 服装预设 ──
+    // 2. 服装预设
     public getOutfits(): OutfitProfile[] {
-        const data = this._hostBridge.getExtensionSettings<OutfitProfile[]>(STORAGE_KEY_OUTFITS);
-        return Array.isArray(data) ? data : [];
+        return this.getEntities<OutfitProfile>(CHARACTER_STORAGE_KEYS.OUTFITS);
     }
+    public saveOutfits(list: OutfitProfile[]): void { this.saveEntities(CHARACTER_STORAGE_KEYS.OUTFITS, list); }
+    public upsertOutfit(outfit: OutfitProfile): void { this.upsertEntity(CHARACTER_STORAGE_KEYS.OUTFITS, outfit); }
+    public deleteOutfit(id: string): void { this.deleteEntity(CHARACTER_STORAGE_KEYS.OUTFITS, id); }
 
-    public saveOutfits(outfits: OutfitProfile[]): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_OUTFITS, outfits as any);
-    }
-
-    public upsertOutfit(outfit: OutfitProfile): void {
-        const list = this.getOutfits();
-        const idx = list.findIndex((o) => o.id === outfit.id);
-        if (idx >= 0) list[idx] = outfit;
-        else list.push(outfit);
-        this.saveOutfits(list);
-    }
-
-    public deleteOutfit(id: string): void {
-        const list = this.getOutfits().filter((o) => o.id !== id);
-        this.saveOutfits(list);
-    }
-
-    // ── 3. 启用方案 ──
+    // 3. 启用方案
     public getSchemes(): EnableSchemeProfile[] {
-        const data = this._hostBridge.getExtensionSettings<EnableSchemeProfile[]>(STORAGE_KEY_SCHEMES);
-        return Array.isArray(data) ? data : [];
+        return this.getEntities<EnableSchemeProfile>(CHARACTER_STORAGE_KEYS.SCHEMES);
     }
+    public saveSchemes(list: EnableSchemeProfile[]): void { this.saveEntities(CHARACTER_STORAGE_KEYS.SCHEMES, list); }
+    public upsertScheme(scheme: EnableSchemeProfile): void { this.upsertEntity(CHARACTER_STORAGE_KEYS.SCHEMES, scheme); }
+    public deleteScheme(id: string): void { this.deleteEntity(CHARACTER_STORAGE_KEYS.SCHEMES, id); }
 
-    public saveSchemes(schemes: EnableSchemeProfile[]): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_SCHEMES, schemes as any);
-    }
-
-    public upsertScheme(scheme: EnableSchemeProfile): void {
-        const list = this.getSchemes();
-        const idx = list.findIndex((s) => s.id === scheme.id);
-        if (idx >= 0) list[idx] = scheme;
-        else list.push(scheme);
-        this.saveSchemes(list);
-    }
-
-    public deleteScheme(id: string): void {
-        const list = this.getSchemes().filter((s) => s.id !== id);
-        this.saveSchemes(list);
-    }
-
-    // ── 4. 注入模板 ──
+    // 4. 注入模板
     public getTemplates(): InjectionTemplateScheme[] {
-        const data = this._hostBridge.getExtensionSettings<InjectionTemplateScheme[]>(STORAGE_KEY_TEMPLATES);
-        return Array.isArray(data) ? data : [];
+        return this.getEntities<InjectionTemplateScheme>(CHARACTER_STORAGE_KEYS.TEMPLATES);
     }
+    public saveTemplates(list: InjectionTemplateScheme[]): void { this.saveEntities(CHARACTER_STORAGE_KEYS.TEMPLATES, list); }
+    public upsertTemplate(tpl: InjectionTemplateScheme): void { this.upsertEntity(CHARACTER_STORAGE_KEYS.TEMPLATES, tpl); }
+    public deleteTemplate(id: string): void { this.deleteEntity(CHARACTER_STORAGE_KEYS.TEMPLATES, id); }
 
-    public saveTemplates(templates: InjectionTemplateScheme[]): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_TEMPLATES, templates as any);
-    }
-
-    public upsertTemplate(tpl: InjectionTemplateScheme): void {
-        const list = this.getTemplates();
-        const idx = list.findIndex((t) => t.id === tpl.id);
-        if (idx >= 0) list[idx] = tpl;
-        else list.push(tpl);
-        this.saveTemplates(list);
-    }
-
-    public deleteTemplate(id: string): void {
-        const list = this.getTemplates().filter((t) => t.id !== id);
-        this.saveTemplates(list);
-    }
-
-    // ── 5. 正则宏公式方案 ──
+    // 5. 正则公式
     public getFormulas(): RegexFormulaScheme[] {
-        const data = this._hostBridge.getExtensionSettings<RegexFormulaScheme[]>(STORAGE_KEY_FORMULAS);
-        return Array.isArray(data) ? data : [];
+        return this.getEntities<RegexFormulaScheme>(CHARACTER_STORAGE_KEYS.FORMULAS);
     }
-
-    public saveFormulas(formulas: RegexFormulaScheme[]): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_FORMULAS, formulas as any);
-    }
-
-    public upsertFormula(scheme: RegexFormulaScheme): void {
-        const list = this.getFormulas();
-        const idx = list.findIndex((f) => f.id === scheme.id);
-        if (idx >= 0) list[idx] = scheme;
-        else list.push(scheme);
-        this.saveFormulas(list);
-    }
-
-    public deleteFormula(id: string): void {
-        const list = this.getFormulas().filter((f) => f.id !== id);
-        this.saveFormulas(list);
-    }
+    public saveFormulas(list: RegexFormulaScheme[]): void { this.saveEntities(CHARACTER_STORAGE_KEYS.FORMULAS, list); }
+    public upsertFormula(scheme: RegexFormulaScheme): void { this.upsertEntity(CHARACTER_STORAGE_KEYS.FORMULAS, scheme); }
+    public deleteFormula(id: string): void { this.deleteEntity(CHARACTER_STORAGE_KEYS.FORMULAS, id); }
 
     public getActiveFormulaId(): string {
-        const id = this._hostBridge.getExtensionSettings<string>(STORAGE_KEY_ACTIVE_FORMULA_ID);
+        const id = this._hostBridge.getExtensionSettings<string>(CHARACTER_STORAGE_KEYS.ACTIVE_FORMULA_ID);
         return id || this.getFormulas()[0]?.id || '';
     }
 
     public setActiveFormulaId(id: string): void {
-        this._hostBridge.saveExtensionSettings(STORAGE_KEY_ACTIVE_FORMULA_ID, id as any);
+        this._hostBridge.saveExtensionSettings(CHARACTER_STORAGE_KEYS.ACTIVE_FORMULA_ID, id as any);
     }
 
     /**
-     * 重置所有方案至初始示范配置
+     * 重置所有方案至出厂内置示范配置
      */
-    public resetAllToDefaults(): void {
-        this.saveCharacters([DEFAULT_CHARACTER_PROFILE]);
-        this.saveOutfits([DEFAULT_OUTFIT_PROFILE]);
-        this.saveSchemes([DEFAULT_ENABLE_SCHEME]);
-        this.saveTemplates([DEFAULT_INJECTION_TEMPLATE]);
-        this.saveFormulas([DEFAULT_REGEX_FORMULA_SCHEME]);
-        this.setActiveFormulaId('standard-formula');
+    public async resetAllToDefaults(): Promise<void> {
+        const [chars, outfits, schemes, templates, formulas] = await Promise.all([
+            fetchCharacters(this._presets),
+            fetchOutfits(this._presets),
+            fetchEnableSchemes(this._presets),
+            fetchInjectionTemplates(this._presets),
+            fetchRegexFormulas(this._presets)
+        ]);
+
+        if (chars.length > 0) this.saveCharacters(chars);
+        if (outfits.length > 0) this.saveOutfits(outfits);
+        if (schemes.length > 0) this.saveSchemes(schemes);
+        if (templates.length > 0) this.saveTemplates(templates);
+        if (formulas.length > 0) {
+            this.saveFormulas(formulas);
+            this.setActiveFormulaId(formulas[0]?.id || 'standard-formula');
+        }
     }
 }

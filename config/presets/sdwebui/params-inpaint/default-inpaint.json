@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "id": "sd_inpaint_standard",
+    "name": "局部重绘标准方案",
+    "driver": "sdwebui",
+    "category": "params-inpaint",
+    "version": "1.0.0"
+  },
+  "data": {
+    "maskBlur": 4,
+    "denoisingStrength": 0.65,
+    "inpaintFill": 1,
+    "inpaintFullRes": true,
+    "inpaintFullResPadding": 32
+  }
+}

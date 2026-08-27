@@ -13,14 +13,14 @@ import { IExtensionRegistry } from './registry/extension-registry';
 import { IUIRegistry } from './registry/ui-registry';
 import { IPresetRegistry } from './registry/preset-registry';
 import { IDriverRegistry } from './registry/driver-registry';
-import { IThemeContract, ITaskContract, IPipelineHooksContract, IModalContract, IFeedbackContract } from './contracts';
+import type { IThemeContract, ITaskContract, IPipelineHooksContract, IModalContract, IFeedbackContract } from './contracts';
 /**
  * 核心全局上下文接口 (整合各子系统与基础服务)
  */
 export interface KernelContext extends IDisposable {
     /** 插件当前版本号 */
     readonly version: string;
-    /** 宿主环境沙箱隔离适配器 */
+    /** 宿主环境通信与事件适配器 */
     readonly host: IHostBridge;
     /** 强类型跨模块事件总线 */
     readonly events: ITypedEventBus<CoreEventMap>;

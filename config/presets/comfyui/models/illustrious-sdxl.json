@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "id": "illustrious_sdxl_default",
+    "name": "Illustrious SDXL 二次元动漫预设",
+    "driver": "comfyui",
+    "category": "models",
+    "version": "1.0.0"
+  },
+  "data": {
+    "ckptName": "waiIllustriousSDXL_v170.safetensors",
+    "clipName": "",
+    "vaeName": "",
+    "width": 1024,
+    "height": 1344,
+    "steps": 18,
+    "cfgScale": 6,
+    "samplerName": "euler_ancestral",
+    "scheduler": "normal",
+    "checkpointPositivePrefix": "masterpiece, best quality, highly detailed",
+    "checkpointNegativePrefix": "score_1, score_2, score_3, bad anatomy, bad hands",
+    "inpaintDenoise": 0.75,
+    "inpaintMaskBlur": 8,
+    "inpaintGrowMask": 6
+  }
+}

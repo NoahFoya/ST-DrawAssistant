@@ -4,8 +4,7 @@
  */
 
 import { CharacterStorage } from './storage';
-import { ControlFactory, createFieldRow } from '../../ui/components/controls';
-import { bindPresetToolbar } from '../../ui/components/preset-toolbar';
+import { ControlFactory, createFieldRow, bindPresetToolbar } from '../../ui';
 import {
     createCharacterPresetAdapter,
     createOutfitPresetAdapter,
@@ -31,11 +30,6 @@ export function createCharacterTabView(
     // ── 顶部 5 大子 Tab 导航栏 ──
     const navBar = document.createElement('div');
     navBar.className = 'da-sub-tab-nav';
-    navBar.style.display = 'flex';
-    navBar.style.gap = '8px';
-    navBar.style.borderBottom = '1px solid var(--da-border-color)';
-    navBar.style.paddingBottom = '10px';
-    navBar.style.marginBottom = '16px';
 
     const subTabs = [
         { id: 'character', title: '👤 角色卡设定' },

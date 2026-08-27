@@ -9,10 +9,11 @@ import { IDisposable, DisposableStore } from '../../core/foundation/disposable';
 import { CharacterStorage } from './storage';
 import { createCharacterPromptHook } from './prompt-hook';
 import { createCharacterTabView } from './character-tab';
+import { CHARACTER_MANAGER_EXTENSION_ID } from './constants';
 import { VERSION } from '../../core/constants';
 
 export class CharacterManagerExtension implements IExtension {
-    public readonly id = 'character-manager';
+    public readonly id = CHARACTER_MANAGER_EXTENSION_ID;
     public readonly name = '角色与服装预设管理';
     public readonly version = VERSION;
 
@@ -23,7 +24,7 @@ export class CharacterManagerExtension implements IExtension {
      * @param context 核心全局上下文实例
      */
     public activate(context: KernelContext): void {
-        const storage = new CharacterStorage(context.host);
+        const storage = new CharacterStorage(context.host, context.presets);
 
         // 1. 注册提示词流水线前置处理 Hook (beforePromptBuild)
         if (context.hooks?.beforePromptBuild) {
@@ -40,7 +41,7 @@ export class CharacterManagerExtension implements IExtension {
             tabRegistration = context.ui.registerTab({
                 id: 'character-manager',
                 title: '角色管理',
-                icon: '👤',
+                icon: '',
                 order: 20,
                 render: (container: HTMLElement) => {
                     const view = createCharacterTabView(storage);

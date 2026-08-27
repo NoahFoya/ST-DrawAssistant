@@ -1,0 +1,7 @@
+{
+  "id": "tpl-yaml-keyvalue",
+  "name": "YAML 紧凑键值对风格",
+  "characterListTemplate": "Character:\n  name: {nameCN} ({nameEN})\n  origin: {origin}\n  body_traits: {bodyTraits}\n  facial: {facial}\n  facial_back: {facialBack}\n  upper_sfw: {upperSFW}\n  upper_sfw_back: {upperSFWBack}\n  side_sfw: {sideSFW}\n  lower_sfw: {lowerSFW}\n  lower_sfw_back: {lowerSFWBack}\n  upper_nsfw: {upperNSFW}\n  upper_nsfw_back: {upperNSFWBack}\n  lower_nsfw: {lowerNSFW}\n  lower_nsfw_back: {lowerNSFWBack}\n  negative: {negative}\n{outfits}",
+  "innerOutfitTemplate": "  Outfit:\n    name: {nameCN} ({nameEN})\n    head_accessory: {headAcc}\n    upper_body: {upperBody}\n    upper_body_back: {upperBodyBack}\n    lower_body: {lowerBody}\n    lower_body_back: {lowerBodyBack}\n    footwear: {footwear}\n    accessories: {accessories}",
+  "enableOutfitListTemplate": "Outfit:\n  name: {nameCN} ({nameEN})\n  head_accessory: {headAcc}\n  upper_body: {upperBody}\n  upper_body_back: {upperBodyBack}\n  lower_body: {lowerBody}\n  lower_body_back: {lowerBodyBack}\n  footwear: {footwear}\n  accessories: {accessories}"
+}

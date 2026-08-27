@@ -1,56 +1,26 @@
 /**
  * @module core/state/store-types
- * @description DrawAssistantSettings 设置项全局强类型定义
+ * @description 全局配置状态类型定义与预设加载逻辑 (DrawAssistantSettings)
+ *
+ * 设计意图：
+ * - 集中定义插件全局配置的 TypeScript 接口与各子方案数据结构；
+ * - 提供基础默认配置对象，确保首次启动时的安全初始化；
+ * - 支持从 config/presets/ 静态目录动态加载预设方案并同步至配置中心；
+ * - 修改 config/presets/ 目录下的预设 JSON 文件后，刷新页面即可直接生效。
  */
-export type ImageProvider = 'comfyui' | 'sdwebui' | 'novelai';
-export interface ExtensionState {
-    enabled: boolean;
-    config?: Record<string, unknown>;
-}
-export interface ImageDisplayConfig {
-    align: 'left' | 'center' | 'right';
-    objectFit: 'contain' | 'cover' | 'fill' | 'none';
-    maxHeight: number;
-    maxWidthPct: number;
-    rounded: boolean;
-}
-export interface WorkflowInjectionConfig {
-    positiveNodeId: string;
-    positiveField: string;
-    negativeNodeId: string;
-    negativeField: string;
-    widthNodeId: string;
-    widthField: string;
-    heightNodeId: string;
-    heightField: string;
-    kSamplerNodeId: string;
-    saveImageNodeId: string;
-}
-export interface LoraItem {
-    name: string;
-    weight: number;
-    textWeight?: number;
-    triggerWeight?: number;
-}
-export interface PresetProfileItem<T = Record<string, unknown>> {
+import type { IPresetRegistry } from '../registry/preset-registry';
+import { ObservableStore } from './store';
+import type { ThemeData } from '../contracts';
+export type { ThemeData } from '../contracts';
+/** 支持的图像生成后端类型枚举 (开放联合类型，允许扩展第三方新模型驱动) */
+export type ImageProvider = 'comfyui' | 'sdwebui' | (string & {});
+/** 方案项通用包装结构 */
+export interface PresetProfileItem<T = any> {
     id: string;
     name: string;
     data: T;
 }
-export interface ThemeData {
-    bgPrimary: string;
-    bgGradientEnd?: string;
-    bgGradientAngle?: number;
-    bgGradient?: string;
-    bgSecondary: string;
-    bgOpacity?: number;
-    textPrimary: string;
-    textSecondary: string;
-    borderColor: string;
-    accentColor: string;
-    blurRadius: number;
-    borderRadius: number;
-}
+/** ComfyUI 模型参数方案数据结构 */
 export interface ModelProfileData {
     ckptName?: string;
     clipName?: string;
@@ -67,21 +37,59 @@ export interface ModelProfileData {
     inpaintMaskBlur?: number;
     inpaintGrowMask?: number;
 }
+/** ComfyUI 提示词方案数据结构 */
 export interface PromptProfileData {
     promptPrefix?: string;
     negativePrefix?: string;
     promptSuffix?: string;
     loras?: LoraItem[];
 }
+/** 工作流方案数据结构 */
 export interface WorkflowProfileData {
-    json?: string;
+    json: string;
 }
+/** LoRA 触发词与权重项 */
+export interface LoraItem {
+    name: string;
+    weight: number;
+    clipWeight?: number;
+    textWeight?: number;
+    triggerWeight?: number;
+    triggerWords?: string;
+}
+/** 图像展示样式配置 */
+export interface ImageDisplayConfig {
+    align: 'left' | 'center' | 'right';
+    objectFit: 'contain' | 'cover' | 'fill' | 'none';
+    maxHeight: number;
+    maxWidthPct: number;
+    rounded: boolean;
+}
+/** 扩展功能状态 */
+export interface ExtensionState {
+    enabled: boolean;
+    config?: Record<string, any>;
+}
+/** 工作流节点注入映射配置 */
+export interface WorkflowInjectionConfig {
+    positiveNodeId: string;
+    positiveField: string;
+    negativeNodeId: string;
+    negativeField: string;
+    widthNodeId: string;
+    widthField: string;
+    heightNodeId: string;
+    heightField: string;
+    kSamplerNodeId: string;
+    saveImageNodeId: string;
+}
+/**
+ * 插件全局设置数据结构完整接口定义
+ */
 export interface DrawAssistantSettings {
-    version?: string;
+    version: string;
     enabled: boolean;
     showHelp: boolean;
-    autoCleanupOnChatDelete?: boolean;
-    logLevel?: 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
     provider: ImageProvider;
     requestMode: 'browser' | 'server';
     serverUrl: string;
@@ -107,6 +115,7 @@ export interface DrawAssistantSettings {
     enableActionPanel?: boolean;
     imageFormat?: 'original' | 'webp' | 'jpeg';
     imageQuality?: number;
+    maxStoredImages?: number;
     maxConcurrent: number;
     requestTimeout: number;
     themePreset?: string;
@@ -116,10 +125,13 @@ export interface DrawAssistantSettings {
     fabVisible?: boolean;
     fabOpacity?: number;
     fabIcon?: string;
+    fabPresetIcon?: string;
     fabCustomIcon?: string;
     fabPosition?: {
-        x: number;
-        y: number;
+        x?: number;
+        y?: number;
+        top?: number;
+        left?: number;
     } | null;
     extensions?: Record<string, ExtensionState>;
     workflowJson: string;
@@ -131,6 +143,7 @@ export interface DrawAssistantSettings {
     cachedSamplers?: string[];
     cachedSchedulers?: string[];
     cachedLoras?: string[];
+    cachedUpscalers?: string[];
     ckptName?: string;
     clipName?: string;
     vaeName?: string;
@@ -165,7 +178,44 @@ export interface DrawAssistantSettings {
     sdHiresDenoise?: number;
     sdProfiles?: PresetProfileItem<any>[];
     sdProfileId?: string;
+    naiUrl?: string;
+    naiApiKey?: string;
+    naiModel?: string;
+    naiSampler?: string;
+    naiSteps?: number;
+    naiScale?: number;
+    naiWidth?: number;
+    naiHeight?: number;
+    naiNegativePrefix?: string;
+    naiPromptPrefix?: string;
+    naiPromptSuffix?: string;
+    naiSmea?: boolean;
+    naiSmeaDyn?: boolean;
+    naiDecrisper?: boolean;
+    naiUncondScale?: number;
+    openaiBaseUrl?: string;
+    openaiApiKey?: string;
+    openaiModel?: string;
+    openaiSize?: string;
+    openaiQuality?: string;
+    openaiStyle?: string;
+    openaiPromptPrefix?: string;
+    openaiNegativePrefix?: string;
+    logLevel?: 'debug' | 'info' | 'warn' | 'error';
     promptTemplate?: string;
     negativePromptTemplate?: string;
+    autoCleanupOnChatDelete?: boolean;
 }
+/**
+ * 创建基准出厂默认设置对象 (同步防呆兜底，保障离线冷启动绝对可用)
+ */
+export declare function createDefaultSettings(): DrawAssistantSettings;
+/**
+ * 从预设注册表中读取预设列表，并将默认项参数注入全局配置
+ *
+ * @param store 全局状态 Store 实例
+ * @param registryOrOverwrite 预设注册中心实例或是否强制覆盖标识
+ * @param overwriteExisting 是否覆盖现有配置（全量出厂重置时为 true）
+ */
+export declare function hydrateSettingsFromPresets(store: ObservableStore<DrawAssistantSettings>, registryOrOverwrite?: IPresetRegistry | boolean, overwriteExisting?: boolean): Promise<void>;
 //# sourceMappingURL=store-types.d.ts.map

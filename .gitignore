@@ -1,5 +1,7 @@
 # ST-DrawAssistant 项目专属忽略规则
 docs/
+tests/
+test/
 
 
 # TypeScript 增量构建缓存

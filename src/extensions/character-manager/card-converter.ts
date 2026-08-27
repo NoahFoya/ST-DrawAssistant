@@ -5,9 +5,15 @@
 
 import { CharacterRule } from './types';
 
+/**
+ * 角色卡数据多模板导入导出转换器
+ */
 export class CardConverter {
     /**
-     * 将文本解析为 CharacterRule
+     * 将外部文本 (Tavern XML / YAML / Markdown) 智能识别并解析为角色特征规则对象
+     *
+     * @param text 待解析的卡片文本内容
+     * @returns 解析提取出的 CharacterRule 属性字典
      */
     public parseToCharacterRule(text: string): Partial<CharacterRule> {
         if (!text) return {};
@@ -34,7 +40,11 @@ export class CardConverter {
     }
 
     /**
-     * 将 CharacterRule 导出为指定模板格式
+     * 将角色特征规则对象格式化序列化为指定模板文本格式
+     *
+     * @param rule 角色特征规则数据对象
+     * @param format 目标格式类型 ('xml' | 'yaml' | 'markdown')
+     * @returns 序列化后的格式化文本字符串
      */
     public formatRule(rule: CharacterRule, format: 'xml' | 'yaml' | 'markdown'): string {
         switch (format) {

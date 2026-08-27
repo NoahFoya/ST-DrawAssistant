@@ -1,9 +1,9 @@
 /**
  * @module core/foundation/host-bridge
- * @description SillyTavern 宿主环境安全沙箱桥接接口与实现 (IHostBridge 与 whenReady 握手)
+ * @description SillyTavern 宿主环境桥接适配器实现 (IHostBridge)
  */
 
-import { IDisposable, toDisposable } from './disposable';
+import { IDisposable, DisposableStore, toDisposable } from './disposable';
 
 export interface HostMessageEvent {
     readonly messageId: number;
@@ -15,11 +15,11 @@ export interface HostMessageEvent {
 }
 
 /**
- * 宿主环境沙箱适配接口
- * 彻底阻断插件业务代码对全局宿主变量与原生 DOM 的直接访问
+ * 宿主环境通信与事件适配接口
+ * 封装对 SillyTavern 上下文、事件总线与持久化存储的交互
  */
 export interface IHostBridge {
-    /** 阻塞等待宿主环境及全局上下文完全就绪 */
+    /** 等待宿主环境及全局上下文完全就绪 */
     whenReady(): Promise<void>;
 
     /** 监听 AI 角色消息渲染完成事件 (对应宿主 CHARACTER_MESSAGE_RENDERED) */
@@ -28,6 +28,8 @@ export interface IHostBridge {
     onUserMessageRendered(handler: (ev: HostMessageEvent) => void): IDisposable;
     /** 监听楼层分支滑动切换事件 (Swipe) */
     onMessageSwiped(handler: (ev: { messageId: number; swipeId: number }) => void): IDisposable;
+    /** 监听楼层编辑修改事件 (对应宿主 MESSAGE_EDITED / MESSAGE_UPDATED) */
+    onMessageEdited(handler: (ev: { messageId: number }) => void): IDisposable;
     /** 监听楼层删除或撤回事件 */
     onMessageDeleted(handler: (ev: { messageId: number }) => void): IDisposable;
     /** 监听当前聊天文件切换事件 */
@@ -48,6 +50,11 @@ export interface IHostBridge {
     getChatMessage(messageId: number): Record<string, any> | null;
     /** 向指定楼层的 extra 字段写入数据并安全持久化 */
     writeChatMessageExtra(messageId: number, key: string, value: unknown): void;
+    /** 原子化补丁更新指定楼层的 extra 字段并安全持久化 */
+    patchChatMessageExtra<T = unknown>(messageId: number, key: string, updater: (prev: T | undefined) => T): void;
+    /** 获取当前聊天中所有被引用的图像 UUID 集合 */
+    getReferencedImageIds(): Set<string>;
+
 
     /** 持久化当前会话级元数据 (chatMetadata) */
     saveChatMetadata(): void;
@@ -65,6 +72,7 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
     private _readyPromise: Promise<void> | null = null;
     private _stContext: any = null;
     private readonly _memorySettings = new Map<string, any>();
+    private readonly _disposables = new DisposableStore();
 
     constructor() {
         this.initHostContext();
@@ -92,27 +100,36 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         if (this._readyPromise) return this._readyPromise;
 
         this._readyPromise = new Promise<void>((resolve) => {
-            const checkReady = () => {
-                const ctx = this.getST();
-                if (ctx && ctx.eventSource && ctx.event_types) {
-                    this._isReady = true;
-                    resolve();
-                    return true;
-                }
-                return false;
+            const ctx = this.getST();
+            if (ctx?.eventSource && ctx?.event_types) {
+                this._isReady = true;
+                resolve();
+                return;
+            }
+
+            const onReady = () => {
+                this._isReady = true;
+                resolve();
             };
 
-            if (checkReady()) return;
+            if (ctx?.eventSource && ctx?.event_types?.APP_READY) {
+                ctx.eventSource.once(ctx.event_types.APP_READY, onReady);
+            }
 
+            // 极早加载兜底：宿主上下文尚未挂载时降级为轮询，最长等待 3 秒
             const timer = setInterval(() => {
-                if (checkReady()) clearInterval(timer);
-            }, 50);
+                const currentCtx = this.getST();
+                if (currentCtx?.eventSource && currentCtx?.event_types) {
+                    clearInterval(timer);
+                    onReady();
+                }
+            }, 100);
 
             setTimeout(() => {
                 clearInterval(timer);
                 this._isReady = true;
                 resolve();
-            }, 5000);
+            }, 3000);
         });
 
         return this._readyPromise;
@@ -139,9 +156,11 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         };
 
         ctx.eventSource.on(ctx.event_types.CHARACTER_MESSAGE_RENDERED, listener);
-        return toDisposable(() => {
+        const d = toDisposable(() => {
             ctx.eventSource.removeListener?.(ctx.event_types.CHARACTER_MESSAGE_RENDERED, listener);
         });
+        this._disposables.add(d);
+        return d;
     }
 
     public onUserMessageRendered(handler: (ev: HostMessageEvent) => void): IDisposable {
@@ -165,9 +184,11 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         };
 
         ctx.eventSource.on(ctx.event_types.USER_MESSAGE_RENDERED, listener);
-        return toDisposable(() => {
+        const d = toDisposable(() => {
             ctx.eventSource.removeListener?.(ctx.event_types.USER_MESSAGE_RENDERED, listener);
         });
+        this._disposables.add(d);
+        return d;
     }
 
     public onMessageSwiped(handler: (ev: { messageId: number; swipeId: number }) => void): IDisposable {
@@ -183,9 +204,31 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         };
 
         ctx.eventSource.on(ctx.event_types.MESSAGE_SWIPED, listener);
-        return toDisposable(() => {
+        const d = toDisposable(() => {
             ctx.eventSource.removeListener?.(ctx.event_types.MESSAGE_SWIPED, listener);
         });
+        this._disposables.add(d);
+        return d;
+    }
+
+    public onMessageEdited(handler: (ev: { messageId: number }) => void): IDisposable {
+        const ctx = this.getST();
+        const eventType = ctx?.event_types?.MESSAGE_EDITED || ctx?.event_types?.MESSAGE_UPDATED;
+        if (!ctx || !ctx.eventSource || !eventType) {
+            return toDisposable(() => {});
+        }
+
+        const listener = (data: any) => {
+            const messageId = typeof data === 'number' ? data : (data?.messageId ?? data?.id ?? 0);
+            handler({ messageId });
+        };
+
+        ctx.eventSource.on(eventType, listener);
+        const d = toDisposable(() => {
+            ctx.eventSource.removeListener?.(eventType, listener);
+        });
+        this._disposables.add(d);
+        return d;
     }
 
     public onMessageDeleted(handler: (ev: { messageId: number }) => void): IDisposable {
@@ -200,9 +243,11 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         };
 
         ctx.eventSource.on(ctx.event_types.MESSAGE_DELETED, listener);
-        return toDisposable(() => {
+        const d = toDisposable(() => {
             ctx.eventSource.removeListener?.(ctx.event_types.MESSAGE_DELETED, listener);
         });
+        this._disposables.add(d);
+        return d;
     }
 
     public onChatChanged(handler: (chatId: string) => void): IDisposable {
@@ -217,9 +262,11 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         };
 
         ctx.eventSource.on(ctx.event_types.CHAT_CHANGED, listener);
-        return toDisposable(() => {
+        const d = toDisposable(() => {
             ctx.eventSource.removeListener?.(ctx.event_types.CHAT_CHANGED, listener);
         });
+        this._disposables.add(d);
+        return d;
     }
 
     public getCurrentCharacter(): { name: string; avatar?: string; description?: string } | null {
@@ -227,15 +274,6 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         if (!ctx) return null;
         const charId = ctx.characterId;
         if (charId === undefined || charId === null) {
-            // 尝试从当前聊天对象或群组对象中探测角色信息
-            if (ctx.characters && Array.isArray(ctx.characters) && ctx.characters.length > 0) {
-                const first = ctx.characters[0];
-                return {
-                    name: first.name || '',
-                    avatar: first.avatar || '',
-                    description: first.description || ''
-                };
-            }
             return null;
         }
         const charObj = ctx.characters?.[charId];
@@ -296,10 +334,64 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
 
         msg.extra = { ...(msg.extra ?? {}), [key]: value };
 
-        const saveFn = ctx.saveChatConditional ?? ctx.saveChat;
+        const saveFn = ctx.saveChatConditional || ctx.saveChatDebounced || ctx.saveChat;
         if (typeof saveFn === 'function') {
-            saveFn.call(ctx);
+            try {
+                saveFn.call(ctx);
+            } catch {
+                // saveFn.call 失败时静默处理，避免因宿主内部异常中断 extra 写入流程
+            }
         }
+    }
+
+    public patchChatMessageExtra<T = unknown>(messageId: number, key: string, updater: (prev: T | undefined) => T): void {
+        const ctx = this.getST();
+        if (!ctx || !Array.isArray(ctx.chat)) return;
+        const msg = ctx.chat[messageId];
+        if (!msg) return;
+
+        const currentExtra = msg.extra ?? {};
+        const currentVal = currentExtra[key] as T | undefined;
+        const updatedVal = updater(currentVal);
+
+        msg.extra = { ...currentExtra, [key]: updatedVal };
+
+        const saveFn = ctx.saveChatConditional || ctx.saveChatDebounced || ctx.saveChat;
+        if (typeof saveFn === 'function') {
+            try {
+                saveFn.call(ctx);
+            } catch {
+                // saveFn.call 失败时静默处理，避免因宿主内部异常中断 extra 写入流程
+            }
+        }
+    }
+
+
+    public getReferencedImageIds(): Set<string> {
+        const ids = new Set<string>();
+        const ctx = this.getST();
+        const chat = ctx?.chat;
+        if (Array.isArray(chat)) {
+            for (const msg of chat) {
+                const extra = msg?.extra;
+                if (!extra || typeof extra !== 'object') continue;
+                const daImages = extra['da_images'];
+                if (!daImages || typeof daImages !== 'object') continue;
+                for (const item of Object.values(daImages)) {
+                    if (item && typeof item === 'object') {
+                        const directUuid = (item as any).uuid || (item as any).id;
+                        if (directUuid) ids.add(directUuid);
+                        for (const sub of Object.values(item as Record<string, any>)) {
+                            if (sub && typeof sub === 'object') {
+                                const uid = (sub as any).uuid || (sub as any).id;
+                                if (uid) ids.add(uid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return ids;
     }
 
     public saveChatMetadata(): void {
@@ -333,8 +425,22 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
 
     public getExtensionSettings<T = Record<string, unknown>>(moduleName: string): T | null {
         const ctx = this.getST();
-        if (ctx?.extensionSettings?.[moduleName] !== undefined) {
-            return ctx.extensionSettings[moduleName] as T;
+        if (ctx?.extensionSettings) {
+            if (ctx.extensionSettings[moduleName] !== undefined) {
+                return ctx.extensionSettings[moduleName] as T;
+            }
+            // 兼容大小写与下划线/中划线别名
+            const aliases = [
+                'ST-DrawAssistant',
+                'st-drawassistant',
+                'st_drawassistant',
+                'st_drawassistant_settings'
+            ];
+            for (const alias of aliases) {
+                if (ctx.extensionSettings[alias] !== undefined) {
+                    return ctx.extensionSettings[alias] as T;
+                }
+            }
         }
         return (this._memorySettings.get(moduleName) as T) || null;
     }
@@ -344,5 +450,6 @@ export class SillyTavernHostBridge implements IHostBridge, IDisposable {
         this._readyPromise = null;
         this._stContext = null;
         this._memorySettings.clear();
+        this._disposables.dispose();
     }
 }

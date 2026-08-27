@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "id": "sd_default_v15",
+    "name": "SD 1.5 动漫默认方案",
+    "driver": "sdwebui",
+    "category": "models",
+    "version": "1.0.0"
+  },
+  "data": {
+    "sdModelCheckpoint": "v1-5-pruned-emaonly.safetensors",
+    "sdSamplerName": "DPM++ 2M Karras",
+    "sdSteps": 20,
+    "sdCfgScale": 7.0,
+    "sdWidth": 512,
+    "sdHeight": 768,
+    "sdClipSkip": 2,
+    "sdEnableHires": true,
+    "sdHiresUpscaler": "R-ESRGAN 4x+ Anime6B",
+    "sdHiresSteps": 15,
+    "sdHiresDenoise": 0.45,
+    "sdHiresUpscaleBy": 1.5
+  }
+}

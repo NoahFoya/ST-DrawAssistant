@@ -1,9 +1,10 @@
 /**
  * @module core/registry/ui-registry
- * @description UI 插槽与贡献点注册中心 (TabSlotDescriptor, FloorButtonSlotDescriptor, IUIRegistry)
+ * @description UI 插槽与贡献点注册中心 (Tab 页、楼层操作按钮与悬浮球动作)
  */
 import { IDisposable } from '../foundation/disposable';
 import { HostMessageEvent } from '../foundation/host-bridge';
+/** Tab 页面插槽描述符 */
 export interface TabSlotDescriptor {
     readonly id: string;
     readonly title: string;
@@ -12,6 +13,7 @@ export interface TabSlotDescriptor {
     readonly isBuiltIn?: boolean;
     render(container: HTMLElement): IDisposable | void;
 }
+/** 楼层操作按钮描述符 */
 export interface FloorButtonSlotDescriptor {
     readonly id: string;
     readonly label: string;
@@ -19,6 +21,7 @@ export interface FloorButtonSlotDescriptor {
     shouldRender?(message: HostMessageEvent): boolean;
     onClick(message: HostMessageEvent): void;
 }
+/** 全局悬浮球动作描述符 */
 export interface FabActionDescriptor {
     readonly id: string;
     readonly title: string;

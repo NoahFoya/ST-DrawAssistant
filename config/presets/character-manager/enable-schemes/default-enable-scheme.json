@@ -1,0 +1,15 @@
+{
+  "id": "default-enable-scheme",
+  "name": "默认设定启用方案",
+  "boundCharacterCards": "",
+  "characterRules": {
+    "char-passerby-male": "ALL",
+    "char-passerby-female": "ALL",
+    "char-elysia": "match"
+  },
+  "outfitRules": {
+    "outfit-student-male": "ALL",
+    "outfit-student-female": "ALL",
+    "outfit-pink-dress": "match"
+  }
+}

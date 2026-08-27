@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "id": "moody_aesthetic_default",
+    "name": "Moody 唯美动漫打标预设",
+    "driver": "comfyui",
+    "category": "prompts",
+    "version": "1.0.0"
+  },
+  "data": {
+    "promptPrefix": "best quality, score_7, score_9, very aesthetic, ultra detailed, high contrast, anime aesthetic",
+    "negativePrefix": "worst quality, low quality, score_1, score_2, score_3, artist name, shiny skin, bad anatomy, bad hands",
+    "promptSuffix": "",
+    "loras": []
+  }
+}

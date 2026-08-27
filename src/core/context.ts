@@ -3,6 +3,7 @@
  * @description 核心全局上下文 (KernelContext) 与初始化装配
  */
 
+import { VERSION } from './constants';
 import { IDisposable, DisposableStore } from './foundation/disposable';
 import { ITypedEventBus, TypedEventBus, CoreEventMap } from './foundation/event-bus';
 import { IHostBridge, SillyTavernHostBridge } from './foundation/host-bridge';
@@ -14,9 +15,9 @@ import { IStorageAdapter, IndexedDBStorageAdapter } from './state/storage-adapte
 import { IExtensionRegistry, ExtensionRegistry } from './registry/extension-registry';
 import { IUIRegistry, UIRegistry } from './registry/ui-registry';
 import { IPresetRegistry, PresetRegistry } from './registry/preset-registry';
+import { loadAllPresetsToRegistry } from './config/config-loader';
 import { IDriverRegistry, DriverRegistry } from './registry/driver-registry';
-
-import {
+import type {
     IThemeContract,
     ITaskContract,
     IPipelineHooksContract,
@@ -30,7 +31,7 @@ import {
 export interface KernelContext extends IDisposable {
     /** 插件当前版本号 */
     readonly version: string;
-    /** 宿主环境沙箱隔离适配器 */
+    /** 宿主环境通信与事件适配器 */
     readonly host: IHostBridge;
     /** 强类型跨模块事件总线 */
     readonly events: ITypedEventBus<CoreEventMap>;
@@ -62,8 +63,6 @@ export interface KernelContext extends IDisposable {
     feedback?: IFeedbackContract;
 }
 
-import { VERSION } from './constants';
-
 /**
  * 创建并初始化核心上下文实例
  *
@@ -91,11 +90,11 @@ export function createKernelContext(version = VERSION): KernelContext {
     );
 
     // 监听设置变化向事件总线广播
-    store.subscribe((state, keyPath) => {
+    store.subscribe((state, keyPath, oldState) => {
         events.emit('settings:changed', {
             path: keyPath || '',
             value: keyPath ? (state as any)[keyPath] : state,
-            oldValue: undefined
+            oldValue: keyPath ? (oldState ? (oldState as any)[keyPath] : undefined) : oldState
         });
     });
 
@@ -103,6 +102,7 @@ export function createKernelContext(version = VERSION): KernelContext {
     const extensions = disposables.add(new ExtensionRegistry());
     const ui = disposables.add(new UIRegistry());
     const presets = disposables.add(new PresetRegistry());
+    loadAllPresetsToRegistry(presets);
     const drivers = disposables.add(new DriverRegistry());
 
     let isDisposed = false;

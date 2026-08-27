@@ -4,30 +4,25 @@
  */
 import { KernelContext } from './core';
 export * from './core';
-export { createGeneralTabView, createComfyUITabView, createSDWebUITabView, createThemeTabView, createDiagnosticsTabView, createGalleryTabView, createFABSettingsTabView, createAboutTabView } from './ui';
-export * from './domain';
-export * from './extensions/character-manager';
-export type { ThemeData } from './core';
+export { createGeneralTabView, createComfyUITabView, createSDWebUITabView, createOpenAITabView, createNovelAITabView, createThemeTabView, createDiagnosticsTabView, createGalleryTabView, createFABSettingsTabView, createAboutTabView } from './ui';
 /**
- * 获取当前全局核心上下文实例
+ * 获取当前全局核心内核上下文单例 (若插件未初始化完成则返回 null)
  *
- * @returns 当前全局激活的核心上下文实例，未初始化时为 null
+ * @returns 核心上下文实例或 null
  */
 export declare function getKernelContext(): KernelContext | null;
 /**
- * 插件顶层装配与全局启动入口 (Bootstrap)
+ * 插件全局引导装配入口函数 (Bootstrap)
  *
- * 执行步骤：
- * 1. 实例化核心全局上下文与强类型事件总线；
- * 2. 阻塞等待 SillyTavern 宿主环境沙箱就绪；
- * 3. 阻塞等待 IndexedDB 本地存储层初始化完成；
- * 4. 注册 ComfyUI 与 SD-WebUI 生图后端驱动；
- * 5. 初始化提示词流水线与任务调度状态机；
- * 6. 注册 8 大核心自带基础设置视图与生命周期管理；
- * 7. 装配角色与服装管理器扩展插件 (CharacterManagerExtension)；
- * 8. 初始化楼层生图按钮扫描与右下角 FAB 悬浮快捷球。
+ * 执行全链路系统装配流程：
+ * 1. 创建核心上下文环境与响应式配置 Store；
+ * 2. 初始化核心基础组件 (I18n, Logger, EventBus, Storage, PresetRegistry)；
+ * 3. 注册四大核心生图引擎驱动 (ComfyUI / SD-WebUI / NovelAI / OpenAI)；
+ * 4. 注册内置功能扩展 (角色预设、负向词库、提示词模板、Inpaint 局部重绘)；
+ * 5. 初始化交互容器 (FloorButton, FAB 悬浮球, SettingsModal 设置弹窗)；
+ * 6. 注册内置视图面板 (TabSlotDescriptor 格式)；
  *
- * @returns 装配完成的核心上下文实例
+ * @returns 初始化装配完成的 KernelContext 实例
  */
 export declare function bootstrap(): Promise<KernelContext>;
 //# sourceMappingURL=index.d.ts.map

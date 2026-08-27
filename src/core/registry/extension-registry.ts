@@ -1,38 +1,22 @@
 /**
  * @module core/registry/extension-registry
- * @description 独立扩展模块注册与生命周期管理中心 (IExtension, IExtensionRegistry)
+ * @description 独立扩展插件注册与生命周期管理 (IExtension, IExtensionRegistry)
  */
 
 import { IDisposable, toDisposable } from '../foundation/disposable';
 import { Logger } from '../diagnostics/logger';
 
-/**
- * 独立扩展模块标准化接口
- */
+/** 扩展插件接口定义 */
 export interface IExtension {
-    /** 扩展唯一 ID (如 'character-manager') */
     readonly id: string;
-    /** 扩展可读名称 */
     readonly name: string;
-    /** 语义化版本号 */
     readonly version: string;
-
-    /**
-     * 激活扩展
-     * 在此生命周期内向 Context 注册专属 Tab、挂载拦截钩子与加载预设
-     */
+    /** 激活生命周期 (挂载 Tab 插槽、注册拦截钩子、加载专属预设) */
     activate(context: any): void | Promise<void>;
-
-    /**
-     * 停用扩展
-     * 在此生命周期内完成资源清理与事件注销
-     */
+    /** 停用生命周期 (清理资源与事件监听) */
     deactivate?(): void | Promise<void>;
 }
 
-/**
- * 扩展注册中心接口
- */
 export interface IExtensionRegistry extends IDisposable {
     register(extension: IExtension): IDisposable;
     get(id: string): IExtension | undefined;
@@ -41,9 +25,6 @@ export interface IExtensionRegistry extends IDisposable {
     deactivateAll(): Promise<void>;
 }
 
-/**
- * 扩展注册中心实现类
- */
 export class ExtensionRegistry implements IExtensionRegistry {
     private readonly _extensions = new Map<string, IExtension>();
     private readonly _activeExtensions = new Set<string>();
@@ -87,7 +68,7 @@ export class ExtensionRegistry implements IExtensionRegistry {
                 await ext.activate(context);
                 this._activeExtensions.add(ext.id);
             } catch (err) {
-                this._logger.error(`激活扩展 [${ext.id}] 发生致命异常:`, err);
+                this._logger.error(`激活扩展 [${ext.id}] 发生异常:`, err);
             }
         }
     }
@@ -98,8 +79,8 @@ export class ExtensionRegistry implements IExtensionRegistry {
             if (ext) {
                 try {
                     await ext.deactivate?.();
-                } catch (err) {
-                    this._logger.error(`停用扩展 [${extId}] 异常:`, err);
+                } catch (e) {
+                    this._logger.error(`停用扩展 [${extId}] 发生异常:`, e);
                 }
             }
         }

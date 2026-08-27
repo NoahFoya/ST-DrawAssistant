@@ -1,703 +1,615 @@
 /**
  * @module ui/views/comfyui-tab
- * @description ComfyUI 专属配置面板视图 (包含服务器连接、模型/采样器选择、工作流管理与注入节点映射)
+ * @description ComfyUI 生图后端配置面板视图 (ComfyUI Tab) - 声明式 Schema 架构重构版
  */
 
 import { ObservableStore } from '../../core/state/store';
-import { DrawAssistantSettings, LoraItem } from '../../core/state/store-types';
-import { ControlFactory, createFieldRow } from '../components/controls';
-import { bindPresetToolbar } from '../components/preset-toolbar';
-import { openBlueprintModal } from '../components/blueprint-modal';
-import { FeedbackService } from '../feedback-service';
+import {
+    DrawAssistantSettings,
+    ModelProfileData,
+    PromptProfileData
+} from '../../core/state/store-types';
+import {
+    FormRenderer,
+    SectionCardSchema,
+    createCollapsibleSection,
+    createConnectionCard,
+    createLoraManagerControl,
+    SelectOptionItem
+} from '../controls';
+import {
+    createWorkflowPresetCard,
+    bindPresetToolbar
+} from '../presets';
+import { FeedbackService } from '../feedback/feedback';
+import type { IDriverRegistry } from '../../core/registry/driver-registry';
 import { IDisposable } from '../../core/foundation/disposable';
+import { DEFAULT_COMFYUI_URL, COMFYUI_SIZE_PRESETS } from '../../core/constants';
+import {
+    fetchComfyUIModels,
+    fetchComfyUIPrompts,
+    fetchComfyUITxt2ImgWorkflows,
+    fetchComfyUIInpaintWorkflows
+} from '../../core/config/config-loader';
 
 /**
  * 构建并渲染 ComfyUI 后端引擎配置面板
  *
  * @param store 全局响应式状态配置中心实例
+ * @param drivers 生图驱动注册中心抽象
  * @returns 包含生命周期清理能力的 ComfyUI 配置面板 DOM 根节点
  */
-export function createComfyUITabView(store: ObservableStore<DrawAssistantSettings>): HTMLElement & IDisposable {
-    const controls = new ControlFactory();
+export function createComfyUITabView(
+    store: ObservableStore<DrawAssistantSettings>,
+    drivers?: IDriverRegistry
+): HTMLElement & IDisposable {
     const container = document.createElement('div') as unknown as HTMLElement & IDisposable;
     container.className = 'da-tab-pane da-comfyui-tab';
 
-    const settings = store.getState();
+    /**
+     * 界面状态分层设计：
+     * 1. draftStore (内存草稿)：用于承载下方 C3/C4 参数输入框与滑块。
+     *    用户在界面微调宽高、步数、CFG 或切换方案时，仅在内存中更新草稿，绝不触发写盘；
+     * 2. store (持久化中心)：用于记录当前选中的方案 ID 与已保存的方案列表。
+     *    只有当用户明确点击工具栏的「保存方案」时，才将草稿数据存入方案列表并持久化落盘；
+     * 3. 双渲染器：rendererDraft 绑定草稿，rendererMain 绑定持久化配置。
+     */
+    const draftStore = new ObservableStore<DrawAssistantSettings>({ ...store.getState() });
+    const rendererDraft = new FormRenderer<DrawAssistantSettings>(draftStore);
+    const rendererMain = new FormRenderer<DrawAssistantSettings>(store);
 
-    // ── C1: API 服务连接 ───────────────────────────────────────────────────
-    const urlInput = document.createElement('input');
-    urlInput.type = 'text';
-    urlInput.className = 'da-input da-control-fixed-180';
-    urlInput.style.flex = '1';
-    urlInput.value = settings.serverUrl ?? 'http://127.0.0.1:8188';
-    urlInput.addEventListener('change', () => {
-        const val = urlInput.value.trim();
-        if (val) store.set('serverUrl', val);
+    /**
+     * 将模型方案数据批量应用到草稿 Store（单次 update 避免多次 listener 触发）
+     */
+    const applyModelProfileData = (d: ModelProfileData): void => {
+        const patch: Partial<DrawAssistantSettings> = {};
+        if (d.ckptName) patch.ckptName = d.ckptName;
+        if (d.clipName) patch.clipName = d.clipName;
+        if (d.vaeName) patch.vaeName = d.vaeName;
+        if (d.width) patch.width = d.width;
+        if (d.height) patch.height = d.height;
+        if (d.steps) patch.steps = d.steps;
+        if (d.cfgScale) patch.cfgScale = d.cfgScale;
+        if (d.samplerName) patch.samplerName = d.samplerName;
+        if (d.scheduler) patch.scheduler = d.scheduler;
+        if (d.checkpointPositivePrefix !== undefined) patch.checkpointPositivePrefix = d.checkpointPositivePrefix;
+        if (d.checkpointNegativePrefix !== undefined) patch.checkpointNegativePrefix = d.checkpointNegativePrefix;
+        if (d.inpaintDenoise !== undefined) patch.inpaintDenoise = d.inpaintDenoise;
+        if (d.inpaintMaskBlur !== undefined) patch.inpaintMaskBlur = d.inpaintMaskBlur;
+        if (d.inpaintGrowMask !== undefined) patch.inpaintGrowMask = d.inpaintGrowMask;
+        draftStore.update(patch);
+    };
+
+    /**
+     * 将提示词方案数据批量应用到草稿 Store（单次 update 避免多次 listener 触发）
+     */
+    const applyPromptProfileData = (d: PromptProfileData): void => {
+        const patch: Partial<DrawAssistantSettings> = {};
+        if (d.promptPrefix !== undefined) patch.promptPrefix = d.promptPrefix;
+        if (d.negativePrefix !== undefined) patch.negativePrefix = d.negativePrefix;
+        if (d.promptSuffix !== undefined) patch.promptSuffix = d.promptSuffix;
+        if (d.loras) patch.loras = d.loras;
+        draftStore.update(patch);
+    };
+
+    // ── C1: API 服务连接卡片 ───────────────────────────────────────────────
+    const cardC1 = createConnectionCard({
+        title: 'API 服务连接',
+        description: '配置 ComfyUI HTTP 服务根地址，测试连通性并自动拉取后端全量模型与 LoRA 列表',
+        url: store.get('serverUrl') || DEFAULT_COMFYUI_URL,
+        placeholder: 'http://127.0.0.1:8188',
+        onUrlChange: (newUrl) => store.set('serverUrl', newUrl),
+        onTest: async (url, btn) => {
+            btn.disabled = true;
+            btn.textContent = '连接中...';
+            try {
+                store.set('serverUrl', url);
+                const driver = drivers?.get('comfyui');
+                if (!driver) {
+                    FeedbackService.toastError('🔴 驱动未就绪: ComfyUI 驱动未注册');
+                    return;
+                }
+
+                const result = driver.checkConnection
+                    ? await driver.checkConnection()
+                    : { connected: await driver.ping(), latencyMs: 0 };
+
+                if (result.connected) {
+                    const syncResult = driver.syncAssets ? await driver.syncAssets(store) : { updatedCount: 0, summary: '', details: {} };
+                    FeedbackService.toastSuccess(
+                        `🟢 ComfyUI 连接成功 (延迟 ${result.latencyMs ?? 0}ms)\n${syncResult.summary}`
+                    );
+                } else {
+                    FeedbackService.toastError('🔴 ComfyUI 连接失败: 无法访问后端服务');
+                }
+            } catch (err: any) {
+                FeedbackService.toastError(`🔴 连接异常: ${err?.message || err}`);
+            } finally {
+                if (btn && btn.isConnected) {
+                    btn.disabled = false;
+                    btn.textContent = '测试连接';
+                }
+            }
+        }
+    });
+    container.appendChild(cardC1);
+
+    // ── C2: 局部方案快捷切换卡片 ─────────────────────────────────────────────
+    const getModelProfiles = (): SelectOptionItem[] => [
+        { label: '(未关联/自定义)', value: '' },
+        ...(store.get('comfyModelProfiles') || []).map((p) => ({ label: p.name, value: p.id }))
+    ];
+
+    const getPromptProfiles = (): SelectOptionItem[] => [
+        { label: '(未关联/自定义)', value: '' },
+        ...(store.get('comfyPromptProfiles') || []).map((p) => ({ label: p.name, value: p.id }))
+    ];
+
+    const getTxt2ImgWorkflows = (): SelectOptionItem[] => [
+        { label: '(未关联/自定义)', value: '' },
+        ...(store.get('comfyTxt2ImgWorkflows') || []).map((p) => ({ label: p.name, value: p.id }))
+    ];
+
+    const getInpaintWorkflows = (): SelectOptionItem[] => [
+        { label: '(未关联/自定义)', value: '' },
+        ...(store.get('comfyInpaintWorkflows') || []).map((p) => ({ label: p.name, value: p.id }))
+    ];
+
+    const cardC2Schema: SectionCardSchema<DrawAssistantSettings> = {
+        title: '局部方案快捷切换',
+        description: '在 ComfyUI 面板顶部直接快速切换并装载模型参数、提示词、文生图及局部重绘方案',
+        rows: [
+            {
+                key: 'comfyModelProfileId',
+                type: 'select',
+                label: '模型参数方案',
+                helpTooltip: '快捷切换底模、CLIP、VAE 解码器、分辨率及采样步数预设。',
+                options: getModelProfiles(),
+                onChangeHook: (id) => {
+                    if (id) {
+                        const profile = (store.get('comfyModelProfiles') || []).find((p) => p.id === id);
+                        if (profile?.data) applyModelProfileData(profile.data);
+                    }
+                }
+            },
+            {
+                key: 'comfyPromptProfileId',
+                type: 'select',
+                label: '提示词方案',
+                helpTooltip: '快捷切换全局正向提示词前缀/后缀、负向词与绑定的 LoRA 方案。',
+                options: getPromptProfiles(),
+                onChangeHook: (id) => {
+                    if (id) {
+                        const profile = (store.get('comfyPromptProfiles') || []).find((p) => p.id === id);
+                        if (profile?.data) applyPromptProfileData(profile.data);
+                    }
+                }
+            },
+            {
+                key: 'comfyTxt2ImgWorkflowId',
+                type: 'select',
+                label: '文生图工作流方案',
+                helpTooltip: '快捷切换标准 API 格式文生图 Workflow JSON 预设。',
+                options: getTxt2ImgWorkflows(),
+                onChangeHook: (id) => {
+                    if (id) {
+                        const wf = (store.get('comfyTxt2ImgWorkflows') || []).find((p) => p.id === id);
+                        if (wf?.data?.json) store.set('workflowJson', wf.data.json);
+                    }
+                }
+            },
+            {
+                key: 'comfyInpaintWorkflowId',
+                type: 'select',
+                label: '局部重绘工作流方案',
+                helpTooltip: '快捷切换 Mask 掩码抠图与局部重绘 API Format Workflow JSON 预设。',
+                options: getInpaintWorkflows(),
+                onChangeHook: (id) => {
+                    if (id) {
+                        const wf = (store.get('comfyInpaintWorkflows') || []).find((p) => p.id === id);
+                        if (wf?.data?.json) store.set('inpaintWorkflowJson', wf.data.json);
+                    }
+                }
+            }
+        ]
+    };
+    container.appendChild(rendererMain.renderCard(cardC2Schema));
+
+    // ── C3: 底模与采样参数配置卡片 ───────────────────────────────────────────
+    const getCachedModels = (): SelectOptionItem[] => [
+        { label: '未选择', value: '' },
+        ...(store.get('cachedModels') || []).map((m) => ({ label: m, value: m }))
+    ];
+    const getCachedClips = (): SelectOptionItem[] => [
+        { label: '未选择 (使用底模自带)', value: '' },
+        ...(store.get('cachedClips') || []).map((c) => ({ label: c, value: c }))
+    ];
+    const getCachedVaes = (): SelectOptionItem[] => [
+        { label: '未选择 (使用底模自带)', value: '' },
+        ...(store.get('cachedVaes') || []).map((v) => ({ label: v, value: v }))
+    ];
+    const getCachedSamplers = (): SelectOptionItem[] =>
+        (store.get('cachedSamplers') || ['euler_ancestral', 'euler', 'dpmpp_2m', 'dpmpp_sde', 'ddim', 'uni_pc']).map((s) => ({ label: s, value: s }));
+    const getCachedSchedulers = (): SelectOptionItem[] =>
+        (store.get('cachedSchedulers') || ['normal', 'karras', 'exponential', 'sgm_uniform']).map((s) => ({ label: s, value: s }));
+
+    const toolbarC3 = bindPresetToolbar({
+        adapter: {
+            label: '模型参数',
+            getProfiles: () => (store.get('comfyModelProfiles') || []).map((p) => ({ id: p.id, name: p.name, data: p.data })),
+            getInitialId: () => store.get('comfyModelProfileId') || '',
+            createProfile: (name, data: ModelProfileData) => {
+                const id = `model_${Date.now()}`;
+                const current = store.get('comfyModelProfiles') || [];
+                store.set('comfyModelProfiles', [...current, { id, name, data }]);
+                store.set('comfyModelProfileId', id);
+                return id;
+            },
+            saveProfile: (id, data: ModelProfileData) => {
+                const current = store.get('comfyModelProfiles') || [];
+                store.set('comfyModelProfiles', current.map((p) => (p.id === id ? { ...p, data } : p)));
+            },
+            renameProfile: (id, newName) => {
+                const current = store.get('comfyModelProfiles') || [];
+                store.set('comfyModelProfiles', current.map((p) => (p.id === id ? { ...p, name: newName } : p)));
+            },
+            deleteProfile: (id) => {
+                const current = store.get('comfyModelProfiles') || [];
+                store.set('comfyModelProfiles', current.filter((p) => p.id !== id));
+                store.set('comfyModelProfileId', '');
+                return '';
+            },
+            resetToDefault: async () => {
+                try {
+                    const defaults = await fetchComfyUIModels();
+                    store.set('comfyModelProfiles', defaults);
+                    store.set('comfyModelProfileId', defaults[0]?.id || '');
+                } catch {
+                    store.set('comfyModelProfiles', []);
+                    store.set('comfyModelProfileId', '');
+                }
+            }
+        },
+        getCurrentData: () => ({
+            ckptName: draftStore.get('ckptName'),
+            clipName: draftStore.get('clipName'),
+            vaeName: draftStore.get('vaeName'),
+            width: draftStore.get('width'),
+            height: draftStore.get('height'),
+            steps: draftStore.get('steps'),
+            cfgScale: draftStore.get('cfgScale'),
+            samplerName: draftStore.get('samplerName'),
+            scheduler: draftStore.get('scheduler'),
+            checkpointPositivePrefix: draftStore.get('checkpointPositivePrefix'),
+            checkpointNegativePrefix: draftStore.get('checkpointNegativePrefix'),
+            inpaintDenoise: draftStore.get('inpaintDenoise'),
+            inpaintMaskBlur: draftStore.get('inpaintMaskBlur'),
+            inpaintGrowMask: draftStore.get('inpaintGrowMask')
+        }),
+        applyData: (id) => {
+            const profile = (store.get('comfyModelProfiles') || []).find((p) => p.id === id);
+            if (profile?.data) applyModelProfileData(profile.data);
+        },
+        onRefresh: () => {}
     });
 
-    const testBtn = document.createElement('button');
-    testBtn.className = 'da-btn secondary';
-    testBtn.style.width = '100px';
-    testBtn.style.flexShrink = '0';
-    testBtn.textContent = '测试连接';
 
-    // 预声明各模型选择框引用
-    const modelSelect = document.createElement('select');
-    modelSelect.className = 'da-select da-control-fixed-180';
-    const clipSelect = document.createElement('select');
-    clipSelect.className = 'da-select da-control-fixed-180';
-    const vaeSelect = document.createElement('select');
-    vaeSelect.className = 'da-select da-control-fixed-180';
-    const samplerSelect = document.createElement('select');
-    samplerSelect.className = 'da-select da-control-fixed-180';
-    const schedulerSelect = document.createElement('select');
-    schedulerSelect.className = 'da-select da-control-fixed-180';
-    const loraAddSelect = document.createElement('select');
-    loraAddSelect.className = 'da-select da-control-fixed-180';
-
-    const populateSelect = (selectEl: HTMLSelectElement, list: string[] = [], currentVal = '', emptyLabel = '未选择') => {
-        selectEl.innerHTML = '';
-        if (emptyLabel) {
-            const emptyOpt = document.createElement('option');
-            emptyOpt.value = '';
-            emptyOpt.textContent = emptyLabel;
-            if (!currentVal) emptyOpt.selected = true;
-            selectEl.appendChild(emptyOpt);
-        }
-        list.forEach((item) => {
-            const opt = document.createElement('option');
-            opt.value = item;
-            opt.textContent = item;
-            if (item === currentVal) opt.selected = true;
-            selectEl.appendChild(opt);
-        });
-    };
-
-    populateSelect(modelSelect, settings.cachedModels, settings.ckptName, '未选择');
-    populateSelect(clipSelect, settings.cachedClips, settings.clipName, '未选择');
-    populateSelect(vaeSelect, settings.cachedVaes, settings.vaeName, '未选择');
-    populateSelect(samplerSelect, settings.cachedSamplers, settings.samplerName, '未选择');
-    populateSelect(schedulerSelect, settings.cachedSchedulers, settings.scheduler, '未选择');
-    populateSelect(loraAddSelect, settings.cachedLoras, '', '(选择 Lora 模型)');
-
-    testBtn.onclick = async () => {
-        testBtn.disabled = true;
-        testBtn.textContent = '连接中...';
-        const base = (store.get('serverUrl') || 'http://127.0.0.1:8188').replace(/\/+$/, '');
-        try {
-            const resStats = await fetch(`${base}/system_stats`, { signal: AbortSignal.timeout(5000) });
-            if (!resStats.ok) throw new Error('ComfyUI 服务未响应');
-
-            const resInfo = await fetch(`${base}/object_info`, { signal: AbortSignal.timeout(10000) });
-            if (resInfo.ok) {
-                const info = await resInfo.json();
-                const models = info['CheckpointLoaderSimple']?.input?.required?.ckpt_name?.[0] || [];
-                const clips = info['CLIPLoader']?.input?.required?.clip_name?.[0] || [];
-                const vaes = info['VAELoader']?.input?.required?.vae_name?.[0] || [];
-                const samplers = info['KSampler']?.input?.required?.sampler_name?.[0] || [];
-                const schedulers = info['KSampler']?.input?.required?.scheduler?.[0] || [];
-                const loras = info['LoraLoader']?.input?.required?.lora_name?.[0] || [];
-
-                store.set('cachedModels', models);
-                store.set('cachedClips', clips);
-                store.set('cachedVaes', vaes);
-                store.set('cachedSamplers', samplers);
-                store.set('cachedSchedulers', schedulers);
-                store.set('cachedLoras', loras);
-
-                populateSelect(modelSelect, models, store.get('ckptName'), '未选择');
-                populateSelect(clipSelect, clips, store.get('clipName'), '未选择');
-                populateSelect(vaeSelect, vaes, store.get('vaeName'), '未选择');
-                populateSelect(samplerSelect, samplers, store.get('samplerName'), '未选择');
-                populateSelect(schedulerSelect, schedulers, store.get('scheduler'), '未选择');
-                populateSelect(loraAddSelect, loras, '', '(选择 Lora 模型)');
-
-                FeedbackService.toast(`🟢 ComfyUI 连接成功！已拉取：${models.length} 模型、${loras.length} LoRA、${samplers.length} 采样器`);
-            }
-        } catch (err: any) {
-            FeedbackService.toast(`🔴 ComfyUI 连接失败: ${err.message || '网络无法连接'}`, true);
-        } finally {
-            testBtn.disabled = false;
-            testBtn.textContent = '测试连接';
-        }
-    };
-
-    const cardC1 = controls.createCard(
-        'API 服务连接',
-        (body) => {
-            const row = createFieldRow({
-                label: 'ComfyUI API 服务地址',
-                helpTooltip: 'ComfyUI 服务端根地址 (例如 http://127.0.0.1:8188)。',
-                control: [urlInput, testBtn]
-            });
-            body.appendChild(row);
-        },
-        '配置 ComfyUI HTTP 服务根地址，测试连通性并自动拉取后端全量模型与 Lora 列表'
-    );
-
-    // ── C2: 局部方案快捷切换栏 ───────────────────────────────────────────────
-    const cardC2 = controls.createCard(
-        '局部方案快捷切换',
-        (body) => {
-            body.appendChild(
-                controls.createSelect({
-                    label: '模型参数方案',
-                    helpTooltip: '顶部分步快捷切换底模、CLIP、VAE 解码器、分辨率及采样算法步数预设。',
-                    value: settings.comfyModelProfileId ?? '',
-                    items: [
-                        { value: '', label: '(未关联/自定义)' },
-                        ...(settings.comfyModelProfiles || []).map((p) => ({ value: p.id, label: p.name }))
-                    ],
-                    onChange: (val: string) => store.set('comfyModelProfileId', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSelect({
-                    label: '提示词方案',
-                    helpTooltip: '顶部分步快捷切换正负向词与 Lora 追加配置预设。',
-                    value: settings.comfyPromptProfileId ?? '',
-                    items: [
-                        { value: '', label: '(未关联/自定义)' },
-                        ...(settings.comfyPromptProfiles || []).map((p) => ({ value: p.id, label: p.name }))
-                    ],
-                    onChange: (val: string) => store.set('comfyPromptProfileId', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSelect({
-                    label: '文生图工作流',
-                    helpTooltip: '顶部分步快捷切换主渲染流程 API 工作流预设。',
-                    value: settings.comfyTxt2ImgWorkflowId ?? '',
-                    items: [
-                        { value: '', label: '(未关联/自定义)' },
-                        ...(settings.comfyTxt2ImgWorkflows || []).map((p) => ({ value: p.id, label: p.name }))
-                    ],
-                    onChange: (val: string) => store.set('comfyTxt2ImgWorkflowId', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSelect({
-                    label: '局部重绘工作流',
-                    helpTooltip: '顶部分步快捷切换 Inpaint 局部修图 API 工作流预设。',
-                    value: settings.comfyInpaintWorkflowId ?? '',
-                    items: [
-                        { value: '', label: '(未关联/自定义)' },
-                        ...(settings.comfyInpaintWorkflows || []).map((p) => ({ value: p.id, label: p.name }))
-                    ],
-                    onChange: (val: string) => store.set('comfyInpaintWorkflowId', val)
-                })
-            );
-        },
-        '在 ComfyUI 面板顶部直接快速切换并装载模型参数、提示词、文生图及局部重绘方案'
-    );
-
-    // ── C3: 模型与采样参数配置 ────────────────────────────────────────────────
-    const cardC3 = controls.createCard(
-        '模型与采样参数配置',
-        (body) => {
-            const toolbar = bindPresetToolbar({
-                adapter: {
-                    label: '模型参数',
-                    getProfiles: () => (store.get('comfyModelProfiles') || []).map((p) => ({ id: p.id, name: p.name, data: p.data })),
-                    getInitialId: () => store.get('comfyModelProfileId') || '',
-                    createProfile: (name, data: any) => {
-                        const id = `model_${Date.now()}`;
-                        const current = store.get('comfyModelProfiles') || [];
-                        store.set('comfyModelProfiles', [...current, { id, name, data }]);
-                        store.set('comfyModelProfileId', id);
-                        return id;
-                    },
-                    saveProfile: (id, data: any) => {
-                        const current = store.get('comfyModelProfiles') || [];
-                        store.set(
-                            'comfyModelProfiles',
-                            current.map((p) => (p.id === id ? { ...p, data } : p))
-                        );
-                    },
-                    renameProfile: (id, newName) => {
-                        const current = store.get('comfyModelProfiles') || [];
-                        store.set(
-                            'comfyModelProfiles',
-                            current.map((p) => (p.id === id ? { ...p, name: newName } : p))
-                        );
-                    },
-                    deleteProfile: (id) => {
-                        const current = store.get('comfyModelProfiles') || [];
-                        store.set(
-                            'comfyModelProfiles',
-                            current.filter((p) => p.id !== id)
-                        );
-                        store.set('comfyModelProfileId', '');
-                        return '';
-                    },
-                    resetToDefault: () => {
-                        store.set('comfyModelProfiles', []);
-                        store.set('comfyModelProfileId', '');
+    const cardC3Schema: SectionCardSchema<DrawAssistantSettings> = {
+        title: '底模与采样参数配置',
+        description: '配置主模型 (Checkpoint)、CLIP 编码器、VAE、采样步数及分辨率尺寸',
+        rows: [
+            {
+                type: 'component',
+                label: '模型参数方案管理',
+                renderCustom: () => toolbarC3
+            },
+            {
+                key: 'ckptName',
+                type: 'select',
+                label: '主模型 (Checkpoint)',
+                helpTooltip: '从 ComfyUI 后端包含 CheckpointLoaderSimple, UNETLoader 等合并的所有可用模型。',
+                options: getCachedModels()
+            },
+            {
+                key: 'clipName',
+                type: 'select',
+                label: 'CLIP 文本编码器',
+                helpTooltip: '指定独立 CLIP 文本编码器模型。若当前工作流已内置编码器或无需覆盖，留空未选择即可。',
+                options: getCachedClips()
+            },
+            {
+                key: 'vaeName',
+                type: 'select',
+                label: 'VAE 图像解码器',
+                helpTooltip: '指定独立 VAE 解码器模型。若已包含于底模中或无需覆盖，留空未选择即可。',
+                options: getCachedVaes()
+            },
+            {
+                key: 'samplerName',
+                type: 'select',
+                label: '采样算法 (Sampler)',
+                helpTooltip: '生图采样器算法（如 euler, euler_ancestral, dpmpp_2m 等）。',
+                options: getCachedSamplers()
+            },
+            {
+                key: 'scheduler',
+                type: 'select',
+                label: '调度器 (Scheduler)',
+                helpTooltip: '采样时间步调度器（如 normal, karras, exponential, sgm_uniform 等）。',
+                options: getCachedSchedulers()
+            },
+            {
+                type: 'select',
+                label: '分辨率尺寸预设',
+                helpTooltip: '快捷选用推荐生成宽高比例，选择后自动同步至下方宽高输入框。',
+                options: [...COMFYUI_SIZE_PRESETS],
+                onChangeHook: (val: string) => {
+                    if (val !== 'custom') {
+                        const [w, h] = val.split('x').map((n) => parseInt(n, 10));
+                        if (w && h) draftStore.update({ width: w, height: h });
                     }
-                },
-                getCurrentData: () => ({
-                    ckptName: store.get('ckptName'),
-                    clipName: store.get('clipName'),
-                    vaeName: store.get('vaeName'),
-                    width: store.get('width'),
-                    height: store.get('height'),
-                    steps: store.get('steps'),
-                    cfgScale: store.get('cfgScale'),
-                    samplerName: store.get('samplerName'),
-                    scheduler: store.get('scheduler'),
-                    checkpointPositivePrefix: store.get('checkpointPositivePrefix'),
-                    checkpointNegativePrefix: store.get('checkpointNegativePrefix')
-                }),
-                applyData: (id) => {
-                    const profile = (store.get('comfyModelProfiles') || []).find((p) => p.id === id);
-                    if (profile?.data) {
-                        const d = profile.data;
-                        if (d.ckptName) store.set('ckptName', d.ckptName);
-                        if (d.clipName) store.set('clipName', d.clipName);
-                        if (d.vaeName) store.set('vaeName', d.vaeName);
-                        if (d.width) store.set('width', d.width);
-                        if (d.height) store.set('height', d.height);
-                        if (d.steps) store.set('steps', d.steps);
-                        if (d.cfgScale) store.set('cfgScale', d.cfgScale);
-                        if (d.samplerName) store.set('samplerName', d.samplerName);
-                        if (d.scheduler) store.set('scheduler', d.scheduler);
-                    }
-                },
-                onRefresh: () => {}
-            });
-            body.appendChild(toolbar);
-
-            // 主模型
-            modelSelect.addEventListener('change', () => store.set('ckptName', modelSelect.value));
-            body.appendChild(
-                createFieldRow({
-                    label: '主模型 (Checkpoint)',
-                    helpTooltip: '从 ComfyUI 后端包含 CheckpointLoaderSimple, UNETLoader 等合并的所有可用模型。',
-                    control: modelSelect
-                })
-            );
-
-            // CLIP 编码器
-            clipSelect.addEventListener('change', () => store.set('clipName', clipSelect.value));
-            body.appendChild(
-                createFieldRow({
-                    label: 'CLIP 文本编码器',
-                    helpTooltip: '独立 CLIP 文本编码器（如 clip-l, t5xxl 等）。未选择时使用 Checkpoint 自带的 CLIP。',
-                    control: clipSelect
-                })
-            );
-
-            // VAE 解码器
-            vaeSelect.addEventListener('change', () => store.set('vaeName', vaeSelect.value));
-            body.appendChild(
-                createFieldRow({
-                    label: 'VAE 解码器',
-                    helpTooltip: '独立 VAE 图像解码器。未选择时使用 Checkpoint 自带的 VAE。',
-                    control: vaeSelect
-                })
-            );
-
-            // 宽度与高度
-            body.appendChild(
-                controls.createSlider({
-                    label: '生图宽度 (Width, px)',
-                    min: 256,
-                    max: 2048,
-                    step: 64,
-                    value: settings.width ?? 1024,
-                    onChange: (val: number) => store.set('width', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSlider({
-                    label: '生图高度 (Height, px)',
-                    min: 256,
-                    max: 2048,
-                    step: 64,
-                    value: settings.height ?? 1024,
-                    onChange: (val: number) => store.set('height', val)
-                })
-            );
-
-            // 步数与 CFG
-            body.appendChild(
-                controls.createSlider({
-                    label: '采样步数 (Steps)',
-                    min: 1,
-                    max: 100,
-                    step: 1,
-                    value: settings.steps ?? 28,
-                    onChange: (val: number) => store.set('steps', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSlider({
-                    label: '提示词引导系数 (CFG Scale)',
-                    min: 1.0,
-                    max: 20.0,
-                    step: 0.5,
-                    value: settings.cfgScale ?? 6.5,
-                    onChange: (val: number) => store.set('cfgScale', val)
-                })
-            );
-
-            // 采样器与调度器
-            samplerSelect.addEventListener('change', () => store.set('samplerName', samplerSelect.value));
-            body.appendChild(
-                createFieldRow({
-                    label: '采样器 (Sampler)',
-                    control: samplerSelect
-                })
-            );
-
-            schedulerSelect.addEventListener('change', () => store.set('scheduler', schedulerSelect.value));
-            body.appendChild(
-                createFieldRow({
-                    label: '调度器 (Scheduler)',
-                    control: schedulerSelect
-                })
-            );
-
-            // 底模专属前缀
-            body.appendChild(
-                controls.createInput({
-                    label: '底模专属正向提示词前缀',
-                    placeholder: '例如: anime style, vibrant colors',
-                    value: settings.checkpointPositivePrefix ?? '',
-                    onChange: (val: string) => store.set('checkpointPositivePrefix', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createInput({
-                    label: '底模专属负向提示词前缀',
-                    placeholder: '例如: realistic, photo, realistic skin',
-                    value: settings.checkpointNegativePrefix ?? '',
-                    onChange: (val: string) => store.set('checkpointNegativePrefix', val)
-                })
-            );
-        },
-        '配置底模 Checkpoint、文本编码器与 VAE 解码器，并设定分辨率与 KSampler 采样参数'
-    );
-
-    // ── C4: 提示词模板与 Lora 增强 ───────────────────────────────────────────
-    const cardC4 = controls.createCard(
-        '提示词模板与 Lora 增强',
-        (body) => {
-            const toolbar = bindPresetToolbar({
-                adapter: {
-                    label: '提示词',
-                    getProfiles: () => (store.get('comfyPromptProfiles') || []).map((p) => ({ id: p.id, name: p.name, data: p.data })),
-                    getInitialId: () => store.get('comfyPromptProfileId') || '',
-                    createProfile: (name, data: any) => {
-                        const id = `prompt_${Date.now()}`;
-                        const current = store.get('comfyPromptProfiles') || [];
-                        store.set('comfyPromptProfiles', [...current, { id, name, data }]);
-                        store.set('comfyPromptProfileId', id);
-                        return id;
-                    },
-                    saveProfile: (id, data: any) => {
-                        const current = store.get('comfyPromptProfiles') || [];
-                        store.set(
-                            'comfyPromptProfiles',
-                            current.map((p) => (p.id === id ? { ...p, data } : p))
-                        );
-                    },
-                    renameProfile: (id, newName) => {
-                        const current = store.get('comfyPromptProfiles') || [];
-                        store.set(
-                            'comfyPromptProfiles',
-                            current.map((p) => (p.id === id ? { ...p, name: newName } : p))
-                        );
-                    },
-                    deleteProfile: (id) => {
-                        const current = store.get('comfyPromptProfiles') || [];
-                        store.set(
-                            'comfyPromptProfiles',
-                            current.filter((p) => p.id !== id)
-                        );
-                        store.set('comfyPromptProfileId', '');
-                        return '';
-                    },
-                    resetToDefault: () => {
-                        store.set('comfyPromptProfiles', []);
-                        store.set('comfyPromptProfileId', '');
-                    }
-                },
-                getCurrentData: () => ({
-                    promptPrefix: store.get('promptPrefix'),
-                    negativePrefix: store.get('negativePrefix'),
-                    promptSuffix: store.get('promptSuffix'),
-                    loras: store.get('loras')
-                }),
-                applyData: (id) => {
-                    const profile = (store.get('comfyPromptProfiles') || []).find((p) => p.id === id);
-                    if (profile?.data) {
-                        const d = profile.data;
-                        if (d.promptPrefix) store.set('promptPrefix', d.promptPrefix);
-                        if (d.negativePrefix) store.set('negativePrefix', d.negativePrefix);
-                        if (d.promptSuffix) store.set('promptSuffix', d.promptSuffix);
-                        if (d.loras) store.set('loras', d.loras);
-                    }
-                },
-                onRefresh: () => {}
-            });
-            body.appendChild(toolbar);
-
-            body.appendChild(
-                controls.createInput({
-                    label: '全局正向提示词前缀',
-                    placeholder: '自动追加在正向提示词开头...',
-                    value: settings.promptPrefix ?? '',
-                    onChange: (val: string) => store.set('promptPrefix', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createInput({
-                    label: '全局负向提示词前缀',
-                    placeholder: '自动追加在负向提示词开头...',
-                    value: settings.negativePrefix ?? '',
-                    onChange: (val: string) => store.set('negativePrefix', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createInput({
-                    label: '全局正向提示词后缀',
-                    placeholder: '自动追加在正向提示词末尾...',
-                    value: settings.promptSuffix ?? '',
-                    onChange: (val: string) => store.set('promptSuffix', val)
-                })
-            );
-
-            // LoRA 列表容器
-            const loraListContainer = document.createElement('div');
-            loraListContainer.style.marginTop = '12px';
-
-            const renderLoras = () => {
-                loraListContainer.innerHTML = '';
-                const loras: LoraItem[] = store.get('loras') || [];
-                loras.forEach((l, idx) => {
-                    const row = document.createElement('div');
-                    row.style.display = 'flex';
-                    row.style.alignItems = 'center';
-                    row.style.gap = '8px';
-                    row.style.marginBottom = '6px';
-
-                    const nameSpan = document.createElement('span');
-                    nameSpan.style.flex = '1';
-                    nameSpan.style.fontSize = '0.88em';
-                    nameSpan.textContent = l.name;
-
-                    const weightInput = document.createElement('input');
-                    weightInput.type = 'number';
-                    weightInput.className = 'da-input';
-                    weightInput.style.width = '70px';
-                    weightInput.step = '0.05';
-                    weightInput.value = String(l.weight);
-                    weightInput.onchange = () => {
-                        const current = store.get('loras') || [];
-                        const next = [...current];
-                        if (next[idx]) {
-                            next[idx].weight = parseFloat(weightInput.value) || 1.0;
-                            store.set('loras', next);
+                }
+            },
+            {
+                key: 'width',
+                type: 'number',
+                label: '生成宽度 (Width, px)',
+                helpTooltip: '生成图像的物理像素宽度。',
+                min: 64,
+                max: 4096,
+                step: 64,
+                unit: 'px'
+            },
+            {
+                key: 'height',
+                type: 'number',
+                label: '生成高度 (Height, px)',
+                helpTooltip: '生成图像的物理像素高度。',
+                min: 64,
+                max: 4096,
+                step: 64,
+                unit: 'px'
+            },
+            {
+                key: 'steps',
+                type: 'number',
+                label: '采样步数 (Steps)',
+                helpTooltip: '生成图像迭代采样步数。',
+                min: 1,
+                max: 150,
+                step: 1,
+                unit: '步'
+            },
+            {
+                key: 'cfgScale',
+                type: 'number',
+                label: '提示词引导系数 (CFG Scale)',
+                helpTooltip: 'CFG 文本引导权重（推荐 5.0 ~ 8.0）。',
+                min: 1.0,
+                max: 30.0,
+                step: 0.5
+            },
+            {
+                key: 'checkpointPositivePrefix',
+                type: 'input',
+                label: '模型专用正向提示词',
+                helpTooltip: '绑定在此模型参数预设中的固有正向画风起手词（自动拼接在正向最前）。',
+                placeholder: 'masterpiece, best quality, anime style...'
+            },
+            {
+                key: 'checkpointNegativePrefix',
+                type: 'input',
+                label: '模型专用负向提示词',
+                helpTooltip: '绑定在此模型参数预设中的固有避坑负向词（自动拼接在负向最前）。',
+                placeholder: 'lowres, bad anatomy, worst quality...'
+            },
+            {
+                type: 'component',
+                label: '局部重绘与图生图参数',
+                renderCustom: () => {
+                    return createCollapsibleSection({
+                        summaryText: '局部重绘与图生图参数',
+                        defaultOpen: false,
+                        renderBody: (inpaintBody) => {
+                            inpaintBody.appendChild(
+                                rendererDraft.renderRow({
+                                    key: 'inpaintDenoise',
+                                    type: 'number',
+                                    label: '重绘重噪幅度',
+                                    helpTooltip: '局部重绘/图生图的重噪强度（0.05 ~ 1.0，推荐 0.6 ~ 0.85）。',
+                                    min: 0.05,
+                                    max: 1.0,
+                                    step: 0.05
+                                })
+                            );
+                            inpaintBody.appendChild(
+                                rendererDraft.renderRow({
+                                    key: 'inpaintMaskBlur',
+                                    type: 'number',
+                                    label: '蒙版羽化半径',
+                                    helpTooltip: '局部重绘边缘模糊过渡像素 (0 ~ 64 px，推荐 4 ~ 12 px)。',
+                                    min: 0,
+                                    max: 64,
+                                    step: 1,
+                                    unit: 'px'
+                                })
+                            );
+                            inpaintBody.appendChild(
+                                rendererDraft.renderRow({
+                                    key: 'inpaintGrowMask',
+                                    type: 'number',
+                                    label: '蒙版外扩像素',
+                                    helpTooltip: '涂抹掩码向外自动扩展的外扩像素 (0 ~ 64 px，推荐 4 ~ 8 px)。',
+                                    min: 0,
+                                    max: 64,
+                                    step: 1,
+                                    unit: 'px'
+                                })
+                            );
                         }
-                    };
-
-                    const delBtn = document.createElement('button');
-                    delBtn.className = 'da-btn danger';
-                    delBtn.style.padding = '2px 8px';
-                    delBtn.textContent = '✕';
-                    delBtn.onclick = () => {
-                        const next = (store.get('loras') || []).filter((_, i) => i !== idx);
-                        store.set('loras', next);
-                        renderLoras();
-                    };
-
-                    row.appendChild(nameSpan);
-                    row.appendChild(weightInput);
-                    row.appendChild(delBtn);
-                    loraListContainer.appendChild(row);
-                });
-            };
-
-            const addLoraRow = document.createElement('div');
-            addLoraRow.style.display = 'flex';
-            addLoraRow.style.gap = '8px';
-            addLoraRow.style.marginTop = '8px';
-
-            const addBtn = document.createElement('button');
-            addBtn.className = 'da-btn secondary';
-            addBtn.textContent = '+ 添加 LoRA';
-            addBtn.onclick = () => {
-                const name = loraAddSelect.value;
-                if (!name) return;
-                const current = store.get('loras') || [];
-                store.set('loras', [...current, { name, weight: 1.0 }]);
-                renderLoras();
-            };
-
-            addLoraRow.appendChild(loraAddSelect);
-            addLoraRow.appendChild(addBtn);
-
-            body.appendChild(
-                createFieldRow({
-                    label: '追加 LoRA 列表',
-                    helpTooltip: '配置自动追加至生图提示词或 ComfyUI LoraLoader 的 LoRA 列表。',
-                    control: addLoraRow
-                })
-            );
-
-            body.appendChild(loraListContainer);
-            renderLoras();
-        },
-        '配置正负向提示词模板、全局变量占位符与 LoRA 模型追加与权重调节'
-    );
-
-    // ── C5: 文生图工作流配置 ─────────────────────────────────────────────────
-    const cardC5 = controls.createCard(
-        '文生图工作流配置',
-        (body) => {
-            const blueprintBtn = document.createElement('button');
-            blueprintBtn.className = 'da-btn primary';
-            blueprintBtn.style.marginBottom = '12px';
-            blueprintBtn.textContent = '🎨 查看与编辑工作流蓝图 (Blueprint)';
-            blueprintBtn.onclick = () => {
-                openBlueprintModal(JSON.stringify(store.get('workflowJson') || {}, null, 2), (updated) => {
-                    try {
-                        store.set('workflowJson', JSON.parse(updated));
-                    } catch {}
-                }, 'txt2img');
-            };
-            body.appendChild(blueprintBtn);
-
-            // 节点插槽映射
-            const injection = settings.workflowInjection || {
-                positiveNodeId: '6',
-                positiveField: 'text',
-                negativeNodeId: '7',
-                negativeField: 'text',
-                widthNodeId: '5',
-                widthField: 'width',
-                heightNodeId: '5',
-                heightField: 'height',
-                kSamplerNodeId: '3',
-                saveImageNodeId: '9'
-            };
-
-            const mappingGrid = document.createElement('div');
-            mappingGrid.style.display = 'grid';
-            mappingGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
-            mappingGrid.style.gap = '8px';
-            mappingGrid.style.marginBottom = '12px';
-
-            const addMappingField = (label: string, key: keyof typeof injection, defVal: string) => {
-                const row = createFieldRow({
-                    label,
-                    type: 'text',
-                    value: (injection[key] as string) || defVal,
-                    onChange: (val) => {
-                        const cur = store.get('workflowInjection') || injection;
-                        store.set('workflowInjection', { ...cur, [key]: String(val) });
-                    }
-                });
-                mappingGrid.appendChild(row);
-            };
-
-            addMappingField('正向词节点 ID', 'positiveNodeId', '6');
-            addMappingField('负向词节点 ID', 'negativeNodeId', '7');
-            addMappingField('采样器节点 ID', 'kSamplerNodeId', '3');
-            addMappingField('尺寸 Latent 节点 ID', 'widthNodeId', '5');
-            addMappingField('图像输出节点 ID', 'saveImageNodeId', '9');
-
-            body.appendChild(mappingGrid);
-
-            const wfInput = controls.createInput({
-                label: '文生图 API 工作流 JSON',
-                type: 'textarea',
-                value: JSON.stringify(settings.workflowJson || {}, null, 2),
-                placeholder: '粘贴 ComfyUI Save (API Format) 导出的 JSON 工作流...',
-                onChange: (val: string) => {
-                    try {
-                        const parsed = JSON.parse(val);
-                        store.set('workflowJson', parsed);
-                    } catch {}
+                    });
                 }
-            });
-            body.appendChild(wfInput);
-        },
-        '配置文生图主渲染流程的 ComfyUI API 格式工作流 JSON 与插槽节点映射'
-    );
+            }
+        ]
+    };
+    container.appendChild(rendererDraft.renderCard(cardC3Schema));
 
-    // ── C6: 局部重绘工作流配置 ───────────────────────────────────────────────
-    const cardC6 = controls.createCard(
-        '局部重绘工作流配置',
-        (body) => {
-            body.appendChild(
-                controls.createSlider({
-                    label: '重绘重绘幅度 (Denoising Strength)',
-                    min: 0.0,
-                    max: 1.0,
-                    step: 0.05,
-                    value: settings.inpaintDenoise ?? 0.75,
-                    onChange: (val: number) => store.set('inpaintDenoise', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSlider({
-                    label: '蒙版模糊像素 (Mask Blur, px)',
-                    min: 0,
-                    max: 64,
-                    step: 2,
-                    value: settings.inpaintMaskBlur ?? 4,
-                    onChange: (val: number) => store.set('inpaintMaskBlur', val)
-                })
-            );
-
-            body.appendChild(
-                controls.createSlider({
-                    label: '蒙版外扩膨胀 (Grow Mask, px)',
-                    min: 0,
-                    max: 32,
-                    step: 1,
-                    value: settings.inpaintGrowMask ?? 0,
-                    onChange: (val: number) => store.set('inpaintGrowMask', val)
-                })
-            );
-
-            const inpaintWfInput = controls.createInput({
-                label: '局部重绘 API 工作流 JSON',
-                type: 'textarea',
-                value: JSON.stringify(settings.inpaintWorkflowJson || {}, null, 2),
-                placeholder: '粘贴 ComfyUI 局部重绘 (Inpaint) API 格式工作流...',
-                onChange: (val: string) => {
-                    try {
-                        const parsed = JSON.parse(val);
-                        store.set('inpaintWorkflowJson', parsed);
-                    } catch {}
+    // ── C4: 提示词模板与 LoRA 增强卡片 ──────────────────────────────────────
+    const toolbarC4 = bindPresetToolbar({
+        adapter: {
+            label: '提示词',
+            getProfiles: () => (store.get('comfyPromptProfiles') || []).map((p) => ({ id: p.id, name: p.name, data: p.data })),
+            getInitialId: () => store.get('comfyPromptProfileId') || '',
+            createProfile: (name, data: PromptProfileData) => {
+                const id = `prompt_${Date.now()}`;
+                const current = store.get('comfyPromptProfiles') || [];
+                store.set('comfyPromptProfiles', [...current, { id, name, data }]);
+                store.set('comfyPromptProfileId', id);
+                return id;
+            },
+            saveProfile: (id, data: PromptProfileData) => {
+                const current = store.get('comfyPromptProfiles') || [];
+                store.set('comfyPromptProfiles', current.map((p) => (p.id === id ? { ...p, data } : p)));
+            },
+            renameProfile: (id, newName) => {
+                const current = store.get('comfyPromptProfiles') || [];
+                store.set('comfyPromptProfiles', current.map((p) => (p.id === id ? { ...p, name: newName } : p)));
+            },
+            deleteProfile: (id) => {
+                const current = store.get('comfyPromptProfiles') || [];
+                store.set('comfyPromptProfiles', current.filter((p) => p.id !== id));
+                store.set('comfyPromptProfileId', '');
+                return '';
+            },
+            resetToDefault: async () => {
+                try {
+                    const defaults = await fetchComfyUIPrompts();
+                    store.set('comfyPromptProfiles', defaults);
+                    store.set('comfyPromptProfileId', defaults[0]?.id || '');
+                } catch {
+                    store.set('comfyPromptProfiles', []);
+                    store.set('comfyPromptProfileId', '');
                 }
-            });
-            body.appendChild(inpaintWfInput);
+            }
         },
-        '配置 Inpaint 局部重绘流程的 API 工作流、重绘幅度与蒙版羽化参数'
-    );
+        getCurrentData: () => ({
+            promptPrefix: draftStore.get('promptPrefix'),
+            negativePrefix: draftStore.get('negativePrefix'),
+            promptSuffix: draftStore.get('promptSuffix'),
+            loras: draftStore.get('loras')
+        }),
+        applyData: (id) => {
+            const profile = (store.get('comfyPromptProfiles') || []).find((p) => p.id === id);
+            if (profile?.data) applyPromptProfileData(profile.data);
+        },
+        onRefresh: () => {}
+    });
 
-    container.appendChild(cardC1);
-    container.appendChild(cardC2);
-    container.appendChild(cardC3);
-    container.appendChild(cardC4);
-    container.appendChild(cardC5);
-    container.appendChild(cardC6);
+
+    const cardC4Schema: SectionCardSchema<DrawAssistantSettings> = {
+        title: '提示词模板与 LoRA 增强',
+        description: '维护正向前缀词、正向后缀词、负向词及 LoRA 动态选择与权重追加列表',
+        rows: [
+            {
+                type: 'component',
+                label: '提示词方案管理',
+                renderCustom: () => toolbarC4
+            },
+            {
+                key: 'promptPrefix',
+                type: 'input',
+                label: '全局正向提示词前缀',
+                helpTooltip: '自动拼接在 AI 楼层正向提示词的最前端。例如质量词、画风起手词等。',
+                placeholder: 'masterpiece, best quality, highly detailed...'
+            },
+            {
+                key: 'promptSuffix',
+                type: 'input',
+                label: '全局正向提示词后缀',
+                helpTooltip: '自动拼接在 AI 楼层正向提示词的末尾。',
+                placeholder: 'vibrant lighting, 8k resolution...'
+            },
+            {
+                key: 'negativePrefix',
+                type: 'input',
+                label: '全局负向提示词',
+                helpTooltip: '全局排除的不期望特征或画质瑕疵词。',
+                placeholder: 'lowres, bad anatomy, worst quality, text, error...'
+            },
+            {
+                type: 'component',
+                label: '追加 LoRA 模型预设 (WeiLin)',
+                renderCustom: () => {
+                    return createCollapsibleSection({
+                        summaryText: '追加 LoRA 模型预设 (WeiLin)',
+                        defaultOpen: false,
+                        renderBody: (loraBody) => {
+                            const loraManager = createLoraManagerControl({
+                                loras: draftStore.get('loras') || store.get('loras') || [],
+                                cachedLoras: store.get('cachedLoras') || [],
+                                showExtraWeights: true,
+                                onChange: (newLoras) => {
+                                    draftStore.set('loras', newLoras);
+                                }
+                            });
+                            loraBody.appendChild(loraManager);
+                        }
+                    });
+                }
+            }
+        ]
+    };
+    container.appendChild(rendererDraft.renderCard(cardC4Schema));
+
+    // ── C5: 文生图工作流预设卡片 ─────────────────────────────────────────────
+    const cardC5Workflow = createWorkflowPresetCard({
+        title: '文生图工作流预设',
+        description: '维护标准文本生成图像 API Format Workflow JSON，支持通过蓝图可视化编辑器绑定变量',
+        label: '文生图工作流',
+        blueprintMode: 'txt2img',
+        fieldLabel: '文生图 API 工作流 JSON',
+        helpTooltip: 'ComfyUI 开启 Dev Mode 导出的 API 格式文生图工作流 JSON。可点击右侧按钮打开可视化蓝图。',
+        placeholder: '请输入 API 格式文生图 Workflow JSON，或使用上方工具栏导入与选择工作流...',
+        getProfiles: () => store.get('comfyTxt2ImgWorkflows') || [],
+        getCurrentProfileId: () => store.get('comfyTxt2ImgWorkflowId') || '',
+        getCurrentJson: () => store.get('workflowJson') || '',
+        onProfilesChange: (profiles, activeId) => {
+            store.set('comfyTxt2ImgWorkflows', profiles);
+            store.set('comfyTxt2ImgWorkflowId', activeId);
+        },
+        onJsonChange: (json) => store.set('workflowJson', json),
+        fetchDefaults: fetchComfyUITxt2ImgWorkflows,
+        onRefresh: () => {}
+    });
+    container.appendChild(cardC5Workflow);
+
+    // ── C6: 局部重绘工作流预设卡片 ─────────────────────────────────────────
+    const cardC6Workflow = createWorkflowPresetCard({
+        title: '局部重绘工作流预设',
+        description: '配置用于图像局部抠图、修补与重绘的 API Format Workflow JSON',
+        label: '重绘工作流',
+        blueprintMode: 'inpaint',
+        fieldLabel: '重绘 API 工作流 JSON',
+        helpTooltip: '用于 Mask 掩码抠图与 Inpaint 生成的 ComfyUI 工作流。可点击右侧按钮打开可视化蓝图。',
+        placeholder: '请输入 API 格式局部重绘 Workflow JSON，或使用上方工具栏导入与选择工作流...',
+        getProfiles: () => store.get('comfyInpaintWorkflows') || [],
+        getCurrentProfileId: () => store.get('comfyInpaintWorkflowId') || '',
+        getCurrentJson: () => store.get('inpaintWorkflowJson') || '',
+        onProfilesChange: (profiles, activeId) => {
+            store.set('comfyInpaintWorkflows', profiles);
+            store.set('comfyInpaintWorkflowId', activeId);
+        },
+        onJsonChange: (json) => store.set('inpaintWorkflowJson', json),
+        fetchDefaults: fetchComfyUIInpaintWorkflows,
+        onRefresh: () => {}
+    });
+    container.appendChild(cardC6Workflow);
+
 
     container.dispose = () => {
-        // 资源释放
+        rendererDraft.dispose();
+        rendererMain.dispose();
+        draftStore.dispose();
     };
 
     return container;

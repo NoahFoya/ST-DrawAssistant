@@ -21,6 +21,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
+    "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],

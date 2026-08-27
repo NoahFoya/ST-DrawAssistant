@@ -1,1 +1,0 @@
-{"version":3,"file":"comfyui-tab.d.ts","sourceRoot":"","sources":["../../../src/ui/default-views/comfyui-tab.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,EAAE,eAAe,EAAE,MAAM,wBAAwB,CAAC;AACzD,OAAO,EAAE,qBAAqB,EAAY,MAAM,8BAA8B,CAAC;AAK/E,OAAO,EAAE,WAAW,EAAE,MAAM,kCAAkC,CAAC;AAE/D;;;;;GAKG;AACH,wBAAgB,oBAAoB,CAAC,KAAK,EAAE,eAAe,CAAC,qBAAqB,CAAC,GAAG,WAAW,GAAG,WAAW,CA4qB7G"}

@@ -1,57 +1,39 @@
 /**
  * @module domain/drivers/driver-contract
- * @description 生图后端驱动抽象接口与多模态 Payload 数据定义 (IDrawDriver, GenerationPayload)
+ * @description 生图后端驱动接口与请求参数定义 (IDrawDriver, GenerationPayload)
  */
-export interface CommonGenParams {
-    seed: number;
-    steps: number;
-    cfgScale: number;
-    samplerName: string;
-    scheduler?: string;
-    width: number;
-    height: number;
-}
-export type GenerationPayload = {
-    mode: 'txt2img';
-    prompt: string;
-    negativePrompt: string;
-    params: CommonGenParams;
-} | {
-    mode: 'inpaint';
-    prompt: string;
-    negativePrompt: string;
-    params: CommonGenParams;
-    initImageBlob: Blob;
-    maskImageBlob: Blob;
-    denoiseStrength: number;
-};
-export interface ComfyWorkflowMapping {
-    promptNodeId: string;
-    negativeNodeId: string;
-    samplerNodeId: string;
-    latentNodeId: string;
-    outputNodeId: string;
-    imageInputNodeId?: string;
-    maskInputNodeId?: string;
-}
-/**
- * 生图后端驱动抽象接口
- */
-export interface IDrawDriver {
-    /** 驱动唯一标识 ID (如 'comfyui', 'sdwebui') */
+export * from './base-driver';
+import type { ObservableStore } from '../../core/state/store';
+import type { DrawAssistantSettings } from '../../core/state/store-types';
+import type { IDrawDriverContract, DriverAssetSyncResult, GenerationPayload, DriverBuildPayloadOptions } from '../../core/contracts';
+export type { CommonGenParams, GenerationPayload, DriverBuildPayloadOptions, DriverAssetSyncResult, IDrawDriverContract } from '../../core/contracts';
+/** 生图后端驱动通用抽象接口 */
+export interface IDrawDriver extends IDrawDriverContract {
     readonly id: string;
-    /** 驱动可读显示名称 */
     readonly name: string;
-    /** 检查后端生图服务的连通性 */
+    /** 检查后端连通性与健康状态 */
     ping(): Promise<boolean>;
-    /** 格式化提示词语法 (适配不同生图引擎的权重表达语法) */
+    /** 检查后端连通性并返回耗时与状态 (供遥测与健康检测使用) */
+    checkConnection(): Promise<{
+        connected: boolean;
+        latencyMs?: number;
+        error?: string;
+    }>;
+    /** 同步拉取后端全量模型、采样器与 LoRA 资产并批量缓存至 Store */
+    syncAssets(store: ObservableStore<DrawAssistantSettings>): Promise<DriverAssetSyncResult>;
+    /** 适配目标后端的提示词权重语法 */
     formatPrompt(rawPrompt: string): string;
-    /**
-     * 执行异步生图流程
-     * @param payload 生图参数载荷
-     * @param onProgress 进度更新回调函数
-     * @returns 生成的图像 Blob 列表与元数据
-     */
+    /** 适配目标后端的 LoRA 标签语法 (如 ComfyUI WLR 语法 vs SD-WebUI 语法) */
+    formatLoraTag(lora: {
+        name: string;
+        weight?: number;
+        clipWeight?: number;
+        textWeight?: number;
+        triggerWeight?: number;
+    }): string;
+    /** 组装引擎专属的 GenerationPayload */
+    buildPayload(options: DriverBuildPayloadOptions): GenerationPayload;
+    /** 执行生图流程并派发生图进度 */
     generate(payload: GenerationPayload, onProgress: (progress: {
         percent: number;
         nodeName?: string;
@@ -60,7 +42,7 @@ export interface IDrawDriver {
         imageBlobs: Blob[];
         metadata: Record<string, unknown>;
     }>;
-    /** 取消或中断当前正在执行的生图任务 */
-    interrupt?(): Promise<void>;
+    /** 中断当前正在执行的任务 */
+    interrupt(): Promise<void>;
 }
 //# sourceMappingURL=driver-contract.d.ts.map

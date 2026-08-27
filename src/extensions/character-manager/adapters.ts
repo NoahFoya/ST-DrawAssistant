@@ -1,269 +1,152 @@
 /**
  * @module extensions/character-manager/adapters
- * @description 角色管理器 5 大子面板预设方案操作适配器工厂
+ * @description 角色管理器 5 大子面板预设方案操作适配器工厂 (基于泛型通用工厂实现)
  */
 
-import { PresetToolbarAdapter } from '../../ui/components/preset-toolbar';
+import { PresetToolbarAdapter } from '../../ui';
+import { CharacterStorage } from './storage';
+import { CHARACTER_STORAGE_KEYS } from './constants';
 import {
+    fetchCharacters,
+    fetchOutfits,
+    fetchEnableSchemes,
+    fetchInjectionTemplates,
+    fetchRegexFormulas
+} from './preset-loader';
+import type {
     CharacterProfile,
     OutfitProfile,
     EnableSchemeProfile,
     InjectionTemplateScheme,
     RegexFormulaScheme
 } from './types';
-import {
-    CharacterStorage,
-    DEFAULT_CHARACTER_PROFILE,
-    DEFAULT_OUTFIT_PROFILE,
-    DEFAULT_ENABLE_SCHEME,
-    DEFAULT_INJECTION_TEMPLATE,
-    DEFAULT_REGEX_FORMULA_SCHEME
-} from './storage';
+
+interface PresetAdapterConfig<T extends { id: string }> {
+    label: string;
+    prefix: string;
+    storageKey: string;
+    fetchDefaults: () => Promise<T[]>;
+    getName: (item: T) => string;
+    buildNewEntity: (id: string, name: string, data: T) => T;
+    updateEntityName: (item: T, newName: string) => T;
+    isFormula?: boolean;
+}
 
 /**
- * 1. 角色设定预设方案适配器工厂
- *
- * @param storage 角色管理器存储服务实例
- * @returns 角色设定专属的 PresetToolbarAdapter
+ * 泛型预设适配器通用生成器 (直接通过 storageKey 操作实体引擎)
  */
-export function createCharacterPresetAdapter(
-    storage: CharacterStorage
-): PresetToolbarAdapter<CharacterProfile> {
+function createPresetAdapterHelper<T extends { id: string }>(
+    storage: CharacterStorage,
+    config: PresetAdapterConfig<T>
+): PresetToolbarAdapter<T> {
     return {
+        label: config.label,
+        getProfiles: () =>
+            storage.getEntities<T>(config.storageKey).map((item) => ({
+                id: item.id,
+                name: config.getName(item),
+                data: item
+            })),
+        getInitialId: () =>
+            config.isFormula
+                ? storage.getActiveFormulaId()
+                : storage.getEntities<T>(config.storageKey)[0]?.id ?? '',
+        createProfile: (name, data) => {
+            const newId = `${config.prefix}_${Date.now()}`;
+            const trimmedName = name.trim() || `新${config.label}`;
+            const newEntity = config.buildNewEntity(newId, trimmedName, data);
+            storage.upsertEntity<T>(config.storageKey, newEntity);
+            if (config.isFormula) storage.setActiveFormulaId(newId);
+            return newId;
+        },
+        saveProfile: (id, data) => {
+            storage.upsertEntity<T>(config.storageKey, { ...data, id });
+        },
+        renameProfile: (id, newName) => {
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+            const item = storage.getEntities<T>(config.storageKey).find((x) => x.id === id);
+            if (item) storage.upsertEntity<T>(config.storageKey, config.updateEntityName(item, trimmed));
+        },
+        deleteProfile: (id) => {
+            storage.deleteEntity<T>(config.storageKey, id);
+            const remaining = storage.getEntities<T>(config.storageKey);
+            const nextId = remaining[0]?.id ?? '';
+            if (config.isFormula) storage.setActiveFormulaId(nextId);
+            return nextId;
+        },
+        resetToDefault: async () => {
+            const list = await config.fetchDefaults();
+            if (list.length > 0) {
+                storage.saveEntities<T>(config.storageKey, list);
+                if (config.isFormula) storage.setActiveFormulaId(list[0]?.id || '');
+            }
+        }
+    };
+}
+
+// ── 1. 角色预设适配器工厂 ──────────────────────────────────────────────────
+export function createCharacterPresetAdapter(storage: CharacterStorage): PresetToolbarAdapter<CharacterProfile> {
+    return createPresetAdapterHelper<CharacterProfile>(storage, {
         label: '角色预设',
-        getProfiles: () =>
-            storage.getCharacters().map((c) => ({
-                id: c.id,
-                name: c.nameCN ? `${c.nameCN} (${c.nameEN || '未命名'})` : c.nameEN || c.id,
-                data: c
-            })),
-        getInitialId: () => storage.getCharacters()[0]?.id ?? '',
-        createProfile: (name, data) => {
-            const newId = `char_${Date.now()}`;
-            const trimmedName = name.trim() || '新角色设定';
-            const newChar: CharacterProfile = {
-                ...data,
-                id: newId,
-                nameCN: trimmedName,
-                nameEN: data.nameEN || trimmedName
-            };
-            storage.upsertCharacter(newChar);
-            return newId;
-        },
-        saveProfile: (id, data) => {
-            storage.upsertCharacter({ ...data, id });
-        },
-        renameProfile: (id, newName) => {
-            const trimmed = newName.trim();
-            if (!trimmed) return;
-            const item = storage.getCharacters().find((c) => c.id === id);
-            if (item) storage.upsertCharacter({ ...item, nameCN: trimmed });
-        },
-        deleteProfile: (id) => {
-            storage.deleteCharacter(id);
-            return storage.getCharacters()[0]?.id ?? '';
-        },
-        resetToDefault: () => {
-            storage.saveCharacters([DEFAULT_CHARACTER_PROFILE]);
-        }
-    };
+        prefix: 'char',
+        storageKey: CHARACTER_STORAGE_KEYS.CHARACTERS,
+        fetchDefaults: fetchCharacters,
+        getName: (c) => (c.nameCN ? `${c.nameCN} (${c.nameEN || '未命名'})` : c.nameEN || c.id),
+        buildNewEntity: (id, name, data) => ({ ...data, id, nameCN: name, nameEN: data.nameEN || name }),
+        updateEntityName: (c, newName) => ({ ...c, nameCN: newName })
+    });
 }
 
-/**
- * 2. 服装设定预设方案适配器工厂
- *
- * @param storage 角色管理器存储服务实例
- * @returns 服装设定专属的 PresetToolbarAdapter
- */
-export function createOutfitPresetAdapter(
-    storage: CharacterStorage
-): PresetToolbarAdapter<OutfitProfile> {
-    return {
+// ── 2. 服装预设适配器工厂 ──────────────────────────────────────────────────
+export function createOutfitPresetAdapter(storage: CharacterStorage): PresetToolbarAdapter<OutfitProfile> {
+    return createPresetAdapterHelper<OutfitProfile>(storage, {
         label: '服装预设',
-        getProfiles: () =>
-            storage.getOutfits().map((o) => ({
-                id: o.id,
-                name: o.nameCN ? `${o.nameCN} (${o.nameEN || '未命名'})` : o.nameEN || o.id,
-                data: o
-            })),
-        getInitialId: () => storage.getOutfits()[0]?.id ?? '',
-        createProfile: (name, data) => {
-            const newId = `outfit_${Date.now()}`;
-            const trimmedName = name.trim() || '新服装设定';
-            const newOutfit: OutfitProfile = {
-                ...data,
-                id: newId,
-                nameCN: trimmedName,
-                nameEN: data.nameEN || trimmedName
-            };
-            storage.upsertOutfit(newOutfit);
-            return newId;
-        },
-        saveProfile: (id, data) => {
-            storage.upsertOutfit({ ...data, id });
-        },
-        renameProfile: (id, newName) => {
-            const trimmed = newName.trim();
-            if (!trimmed) return;
-            const item = storage.getOutfits().find((o) => o.id === id);
-            if (item) storage.upsertOutfit({ ...item, nameCN: trimmed });
-        },
-        deleteProfile: (id) => {
-            storage.deleteOutfit(id);
-            return storage.getOutfits()[0]?.id ?? '';
-        },
-        resetToDefault: () => {
-            storage.saveOutfits([DEFAULT_OUTFIT_PROFILE]);
-        }
-    };
+        prefix: 'outfit',
+        storageKey: CHARACTER_STORAGE_KEYS.OUTFITS,
+        fetchDefaults: fetchOutfits,
+        getName: (o) => (o.nameCN ? `${o.nameCN} (${o.nameEN || '未命名'})` : o.nameEN || o.id),
+        buildNewEntity: (id, name, data) => ({ ...data, id, nameCN: name, nameEN: data.nameEN || name }),
+        updateEntityName: (o, newName) => ({ ...o, nameCN: newName })
+    });
 }
 
-/**
- * 3. 方案启用规则预设适配器工厂
- *
- * @param storage 角色管理器存储服务实例
- * @returns 启用方案专属的 PresetToolbarAdapter
- */
-export function createEnableSchemePresetAdapter(
-    storage: CharacterStorage
-): PresetToolbarAdapter<EnableSchemeProfile> {
-    return {
+// ── 3. 启用方案适配器工厂 ──────────────────────────────────────────────────
+export function createEnableSchemePresetAdapter(storage: CharacterStorage): PresetToolbarAdapter<EnableSchemeProfile> {
+    return createPresetAdapterHelper<EnableSchemeProfile>(storage, {
         label: '启用方案',
-        getProfiles: () =>
-            storage.getSchemes().map((s) => ({
-                id: s.id,
-                name: s.name || s.id,
-                data: s
-            })),
-        getInitialId: () => storage.getSchemes()[0]?.id ?? '',
-        createProfile: (name, data) => {
-            const newId = `scheme_${Date.now()}`;
-            const trimmedName = name.trim() || '新启用方案';
-            const newScheme: EnableSchemeProfile = {
-                ...data,
-                id: newId,
-                name: trimmedName
-            };
-            storage.upsertScheme(newScheme);
-            return newId;
-        },
-        saveProfile: (id, data) => {
-            storage.upsertScheme({ ...data, id });
-        },
-        renameProfile: (id, newName) => {
-            const trimmed = newName.trim();
-            if (!trimmed) return;
-            const item = storage.getSchemes().find((s) => s.id === id);
-            if (item) storage.upsertScheme({ ...item, name: trimmed });
-        },
-        deleteProfile: (id) => {
-            storage.deleteScheme(id);
-            return storage.getSchemes()[0]?.id ?? '';
-        },
-        resetToDefault: () => {
-            storage.saveSchemes([DEFAULT_ENABLE_SCHEME]);
-        }
-    };
+        prefix: 'scheme',
+        storageKey: CHARACTER_STORAGE_KEYS.SCHEMES,
+        fetchDefaults: fetchEnableSchemes,
+        getName: (s) => s.name,
+        buildNewEntity: (id, name, data) => ({ ...data, id, name }),
+        updateEntityName: (s, newName) => ({ ...s, name: newName })
+    });
 }
 
-/**
- * 4. 注入模板方案适配器工厂
- *
- * @param storage 角色管理器存储服务实例
- * @returns 注入模板专属的 PresetToolbarAdapter
- */
-export function createInjectionTemplatePresetAdapter(
-    storage: CharacterStorage
-): PresetToolbarAdapter<InjectionTemplateScheme> {
-    return {
+// ── 4. 提示词注入模板方案适配器工厂 ────────────────────────────────────────
+export function createInjectionTemplatePresetAdapter(storage: CharacterStorage): PresetToolbarAdapter<InjectionTemplateScheme> {
+    return createPresetAdapterHelper<InjectionTemplateScheme>(storage, {
         label: '注入模板',
-        getProfiles: () =>
-            storage.getTemplates().map((t) => ({
-                id: t.id,
-                name: t.name || t.id,
-                data: t
-            })),
-        getInitialId: () => storage.getTemplates()[0]?.id ?? '',
-        createProfile: (name, data) => {
-            const newId = `tpl_${Date.now()}`;
-            const trimmedName = name.trim() || '新注入模板';
-            const newTpl: InjectionTemplateScheme = {
-                ...data,
-                id: newId,
-                name: trimmedName
-            };
-            storage.upsertTemplate(newTpl);
-            return newId;
-        },
-        saveProfile: (id, data) => {
-            storage.upsertTemplate({ ...data, id });
-        },
-        renameProfile: (id, newName) => {
-            const trimmed = newName.trim();
-            if (!trimmed) return;
-            const item = storage.getTemplates().find((t) => t.id === id);
-            if (item) storage.upsertTemplate({ ...item, name: trimmed });
-        },
-        deleteProfile: (id) => {
-            storage.deleteTemplate(id);
-            return storage.getTemplates()[0]?.id ?? '';
-        },
-        resetToDefault: () => {
-            storage.saveTemplates([DEFAULT_INJECTION_TEMPLATE]);
-        }
-    };
+        prefix: 'template',
+        storageKey: CHARACTER_STORAGE_KEYS.TEMPLATES,
+        fetchDefaults: fetchInjectionTemplates,
+        getName: (t) => t.name,
+        buildNewEntity: (id, name, data) => ({ ...data, id, name }),
+        updateEntityName: (t, newName) => ({ ...t, name: newName })
+    });
 }
 
-/**
- * 5. 正则宏公式方案适配器工厂
- *
- * @param storage 角色管理器存储服务实例
- * @returns 正则宏公式专属的 PresetToolbarAdapter
- */
-export function createRegexFormulaPresetAdapter(
-    storage: CharacterStorage
-): PresetToolbarAdapter<RegexFormulaScheme> {
-    return {
-        label: '宏公式方案',
-        getProfiles: () =>
-            storage.getFormulas().map((f) => ({
-                id: f.id,
-                name: f.name || f.id,
-                data: f
-            })),
-        getInitialId: () => storage.getActiveFormulaId(),
-        createProfile: (name, data) => {
-            const newId = `formula_${Date.now()}`;
-            const trimmedName = name.trim() || '新正则宏公式';
-            const newFormula: RegexFormulaScheme = {
-                ...data,
-                id: newId,
-                name: trimmedName
-            };
-            storage.upsertFormula(newFormula);
-            storage.setActiveFormulaId(newId);
-            return newId;
-        },
-        saveProfile: (id, data) => {
-            storage.upsertFormula({ ...data, id });
-        },
-        renameProfile: (id, newName) => {
-            const trimmed = newName.trim();
-            if (!trimmed) return;
-            const item = storage.getFormulas().find((f) => f.id === id);
-            if (item) storage.upsertFormula({ ...item, name: trimmed });
-        },
-        deleteProfile: (id) => {
-            storage.deleteFormula(id);
-            const remaining = storage.getFormulas()[0]?.id ?? '';
-            storage.setActiveFormulaId(remaining);
-            return remaining;
-        },
-        resetToDefault: () => {
-            storage.saveFormulas([DEFAULT_REGEX_FORMULA_SCHEME]);
-            storage.setActiveFormulaId(DEFAULT_REGEX_FORMULA_SCHEME.id);
-        }
-    };
+// ── 5. 正则宏公式方案适配器工厂 ────────────────────────────────────────────
+export function createRegexFormulaPresetAdapter(storage: CharacterStorage): PresetToolbarAdapter<RegexFormulaScheme> {
+    return createPresetAdapterHelper<RegexFormulaScheme>(storage, {
+        label: '公式方案',
+        prefix: 'formula',
+        storageKey: CHARACTER_STORAGE_KEYS.FORMULAS,
+        isFormula: true,
+        fetchDefaults: fetchRegexFormulas,
+        getName: (f) => f.name,
+        buildNewEntity: (id, name, data) => ({ ...data, id, name }),
+        updateEntityName: (f, newName) => ({ ...f, name: newName })
+    });
 }
-
-export const createMacroFormulaPresetAdapter = createRegexFormulaPresetAdapter;

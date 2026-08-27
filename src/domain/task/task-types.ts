@@ -3,28 +3,22 @@
  * @description 会话级任务标识 (TaskContextIdentity) 与状态流转数据结构定义
  */
 
-import { GenerationPayload } from '../drivers/driver-contract';
+export type { TaskStatus, TaskContextIdentity, TaskState, GenerationPayload } from '../../core/contracts';
+import type { TaskStatus, TaskContextIdentity, GenerationPayload } from '../../core/contracts';
 
-export interface TaskContextIdentity {
-    readonly taskId: string; // 全局唯一 UUID
-    readonly chatId: string; // 绑定的会话 ID
-    readonly messageId: number; // 绑定的楼层 ID
-    readonly swipeId?: number; // 消息的分支版本 ID
-}
 
-/** 任务状态机：支持排队、执行、完成、取消、客户端丢弃与错误状态 */
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'DISCARDED' | 'ERROR';
 
-export interface TaskState {
-    readonly identity: TaskContextIdentity;
-    readonly status: TaskStatus;
-    readonly payload: GenerationPayload;
-    readonly progress?: {
+/** 任务内部可变状态 (供 TaskManager 内部流转) */
+export interface MutableTaskState {
+    identity: TaskContextIdentity;
+    status: TaskStatus;
+    payload?: GenerationPayload;
+    progress?: {
         percent: number;
         nodeName?: string;
         previewBlob?: Blob;
     };
-    readonly error?: string;
-    readonly resultBlobs?: Blob[];
-    readonly createdAt: number;
+    error?: string;
+    resultBlobs?: Blob[];
+    createdAt: number;
 }

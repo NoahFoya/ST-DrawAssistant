@@ -1,0 +1,7 @@
+{
+  "id": "tpl-markdown-card",
+  "name": "Markdown 卡片风格",
+  "characterListTemplate": "### 👤 角色设定: {nameCN} ({nameEN})\n- 作品来源: {origin}\n- 固有特征: {bodyTraits}\n- 五官外貌: {facial}\n- 五官外貌背面: {facialBack}\n- 上半身 SFW: {upperSFW}\n- 上半身 SFW 背面: {upperSFWBack}\n- 侧身曲线 SFW: {sideSFW}\n- 下半身 SFW: {lowerSFW}\n- 下半身 SFW 背面: {lowerSFWBack}\n- 上半身 NSFW: {upperNSFW}\n- 上半身 NSFW 背面: {upperNSFWBack}\n- 下半身 NSFW: {lowerNSFW}\n- 下半身 NSFW 背面: {lowerNSFWBack}\n- 负面排斥: {negative}\n{outfits}",
+  "innerOutfitTemplate": "- 👕 专属服装: {nameCN} ({nameEN}) | 头部: {headAcc} | 上半身: {upperBody} | 下半身: {lowerBody} | 鞋袜: {footwear} | 配饰: {accessories}",
+  "enableOutfitListTemplate": "### 👕 独立启用服装: {nameCN} ({nameEN})\n- 头部饰品: {headAcc}\n- 上衣穿着: {upperBody}\n- 裙裤下装: {lowerBody}\n- 腿部鞋袜: {footwear}\n- 配饰配件: {accessories}"
+}

@@ -1,6 +1,6 @@
 /**
  * @module core/foundation/host-bridge
- * @description SillyTavern 宿主环境安全沙箱桥接接口与实现 (IHostBridge 与 whenReady 握手)
+ * @description SillyTavern 宿主环境桥接适配器实现 (IHostBridge)
  */
 import { IDisposable } from './disposable';
 export interface HostMessageEvent {
@@ -12,11 +12,11 @@ export interface HostMessageEvent {
     readonly element?: HTMLElement;
 }
 /**
- * 宿主环境沙箱适配接口
- * 彻底阻断插件业务代码对全局宿主变量与原生 DOM 的直接访问
+ * 宿主环境通信与事件适配接口
+ * 封装对 SillyTavern 上下文、事件总线与持久化存储的交互
  */
 export interface IHostBridge {
-    /** 阻塞等待宿主环境及全局上下文完全就绪 */
+    /** 等待宿主环境及全局上下文完全就绪 */
     whenReady(): Promise<void>;
     /** 监听 AI 角色消息渲染完成事件 (对应宿主 CHARACTER_MESSAGE_RENDERED) */
     onCharacterMessageRendered(handler: (ev: HostMessageEvent) => void): IDisposable;
@@ -26,6 +26,10 @@ export interface IHostBridge {
     onMessageSwiped(handler: (ev: {
         messageId: number;
         swipeId: number;
+    }) => void): IDisposable;
+    /** 监听楼层编辑修改事件 (对应宿主 MESSAGE_EDITED / MESSAGE_UPDATED) */
+    onMessageEdited(handler: (ev: {
+        messageId: number;
     }) => void): IDisposable;
     /** 监听楼层删除或撤回事件 */
     onMessageDeleted(handler: (ev: {
@@ -51,6 +55,10 @@ export interface IHostBridge {
     getChatMessage(messageId: number): Record<string, any> | null;
     /** 向指定楼层的 extra 字段写入数据并安全持久化 */
     writeChatMessageExtra(messageId: number, key: string, value: unknown): void;
+    /** 原子化补丁更新指定楼层的 extra 字段并安全持久化 */
+    patchChatMessageExtra<T = unknown>(messageId: number, key: string, updater: (prev: T | undefined) => T): void;
+    /** 获取当前聊天中所有被引用的图像 UUID 集合 */
+    getReferencedImageIds(): Set<string>;
     /** 持久化当前会话级元数据 (chatMetadata) */
     saveChatMetadata(): void;
     /** 防抖持久化全局设置 (extensionSettings) */
@@ -65,6 +73,7 @@ export declare class SillyTavernHostBridge implements IHostBridge, IDisposable {
     private _readyPromise;
     private _stContext;
     private readonly _memorySettings;
+    private readonly _disposables;
     constructor();
     private initHostContext;
     private getST;
@@ -74,6 +83,9 @@ export declare class SillyTavernHostBridge implements IHostBridge, IDisposable {
     onMessageSwiped(handler: (ev: {
         messageId: number;
         swipeId: number;
+    }) => void): IDisposable;
+    onMessageEdited(handler: (ev: {
+        messageId: number;
     }) => void): IDisposable;
     onMessageDeleted(handler: (ev: {
         messageId: number;
@@ -90,6 +102,8 @@ export declare class SillyTavernHostBridge implements IHostBridge, IDisposable {
     getMainContainer(): HTMLElement | null;
     getChatMessage(messageId: number): Record<string, any> | null;
     writeChatMessageExtra(messageId: number, key: string, value: unknown): void;
+    patchChatMessageExtra<T = unknown>(messageId: number, key: string, updater: (prev: T | undefined) => T): void;
+    getReferencedImageIds(): Set<string>;
     saveChatMetadata(): void;
     saveExtensionSettingsDebounced(): void;
     saveExtensionSettings(moduleName: string, settings: Record<string, unknown>): void;

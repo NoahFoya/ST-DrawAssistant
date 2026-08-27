@@ -1,22 +1,118 @@
 /**
  * @module core/state/storage-adapter
- * @description IndexedDB 持久化适配器 (支持 SHA-256 内容寻址去重、LRU 水位熔断与 Storage Quota 保护)
+ * @description 本地图像数据库存储适配器 (基于浏览器 IndexedDB)
+ *
+ * 图文解耦存储机制：
+ * 1. 图片二进制数据（WebP/PNG Blob）体积较大，统一持久化保存在浏览器本地的 IndexedDB 中；
+ * 2. SillyTavern 的聊天记录文本 (jsonl) 中仅保存轻量级的图片 UUID 与提示词元数据；
+ * 3. 消息重新渲染时，通过 UUID 从 IndexedDB 异步读取 Blob 并生成临时 Object URL 供 <img> 标签展示；
+ * 4. 支持基于 SHA-256 / FNV 哈希的图片去重，以及超出上限时的 LRU (最近最少访问) 自动淘汰策略（收藏图片受到保护不被自动清理）。
  */
 
 import { IDisposable } from '../foundation/disposable';
 import { Logger } from '../diagnostics/logger';
 import { DB_NAME } from '../constants';
 
+/** 本地存储的生图历史记录数据结构 */
 export interface StoredImageRecord {
+    /** 图像全局唯一标识符 (UUID) */
     readonly id: string;
+    /** 图像二进制内容哈希 (用于避免重复存入相同图片) */
     readonly hash: string;
+    /** 生图提示词正文 */
     readonly prompt: string;
-    readonly data: string;
+    /** 图像实际二进制数据 (Blob) 或 Base64 字符串 */
+    readonly data: string | Blob;
+    /** 缩略图 Blob (用于画廊面板快速网格展示，降低内存压力) */
+    readonly thumbnailData?: Blob;
+    /** 生成完成的时间戳 (毫秒) */
     readonly timestamp: number;
+    /** 生图参数快照（模型、采样步数、CFG、种子等） */
     readonly metadata?: Record<string, unknown>;
+    /** 是否已被用户收藏标星 (收藏项不会被 LRU 缓存淘汰策略自动清除) */
     isFavorite?: boolean;
+    /** 最近一次被点击或查看的时间戳 */
     lastAccessedAt?: number;
 }
+
+/**
+ * 生成指定最大尺寸的轻量缩略图 Blob
+ *
+ * @param blob 原图 Blob 数据
+ * @param maxWidth 缩略图最大宽度 (默认 256)
+ * @param maxHeight 缩略图最大高度 (默认 256)
+ * @returns 缩略图 Blob
+ */
+export async function createThumbnail(
+    blob: Blob,
+    maxWidth = 256,
+    maxHeight = 256
+): Promise<Blob> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return blob;
+    }
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        let isSettled = false;
+
+        const cleanupAndResolve = (resultBlob: Blob) => {
+            if (!isSettled) {
+                isSettled = true;
+                clearTimeout(timer);
+                URL.revokeObjectURL(url);
+                resolve(resultBlob);
+            }
+        };
+
+        const timer = setTimeout(() => {
+            cleanupAndResolve(blob);
+        }, 5000);
+
+        img.onload = () => {
+            try {
+                let width = img.naturalWidth || img.width || 256;
+                let height = img.naturalHeight || img.height || 256;
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, width);
+                canvas.height = Math.max(1, height);
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob(
+                        (thumbBlob) => {
+                            cleanupAndResolve(thumbBlob || blob);
+                        },
+                        'image/webp',
+                        0.85
+                    );
+                    return;
+                }
+            } catch {
+                // 绘制异常降级返回原图
+            }
+            cleanupAndResolve(blob);
+        };
+
+        img.onerror = () => {
+            cleanupAndResolve(blob);
+        };
+
+        img.src = url;
+    });
+}
+
 
 /**
  * 图像本地持久化存储适配器接口
@@ -25,7 +121,7 @@ export interface IStorageAdapter extends IDisposable {
     /** 初始化数据库连接与 ObjectStore 迁移 */
     init(): Promise<void>;
     /** 保存图像记录并返回生成的或指定的 UUID */
-    saveImage(record: Omit<StoredImageRecord, 'hash' | 'timestamp'> & { hash?: string }): Promise<string>;
+    saveImage(record: Omit<StoredImageRecord, 'hash' | 'timestamp'> & { hash?: string }, maxStoredImages?: number): Promise<string>;
     /** 根据 UUID 获取单张图像数据快照 */
     getImage(id: string): Promise<StoredImageRecord | null>;
     /** 根据内容哈希检索已存在的去重图像 */
@@ -36,8 +132,10 @@ export interface IStorageAdapter extends IDisposable {
     deleteImage(id: string): Promise<void>;
     /** 切换图像的收藏状态 (Star) */
     toggleFavorite(id: string): Promise<boolean>;
+    /** 清空所有存储的图像记录 */
+    clear(): Promise<void>;
     /** 计算图像二进制数据或 Base64 的 SHA-256 哈希值 */
-    calculateHash(data: string | Blob): Promise<string>;
+    calculateHash(data: string | Blob | ArrayBuffer): Promise<string>;
 }
 
 export class IndexedDBStorageAdapter implements IStorageAdapter {
@@ -87,34 +185,54 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         });
     }
 
-    public async calculateHash(data: string | Blob): Promise<string> {
+    public async calculateHash(data: string | Blob | ArrayBuffer): Promise<string> {
+        let binaryBuffer: Uint8Array;
+
         try {
-            if (typeof crypto !== 'undefined' && crypto.subtle) {
-                let buffer: ArrayBuffer;
-                if (typeof data === 'string') {
-                    buffer = new TextEncoder().encode(data).buffer;
+            if (data instanceof ArrayBuffer) {
+                binaryBuffer = new Uint8Array(data);
+            } else if (data instanceof Blob) {
+                const ab = await data.arrayBuffer();
+                binaryBuffer = new Uint8Array(ab);
+            } else if (typeof data === 'string') {
+                if (data.startsWith('data:')) {
+                    const commaIdx = data.indexOf(',');
+                    const b64 = commaIdx >= 0 ? data.slice(commaIdx + 1) : data;
+                    const binStr = typeof atob !== 'undefined' ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+                    binaryBuffer = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) {
+                        binaryBuffer[i] = binStr.charCodeAt(i);
+                    }
                 } else {
-                    buffer = await data.arrayBuffer();
+                    binaryBuffer = new TextEncoder().encode(data);
                 }
-                const digest = await crypto.subtle.digest('SHA-256', buffer);
+            } else {
+                binaryBuffer = new Uint8Array(0);
+            }
+
+            if (typeof crypto !== 'undefined' && crypto.subtle) {
+                const digest = await crypto.subtle.digest('SHA-256', binaryBuffer.buffer as ArrayBuffer);
                 return Array.from(new Uint8Array(digest))
                     .map((b) => b.toString(16).padStart(2, '0'))
                     .join('');
             }
         } catch {
-            // fallback
+            binaryBuffer = new Uint8Array(0);
         }
-        let hash = 0;
-        const str = typeof data === 'string' ? data : 'blob_hash';
-        for (let i = 0; i < str.length; i++) {
-            hash = (hash << 5) - hash + str.charCodeAt(i);
-            hash |= 0;
+
+        // 确定性纯二进制 FNV-1a 32位哈希回退 (防止非安全环境或无 WebCrypto 时退化为常数哈希)
+        let fnv = 0x811c9dc5;
+        for (let i = 0; i < binaryBuffer.length; i++) {
+            fnv ^= binaryBuffer[i];
+            fnv = Math.imul(fnv, 0x01000193);
         }
-        return `hash_${Math.abs(hash).toString(16)}`;
+        return `fnv_${(fnv >>> 0).toString(16).padStart(8, '0')}_len_${binaryBuffer.length}`;
     }
 
+
     public async saveImage(
-        record: Omit<StoredImageRecord, 'hash' | 'timestamp'> & { hash?: string }
+        record: Omit<StoredImageRecord, 'hash' | 'timestamp'> & { hash?: string },
+        maxStoredImages?: number
     ): Promise<string> {
         await this.init();
 
@@ -129,11 +247,22 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
             return existing.id;
         }
 
-        // 2. LRU 容量熔断检查
-        await this.ensureStorageQuota();
+        // 2. 检查存储配额并在需要时执行 LRU 自动容量清理
+        await this.ensureStorageQuota(maxStoredImages);
+
+        // 3. 若未附带缩略图且数据为 Blob，自动异步生成 256x256 缩略图
+        let thumbnailData = record.thumbnailData;
+        if (!thumbnailData && record.data instanceof Blob) {
+            try {
+                thumbnailData = await createThumbnail(record.data, 256, 256);
+            } catch {
+                // fallback
+            }
+        }
 
         const fullRecord: StoredImageRecord = {
             ...record,
+            thumbnailData,
             hash,
             timestamp: Date.now(),
             lastAccessedAt: Date.now(),
@@ -236,6 +365,23 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         return item.isFavorite;
     }
 
+    public async clear(): Promise<void> {
+        await this.init();
+        this._memoryStore.clear();
+        if (!this._db) return;
+
+        return new Promise<void>((resolve) => {
+            const tx = this._db!.transaction(IndexedDBStorageAdapter.STORE_IMAGES, 'readwrite');
+            const store = tx.objectStore(IndexedDBStorageAdapter.STORE_IMAGES);
+            const req = store.clear();
+            req.onsuccess = () => {
+                this._logger.info('已成功清空 IndexedDB 中的全部图像缓存');
+                resolve();
+            };
+            req.onerror = () => resolve();
+        });
+    }
+
     private async updateRecord(record: StoredImageRecord): Promise<void> {
         if (!this._db) {
             this._memoryStore.set(record.id, record);
@@ -251,8 +397,21 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
         });
     }
 
-    private async ensureStorageQuota(): Promise<void> {
+    private async ensureStorageQuota(maxStoredImages?: number): Promise<void> {
         let shouldEvict = false;
+        let evictCount = 0;
+
+        const all = await this.getAllImages();
+        const evictable = all.filter((img) => !img.isFavorite);
+        evictable.sort((a, b) => (a.lastAccessedAt || a.timestamp) - (b.lastAccessedAt || b.timestamp));
+
+        // 1. 检查用户配置的最大图片数量上限 (maxStoredImages)
+        if (typeof maxStoredImages === 'number' && maxStoredImages > 0 && all.length >= maxStoredImages) {
+            shouldEvict = true;
+            evictCount = Math.max(1, all.length - maxStoredImages + 1);
+        }
+
+        // 2. 检查浏览器 Storage Quota 使用比例 (ratio > 0.9)
         try {
             if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
                 const estimate = await navigator.storage.estimate();
@@ -260,25 +419,22 @@ export class IndexedDBStorageAdapter implements IStorageAdapter {
                     const ratio = estimate.usage / estimate.quota;
                     if (ratio > 0.9) {
                         shouldEvict = true;
-                        this._logger.warn(`Storage Quota 使用率达 ${(ratio * 100).toFixed(1)}%，触发 LRU 自动淘汰`);
+                        evictCount = Math.max(evictCount, 20);
+                        this._logger.warn(`存储配额使用率达 ${(ratio * 100).toFixed(1)}%，触发 LRU 自动清理`);
                     }
                 }
             }
         } catch {
-            // ignore
+            // 忽略配额查询异常
         }
 
-        if (!shouldEvict) return;
+        if (!shouldEvict || evictCount <= 0 || evictable.length === 0) return;
 
-        const all = await this.getAllImages();
-        const evictable = all.filter((img) => !img.isFavorite);
-        evictable.sort((a, b) => (a.lastAccessedAt || a.timestamp) - (b.lastAccessedAt || b.timestamp));
-
-        const evictCount = Math.min(20, evictable.length);
-        for (let i = 0; i < evictCount; i++) {
+        const count = Math.min(evictCount, evictable.length);
+        for (let i = 0; i < count; i++) {
             await this.deleteImage(evictable[i].id);
         }
-        this._logger.info(`LRU 熔断已淘汰 ${evictCount} 张非收藏历史图片`);
+        this._logger.info(`存储配额保护已自动清理 ${count} 张非收藏历史图片`);
     }
 
     public dispose(): void {

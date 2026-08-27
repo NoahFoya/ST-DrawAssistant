@@ -1,87 +1,69 @@
 /**
  * @module core/presets/preset-definitions
- * @description 预设方案分类定义与字段映射规则 (PresetCategoryDefinitions)
+ * @description 预设方案分类定义与状态映射配置
  */
-import { DrawAssistantSettings, ModelProfileData, PromptProfileData, WorkflowProfileData } from '../state/store-types';
-export interface PresetCategoryDef<TData = Record<string, unknown>> {
-    listKey: keyof DrawAssistantSettings;
-    activeIdKey: keyof DrawAssistantSettings;
-    applyToSettings: (data: TData) => Partial<DrawAssistantSettings>;
-    validateImport: (raw: unknown) => {
+import type { DrawAssistantSettings, ModelProfileData, PromptProfileData, WorkflowProfileData, ThemeData } from '../state/store-types';
+/**
+ * 预设分类与全局配置字段的静态映射表
+ */
+export interface PresetCategoryMap {
+    model: {
+        listKey: 'comfyModelProfiles';
+        activeIdKey: 'comfyModelProfileId';
+        dataType: ModelProfileData;
+    };
+    prompt: {
+        listKey: 'comfyPromptProfiles';
+        activeIdKey: 'comfyPromptProfileId';
+        dataType: PromptProfileData;
+    };
+    txt2imgWorkflow: {
+        listKey: 'comfyTxt2ImgWorkflows';
+        activeIdKey: 'comfyTxt2ImgWorkflowId';
+        dataType: WorkflowProfileData;
+    };
+    inpaintWorkflow: {
+        listKey: 'comfyInpaintWorkflows';
+        activeIdKey: 'comfyInpaintWorkflowId';
+        dataType: WorkflowProfileData;
+    };
+    sdProfile: {
+        listKey: 'sdProfiles';
+        activeIdKey: 'sdProfileId';
+        dataType: Record<string, unknown>;
+    };
+    theme: {
+        listKey: 'customThemes';
+        activeIdKey: 'themePreset';
+        dataType: ThemeData;
+    };
+}
+/** 核心支持的预设方案分类类型 */
+export type RegistryCategory = keyof PresetCategoryMap;
+/**
+ * 预设分类定义接口
+ */
+export interface PresetCategoryDef<K extends RegistryCategory = RegistryCategory> {
+    /** 全局设置中存储该分类预设列表的属性名 */
+    readonly listKey: PresetCategoryMap[K]['listKey'];
+    /** 全局设置中记录当前选中的预设 ID 的属性名 */
+    readonly activeIdKey: PresetCategoryMap[K]['activeIdKey'];
+    /** 将预设数据转换为全局设置字段更新对象的适配函数 */
+    readonly applyToSettings: (data: PresetCategoryMap[K]['dataType']) => Partial<DrawAssistantSettings>;
+    /** 导入预设文件时的数据校验函数 */
+    readonly validateImport: (raw: unknown) => {
         valid: boolean;
         reason?: string;
     };
-    normalizeImport?: (raw: unknown, rawContent: string) => TData;
-    label: string;
+    /** 导入预设数据时的格式规范化函数 (可选) */
+    readonly normalizeImport?: (raw: unknown, rawContent: string) => PresetCategoryMap[K]['dataType'];
+    /** 分类中文显示名称 */
+    readonly label: string;
 }
+/**
+ * 各类预设方案的映射规则与校验规则定义字典
+ */
 export declare const PRESET_REGISTRY: {
-    readonly model: {
-        readonly listKey: keyof DrawAssistantSettings;
-        readonly activeIdKey: keyof DrawAssistantSettings;
-        readonly applyToSettings: (d: ModelProfileData) => Partial<DrawAssistantSettings>;
-        readonly validateImport: (raw: unknown) => {
-            valid: boolean;
-            reason: string;
-        } | {
-            valid: boolean;
-            reason?: undefined;
-        };
-        readonly label: "模型与生图参数";
-    };
-    readonly prompt: {
-        readonly listKey: keyof DrawAssistantSettings;
-        readonly activeIdKey: keyof DrawAssistantSettings;
-        readonly applyToSettings: (d: PromptProfileData) => Partial<DrawAssistantSettings>;
-        readonly validateImport: (raw: unknown) => {
-            valid: boolean;
-            reason: string;
-        } | {
-            valid: boolean;
-            reason?: undefined;
-        };
-        readonly label: "提示词方案";
-    };
-    readonly txt2imgWorkflow: {
-        readonly listKey: keyof DrawAssistantSettings;
-        readonly activeIdKey: keyof DrawAssistantSettings;
-        readonly applyToSettings: (d: WorkflowProfileData) => Partial<DrawAssistantSettings>;
-        readonly validateImport: (raw: unknown) => {
-            valid: boolean;
-            reason: string;
-        } | {
-            valid: boolean;
-            reason?: undefined;
-        };
-        readonly normalizeImport: (raw: unknown, rawContent: string) => WorkflowProfileData;
-        readonly label: "文生图工作流";
-    };
-    readonly inpaintWorkflow: {
-        readonly listKey: keyof DrawAssistantSettings;
-        readonly activeIdKey: keyof DrawAssistantSettings;
-        readonly applyToSettings: (d: WorkflowProfileData) => Partial<DrawAssistantSettings>;
-        readonly validateImport: (raw: unknown) => {
-            valid: boolean;
-            reason: string;
-        } | {
-            valid: boolean;
-            reason?: undefined;
-        };
-        readonly normalizeImport: (raw: unknown, rawContent: string) => WorkflowProfileData;
-        readonly label: "重绘工作流";
-    };
-    readonly theme: {
-        readonly listKey: keyof DrawAssistantSettings;
-        readonly activeIdKey: keyof DrawAssistantSettings;
-        readonly applyToSettings: () => Partial<DrawAssistantSettings>;
-        readonly validateImport: (raw: unknown) => {
-            valid: boolean;
-            reason: string;
-        } | {
-            valid: boolean;
-            reason?: undefined;
-        };
-        readonly label: "外观主题";
-    };
+    [K in RegistryCategory]: PresetCategoryDef<K>;
 };
-export type RegistryCategory = keyof typeof PRESET_REGISTRY;
 //# sourceMappingURL=preset-definitions.d.ts.map

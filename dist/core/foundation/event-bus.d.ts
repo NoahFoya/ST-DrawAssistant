@@ -1,15 +1,13 @@
 /**
  * @module core/foundation/event-bus
- * @description 强类型跨模块事件总线 (TypedEventBus 与 CoreEventMap)
+ * @description 强类型事件总线与核心事件定义
  */
 import { IDisposable } from './disposable';
-/**
- * 跨模块核心事件定义列表
- */
+/** 核心事件类型映射定义 */
 export interface CoreEventMap {
-    /** 宿主就绪完成 */
+    /** 宿主环境连接就绪 */
     'host:ready': void;
-    /** 设置项发生变动 (携带变化路径与新旧值) */
+    /** 配置项变动 */
     'settings:changed': {
         path: string;
         value: unknown;
@@ -26,13 +24,13 @@ export interface CoreEventMap {
         progress?: number;
         error?: string;
     };
-    /** 任务完成并获得图片 */
+    /** 任务执行成功 */
     'task:completed': {
         taskId: string;
         imageBlobs: Blob[];
         metadata?: Record<string, unknown>;
     };
-    /** 任务失败 */
+    /** 任务执行失败 */
     'task:failed': {
         taskId: string;
         error: string;
@@ -47,7 +45,7 @@ export interface CoreEventMap {
         chatId: string;
         isUser: boolean;
     };
-    /** 模态框打开/关闭事件 */
+    /** 模态框开关 */
     'modal:opened': {
         modalId: string;
     };
@@ -63,52 +61,40 @@ export interface CoreEventMap {
     };
 }
 export type EventHandler<T = any> = (payload: T) => void | Promise<void>;
-/**
- * 强类型事件总线通用接口
- */
+/** 强类型事件总线接口 */
 export interface ITypedEventBus<Events = CoreEventMap> {
-    /**
-     * 订阅指定事件
-     * @param eventName 事件名称
-     * @param handler 事件处理回调函数
-     * @returns 用于取消订阅的 IDisposable 句柄
-     */
+    /** 订阅事件并返回销毁句柄 */
     on<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): IDisposable;
-    /**
-     * 单次订阅指定事件（触发一次后自动解除）
-     * @param eventName 事件名称
-     * @param handler 事件处理回调函数
-     * @returns 用于取消订阅的 IDisposable 句柄
-     */
+    /** 单次订阅事件 */
     once<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): IDisposable;
-    /**
-     * 触发指定事件并向所有监听器广播载荷
-     * @param eventName 事件名称
-     * @param payload 事件携带的强类型载荷数据
-     */
+    /** 广播事件数据 */
     emit<K extends keyof Events>(eventName: K, payload: Events[K]): void;
-    /**
-     * 取消指定监听回调函数的订阅
-     * @param eventName 事件名称
-     * @param handler 待解绑的处理回调函数
-     */
+    /** 注销指定事件监听器 */
     off<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): void;
-    /**
-     * 清空所有事件的所有监听器
-     */
+    /** 清空所有监听器 */
     clear(): void;
 }
-/**
- * 强类型事件总线实现类
- */
+/** 强类型事件总线实现 (支持异步异常隔离) */
 export declare class TypedEventBus<Events = CoreEventMap> implements ITypedEventBus<Events>, IDisposable {
     private readonly _listeners;
     private _isDisposed;
+    /**
+     * 订阅指定事件，返回可用于取消订阅的销毁句柄
+     * 总线已销毁时返回空操作句柄而非抛出错误
+     */
     on<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): IDisposable;
+    /** 单次订阅指定事件，回调触发一次后自动注销 */
     once<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): IDisposable;
+    /**
+     * 向所有订阅者广播事件数据
+     * 单个监听器的同步异常与异步异常均被隔离，不会中断其他监听器执行
+     */
     emit<K extends keyof Events>(eventName: K, payload: Events[K]): void;
+    /** 注销指定事件的单个监听器，若该监听器下已无其他订阅则同时清除事件条目 */
     off<K extends keyof Events>(eventName: K, handler: EventHandler<Events[K]>): void;
+    /** 清除全部事件监听器，常用于重置场景 */
     clear(): void;
+    /** 销毁事件总线，清除所有监听器并阻止后续事件广播 */
     dispose(): void;
 }
 //# sourceMappingURL=event-bus.d.ts.map

@@ -1,6 +1,6 @@
 /**
  * @module core/registry/preset-registry
- * @description 预设与规则方案索引注册中心 (PresetMetadata, PresetItem, IPresetRegistry)
+ * @description 预设方案注册中心 (支持按驱动类型与分类检索)
  */
 
 import { IDisposable, toDisposable } from '../foundation/disposable';
@@ -29,18 +29,16 @@ export interface PresetItem<T = unknown> {
     isBuiltIn?: boolean;
 }
 
-/**
- * 预设与规则方案索引注册中心接口
- */
 export interface IPresetRegistry extends IDisposable {
-    /** 注册一个预设方案项 */
+    /** 注册预设项并返回用于注销的清理句柄 */
     register<T>(preset: PresetItem<T>): IDisposable;
-    /** 根据引擎标识、分类和 ID 精确获取预设方案 */
+    /** 精确查询单个预设项 */
     get<T>(driver: string, category: string, id: string): PresetItem<T> | undefined;
-    /** 根据引擎标识与分类筛选枚举预设方案列表 */
+    /** 按照驱动类型或分类筛选预设项列表 */
     list(driver?: string, category?: string): PresetItem[];
 }
 
+/** 预设注册中心实现 */
 export class PresetRegistry implements IPresetRegistry {
     private readonly _presets = new Map<string, PresetItem<any>>();
     private readonly _logger = new Logger('PresetRegistry');
@@ -68,7 +66,7 @@ export class PresetRegistry implements IPresetRegistry {
     public list(driver?: string, category?: string): PresetItem[] {
         const results: PresetItem[] = [];
         for (const item of this._presets.values()) {
-            if (driver && item.metadata.driver !== driver && item.metadata.driver !== 'common') {
+            if (driver && item.metadata.driver !== driver) {
                 continue;
             }
             if (category && item.metadata.category !== category) {

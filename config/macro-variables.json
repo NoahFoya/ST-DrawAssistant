@@ -1,0 +1,137 @@
+﻿[
+  {
+    "variable": "%prompt%",
+    "label": "正向提示词",
+    "category": "prompt",
+    "type": "string",
+    "aliases": ["%inpaint_positive%"],
+    "matchKeys": ["positive", "text"],
+    "tip": "自动包含模型起手式、全局前缀、AI提示词及后缀与LoRA"
+  },
+  {
+    "variable": "%negative_prompt%",
+    "label": "负向提示词",
+    "category": "prompt",
+    "type": "string",
+    "aliases": ["%inpaint_negative%"],
+    "matchKeys": ["negative", "text"],
+    "tip": "自动包含模型负向起手式、全局负向词及当次负向词"
+  },
+  {
+    "variable": "%seed%",
+    "label": "随机种子",
+    "category": "sampler",
+    "type": "number",
+    "aliases": [],
+    "matchKeys": ["seed", "noise_seed"],
+    "tip": "生图随机种子数值 (通常位于 KSampler 或 Seed 节点)"
+  },
+  {
+    "variable": "%steps%",
+    "label": "采样步数",
+    "category": "sampler",
+    "type": "number",
+    "aliases": [],
+    "matchKeys": ["steps"],
+    "tip": "采样迭代步数 (通常位于 KSampler / KSamplerAdvanced 节点)"
+  },
+  {
+    "variable": "%cfg%",
+    "label": "CFG Scale",
+    "category": "sampler",
+    "type": "number",
+    "aliases": ["%cfg_scale%"],
+    "matchKeys": ["cfg", "cfg_scale"],
+    "tip": "提示词引导系数 (通常位于 KSampler 节点)"
+  },
+  {
+    "variable": "%sampler_name%",
+    "label": "采样器算法",
+    "category": "sampler",
+    "type": "string",
+    "aliases": [],
+    "matchKeys": ["sampler_name", "sampler"],
+    "tip": "采样算法名称 (如 euler_ancestral)"
+  },
+  {
+    "variable": "%scheduler%",
+    "label": "调度器类型",
+    "category": "sampler",
+    "type": "string",
+    "aliases": [],
+    "matchKeys": ["scheduler"],
+    "tip": "调度算法名称 (如 normal, karras)"
+  },
+  {
+    "variable": "%width%",
+    "label": "图像宽度",
+    "category": "resolution",
+    "type": "number",
+    "aliases": [],
+    "matchKeys": ["width"],
+    "tip": "生成图像像素宽度 (通常位于 EmptyLatentImage 节点)"
+  },
+  {
+    "variable": "%height%",
+    "label": "图像高度",
+    "category": "resolution",
+    "type": "number",
+    "aliases": [],
+    "matchKeys": ["height"],
+    "tip": "生成图像像素高度 (通常位于 EmptyLatentImage 节点)"
+  },
+  {
+    "variable": "%ckpt_name%",
+    "label": "主模型 Checkpoint",
+    "category": "model",
+    "type": "string",
+    "aliases": ["%unet_name%", "%MODEL_NAME%"],
+    "matchKeys": ["ckpt_name", "unet_name"],
+    "tip": "选中的 Checkpoint / UNet 模型文件名"
+  },
+  {
+    "variable": "%clip_name%",
+    "label": "CLIP 编码器",
+    "category": "model",
+    "type": "string",
+    "aliases": ["%clip%"],
+    "matchKeys": ["clip_name"],
+    "tip": "选中的 CLIP 文本编码器模型文件名"
+  },
+  {
+    "variable": "%vae_name%",
+    "label": "VAE 解码器",
+    "category": "model",
+    "type": "string",
+    "aliases": ["%vae%"],
+    "matchKeys": ["vae_name"],
+    "tip": "选中的 VAE 图像解码器模型文件名"
+  },
+  {
+    "variable": "%inpaint_denoise%",
+    "label": "重绘强度",
+    "category": "inpaint",
+    "type": "number",
+    "aliases": ["%denoise%"],
+    "matchKeys": ["inpaint_denoise", "denoise"],
+    "tip": "局部重绘降噪幅度 (通常位于重绘采样器节点)"
+  },
+  {
+    "variable": "%inpaint_image%",
+    "label": "重绘底图文件名",
+    "category": "inpaint",
+    "type": "string",
+    "aliases": ["%init_image%"],
+    "matchKeys": ["inpaint_image", "image"],
+    "tip": "重绘底图文件名 (通常位于 LoadImage 节点)"
+  },
+  {
+    "variable": "%inpaint_mask%",
+    "label": "重绘遮罩文件名",
+    "category": "inpaint",
+    "type": "string",
+    "aliases": ["%mask_image%"],
+    "matchKeys": ["inpaint_mask", "mask"],
+    "tip": "重绘遮罩文件名 (通常位于 LoadImageMask 节点)"
+  }
+]

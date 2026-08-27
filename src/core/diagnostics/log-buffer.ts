@@ -1,6 +1,6 @@
 /**
  * @module core/diagnostics/log-buffer
- * @description 内存循环日志缓冲实现 (支持定长环形队列与系统诊断包导出)
+ * @description 内存定长环形日志缓冲器
  */
 
 export interface LogEntry {
@@ -11,9 +11,7 @@ export interface LogEntry {
     readonly data?: unknown;
 }
 
-/**
- * 内存环形日志缓冲器
- */
+/** 内存环形日志缓冲器 (用于排障分析与诊断包导出) */
 export class LogBuffer {
     private readonly _buffer: LogEntry[] = [];
     private readonly _maxSize: number;
@@ -22,9 +20,6 @@ export class LogBuffer {
         this._maxSize = maxSize;
     }
 
-    /**
-     * 追加一条日志记录
-     */
     public push(entry: LogEntry): void {
         if (this._buffer.length >= this._maxSize) {
             this._buffer.shift();
@@ -32,16 +27,10 @@ export class LogBuffer {
         this._buffer.push(entry);
     }
 
-    /**
-     * 获取当前所有缓冲日志
-     */
     public getAll(): readonly LogEntry[] {
         return this._buffer;
     }
 
-    /**
-     * 按命名空间或等级过滤日志
-     */
     public query(options?: { level?: string; namespace?: string; limit?: number }): LogEntry[] {
         let list = this._buffer;
         if (options?.level) {
@@ -56,16 +45,11 @@ export class LogBuffer {
         return list;
     }
 
-    /**
-     * 清空缓冲区
-     */
     public clear(): void {
         this._buffer.length = 0;
     }
 
-    /**
-     * 导出为结构化诊断 JSON 文本
-     */
+    /** 导出为结构化诊断快照 JSON 文本 */
     public exportDiagnosticDump(): string {
         const payload = {
             exportTime: new Date().toISOString(),
