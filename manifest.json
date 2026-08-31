@@ -1,0 +1,12 @@
+{
+  "display_name": "Starlight DrawAssistant",
+  "name": "ST-DrawAssistant",
+  "js": "dist/index.js",
+  "css": "styles/main.css",
+  "author": "NoahFoya",
+  "version": "0.1.0",
+  "description": "SillyTavern context-aware AI image generation extension with multi-backend support",
+  "loading_order": 10,
+  "auto_update": false,
+  "homePage": "https://github.com/NoahFoya/ST-DrawAssistant"
+}

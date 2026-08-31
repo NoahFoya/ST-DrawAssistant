@@ -29,8 +29,7 @@ coverage
 *.lcov
 .nyc_output
 
-# Build Outputs & Bundles
-dist/
+# Build Outputs & Bundles (保留 dist/ 与 server/ 用于酒馆无编译环境 git 直接安装)
 build/
 out/
 .cache/

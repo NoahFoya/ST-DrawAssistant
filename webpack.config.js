@@ -1,7 +1,8 @@
 const path = require('path');
 
 /** @type {import('webpack').Configuration} */
-module.exports = {
+const clientConfig = {
+    name: 'client',
     entry: './src/index.ts',
     target: ['web', 'es2020'],
     devtool: 'source-map',
@@ -39,7 +40,50 @@ module.exports = {
         ],
     },
     performance: {
-        maxAssetSize: 1048576, // 1MB 阈值，适配内置预设资产
+        maxAssetSize: 1048576,
         maxEntrypointSize: 1048576,
     },
 };
+
+/** @type {import('webpack').Configuration} */
+const serverConfig = {
+    name: 'server',
+    entry: './src/server/index.ts',
+    target: 'node',
+    devtool: 'source-map',
+    output: {
+        path: path.resolve(__dirname, 'server'),
+        filename: 'index.js',
+        clean: true,
+        library: {
+            type: 'commonjs2',
+        },
+    },
+    resolve: {
+        extensions: ['.ts', '.js', '.json'],
+    },
+    externals: {
+        express: 'commonjs express',
+    },
+    module: {
+        rules: [
+            {
+                test: /\.tsx?$/,
+                use: [
+                    {
+                        loader: 'ts-loader',
+                        options: {
+                            compilerOptions: {
+                                declaration: false,
+                                declarationMap: false,
+                            },
+                        },
+                    },
+                ],
+                exclude: /node_modules/,
+            },
+        ],
+    },
+};
+
+module.exports = [clientConfig, serverConfig];

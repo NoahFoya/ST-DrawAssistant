@@ -2,7 +2,7 @@
   "name": "st-drawassistant",
   "version": "0.1.0",
   "description": "SillyTavern context-aware AI image generation extension",
-  "main": "dist/index.js",
+  "main": "server/index.js",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
@@ -19,6 +19,7 @@
   "author": "NoahFoya",
   "license": "GPL-3.0",
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "ts-loader": "^9.5.1",
     "typescript": "^5.5.0",
     "webpack": "^5.95.0",
