@@ -1,0 +1,84 @@
+/**
+ * @module styles/core/reset
+ * @layer core (Layer 1)
+ * @description 插件局部样式重置与宿主环境隔离
+ *
+ * 核心边界与约束：
+ * 1. 宿主隔离：严禁声明全局无前缀选择器 (*, body, html, button)，仅在插件容器作用域内重置；
+ * 2. 盒模型规范：作用域内统一声明 border-box，避免宿主盒模型差异破坏尺寸计算；
+ * 3. 继承归一化：重置原生表单控件默认边距并显式继承字体系列。
+ */
+
+/* 1. 作用域容器文本渲染初始化 */
+.st-da-root,
+.da-modal-backdrop,
+.da-main-modal-inner,
+.da-overlay-host {
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-base, 13.5px);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--da-text-primary);
+}
+
+/* 2. 作用域盒模型统一定义 (border-box) */
+.st-da-root *,
+.da-modal-backdrop *,
+.da-main-modal-inner *,
+.da-overlay-host * {
+    box-sizing: border-box;
+}
+
+/* 3. 表单原生控件边距归零与字体继承 */
+.da-main-modal-inner button,
+.da-main-modal-inner input,
+.da-main-modal-inner select,
+.da-main-modal-inner textarea,
+.st-da-root button,
+.st-da-root input,
+.st-da-root select,
+.st-da-root textarea,
+.da-overlay-host button,
+.da-overlay-host input,
+.da-overlay-host select,
+.da-overlay-host textarea {
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+/* 4. 标题与段落边距归零 */
+.da-main-modal-inner h1,
+.da-main-modal-inner h2,
+.da-main-modal-inner h3,
+.da-main-modal-inner h4,
+.da-main-modal-inner p,
+.st-da-root h1,
+.st-da-root h2,
+.st-da-root h3,
+.st-da-root h4,
+.st-da-root p,
+.da-overlay-host h1,
+.da-overlay-host h2,
+.da-overlay-host h3,
+.da-overlay-host h4,
+.da-overlay-host p {
+    margin: 0;
+    padding: 0;
+}
+
+/* 5. 列表元素样式与间距重置 */
+.da-main-modal-inner ul,
+.da-main-modal-inner ol,
+.st-da-root ul,
+.st-da-root ol,
+.da-overlay-host ul,
+.da-overlay-host ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+

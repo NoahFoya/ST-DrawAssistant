@@ -1,0 +1,409 @@
+/**
+ * @module styles/skin/responsive
+ * @layer skin (Layer 5)
+ * @description 移动端、平板与触控设备自适应响应式规则
+ *
+ * 职责与约束：
+ * 1. 作为整个样式系统的响应式层，集中维护基于视口宽度与输入指针特性的覆盖规则；
+ * 2. 基础组件样式仅声明桌面默认形态，避免碎片化 @media 导致优先级混乱；
+ * 3. 媒体查询内的属性覆盖允许使用 !important，用于对抗 Layer 2-4 的静态声明；
+ * 4. CSS 自定义属性（--da-*）后的 !important 符合规范：影响该变量声明的级联优先级，
+ *    变量值本身不含 !important，var() 引用处得到纯净值。
+ */
+
+/* 1. 平板与中等屏幕适配 (max-width: 900px)
+   微调主弹窗与侧边栏宽度，为右侧核心配置/工作区留出足够阅读与操作空间；
+   规格参数网格由 4 列自适应降级为 2 列。 */
+@media (max-width: 900px) {
+    /* 弹窗适当收缩，预留四周微弱边距以感知遮罩层 */
+    .da-settings-panel,
+    .da-main-modal-inner {
+        width: 96vw;
+        height: 92vh;
+    }
+
+    /* 侧边栏适度收缩，将空间让渡给右侧内容区 */
+    .da-sidebar-tabs {
+        width: 160px;
+        flex: 0 0 160px;
+    }
+
+    /* 工作流蓝图编辑器外壳弹性收缩 */
+    .da-workflow-modal-inner {
+        width: 96vw;
+        height: 92vh;
+    }
+
+    /* 右侧属性检查器面板适度收窄，保障左侧节点画布的可视面积 */
+    .da-workflow-inspector-panel {
+        width: 320px;
+    }
+
+    /* 系统规格指标卡片网格降级为双列并排 */
+    .da-spec-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* 2. 复合编辑器与大屏弹窗适配 (max-width: 768px)
+   工作流蓝图编辑器与图片详情模态框在小屏下由横向双列转为纵向单列流式堆叠；
+   重新按垂直比例分配操作区，防止水平方向挤压截断。 */
+@media (max-width: 768px) {
+    /* 工作流编辑器小屏满屏展示，移除圆角与边框以最大化利用可视面积 */
+    .da-workflow-modal-inner {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    /* 工作区容器由横向双列转为纵向单列流式堆叠，解除横向固定尺寸限制 */
+    .da-workflow-workspace {
+        flex-direction: column !important;
+    }
+
+    /* 画布区域占据上半部 45% 弹性高度，保障最小 200px 交互操作空间 */
+    .da-workflow-canvas-wrapper {
+        flex: 1 1 45% !important;
+        min-height: 200px !important;
+        padding: 10px !important;
+    }
+
+    /* 属性检查器面板位于下半部占据 55% 视高；
+       移除原有左边框，改用顶部边框分隔上方画布，保障长属性列表可独立滚动 */
+    .da-workflow-inspector-panel {
+        width: 100% !important;
+        flex: 1 1 55% !important;
+        border-left: none !important;
+        border-top: 1px solid var(--da-border-color) !important;
+        padding: 12px !important;
+    }
+
+    /* 底部操作条应用 safe-area-inset-bottom 边距，避免触控按钮被移动端手势条遮挡 */
+    .da-workflow-footer {
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    }
+
+    /* 宏变量快捷插入下拉面板限制最大宽度并右侧留出 12px 安全间距，防止溢出视口 */
+    .da-var-dropdown {
+        width: calc(100vw - 24px) !important;
+        max-width: 360px !important;
+        right: 12px !important;
+    }
+
+    /* 图像详情与元数据查看器弹窗自适应尺寸 */
+    .da-inspect-modal {
+        width: 96vw !important;
+        max-height: 92vh !important;
+        border-radius: var(--da-radius-modal, 12px) !important;
+    }
+
+    /* 详情主体网格由左右双列（1fr 340px）切换为纵向单列流式堆叠 */
+    .da-inspect-body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+        padding: 12px !important;
+    }
+
+    /* 视觉提升：在单列排布下利用 order: -1 将生成图像预览提升至最顶部，
+       使用户打开详情即刻直观检阅生成成果，再向下滑动查阅详细参数 */
+    .da-inspect-col-visual {
+        order: -1;
+    }
+
+    /* 生成参数表格由双列网格降为单列流动，防止参数名与取值横向截断 */
+    .da-inspect-params-matrix {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* 预览视窗在移动端限制最大高度为 280px，留出首屏下半部空间提示下方存在元数据 */
+    .da-inspect-preview-box {
+        max-height: 280px !important;
+    }
+
+    /* 数据统计双列图表（分布占比与生成趋势）降级为单列纵向排列 */
+    .da-stat-analytics-row {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+}
+
+/* 3. 移动端与紧凑手机屏幕适配 (max-width: 680px)
+   主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；全局字阶微调收缩。 */
+@media (max-width: 680px) {
+    /* 移动端全局字阶微调，保障触控屏舒适阅读密度 */
+    :root, .st-da-root {
+        --da-font-size-xs: 11px !important;
+        --da-font-size-sm: 12px !important;
+        --da-font-size-base: 13.5px !important;
+        --da-font-size-md: 14.5px !important;
+        --da-font-size-lg: 16px !important;
+    }
+
+    /* 移除背景遮罩内边距，弹窗全屏平铺无边距 */
+    .da-modal-backdrop {
+        padding: 0 !important;
+    }
+
+    /* 弹窗主体撑满整个视口，清除边框与圆角，最大化小屏显示利用率 */
+    .da-settings-panel,
+    .da-main-modal-inner {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    /* 顶栏水平内边距压缩，为标题和右侧操作按钮释放横向空间 */
+    .da-header-bar {
+        padding: 0 var(--da-space-md, 10px) !important;
+    }
+
+    /* 顶栏标题限制最大宽度并启用省略截断，防止挤压右侧快捷工具与关闭按钮 */
+    .da-header-title {
+        font-size: var(--da-font-size-base, 0.88rem) !important;
+        max-width: 140px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* 弹窗主体容器由左右分栏转为上下纵向排列（顶部 Tab + 下方内容区） */
+    .da-modal-body {
+        flex-direction: column !important;
+    }
+
+    /* 侧边栏转为顶部横向滚动的 Tab 导航条：
+       1. 清除右边框，改为底部边框区分下方内容；
+       2. 开启横向单行滚动并启用 touch 惯性滑动；
+       3. 隐藏原生滚动条保持界面简洁。 */
+    .da-sidebar-tabs {
+        width: 100% !important;
+        flex: 0 0 auto !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: var(--da-space-xs, 4px) var(--da-space-sm, 8px) !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--da-border-color) !important;
+        gap: var(--da-space-xs, 6px) !important;
+    }
+
+    .da-sidebar-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* 选项卡按钮自适应内容宽度，不强制拉伸，保持横向流式排列 */
+    .da-sidebar-item {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-height: 34px !important;
+        height: 34px !important;
+        padding: 0 12px !important;
+        white-space: nowrap !important;
+        font-size: 0.84rem !important;
+        border-radius: 6px !important;
+    }
+
+    /* 激活指示线：由左侧垂直竖条转为底部水平横条，对齐常规顶部 Tab 视觉规范 */
+    .da-sidebar-item--active::before {
+        left: 6px !important;
+        right: 6px !important;
+        top: auto !important;
+        bottom: 0 !important;
+        width: auto !important;
+        height: 2px !important;
+        border-radius: 2px 2px 0 0 !important;
+    }
+
+    /* 内容滚动区域设置 contain 滚动行为，阻断滚动穿透到外部页面 */
+    .da-modal-content {
+        padding: var(--da-space-sm, 10px) var(--da-space-md, 12px) !important;
+        overscroll-behavior: contain;
+    }
+
+    /* 底部操作栏应用安全区内边距，规避手机底部手势导航条遮挡 */
+    .da-footer-bar {
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+        font-size: 0.78em !important;
+    }
+
+    /* 统计看板指标网格双列等分排列 */
+    .da-stat-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    /* 通用过滤工具栏自动折行，左右插槽各占整行流动 */
+    .da-filter-bar {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .da-filter-bar__left,
+    .da-filter-bar__right {
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    .da-filter-bar .da-input--search {
+        width: 100% !important;
+    }
+
+    /* 图库底部悬浮批量控制台居中折行排布 */
+    .da-batch-floating-bar {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        padding: 8px 12px !important;
+    }
+
+    /* 局部重绘与裁剪模态框在移动端满屏铺开 */
+    .da-inpaint-modal-panel {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        padding: 10px !important;
+    }
+
+    .da-inpaint-canvas-wrapper {
+        min-height: 200px !important;
+    }
+
+    /* 悬浮球头像正圆形裁剪面板限制宽度 */
+    .da-cropper-panel {
+        width: 94vw !important;
+    }
+
+    /* 流式自适应控件强制满宽 */
+    .da-control--fluid {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* 4. 超窄屏幕与小屏手机适配 (max-width: 520px)
+   表单行由水平两端对齐转为垂直列布局，标签置顶，控件撑满整行。 */
+@media (max-width: 520px) {
+    /*
+     * 标准表单行自适应流式重排：
+     * 1. 容器转为纵向列排布，两端间距统一；
+     * 2. 标签插槽与控件插槽均占满 100% 宽度；
+     * 3. 控件插槽清除 margin-left: auto，改为靠左自然流动并撑满整行；
+     * 4. 内部输入框、下拉框、滑块与分段器统一满宽；
+     * 5. 带有 .da-form-row--inline 或 .da-row--keep-inline 的开关行显式维持单行两端对齐。
+     */
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline),
+    .da-row:not(.da-form-row--inline):not(.da-row--keep-inline) {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: var(--da-space-xs, 4px) !important;
+    }
+
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__label-slot,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--left,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-field-label-group {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+    }
+
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control-slot,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 auto !important;
+        margin-left: 0 !important;
+        justify-content: flex-start !important;
+    }
+
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-number-input,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-group {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* 紧凑内联行维持水平单行居中两端对齐 */
+    .da-form-row--inline,
+    .da-row--keep-inline {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    .da-form-row--inline .da-form-row__control-slot,
+    .da-row--keep-inline .da-slot--right {
+        margin-left: auto !important;
+        flex: 0 0 auto !important;
+    }
+
+    /* 超窄屏幕下顶栏标题最大宽度进一步收敛至 110px */
+    .da-header-title {
+        max-width: 110px !important;
+    }
+
+    /* 统计指标与系统规格卡片网格降级为单列排布 */
+    .da-stat-grid,
+    .da-spec-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .da-quick-theme-selector {
+        padding: 2px 6px !important;
+    }
+
+    .da-quick-theme-select {
+        max-width: 80px !important;
+    }
+
+    /* 快捷操作浮动面板在超窄屏下微调宽度与内边距 */
+    .da-action-panel {
+        width: 96% !important;
+        padding: 14px 16px !important;
+    }
+}
+
+/* 5. 触控与粗指针设备交互适配 (@media (pointer: coarse))
+   扩大点击热区，保障移动端最小操作高度，解决手指触控误触与漏触。 */
+@media (pointer: coarse) {
+    /*
+     * 扩充小图标按钮的隐式触控命中区域：
+     * 通过绝对定位伪元素向四周外延 6px，将可触控区域扩展至标准尺寸（>= 36px），
+     * 解决关闭按钮、帮助提示、变量插入等小按钮在触控屏上容易点偏的问题。
+     */
+    .da-help-btn,
+    .da-modal-close-btn,
+    .da-btn-var-inject,
+    .da-icon-btn,
+    .da-icon-btn--ghost,
+    .da-number-btn {
+        position: relative;
+    }
+
+    .da-help-btn::after,
+    .da-modal-close-btn::after,
+    .da-btn-var-inject::after,
+    .da-icon-btn::after,
+    .da-icon-btn--ghost::after,
+    .da-number-btn::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+    }
+
+    /* 触控交互下按钮、下拉选择器与文本输入框最低高度保障（>= 32px） */
+    .da-btn,
+    .da-select,
+    .da-input,
+    .da-number-input {
+        min-height: 32px;
+    }
+}

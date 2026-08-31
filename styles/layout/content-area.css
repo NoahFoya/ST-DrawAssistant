@@ -1,0 +1,120 @@
+/**
+ * @module styles/layout/content-area
+ * @layer layout (Layer 2)
+ * @description 主弹窗右侧内容区域容器、Tab 面板与二级子导航
+ *
+ * 职责与约束：
+ * 1. 作为弹窗右侧核心展示区，填充剩余空间（flex: 1 1 0%）；
+ * 2. 建立局部垂直独立滚动上下文（overflow-y: auto），通过 scrollbar-gutter: stable 防止滚动条显隐引起宽度跳动；
+ * 3. 各 Tab 页面组件作为 .da-tab-pane 挂载至此容器，保持纵向流式自适应排布。
+ */
+
+/* 1. 主内容滚动区域 (.da-modal-content)
+   .st-da-root 前缀确保不被宿主全局 flex 规则覆盖；
+   min-width: 0 与 min-height: 0 允许 flex 子项收缩以建立局部独立滚动上下文；
+   细窄半透明滚动条配合 scrollbar-gutter: stable 维持界面轻量无跳动感。 */
+.st-da-root .da-modal-content {
+    flex: 1 1 0%;
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    padding: 14px 18px 24px 18px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    background: transparent;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--da-accent-rgb), 0.22) transparent;
+}
+
+.da-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.da-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.da-modal-content::-webkit-scrollbar-thumb {
+    background: rgba(var(--da-accent-rgb), 0.22);
+    border-radius: 4px;
+    transition: background 0.15s ease;
+}
+
+.da-modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--da-accent-rgb), 0.45);
+    box-shadow: 0 0 6px rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
+   纵向弹性容器，各功能卡片间距统一为 var(--da-space-lg, 16px)；
+   加载时配合 da-fadein 产生平滑淡入动效。 */
+.st-da-root .da-tab-pane {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--da-space-lg, 16px);
+    box-sizing: border-box;
+    padding: 2px 0 16px 0;
+    animation: da-fadein 0.18s var(--da-ease);
+}
+
+/* 3. 二级子选项卡导航条 (.da-sub-tab-nav)
+   用于复杂配置页面内部的二级子功能横向切页（如诊断日志中的“日志”与“统计”）；
+   底部边框与下方子视图建立清晰分界线。 */
+.da-sub-tab-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+    border-bottom: 1px solid var(--da-border-color);
+    padding-bottom: var(--da-space-sm, 6px);
+    margin-bottom: var(--da-space-md, 10px);
+    overflow-x: auto;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.da-sub-tab-btn {
+    font-size: var(--da-font-size-sm, 0.80rem);
+    padding: 4px var(--da-space-md, 10px);
+    white-space: nowrap;
+    border-radius: var(--da-radius-btn, 6px);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s var(--da-ease);
+}
+
+.da-sub-tab-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+/* 二级 Tab 激活态：半透明底色搭配品牌色文字与边框 */
+.da-sub-tab-btn.active {
+    background: rgba(var(--da-accent-rgb), 0.12);
+    color: var(--da-accent-color);
+    border-color: var(--da-border-focus);
+    box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.15);
+    font-weight: 600;
+}
+
+/* 二级子选项卡内容面板容器 */
+.da-sub-tab-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--da-space-lg, 16px);
+    width: 100%;
+    min-height: 0;
+}
+
+/* Tab 占位与空状态提示文本 */
+.da-tab-placeholder {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--da-text-secondary);
+}

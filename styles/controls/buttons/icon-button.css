@@ -1,0 +1,94 @@
+/**
+ * @module styles/controls/buttons/icon-button
+ * @layer controls/buttons (Layer 3)
+ * @description 微型图标按钮与预设工具条状态变体
+ *
+ * 规范约束与技术原因：
+ * 1. 事件目标一致性：内部 SVG/Emoji 设置 pointer-events: none，防止点击子元素导致 event.target 错位；
+ * 2. 状态自包含：未保存修改通过保存按钮（.is-dirty）呼吸金光表达，避免添加文字徽标造成视觉杂乱；
+ * 3. 危险操作隔离：删除、清空等破坏性操作采用 .da-icon-btn--danger 红色警示。
+ */
+
+/* 1. 正方形图标按钮基类 */
+.da-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 4px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-secondary, rgba(255, 255, 255, 0.04));
+    color: var(--da-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: all 0.16s var(--da-ease);
+}
+
+.da-icon-btn:hover:not(:disabled) {
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+    background: var(--da-bg-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.da-icon-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.da-icon-btn:focus-visible {
+    outline: none;
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+.da-icon-btn:disabled {
+    opacity: 0.35 !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* 内部矢量图标尺寸标准化，禁止鼠标穿透 */
+.da-icon-btn svg {
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+/* 2. 语义化变体 */
+/* 危险删除变体 (用于删除预设、清空等高危操作) */
+.da-icon-btn--danger {
+    background: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.1);
+    border-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.35);
+    color: var(--da-color-error);
+}
+
+.da-icon-btn--danger:hover:not(:disabled) {
+    background: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.22) !important;
+    border-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.6) !important;
+    color: var(--da-color-error) !important;
+    box-shadow: 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25);
+}
+
+/* 3. 未保存修改高亮呼吸动效 (.da-icon-btn.is-dirty)
+   仅用于预设工具栏保存按钮，当表单值与基准快照不一致时激活；恢复原值时自动清除 */
+.da-icon-btn.is-dirty {
+    color: var(--da-color-warn) !important;
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.55) !important;
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.15) !important;
+    animation: da-breathe-glow 2s infinite ease-in-out;
+}
+
+@keyframes da-breathe-glow {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.3);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.75);
+    }
+}

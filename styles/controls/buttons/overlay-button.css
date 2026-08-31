@@ -1,0 +1,70 @@
+/**
+ * @module styles/controls/buttons/overlay-button
+ * @layer controls/buttons (Layer 3)
+ * @description 半透明磨砂浮层微型操作按钮 (用于媒体卡片与画布角落浮动操作)
+ *
+ * 核心边界与约束：
+ * 1. 场景定位：专门用于叠加在图片、画布或画廊卡片上的绝对定位微型操作；
+ * 2. 视觉对比：采用深色磨砂半透明背景保障明暗底图上的可读性；
+ * 3. 事件保护：内嵌 SVG 图标设置 pointer-events: none 避免阻滞按钮点击。
+ */
+
+/* --- 1. 浮层微型按钮基类 --- */
+.da-overlay-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    font-size: 12px;
+    padding: 3px 7px;
+    border-radius: var(--da-radius-sm, 4px);
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    line-height: 1;
+    transition: background 0.15s var(--da-ease), transform 0.1s var(--da-ease), color 0.15s var(--da-ease);
+    user-select: none;
+}
+
+/* 避免内嵌 SVG 元素阻滞按钮点击冒泡 */
+.da-overlay-btn svg {
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.da-overlay-btn:hover {
+    background: var(--da-accent-color);
+    color: #000000;
+    transform: scale(1.08);
+}
+
+.da-overlay-btn:active {
+    transform: scale(0.96);
+}
+
+.da-overlay-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--da-accent-color);
+}
+
+/* --- 2. 语义化与状态修饰 --- */
+/* 危险删除变体 (如画廊卡片浮层删除) */
+.da-overlay-btn--danger:hover,
+.da-overlay-btn.is-danger:hover {
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+}
+
+/* 禁用态 */
+.da-overlay-btn:disabled,
+.da-overlay-btn.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+}
+

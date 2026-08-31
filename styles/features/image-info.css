@@ -1,0 +1,351 @@
+/**
+ * @module styles/features/image-info
+ * @layer features (Layer 4)
+ * @description 图像元数据详情与多后端生成参数检查器弹窗 (ImageInfoPanel)
+ *
+ * 职责与约束：
+ * 1. 负责呈现已生成图像的完整技术元数据，包括正/反向提示词、LoRA 列表、步数、CFG、Seed 等；
+ * 2. 桌面端采用左右双列（1fr 340px）网格排布，左侧展示长文本参数，右侧展示 1:1 预览与操作动作；
+ * 3. 提示词采用 min-width: 0 与 word-break: break-word 阻断长词撑破网格；
+ * 4. 参数表格每个单元格支持点击一键复制取值，支持悬停交互反馈。
+ */
+
+/* --- 1. 图像详情弹窗外壳 --- */
+.da-inspect-modal {
+    width: 95%;
+    max-width: 1060px;
+    max-height: 88vh;
+    border-radius: var(--da-radius-large, 16px);
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary, #1a1d26));
+    backdrop-filter: blur(var(--da-blur-panel, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px));
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.45));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: da-fadein 0.22s var(--da-ease);
+}
+
+/* 2. 顶栏标题与元数据徽标 (.da-inspect-header) */
+.da-inspect-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--da-border-color);
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.03));
+}
+
+.da-inspect-header__left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.da-inspect-title {
+    margin: 0;
+    font-size: 1.12em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-inspect-title svg {
+    color: var(--da-accent-color);
+}
+
+.da-inspect-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.78em;
+    font-family: monospace;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--da-text-secondary);
+    border: 1px solid var(--da-border-color);
+}
+
+/* 3. 详情主体双列网格 (.da-inspect-body)
+   采用 1fr 340px 左右列划分，内部具备独立垂直滚动能力 */
+.da-inspect-body {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    padding: 20px;
+}
+
+/* 4. 左栏：提示词与生成参数 (.da-inspect-col-meta)
+   承载正向提示词、反向提示词、LoRA 列表与生成参数表格；
+   min-width: 0 保证长提示词自动换行折行，避免将 Grid 网格列挤压撑破。 */
+.da-inspect-col-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.da-inspect-prompt-box {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-inspect-prompt-box.is-negative {
+    border-color: rgba(255, 69, 58, 0.25);
+    background: rgba(255, 69, 58, 0.03);
+}
+
+.da-inspect-prompt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.da-inspect-prompt-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-inspect-prompt-title svg {
+    color: var(--da-accent-color);
+}
+
+.da-inspect-token-count {
+    font-size: 0.8em;
+    color: var(--da-text-muted);
+    font-weight: normal;
+    margin-left: 4px;
+}
+
+.da-inspect-prompt-text {
+    font-size: 0.88em;
+    line-height: 1.55;
+    color: var(--da-text-secondary);
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-subtle, rgba(255, 255, 255, 0.06));
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 140px;
+    overflow-y: auto;
+    word-break: break-word;
+    user-select: text;
+}
+
+/* 5. LoRA 标签芯片容器 (.da-inspect-lora-box) */
+.da-inspect-lora-box {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-inspect-meta-subhead {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-inspect-lora-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.da-inspect-lora-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: 20px;
+    font-size: 0.82em;
+    color: var(--da-text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.da-inspect-lora-chip:hover {
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb, 74, 136, 247), 0.12);
+    transform: translateY(-1px);
+}
+
+.da-inspect-lora-chip .da-chip-val {
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.09);
+    font-size: 0.9em;
+    color: var(--da-accent-color);
+    font-weight: 600;
+}
+
+/* 6. 生成参数双列网格与点击复制 (.da-inspect-params-matrix)
+   采用双列等宽网格（repeat(2, 1fr)）展示步数、CFG、种子、模型、采样器等核心元数据；
+   每个单元格支持鼠标悬停高亮与点击快速复制取值。 */
+.da-inspect-params-matrix {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 14px;
+}
+
+.da-inspect-param-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 10px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-subtle, rgba(255, 255, 255, 0.05));
+    border-radius: 6px;
+    min-width: 0;
+}
+
+.da-inspect-param-label {
+    font-size: 0.76em;
+    color: var(--da-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-inspect-param-val {
+    font-size: 0.86em;
+    font-weight: 500;
+    color: var(--da-text-primary);
+    word-break: break-all;
+}
+
+.da-inspect-param-val.is-copyable {
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.da-inspect-param-val.is-copyable:hover {
+    color: var(--da-accent-color);
+    text-decoration: underline;
+}
+
+/* 7. 右栏：图像预览视窗与操作工具箱 (.da-inspect-col-visual)
+   桌面端固定宽度 340px 容器，包含 1:1 正方形预览视窗、快捷操作按钮组（以图生图、重绘、导出、删除）及文件尺寸信息。 */
+.da-inspect-col-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.da-inspect-preview-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #0d0f14;
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-in;
+}
+
+.da-inspect-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+}
+
+.da-inspect-preview-box:hover .da-inspect-preview-img {
+    transform: scale(1.02);
+}
+
+.da-inspect-zoom-badge {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(18, 20, 26, 0.8);
+    backdrop-filter: blur(6px);
+    color: #ffffff;
+    font-size: 0.78em;
+    padding: 4px 10px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 技术规格参数指标 */
+.da-inspect-tech-specs {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.da-inspect-tech-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-inspect-tech-label {
+    font-size: 0.74em;
+    color: var(--da-text-muted);
+}
+
+.da-inspect-tech-value {
+    font-size: 0.84em;
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+/* 快捷操作工具箱 */
+.da-inspect-actions-card {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-inspect-actions-card .da-btn {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+    padding: 7px 12px;
+}

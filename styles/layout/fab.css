@@ -1,0 +1,181 @@
+/**
+ * @module styles/layout/fab
+ * @layer layout (Layer 2)
+ * @description 全局悬浮球控件 (FAB)、未读徽标及设置面板图标选择器
+ *
+ * 职责与约束：
+ * 1. 作为常驻浏览器的悬浮快速入口，支持在屏幕四周边沿任意拖拽定位；
+ * 2. 拖拽时通过 touch-action: none 阻止触控设备默认滚动行为，并临时设置 transition: none 保证位移实时无迟滞；
+ * 3. 包含在悬浮球设置选项卡中使用的预设 SVG 图标网格与自定义圆形头像裁剪预览组件。
+ */
+
+/* 1. 悬浮球基础结构与指针交互态 */
+.da-fab-btn,
+#da-fab-button {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--da-bg-secondary-rgba, rgba(32, 36, 48, 0.9));
+    backdrop-filter: blur(var(--da-blur-panel, 16px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 16px));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.15));
+    box-shadow: var(--da-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.45)), 0 0 0 1px rgba(var(--da-accent-rgb), 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    z-index: var(--da-z-fab, 9999);
+    touch-action: none;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: visible;
+    transition: box-shadow 0.2s var(--da-ease), border-color 0.2s var(--da-ease), background-color 0.15s var(--da-ease);
+}
+
+.da-fab-btn:hover,
+#da-fab-button:hover {
+    border-color: var(--da-accent-color) !important;
+    box-shadow: var(--da-shadow-lg), 0 0 16px rgba(var(--da-accent-rgb), 0.35) !important;
+}
+
+.da-fab-btn:active,
+#da-fab-button:active {
+    background: var(--da-bg-hover, rgba(45, 52, 68, 0.95));
+    border-color: var(--da-accent-color) !important;
+    cursor: grabbing;
+}
+
+/* 拖拽进行中状态：禁用 transition 确保指针与悬浮球坐标同步 */
+.da-fab-btn.is-dragging {
+    transition: none !important;
+    cursor: grabbing !important;
+}
+
+/* 2. 悬浮球内部图标与未读徽标 */
+.da-fab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    pointer-events: none;
+}
+
+.da-fab-icon svg {
+    display: block;
+    width: 26px;
+    height: 26px;
+}
+
+.da-fab-icon img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* 右上角红色计数徽标 (用于提示完成数或失败告警) */
+.da-fab-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--da-font-mono, monospace);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 6px rgba(255, 69, 58, 0.8);
+    border: 1.5px solid var(--da-bg-primary, #0f1014);
+    pointer-events: none;
+}
+
+/* 3. 悬浮球预设图标选择网格 */
+.da-fab-icon-grid {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.da-fab-icon-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-sm, 4px);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.18s var(--da-ease);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.da-fab-icon-chip svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    transition: transform 0.18s var(--da-ease-spring), stroke 0.18s ease;
+}
+
+.da-fab-icon-chip:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    color: var(--da-accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.da-fab-icon-chip:hover svg {
+    transform: scale(1.1);
+}
+
+.da-fab-icon-chip.is-active {
+    background: rgba(var(--da-accent-rgb), 0.16);
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+    box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* 4. 自定义图标圆形头像预览 */
+.da-fab-custom-icon-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.da-fab-preview-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--da-accent-color);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.da-fab-preview-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

@@ -1,0 +1,134 @@
+/**
+ * @module styles/controls/inputs/color-picker
+ * @layer controls/inputs (Layer 3)
+ * @description 颜色选择器组件 (原生色盘与十六进制 Hex 输入框联动)
+ *
+ * 核心边界与约束：
+ * 1. 跨内核兼容：分别适配 WebKit (::-webkit-color-swatch) 与 Gecko (::-moz-color-swatch) 圆形色板；
+ * 2. 状态管道：统一对接未保存修改 (.is-dirty)、校验错误 (.is-invalid) 与容器禁用 (.is-disabled)；
+ * 3. 输入规范：Hex 输入框大写呈现与等宽字符对齐。
+ */
+
+/* --- 1. 容器包裹器 (240px 宽度协调对齐) --- */
+.da-color-picker-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--da-space-sm, 8px);
+    width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px;
+    box-sizing: border-box;
+}
+
+.da-color-picker-wrapper.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* --- 2. 原生颜色选择器圆形色板 (WebKit / Gecko) --- */
+.da-color-picker-native {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--da-border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+    outline: none;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* WebKit 色盘伪元素重置 */
+.da-color-picker-native::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border-radius: 50%;
+}
+
+.da-color-picker-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* Gecko (Firefox) 色盘伪元素重置 */
+.da-color-picker-native::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+.da-color-picker-native:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.4);
+}
+
+.da-color-picker-native:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* --- 3. 十六进制 Hex 编码输入框 (200px + 32px 色块 + 8px 间距 = 240px) --- */
+.da-color-hex-input {
+    width: 200px;
+    max-width: 200px;
+    flex: 0 0 200px;
+    height: 32px;
+    padding: 0 var(--da-space-sm, 8px);
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    text-transform: uppercase;
+    text-align: center;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    transition: border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-color-hex-input:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-input-hover);
+}
+
+.da-color-hex-input:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+.da-color-hex-input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+}
+
+/* --- 4. 表单状态联动 (未保存修改 / 校验错误) --- */
+/* 未保存修改态 */
+.da-color-hex-input.is-dirty {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
+}
+
+.da-color-picker-native.is-dirty {
+    box-shadow: 0 0 0 2px var(--da-color-warn);
+}
+
+/* 错误输入态 (提示非法 Hex 格式) */
+.da-color-hex-input.is-invalid {
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
+    color: var(--da-color-error);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
+}
+
+.da-color-picker-native.is-invalid {
+    box-shadow: 0 0 0 2px var(--da-color-error);
+}
+

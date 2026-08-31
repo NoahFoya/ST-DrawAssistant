@@ -1,0 +1,284 @@
+/**
+ * @module styles/features/inpaint
+ * @layer features (Layer 4)
+ * @description 局部重绘画布 (Inpaint Modal)、头像裁剪器 (Circular Cropper) 与楼层图像角标交互
+ *
+ * 职责与约束：
+ * 1. 负责局部重绘蒙版绘制视窗，提供十字准星（cursor: crosshair）与画笔尺寸调节；
+ * 2. 负责悬浮球正圆形头像裁剪器（.da-cropper-panel），运用 9999px 阴影构建圆外暗化遮罩；
+ * 3. 规范嵌入消息气泡中的图片右上角悬浮操作角标（.da-image-corner-trigger）。
+ */
+
+/* 1. 局部重绘画布弹窗 (Inpaint Modal)
+   高 z-index 全屏模糊遮罩与居中操作面板，包含画布绘图视窗、画笔大小调节与图层清除/应用控制。 */
+.da-inpaint-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-dialog, 100095);
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: da-fadein 0.2s var(--da-ease);
+}
+
+.da-inpaint-modal-panel {
+    width: 95%;
+    max-width: 980px;
+    max-height: 90vh;
+    padding: 18px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-lg);
+}
+
+.da-inpaint-canvas-wrapper {
+    flex: 1;
+    min-height: 360px;
+    max-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.da-inpaint-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    cursor: crosshair;
+}
+
+.da-brush-size-input {
+    width: 60px;
+}
+
+/* 2. 悬浮球头像正圆形裁剪组件 (Circular Cropper)
+   居中浮动裁剪弹窗，承载正圆形预览蒙版，用于悬浮球自定义头像的平移与缩放裁剪。 */
+.da-cropper-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100085;
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: da-fadein 0.2s var(--da-ease);
+}
+
+.da-cropper-panel {
+    max-width: 440px;
+    width: 92%;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-large, 16px);
+    box-shadow: var(--da-shadow-modal);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* 裁剪工作台舞台 (280px × 280px) */
+.da-cropper-stage {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 0 auto;
+    background: #0a0c10;
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.da-cropper-stage:active {
+    cursor: grabbing;
+}
+
+.da-cropper-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    max-width: none;
+    max-height: none;
+    transform-origin: center center;
+    pointer-events: none;
+}
+
+/* 正圆形裁剪框：运用 box-shadow 9999px 超大阴影对圆框外侧区域形成遮罩暗化 */
+.da-cropper-mask-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 220px;
+    height: 220px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.da-cropper-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 4px;
+}
+
+.da-cropper-slider-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+    color: var(--da-text-secondary);
+}
+
+/* 3. 快捷操作卡片面板 (.da-action-panel) */
+.da-action-panel {
+    width: 94%;
+    max-width: 680px;
+    padding: 18px 22px;
+    border-radius: 16px;
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-panel, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px));
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+}
+
+.da-action-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--da-border-color);
+    padding-bottom: 10px;
+}
+
+.da-action-panel__title {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+}
+
+.da-action-panel__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-tag-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: 10px;
+}
+
+.da-tag-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.da-tag-card__label {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+}
+
+.da-tag-card__btn-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-action-panel__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--da-border-color);
+    padding-top: 12px;
+}
+
+.da-action-panel__footer-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 4. 楼层生成图像右上角快捷触发栏 (.da-image-corner-trigger)
+   在生成的楼层图片右上角绝对定位圆形半透明按钮；
+   在精确鼠标设备下默认隐藏，悬停图片时平滑显现。 */
+.da-generated-img-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+}
+
+.da-image-corner-trigger {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(18, 20, 26, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    opacity: 0.88;
+    transition: opacity 0.2s ease, transform 0.15s ease, background-color 0.2s ease;
+    z-index: 5;
+}
+
+.da-image-corner-trigger:hover {
+    opacity: 1;
+    transform: scale(1.08);
+    background: var(--da-accent-color, #4a88f7);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.da-image-corner-trigger:active {
+    transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .da-image-corner-trigger {
+        opacity: 0;
+    }
+    .da-generated-img-wrapper:hover .da-image-corner-trigger {
+        opacity: 0.95;
+    }
+}

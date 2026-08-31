@@ -1,0 +1,153 @@
+/**
+ * @module styles/layout/header-bar
+ * @layer layout (Layer 2)
+ * @description 弹窗顶部标题栏、版本徽标、快捷主题切换与关闭按钮
+ *
+ * 职责与约束：
+ * 1. 作为主配置弹窗的固定高度顶部导航条（height: 46px），flex-shrink: 0 防止被内容挤压；
+ * 2. 左侧展示渐变标题与版本徽标，右侧容纳快捷主题下拉选择胶囊与关闭模态按钮；
+ * 3. 底部通过 1px solid var(--da-border-color) 分割线与下方的 Body 内容区分离。
+ */
+
+/* 1. 顶部标题栏固定外壳 (.da-header-bar)
+   采用两端对齐（space-between）弹性布局，内边距横向 16px，固定 46px 紧凑高度 */
+.da-header-bar {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 46px;
+    min-height: 46px;
+    padding: 0 var(--da-space-lg, 16px);
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 20;
+}
+
+/* 2. 左侧品牌标题与版本区 (.da-header-left) */
+.da-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-md, 10px);
+}
+
+/* 渐变标题文本（自适应主文本色到主题强调色） */
+.da-header-title {
+    font-size: var(--da-font-size-md, 15px);
+    font-weight: 700;
+    font-family: var(--da-font-display);
+    letter-spacing: -0.015em;
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+    margin: 0;
+    background: linear-gradient(135deg, var(--da-text-primary) 0%, var(--da-accent-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.da-header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-accent-color);
+    margin-right: 2px;
+    -webkit-text-fill-color: var(--da-accent-color);
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 6px rgba(var(--da-accent-rgb), 0.45));
+}
+
+/* 3. 右侧快捷操作区 (.da-header-right) */
+.da-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-md, 10px);
+    position: relative;
+}
+
+/* 快捷主题切换胶囊外壳 (.da-quick-theme-selector) */
+.da-quick-theme-selector {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-input);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-pill);
+    padding: 2px var(--da-space-md, 10px);
+    height: 26px;
+    box-sizing: border-box;
+    transition: border-color 0.2s var(--da-ease), background 0.2s var(--da-ease), box-shadow 0.2s var(--da-ease);
+}
+
+.da-quick-theme-selector:hover {
+    border-color: var(--da-border-highlight, rgba(139, 92, 246, 0.45));
+    background: var(--da-bg-hover);
+    box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.25);
+}
+
+/* 胶囊内原生下拉选择器 */
+.da-quick-theme-select {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: var(--da-text-primary) !important;
+    font-size: var(--da-font-size-xs, 12px) !important;
+    font-weight: 600;
+    text-align: center !important;
+    text-align-last: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    line-height: 1.3 !important;
+    cursor: pointer;
+    min-width: 68px;
+    max-width: 120px !important;
+    width: auto !important;
+    appearance: none;
+    -webkit-appearance: none;
+    color-scheme: var(--da-color-scheme, dark);
+}
+
+.da-quick-theme-select option {
+    background-color: var(--da-bg-secondary, #0d0f18) !important;
+    color: var(--da-text-primary, #ffffff) !important;
+    font-size: var(--da-font-size-sm, 13px);
+    padding: 6px 10px;
+    text-align: center;
+}
+
+/* 4. 模态弹窗关闭按钮 (.da-modal-close-btn) */
+.da-modal-close-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 4px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.04));
+    color: var(--da-text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1;
+    transition: background 0.18s var(--da-ease), color 0.18s var(--da-ease), border-color 0.18s var(--da-ease), transform 0.15s var(--da-ease-spring);
+}
+
+.da-modal-close-btn:hover {
+    background: var(--da-color-error, #f43f5e);
+    color: #ffffff;
+    border-color: var(--da-color-error, #f43f5e);
+    transform: scale(1.1);
+}
+
+.da-modal-close-btn:active {
+    transform: scale(0.92);
+}

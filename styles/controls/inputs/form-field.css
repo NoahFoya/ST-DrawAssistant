@@ -1,0 +1,184 @@
+/**
+ * @module styles/controls/inputs/form-field
+ * @layer controls/inputs (Layer 3)
+ * @description 表单行排布、标签标题组与提示气泡规范
+ *
+ * 规范约束与技术原因：
+ * 1. 38px 标准表单行：统一采用 38px 高度，防止表单项纵向膨胀导致弹窗滚动条过长；
+ * 2. 行内严禁副标题：表单行内只保留简洁标题，所有解释性说明收敛至悬停提示气泡（.da-help-icon），维持界面清爽；
+ * 3. 控件对齐插槽：右侧操作槽（.da-slot--right）统一垂直居中与右靠齐，消除混用不同控件时的基线跳动；
+ * 4. 彻底移除滑块残留：不再包含任何 slider 容器样式。
+ */
+
+/* 1. 标准 38px 表单行 (.da-form-row) */
+.da-form-row {
+    height: 38px;
+    min-height: 38px;
+    max-height: 38px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-md, 12px);
+    width: 100%;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--da-separator);
+    transition: background-color 0.12s var(--da-ease);
+}
+
+/* 垂直堆叠多行与全宽组件行自适应高度放开 */
+.da-form-row--stacked,
+.da-form-row--full {
+    height: auto !important;
+    min-height: 38px !important;
+    max-height: none !important;
+    padding: 10px 16px !important;
+}
+
+.da-form-row--stacked {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+}
+
+.da-form-row:last-child {
+    border-bottom: none;
+}
+
+.da-form-row:hover:not(.is-disabled) {
+    background-color: var(--da-bg-hover);
+}
+
+.da-form-row.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 2. 行内标题容器 (.da-label-box) */
+.da-label-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-sm, 0.80rem);
+    font-weight: 500;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+/* 3. 悬停微光提示气泡 (.da-help-icon) */
+.da-help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--da-border-color);
+    font-size: 10px;
+    font-family: var(--da-font-family);
+    color: var(--da-text-secondary);
+    cursor: help;
+    position: relative;
+    user-select: none;
+    line-height: 1;
+    transition: all 0.15s var(--da-ease);
+}
+
+.da-help-icon:hover {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    color: var(--da-text-on-accent, #ffffff);
+    box-shadow: 0 0 8px var(--da-accent-color);
+}
+
+/* 纯 CSS 悬停气泡：左对齐展示于问号右侧，高 z-index 避免被父容器裁剪 */
+.da-help-icon[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--da-bg-card, #121624);
+    border: 1px solid var(--da-border-focus, var(--da-accent-color));
+    border-radius: var(--da-radius-sm, 6px);
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--da-text-primary, #f8fafc);
+    line-height: 1.4;
+    white-space: normal;
+    width: 220px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 10px rgba(var(--da-accent-rgb), 0.25);
+    z-index: var(--da-z-tooltip, 100100);
+    pointer-events: none;
+}
+
+/* 4. 控件右对齐插槽 */
+.da-slot--right,
+.da-form-row__control-slot {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--da-space-sm, 8px);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.da-slot--right > .da-input,
+.da-slot--right > .da-select,
+.da-slot--right > .da-btn,
+.da-form-row__control-slot > .da-input,
+.da-form-row__control-slot > .da-select,
+.da-form-row__control-slot > .da-btn {
+    flex-shrink: 0;
+}
+
+/* 开关垂直基线对齐 */
+.da-slot--right > .da-toggle,
+.da-form-row__control-slot > .da-toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+}
+
+/* 5. 字段标签组排布 (.da-field-label-group) */
+.da-field-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 140px;
+    box-sizing: border-box;
+}
+
+.da-field-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-xs, 4px);
+    white-space: nowrap;
+}
+
+.da-field-title {
+    font-size: var(--da-font-size-base, 0.86rem);
+    font-weight: 500;
+    color: var(--da-text-primary);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-field-desc {
+    font-size: var(--da-font-size-xs, 0.76rem);
+    color: var(--da-text-secondary);
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: break-word;
+}

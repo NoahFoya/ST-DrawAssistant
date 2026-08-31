@@ -1,0 +1,80 @@
+/**
+ * @module styles/controls/feedback/chip
+ * @layer controls/feedback (Layer 3)
+ * @description 胶囊标签芯片 (Chip)、流式标签组与状态过滤器
+ *
+ * 核心边界与约束：
+ * 1. 结构规范：提供胶囊标签单元 (.da-chip) 与流式换行容器 (.da-chip-group)；
+ * 2. 状态交互：支持激活态高亮 (.is-active) 与分类计数徽标 (.da-chip__badge)；
+ * 3. 键盘无障碍：支持 :focus-visible 焦点环指示。
+ */
+
+/* --- 1. 标签组流式容器 --- */
+.da-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* --- 2. 基础胶囊标签 --- */
+.da-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-pill, 100px);
+    font-size: 0.78em;
+    color: var(--da-text-secondary);
+    line-height: 1.4;
+    user-select: none;
+    cursor: pointer;
+    transition: background 0.15s var(--da-ease), border-color 0.15s var(--da-ease), color 0.15s var(--da-ease);
+    outline: none;
+}
+
+.da-chip:hover {
+    color: var(--da-text-primary);
+    border-color: var(--da-accent-color);
+}
+
+.da-chip:focus-visible {
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* 选中激活态 */
+.da-chip--active,
+.da-chip.is-active {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    color: var(--da-bg-primary);
+    font-weight: 600;
+}
+
+/* --- 3. 过滤芯片与内嵌徽标 --- */
+.da-chip--filter {
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.da-chip__badge,
+.da-chip-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--da-bg-primary);
+    color: var(--da-text-primary);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* 激活时徽标反色处理，保障与品牌色背景的高对比度 */
+.da-chip.is-active .da-chip__badge,
+.da-chip.is-active .da-chip-badge {
+    background: rgba(0, 0, 0, 0.25);
+    color: #ffffff;
+}
+

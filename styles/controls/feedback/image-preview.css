@@ -1,0 +1,108 @@
+/**
+ * @module styles/controls/feedback/image-preview
+ * @layer controls/feedback (Layer 3)
+ * @description 大图全屏预览弹窗、居中遮罩与关闭按钮
+ *
+ * 职责与约束：
+ * 1. 提供全局独立的大图全屏预览视窗，由 ModalService 统一接管层级与快捷键生命周期；
+ * 2. z-index 设为 100100，确保高于主配置弹窗（10000）与二级对话框（30000）的层叠上下文；
+ * 3. 遮罩层支持点击背景退出，搭配 Esc 按键与右上角关闭按钮提供多路安全退出路径。
+ */
+
+/* 1. 全屏放大遮罩层 (.da-image-preview-backdrop)
+   使用高数值 z-index 穿透并覆盖所有界面元素；
+   高斯模糊虚化底层内容减少背景视觉干扰；
+   鼠标指针设置为 zoom-out 明确提示用户点击空白处即可退出预览。 */
+.da-image-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-modal, 100100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    cursor: zoom-out;
+    backdrop-filter: blur(var(--da-blur-modal, 14px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px));
+    animation: da-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 2. 预览图片承载容器 (.da-image-preview-img)
+   默认 92vw / 92vh 适屏展示；
+   支持点击/双击切换原始尺寸与平移浏览。 */
+.da-image-preview-img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: var(--da-radius-md, 8px);
+    box-shadow: var(--da-shadow-xl, 0 16px 36px rgba(0, 0, 0, 0.5));
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: transform 0.15s ease-out;
+}
+
+/* 放大原图模式：解除视口最大限制，允许全屏滚动与平移浏览长图 */
+.da-image-preview-backdrop.is-zoomed {
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 36px;
+    cursor: default;
+}
+
+.da-image-preview-backdrop.is-zoomed .da-image-preview-img {
+    max-width: none;
+    max-height: none;
+    cursor: zoom-out;
+    margin: auto;
+    flex-shrink: 0;
+}
+
+/* 3. 悬浮快捷操作栏 (.da-image-preview-toolbar) */
+.da-image-preview-toolbar {
+    position: fixed;
+    top: 24px;
+    right: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: calc(var(--da-z-modal, 100100) + 1);
+}
+
+.da-image-preview-btn {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 16, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.da-image-preview-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.08);
+}
+
+.da-image-preview-btn:active {
+    transform: scale(0.95);
+}
+
+.da-image-preview-btn svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+}

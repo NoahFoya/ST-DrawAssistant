@@ -1,0 +1,74 @@
+/**
+ * @module styles/features/terminal
+ * @layer features (Layer 4)
+ * @description 实时控制台日志与终端流输出组件 (LogTerminal)
+ *
+ * 职责与约束：
+ * 1. 用于“日志与统计”面板，实时打印网络请求、生图进度与驱动异常调试日志；
+ * 2. 严格采用等宽字体（Consolas, monospace）与 user-select: text 保证用户可划词复制诊断信息；
+ * 3. 各日志行分为时间戳、日志级别（Debug/Info/Warn/Error）、命名空间标签与换行消息体。
+ */
+
+/* 1. 终端卡片外壳 (.da-log-terminal)
+   深色控制台底色（#0d1117），限制 240px 最大视高，开启纵向滚动 */
+.da-log-terminal {
+    background: var(--da-terminal-bg, #0d1117);
+    color: var(--da-terminal-text, #e6edf3);
+    font-family: var(--da-font-mono, Consolas, monospace);
+    font-size: var(--da-font-size-xs, 0.74rem);
+    padding: 12px 14px;
+    border-radius: var(--da-radius-sm, 8px);
+    border: 1px solid var(--da-separator);
+    max-height: 240px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    user-select: text;
+    line-height: 1.5;
+}
+
+/* 2. 单行日志结构 (.da-log-line)
+   基线对齐排布时间戳、级别、命名空间与日志消息主体 */
+.da-log-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1.5;
+    font-family: var(--da-font-mono, Consolas, monospace);
+}
+
+.da-log-time,
+.da-log-timestamp {
+    color: var(--da-terminal-muted, #8b949e);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.da-log-level {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.da-log-tag,
+.da-log-namespace {
+    color: var(--da-terminal-blue, #58a6ff);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.da-log-msg {
+    color: var(--da-terminal-text, #e6edf3);
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+/* 3. 日志级别语法高亮色彩体系 */
+.da-log-level--debug { color: var(--da-terminal-purple, #bc8cff); }
+.da-log-level--info  { color: var(--da-terminal-teal, #39c5bb);   }
+.da-log-level--warn  { color: var(--da-terminal-yellow, #d29922); }
+.da-log-level--error { color: var(--da-terminal-red, #f85149);    }

@@ -1,0 +1,160 @@
+/**
+ * @module styles/layout/sidebar-tabs
+ * @layer layout (Layer 2)
+ * @description 弹窗侧边导航选项卡、激活指示条与引擎折叠展开
+ */
+
+/* 1. 侧边导航选项卡容器 (严格保持 190px 垂直宽度) */
+.da-sidebar-tabs {
+    flex: 0 0 190px;
+    width: 190px;
+    background: var(--da-bg-sidebar);
+    border-right: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 4px);
+    padding: var(--da-space-md, 12px) var(--da-space-sm, 8px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--da-border-color) transparent;
+}
+
+/* 2. 选项卡条目按钮与交互态 */
+.da-sidebar-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--da-space-sm, 8px);
+    height: 36px;
+    min-height: 36px;
+    padding: 0 var(--da-space-md, 10px);
+    border-radius: var(--da-radius-btn, 6px);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-base, 13px);
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.18s var(--da-ease), color 0.18s var(--da-ease), transform 0.15s var(--da-ease), border-color 0.18s var(--da-ease);
+    box-sizing: border-box;
+    letter-spacing: -0.01em;
+    width: 100%;
+}
+
+.da-sidebar-item:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    transform: translateX(2px);
+}
+
+.da-sidebar-item:active {
+    transform: scale(0.98) translateX(1px);
+}
+
+/* 键盘 Tab 导航时在选项卡上呈现高对比度焦点指示 */
+.da-sidebar-item:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* 3. 侧边栏语义分组细分割线 (.da-sidebar-divider)
+   用于划分“绘图核心驱动区”（ComfyUI/SD/NovelAI/OpenAI）与“系统管理区”（外观/悬浮球/日志/画廊/关于） */
+.da-sidebar-divider {
+    height: 1px;
+    margin: 6px 4px;
+    background: var(--da-separator);
+    opacity: 0.8;
+    flex-shrink: 0;
+}
+
+/* BEM 激活修饰符类 */
+.da-sidebar-item--active {
+    background: var(--da-bg-active, rgba(var(--da-accent-rgb), 0.12));
+    color: var(--da-text-primary);
+    font-weight: 600;
+    border: 1px solid var(--da-border-color);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* 激活态纵向强调色指示条 */
+.da-sidebar-item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 18%;
+    height: 64%;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--da-accent-color);
+    box-shadow: 0 0 10px var(--da-accent-color);
+}
+
+/* 选项卡内部图标容器与 SVG 尺寸约束 */
+.da-sidebar-item__icon {
+    font-size: 1.05em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: inherit;
+}
+
+.da-sidebar-item__icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+}
+
+.da-sidebar-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    flex: 1;
+    min-width: 0;
+}
+
+/* 4. 驱动 Tab 展开/收起指示器 (.da-sidebar-item__expand-trigger)
+   用于切换引擎选项卡的平权展开与折叠收拢 */
+.da-sidebar-item__expand-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: -4px;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--da-radius-sm, 4px);
+    color: var(--da-text-muted);
+    opacity: 0.8;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.22s var(--da-ease-spring), opacity 0.16s var(--da-ease), background 0.16s var(--da-ease), color 0.16s var(--da-ease);
+}
+
+.da-sidebar-item__expand-trigger:hover {
+    opacity: 1;
+    color: var(--da-text-primary);
+    background: var(--da-bg-hover);
+}
+
+.da-sidebar-item__expand-trigger.is-expanded {
+    transform: rotate(180deg);
+    color: var(--da-accent-color);
+    opacity: 1;
+}

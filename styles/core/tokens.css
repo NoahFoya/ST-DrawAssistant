@@ -1,0 +1,146 @@
+/**
+ * @module styles/core/tokens
+ * @file tokens.css
+ * @description 全局 CSS Design Tokens 变量定义 (通用设计令牌抽象层与默认基准值)
+ * @author NoahFoya
+ *
+ * 职责与约束：
+ * 1. 建立全局统一的设计令牌（Tokens），包括颜色、字阶、间距、圆角、阴影、层级与缓动曲线；
+ * 2. 严禁在业务组件中硬编码绝对色彩数值，均应统一引用 var(--da-*) 变量；
+ * 3. 动态主题切换通过 ThemeService 运行时修改 :root 或根容器上的这些变量实现。
+ */
+
+:root {
+    /* 1. 背景与表面颜色体系 */
+    --da-color-scheme: dark;
+    --da-bg-canvas: #07080d;
+    --da-bg-primary: #07080d;
+    --da-bg-secondary: #0d0f18;
+    --da-bg-sidebar: #090a10;
+    --da-bg-subtle: rgba(139, 92, 246, 0.04);
+    --da-bg-card: #121522;
+    --da-bg-card-hover: #181d30;
+    --da-bg-input: #0a0c14;
+    --da-bg-input-hover: #111420;
+    --da-bg-hover: rgba(139, 92, 246, 0.08);
+    --da-bg-active: rgba(139, 92, 246, 0.18);
+    --da-bg-modal: rgba(13, 15, 24, 0.96);
+    --da-bg-gradient: linear-gradient(160deg, #141724 0%, #07080d 100%);
+    --da-bg-overlay-modal: rgba(4, 5, 8, 0.78);
+    --da-bg-overlay-heavy: rgba(3, 4, 6, 0.92);
+
+    /* 2. 文本层级颜色 */
+    --da-text-primary: #f8fafc;
+    --da-text-secondary: #94a3b8;
+    --da-text-muted: #64748b;
+    --da-text-on-accent: #ffffff;
+
+    /* 3. 边框与分割线体系 */
+    --da-border-color: rgba(139, 92, 246, 0.22);
+    --da-border-subtle: rgba(139, 92, 246, 0.12);
+    --da-border-highlight: rgba(139, 92, 246, 0.45);
+    --da-border-focus: #8b5cf6;
+    --da-border-glow: 0 0 16px rgba(139, 92, 246, 0.35);
+    --da-separator: rgba(139, 92, 246, 0.1);
+    --da-inset-top-light: inset 0 1px 0 0 rgba(139, 92, 246, 0.15);
+
+    /* 4. 品牌主色、辅色与 RGB 分量 */
+    --da-accent-color: #8b5cf6;
+    --da-accent-hover: #a78bfa;
+    --da-accent-rgb: 139, 92, 246;
+    --da-accent-cyan: #06b6d4;
+    --da-accent-cyan-rgb: 6, 182, 212;
+    --da-accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+    --da-accent-glow: 0 0 20px rgba(139, 92, 246, 0.45);
+
+    /* 5. 语义状态颜色与 RGB 分量 (成功、报错、警告) */
+    --da-color-success: #10b981;
+    --da-color-success-rgb: 16, 185, 129;
+    --da-color-error: #f43f5e;
+    --da-color-error-rgb: 244, 63, 94;
+    --da-color-warn: #f59e0b;
+    --da-color-warn-rgb: 245, 158, 11;
+    --da-color-fav: #eab308;
+
+    /* 6. 终端日志与工作流节点分类颜色 */
+    --da-terminal-bg: #07090f;
+    --da-terminal-text: #e6edf3;
+    --da-terminal-muted: #64748b;
+    --da-terminal-blue: #38bdf8;
+    --da-terminal-purple: #c084fc;
+    --da-terminal-teal: #2dd4bf;
+    --da-terminal-yellow: #fbbf24;
+    --da-terminal-red: #fb7185;
+
+    --da-node-prompt: #c084fc;
+    --da-node-prompt-rgb: 192, 132, 252;
+    --da-node-sampler: #fb923c;
+    --da-node-sampler-rgb: 251, 146, 60;
+    --da-node-model: #60a5fa;
+    --da-node-model-rgb: 96, 165, 250;
+    --da-node-size: #34d399;
+    --da-node-size-rgb: 52, 211, 153;
+    --da-node-output: #38bdf8;
+    --da-node-output-rgb: 56, 189, 248;
+    --da-node-lora: #f43f5e;
+    --da-node-lora-rgb: 244, 63, 94;
+
+    /* 7. 基础间距体系 */
+    --da-space-2xs: 2px;
+    --da-space-xs: 4px;
+    --da-space-sm: 8px;
+    --da-space-md: 12px;
+    --da-space-lg: 16px;
+    --da-space-xl: 20px;
+    --da-space-2xl: 24px;
+    --da-space-3xl: 32px;
+
+    /* 8. 字体族与字阶体系 */
+    --da-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --da-font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --da-font-display: 'Outfit', 'Inter', sans-serif;
+    --da-font-size-xs: 12px;
+    --da-font-size-sm: 13px;
+    --da-font-size-base: 14px;
+    --da-font-size-md: 15px;
+    --da-font-size-lg: 16px;
+    --da-font-size-xl: 18px;
+    --da-font-size-2xl: 22px;
+
+    /* 8.1 行高体系 */
+    --da-line-height-tight: 1.25;
+    --da-line-height-base: 1.5;
+    --da-line-height-loose: 1.65;
+
+    /* 9. 圆角梯度标度 */
+    --da-radius-modal: 12px;
+    --da-radius-card: 10px;
+    --da-radius-input: 6px;
+    --da-radius-btn: 6px;
+    --da-radius-pill: 9999px;
+    --da-radius-sm: 4px;
+    --da-radius-xs: 2px;
+
+    /* 10. 阴影深度阶梯 */
+    --da-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4), var(--da-inset-top-light);
+    --da-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--da-border-color);
+    --da-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--da-border-color);
+    --da-shadow-modal: 0 16px 48px -8px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--da-border-color);
+
+    /* 11. 缓动曲线与动效时长 */
+    --da-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --da-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --da-duration-fast: 0.15s;
+    --da-duration-base: 0.22s;
+    --da-duration-slow: 0.35s;
+
+    /* 12. 遮罩模糊与层叠上下文 (z-index) */
+    --da-blur-modal: 14px;
+    --da-blur-panel: 20px;
+    --da-z-fab: 9999;
+    --da-z-modal: 10000;
+
+    /* 13. 焦点指示环 */
+    --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35);
+    --da-focus-visible-ring: 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color);
+}

@@ -1,0 +1,135 @@
+/**
+ * @module styles/layout/footer-bar
+ * @layer layout (Layer 2)
+ * @description 弹窗底部状态栏与连接状态指示小圆点
+ *
+ * 职责与约束：
+ * 1. 作为主弹窗底部固定的微型状态条（固定 34px 高度），展示当前生图后端连接态与宿主内存开销；
+ * 2. 左侧展示后端引擎就绪指示小圆点与端点地址，右侧展示系统内存监控指标；
+ * 3. 连通探测中状态通过黄色小圆点搭配脉冲动画向用户提供清晰的异步反馈。
+ */
+
+/* 1. 底部状态栏外壳 (.da-footer-bar)
+   紧凑单行 34px 高度，两端对齐排布，顶部细边框隔离内容区域 */
+.da-footer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 var(--da-space-lg, 16px);
+    background: var(--da-bg-secondary);
+    border-top: 1px solid var(--da-border-color);
+    font-size: var(--da-font-size-xs, 11px);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    font-family: var(--da-font-mono);
+    position: relative;
+    z-index: 20;
+}
+
+/* 2. 状态指示项 (.da-status-item)
+   包裹状态圆点与说明文本的扁平状态条；
+   后端服务状态容器具备指针手势，支持点击即时重新探测连通性。 */
+.da-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    background: transparent;
+    border: none;
+    box-sizing: border-box;
+    cursor: default;
+    transition: color 0.16s ease, opacity 0.16s ease;
+}
+
+.da-status-item#da-server-status-container {
+    cursor: pointer;
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+.da-status-item#da-server-status-container:hover {
+    color: var(--da-text-primary);
+}
+
+.da-status-item#da-server-status-container:hover .da-status-info {
+    color: var(--da-text-primary);
+}
+
+.da-status-item#da-server-status-container:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--da-focus-ring);
+}
+
+.da-status-info,
+.da-server-status-container,
+.da-memory-status-container {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-server-status-text,
+.da-memory-status-text {
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 11px);
+}
+
+/* 3. 状态指示小圆点与语义色彩 (.da-status-dot) */
+.da-status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.2s var(--da-ease), box-shadow 0.2s var(--da-ease);
+}
+
+/* 绿色就绪态 */
+.da-status-dot.da-status-ok,
+.da-status-dot.is-ok {
+    background: var(--da-color-success, #10b981);
+    box-shadow: 0 0 6px var(--da-color-success, #10b981);
+}
+
+.da-status-dot.da-status-ok::after,
+.da-status-dot.is-ok::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1px solid var(--da-color-success, #10b981);
+    animation: da-radar-pulse 2s infinite ease-out;
+}
+
+/* 红色异常态 (连接失败或鉴权未通过) */
+.da-status-dot.da-status-error,
+.da-status-dot.is-error {
+    background: var(--da-color-error, #f43f5e);
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+}
+
+/* 黄色探测中态 (正在执行健康检查或请求排队) */
+.da-status-dot.da-status-checking,
+.da-status-dot.is-checking {
+    background: var(--da-color-warn, #f59e0b);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    animation: da-pulse-dot 1.2s ease-in-out infinite;
+}
+
+/* 警告态 */
+.da-status-dot.da-status-warn,
+.da-status-dot.is-warn {
+    background: var(--da-color-warn, #f59e0b);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
+/* 空闲待命态 */
+.da-status-dot.da-status-idle,
+.da-status-dot.is-idle {
+    background: var(--da-text-muted, #64748b);
+    box-shadow: none;
+}

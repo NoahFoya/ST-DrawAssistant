@@ -1,0 +1,238 @@
+/**
+ * @module styles/features/gallery
+ * @layer features (Layer 4)
+ * @description 画廊检索工具栏、自适应媒体卡片网格、多选批处理控制台与分页器
+ *
+ * 职责与约束：
+ * 1. 提供历史生成图像画廊浏览系统；
+ * 2. 媒体卡片网格利用 repeat(auto-fill, minmax(130px, 1fr)) 实现多尺寸屏幕纯 CSS 流式自适应；
+ * 3. 媒体卡片维持 1:1 正方形视窗，hover 呼出渐变半透明操作浮层；
+ * 4. 底部粘性悬浮批处理条（position: sticky; bottom: 12px）在多选时浮起，支持批量导出与删除。
+ */
+
+/* 1. 画廊检索与过滤工具栏 (.da-gallery-toolbar)
+   纵向分层组织模式切换、检索输入框与排序方式，自适应撑满画廊主容器。 */
+.da-gallery-manager-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-gallery-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+/* 2. 自适应媒体流式卡片网格 (.da-media-grid)
+   利用 CSS Grid repeat(auto-fill, minmax(130px, 1fr)) 实现响应式卡片排布，
+   无需媒体查询即可在不同面板宽度下自动计算并排最佳列数。 */
+.da-gallery-stream-container {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 3. 媒体卡片与悬浮交互 (.da-media-card)
+   严格维持 1:1 正方形等比视窗（aspect-ratio: 1 / 1）；
+   内置悬浮遮罩浮层（.da-media-card__overlay）展示快速选择、收藏与详情触发入口；
+   多选态通过 .is-selected 呈现品牌色高亮边框。 */
+.da-media-card {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--da-radius-sm, 8px);
+    overflow: hidden;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease), border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-media-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--da-accent-color);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.da-media-card.is-selected {
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 0 2px var(--da-accent-color);
+}
+
+/* 4. 媒体卡片内部元素：缩略图、复选框、收藏徽章与悬浮遮罩 */
+.da-media-card__thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    z-index: 1;
+    transition: filter 0.2s var(--da-ease);
+}
+
+.da-media-card:hover .da-media-card__thumb {
+    filter: brightness(1.06);
+}
+
+/* 左上角多选复选框 */
+.da-media-card__checkbox {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 6;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--da-accent-color);
+}
+
+/* 右下角收藏徽章（黄色星星提示） */
+.da-media-card__fav-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    font-size: 14px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.95));
+    z-index: 4;
+    pointer-events: none;
+}
+
+/* 顶部操作遮罩层：悬停时平滑显现快捷操作图标 */
+.da-media-card__overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 6px 8px;
+    gap: 6px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.75) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.da-media-card:hover .da-media-card__overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 5. 底部粘性批量操作栏 (.da-batch-floating-bar)
+   采用 position: sticky; bottom: 12px; 确保长图库纵向滚动时始终贴靠于视野下沿；
+   背景采用半透明与高斯模糊虚化，提供选中项计数、全选、批量导出与批量删除操作。 */
+.da-batch-floating-bar {
+    position: sticky;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-accent-color);
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+    box-sizing: border-box;
+}
+
+.da-batch-count-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--da-accent-color);
+}
+
+.da-batch-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 6. 分页控制器 (.da-pagination)
+   底部通用分页栏，左侧展示当前页码与总记录数统计，右侧提供上下翻页与快速跳转控件。 */
+.da-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 4px;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.da-pagination-info {
+    font-size: 13px;
+    color: var(--da-text-secondary);
+}
+
+.da-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-pagination-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--da-text-primary);
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.da-pagination-btn:hover:not(:disabled) {
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+}
+
+.da-pagination-btn.is-active {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.da-pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.da-pagination-ellipsis {
+    font-size: 12px;
+    color: var(--da-text-secondary);
+    padding: 0 4px;
+}

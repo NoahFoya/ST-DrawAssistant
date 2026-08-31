@@ -1,0 +1,171 @@
+/**
+ * @module styles/features/workflow
+ * @layer features (Layer 4)
+ * @description ComfyUI 工作流卡片状态、工作流宏变量格式化诊断弹窗与占位符标签
+ *
+ * 职责与约束：
+ * 1. 负责工作流卡片匹配状态标签（.da-workflow-status-badge）；
+ * 2. 负责工作流变量格式化诊断弹窗（.da-workflow-format-modal），展示宏变量解析匹配率；
+ * 3. 规范等宽宏占位符标签（.da-macro-tag）的高亮色彩规范。
+ */
+
+/* 1. 工作流卡片外壳与匹配状态微标 (.da-workflow-card) */
+.da-workflow-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-workflow-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--da-radius-pill);
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.da-workflow-status-badge--matched,
+.da-workflow-status-badge.is-matched,
+.da-workflow-status-badge.matched {
+    background: rgba(48, 209, 88, 0.15);
+    color: var(--da-color-success);
+    border: 1px solid rgba(48, 209, 88, 0.35);
+}
+
+.da-workflow-status-badge--unmatched,
+.da-workflow-status-badge.is-unmatched,
+.da-workflow-status-badge.unmatched {
+    background: rgba(255, 159, 10, 0.15);
+    color: var(--da-color-warn);
+    border: 1px solid rgba(255, 159, 10, 0.35);
+}
+
+/* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
+   用于呈现 ComfyUI 工作流中的宏变量替换诊断报告，
+   展示变量匹配率、缺失占位符警示以及格式化前后的 JSON 结构比对。 */
+.da-workflow-format-modal {
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.da-workflow-format-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.da-workflow-format-summary {
+    font-size: 0.9em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+    padding: 10px 14px;
+    background: var(--da-bg-card);
+    border-radius: var(--da-radius-sm, 4px);
+    border: 1px solid var(--da-border-color);
+}
+
+.da-workflow-format-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-workflow-format-section-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-workflow-format-section-title--success,
+.da-workflow-format-section-title.is-success,
+.da-workflow-format-section-title.success {
+    color: var(--da-color-success, #30d158);
+}
+
+.da-workflow-format-section-title--warning,
+.da-workflow-format-section-title.is-warning,
+.da-workflow-format-section-title.warning {
+    color: var(--da-color-warn, #f59e0b);
+}
+
+/* 3. 宏变量列表与匹配项 (.da-workflow-var-item) */
+.da-workflow-var-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-workflow-var-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.84em;
+    box-sizing: border-box;
+}
+
+.da-workflow-var-item--matched,
+.da-workflow-var-item.is-matched,
+.da-workflow-var-item.matched {
+    background: rgba(48, 209, 88, 0.08);
+    border: 1px solid rgba(48, 209, 88, 0.2);
+}
+
+.da-workflow-var-item--unmatched,
+.da-workflow-var-item.is-unmatched,
+.da-workflow-var-item.unmatched {
+    background: rgba(255, 159, 10, 0.08);
+    border: 1px solid rgba(255, 159, 10, 0.2);
+}
+
+/* 等宽宏变量标签 (.da-macro-tag) */
+.da-macro-tag {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.12);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
+    flex-shrink: 0;
+}
+
+.da-macro-tag--warning,
+.da-macro-tag.is-warning,
+.da-macro-tag.warning {
+    color: var(--da-color-warn, #f59e0b);
+    background: rgba(255, 159, 10, 0.12);
+    border-color: rgba(255, 159, 10, 0.3);
+}
+
+.da-workflow-var-target {
+    font-size: 0.88em;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-workflow-var-label {
+    font-weight: 600;
+    color: var(--da-text-primary);
+    flex-shrink: 0;
+}
+
+.da-workflow-var-tip {
+    font-size: 0.82em;
+    color: var(--da-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

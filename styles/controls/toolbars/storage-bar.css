@@ -1,0 +1,114 @@
+/**
+ * @module styles/controls/toolbars/storage-bar
+ * @layer controls/toolbars (Layer 3)
+ * @description IndexedDB 本地持久化存储状态栏、容量占比进度条与操作条带
+ *
+ * 职责与约束：
+ * 1. 用于画廊与设置面板，可视化展现浏览器 IndexedDB 存储使用量与剩余配额；
+ * 2. 进度条根据使用率动态切换渐变色：正常（绿色/品牌色）、警戒（橙黄色 >75%）、告急（红色 >90%）；
+ * 3. 底部集成 3 列统计卡片网格与快捷存储维护操作（导出备份、清空缓存）。
+ */
+
+/* 1. 存储状态栏主体容器 (.da-storage-bar) */
+.da-storage-bar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 2. 存储进度条区域 (.da-storage-progress-wrapper) */
+.da-storage-progress-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-storage-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-sm, 8px);
+}
+
+.da-storage-label {
+    font-size: var(--da-font-size-sm, 0.82rem);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+/* 容量百分比药丸微标 */
+.da-storage-pct-badge {
+    font-size: var(--da-font-size-xs, 0.75rem);
+    font-weight: 700;
+    color: var(--da-accent-color);
+    background: var(--da-bg-primary);
+    padding: 2px var(--da-space-sm, 8px);
+    border-radius: var(--da-radius-pill);
+    border: 1px solid var(--da-separator);
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.da-storage-pct-badge.is-warning {
+    color: var(--da-color-warn-subtle, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.da-storage-pct-badge.is-danger {
+    color: var(--da-color-danger, #ef4444);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* --- 3. 进度条轨道与填充条 --- */
+.da-storage-track {
+    width: 100%;
+    height: 8px;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-pill);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--da-separator);
+}
+
+.da-storage-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--da-accent-color), #38ef7d);
+    border-radius: var(--da-radius-pill);
+    transition: width 0.35s ease, background 0.35s ease;
+}
+
+.da-storage-fill.is-warning {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.da-storage-fill.is-danger {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+/* 4. 存储统计指标卡片网格与操作条带 (.da-storage-stats-grid)
+   3 列等宽网格，内嵌 stat-card 指标展示 */
+.da-storage-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+}
+
+.da-storage-actions-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+/* 存储配额异常或超限错误提示条 */
+.da-storage-error-hint {
+    color: var(--da-color-error, #ff453a);
+    font-size: var(--da-font-size-xs, 0.76rem);
+    padding: 6px 10px;
+    background: rgba(255, 69, 58, 0.08);
+    border: 1px solid rgba(255, 69, 58, 0.25);
+    border-radius: var(--da-radius-sm, 6px);
+    text-align: center;
+}

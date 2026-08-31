@@ -1,0 +1,61 @@
+/**
+ * @module styles/controls/toolbars/filter-bar
+ * @layer controls/toolbars (Layer 3)
+ * @description 通用筛选过滤工具栏与通栏操作条带组件 (FilterBar, ActionStrip)
+ */
+
+/* 1. 通用筛选过滤工具栏 (.da-filter-bar)
+   水平两端对齐容器，左侧插槽承载搜索框与过滤分段器，右侧插槽承载排序与刷新按钮；
+   flex-wrap: wrap 支持窄屏视口下左右两侧平滑折行。 */
+.da-filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-filter-bar__left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 240px;
+}
+
+.da-filter-bar__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 2. 通栏操作条带 (.da-action-strip)
+   带有左右插槽的单行通栏背景卡片条带，用于版本更新提示、诊断导出引导等横向条状布局。 */
+.da-action-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-action-strip__left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+}
+
+.da-action-strip__right {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+}

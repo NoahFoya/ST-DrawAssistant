@@ -1,0 +1,243 @@
+/**
+ * @module styles/controls/inputs/text-input
+ * @layer controls/inputs (Layer 3)
+ * @description 单行文本输入框、居中短文本与居中数字微调框
+ *
+ * 规范约束与技术原因：
+ * 1. 居中排版：短标记文本框与所有数值输入框一律居中显示，与右侧下拉框视觉重心高度一致；
+ * 2. 数字抖动消除：数值类输入框统一开启 tabular-nums 等宽数字特性，防止数值增减时字宽跳动；
+ * 3. 替代连续滑块：采样步数、CFG、透明度等数值统一采用精确数字微调框，避免拖拽误触与横向空间挤压；
+ * 4. 状态反馈：支持 .is-dirty 琥珀色标记与 .is-invalid 错误红框；恢复原值或修正后自动移除。
+ */
+
+/* 1. 单行文本输入框基类 (标准 240px 宽阶梯) */
+.da-input {
+    width: 240px;
+    max-width: 100%;
+    min-width: 100px;
+    height: 32px;
+    padding: 0 var(--da-space-md, 10px);
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    text-align: left;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background-color 0.14s var(--da-ease);
+}
+
+.da-input::placeholder {
+    color: var(--da-text-muted);
+    opacity: 0.7;
+    text-align: inherit;
+}
+
+.da-input:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-input-hover);
+}
+
+.da-input:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+.da-input:focus-visible {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring)), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+.da-input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+}
+
+/* 2. 居中短文本输入框 (120px 规格，严格为标准宽 50%) */
+.da-input--short,
+.da-input--center {
+    width: 120px;
+    max-width: 120px;
+    flex: 0 0 120px;
+    text-align: center;
+    font-family: var(--da-font-mono, var(--da-font-family));
+}
+
+.da-input--short::placeholder,
+.da-input--center::placeholder {
+    text-align: center;
+}
+
+/* 3. 居中纯数字微调输入框 (80px 规格，严格为标准宽 1/3) */
+.da-input--number {
+    width: 80px;
+    max-width: 80px;
+    flex: 0 0 80px;
+    text-align: center;
+    font-family: var(--da-font-mono, monospace);
+    /* tabular-nums 保证 0-9 数字等宽，避免微调时左右抖动 */
+    font-variant-numeric: tabular-nums;
+}
+
+.da-input--number::placeholder {
+    text-align: center;
+}
+
+/* 紧凑与超短数字微调变体 (48px 与 60px) */
+.da-input--num-short {
+    width: 48px;
+    max-width: 48px;
+    flex: 0 0 48px;
+    text-align: center;
+    padding: 0 2px !important;
+    font-family: var(--da-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+.da-input-num-small {
+    width: 60px;
+    max-width: 60px;
+    flex: 0 0 60px;
+    text-align: center;
+    font-family: var(--da-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 4. 带单位后缀复合数字输入框 (120px 规格，与短文本齐平，单位内嵌) */
+.da-input-unit-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 120px;
+    max-width: 120px;
+    flex: 0 0 120px !important;
+    flex-shrink: 0 !important;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.da-input-unit-wrapper .da-input,
+.da-input.da-input--has-unit {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 32px;
+    padding-left: 6px;
+    /* 右侧预留单位徽标宽度，防止输入数字被文字覆盖 */
+    padding-right: 28px;
+    text-align: center;
+    font-family: var(--da-font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 单位后缀绝对定位徽标 (内嵌于输入框内部右侧) */
+.da-input-unit-badge {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    pointer-events: none;
+    user-select: none;
+    font-family: var(--da-font-mono, var(--da-font-family));
+    white-space: nowrap;
+}
+
+/* 5. 内嵌后缀按钮容器 (密码框显隐切换眼睛内嵌于输入框内部) */
+.da-input-suffix-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px;
+    flex-shrink: 0;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.da-input-suffix-wrapper.da-w-full {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+}
+
+.da-input-suffix-wrapper .da-input {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    height: 32px !important;
+    padding-right: 32px !important;
+}
+
+.da-input-suffix-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--da-radius-xs, 4px);
+    transition: color 0.15s var(--da-ease), background-color 0.15s var(--da-ease);
+}
+
+.da-input-suffix-btn:hover {
+    color: var(--da-accent-color);
+    background-color: var(--da-bg-hover);
+}
+
+.da-input-suffix-btn svg {
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+/* 6. 表单状态联动 (未保存修改 / 校验错误) */
+/* 未保存修改态：琥珀色高亮微光 */
+.da-input.is-dirty,
+.da-input-suffix-wrapper.is-dirty .da-input,
+.da-input-unit-wrapper.is-dirty .da-input {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
+}
+
+/* 错误校验态：红色高亮提示格式异常 */
+.da-input.is-invalid,
+.da-input-suffix-wrapper.is-invalid .da-input,
+.da-input-unit-wrapper.is-invalid .da-input {
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
+    color: var(--da-color-error);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
+}
+
+/* 6. 紧凑尺寸与搜索变体 */
+.da-input--sm {
+    height: 26px !important;
+    padding: 0 8px !important;
+    font-size: var(--da-font-size-xs, 0.74rem) !important;
+}
+
+.da-input--search {
+    flex: 1;
+    min-width: 160px;
+}

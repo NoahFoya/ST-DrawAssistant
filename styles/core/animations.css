@@ -1,0 +1,102 @@
+/**
+ * @module styles/core/animations
+ * @layer core (Layer 1)
+ * @description 集中维护全局基础动画关键帧、边框高亮动效与状态指示脉冲
+ *
+ * 职责与约束：
+ * 1. 集中定义模态弹窗平滑展开、边框环绕高亮与状态指示扩散波纹等全局关键帧；
+ * 2. 动效遵循物理惯性，杜绝无意义高频晃动，保证 60fps 高性能平滑渲染；
+ * 3. 严格遵循 prefers-reduced-motion 无障碍偏好，在系统要求减弱动效时禁用循环动画。
+ */
+
+/* 1. 视图进入与平滑淡入关键帧 */
+@keyframes da-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 模态弹窗轻微缩放与平滑上浮进入动画 (从 0.96 缩放至 1.0) */
+@keyframes da-modal-slide-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* 2. 边框环绕高亮漫游关键帧 (Border Beam Sweep)
+   用于容器和关键卡片边缘的光斑匀速环绕流转 */
+@keyframes da-beam-walk {
+    0%   { top: -90px; left: -90px; }
+    25%  { top: -90px; left: calc(100% - 90px); }
+    50%  { top: calc(100% - 90px); left: calc(100% - 90px); }
+    75%  { top: calc(100% - 90px); left: -90px; }
+    100% { top: -90px; left: -90px; }
+}
+
+/* 3. 状态指示扩散波纹关键帧 (Radar Pulse Expansion)
+   用于顶栏引擎在线指示、网络状态、未保存小圆点的波纹扩散 */
+@keyframes da-radar-pulse {
+    0% {
+        transform: scale(0.6);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(2.4);
+        opacity: 0;
+    }
+}
+
+/* 基础透明度闪烁 */
+@keyframes da-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.65; }
+}
+
+/* 连通探测与更新指示小圆点发光脉冲 */
+@keyframes da-pulse-dot {
+    0%, 100% { box-shadow: 0 0 3px rgba(139, 92, 246, 0.4); }
+    50%      { box-shadow: 0 0 10px rgba(139, 92, 246, 0.85); }
+}
+
+/* 未保存修改状态指示小圆点轻量脉冲动画 */
+@keyframes da-pulse-dirty {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.45);
+    }
+}
+
+/* 版本更新徽标柔和发光动画 */
+@keyframes da-update-pill-glow {
+    0%, 100% {
+        box-shadow: 0 0 6px rgba(16, 185, 129, 0.25);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.55);
+    }
+}
+
+/* 4. 无障碍动效减弱偏好支持 (prefers-reduced-motion)
+   当系统开启减少动态效果时，停用循环脉冲与流光过渡动画，避免无意义的 GPU 持续消耗与视觉眩晕 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
