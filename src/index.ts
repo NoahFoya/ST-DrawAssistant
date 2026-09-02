@@ -3,42 +3,44 @@
  * @description ST-DrawAssistant 前端扩展引导与生命周期入口 (Bootstrap)
  */
 
-export const EXTENSION_NAME = 'ST-DrawAssistant';
-export const EXTENSION_VERSION = '0.1.0';
+import { createCoreContext, CoreContext, EXTENSION_NAME, EXTENSION_VERSION } from './core';
 
-let isInitialized = false;
+export * from './core';
+
+let _activeCoreContext: CoreContext | null = null;
+
+/** 获取当前处于激活状态的核心基础设施上下文 (供调试使用) */
+export function getActiveCoreContext(): CoreContext | null {
+    return _activeCoreContext;
+}
 
 /**
- * 插件全局引导入口函数 (Bootstrap Pipeline)
+ * 插件全局引导入口函数
  */
-export async function bootstrap(): Promise<void> {
-    if (isInitialized) {
+export async function bootstrap(): Promise<CoreContext> {
+    if (_activeCoreContext) {
         console.warn(`[${EXTENSION_NAME}] 插件已处于初始化状态，跳过重复自启动。`);
-        return;
+        return _activeCoreContext;
     }
-    isInitialized = true;
 
     console.info(`[${EXTENSION_NAME}] v${EXTENSION_VERSION} 插件正在启动初始化...`);
 
-    // 宿主就绪检测与事件绑定
+    // 1. 初始化核心基础设施层上下文
+    const context = createCoreContext();
+    _activeCoreContext = context;
+
+    // 2. 宿主环境就绪等待与本地存储初始化
+    try {
+        await context.host.whenReady();
+        await context.storage.init();
+        context.events.emit('host:ready', undefined);
+        context.logger.info('ST-DrawAssistant 核心基础设施层已就绪');
+    } catch (err) {
+        context.logger.error('核心基础设施层启动自检异常', err);
+    }
+
+    // 3. 监听页面卸载与生命周期安全清理
     if (typeof window !== 'undefined') {
-        const checkContextReady = () => {
-            const st = (window as unknown as { SillyTavern?: { getContext?: () => { eventSource?: { on: (event: string, fn: (...args: unknown[]) => void) => void }, event_types?: Record<string, string> } } }).SillyTavern;
-            return Boolean(st?.getContext?.()?.eventSource && st?.getContext?.()?.event_types);
-        };
-
-        if (checkContextReady()) {
-            setupLifecycleListeners();
-        } else {
-            const timer = setInterval(() => {
-                if (checkContextReady()) {
-                    clearInterval(timer);
-                    setupLifecycleListeners();
-                }
-            }, 100);
-        }
-
-        // 页面卸载/刷新时的资源安全释放
         window.addEventListener(
             'pagehide',
             () => {
@@ -47,40 +49,23 @@ export async function bootstrap(): Promise<void> {
             { once: true }
         );
     }
-}
 
-/**
- * 注册 SillyTavern 核心生命周期监听器
- */
-function setupLifecycleListeners(): void {
-    try {
-        const st = (window as unknown as { SillyTavern: { getContext: () => { eventSource: { on: (event: string, fn: (...args: unknown[]) => void) => void }, event_types: Record<string, string> } } }).SillyTavern;
-        const ctx = st.getContext();
-        const { eventSource, event_types } = ctx;
-
-        if (event_types?.APP_READY) {
-            eventSource.on(event_types.APP_READY, () => {
-                console.info(`[${EXTENSION_NAME}] 收到 APP_READY 事件，扩展进入运行态。`);
-            });
-        }
-
-        if (event_types?.CHAT_CHANGED) {
-            eventSource.on(event_types.CHAT_CHANGED, () => {
-                console.debug(`[${EXTENSION_NAME}] 收到 CHAT_CHANGED 事件，重置上下文缓存。`);
-            });
-        }
-    } catch (err) {
-        console.error(`[${EXTENSION_NAME}] 注册宿主生命周期事件失败:`, err);
-    }
+    return context;
 }
 
 /**
  * 释放插件持有的所有全局资源
  */
 export function dispose(): void {
-    if (!isInitialized) return;
-    isInitialized = false;
-    console.info(`[${EXTENSION_NAME}] 插件资源已释放。`);
+    if (!_activeCoreContext) return;
+    try {
+        _activeCoreContext.dispose();
+    } catch (err) {
+        console.error(`[${EXTENSION_NAME}] 释放插件资源异常:`, err);
+    } finally {
+        _activeCoreContext = null;
+        console.info(`[${EXTENSION_NAME}] 插件资源已释放。`);
+    }
 }
 
 // 浏览器环境自动引导自启动

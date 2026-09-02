@@ -30,7 +30,7 @@ export async function init(router: Router): Promise<void> {
         res.json({
             status: 'ok',
             plugin: info.id,
-            version: '0.1.0',
+            version: '0.1.1',
             timestamp: Date.now()
         });
     });
