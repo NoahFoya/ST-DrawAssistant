@@ -51,11 +51,11 @@ interface HostSubscriptionDescriptor {
 }
 
 /**
- * 宿主环境客户端接口代理
- * 封装酒馆就绪检测、消息事件监听、角色信息读取与扩展数据防抖存盘
+ * 酒馆宿主环境客户端接口代理
+ * 封装酒馆就绪检测、消息事件监听、角色信息读取与配置防抖保存
  */
 export class HostClient implements IDisposable {
-    private readonly _disposables: IDisposable[] = [];
+    private readonly _disposables = new Set<IDisposable>();
     private readonly _pendingSubscriptions = new Set<HostSubscriptionDescriptor>();
     private _isReady = false;
     private _readyPromise: Promise<void> | null = null;
@@ -153,7 +153,7 @@ export class HostClient implements IDisposable {
             });
 
             item.disposable = activeDisposable;
-            this._disposables.push(activeDisposable);
+            this._disposables.add(activeDisposable);
         }
     }
 
@@ -179,14 +179,16 @@ export class HostClient implements IDisposable {
         }
 
         const remover = toDisposable(() => {
+            this._disposables.delete(remover);
             this._pendingSubscriptions.delete(item);
             if (item.disposable) {
+                this._disposables.delete(item.disposable);
                 item.disposable.dispose();
                 item.disposable = undefined;
             }
         });
 
-        this._disposables.push(remover);
+        this._disposables.add(remover);
         return remover;
     }
 
@@ -293,14 +295,14 @@ export class HostClient implements IDisposable {
         };
     }
 
-    /** 获取指定楼层的 DOM 容器元素 */
+    /** 获取指定消息的 DOM 容器元素 */
     public getMessageElement(messageId: number): HTMLElement | null {
         if (typeof document === 'undefined') return null;
         return document.querySelector(`.mes[mesid="${messageId}"]`) as HTMLElement | null;
     }
 
     /**
-     * 向指定楼层的 message.extra[EXTENSION_KEY] 写入扩展数据并触发防抖存盘
+     * 向指定消息的 message.extra[EXTENSION_KEY] 写入扩展数据并触发防抖保存
      */
     public writeChatMessageExtra(messageId: number, key: string, value: unknown): void {
         const ctx = this.getST();
@@ -347,7 +349,7 @@ export class HostClient implements IDisposable {
         this.saveExtensionSettingsDebounced();
     }
 
-    /** 获取宿主 API CSRF 安全标头 */
+    /** 获取酒馆 API CSRF 请求头 */
     public getRequestHeaders(): Record<string, string> {
         return this.getST()?.getRequestHeaders?.() || {};
     }
@@ -357,9 +359,9 @@ export class HostClient implements IDisposable {
         this._isReady = false;
         this._readyPromise = null;
         this._pendingSubscriptions.clear();
-        for (const d of this._disposables) {
+        for (const d of Array.from(this._disposables)) {
             d.dispose();
         }
-        this._disposables.length = 0;
+        this._disposables.clear();
     }
 }

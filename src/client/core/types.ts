@@ -50,7 +50,7 @@ export interface ImageMetadata {
 }
 
 /**
- * 本地持久化保存的图像实体
+ * 本地存储的图片记录
  */
 export interface StoredImageRecord {
     /** 图像唯一 ID */

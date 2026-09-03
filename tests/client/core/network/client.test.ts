@@ -82,22 +82,12 @@ describe('NetworkClient', () => {
                     'X-Requested-With': 'XMLHttpRequest'
                 })
             );
+            expect(callArgs[1].headers['Content-Type']).toBeUndefined();
         });
 
-        it('遇到 403 错误应刷新 CSRF 标头并自动重试一次', async () => {
-            let callCount = 0;
-            const mockFetch = vi.fn().mockImplementation(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.resolve(new Response('Forbidden', { status: 403 }));
-                }
-                return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
-            });
+        it('遇到 403 状态码时不自动重试，直接返回原始 Response', async () => {
+            const mockFetch = vi.fn().mockResolvedValue(new Response('Forbidden', { status: 403 }));
             globalThis.fetch = mockFetch;
-
-            mockCsrfProvider
-                .mockReturnValueOnce({ 'X-CSRF-Token': 'old-token' })
-                .mockReturnValueOnce({ 'X-CSRF-Token': 'new-refreshed-token' });
 
             const client = new NetworkClient({
                 csrfHeadersProvider: mockCsrfProvider,
@@ -105,8 +95,8 @@ describe('NetworkClient', () => {
             });
 
             const resp = await client.fetchHost('/api/test-403');
-            expect(mockFetch).toHaveBeenCalledTimes(2);
-            expect(mockCsrfProvider).toHaveBeenCalledTimes(2);
+            expect(resp.status).toBe(403);
+            expect(mockFetch).toHaveBeenCalledTimes(1);
         });
 
         it('当请求体为 FormData 时不应强制附加 application/json 标头', async () => {
@@ -131,7 +121,7 @@ describe('NetworkClient', () => {
             expect(callHeaders['X-Requested-With']).toBe('XMLHttpRequest');
         });
 
-        it('应正确规范化标准 Headers 实例', async () => {
+        it('应正确解析并转换 Headers 实例为普通键值对象', async () => {
             const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true })));
             globalThis.fetch = mockFetch;
 
@@ -240,7 +230,7 @@ describe('NetworkClient', () => {
             expect(parsedBody.url).toBe('http://192.168.1.50:8188/sdapi/v1/txt2img');
         });
 
-        it('在 server 模式下若代理返回 502 应对称抛出 NetworkError (code: GATEWAY_ERROR)', async () => {
+        it('在 server 模式下若代理返回 502 应转换为 NetworkError (code: GATEWAY_ERROR)', async () => {
             const errorPayload = {
                 error: 'Bad Gateway: 宿主服务端无法连接至生图端点',
                 code: 'BAD_GATEWAY',
@@ -288,6 +278,110 @@ describe('NetworkClient', () => {
             expect(resp.status).toBe(400);
             const data = await resp.json();
             expect(data).toEqual(upstreamError);
+        });
+
+        it('在 browser 模式下直连超时应准确抛出 NetworkError (code: TIMEOUT)', async () => {
+            // 模拟超时挂起的请求
+            globalThis.fetch = vi.fn().mockImplementation((_url, options) => {
+                return new Promise((_resolve, reject) => {
+                    if (options?.signal) {
+                        options.signal.addEventListener('abort', () => {
+                            reject(options.signal.reason);
+                        });
+                    }
+                });
+            });
+
+            const client = new NetworkClient({
+                csrfHeadersProvider: mockCsrfProvider,
+                getProxyMode: () => 'browser'
+            });
+
+            try {
+                await client.fetchExternal('http://127.0.0.1:8188/prompt', {
+                    timeoutMs: 20
+                });
+                expect.unreachable('应抛出超时错误');
+            } catch (err: any) {
+                expect(err).toBeInstanceOf(NetworkError);
+                expect(err.code).toBe('TIMEOUT');
+                expect(err.message).toContain('直连生图端点超时');
+            }
+        });
+
+        it('在 browser 模式下若外部 AbortSignal 取消应原样抛出 AbortError', async () => {
+            const controller = new AbortController();
+            globalThis.fetch = vi.fn().mockImplementation((_url, options) => {
+                return new Promise((_resolve, reject) => {
+                    options?.signal?.addEventListener('abort', () => {
+                        const abortErr = new Error('Client abort');
+                        abortErr.name = 'AbortError';
+                        reject(abortErr);
+                    });
+                });
+            });
+
+            const client = new NetworkClient({
+                csrfHeadersProvider: mockCsrfProvider,
+                getProxyMode: () => 'browser'
+            });
+
+            const promise = client.fetchExternal('http://127.0.0.1:8188/prompt', {
+                signal: controller.signal
+            });
+            controller.abort();
+
+            try {
+                await promise;
+                expect.unreachable('应抛出中止错误');
+            } catch (err: any) {
+                expect(err?.name).toBe('AbortError');
+            }
+        });
+    });
+
+    describe('probeEndpoint', () => {
+        it('当目标端点返回 200 时应返回连通成功状态', async () => {
+            const mockFetch = vi.fn().mockResolvedValue(new Response('OK', { status: 200, statusText: 'OK' }));
+            globalThis.fetch = mockFetch;
+
+            const client = new NetworkClient({
+                csrfHeadersProvider: mockCsrfProvider,
+                getProxyMode: () => 'browser'
+            });
+
+            const result = await client.probeEndpoint('http://127.0.0.1:8188/system_stats');
+            expect(result.ok).toBe(true);
+            expect(result.status).toBe(200);
+            expect(result.error).toBeUndefined();
+        });
+
+        it('当目标端点返回 404 时应返回 ok=false 并附带 HTTP 状态文本', async () => {
+            const mockFetch = vi.fn().mockResolvedValue(new Response('Not Found', { status: 404, statusText: 'Not Found' }));
+            globalThis.fetch = mockFetch;
+
+            const client = new NetworkClient({
+                csrfHeadersProvider: mockCsrfProvider,
+                getProxyMode: () => 'browser'
+            });
+
+            const result = await client.probeEndpoint('http://127.0.0.1:8188/invalid-route');
+            expect(result.ok).toBe(false);
+            expect(result.status).toBe(404);
+            expect(result.error).toContain('HTTP 404');
+        });
+
+        it('当网络连接彻底断开时应捕获异常并返回错误原因', async () => {
+            globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'));
+
+            const client = new NetworkClient({
+                csrfHeadersProvider: mockCsrfProvider,
+                getProxyMode: () => 'browser'
+            });
+
+            const result = await client.probeEndpoint('http://127.0.0.1:9999/health');
+            expect(result.ok).toBe(false);
+            expect(result.error).toBeDefined();
         });
     });
 });

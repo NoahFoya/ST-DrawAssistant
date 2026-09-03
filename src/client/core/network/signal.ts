@@ -1,6 +1,6 @@
 /**
  * @module core/network/signal
- * @description 多源取消信号与超时编排工具函数
+ * @description 超时控制与取消信号组合工具
  */
 
 export interface TimeoutSignalResult {
@@ -27,7 +27,7 @@ export function composeTimeoutSignal(
 
     const timer = setTimeout(() => {
         timedOut = true;
-        controller.abort(new Error(`Operation timed out after ${timeoutMs}ms`));
+        controller.abort(new DOMException(`Operation timed out after ${timeoutMs}ms`, 'AbortError'));
     }, timeoutMs);
 
     let onParentAbort: (() => void) | null = null;

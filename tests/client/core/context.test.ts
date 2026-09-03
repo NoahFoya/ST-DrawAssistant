@@ -14,7 +14,7 @@ describe('CoreContext (基础设施服务容器)', () => {
         };
     });
 
-    it('createCoreContext 应正确装配所有底层单例服务', () => {
+    it('createCoreContext 应正确实例化并关联底层核心服务', () => {
         const context = createCoreContext();
 
         expect(context.host).toBeDefined();
@@ -34,5 +34,37 @@ describe('CoreContext (基础设施服务容器)', () => {
         context.dispose();
 
         expect(customDisposable.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('当监听到宿主 chat:changed 时应主动调用 storage.revokeAllUrls 并派发总线事件', () => {
+        let chatListener: ((chatId: string) => void) | undefined;
+        (globalThis as any).SillyTavern.getContext = () => ({
+            eventSource: {
+                on: vi.fn((event, handler) => {
+                    if (event === 'CHAT_CHANGED') {
+                        chatListener = handler;
+                    }
+                }),
+                off: vi.fn(),
+                emit: vi.fn()
+            },
+            event_types: { CHAT_CHANGED: 'CHAT_CHANGED' },
+            extensionSettings: {},
+            saveSettingsDebounced: vi.fn(),
+            saveChatDebounced: vi.fn()
+        });
+
+        const context = new CoreContext();
+        const revokeSpy = vi.spyOn(context.storage, 'revokeAllUrls');
+        const busSpy = vi.fn();
+        context.events.on('chat:changed', busSpy);
+
+        expect(chatListener).toBeDefined();
+        chatListener!('chat-456');
+
+        expect(revokeSpy).toHaveBeenCalledTimes(1);
+        expect(busSpy).toHaveBeenCalledWith({ chatId: 'chat-456' });
+
+        context.dispose();
     });
 });

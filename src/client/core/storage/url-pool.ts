@@ -55,6 +55,10 @@ export class ImageUrlPool implements IDisposable {
             const url = await pending;
             const loadedEntry = this._cache.get(imageId);
             if (loadedEntry && url) {
+                if (loadedEntry.cleanupTimer) {
+                    clearTimeout(loadedEntry.cleanupTimer);
+                    loadedEntry.cleanupTimer = null;
+                }
                 loadedEntry.refCount += 1;
             }
             return url;
@@ -64,6 +68,11 @@ export class ImageUrlPool implements IDisposable {
             try {
                 const blob = await blobProvider();
                 if (!blob || this._isDisposed) return null;
+
+                // 若加载期间已被显式撤销，则跳过缓存写入
+                if (!this._pendingLoads.has(imageId)) {
+                    return null;
+                }
 
                 const url = URL.createObjectURL(blob);
                 const newEntry: UrlPoolEntry = {
@@ -108,6 +117,25 @@ export class ImageUrlPool implements IDisposable {
                 }
             }, this._releaseDelayMs);
         }
+    }
+
+    /**
+     * 立即撤销指定图片的临时访问链接并从缓存中彻底移除
+     *
+     * @param imageId 图片唯一 ID
+     */
+    public revoke(imageId: string): void {
+        if (!imageId) return;
+        const entry = this._cache.get(imageId);
+        if (entry) {
+            if (entry.cleanupTimer) {
+                clearTimeout(entry.cleanupTimer);
+                entry.cleanupTimer = null;
+            }
+            URL.revokeObjectURL(entry.url);
+            this._cache.delete(imageId);
+        }
+        this._pendingLoads.delete(imageId);
     }
 
     /** 撤销全部活跃的临时访问链接并清空缓存 */

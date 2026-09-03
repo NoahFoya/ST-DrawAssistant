@@ -54,6 +54,15 @@ describe('ConfigStore & mergeSettingsWithDefaults', () => {
             const merged = mergeSettingsWithDefaults(userConfig);
             expect(merged.engineConfigs.comfyui).toEqual({ serverUrl: 'http://127.0.0.1:8188' });
         });
+
+        it('修改合并后的配置对象不应污染 DEFAULT_SETTINGS 全局默认对象', () => {
+            const merged = mergeSettingsWithDefaults({});
+            (merged.engineConfigs as any)['polluteKey'] = { test: true };
+            merged.customThemes.push({ id: 'pollute', name: 'pollute', tokens: {} });
+
+            expect((DEFAULT_SETTINGS.engineConfigs as any)['polluteKey']).toBeUndefined();
+            expect(DEFAULT_SETTINGS.customThemes.some(t => t.id === 'pollute')).toBe(false);
+        });
     });
 
     describe('ConfigStore 状态管理与监听', () => {

@@ -25,7 +25,7 @@ export class StorageService implements IDisposable {
         await this.db.init();
     }
 
-    /** 保存图像实体记录 */
+    /** 保存图片记录 */
     public async saveImage(record: StoredImageRecord): Promise<void> {
         await this.db.save(record);
     }
@@ -35,9 +35,9 @@ export class StorageService implements IDisposable {
         return await this.db.get(id);
     }
 
-    /** 根据 ID 删除图像记录并释放其临时链接 */
+    /** 根据 ID 删除图片记录并释放其临时访问链接 */
     public async deleteImage(id: string): Promise<boolean> {
-        this.urlPool.release(id);
+        this.urlPool.revoke(id);
         return await this.db.delete(id);
     }
 

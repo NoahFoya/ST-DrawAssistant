@@ -33,37 +33,41 @@ export interface ThemeDefinition {
     tokens: Record<string, string>;
 }
 
-/** 内置日间模式安全常量主题 */
+/** 内置明亮主题 */
 export const BUILTIN_THEME_LIGHT: ThemeDefinition = Object.freeze({
     id: 'light',
     name: '明亮日间',
     isDark: false,
     tokens: Object.freeze({
         '--da-primary': '#2563eb',
+        '--da-primary-hover': '#1d4ed8',
         '--da-bg-base': '#ffffff',
         '--da-bg-surface': '#f8fafc',
+        '--da-surface-card': 'rgba(0, 0, 0, 0.04)',
         '--da-text-base': '#0f172a',
         '--da-text-muted': '#64748b',
         '--da-border': '#e2e8f0'
     })
 });
 
-/** 内置夜间模式安全常量主题 (出厂默认) */
+/** 内置深色主题 (默认) */
 export const BUILTIN_THEME_DARK: ThemeDefinition = Object.freeze({
     id: 'dark',
     name: '深色夜间',
     isDark: true,
     tokens: Object.freeze({
         '--da-primary': '#3b82f6',
+        '--da-primary-hover': '#2563eb',
         '--da-bg-base': '#0f172a',
         '--da-bg-surface': '#1e293b',
+        '--da-surface-card': 'rgba(255, 255, 255, 0.05)',
         '--da-text-base': '#f8fafc',
         '--da-text-muted': '#94a3b8',
         '--da-border': '#334155'
     })
 });
 
-/** 内置安全常量主题集合 (默认样式回退，避免样式缺失) */
+/** 内置备用主题列表 (用于缺少自定义配置时的回退) */
 export const BUILTIN_THEMES: readonly ThemeDefinition[] = Object.freeze([
     BUILTIN_THEME_DARK,
     BUILTIN_THEME_LIGHT

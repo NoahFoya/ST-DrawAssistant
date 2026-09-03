@@ -6,16 +6,18 @@
 :root {
     --da-primary: #3b82f6;
     --da-primary-hover: #2563eb;
-    --da-surface: rgba(30, 41, 59, 0.95);
+    --da-bg-base: #0f172a;
+    --da-bg-surface: #1e293b;
     --da-surface-card: rgba(255, 255, 255, 0.05);
-    --da-text: #f8fafc;
+    --da-text-base: #f8fafc;
     --da-text-muted: #94a3b8;
-    --da-border: rgba(255, 255, 255, 0.1);
+    --da-border: #334155;
     --da-radius: 8px;
     --da-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.st-da-root {
+.da-root {
     font-family: inherit;
     box-sizing: border-box;
+    color: var(--da-text-base);
 }

@@ -38,7 +38,7 @@ export class IndexedDbStore implements IDisposable {
         }
     }
 
-    /** 保存图像实体记录 */
+    /** 保存图片记录 */
     public async save(record: StoredImageRecord): Promise<void> {
         await this.init();
         await this._db.setItem(record.id, record);
@@ -60,8 +60,8 @@ export class IndexedDbStore implements IDisposable {
     /**
      * 按创建时间倒序分页获取图片记录
      *
-     * 先收集轻量级的时间与 ID 信息完成分页切片，再按需读取当前页的图片实体，
-     * 避免在内存中一次性加载所有大图数据导致浏览器内存溢出。
+     * 先收集时间与 ID 进行分页，再按需读取对应页的图片数据，
+     * 避免在内存中一次性加载所有大图导致浏览器内存溢出。
      *
      * @param limit 每页记录数
      * @param offset 起始位置
@@ -82,15 +82,13 @@ export class IndexedDbStore implements IDisposable {
         indexList.sort((a, b) => b.createdAt - a.createdAt);
         const pagedIndexes = indexList.slice(offset, offset + limit);
 
-        const records: StoredImageRecord[] = [];
-        for (const item of pagedIndexes) {
-            const record = await this._db.getItem<StoredImageRecord>(item.id);
-            if (record) {
-                records.push(record);
-            }
-        }
+        const records = await Promise.all(
+            pagedIndexes.map(async (item) => {
+                return await this._db.getItem<StoredImageRecord>(item.id);
+            })
+        );
 
-        return records;
+        return records.filter((r): r is StoredImageRecord => r !== null);
     }
 
     /** 获取记录总数 */

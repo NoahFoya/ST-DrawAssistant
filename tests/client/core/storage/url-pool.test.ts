@@ -123,4 +123,41 @@ describe('ImageUrlPool (Object URL 内存管理池)', () => {
         vi.advanceTimersByTime(5000);
         expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith(url1);
     });
+
+    it('revoke 应当立即强制撤销指定图片的 Object URL 并彻底清理缓存', async () => {
+        const pool = new ImageUrlPool({ releaseDelayMs: 5000 });
+        const mockBlob = new Blob(['data']);
+        const provider = vi.fn().mockResolvedValue(mockBlob);
+
+        const url = await pool.acquire('img-force-revoke', provider);
+        expect(url).toBeTruthy();
+
+        // 立即强制撤销
+        pool.revoke('img-force-revoke');
+        expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith(url);
+
+        // 再次 acquire 时应当重新调用 provider 生成新 URL
+        const url2 = await pool.acquire('img-force-revoke', provider);
+        expect(url2).toBeTruthy();
+        expect(provider).toHaveBeenCalledTimes(2);
+    });
+
+    it('并发加载期间若图片被撤销，应终止创建并返回 null', async () => {
+        const pool = new ImageUrlPool();
+        let resolveBlob: (blob: Blob) => void;
+        const delayedProvider = vi.fn().mockImplementation(() => {
+            return new Promise<Blob>((resolve) => {
+                resolveBlob = resolve;
+            });
+        });
+
+        const p = pool.acquire('img-cancel', delayedProvider);
+        // 加载未完成时外部调用 revoke
+        pool.revoke('img-cancel');
+
+        resolveBlob!(new Blob(['data']));
+        const result = await p;
+        expect(result).toBeNull();
+        expect(globalThis.URL.createObjectURL).not.toHaveBeenCalled();
+    });
 });

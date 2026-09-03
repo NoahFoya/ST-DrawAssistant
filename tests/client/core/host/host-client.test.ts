@@ -49,7 +49,7 @@ describe('HostClient (宿主环境交互)', () => {
         await expect(host.whenReady(50)).rejects.toThrow('等待 SillyTavern 宿主环境就绪超时');
     });
 
-    it('onCharacterMessageRendered 应注册宿主事件并在触发时规范化消息对象', () => {
+    it('onCharacterMessageRendered 应注册酒馆事件并在触发时构造标准消息对象', () => {
         const host = new HostClient();
         const handler = vi.fn();
 

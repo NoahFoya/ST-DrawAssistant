@@ -1,9 +1,9 @@
 /**
  * @file src/common/types.ts
- * @description 跨端共享通用基础类型与通信契约定义
+ * @description 前后端通用的基础类型与接口定义
  */
 
-/** 可注销与可释放资源的通用接口 */
+/** 资源释放接口 */
 export interface IDisposable {
     dispose(): void;
 }
@@ -16,15 +16,15 @@ export function toDisposable(fn: () => void): IDisposable {
                 isDisposed = true;
                 try {
                     fn();
-                } catch {
-                    // 捕获清理回调抛出的异常，避免中断后续全局资源的释放流程
+                } catch (err) {
+                    console.warn('[ST-DrawAssistant] 资源释放回调执行异常:', err);
                 }
             }
         }
     };
 }
 
-/** 跨端反向代理中继请求载荷 */
+/** 服务端代理请求参数 */
 export interface ProxyRelayPayload {
     url: string;
     method?: string;
@@ -33,7 +33,7 @@ export interface ProxyRelayPayload {
     timeoutMs?: number;
 }
 
-/** 反向代理错误响应载荷 */
+/** 服务端代理错误响应数据 */
 export interface ProxyErrorPayload {
     error: string;
     code: 'BAD_REQUEST' | 'BAD_GATEWAY' | 'GATEWAY_TIMEOUT' | 'SECURITY_BLOCKED' | 'CLIENT_CLOSED';

@@ -28,11 +28,10 @@ export async function bootstrap(): Promise<CoreContext> {
 
     console.info(`[${EXTENSION_NAME}] v${EXTENSION_VERSION} 插件正在启动初始化...`);
 
-    // 装配核心基础设施层服务容器
     const context = createCoreContext();
     _activeCoreContext = context;
 
-    // 校验宿主环境并初始化本地存储
+    // 等待宿主就绪，同步已存配置并挂载本地存储
     try {
         await context.host.whenReady();
         const savedSettings = context.host.getExtensionSettings();
@@ -75,7 +74,6 @@ export function dispose(): void {
     }
 }
 
-// 浏览器环境自动引导自启动
 if (typeof window !== 'undefined') {
     void bootstrap();
 }

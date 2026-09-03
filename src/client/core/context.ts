@@ -53,6 +53,8 @@ export class CoreContext implements IDisposable {
 
         this.addDisposable(
             this.host.onChatChanged((chatId) => {
+                // 会话切换时释放临时图片 Object URL 资源
+                this.storage.revokeAllUrls();
                 this.events.emit('chat:changed', { chatId });
             })
         );
@@ -68,11 +70,11 @@ export class CoreContext implements IDisposable {
         return disposable;
     }
 
-    /** 释放整个基础设施层资源树 */
+    /** 释放基础设施层所有托管服务与资源 */
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
-        this.logger.info('正在释放 Core 基础设施层资源树...');
+        this.logger.info('正在释放 Core 基础设施层资源...');
 
         for (const d of this._disposables.reverse()) {
             try {

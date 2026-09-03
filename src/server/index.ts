@@ -28,7 +28,6 @@ export const info: PluginInfo = {
 export async function init(router: Router): Promise<void> {
     console.info(`[${info.name}] 正在初始化服务端辅助路由...`);
 
-    // 基础健康检查接口
     router.get('/health', (_req: Request, res: Response) => {
         res.json({
             status: 'ok',
@@ -39,7 +38,6 @@ export async function init(router: Router): Promise<void> {
         });
     });
 
-    // 辅助反向代理中继接口
     router.post('/proxy', (req: Request, res: Response) => {
         void handleProxyRequest(req, res);
     });

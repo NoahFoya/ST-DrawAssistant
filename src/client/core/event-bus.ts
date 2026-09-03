@@ -1,6 +1,6 @@
 /**
  * @module core/event-bus
- * @description 进程内强类型解耦事件总线 (TypedEventBus)
+ * @description 进程内事件总线 (TypedEventBus)
  */
 
 import { IDisposable, toDisposable } from './types';
@@ -9,8 +9,8 @@ import { Logger } from './logger';
 export type EventHandler<T> = (payload: T) => void;
 
 /**
- * 强类型事件总线
- * 用于底层基础设施层与业务层之间的解耦通信，订阅时返回可直接注销的 IDisposable 对象
+ * 事件总线
+ * 用于各模块之间的事件订阅与通知
  */
 export class TypedEventBus<TEventMap extends Record<string, any>> implements IDisposable {
     private readonly _listeners = new Map<keyof TEventMap, Set<EventHandler<any>>>();
@@ -48,7 +48,7 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
     }
 
     /**
-     * 派发强类型事件
+     * 派发事件
      * 捕获并记录单个处理器的执行异常，防止异常扩散影响其他监听器
      */
     public emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]): void {

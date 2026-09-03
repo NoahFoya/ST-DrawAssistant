@@ -10,7 +10,7 @@ import { DEFAULT_SAVE_DEBOUNCE_MS, BUILTIN_THEMES, BUILTIN_THEME_DARK } from '..
 export type StateListener<T> = (state: T, keyPath?: string, oldState?: T) => void;
 export type KeyListener<V> = (newValue: V, oldValue: V) => void;
 
-/** 出厂默认配置 */
+/** 插件默认配置 */
 export const DEFAULT_SETTINGS: DrawAssistantSettings = {
     enabled: true,
     activeProvider: 'comfyui',
@@ -39,16 +39,29 @@ function isPlainObject(item: unknown): item is Record<string, any> {
     return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
+function deepClone<T>(obj: T): T {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(obj);
+        } catch {}
+    }
+    return JSON.parse(JSON.stringify(obj));
+}
+
 /**
  * 递归合并配置对象
- * 普通对象递归补齐默认值；数组与基础类型优先保留用户当前设置
+ * 普通对象递归补齐默认值；数组与基础类型优先保留用户当前设置；实现完整对象隔离
  */
 export function mergeSettingsWithDefaults(
     userSettings: unknown,
     defaults: DrawAssistantSettings = DEFAULT_SETTINGS
 ): DrawAssistantSettings {
+    const baseDefaults = deepClone(defaults);
     if (!userSettings || typeof userSettings !== 'object') {
-        return { ...defaults };
+        return baseDefaults;
     }
 
     const raw = userSettings as Record<string, any>;
@@ -58,24 +71,24 @@ export function mergeSettingsWithDefaults(
             return target;
         }
         if (Array.isArray(target)) {
-            return Array.isArray(source) ? source : target;
+            return Array.isArray(source) ? deepClone(source) : target;
         }
         if (isPlainObject(target) && isPlainObject(source)) {
             const result: Record<string, any> = { ...target };
             for (const key of Object.keys(source)) {
-                result[key] = key in target ? deepMerge(target[key], source[key]) : source[key];
+                result[key] = key in target ? deepMerge(target[key], source[key]) : deepClone(source[key]);
             }
             return result;
         }
-        return source;
+        return deepClone(source);
     }
 
-    return deepMerge(defaults, raw) as DrawAssistantSettings;
+    return deepMerge(baseDefaults, raw) as DrawAssistantSettings;
 }
 
 /**
  * 配置状态管理中心
- * 提供单向数据流、细粒度键级监听与防抖持久化能力
+ * 提供单向数据流、按键订阅变更与防抖持久化能力
  */
 export class ConfigStore implements IDisposable {
     private _state: DrawAssistantSettings;
@@ -125,7 +138,7 @@ export class ConfigStore implements IDisposable {
                 try {
                     handler(value, oldValue);
                 } catch (err) {
-                    this._logger.error(`键级监听执行失败 [${String(key)}]`, err);
+                    this._logger.error(`配置项变更监听执行失败 [${String(key)}]`, err);
                 }
             }
         }
@@ -169,7 +182,7 @@ export class ConfigStore implements IDisposable {
                     try {
                         h(this._state[key], oldState[key]);
                     } catch (err) {
-                        this._logger.error(`批量更新键级监听失败 [${String(key)}]`, err);
+                        this._logger.error(`配置项变更监听执行失败 [${String(key)}]`, err);
                     }
                 }
             }

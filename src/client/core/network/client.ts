@@ -96,8 +96,7 @@ export class NetworkClient {
     /**
      * 向宿主服务发起同源 HTTP 请求
      *
-     * 自动附加 CSRF 安全标头与 XMLHttpRequest 标识，
-     * 若遇到 403 令牌失效则自动刷新凭据并重试一次。
+     * 自动附加 CSRF 防护请求头与 X-Requested-With 标识。
      *
      * @param url 宿主相对或绝对路径
      * @param options 请求配置选项
@@ -109,11 +108,12 @@ export class NetworkClient {
         const csrfHeaders = options.skipCsrf ? {} : this._csrfHeadersProvider();
         const customHeaders = normalizeHeaders(options.headers);
 
-        // FormData 载荷需保留原生 boundary 分隔符，缺省 Content-Type 让运行环境自动识别注入
+        // FormData 需由运行环境自动生成带 boundary 的请求头；无 Body 的请求不附加 Content-Type
         const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+        const hasBody = options.body != null;
         const defaultHeaders: Record<string, string> = {
             'X-Requested-With': 'XMLHttpRequest',
-            ...(isFormData ? {} : { 'Content-Type': 'application/json' })
+            ...(hasBody && !isFormData ? { 'Content-Type': 'application/json' } : {})
         };
 
         const mergedHeaders: Record<string, string> = {
@@ -123,25 +123,11 @@ export class NetworkClient {
         };
 
         try {
-            let resp = await fetch(url, {
+            const resp = await fetch(url, {
                 ...options,
                 headers: mergedHeaders,
                 signal
             });
-
-            // 宿主会话令牌失效时自动刷新凭据重试一次
-            if (resp.status === 403 && !options.skipCsrf) {
-                this._logger.warn('遇到 403 CSRF 错误，刷新标头后重试...');
-                const refreshedHeaders = {
-                    ...mergedHeaders,
-                    ...this._csrfHeadersProvider()
-                };
-                resp = await fetch(url, {
-                    ...options,
-                    headers: refreshedHeaders,
-                    signal
-                });
-            }
 
             return resp;
         } catch (err: any) {
@@ -159,9 +145,9 @@ export class NetworkClient {
     /**
      * 向外部生图后端发起网络请求
      *
-     * 支持双通道网络分发路由：
-     * - server 模式：通过宿主服务端反向代理中继，规避浏览器 Mixed Content 限制并由服务端隔离注入鉴权凭据；
-     * - browser 模式：前端浏览器直接连接目标端点，剥离宿主凭据并执行协议安全检查。
+     * 支持两种请求模式：
+     * - server 模式：由服务端插件反向代理中继，解决跨域 (CORS) 与 Mixed Content 限制，并在服务端安全附加 API 凭据；
+     * - browser 模式：前端浏览器直接连接目标端点，剥离宿主敏感凭据并执行协议安全检查。
      *
      * @param targetUrl 目标生图服务端点 URL
      * @param options 请求配置选项
@@ -255,23 +241,24 @@ export class NetworkClient {
             });
             return resp;
         } catch (err: any) {
+            if (isTimeout()) {
+                const timeoutError = new NetworkError({
+                    message: `直连生图端点超时 (${timeoutMs}ms) [${targetUrl}]`,
+                    code: 'TIMEOUT',
+                    targetUrl,
+                    cause: err
+                });
+                this._logger.error(timeoutError.message);
+                throw timeoutError;
+            }
+
             if (err?.name === 'AbortError') {
-                if (isTimeout()) {
-                    const timeoutError = new NetworkError({
-                        message: `直连生图端点超时 (${timeoutMs}ms) [${targetUrl}]`,
-                        code: 'TIMEOUT',
-                        targetUrl,
-                        cause: err
-                    });
-                    this._logger.error(timeoutError.message);
-                    throw timeoutError;
-                }
                 this._logger.debug(`直连请求已中止 [${targetUrl}]`);
                 throw err;
             }
 
             const explicitError = new NetworkError({
-                message: `直连生图端点失败 [${targetUrl}]: 连接失败或被浏览器跨域 (CORS) 拦截。若后端未开启允许跨域，请在设置中将请求模式切换为 [服务端代理 (server)]。原因: ${err?.message || err}`,
+                message: `直连生图端点失败 [${targetUrl}]: 无法建立连接。可能原因: 1. 生图服务未启动或端口不通 (请先确认在浏览器能否直接访问该地址); 2. 浏览器跨域 (CORS) 限制 (后端需开启跨域或在设置中切换为 [服务端代理 (server)] 模式); 3. 网络离线。原因详情: ${err?.message || err}`,
                 code: 'NETWORK_ERROR',
                 targetUrl,
                 cause: err
@@ -280,6 +267,39 @@ export class NetworkClient {
             throw explicitError;
         } finally {
             cleanup();
+        }
+    }
+
+    /**
+     * 轻量探测目标生图服务端点的连通性 (用于设置面板连通性测试与快速诊断)
+     *
+     * 采用轻量 GET 请求探测端点连通性，自动遵循当前配置的代理或直连网络模式。
+     *
+     * @param targetUrl 目标端点地址
+     * @param options 探测选项 (默认 8000ms 超时)
+     */
+    public async probeEndpoint(
+        targetUrl: string,
+        options: { timeoutMs?: number; signal?: AbortSignal } = {}
+    ): Promise<{ ok: boolean; status?: number; error?: string }> {
+        const timeoutMs = options.timeoutMs ?? 8000;
+        try {
+            const resp = await this.fetchExternal(targetUrl, {
+                method: 'GET',
+                timeoutMs,
+                signal: options.signal
+            });
+            return {
+                ok: resp.ok,
+                status: resp.status,
+                error: resp.ok ? undefined : `HTTP ${resp.status} ${resp.statusText}`
+            };
+        } catch (err: any) {
+            return {
+                ok: false,
+                status: err?.status,
+                error: err?.message || String(err)
+            };
         }
     }
 }

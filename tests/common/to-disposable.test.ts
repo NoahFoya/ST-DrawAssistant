@@ -13,7 +13,8 @@ describe('toDisposable', () => {
         expect(cleanupFn).toHaveBeenCalledTimes(1);
     });
 
-    it('清理函数抛出异常时应被捕获，不中断执行流程', () => {
+    it('清理函数抛出异常时应输出警告并安全捕获，不中断后续流程', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const brokenCleanup = vi.fn().mockImplementation(() => {
             throw new Error('清理异常');
         });
@@ -24,5 +25,11 @@ describe('toDisposable', () => {
         }).not.toThrow();
 
         expect(brokenCleanup).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[ST-DrawAssistant] 资源释放回调执行异常:'),
+            expect.any(Error)
+        );
+
+        warnSpy.mockRestore();
     });
 });
