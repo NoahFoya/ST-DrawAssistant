@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "0.1.2",
+  "description": "ST-DrawAssistant 本地服务端配置文件示例。复制此文件为 config.json 并填写您的私有 API 密钥。",
+  "apiKeys": {
+    "novelai": "",
+    "openai": "",
+    "gemini": "",
+    "grok": ""
+  },
+  "serverOptions": {
+    "proxyTimeoutMs": 180000,
+    "maxPayloadSizeMb": 10,
+    "enableProxyLog": false,
+    "allowedHosts": ["127.0.0.1", "localhost", "192.168.0.0/16", "10.0.0.0/8"]
+  }
+}

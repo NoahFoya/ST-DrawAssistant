@@ -1,10 +1,13 @@
 /**
  * @module server/index
- * @description ST-DrawAssistant 服务端插件入口 (Node.js 运行域)
- * 遵循 SillyTavern Server Plugin 契约 (info, init, exit)
+ * @description ST-DrawAssistant 宿主服务端辅助插件入口 (Node.js 运行域)
+ * 实现 SillyTavern Server Plugin 标准接口 (info, init, exit)
  */
 
 import type { Router, Request, Response } from 'express';
+import { PLUGIN_ID, EXTENSION_NAME, EXTENSION_VERSION } from '../common';
+import { handleProxyRequest, abortAllActiveProxyRequests } from './proxy';
+import { getConfiguredKeyStatus } from './server-config';
 
 export interface PluginInfo {
     id: string;
@@ -13,34 +16,42 @@ export interface PluginInfo {
 }
 
 export const info: PluginInfo = {
-    id: 'st-drawassistant',
-    name: 'ST-DrawAssistant Server Plugin',
-    description: 'Server-side proxy and credentials isolation for ST-DrawAssistant'
+    id: PLUGIN_ID,
+    name: `${EXTENSION_NAME} Server Plugin`,
+    description: 'Server-side proxy relay and security guard for ST-DrawAssistant'
 };
 
 /**
- * 服务端插件初始化契约函数
+ * 服务端辅助插件初始化函数
  * @param router 宿主注入的专用 Express 路由器 (已挂载于 /api/plugins/st-drawassistant/)
  */
 export async function init(router: Router): Promise<void> {
-    console.info(`[${info.name}] 正在初始化服务端插件路由...`);
+    console.info(`[${info.name}] 正在初始化服务端辅助路由...`);
 
-    // 基础健康检查接口 (/api/plugins/st-drawassistant/health)
+    // 基础健康检查接口
     router.get('/health', (_req: Request, res: Response) => {
         res.json({
             status: 'ok',
             plugin: info.id,
-            version: '0.1.1',
+            version: EXTENSION_VERSION,
+            configuredKeys: getConfiguredKeyStatus(),
             timestamp: Date.now()
         });
     });
 
-    console.info(`[${info.name}] 服务端插件就绪。`);
+    // 辅助反向代理中继接口
+    router.post('/proxy', (req: Request, res: Response) => {
+        void handleProxyRequest(req, res);
+    });
+
+    console.info(`[${info.name}] 服务端辅助代理路由已挂载就绪。`);
 }
 
 /**
- * 服务端插件退出/重载资源释放契约函数
+ * 服务端辅助插件退出与资源释放函数
  */
 export async function exit(): Promise<void> {
-    console.info(`[${info.name}] 正在清理服务端插件资源...`);
+    console.info(`[${info.name}] 正在清理服务端辅助资源与连接...`);
+    abortAllActiveProxyRequests();
+    console.info(`[${info.name}] 资源清理完成。`);
 }

@@ -21,8 +21,16 @@
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@common/*": ["src/common/*"],
+      "@common": ["src/common/index.ts"],
+      "@client/*": ["src/client/*"],
+      "@client": ["src/client/index.ts"],
+      "@server/*": ["src/server/*"],
+      "@server": ["src/server/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "server", "**/*.test.ts"]

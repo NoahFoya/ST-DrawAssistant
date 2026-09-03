@@ -38,6 +38,8 @@ web_modules/
 .env
 .env.*
 !.env.example
+config/config.json
+!config/config.example.json
 
 # ==============================================================================
 # 5. IDE 与操作系统元数据

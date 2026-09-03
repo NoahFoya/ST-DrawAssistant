@@ -3,7 +3,7 @@ const path = require('path');
 /** @type {import('webpack').Configuration} */
 const clientConfig = {
     name: 'client',
-    entry: './src/index.ts',
+    entry: './src/client/index.ts',
     target: ['web', 'es2020'],
     devtool: 'source-map',
     output: {
@@ -19,6 +19,11 @@ const clientConfig = {
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.json'],
+        alias: {
+            '@common': path.resolve(__dirname, 'src/common'),
+            '@client': path.resolve(__dirname, 'src/client'),
+            '@server': path.resolve(__dirname, 'src/server'),
+        },
     },
     module: {
         rules: [
@@ -61,6 +66,11 @@ const serverConfig = {
     },
     resolve: {
         extensions: ['.ts', '.js', '.json'],
+        alias: {
+            '@common': path.resolve(__dirname, 'src/common'),
+            '@client': path.resolve(__dirname, 'src/client'),
+            '@server': path.resolve(__dirname, 'src/server'),
+        },
     },
     externals: {
         express: 'commonjs express',
