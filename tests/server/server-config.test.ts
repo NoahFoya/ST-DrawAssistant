@@ -6,7 +6,8 @@ import {
     loadServerConfig,
     getServerConfig,
     getConfiguredKeyStatus,
-    resetServerConfigCache
+    resetServerConfigCache,
+    resolveConfigFilePath
 } from '../../src/server/server-config';
 
 describe('ServerConfig (服务端本地配置加载器)', () => {
@@ -55,13 +56,14 @@ describe('ServerConfig (服务端本地配置加载器)', () => {
         expect(config.serverOptions.enableProxyLog).toBe(true);
     });
 
-    it('当配置文件缺失或损坏时应安全回退至出厂默认配置', () => {
+    it('当配置文件缺失或损坏时应安全回退至默认配置', () => {
         const config = loadServerConfig(path.join(tempDir, 'non-existent.json'));
 
         expect(config.apiKeys).toEqual({});
         expect(config.serverOptions.proxyTimeoutMs).toBe(180000);
-        expect(config.serverOptions.maxPayloadSizeMb).toBe(10);
+        expect(config.serverOptions.maxPayloadSizeMb).toBe(50);
         expect(config.serverOptions.enableProxyLog).toBe(false);
+        expect(config.serverOptions.allowedHosts).toContain('*');
     });
 
     it('getConfiguredKeyStatus 应只返回布尔值状态，绝不泄露明文密钥', () => {
@@ -91,5 +93,11 @@ describe('ServerConfig (服务端本地配置加载器)', () => {
         for (const v of values) {
             expect(typeof v).toBe('boolean');
         }
+    });
+
+    it('resolveConfigFilePath 应返回字符串有效路径且以 config.json 结尾', () => {
+        const resolved = resolveConfigFilePath();
+        expect(typeof resolved).toBe('string');
+        expect(resolved.endsWith('config.json')).toBe(true);
     });
 });

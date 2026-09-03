@@ -32,11 +32,11 @@ export interface ServerConfig {
     serverOptions: ServerOptions;
 }
 
-const DEFAULT_SERVER_OPTIONS: ServerOptions = {
+export const DEFAULT_SERVER_OPTIONS: ServerOptions = {
     proxyTimeoutMs: 180000,
-    maxPayloadSizeMb: 10,
+    maxPayloadSizeMb: 50,
     enableProxyLog: false,
-    allowedHosts: ['127.0.0.1', 'localhost', '192.168.0.0/16', '10.0.0.0/8']
+    allowedHosts: ['*'] // 默认放行所有合法生图端点 (包含局域网、DDNS、云端与第三方中转站)，用户可按需在 config.json 中收紧白名单
 };
 
 let _cachedConfig: ServerConfig | null = null;
@@ -45,17 +45,17 @@ let _cachedConfig: ServerConfig | null = null;
  * 确定 config/config.json 的物理绝对路径
  */
 export function resolveConfigFilePath(): string {
-    // 优先尝试当前工作目录下的 config/config.json，或者模块上级目录
+    // 优先读取插件自身目录下的配置文件
+    const pluginConfig = path.resolve(__dirname, '..', 'config', 'config.json');
+    if (fs.existsSync(pluginConfig)) {
+        return pluginConfig;
+    }
+    // 调试与独立运行环境下尝试当前工作目录
     const cwdConfig = path.resolve(process.cwd(), 'config', 'config.json');
     if (fs.existsSync(cwdConfig)) {
         return cwdConfig;
     }
-    // 尝试从编译产物目录向上寻找根目录
-    const relativeConfig = path.resolve(__dirname, '..', 'config', 'config.json');
-    if (fs.existsSync(relativeConfig)) {
-        return relativeConfig;
-    }
-    return cwdConfig;
+    return pluginConfig;
 }
 
 /**
@@ -89,7 +89,7 @@ export function loadServerConfig(customPath?: string): ServerConfig {
             return _cachedConfig;
         }
     } catch (err) {
-        console.warn(`[ST-DrawAssistant][ServerConfig] 读取本地配置文件失败 [${filePath}]，将使用出厂默认配置。原因:`, err);
+        console.warn(`[ST-DrawAssistant][ServerConfig] 读取本地配置文件失败 [${filePath}]，将使用默认配置。原因:`, err);
     }
 
     _cachedConfig = {

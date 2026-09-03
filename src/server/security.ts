@@ -1,9 +1,10 @@
 /**
  * @module server/security
- * @description 服务端辅助插件安全网关与标头过滤处理
+ * @description 服务端代理安全校验与请求头清洗过滤
  */
 
 import type { Response } from 'express';
+import { DEFAULT_SERVER_OPTIONS } from './server-config';
 
 /** 限制访问的云服务元数据端点地址 */
 const FORBIDDEN_METADATA_HOSTS = new Set([
@@ -14,7 +15,7 @@ const FORBIDDEN_METADATA_HOSTS = new Set([
     '[fd00:ec2::254]'
 ]);
 
-/** 需显式剥离的酒馆宿主内部敏感会话标头 */
+/** 转发外部请求时需移除的酒馆内部会话头，防止敏感凭据外泄 */
 const FORBIDDEN_REQUEST_HEADERS = new Set([
     'cookie',
     'x-csrf-token',
@@ -24,7 +25,7 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
     'referer'
 ]);
 
-/** 响应中必须剥离的逐跳传输标头与报头压缩控制标头 */
+/** 回传客户端时需移除的逐跳传输头 (Hop-by-hop Headers) */
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
     'connection',
     'keep-alive',
@@ -67,7 +68,7 @@ function parseIpv4(ip: string): number | null {
 }
 
 /**
- * 校验指定 IPv4 是否匹配 CIDR 网段规则 (如 192.168.0.0/16)
+ * 校验指定 IPv4 是否匹配 CIDR 网段规则 (如 192.168.0.0/16, 172.16.0.0/12)
  */
 function matchCidr(ipStr: string, cidr: string): boolean {
     const [baseIp, prefixStr] = cidr.split('/');
@@ -85,10 +86,25 @@ function matchCidr(ipStr: string, cidr: string): boolean {
 }
 
 /**
- * 校验目标主机名是否符合受信任的白名单策略
+ * 校验目标主机名是否符合受信任的安全策略
+ *
+ * 支持通配放行、内置已知云服务域名、CIDR 子网掩码与主机名/泛域名精确匹配。
+ *
+ * @param hostname 目标主机名
+ * @param allowedHosts 服务端配置的主机白名单
  */
-export function isHostAllowed(hostname: string, allowedHosts: readonly string[] = []): boolean {
+export function isHostAllowed(
+    hostname: string,
+    allowedHosts: readonly string[] = []
+): boolean {
     const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    // 若白名单包含 '*'，则全局放行任意主机
+    for (const rule of allowedHosts) {
+        if (rule.trim() === '*') {
+            return true;
+        }
+    }
 
     // 匹配内置受信任的云端生图服务域名
     for (const domain of KNOWN_CLOUD_DOMAINS) {
@@ -97,14 +113,10 @@ export function isHostAllowed(hostname: string, allowedHosts: readonly string[] 
         }
     }
 
-    // 匹配服务端配置的受信任主机列表（支持通配符、CIDR 子网与域名泛解析）
+    // 匹配服务端配置的受信任主机列表（支持 CIDR 子网与主机名/泛域名）
     for (const rule of allowedHosts) {
         const cleanRule = rule.trim().toLowerCase().replace(/^\[|\]$/g, '');
         if (!cleanRule) continue;
-
-        if (cleanRule === '*') {
-            return true;
-        }
 
         // CIDR 掩码匹配 (如 192.168.0.0/16)
         if (cleanRule.includes('/')) {
@@ -114,7 +126,7 @@ export function isHostAllowed(hostname: string, allowedHosts: readonly string[] 
             continue;
         }
 
-        // 主机名/IP 精确或泛域名匹配
+        // 主机名/IP 精确匹配或子域名泛解析匹配
         if (lower === cleanRule || lower.endsWith(`.${cleanRule}`)) {
             return true;
         }
@@ -154,7 +166,6 @@ export function validateTargetUrl(
 
     const hostname = parsed.hostname.toLowerCase();
 
-    // 拦截云服务元数据敏感地址
     if (FORBIDDEN_METADATA_HOSTS.has(hostname)) {
         return {
             valid: false,
@@ -162,7 +173,6 @@ export function validateTargetUrl(
         };
     }
 
-    // 拦截链路本地私有保留网段
     if (hostname.startsWith('169.254.')) {
         return {
             valid: false,
@@ -170,21 +180,19 @@ export function validateTargetUrl(
         };
     }
 
-    // 白名单校验 (若提供了 allowedHosts 则强校验)
-    if (allowedHosts && allowedHosts.length > 0) {
-        if (!isHostAllowed(hostname, allowedHosts)) {
-            return {
-                valid: false,
-                reason: `目标主机 [${hostname}] 不在服务端安全白名单中`
-            };
-        }
+    const effectiveAllowed = allowedHosts ?? DEFAULT_SERVER_OPTIONS.allowedHosts;
+    if (!isHostAllowed(hostname, effectiveAllowed)) {
+        return {
+            valid: false,
+            reason: `目标主机 [${hostname}] 不在服务端安全白名单中`
+        };
     }
 
     return { valid: true };
 }
 
 /**
- * 清洗外部请求头，剥离酒馆宿主自身敏感会话标头
+ * 过滤外部请求头，移除酒馆自身的敏感会话字段
  */
 export function sanitizeRequestHeaders(headers: Record<string, string> = {}): Record<string, string> {
     const cleaned: Record<string, string> = {};
@@ -201,7 +209,7 @@ export function sanitizeRequestHeaders(headers: Record<string, string> = {}): Re
 }
 
 /**
- * 复制上游生图服务的响应标头至客户端响应，剥离逐跳传输与报文压缩标头
+ * 复制上游生图服务的响应头至客户端响应，同时剔除逐跳传输与压缩相关头部
  */
 export function filterSafeResponseHeaders(upstreamHeaders: Headers, res: Response): void {
     for (const [key, value] of upstreamHeaders.entries()) {
