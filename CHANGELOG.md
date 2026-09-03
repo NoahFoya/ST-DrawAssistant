@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-09-04
+
+### Added
+- `network`: 服务端反向代理引入 Node.js 原生 `pipeline(Readable.fromWeb(body), res)` 真流式管道，支持超高分辨率大图与无损图像透传，消除内存堆积与体积阻断。
+- `network`: 增加服务端代理响应端 `res.on('close')` 与请求端 `req.on('close')` 全双工断开感知，确保客户端在图片传输中途取消时即时中止上游任务，避免显卡空转。
+- `theme`: 内置明亮与深色主题补齐 `--da-primary-hover` 与 `--da-surface-card` Token，彻底消除日间模式下的反色发灰阴影。
+
+### Security
+- `security`: 默认安全策略采用 `allowedHosts: ['*']` 实用化开放模式，开箱即用支持局域网设备、DDNS 动态域名、内网穿透与第三方 API 中转站。
+- `security`: 修复白名单回退与空数组边界漏洞，当显式传入 `allowedHosts: []` 时严格阻断自定义外部目标，杜绝配置绕过。
+- `security`: 保持对云服务器元数据地址（`169.254.169.254`、`metadata.google.internal` 等）的强制阻断与酒馆内部敏感凭据（Cookie、CSRF）剥离。
+
+### Fixed
+- `config`: `ConfigStore.mergeSettingsWithDefaults` 引入深拷贝对象隔离，防止外部对配置对象的修改污染全局出厂配置单例 `DEFAULT_SETTINGS`。
+- `network`: 纠正过度防御性模糊匹配，封闭 `NetworkError` 强类型判定分支，彻底杜绝前端跨域 (CORS) 拦截错误被误判为“网络抖动瞬态错误”而盲目重试。
+- `storage`: `IndexedDbStore.list` 分页查询由 50 次串行 IO 优化为 `Promise.all` 并发批量读取，消除翻页卡顿与加载延时。
+
+### Refactored
+- `clean`: 全面清理补丁式修正痕迹与过程性注释，消除“内存悬垂”、“对称抛出”等跨专业借词与生造词，统一表达标准。
+- `clean`: 更新配置示例模板 `config/config.example.json`，同步最新默认规范。
+
+### Tests
+- 测试套件扩充至 12 个文件、84 项自动化测试，覆盖大图流式转发、CORS 非瞬态断言、深拷贝防污染与白名单边界，全量 100% 通过。
+
 ## [0.1.2] - 2026-09-03
 
 ### Security
