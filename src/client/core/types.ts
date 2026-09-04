@@ -16,7 +16,7 @@ export enum LogLevel {
 
 /**
  * 跨后端通用的标准图像元数据实体
- * 遵循文档型数据模型，公共基准强类型化，后端专属参数收敛在开放的 engineParams 中
+ * 公共字段统一定义，后端专属参数保存在开放的 engineParams 中
  */
 export interface ImageMetadata {
     /** 图像资产唯一标识 */
@@ -46,13 +46,13 @@ export interface ImageMetadata {
     readonly durationMs?: number;
 
     /**
-     * 引擎专属参数快照 (开放命名空间，命名空间自治)
-     * 领域层与核心层保持中立，不预设任何具体后端的私有字段
+     * 各生图后端特有的参数快照
+     * 核心层不预设具体后端的专有字段结构
      */
     readonly engineParams?: Record<string, unknown>;
 
     /**
-     * 外部后端原始响应快照 (可选保底，便于导出原生数据块与底层审计)
+     * 后端原始响应快照，供调试或导出原生信息使用
      */
     readonly rawResponse?: unknown;
 }
@@ -114,11 +114,77 @@ export interface DrawAssistantSettings {
     customData?: Record<string, unknown>;
 }
 
-/** 内部事件定义 */
+/** 任务生命周期状态枚举 */
+export type TaskStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+
+/**
+ * 生图任务请求数据结构
+ * 承载用户意图与后端专有参数，由流水线组织后交付调度中心
+ */
+export interface GenerationRequest {
+    /** 任务唯一标识 */
+    readonly taskId: string;
+
+    /** 目标绘图后端标识 (如 'comfyui' | 'sdwebui' | 'novelai' | 'cloud') */
+    readonly targetEngine: string;
+
+    /** 经语义整合后的正向提示词描述 (通用标准文本) */
+    readonly prompt: string;
+
+    /** 可选的负向提示词描述 */
+    readonly negativePrompt?: string;
+
+    /** 关联的会话上下文快照 (可选) */
+    readonly contextInfo?: {
+        readonly characterId?: string | number;
+        readonly characterName?: string;
+        readonly messageId?: number;
+        readonly chatId?: string;
+    };
+
+    /** 关联的图像输入 (用于图生图、重绘蒙版与参考图) */
+    readonly imageInputs?: {
+        readonly initImageBlob?: Blob;
+        readonly maskImageBlob?: Blob;
+        readonly referenceImageBlobs?: Blob[];
+        readonly denoiseStrength?: number;
+    };
+
+    /**
+     * 当前后端的专属参数字典
+     * 由前端根据用户当前所选引擎传入，直接交给对应引擎的驱动处理，上层逻辑不解析内部结构
+     */
+    readonly engineOptions: Record<string, unknown>;
+}
+
+/**
+ * 生图任务统一返回结果
+ */
+export interface GenerationResult {
+    readonly taskId: string;
+    readonly engine: string;
+    readonly images: Array<{
+        blob: Blob;
+        format: string;
+        seed?: number;
+        metadata?: Record<string, unknown>;
+    }>;
+    readonly durationMs: number;
+}
+
+/** 内部事件定义与任务生命周期通知 */
 export interface CoreEventMap {
     'settings:changed': { settings: DrawAssistantSettings; changedKey?: string };
     'chat:changed': { chatId: string };
     'host:ready': void;
     'asset:saved': { assetId: string; record: StoredImageRecord };
     'asset:deleted': { assetId: string };
+    // 任务生命周期事件
+    'task:queued': { taskId: string; request: GenerationRequest };
+    'task:started': { taskId: string; request: GenerationRequest };
+    'task:progress': { taskId: string; progress: number; previewUrl?: string };
+    'task:completed': { taskId: string; result: GenerationResult };
+    'task:cancelled': { taskId: string; reason?: string };
+    'task:failed': { taskId: string; error: string };
+    'task:state_changed': { taskId: string; status: TaskStatus; error?: string };
 }

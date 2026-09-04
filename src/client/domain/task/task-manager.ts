@@ -4,13 +4,11 @@
  *
  * 核心设计规则：
  * 1. 状态流转模型：PENDING (排队中) -> RUNNING (执行中) -> COMPLETED (成功) / FAILED (失败) / CANCELLED (取消)；
- * 2. 取消丢弃保护机制 (Cancel & Drop Guard)：
- *    当执行中的任务被取消时，状态立即变更为 CANCELLED 并向后端发送中断信号。
- *    即使底层驱动在网络延迟后仍返回了图片数据，调度中心也直接丢弃，绝不写入存储，绝不触发完成事件；
- * 3. 并发配额自平衡：严格受 maxConcurrentTasks 配额约束，在任务终结时自动推进队列。
+ * 2. 任务取消处理：执行中的任务被取消时状态置为 CANCELLED 并发出中断信号。因网络延迟返回的图片数据将被丢弃，避免写入存储或触发完成事件；
+ * 3. 并发控制：受 maxConcurrentTasks 配额约束，任务终结后推进队列中的后续任务。
  */
 
-import { IDisposable, TypedEventBus } from '../../core';
+import { IDisposable, TypedEventBus, CoreEventMap } from '../../core';
 import { Logger } from '../../core/logger';
 import { GenerationResult } from '../types';
 import { AdapterRegistry } from '../drivers/adapter-registry';
@@ -18,8 +16,7 @@ import {
     TaskStatus,
     TaskSnapshot,
     TaskContextIdentity,
-    SubmitTaskOptions,
-    TaskEventMap
+    SubmitTaskOptions
 } from './task-types';
 
 interface InternalTaskRecord {
@@ -40,7 +37,7 @@ interface InternalTaskRecord {
 
 export interface TaskManagerOptions {
     adapters: AdapterRegistry;
-    events: TypedEventBus<TaskEventMap | any>;
+    events: TypedEventBus<CoreEventMap>;
     getConfig: () => {
         maxConcurrentTasks?: number;
         taskTimeoutMs?: number;
@@ -53,7 +50,7 @@ export interface TaskManagerOptions {
  */
 export class TaskManager implements IDisposable {
     private readonly _adapters: AdapterRegistry;
-    private readonly _events: TypedEventBus<any>;
+    private readonly _events: TypedEventBus<CoreEventMap>;
     private readonly _getConfig: TaskManagerOptions['getConfig'];
     private readonly _logger = new Logger('TaskManager');
 
@@ -116,7 +113,7 @@ export class TaskManager implements IDisposable {
     }
 
     /**
-     * 取消指定任务 (状态即刻置为取消并丢弃迟到结果)
+     * 取消指定任务
      *
      * @param taskId 任务标识
      * @param reason 取消原因
@@ -126,7 +123,6 @@ export class TaskManager implements IDisposable {
         if (!task) return;
 
         if (task.status === 'PENDING') {
-            // 排队中任务直接移出队列
             const idx = this._queue.indexOf(taskId);
             if (idx !== -1) {
                 this._queue.splice(idx, 1);
@@ -138,12 +134,10 @@ export class TaskManager implements IDisposable {
             this.emitState(taskId, 'CANCELLED', reason);
             this._logger.info(`排队中任务已取消 [${taskId}]: ${reason}`);
         } else if (task.status === 'RUNNING') {
-            // 执行中任务立即变更为 CANCELLED 触发丢弃保护
             task.status = 'CANCELLED';
             task.finishedAt = Date.now();
             task.error = reason;
 
-            // 终止网络请求
             if (task.abortController) {
                 task.abortController.abort();
             }
@@ -154,9 +148,9 @@ export class TaskManager implements IDisposable {
 
             this._events.emit('task:cancelled', { taskId, reason });
             this.emitState(taskId, 'CANCELLED', reason);
-            this._logger.info(`执行中任务已取消并开启丢弃保护 [${taskId}]: ${reason}`);
+            this._logger.info(`执行中任务已取消 [${taskId}]: ${reason}`);
 
-            // 尽最大努力通知适配器中止
+            // 通知适配器中断外部生成任务
             const targetEngine = task.request.targetEngine || this._getConfig().activeProvider || 'default';
             const adapter = this._adapters.get(targetEngine);
             if (adapter?.interrupt) {
@@ -233,7 +227,6 @@ export class TaskManager implements IDisposable {
     private async executeTask(task: InternalTaskRecord): Promise<void> {
         const taskId = task.id;
 
-        // 启动前再次检查状态
         if (task.status === 'CANCELLED') {
             this._activeCount--;
             this.processQueue();
@@ -280,9 +273,7 @@ export class TaskManager implements IDisposable {
 
             const result = await adapter.generate(task.request, controller.signal, onProgress);
 
-            // 设计意图：取消丢弃保护机制 (Cancel & Drop Guard)
-            // 防止用户取消任务或切换会话后，因网络延迟迟到的生图结果意外写入存储层，
-            // 进而污染当前新的对话楼层或造成孤立媒体文件堆积
+            // 任务在等待期间已被取消时直接丢弃返回的图像，避免写入存储或影响新消息
             if (this.isTaskCancelled(task)) {
                 this._logger.info(`任务 [${taskId}] 已被取消，异步返回的结果已丢弃`);
                 return;
@@ -307,8 +298,8 @@ export class TaskManager implements IDisposable {
                 task.timeoutTimer = undefined;
             }
 
-            // 若在运行期间已被用户取消，不重复标记为错误
-            if (!this.isTaskCancelled(task)) {
+            // 若任务已在运行期间被取消或已因超时标记失败，不重复标记为失败
+            if (!this.isTaskCancelled(task) && !this.isTaskFailed(task)) {
                 const message = err?.message || '生成失败';
                 this.failTask(task, message);
             }
@@ -330,7 +321,11 @@ export class TaskManager implements IDisposable {
     }
 
     private isTaskCancelled(task: InternalTaskRecord): boolean {
-        return (task.status as string) === 'CANCELLED';
+        return (task.status as TaskStatus) === 'CANCELLED';
+    }
+
+    private isTaskFailed(task: InternalTaskRecord): boolean {
+        return (task.status as TaskStatus) === 'FAILED';
     }
 
     private emitState(taskId: string, status: TaskStatus, error?: string): void {

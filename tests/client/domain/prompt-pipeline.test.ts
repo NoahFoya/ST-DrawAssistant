@@ -66,6 +66,21 @@ describe('Prompt Pipeline & Hooks', () => {
             const res = await hook.call('init', { rawPrompt: 'test' });
             expect(res).toBe('init ok');
         });
+
+        it('关键拦截器 (critical: true) 异常应直接抛出并中断整体链路', async () => {
+            const hook = new AsyncPipelineHook<string>();
+            hook.register(
+                'critical_failure',
+                () => {
+                    throw new Error('critical error');
+                },
+                50,
+                true
+            );
+            hook.register('never_reached', (val) => `${val} unreachable`, 100);
+
+            await expect(hook.call('init', { rawPrompt: 'test' })).rejects.toThrow('critical error');
+        });
     });
 
     describe('PromptPipeline.process', () => {
@@ -133,8 +148,14 @@ describe('Prompt Pipeline & Hooks', () => {
 
 
 
-        it('流水线销毁后调用应抛错', async () => {
+        it('流水线销毁后调用应抛错并清空所有已注册钩子', async () => {
             const hooks = createPipelineHooks();
+            let hookCalled = false;
+            hooks.onRawInput.register('test-hook', (val) => {
+                hookCalled = true;
+                return val;
+            });
+
             const pipeline = new PromptPipeline(hooks);
             pipeline.dispose();
 
@@ -144,6 +165,10 @@ describe('Prompt Pipeline & Hooks', () => {
                     targetEngine: 'sdwebui'
                 })
             ).rejects.toThrow('已被销毁');
+
+            // 钩子已被清空，直接调用 hook 也不应再执行之前注册的 handler
+            await hooks.onRawInput.call('test', { rawPrompt: 'test' });
+            expect(hookCalled).toBe(false);
         });
     });
 });

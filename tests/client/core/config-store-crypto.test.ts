@@ -94,4 +94,33 @@ describe('ConfigStore & Crypto (前端凭据落盘加密与加载解密全链路
         const engineConfig = newStore.getEngineConfig<any>('novelai');
         expect(engineConfig.apiKey).toBe(secretKey);
     });
+
+    it('当宿主晚就绪注入包含密文的 savedSettings 时，loadSettings 应能自动解密为明文', async () => {
+        const secretKey = 'sk-late-injected-token-12345';
+        const rawSettings: any = {
+            enabled: true,
+            engineConfigs: {
+                novelai: {
+                    model: 'nai-diffusion-4-full',
+                    apiKey: secretKey
+                }
+            }
+        };
+
+        const encryptedSettings = await encryptSettingsCredentials(rawSettings as DrawAssistantSettings);
+        expect(encryptedSettings.engineConfigs.novelai.apiKey.startsWith('enc:v1:')).toBe(true);
+
+        // 模拟宿主未就绪时创建的初始空 store
+        const store = new ConfigStore();
+        await store.ready;
+        expect(store.getEngineConfig<any>('novelai')).toBeUndefined();
+
+        // 模拟宿主就绪后注入密文配置
+        await store.loadSettings(encryptedSettings);
+
+        // 验证内存中已透明解密为明文
+        const config = store.getEngineConfig<any>('novelai');
+        expect(config).toBeDefined();
+        expect(config.apiKey).toBe(secretKey);
+    });
 });

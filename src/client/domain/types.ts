@@ -4,64 +4,22 @@
  */
 
 import { IDisposable } from '../../common';
-import { DrawAssistantSettings, ImageMetadata } from '../core/types';
+import {
+    DrawAssistantSettings,
+    ImageMetadata,
+    GenerationRequest,
+    GenerationResult,
+    TaskStatus
+} from '../core/types';
 
-export { IDisposable, DrawAssistantSettings, ImageMetadata };
-
-/**
- * 生图任务请求数据结构
- * 承载用户意图与后端专有参数，由流水线组织后交付调度中心
- */
-export interface GenerationRequest {
-    /** 任务唯一标识 */
-    readonly taskId: string;
-
-    /** 目标绘图后端标识 (如 'comfyui' | 'sdwebui' | 'novelai' | 'cloud') */
-    readonly targetEngine: string;
-
-    /** 经语义整合后的正向提示词描述 (通用标准文本) */
-    readonly prompt: string;
-
-    /** 可选的负向提示词描述 */
-    readonly negativePrompt?: string;
-
-    /** 关联的会话上下文快照 (可选) */
-    readonly contextInfo?: {
-        characterId?: string | number;
-        characterName?: string;
-        messageId?: number;
-        chatId?: string;
-    };
-
-    /** 关联的图像输入 (用于图生图、重绘蒙版与参考图) */
-    readonly imageInputs?: {
-        initImageBlob?: Blob;
-        maskImageBlob?: Blob;
-        referenceImageBlobs?: Blob[];
-        denoiseStrength?: number;
-    };
-
-    /**
-     * 当前后端的专属参数字典
-     * 由前端根据用户当前所选引擎传入，直接交给对应引擎的驱动处理，上层逻辑不解析内部结构
-     */
-    readonly engineOptions: Record<string, unknown>;
-}
-
-/**
- * 生图任务统一返回结果
- */
-export interface GenerationResult {
-    readonly taskId: string;
-    readonly engine: string;
-    readonly images: Array<{
-        blob: Blob;
-        format: string;
-        seed?: number;
-        metadata?: Record<string, unknown>;
-    }>;
-    readonly durationMs: number;
-}
+export {
+    IDisposable,
+    DrawAssistantSettings,
+    ImageMetadata,
+    GenerationRequest,
+    GenerationResult,
+    TaskStatus
+};
 
 /**
  * 生图后端可用资产目录 (由各驱动连接后端时动态获取与刷新)

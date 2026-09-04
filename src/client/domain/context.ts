@@ -35,15 +35,12 @@ export class DomainContext implements IDisposable {
     constructor(options: DomainContextOptions) {
         this._core = options.core;
 
-        // 1. 初始化驱动注册表，并按需组装四大官方支持的后端适配器
         this.adapters = new AdapterRegistry();
         this.registerDefaultAdapters();
 
-        // 2. 初始化提示词流水线
         const hooks = createPipelineHooks();
         this.pipeline = new PromptPipeline(hooks);
 
-        // 3. 初始化任务调度中心，绑定驱动注册表、配置参数与事件通知总线
         this.tasks = new TaskManager({
             adapters: this.adapters,
             events: this._core.events,
@@ -71,10 +68,10 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'SdWebUI',
             getEndpointUrl: () => {
-                const cfg = store.get('engineConfigs')?.['sdwebui'] as Record<string, string> | undefined;
+                const cfg = store.getEngineConfig<Record<string, string>>('sdwebui');
                 return cfg?.['serverUrl'] || 'http://127.0.0.1:7860';
             },
-            defaultConfig: store.get('engineConfigs')?.['sdwebui'] as any
+            getConfig: () => store.getEngineConfig('sdwebui')
         });
         this.adapters.register(sdWebUi);
 
@@ -83,10 +80,10 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'NovelAI',
             getEndpointUrl: () => {
-                const cfg = store.get('engineConfigs')?.['novelai'] as Record<string, string> | undefined;
+                const cfg = store.getEngineConfig<Record<string, string>>('novelai');
                 return cfg?.['serverUrl'] || cfg?.['proxyUrl'] || 'https://image.novelai.net';
             },
-            defaultConfig: store.get('engineConfigs')?.['novelai'] as any
+            getConfig: () => store.getEngineConfig('novelai')
         });
         this.adapters.register(novelai);
 
@@ -95,10 +92,10 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'ComfyUI',
             getEndpointUrl: () => {
-                const cfg = store.get('engineConfigs')?.['comfyui'] as Record<string, string> | undefined;
+                const cfg = store.getEngineConfig<Record<string, string>>('comfyui');
                 return cfg?.['serverUrl'] || 'http://127.0.0.1:8188';
             },
-            defaultConfig: store.get('engineConfigs')?.['comfyui'] as any
+            getConfig: () => store.getEngineConfig('comfyui')
         });
         this.adapters.register(comfyui);
 
@@ -107,10 +104,10 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'CloudAdapter',
             getEndpointUrl: () => {
-                const cfg = store.get('engineConfigs')?.['cloud'] as Record<string, string> | undefined;
+                const cfg = store.getEngineConfig<Record<string, string>>('cloud');
                 return cfg?.['proxyUrl'] || 'https://generativelanguage.googleapis.com';
             },
-            defaultConfig: store.get('engineConfigs')?.['cloud'] as any
+            getConfig: () => store.getEngineConfig('cloud')
         });
         this.adapters.register(cloud);
     }

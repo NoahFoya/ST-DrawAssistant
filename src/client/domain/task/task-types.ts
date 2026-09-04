@@ -3,10 +3,14 @@
  * @description 任务调度系统数据类型、状态机模型与调度事件定义
  */
 
-import { GenerationRequest, GenerationResult } from '../types';
+import {
+    TaskStatus,
+    GenerationRequest,
+    GenerationResult,
+    CoreEventMap
+} from '../../core/types';
 
-/** 任务生命周期状态枚举 */
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+export { TaskStatus, GenerationRequest, GenerationResult, CoreEventMap };
 
 /** 任务上下文标识信息 */
 export interface TaskContextIdentity {
@@ -43,13 +47,5 @@ export interface SubmitTaskOptions {
     swipeId?: number;
 }
 
-/** 任务调度中心事件定义 */
-export interface TaskEventMap {
-    'task:queued': { taskId: string; request: GenerationRequest };
-    'task:started': { taskId: string; request: GenerationRequest };
-    'task:progress': { taskId: string; progress: number; previewUrl?: string };
-    'task:completed': { taskId: string; result: GenerationResult };
-    'task:cancelled': { taskId: string; reason?: string };
-    'task:failed': { taskId: string; error: string };
-    'task:state_changed': { taskId: string; status: TaskStatus; error?: string };
-}
+/** 任务调度中心事件定义 (统一指向 CoreEventMap) */
+export type TaskEventMap = CoreEventMap;

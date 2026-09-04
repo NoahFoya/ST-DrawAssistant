@@ -24,6 +24,7 @@ interface RegisteredHook<TInput, TOutput> {
     id: string;
     handler: HookHandler<TInput, TOutput>;
     priority: number;
+    critical: boolean;
 }
 
 /**
@@ -35,10 +36,19 @@ export class AsyncPipelineHook<T> {
 
     /**
      * 注册拦截器。同标识覆盖，返回用于注销的 IDisposable 句柄
+     * @param id 拦截器唯一标识
+     * @param handler 拦截处理函数
+     * @param priority 执行优先级 (越小越先执行，默认 100)
+     * @param critical 是否为关键拦截器 (若为 true，执行异常时向外抛出并中止流水线；若为 false，异常时记录日志并跳过)
      */
-    public register(id: string, handler: HookHandler<T, T>, priority = 100): IDisposable {
+    public register(
+        id: string,
+        handler: HookHandler<T, T>,
+        priority = 100,
+        critical = false
+    ): IDisposable {
         this._hooks = this._hooks.filter((h) => h.id !== id);
-        this._hooks.push({ id, handler, priority });
+        this._hooks.push({ id, handler, priority, critical });
         this._hooks.sort((a, b) => a.priority - b.priority);
 
         return toDisposable(() => {
@@ -47,7 +57,7 @@ export class AsyncPipelineHook<T> {
     }
 
     /**
-     * 执行拦截器调用链，捕获并降级单个拦截器异常，防止整条流水线意外中断
+     * 执行拦截器调用链。关键拦截器异常直接抛出，可选拦截器异常记录并跳过
      */
     public async call(initialValue: T, context: PipelineHookContext): Promise<T> {
         let current = initialValue;
@@ -55,7 +65,10 @@ export class AsyncPipelineHook<T> {
             try {
                 current = await hook.handler(current, context);
             } catch (err) {
-                console.warn(`[PipelineHook] 拦截器 [${hook.id}] 执行异常:`, err);
+                if (hook.critical) {
+                    throw err;
+                }
+                console.warn(`[PipelineHook] 可选拦截器 [${hook.id}] 执行异常（已跳过）:`, err);
             }
         }
         return current;

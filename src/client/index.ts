@@ -37,20 +37,21 @@ export async function bootstrap(): Promise<{ core: CoreContext; domain: DomainCo
 
     console.info(`[${EXTENSION_NAME}] v${EXTENSION_VERSION} 插件正在启动初始化...`);
 
-    // 1. 初始化核心基础设施容器
     const core = createCoreContext();
     _activeCoreContext = core;
 
-    // 2. 初始化领域业务服务容器
+    // 等待凭据解密完成，确保后续适配器可读取到已解密的明文配置
+    await core.store.ready;
+
     const domain = createDomainContext({ core });
     _activeDomainContext = domain;
 
-    // 3. 等待宿主就绪，同步本地已存配置并挂载本地存储数据库
+    // 等待宿主环境完全挂载，同步宿主已存配置并初始化本地存储
     try {
         await core.host.whenReady();
         const savedSettings = core.host.getExtensionSettings();
         if (savedSettings) {
-            core.store.update(savedSettings);
+            await core.store.loadSettings(savedSettings);
         }
         await core.storage.init();
         core.events.emit('host:ready', undefined);
@@ -59,7 +60,7 @@ export async function bootstrap(): Promise<{ core: CoreContext; domain: DomainCo
         core.logger.error('插件启动初始化检测异常', err);
     }
 
-    // 4. 页面卸载或刷新时，按反向依赖顺序释放全局资源
+    // 页面卸载或刷新时，释放全局持有的任务与连接资源
     if (typeof window !== 'undefined') {
         window.addEventListener(
             'pagehide',

@@ -78,17 +78,12 @@ export class NetworkClient {
      * 本地回环地址属于安全源，不受此限制
      */
     public isMixedContent(targetUrl: string): boolean {
-        if (typeof window === 'undefined') return false;
-        const isPageHttps = window.location?.protocol === 'https:';
-        if (!isPageHttps) return false;
+        if (typeof window === 'undefined' || window.location?.protocol !== 'https:') return false;
         if (!targetUrl.startsWith('http:')) return false;
 
         try {
             const parsed = new URL(targetUrl);
-            if (isLoopbackHost(parsed.hostname)) {
-                return false;
-            }
-            return true;
+            return !isLoopbackHost(parsed.hostname);
         } catch {
             return false;
         }

@@ -24,22 +24,14 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     for (let i = 0; i < len; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
-    if (typeof btoa === 'function') {
-        return btoa(binary);
-    }
-    return Buffer.from(binary, 'binary').toString('base64');
+    return btoa(binary);
 }
 
 /**
  * 将 Base64 字符串解码为 Uint8Array
  */
 function base64ToUint8Array(base64: string): Uint8Array {
-    let binary: string;
-    if (typeof atob === 'function') {
-        binary = atob(base64);
-    } else {
-        binary = Buffer.from(base64, 'base64').toString('binary');
-    }
+    const binary = atob(base64);
     const len = binary.length;
     const bytes = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
@@ -66,6 +58,14 @@ function writeLocalDeviceKey(encoded: string): void {
     }
 }
 
+function getCrypto(): Crypto {
+    const obj = (globalThis as any).crypto || (typeof window !== 'undefined' ? window.crypto : undefined);
+    if (!obj || !obj.subtle) {
+        throw new Error('当前运行环境不支持 Web Crypto API，无法进行安全凭据处理');
+    }
+    return obj;
+}
+
 /**
  * 获取或自动生成当前浏览器设备的专属主密钥 (Device Master Key)
  *
@@ -78,11 +78,7 @@ export async function getOrCreateDeviceKey(): Promise<CryptoKey> {
         return _cachedCryptoKey;
     }
 
-    const cryptoObj = typeof window !== 'undefined' ? window.crypto : (globalThis as any).crypto;
-    if (!cryptoObj || !cryptoObj.subtle) {
-        throw new Error('当前运行环境不支持 Web Crypto API，无法进行安全凭据处理');
-    }
-
+    const cryptoObj = getCrypto();
     const rawKeyBase64 = readLocalDeviceKey();
     let keyBytes: Uint8Array | null = null;
 
@@ -102,7 +98,7 @@ export async function getOrCreateDeviceKey(): Promise<CryptoKey> {
 
     const importedKey = await cryptoObj.subtle.importKey(
         'raw',
-        effectiveKeyBytes,
+        effectiveKeyBytes as BufferSource,
         { name: 'AES-GCM' },
         false,
         ['encrypt', 'decrypt']
@@ -127,7 +123,7 @@ export async function encryptCredential(plaintext: string): Promise<string> {
         return plaintext;
     }
 
-    const cryptoObj = typeof window !== 'undefined' ? window.crypto : (globalThis as any).crypto;
+    const cryptoObj = getCrypto();
     const key = await getOrCreateDeviceKey();
 
     // 每次加密使用全新的 12 字节 IV
@@ -136,7 +132,7 @@ export async function encryptCredential(plaintext: string): Promise<string> {
     const encoded = encoder.encode(plaintext);
 
     const ciphertextBuffer = await cryptoObj.subtle.encrypt(
-        { name: 'AES-GCM', iv },
+        { name: 'AES-GCM', iv: iv as BufferSource },
         key,
         encoded
     );
@@ -175,16 +171,16 @@ export async function decryptCredential(ciphertext: string): Promise<string> {
     }
 
     try {
-        const cryptoObj = typeof window !== 'undefined' ? window.crypto : (globalThis as any).crypto;
+        const cryptoObj = getCrypto();
         const key = await getOrCreateDeviceKey();
 
         const iv = base64ToUint8Array(ivB64);
         const cipherBytes = base64ToUint8Array(cipherB64);
 
         const decryptedBuffer = await cryptoObj.subtle.decrypt(
-            { name: 'AES-GCM', iv },
+            { name: 'AES-GCM', iv: iv as BufferSource },
             key,
-            cipherBytes
+            cipherBytes as BufferSource
         );
 
         const decoder = new TextDecoder();

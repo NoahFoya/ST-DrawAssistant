@@ -3,15 +3,16 @@ import { TaskManager } from '../../../src/client/domain/task/task-manager';
 import { AdapterRegistry } from '../../../src/client/domain/drivers/adapter-registry';
 import { ImageEngineAdapter, GenerationRequest, GenerationResult } from '../../../src/client/domain/types';
 import { TypedEventBus } from '../../../src/client/core/event-bus';
+import { CoreEventMap } from '../../../src/client/core/types';
 
 describe('TaskManager (任务调度中心与状态机)', () => {
     let adapters: AdapterRegistry;
-    let events: TypedEventBus<any>;
+    let events: TypedEventBus<CoreEventMap>;
     let mockAdapter: ImageEngineAdapter;
 
     beforeEach(() => {
         adapters = new AdapterRegistry();
-        events = new TypedEventBus();
+        events = new TypedEventBus<CoreEventMap>();
 
         mockAdapter = {
             id: 'comfyui',
@@ -222,5 +223,53 @@ describe('TaskManager (任务调度中心与状态机)', () => {
         await expect(manager.submit({
             request: { taskId: 't2', targetEngine: 'comfyui', prompt: 'test', engineOptions: {} }
         })).rejects.toThrow('已被销毁');
+    });
+
+    it('任务执行超时应标记为超时错误，且不被 abort 异常二次覆盖，事件仅触发一次', async () => {
+        // 创建一个永远不返回的适配器，模拟卡死超时
+        const hangingAdapter: ImageEngineAdapter = {
+            id: 'hanging',
+            name: 'Hanging Engine',
+            capabilities: { txt2img: true, img2img: false },
+            checkHealth: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
+            generate: vi.fn().mockImplementation((_req, signal: AbortSignal) => {
+                return new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', () => {
+                        reject(new Error('请求已中止 AbortError'));
+                    });
+                });
+            }),
+            interrupt: vi.fn().mockResolvedValue(undefined),
+            dispose: vi.fn()
+        };
+        adapters.register(hangingAdapter);
+
+        const manager = new TaskManager({
+            adapters,
+            events,
+            getConfig: () => ({ maxConcurrentTasks: 1, taskTimeoutMs: 50 })
+        });
+
+        const failedEvents: any[] = [];
+        events.on('task:failed', (e) => {
+            failedEvents.push(e);
+        });
+
+        const taskId = await manager.submit({
+            request: { taskId: 'timeout_t', targetEngine: 'hanging', prompt: 'test', engineOptions: {} }
+        });
+
+        await vi.waitFor(() => {
+            expect(manager.getTask(taskId)?.status).toBe('FAILED');
+        }, { timeout: 2000, interval: 20 });
+
+        const snap = manager.getTask(taskId)!;
+        expect(snap.status).toBe('FAILED');
+        // 验证保留的是真实的超时诊断原因，没有被 catch 块中的通用中止错误覆盖
+        expect(snap.error).toContain('生图任务超时');
+        // 验证 task:failed 事件仅触发了一次，没有重复触发
+        expect(failedEvents).toHaveLength(1);
+        expect(failedEvents[0].taskId).toBe('timeout_t');
+        expect(failedEvents[0].error).toContain('生图任务超时');
     });
 });

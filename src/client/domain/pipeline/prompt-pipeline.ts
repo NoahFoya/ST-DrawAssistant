@@ -66,7 +66,11 @@ export class PromptPipeline implements IDisposable {
     }
 
     public dispose(): void {
+        if (this._isDisposed) return;
         this._isDisposed = true;
+        this._hooks.onRawInput.clear();
+        this._hooks.beforePromptBuild.clear();
+        this._hooks.beforeSubmit.clear();
     }
 
     /**
@@ -101,7 +105,7 @@ export class PromptPipeline implements IDisposable {
         // 插件原生功能：首个管道符 | 分隔正负向提示词，零破坏保留段落换行与自然标点
         const { positive: rawPositive, negative: rawNegative } = separatePromptByPipe(safeInput);
 
-        // 阶段 3：生命周期拦截 (供角色特征管理等扩展注入外貌特征与画风)
+        // 提示词构建前钩子，供扩展注入角色特征或风格词
         const processedPositive = await this._hooks.beforePromptBuild.call(rawPositive, context);
 
         // 合并可选负向提示词
@@ -109,7 +113,6 @@ export class PromptPipeline implements IDisposable {
             ? (rawNegative ? `${rawNegative}, ${options.negativePrompt}` : options.negativePrompt)
             : rawNegative;
 
-        // 阶段 4：构建标准生图请求对象 (GenerationRequest)
         const taskId = options.taskId || `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const targetEngine = options.targetEngine || settings.activeProvider || 'default';
 
@@ -123,7 +126,7 @@ export class PromptPipeline implements IDisposable {
             engineOptions: options.engineOptions || {}
         };
 
-        // 阶段 5：提交前最终检查拦截
+        // 提交前钩子，允许在入队前调整或校验最终请求参数
         const finalRequest = await this._hooks.beforeSubmit.call(initialRequest, context);
 
         return {
