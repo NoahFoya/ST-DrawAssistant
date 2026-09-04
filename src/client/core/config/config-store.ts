@@ -123,11 +123,6 @@ function deepClone<T>(obj: T): T {
     if (obj === null || typeof obj !== 'object') {
         return obj;
     }
-    if (typeof structuredClone === 'function') {
-        try {
-            return structuredClone(obj);
-        } catch {}
-    }
     return JSON.parse(JSON.stringify(obj));
 }
 

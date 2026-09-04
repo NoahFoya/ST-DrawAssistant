@@ -48,9 +48,30 @@ function base64ToUint8Array(base64: string): Uint8Array {
     return bytes;
 }
 
+function readLocalDeviceKey(): string | null {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+        return localStorage.getItem(DEVICE_KEY_STORAGE_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function writeLocalDeviceKey(encoded: string): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        localStorage.setItem(DEVICE_KEY_STORAGE_KEY, encoded);
+    } catch {
+        // 私密浏览或配额受限环境写入失败时回退仅在内存生命周期内生效
+    }
+}
+
 /**
  * 获取或自动生成当前浏览器设备的专属主密钥 (Device Master Key)
- * 该密钥仅持久化于浏览器私有存储，严禁随 extensionSettings 导出
+ *
+ * 设计意图：使用浏览器私有 Web Crypto 256 位随机密钥，仅保留于当前浏览器实例的专属存储中，
+ * 绝不进入宿主 extensionSettings。当导出设置时，由于缺少目标设备的私有主密钥，密文天然不可逆，
+ * 从而彻底杜绝跨设备分享配置时的 API Key 泄露。若存储损坏或缺失，则自动派生新密钥保障系统可用。
  */
 export async function getOrCreateDeviceKey(): Promise<CryptoKey> {
     if (_cachedCryptoKey) {
@@ -62,42 +83,26 @@ export async function getOrCreateDeviceKey(): Promise<CryptoKey> {
         throw new Error('当前运行环境不支持 Web Crypto API，无法进行安全凭据处理');
     }
 
-    let rawKeyBase64: string | null = null;
-    try {
-        if (typeof localStorage !== 'undefined') {
-            rawKeyBase64 = localStorage.getItem(DEVICE_KEY_STORAGE_KEY);
-        }
-    } catch {}
-
-    let keyBytes: Uint8Array;
+    const rawKeyBase64 = readLocalDeviceKey();
+    let keyBytes: Uint8Array | null = null;
 
     if (rawKeyBase64) {
         try {
-            keyBytes = base64ToUint8Array(rawKeyBase64);
-            if (keyBytes.length !== 32) {
-                throw new Error('现有设备密钥长度不符合 256 位要求');
-            }
-        } catch {
-            // 密钥异常时重新生成
-            keyBytes = cryptoObj.getRandomValues(new Uint8Array(32));
-            try {
-                if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem(DEVICE_KEY_STORAGE_KEY, uint8ArrayToBase64(keyBytes));
-                }
-            } catch {}
-        }
-    } else {
-        keyBytes = cryptoObj.getRandomValues(new Uint8Array(32));
-        try {
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(DEVICE_KEY_STORAGE_KEY, uint8ArrayToBase64(keyBytes));
+            const parsed = base64ToUint8Array(rawKeyBase64);
+            if (parsed.length === 32) {
+                keyBytes = parsed;
             }
         } catch {}
     }
 
+    const effectiveKeyBytes = keyBytes ?? cryptoObj.getRandomValues(new Uint8Array(32));
+    if (!keyBytes) {
+        writeLocalDeviceKey(uint8ArrayToBase64(effectiveKeyBytes));
+    }
+
     const importedKey = await cryptoObj.subtle.importKey(
         'raw',
-        keyBytes,
+        effectiveKeyBytes,
         { name: 'AES-GCM' },
         false,
         ['encrypt', 'decrypt']

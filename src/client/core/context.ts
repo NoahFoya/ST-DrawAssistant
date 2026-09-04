@@ -26,12 +26,12 @@ export class CoreContext implements IDisposable {
     private readonly _disposables: IDisposable[] = [];
     private _isDisposed = false;
 
-    constructor() {
+    constructor(initialSettingsOverride?: unknown) {
         this.host = new HostClient();
         this.events = new TypedEventBus<CoreEventMap>();
 
         // 建立配置持久化与广播通道：变更时经由宿主上下文防抖写入并派发总线事件
-        const initialSettings = this.host.getExtensionSettings();
+        const initialSettings = initialSettingsOverride ?? this.host.getExtensionSettings();
         this.store = new ConfigStore(initialSettings, {
             onSave: (state) => {
                 this.host.saveExtensionSettings(state as unknown as Record<string, unknown>);
@@ -88,6 +88,6 @@ export class CoreContext implements IDisposable {
 }
 
 /** 创建并初始化基础设施层上下文实例 */
-export function createCoreContext(): CoreContext {
-    return new CoreContext();
+export function createCoreContext(initialSettings?: unknown): CoreContext {
+    return new CoreContext(initialSettings);
 }
