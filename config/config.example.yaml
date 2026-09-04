@@ -1,0 +1,42 @@
+# ==============================================================================
+# ST-DrawAssistant 服务端本地配置文件模板
+# 复制此文件为 config/config.yaml 并填入您的私有配置。
+# config.yaml 已在 .gitignore 中，不会提交到版本库，保障密钥安全。
+# ==============================================================================
+
+# 生图服务 API 密钥配置 (明文存储于此文件，由服务端内部代理使用)
+api_keys:
+  # NovelAI 访问令牌 (形如 pst-... 或第三方反代中转站提供的 API Key)
+  novelai: "your_novelai_token_here"
+
+  # OpenAI 兼容接口 API Key (形如 sk-...)
+  openai: ""
+
+  # Google Gemini API Key
+  gemini: ""
+
+  # xAI Grok API Key
+  grok: ""
+
+# 自定义服务反代端点 (为空则默认使用官方标准端点)
+endpoints:
+  # 示例: "https://std.loliyc.com/novelai" 或官方 "https://image.novelai.net"
+  novelai: "https://std.loliyc.com/novelai"
+  openai: ""
+  gemini: ""
+  grok: ""
+
+# 服务端代理高级选项
+server:
+  # 代理请求超时时间 (毫秒，默认 180000 即 3 分钟)
+  proxy_timeout_ms: 180000
+
+  # 单次请求最大允许载荷限制 (MB，默认 50)
+  max_payload_size_mb: 50
+
+  # 是否在 Node.js 控制台打印代理请求日志
+  enable_proxy_log: false
+
+  # 允许代理的目标主机白名单 (* 表示放行所有合法生图端点)
+  allowed_hosts:
+    - "*"

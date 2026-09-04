@@ -8,7 +8,8 @@
     "dev": "webpack --mode development --watch",
     "build:dev": "webpack --mode development",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:live": "vitest run tests/integration"
   },
   "keywords": [
     "sillytavern",
@@ -29,6 +30,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "localforage": "^1.10.0"
+    "localforage": "^1.10.0",
+    "yaml": "^2.9.0"
   }
 }

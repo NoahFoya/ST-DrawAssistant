@@ -14,6 +14,7 @@ local/
 tests/scratch/
 coverage/
 .nyc_output/
+output/
 
 # ==============================================================================
 # 3. 日志与运行时临时文件
@@ -40,6 +41,8 @@ web_modules/
 !.env.example
 config/config.json
 !config/config.example.json
+config/config.yaml
+!config/config.example.yaml
 
 # ==============================================================================
 # 5. IDE 与操作系统元数据
