@@ -67,6 +67,9 @@ export function convertToNovelAIPromptSyntax(prompt: string): string {
 
 /**
  * 将尺寸数值规整为 64 的整倍数
+ *
+ * 设计意图：NovelAI V3/V4 底层基于 8x 潜空间 VAE 与分块注意力机制，
+ * 服务端 API 严格限制图像宽高必须为 64 的整数倍 (如 832x1216)，否则会导致 HTTP 400 校验失败。
  */
 export function snapTo64(val: number | undefined, fallback = 832): number {
     const raw = typeof val === 'number' && val > 0 ? val : fallback;
@@ -75,11 +78,19 @@ export function snapTo64(val: number | undefined, fallback = 832): number {
 
 /**
  * 从 NovelAI 返回的二进制 Buffer (PNG 或 ZIP 归档) 中提取图像 Blob
+ *
+ * 设计意图：NovelAI 官方端点默认将生成的图像打包为单文件条目的 ZIP 归档回传，
+ * 内部通常使用 Deflate-raw (算法 8) 无头压缩；本函数优先检测直接 PNG，次之解包 ZIP，
+ * 若遇到非图像的错误文本响应则直接阻断并抛出异常，杜绝生成损坏的死图 Blob。
  */
 export async function extractImageFromZipBuffer(buffer: ArrayBuffer): Promise<Blob> {
+    if (!buffer || buffer.byteLength === 0) {
+        throw new DriverError(DriverErrorType.BACKEND_ERROR, 'NovelAI 返回空响应数据载荷');
+    }
+
     const bytes = new Uint8Array(buffer);
 
-    // 优先检测原生 PNG 格式 (签名 89 50 4E 47)
+    // 优先检测原生 PNG 格式 (魔数签名 89 50 4E 47)
     if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
         return new Blob([buffer], { type: 'image/png' });
     }
@@ -126,6 +137,20 @@ export async function extractImageFromZipBuffer(buffer: ArrayBuffer): Promise<Bl
                 '当前运行环境缺少 DecompressionStream 支持，无法解压 NovelAI 图像数据'
             );
         }
+    }
+
+    // 若既非 PNG 也非 ZIP，检查是否为第三方反代返回的错误 JSON 或纯文本
+    let textPreview = '';
+    try {
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        textPreview = decoder.decode(bytes.slice(0, 256)).trim();
+    } catch {}
+
+    if (textPreview.startsWith('{') || textPreview.startsWith('<') || textPreview.includes('error')) {
+        throw new DriverError(
+            DriverErrorType.BACKEND_ERROR,
+            `NovelAI 端点返回非图像响应: ${textPreview}`
+        );
     }
 
     return new Blob([buffer], { type: 'image/png' });

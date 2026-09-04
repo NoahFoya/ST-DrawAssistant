@@ -315,4 +315,61 @@ describe('ComfyUIAdapter', () => {
         expect(restored.ckptName).toBe('sd_xl_base.safetensors');
         expect(restored.loras).toEqual(testLoras);
     });
+
+    it('当 WebSocket 触发 execution_error 时应立即抛出 DriverError，绝不降级进入 HTTP 长轮询', async () => {
+        // 模拟提交 /prompt 成功返回 prompt_id
+        mockFetchExternal.mockImplementation((url: string) => {
+            if (url.includes('/prompt')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ prompt_id: 'err-prompt-123' })
+                });
+            }
+            if (url.includes('/history/')) {
+                throw new Error('不应该降级调用 /history 接口');
+            }
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+        });
+
+        // 模拟 WebSocket 立即推送 execution_error
+        const OrigWebSocket = globalThis.WebSocket;
+        class MockErrorWebSocket {
+            onmessage: any = null;
+            onerror: any = null;
+            onclose: any = null;
+            close = vi.fn();
+            constructor() {
+                setTimeout(() => {
+                    if (this.onmessage) {
+                        this.onmessage({
+                            data: JSON.stringify({
+                                type: 'execution_error',
+                                data: {
+                                    prompt_id: 'err-prompt-123',
+                                    exception_message: 'CUDA out of memory'
+                                }
+                            })
+                        });
+                    }
+                }, 10);
+            }
+        }
+        (globalThis as any).WebSocket = MockErrorWebSocket;
+
+        const request: GenerationRequest = {
+            taskId: 'task-comfy-err',
+            targetEngine: 'comfyui',
+            prompt: 'masterpiece',
+            engineOptions: {
+                workflowJson: { "3": { "class_type": "KSampler", "inputs": {} } }
+            }
+        };
+
+        try {
+            await expect(adapter.generate(request)).rejects.toThrow(/ComfyUI 节点执行失败: CUDA out of memory/);
+        } finally {
+            (globalThis as any).WebSocket = OrigWebSocket;
+        }
+    });
 });

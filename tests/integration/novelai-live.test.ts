@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { NovelAIAdapter, resolveNovelAIEndpoint } from '../../src/client/domain/drivers/novelai-adapter';
 import { NetworkClient } from '../../src/client/core/network/client';
-import { loadServerConfig, getServerConfig } from '../../src/server/server-config';
+import { loadServerConfig } from '../../src/server/server-config';
 import { ConfigStore } from '../../src/client/core/config/config-store';
 
 describe('NovelAI 现场真实出图与凭据存储集成测试', () => {

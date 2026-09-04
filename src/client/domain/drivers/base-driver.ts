@@ -309,6 +309,7 @@ export abstract class BaseDriver implements ImageEngineAdapter {
 
     /**
      * 将驱动内部的中断控制器信号与外部传入的父信号融合成单一下游信号
+     * 优先使用原生 AbortSignal.any 规范方案，规避长时间持有父信号导致的事件监听器泄漏
      */
     protected composeWithCancelSignal(parentSignal?: AbortSignal | null): AbortSignal | undefined {
         const mySignal = this._abortController?.signal;
@@ -316,14 +317,17 @@ export abstract class BaseDriver implements ImageEngineAdapter {
         if (mySignal && !parentSignal) return mySignal;
         if (!mySignal && parentSignal) return parentSignal;
 
-        const controller = new AbortController();
-        const onAbort = () => controller.abort();
+        if (typeof (AbortSignal as any).any === 'function') {
+            return (AbortSignal as any).any([mySignal, parentSignal]);
+        }
 
+        const controller = new AbortController();
         if (mySignal!.aborted || parentSignal!.aborted) {
             controller.abort();
             return controller.signal;
         }
 
+        const onAbort = () => controller.abort();
         mySignal!.addEventListener('abort', onAbort, { once: true });
         parentSignal!.addEventListener('abort', onAbort, { once: true });
         return controller.signal;

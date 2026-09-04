@@ -272,7 +272,7 @@ export class CloudAdapter extends BaseDriver {
                 };
             }>;
             error?: { message?: string; code?: number };
-        }>(endpoint, body, { signal });
+        }>(endpoint, body, { signal, serviceType: 'gemini' });
 
         if (res.error) {
             throw new DriverError(
@@ -340,7 +340,11 @@ export class CloudAdapter extends BaseDriver {
                 url?: string;
             }>;
             error?: { message?: string; type?: string; code?: string };
-        }>('/images/generations', body, { signal, headers });
+        }>('/images/generations', body, {
+            signal,
+            headers,
+            serviceType: this.detectProvider(model) === 'xai' ? 'grok' : 'openai'
+        });
 
         if (res.error) {
             throw new DriverError(

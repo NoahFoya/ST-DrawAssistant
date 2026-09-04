@@ -474,6 +474,11 @@ export class ComfyUIAdapter extends BaseDriver {
                 await this.waitViaWebSocket(promptId, signal, onProgress);
                 return;
             } catch (wsErr) {
+                // 关键区分：若属于领域错误 (如节点执行异常 execution_error 或任务被取消)，必须立即向外抛出；
+                // 仅在真正的底层网络连接异常 (如 WebSocket 意外断开) 时才降级为 HTTP 历史轮询
+                if (wsErr instanceof DriverError) {
+                    throw wsErr;
+                }
                 this.logger.debug('WebSocket 连接失败或中断，降级为 HTTP 历史轮询', wsErr);
             }
         }
