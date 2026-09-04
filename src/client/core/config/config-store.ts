@@ -6,9 +6,85 @@
 import { IDisposable, toDisposable, DrawAssistantSettings } from '../types';
 import { Logger } from '../logger';
 import { DEFAULT_SAVE_DEBOUNCE_MS, BUILTIN_THEMES, BUILTIN_THEME_DARK } from '../constants';
+import { encryptCredential, decryptCredential } from '../crypto';
 
 export type StateListener<T> = (state: T, keyPath?: string, oldState?: T) => void;
 export type KeyListener<V> = (newValue: V, oldValue: V) => void;
+
+function isSensitiveKey(keyName: string): boolean {
+    const lower = keyName.toLowerCase();
+    return lower === 'apikey' || lower === 'api_key' || lower === 'naiapikey' || lower === 'openaiapikey';
+}
+
+/**
+ * 遍历并加密配置中的敏感凭据
+ */
+export async function encryptSettingsCredentials(settings: DrawAssistantSettings): Promise<DrawAssistantSettings> {
+    const cloned = JSON.parse(JSON.stringify(settings));
+    if (cloned.engineConfigs && typeof cloned.engineConfigs === 'object') {
+        for (const provider of Object.keys(cloned.engineConfigs)) {
+            const cfg = cloned.engineConfigs[provider];
+            if (cfg && typeof cfg === 'object') {
+                for (const k of Object.keys(cfg)) {
+                    if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k]) {
+                        cfg[k] = await encryptCredential(cfg[k]);
+                    }
+                }
+            }
+        }
+    }
+    return cloned;
+}
+
+/**
+ * 遍历并解密配置中的密文凭据
+ */
+export async function decryptSettingsCredentials(settings: DrawAssistantSettings): Promise<DrawAssistantSettings> {
+    const cloned = JSON.parse(JSON.stringify(settings));
+    if (cloned.engineConfigs && typeof cloned.engineConfigs === 'object') {
+        for (const provider of Object.keys(cloned.engineConfigs)) {
+            const cfg = cloned.engineConfigs[provider];
+            if (cfg && typeof cfg === 'object') {
+                for (const k of Object.keys(cfg)) {
+                    if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k]) {
+                        cfg[k] = await decryptCredential(cfg[k]);
+                    }
+                }
+            }
+        }
+    }
+    return cloned;
+}
+
+function hasSensitiveCredentials(settings: DrawAssistantSettings): boolean {
+    if (!settings.engineConfigs || typeof settings.engineConfigs !== 'object') return false;
+    for (const p of Object.keys(settings.engineConfigs)) {
+        const cfg = settings.engineConfigs[p];
+        if (cfg && typeof cfg === 'object') {
+            for (const k of Object.keys(cfg)) {
+                if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k] && !cfg[k].startsWith('enc:v1:')) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+function hasEncryptedCredentials(settings: DrawAssistantSettings): boolean {
+    if (!settings.engineConfigs || typeof settings.engineConfigs !== 'object') return false;
+    for (const p of Object.keys(settings.engineConfigs)) {
+        const cfg = settings.engineConfigs[p];
+        if (cfg && typeof cfg === 'object') {
+            for (const k of Object.keys(cfg)) {
+                if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k].startsWith('enc:v1:')) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
 /** 插件默认配置 */
 export const DEFAULT_SETTINGS: DrawAssistantSettings = {
@@ -26,13 +102,9 @@ export const DEFAULT_SETTINGS: DrawAssistantSettings = {
         name: theme.name,
         tokens: { ...theme.tokens }
     })),
-    fabVisible: true,
-    fabPosition: null,
-    lightboxEnabled: true,
-
     engineConfigs: {},
-    characterRules: {},
-    macroRuleTree: []
+    uiPreferences: {},
+    customData: {}
 };
 
 function isPlainObject(item: unknown): item is Record<string, any> {
@@ -100,6 +172,8 @@ export class ConfigStore implements IDisposable {
     private _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly _debounceMs: number;
 
+    public readonly ready: Promise<void>;
+
     constructor(
         initialSettings?: unknown,
         options?: { onSave?: (state: DrawAssistantSettings) => void; debounceMs?: number }
@@ -107,6 +181,15 @@ export class ConfigStore implements IDisposable {
         this._state = mergeSettingsWithDefaults(initialSettings, DEFAULT_SETTINGS);
         this._saveHandler = options?.onSave;
         this._debounceMs = options?.debounceMs ?? DEFAULT_SAVE_DEBOUNCE_MS;
+
+        // 异步解密初始配置中的密文凭据入内存
+        this.ready = decryptSettingsCredentials(this._state)
+            .then((decrypted) => {
+                this._state = decrypted;
+            })
+            .catch((err) => {
+                this._logger.warn('初始化解密敏感凭据异常，将保留原值:', err);
+            });
     }
 
     /** 获取当前全局配置快照 */
@@ -247,7 +330,7 @@ export class ConfigStore implements IDisposable {
         });
     }
 
-    /** 安排防抖保存 */
+    /** 安排防抖保存 (落盘前自动执行凭据加密) */
     private scheduleSave(): void {
         if (!this._saveHandler) return;
 
@@ -257,10 +340,14 @@ export class ConfigStore implements IDisposable {
 
         this._saveDebounceTimer = setTimeout(() => {
             if (!this._isDisposed && this._saveHandler) {
-                try {
+                if (!hasSensitiveCredentials(this._state)) {
                     this._saveHandler(this._state);
-                } catch (err) {
-                    this._logger.error('防抖保存失败', err);
+                } else {
+                    void encryptSettingsCredentials(this._state).then((persistable) => {
+                        this._saveHandler!(persistable);
+                    }).catch((err) => {
+                        this._logger.error('防抖保存加密失败', err);
+                    });
                 }
             }
         }, this._debounceMs);
@@ -273,17 +360,33 @@ export class ConfigStore implements IDisposable {
             this._saveDebounceTimer = null;
         }
         if (this._saveHandler && !this._isDisposed) {
-            try {
+            if (!hasSensitiveCredentials(this._state)) {
                 this._saveHandler(this._state);
-            } catch (err) {
-                this._logger.error('立即保存失败', err);
+            } else {
+                void encryptSettingsCredentials(this._state).then((persistable) => {
+                    this._saveHandler!(persistable);
+                }).catch((err) => {
+                    this._logger.error('立即保存失败', err);
+                });
             }
         }
     }
 
-    /** 导出当前完整设置为 JSON 文本 (用于用户本地备份与分享) */
-    public exportJson(): string {
-        return JSON.stringify(this._state, null, 2);
+    /** 导出当前完整设置为 JSON 文本 (支持脱敏导出与完整导出) */
+    public exportJson(sanitize = false): string {
+        const cloned = JSON.parse(JSON.stringify(this._state));
+        if (sanitize && cloned.engineConfigs && typeof cloned.engineConfigs === 'object') {
+            for (const p of Object.keys(cloned.engineConfigs)) {
+                if (cloned.engineConfigs[p] && typeof cloned.engineConfigs[p] === 'object') {
+                    for (const k of Object.keys(cloned.engineConfigs[p])) {
+                        if (isSensitiveKey(k)) {
+                            cloned.engineConfigs[p][k] = '';
+                        }
+                    }
+                }
+            }
+        }
+        return JSON.stringify(cloned, null, 2);
     }
 
     /**
@@ -300,6 +403,11 @@ export class ConfigStore implements IDisposable {
             }
             const merged = mergeSettingsWithDefaults(parsed, this._state);
             this.update(merged);
+            if (hasEncryptedCredentials(merged)) {
+                void decryptSettingsCredentials(merged).then((decrypted) => {
+                    this.update(decrypted);
+                });
+            }
             return true;
         } catch (err) {
             this._logger.error('导入配置 JSON 失败', err);
@@ -309,7 +417,7 @@ export class ConfigStore implements IDisposable {
 
     public dispose(): void {
         if (this._isDisposed) return;
-        this.flush();
+        void this.flush();
         this._isDisposed = true;
         this._globalListeners.clear();
         this._keyListeners.clear();
