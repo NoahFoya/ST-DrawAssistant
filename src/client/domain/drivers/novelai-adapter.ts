@@ -46,9 +46,7 @@ export interface NovelAIEngineOptions {
     [key: string]: unknown;
 }
 
-export interface NovelAIAdapterOptions extends BaseDriverOptions {
-    defaultConfig?: NovelAIEngineOptions;
-}
+export interface NovelAIAdapterOptions extends BaseDriverOptions {}
 
 /**
  * 将标准加权语法转换为 NovelAI 官方规范的花括号/方括号语法
@@ -164,45 +162,21 @@ export class NovelAIAdapter extends BaseDriver {
         syntaxType: 'tagBased'
     };
 
-    private readonly _defaultConfig: NovelAIEngineOptions;
 
     constructor(options: NovelAIAdapterOptions) {
         super(options);
-        this._defaultConfig = options.defaultConfig || {};
     }
 
-    public async ping(): Promise<boolean> {
-        try {
-            const apiKey = this._defaultConfig.apiKey;
-            const headers: Record<string, string> = {};
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
-            }
-            const endpoint = resolveNovelAIEndpoint(this.baseUrl);
-            await this.network.fetchExternal(endpoint, {
-                method: 'GET',
-                timeoutMs: 5000,
-                headers,
-                serviceType: 'novelai'
-            });
-            return true;
-        } catch (err: any) {
-            if (err instanceof DriverError && (err.statusCode === 405 || err.statusCode === 200)) {
-                return true;
-            }
-            return false;
-        }
-    }
 
     public override async checkHealth(): Promise<HealthCheckResult> {
         const start = performance.now();
-        const apiKey = this._defaultConfig.apiKey;
-        const endpoint = resolveNovelAIEndpoint(this.baseUrl);
+        const cfg = (this._getConfig?.() as NovelAIEngineOptions | undefined) || {};
+        const endpoint = resolveNovelAIEndpoint((cfg.proxyUrl as string) || (cfg.serverUrl as string) || this.getBaseUrl());
 
         try {
             const headers: Record<string, string> = {};
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
+            if (cfg.apiKey) {
+                headers['Authorization'] = `Bearer ${cfg.apiKey}`;
             }
             await this.network.fetchExternal(endpoint, {
                 method: 'GET',
@@ -253,7 +227,7 @@ export class NovelAIAdapter extends BaseDriver {
     ): Promise<GenerationResult> {
         const startTime = performance.now();
         const options: NovelAIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as NovelAIEngineOptions | undefined),
             ...(request.engineOptions as NovelAIEngineOptions)
         };
 
@@ -290,6 +264,7 @@ export class NovelAIAdapter extends BaseDriver {
             n_samples: 1,
             ucPreset: options.ucPreset ?? 0,
             qualityToggle: options.qualityToggle ?? true,
+            uc: finalNegative,
             negative_prompt: finalNegative,
             seed
         };
@@ -311,7 +286,7 @@ export class NovelAIAdapter extends BaseDriver {
             parameters
         };
 
-        const url = resolveNovelAIEndpoint(this.baseUrl);
+        const url = resolveNovelAIEndpoint((options.proxyUrl as string) || (options.serverUrl as string) || this.getBaseUrl());
         const mergedSignal = this.composeWithCancelSignal(signal);
         let rawResponse: Response;
 
@@ -367,7 +342,7 @@ export class NovelAIAdapter extends BaseDriver {
 
     public extractMetadata(request: GenerationRequest, result: GenerationResult): Record<string, unknown> {
         const options: NovelAIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as NovelAIEngineOptions | undefined),
             ...(request.engineOptions as NovelAIEngineOptions)
         };
 
@@ -413,6 +388,8 @@ export class NovelAIAdapter extends BaseDriver {
 
     public async getModels(): Promise<string[]> {
         return [
+            'nai-diffusion-5-full',
+            'nai-diffusion-4-5-full',
             'nai-diffusion-4-full',
             'nai-diffusion-4-curated',
             'nai-diffusion-3',

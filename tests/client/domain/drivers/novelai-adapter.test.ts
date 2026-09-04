@@ -23,9 +23,9 @@ describe('NovelAIAdapter', () => {
             network: networkClient,
             driverName: 'TestNovelAI',
             getEndpointUrl: () => 'https://image.novelai.net',
-            defaultConfig: {
+            getConfig: () => ({
                 apiKey: 'pst-fake-token-123'
-            }
+            })
         });
     });
 
@@ -97,6 +97,7 @@ describe('NovelAIAdapter', () => {
         expect(opts.headers['Authorization']).toBe('Bearer pst-fake-token-123');
         const body = JSON.parse(opts.body);
         expect(body.input).toBe('{masterpiece}, 1girl, smiling');
+        expect(body.parameters.uc).toBe('[worst quality], blurry');
         expect(body.parameters.negative_prompt).toBe('[worst quality], blurry');
         expect(body.parameters.width).toBe(832);
         expect(body.parameters.height).toBe(1216);
@@ -202,5 +203,31 @@ describe('NovelAIAdapter', () => {
         const textBuffer = new TextEncoder().encode(errorJson).buffer;
 
         await expect(extractImageFromZipBuffer(textBuffer)).rejects.toThrow(/NovelAI 端点返回非图像响应/);
+    });
+
+    it('配置自定义代理端点时应正确请求代理地址而非官方硬编码地址', async () => {
+        const proxyAdapter = new NovelAIAdapter({
+            network: networkClient,
+            driverName: 'TestNovelAIProxy',
+            getEndpointUrl: () => 'https://custom-nai-proxy.com',
+            getConfig: () => ({ apiKey: 'pst-proxy-key' })
+        });
+
+        const fakePngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]);
+        mockFetchExternal.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            arrayBuffer: async () => fakePngBytes.buffer
+        });
+
+        await proxyAdapter.generate({
+            taskId: 'task-proxy',
+            targetEngine: 'novelai',
+            prompt: 'masterpiece',
+            engineOptions: {}
+        });
+
+        const [url] = mockFetchExternal.mock.calls[0];
+        expect(url).toBe('https://custom-nai-proxy.com/ai/generate-image');
     });
 });

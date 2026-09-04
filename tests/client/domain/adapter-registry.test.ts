@@ -29,6 +29,7 @@ describe('AdapterRegistry (驱动适配器注册中心)', () => {
         disposable.dispose();
         expect(registry.has('comfyui')).toBe(false);
         expect(registry.get('comfyui')).toBeUndefined();
+        expect(comfyAdapter.dispose).toHaveBeenCalled();
     });
 
     it('注册同名适配器时应替换并释放旧实例', () => {

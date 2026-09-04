@@ -281,4 +281,40 @@ describe('SdWebUIAdapter', () => {
         expect(catalog.upscalers).toEqual(['R-ESRGAN 4x+']);
         expect(catalog.loras).toEqual(['detail_lora']);
     });
+
+    it('多图生图时若首位包含 Grid 拼图，应自动剔除拼图并将 all_seeds 对应分发给各单图', async () => {
+        const dummyB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        mockFetchExternal.mockImplementation((url: string) => {
+            if (url.includes('/txt2img')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        // 1张 Grid 拼图 + 2张单图 = 共3张图像
+                        images: [dummyB64, dummyB64, dummyB64],
+                        info: JSON.stringify({
+                            all_seeds: [10001, 10002],
+                            all_subseeds: [0, 0],
+                            seed: 10001
+                        })
+                    })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task-grid-filter',
+            targetEngine: 'sdwebui',
+            prompt: 'two cats',
+            engineOptions: {
+                batchSize: 2
+            }
+        };
+
+        const result = await adapter.generate(request);
+        // 应该过滤掉首张 Grid，仅保留 2 张真实单图
+        expect(result.images.length).toBe(2);
+        expect(result.images[0].seed).toBe(10001);
+        expect(result.images[1].seed).toBe(10002);
+    });
 });

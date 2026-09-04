@@ -21,11 +21,18 @@ class TestDriver extends BaseDriver {
     public pingResult = true;
     public syncCount = 0;
 
-    public async ping(): Promise<boolean> {
+    public override async checkHealth() {
         if (!this.pingResult) {
-            throw new Error('Ping connection failed');
+            return {
+                ok: false,
+                latencyMs: 10,
+                message: 'Ping connection failed'
+            };
         }
-        return true;
+        return {
+            ok: true,
+            latencyMs: 10
+        };
     }
 
     protected async doGenerate(request: GenerationRequest): Promise<GenerationResult> {
@@ -111,6 +118,14 @@ describe('BaseDriver', () => {
             const res = await driver.checkHealth();
             expect(res.ok).toBe(false);
             expect(res.message).toBe('Ping connection failed');
+        });
+
+        it('ping 应默认委托 checkHealth 并返回其 ok 状态', async () => {
+            driver.pingResult = true;
+            expect(await driver.ping()).toBe(true);
+
+            driver.pingResult = false;
+            expect(await driver.ping()).toBe(false);
         });
     });
 

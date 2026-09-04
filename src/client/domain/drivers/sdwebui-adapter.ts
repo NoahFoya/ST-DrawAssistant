@@ -51,9 +51,7 @@ export interface SdWebUIEngineOptions {
     [key: string]: unknown;
 }
 
-export interface SdWebUIAdapterOptions extends BaseDriverOptions {
-    defaultConfig?: SdWebUIEngineOptions;
-}
+export interface SdWebUIAdapterOptions extends BaseDriverOptions {}
 
 interface SdApiResponse {
     images?: string[];
@@ -89,21 +87,11 @@ export class SdWebUIAdapter extends BaseDriver {
         syntaxType: 'tagBased'
     };
 
-    private readonly _defaultConfig: SdWebUIEngineOptions;
 
     constructor(options: SdWebUIAdapterOptions) {
         super(options);
-        this._defaultConfig = options.defaultConfig || {};
     }
 
-    public async ping(): Promise<boolean> {
-        try {
-            await this.getJson<Record<string, unknown>>('/sdapi/v1/options', { timeoutMs: 5000 });
-            return true;
-        } catch {
-            return false;
-        }
-    }
 
     public override async checkHealth(): Promise<HealthCheckResult> {
         const start = performance.now();
@@ -165,7 +153,7 @@ export class SdWebUIAdapter extends BaseDriver {
     ): Promise<GenerationResult> {
         const startTime = performance.now();
         const options: SdWebUIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as SdWebUIEngineOptions | undefined),
             ...(request.engineOptions as SdWebUIEngineOptions)
         };
 
@@ -208,7 +196,9 @@ export class SdWebUIAdapter extends BaseDriver {
             width,
             height,
             override_settings: overrideSettings,
-            override_settings_restore_afterwards: true
+            override_settings_restore_afterwards: true,
+            send_images: true,
+            save_images: false
         };
 
         if (options.scheduler) {
@@ -287,11 +277,17 @@ export class SdWebUIAdapter extends BaseDriver {
             throw new DriverError(DriverErrorType.BACKEND_ERROR, 'SD-WebUI 未返回任何图像数据');
         }
 
-        // 从后端 info JSON 中提取实际生效的随机种子，未提供时回退至请求种子
+        // 从后端 info JSON 中提取独立种子列表与当前主种子
+        let rawImages = response.images;
+        let allSeeds: number[] = [];
         let resolvedSeed: number | undefined;
+
         if (response.info) {
             try {
                 const parsedInfo = JSON.parse(response.info);
+                if (Array.isArray(parsedInfo.all_seeds)) {
+                    allSeeds = parsedInfo.all_seeds.filter((s: unknown): s is number => typeof s === 'number');
+                }
                 if (typeof parsedInfo.seed === 'number') {
                     resolvedSeed = parsedInfo.seed;
                 }
@@ -303,11 +299,16 @@ export class SdWebUIAdapter extends BaseDriver {
             resolvedSeed = seed;
         }
 
+        // 当返回图像数大于种子数量 (多图生成时 A1111 默认在首位附加 Grid 拼图)，自动过滤首张拼图仅保留单图
+        if (allSeeds.length > 0 && rawImages.length > allSeeds.length) {
+            rawImages = rawImages.slice(rawImages.length - allSeeds.length);
+        }
+
         const totalDurationMs = Math.round(performance.now() - startTime);
-        const images = response.images.map((b64) => ({
+        const images = rawImages.map((b64, idx) => ({
             blob: base64ToBlob(b64, 'image/png'),
             format: 'image/png',
-            seed: resolvedSeed,
+            seed: allSeeds[idx] ?? resolvedSeed,
             metadata: {
                 info: response.info,
                 parameters: response.parameters
@@ -334,7 +335,7 @@ export class SdWebUIAdapter extends BaseDriver {
     /** 从请求与生成结果中提取标准 ImageMetadata.engineParams */
     public extractMetadata(request: GenerationRequest, result: GenerationResult): Record<string, unknown> {
         const options: SdWebUIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as SdWebUIEngineOptions | undefined),
             ...(request.engineOptions as SdWebUIEngineOptions)
         };
 

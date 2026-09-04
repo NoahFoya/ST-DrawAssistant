@@ -46,9 +46,7 @@ export interface ComfyUIEngineOptions {
     [key: string]: unknown;
 }
 
-export interface ComfyUIAdapterOptions extends BaseDriverOptions {
-    defaultConfig?: ComfyUIEngineOptions;
-}
+export interface ComfyUIAdapterOptions extends BaseDriverOptions {}
 
 interface ComfyImageOutput {
     filename: string;
@@ -151,25 +149,21 @@ export class ComfyUIAdapter extends BaseDriver {
         syntaxType: 'nodeGraph'
     };
 
-    private readonly _defaultConfig: ComfyUIEngineOptions;
-    private readonly _sessionClientId: string;
+    private readonly _defaultSessionClientId: string;
     private _currentPromptId: string | null = null;
     private _objectInfoCache: { data: Record<string, unknown>; fetchedAt: number } | null = null;
 
     constructor(options: ComfyUIAdapterOptions) {
         super(options);
-        this._defaultConfig = options.defaultConfig || {};
-        this._sessionClientId = this._defaultConfig.clientId || `st-da-${Math.random().toString(36).slice(2, 10)}`;
+        this._defaultSessionClientId = `st-da-${Math.random().toString(36).slice(2, 10)}`;
     }
 
-    public async ping(): Promise<boolean> {
-        try {
-            await this.getJson('/system_stats', { timeoutMs: 5000 });
-            return true;
-        } catch {
-            return false;
-        }
+    /** 获取当前生效的 ComfyUI 客户端标识 */
+    public getClientId(): string {
+        const cfg = this._getConfig?.() as ComfyUIEngineOptions | undefined;
+        return (cfg?.clientId as string) || this._defaultSessionClientId;
     }
+
 
     public override async checkHealth(): Promise<HealthCheckResult> {
         const start = performance.now();
@@ -252,7 +246,7 @@ export class ComfyUIAdapter extends BaseDriver {
     ): Promise<GenerationResult> {
         const startTime = performance.now();
         const options: ComfyUIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as ComfyUIEngineOptions | undefined),
             ...(request.engineOptions as ComfyUIEngineOptions)
         };
 
@@ -280,12 +274,13 @@ export class ComfyUIAdapter extends BaseDriver {
         let initImageFileName = '';
         let maskImageFileName = '';
 
-        // 存在底图或遮罩时，先上传至 ComfyUI 临时目录供工作流节点引用
+        // 存在底图或遮罩时，携带唯一任务前缀上传至 ComfyUI 临时目录，杜绝并发文件名冲突
+        const taskPrefix = (request.taskId || `task_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
         if (request.imageInputs?.initImageBlob) {
-            initImageFileName = await this.uploadImage(request.imageInputs.initImageBlob, 'init_image.png', signal);
+            initImageFileName = await this.uploadImage(request.imageInputs.initImageBlob, `${taskPrefix}_init.png`, signal);
         }
         if (request.imageInputs?.maskImageBlob) {
-            maskImageFileName = await this.uploadImage(request.imageInputs.maskImageBlob, 'mask_image.png', signal);
+            maskImageFileName = await this.uploadImage(request.imageInputs.maskImageBlob, `${taskPrefix}_mask.png`, signal);
         }
 
         const workflowSource = options.workflowJson || {};
@@ -298,18 +293,55 @@ export class ComfyUIAdapter extends BaseDriver {
         );
 
         const submitPayload = {
-            client_id: this._sessionClientId,
+            client_id: this.getClientId(),
             prompt: substitutedWorkflow
         };
 
-        const submitRes = await this.postJson<{ prompt_id: string; number: number; node_errors?: unknown }>(
+/** 格式化 ComfyUI /prompt 校验失败时的具体节点错误信息 */
+function formatComfyNodeErrors(nodeErrors: unknown): string {
+    if (!nodeErrors || typeof nodeErrors !== 'object') return '';
+    const details: string[] = [];
+    for (const [nodeId, nodeErr] of Object.entries(nodeErrors as Record<string, any>)) {
+        const classType = nodeErr?.class_type ? ` [${nodeErr.class_type}]` : '';
+        if (Array.isArray(nodeErr?.errors)) {
+            const errMsgs = nodeErr.errors
+                .map((e: any) => e?.message || e?.details || JSON.stringify(e))
+                .filter(Boolean)
+                .join('; ');
+            if (errMsgs) {
+                details.push(`节点 #${nodeId}${classType}: ${errMsgs}`);
+            }
+        } else if (typeof nodeErr === 'string') {
+            details.push(`节点 #${nodeId}${classType}: ${nodeErr}`);
+        }
+    }
+    return details.join('\n');
+}
+
+        const submitRes = await this.postJson<{
+            prompt_id?: string;
+            number?: number;
+            node_errors?: Record<string, unknown>;
+            error?: string | { message?: string; details?: string };
+        }>(
             '/prompt',
             submitPayload,
             { signal }
         );
 
+        if (submitRes?.node_errors && Object.keys(submitRes.node_errors).length > 0) {
+            const formatted = formatComfyNodeErrors(submitRes.node_errors);
+            throw new DriverError(
+                DriverErrorType.INVALID_PARAMS,
+                `ComfyUI 工作流校验失败:\n${formatted}`
+            );
+        }
+
         if (!submitRes?.prompt_id) {
-            throw new DriverError(DriverErrorType.BACKEND_ERROR, 'ComfyUI 提交失败，未返回 prompt_id');
+            const errorMsg = typeof submitRes?.error === 'object'
+                ? submitRes.error.message || JSON.stringify(submitRes.error)
+                : (submitRes?.error || 'ComfyUI 提交失败，未返回 prompt_id');
+            throw new DriverError(DriverErrorType.BACKEND_ERROR, String(errorMsg));
         }
 
         const promptId = submitRes.prompt_id;
@@ -322,8 +354,22 @@ export class ComfyUIAdapter extends BaseDriver {
 
             const history = await this.getJson<Record<string, ComfyHistoryItem>>(`/history/${promptId}`, { signal });
             const item = history[promptId];
-            if (!item || !item.outputs) {
-                throw new DriverError(DriverErrorType.BACKEND_ERROR, `未能从 ComfyUI 历史记录中找到任务输出 [${promptId}]`);
+            if (!item) {
+                throw new DriverError(DriverErrorType.BACKEND_ERROR, `未能从 ComfyUI 历史记录中找到任务 [${promptId}]`);
+            }
+
+            if (item.status?.status_str === 'error') {
+                const msgs = Array.isArray((item.status as any)?.messages)
+                    ? (item.status as any).messages.map((m: any) => typeof m === 'string' ? m : JSON.stringify(m)).join('; ')
+                    : '';
+                throw new DriverError(
+                    DriverErrorType.BACKEND_ERROR,
+                    `ComfyUI 任务执行异常崩溃: ${msgs || '未知节点执行错误'}`
+                );
+            }
+
+            if (!item.outputs) {
+                throw new DriverError(DriverErrorType.BACKEND_ERROR, `ComfyUI 任务执行完毕但无输出字典 [${promptId}]`);
             }
 
             const allImages: ComfyImageOutput[] = [];
@@ -389,7 +435,7 @@ export class ComfyUIAdapter extends BaseDriver {
 
     public extractMetadata(request: GenerationRequest, _result: GenerationResult): Record<string, unknown> {
         const options: ComfyUIEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as ComfyUIEngineOptions | undefined),
             ...(request.engineOptions as ComfyUIEngineOptions)
         };
         return {
@@ -428,7 +474,8 @@ export class ComfyUIAdapter extends BaseDriver {
     /** 上传底图或蒙版到 ComfyUI */
     private async uploadImage(blob: Blob, filename: string, signal?: AbortSignal): Promise<string> {
         const formData = new FormData();
-        formData.append('image', blob, filename);
+        const file = typeof File !== 'undefined' ? new File([blob], filename, { type: blob.type }) : blob;
+        formData.append('image', file, filename);
         formData.append('overwrite', 'true');
 
         const res = await this.uploadFormData<{ name: string; subfolder?: string; type?: string }>(
@@ -494,7 +541,7 @@ export class ComfyUIAdapter extends BaseDriver {
     ): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             const base = this.getBaseUrl().replace(/^http/, 'ws');
-            const wsUrl = `${base}/ws?clientId=${this._sessionClientId}`;
+            const wsUrl = `${base}/ws?clientId=${this.getClientId()}`;
             let ws: WebSocket | null = null;
 
             const cleanup = () => {
@@ -569,6 +616,14 @@ export class ComfyUIAdapter extends BaseDriver {
                             ));
                         }
                     }
+
+                    // 中断事件
+                    if (type === 'execution_interrupted' && data) {
+                        if (data.prompt_id === promptId) {
+                            cleanup();
+                            reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已被后端中断'));
+                        }
+                    }
                 } catch {}
             };
 
@@ -603,16 +658,45 @@ export class ComfyUIAdapter extends BaseDriver {
                     signal
                 });
                 if (history && history[promptId]) {
+                    const item = history[promptId];
+                    if (item.status?.status_str === 'error') {
+                        const msgs = Array.isArray((item.status as any)?.messages)
+                            ? (item.status as any).messages.map((m: any) => typeof m === 'string' ? m : JSON.stringify(m)).join('; ')
+                            : '';
+                        throw new DriverError(
+                            DriverErrorType.BACKEND_ERROR,
+                            `ComfyUI 任务执行异常崩溃: ${msgs || '未知节点执行错误'}`
+                        );
+                    }
                     // 已进入历史记录，说明工作流执行完成
                     return;
                 }
             } catch (err: any) {
-                if (err instanceof DriverError && err.type === DriverErrorType.CANCELLED) {
+                if (err instanceof DriverError) {
                     throw err;
                 }
             }
 
-            await new Promise((r) => setTimeout(r, intervalMs));
+            await new Promise<void>((resolve, reject) => {
+                const timer = setTimeout(() => {
+                    signal?.removeEventListener('abort', onAbort);
+                    resolve();
+                }, intervalMs);
+
+                const onAbort = () => {
+                    clearTimeout(timer);
+                    signal?.removeEventListener('abort', onAbort);
+                    reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已取消'));
+                };
+
+                if (signal?.aborted || this._cancelled) {
+                    clearTimeout(timer);
+                    reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已取消'));
+                    return;
+                }
+
+                signal?.addEventListener('abort', onAbort, { once: true });
+            });
         }
 
         throw new DriverError(DriverErrorType.TIMEOUT, `等待 ComfyUI 执行结果超时 [${promptId}]`);

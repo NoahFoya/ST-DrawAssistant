@@ -48,6 +48,7 @@ export class AdapterRegistry implements IDisposable {
         const adapter = this._adapters.get(key);
         if (adapter) {
             this._adapters.delete(key);
+            adapter.dispose?.();
         }
     }
 

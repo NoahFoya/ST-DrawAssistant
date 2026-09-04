@@ -30,6 +30,12 @@ export interface BaseDriverOptions {
     driverName: string;
     getEndpointUrl?: () => string;
     baseUrl?: string;
+    /** 运行时动态读取引擎配置的闭包，替代构造时的一次性快照。
+     * 子类在 doGenerate / checkHealth 等方法中通过 this._getConfig?.() 读取当前配置，
+     * 确保用户在 UI 修改引擎参数后不需刷新就能即时生效。 */
+    getConfig?: () => Record<string, unknown> | undefined;
+    /** 静态配置（可选，便于单测或独立实例化，存在 getConfig 时优先使用闭包） */
+    defaultConfig?: Record<string, unknown>;
 }
 
 /**
@@ -44,6 +50,7 @@ export abstract class BaseDriver implements ImageEngineAdapter {
     protected readonly network: NetworkClient;
     protected readonly logger: Logger;
     protected readonly getEndpointUrl: () => string;
+    protected readonly _getConfig: (() => Record<string, unknown> | undefined) | undefined;
 
     protected _cancelled = false;
     protected _isGenerating = false;
@@ -54,32 +61,19 @@ export abstract class BaseDriver implements ImageEngineAdapter {
         this.network = options.network;
         this.logger = new Logger(options.driverName);
         this.getEndpointUrl = options.getEndpointUrl || (() => options.baseUrl || '');
+        this._getConfig = options.getConfig ?? (options.defaultConfig ? () => options.defaultConfig : undefined);
     }
 
-    /** 检测后端连通性 (实现类重写) */
-    public abstract ping(): Promise<boolean>;
+    /** 服务健康度检测与延迟统计 (各生图驱动实现类具体提供) */
+    public abstract checkHealth(): Promise<HealthCheckResult>;
 
-    /** 服务健康度检测与延迟统计 */
-    public async checkHealth(): Promise<HealthCheckResult> {
-        const startTime = performance.now();
+    /** 检测后端连通性 (统一委托 checkHealth 执行，消除各子类重复代码) */
+    public async ping(): Promise<boolean> {
         try {
-            const ok = await this.ping();
-            const latencyMs = Math.round(performance.now() - startTime);
-            if (!ok) {
-                return { ok: false, latencyMs, message: '服务未响应或返回异常状态' };
-            }
-            return { ok: true, latencyMs };
-        } catch (err: any) {
-            const latencyMs = Math.round(performance.now() - startTime);
-            const statusCode = err instanceof DriverError
-                ? err.statusCode
-                : (err instanceof NetworkError ? err.status : undefined);
-            return {
-                ok: false,
-                latencyMs,
-                message: err?.message || '连接失败',
-                statusCode
-            };
+            const res = await this.checkHealth();
+            return res.ok;
+        } catch {
+            return false;
         }
     }
 
@@ -113,30 +107,18 @@ export abstract class BaseDriver implements ImageEngineAdapter {
      * 提交并执行生图请求
      *
      * @param request 生图请求对象
-     * @param signalOrProgress 可选的中断信号或进度回调
+     * @param signal 可选的中断信号
      * @param onProgress 进度回调函数
      */
     public async generate(
         request: GenerationRequest,
-        signalOrProgress?: AbortSignal | ProgressCallback,
+        signal?: AbortSignal,
         onProgress?: ProgressCallback
     ): Promise<GenerationResult> {
         this.resetCancelState();
         this._isGenerating = true;
-        let signal: AbortSignal | undefined;
-        let progressCb: ProgressCallback | undefined;
-
-        if (typeof signalOrProgress === 'function') {
-            progressCb = signalOrProgress;
-        } else if (signalOrProgress && typeof (signalOrProgress as any).addEventListener === 'function') {
-            signal = signalOrProgress as AbortSignal;
-            progressCb = onProgress;
-        } else {
-            progressCb = onProgress;
-        }
-
         try {
-            return await this.doGenerate(request, signal, progressCb);
+            return await this.doGenerate(request, signal, onProgress);
         } finally {
             this._isGenerating = false;
         }
@@ -249,7 +231,7 @@ export abstract class BaseDriver implements ImageEngineAdapter {
                 );
             }
 
-            return (await resp.json().catch(() => ({}))) as T;
+            return (await resp.json()) as T;
         } catch (err) {
             throw this.normalizeError(err, url);
         }

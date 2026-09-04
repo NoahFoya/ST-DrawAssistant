@@ -38,9 +38,7 @@ export interface CloudEngineOptions {
     [key: string]: unknown;
 }
 
-export interface CloudAdapterOptions extends BaseDriverOptions {
-    defaultConfig?: CloudEngineOptions;
-}
+export interface CloudAdapterOptions extends BaseDriverOptions {}
 
 export class CloudAdapter extends BaseDriver {
     public readonly id = 'cloud';
@@ -54,29 +52,42 @@ export class CloudAdapter extends BaseDriver {
         syntaxType: 'natural'
     };
 
-    private readonly _defaultConfig: CloudEngineOptions;
 
     constructor(options: CloudAdapterOptions) {
         super(options);
-        this._defaultConfig = options.defaultConfig || {};
     }
 
-    public async ping(): Promise<boolean> {
-        try {
-            const provider = this.detectProvider(this._defaultConfig.model);
-            if (provider === 'google') {
-                return true;
-            }
-            await this.getJson('/models', { timeoutMs: 5000 });
-            return true;
-        } catch {
-            return false;
+    /**
+     * 根据服务通道获取基准 URL
+     * 优先遵循用户显式指定的代理或服务器地址，其次选用对应通道的官方默认端点
+     */
+    public getProviderBaseUrl(provider: 'google' | 'openai' | 'xai', options: CloudEngineOptions = {}): string {
+        const configuredUrl = (options.proxyUrl as string) || (options.serverUrl as string);
+        if (configuredUrl) {
+            return configuredUrl.replace(/\/+$/, '');
+        }
+
+        const base = this.getBaseUrl();
+        if (base && base !== 'https://generativelanguage.googleapis.com') {
+            return base;
+        }
+
+        switch (provider) {
+            case 'openai':
+                return 'https://api.openai.com';
+            case 'xai':
+                return 'https://api.x.ai';
+            case 'google':
+            default:
+                return 'https://generativelanguage.googleapis.com';
         }
     }
 
+
     public override async checkHealth(): Promise<HealthCheckResult> {
         const start = performance.now();
-        const apiKey = this._defaultConfig.apiKey;
+        const cfg = (this._getConfig?.() as CloudEngineOptions | undefined) || {};
+        const apiKey = cfg.apiKey as string | undefined;
         if (!apiKey) {
             return {
                 ok: false,
@@ -86,7 +97,7 @@ export class CloudAdapter extends BaseDriver {
         }
 
         try {
-            const provider = this.detectProvider(this._defaultConfig.model);
+            const provider = this.detectProvider(cfg.model as string | undefined);
             if (provider === 'google') {
                 return {
                     ok: true,
@@ -94,10 +105,13 @@ export class CloudAdapter extends BaseDriver {
                 };
             }
 
+            const baseUrl = this.getProviderBaseUrl(provider, cfg);
+            const cleanBase = baseUrl.replace(/\/+$/, '');
+            const modelsEndpoint = cleanBase.endsWith('/v1') ? `${cleanBase}/models` : `${cleanBase}/v1/models`;
             const headers: Record<string, string> = {
                 Authorization: `Bearer ${apiKey}`
             };
-            await this.getJson('/models', { timeoutMs: 6000, headers });
+            await this.network.fetchExternal(modelsEndpoint, { timeoutMs: 6000, headers });
             return {
                 ok: true,
                 latencyMs: Math.round(performance.now() - start)
@@ -135,7 +149,7 @@ export class CloudAdapter extends BaseDriver {
     ): Promise<GenerationResult> {
         const startTime = performance.now();
         const options: CloudEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as CloudEngineOptions | undefined),
             ...(request.engineOptions as CloudEngineOptions)
         };
 
@@ -143,6 +157,10 @@ export class CloudAdapter extends BaseDriver {
         const provider = options.provider && options.provider !== 'auto'
             ? options.provider
             : this.detectProvider(model);
+
+        if (request.negativePrompt) {
+            this.logger.debug('云端多模态模型原生不支持独立的负向提示词，已遵循方案 A 保持忽略，避免语义逆向污染');
+        }
 
         let imageBlobs: Blob[];
 
@@ -177,7 +195,7 @@ export class CloudAdapter extends BaseDriver {
 
     public extractMetadata(request: GenerationRequest, _result: GenerationResult): Record<string, unknown> {
         const options: CloudEngineOptions = {
-            ...this._defaultConfig,
+            ...(this._getConfig?.() as CloudEngineOptions | undefined),
             ...(request.engineOptions as CloudEngineOptions)
         };
         return {
@@ -225,9 +243,10 @@ export class CloudAdapter extends BaseDriver {
         options: CloudEngineOptions,
         signal?: AbortSignal
     ): Promise<Blob[]> {
+        const baseUrl = this.getProviderBaseUrl('google', options);
         const apiKey = options.apiKey;
         const queryParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
-        const endpoint = `/v1beta/models/${encodeURIComponent(model)}:generateContent${queryParam}`;
+        const endpoint = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent${queryParam}`;
 
         const parts: Array<Record<string, unknown>> = [
             { text: request.prompt }
@@ -249,6 +268,13 @@ export class CloudAdapter extends BaseDriver {
             });
         }
 
+        const generationConfig: Record<string, unknown> = {
+            responseModalities: ['TEXT', 'IMAGE']
+        };
+        if (options.aspectRatio) {
+            generationConfig.aspectRatio = options.aspectRatio;
+        }
+
         const body = {
             contents: [
                 {
@@ -256,9 +282,7 @@ export class CloudAdapter extends BaseDriver {
                     parts
                 }
             ],
-            generationConfig: {
-                responseModalities: ['TEXT', 'IMAGE']
-            }
+            generationConfig
         };
 
         const res = await this.postJson<{
@@ -321,18 +345,49 @@ export class CloudAdapter extends BaseDriver {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
-        const size = options.size || (options.width && options.height ? `${options.width}x${options.height}` : '1024x1024');
+        const provider = this.detectProvider(model);
+        const baseUrl = this.getProviderBaseUrl(provider, options);
+        const cleanBase = baseUrl.replace(/\/+$/, '');
+        const endpoint = cleanBase.endsWith('/v1')
+            ? `${cleanBase}/images/generations`
+            : `${cleanBase}/v1/images/generations`;
 
-        const body: Record<string, unknown> = {
-            model,
-            prompt: request.prompt,
-            n: 1,
-            size,
-            response_format: 'b64_json'
-        };
+        let body: Record<string, unknown>;
 
-        if (options.quality) body.quality = options.quality;
-        if (options.style) body.style = options.style;
+        if (provider === 'xai') {
+            // xAI Grok Imagine 原生支持 aspect_ratio 与 resolution
+            let aspectRatio = options.aspectRatio;
+            if (!aspectRatio && options.width && options.height) {
+                const ratio = options.width / options.height;
+                if (Math.abs(ratio - 1) < 0.05) aspectRatio = '1:1';
+                else if (Math.abs(ratio - 16 / 9) < 0.05) aspectRatio = '16:9';
+                else if (Math.abs(ratio - 9 / 16) < 0.05) aspectRatio = '9:16';
+                else if (Math.abs(ratio - 4 / 3) < 0.05) aspectRatio = '4:3';
+                else if (Math.abs(ratio - 3 / 4) < 0.05) aspectRatio = '3:4';
+            }
+
+            body = {
+                model,
+                prompt: request.prompt,
+                n: 1,
+                aspect_ratio: aspectRatio || '1:1',
+                response_format: 'b64_json'
+            };
+            if (options.quality) {
+                body.resolution = (options.quality === 'high' || options.quality === '2k') ? '2k' : '1k';
+            }
+        } else {
+            const size = options.size || (options.width && options.height ? `${options.width}x${options.height}` : '1024x1024');
+            body = {
+                model,
+                prompt: request.prompt,
+                n: 1,
+                size,
+                response_format: 'b64_json'
+            };
+            if (options.quality) body.quality = options.quality;
+            if (options.style) body.style = options.style;
+        }
 
         const res = await this.postJson<{
             data?: Array<{
@@ -340,10 +395,10 @@ export class CloudAdapter extends BaseDriver {
                 url?: string;
             }>;
             error?: { message?: string; type?: string; code?: string };
-        }>('/images/generations', body, {
+        }>(endpoint, body, {
             signal,
             headers,
-            serviceType: this.detectProvider(model) === 'xai' ? 'grok' : 'openai'
+            serviceType: provider === 'xai' ? 'grok' : 'openai'
         });
 
         if (res.error) {

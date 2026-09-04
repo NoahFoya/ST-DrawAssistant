@@ -32,6 +32,24 @@ describe('ComfyUIAdapter', () => {
         expect(adapter.capabilities.syntaxType).toBe('nodeGraph');
     });
 
+    it('getClientId 应动态返回配置中的 clientId 或会话随机标识', () => {
+        // 未配置时返回 st-da- 前缀的会话标识
+        expect(adapter.getClientId()).toMatch(/^st-da-/);
+
+        // 动态配置了 clientId 时优先返回配置中的值
+        let currentCfg: any = {};
+        const dynamicAdapter = new ComfyUIAdapter({
+            network: networkClient,
+            driverName: 'DynamicComfyUI',
+            getEndpointUrl: () => 'http://mock.comfyui.local',
+            getConfig: () => currentCfg
+        });
+
+        expect(dynamicAdapter.getClientId()).toMatch(/^st-da-/);
+        currentCfg = { clientId: 'custom-session-123' };
+        expect(dynamicAdapter.getClientId()).toBe('custom-session-123');
+    });
+
     it('substituteWorkflowVariables 应安全替换数字与包含特殊字符的字符串变量', () => {
         const sampleWorkflow = {
             "3": {
@@ -368,6 +386,218 @@ describe('ComfyUIAdapter', () => {
 
         try {
             await expect(adapter.generate(request)).rejects.toThrow(/ComfyUI 节点执行失败: CUDA out of memory/);
+        } finally {
+            (globalThis as any).WebSocket = OrigWebSocket;
+        }
+    });
+
+    it('当传入底图或遮罩时，上传至 ComfyUI 的文件名应包含 taskId 前缀防止并发覆盖', async () => {
+        let uploadedInitFilename = '';
+        let uploadedMaskFilename = '';
+        let submittedWorkflow: any = null;
+
+        mockFetchExternal.mockImplementation((url: string, opts?: any) => {
+            if (url.includes('/upload/image')) {
+                const formData = opts.body as any;
+                const file = formData?.get?.('image');
+                const filename = file?.name || '';
+                if (filename.includes('_init.png')) {
+                    uploadedInitFilename = filename;
+                } else if (filename.includes('_mask.png')) {
+                    uploadedMaskFilename = filename;
+                }
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ name: filename || 'mock.png' })
+                });
+            }
+            if (url.includes('/prompt')) {
+                const body = JSON.parse(opts.body);
+                submittedWorkflow = body.prompt;
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ prompt_id: 'pid-upload-test', number: 1 })
+                });
+            }
+            if (url.includes('/history/')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        'pid-upload-test': {
+                            status: { completed: true },
+                            outputs: {
+                                "9": { images: [{ filename: 'output.png', subfolder: '', type: 'output' }] }
+                            }
+                        }
+                    })
+                });
+            }
+            if (url.includes('/view?')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    blob: async () => new Blob(['fake-img'], { type: 'image/png' })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task_unique_123',
+            targetEngine: 'comfyui',
+            prompt: 'inpaint a cat',
+            imageInputs: {
+                initImageBlob: new Blob(['init'], { type: 'image/png' }),
+                maskImageBlob: new Blob(['mask'], { type: 'image/png' }),
+                denoiseStrength: 0.65
+            },
+            engineOptions: {
+                workflowJson: {
+                    "1": { "inputs": { "image": "%inpaint_image%" } },
+                    "2": { "inputs": { "mask": "%inpaint_mask%" } }
+                }
+            }
+        };
+
+        const result = await adapter.generate(request);
+
+        expect(result.taskId).toBe('task_unique_123');
+        expect(uploadedInitFilename).toBe('task_unique_123_init.png');
+        expect(uploadedMaskFilename).toBe('task_unique_123_mask.png');
+        expect(submittedWorkflow['1'].inputs.image).toBe('task_unique_123_init.png');
+        expect(submittedWorkflow['2'].inputs.mask).toBe('task_unique_123_mask.png');
+    });
+
+    it('waitViaHttpPolling 应在收到 AbortSignal 时立即退出并抛出 CANCELLED 错误', async () => {
+        // 禁止 WebSocket 连接以触发 HTTP 轮询路径
+        const OrigWebSocket = globalThis.WebSocket;
+        class FailingWebSocket {
+            constructor() {
+                throw new Error('WebSocket disabled for polling test');
+            }
+        }
+        (globalThis as any).WebSocket = FailingWebSocket;
+
+        mockFetchExternal.mockImplementation((url: string) => {
+            if (url.includes('/prompt')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ prompt_id: 'pid-poll-abort' })
+                });
+            }
+            if (url.includes('/history/pid-poll-abort')) {
+                // 历史记录始终为空，持续等待中
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({})
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const controller = new AbortController();
+        const request: GenerationRequest = {
+            taskId: 'task-poll-abort',
+            targetEngine: 'comfyui',
+            prompt: 'scenery',
+            engineOptions: {
+                workflowJson: { "1": { "class_type": "KSampler" } }
+            }
+        };
+
+        // 50ms 后中止任务
+        setTimeout(() => {
+            controller.abort();
+        }, 50);
+
+        try {
+            await expect(adapter.generate(request, controller.signal)).rejects.toThrow('ComfyUI 任务已取消');
+        } finally {
+            (globalThis as any).WebSocket = OrigWebSocket;
+        }
+    });
+
+    it('当 ComfyUI 提交返回 node_errors 时，应准确解析具体节点并抛出包含详细原因的错误', async () => {
+        mockFetchExternal.mockImplementation((url: string) => {
+            if (url.includes('/prompt')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        node_errors: {
+                            "3": {
+                                class_type: "KSampler",
+                                errors: [{ message: "Value not in list: sampler_name 'invalid_sampler'" }]
+                            }
+                        }
+                    })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task-node-err',
+            targetEngine: 'comfyui',
+            prompt: 'scenery'
+        };
+
+        await expect(adapter.generate(request)).rejects.toThrow('节点 #3 [KSampler]: Value not in list');
+    });
+
+    it('当 ComfyUI 任务在后端崩溃且历史记录 status_str 为 error 时，应抛出后端崩溃错误', async () => {
+        const OrigWebSocket = (globalThis as any).WebSocket;
+        class FailingWebSocket {
+            onclose: any = null;
+            onerror: any = null;
+            onmessage: any = null;
+            constructor() {
+                setTimeout(() => {
+                    if (this.onclose) this.onclose();
+                }, 10);
+            }
+            close() {}
+        }
+        (globalThis as any).WebSocket = FailingWebSocket;
+
+        mockFetchExternal.mockImplementation((url: string) => {
+            if (url.includes('/prompt')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ prompt_id: 'pid-crash' })
+                });
+            }
+            if (url.includes('/history/pid-crash')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        'pid-crash': {
+                            status: {
+                                status_str: 'error',
+                                messages: ['CUDA out of memory']
+                            }
+                        }
+                    })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task-crash',
+            targetEngine: 'comfyui',
+            prompt: 'scenery'
+        };
+
+        try {
+            await expect(adapter.generate(request)).rejects.toThrow('ComfyUI 任务执行异常崩溃: CUDA out of memory');
         } finally {
             (globalThis as any).WebSocket = OrigWebSocket;
         }
