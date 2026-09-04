@@ -109,33 +109,16 @@ export async function extractImageFromZipBuffer(buffer: ArrayBuffer): Promise<Bl
         if (compressionMethod === 0) {
             return new Blob([fileData], { type: 'image/png' });
         } else if (compressionMethod === 8) {
-            if (typeof DecompressionStream !== 'undefined') {
-                try {
-                    const stream = new Blob([fileData]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-                    const decompressedArray = await new Response(stream).arrayBuffer();
-                    return new Blob([decompressedArray], { type: 'image/png' });
-                } catch (err: any) {
-                    throw new DriverError(
-                        DriverErrorType.BACKEND_ERROR,
-                        `NovelAI ZIP 响应流 Deflate 解压失败: ${err?.message || '未知解压异常'}`
-                    );
-                }
-            }
-
             try {
-                const getRequire = new Function('return typeof require !== "undefined" ? require : null;');
-                const nodeReq = getRequire();
-                if (nodeReq) {
-                    const zlibMod = nodeReq('zlib');
-                    const decompressed = zlibMod.inflateRawSync(Buffer.from(fileData));
-                    return new Blob([decompressed], { type: 'image/png' });
-                }
-            } catch {}
-
-            throw new DriverError(
-                DriverErrorType.BACKEND_ERROR,
-                '当前运行环境缺少 DecompressionStream 支持，无法解压 NovelAI 图像数据'
-            );
+                const stream = new Blob([fileData]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+                const decompressedArray = await new Response(stream).arrayBuffer();
+                return new Blob([decompressedArray], { type: 'image/png' });
+            } catch (err: any) {
+                throw new DriverError(
+                    DriverErrorType.BACKEND_ERROR,
+                    `NovelAI ZIP 响应流 Deflate 解压失败: ${err?.message || '未知解压异常'}`
+                );
+            }
         }
     }
 

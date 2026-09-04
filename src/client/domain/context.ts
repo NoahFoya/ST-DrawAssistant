@@ -82,7 +82,10 @@ export class DomainContext implements IDisposable {
         const novelai = new NovelAIAdapter({
             network,
             driverName: 'NovelAI',
-            getEndpointUrl: () => 'https://image.novelai.net',
+            getEndpointUrl: () => {
+                const cfg = store.get('engineConfigs')?.['novelai'] as Record<string, string> | undefined;
+                return cfg?.['serverUrl'] || cfg?.['proxyUrl'] || 'https://image.novelai.net';
+            },
             defaultConfig: store.get('engineConfigs')?.['novelai'] as any
         });
         this.adapters.register(novelai);

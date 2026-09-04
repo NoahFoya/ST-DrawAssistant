@@ -32,4 +32,22 @@ describe('DomainContext (领域服务统一组装容器)', () => {
 
         core.dispose();
     });
+
+    it('当配置中心提供自定义 serverUrl 时，各适配器应动态解析自定义端点', () => {
+        const core = createCoreContext({
+            engineConfigs: {
+                novelai: {
+                    serverUrl: 'https://custom.novelai-proxy.com'
+                }
+            }
+        });
+        const domain = createDomainContext({ core });
+
+        const novelai = domain.adapters.get('novelai') as any;
+        expect(novelai).toBeDefined();
+        expect(novelai.baseUrl).toBe('https://custom.novelai-proxy.com');
+
+        domain.dispose();
+        core.dispose();
+    });
 });
