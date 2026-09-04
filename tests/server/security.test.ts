@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
 import {
     validateTargetUrl,
-    sanitizeRequestHeaders
+    sanitizeRequestHeaders,
+    filterSafeResponseHeaders
 } from '../../src/server/security';
 
 describe('Server Security Guard', () => {
@@ -90,6 +90,32 @@ describe('Server Security Guard', () => {
             expect(cleaned['Content-Type']).toBe('application/json');
             expect(cleaned['Authorization']).toBe('Bearer external-key');
             expect(cleaned['Accept']).toBe('image/png');
+        });
+    });
+
+    describe('filterSafeResponseHeaders', () => {
+        it('应成功过滤 set-cookie、content-length 及逐跳传输头，并保留安全业务标头', () => {
+            const mockHeaders = new Headers();
+            mockHeaders.set('content-type', 'image/png');
+            mockHeaders.set('set-cookie', 'session=injected_val; Path=/; HttpOnly');
+            mockHeaders.set('content-length', '102400');
+            mockHeaders.set('connection', 'keep-alive');
+            mockHeaders.set('x-request-id', 'req-test-123');
+
+            const setHeaders: Record<string, string> = {};
+            const mockRes: any = {
+                setHeader: (key: string, val: string) => {
+                    setHeaders[key.toLowerCase()] = val;
+                }
+            };
+
+            filterSafeResponseHeaders(mockHeaders, mockRes);
+
+            expect(setHeaders['content-type']).toBe('image/png');
+            expect(setHeaders['x-request-id']).toBe('req-test-123');
+            expect(setHeaders['set-cookie']).toBeUndefined();
+            expect(setHeaders['content-length']).toBeUndefined();
+            expect(setHeaders['connection']).toBeUndefined();
         });
     });
 });

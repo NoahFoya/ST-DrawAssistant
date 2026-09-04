@@ -120,6 +120,8 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         (targetHostname.includes('api.x.ai')) ? 'grok' : undefined
     );
 
+    // 服务端自动凭据注入：针对 NovelAI 同时注入 Authorization (官方标准) 与 Token (第三方反代非标头)，
+    // 使得同一配置在官方端点与第三方反代中转站间无缝通用
     if (serviceType === 'novelai' && serverConfig.apiKeys.novelai) {
         const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
         if (!hasAuth) {

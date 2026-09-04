@@ -25,7 +25,10 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
     'referer'
 ]);
 
-/** 回传客户端时需移除的逐跳传输头 (Hop-by-hop Headers) */
+/**
+ * 回传客户端时需移除的逐跳传输头 (Hop-by-hop Headers) 及安全隔离字段
+ * 包含连接控制、压缩长度字段以及 set-cookie (防止外部服务或第三方反代污染酒馆宿主 Cookie)
+ */
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
     'connection',
     'keep-alive',
@@ -36,7 +39,8 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
     'transfer-encoding',
     'upgrade',
     'content-length',
-    'content-encoding'
+    'content-encoding',
+    'set-cookie'
 ]);
 
 export interface TargetValidationResult {
