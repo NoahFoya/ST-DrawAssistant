@@ -24,17 +24,18 @@ export function toDisposable(fn: () => void): IDisposable {
     };
 }
 
-/** 服务端代理请求参数 */
-export interface ProxyRelayPayload {
+/** 服务端反向代理请求参数 */
+export interface ProxyRelayRequest {
     url: string;
     method?: string;
     headers?: Record<string, string>;
     body?: string | Record<string, unknown>;
     timeoutMs?: number;
+    serviceType?: 'novelai' | 'openai' | 'gemini' | 'grok';
 }
 
-/** 服务端代理错误响应数据 */
-export interface ProxyErrorPayload {
+/** 服务端反向代理错误响应数据 */
+export interface ProxyErrorResponse {
     error: string;
     code: 'BAD_REQUEST' | 'BAD_GATEWAY' | 'GATEWAY_TIMEOUT' | 'SECURITY_BLOCKED' | 'CLIENT_CLOSED';
     targetUrl?: string;

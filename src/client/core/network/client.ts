@@ -11,13 +11,14 @@ import {
     DEFAULT_PROXY_TIMEOUT_MS,
     LOOPBACK_HOSTS
 } from '../constants';
-import { ProxyRelayPayload, ProxyErrorPayload } from './types';
+import { ProxyRelayRequest, ProxyErrorResponse } from './types';
 import { NetworkError, NetworkErrorCode } from './error';
 import { composeTimeoutSignal } from './signal';
 
 export interface HttpRequestOptions extends RequestInit {
     timeoutMs?: number;
     skipCsrf?: boolean;
+    serviceType?: ProxyRelayRequest['serviceType'];
 }
 
 /**
@@ -158,39 +159,40 @@ export class NetworkClient {
         if (mode === 'server') {
             this._logger.debug(`通过服务端代理转发 -> ${targetUrl}`);
             const proxyTimeout = options.timeoutMs ?? DEFAULT_PROXY_TIMEOUT_MS;
-            const payload: ProxyRelayPayload = {
+            const relayRequest: ProxyRelayRequest = {
                 url: targetUrl,
                 method: options.method || 'GET',
                 headers: normalizeHeaders(options.headers),
                 body: options.body != null
                     ? (typeof options.body === 'string' ? options.body : (options.body as unknown as Record<string, unknown>))
                     : undefined,
-                timeoutMs: proxyTimeout
+                timeoutMs: proxyTimeout,
+                serviceType: options.serviceType
             };
 
             const resp = await this.fetchHost(SERVER_PROXY_ENDPOINT, {
                 method: 'POST',
-                body: JSON.stringify(payload),
+                body: JSON.stringify(relayRequest),
                 timeoutMs: proxyTimeout + 5000,
                 signal: options.signal
             });
 
             if (!resp.ok) {
-                let errorPayload: ProxyErrorPayload | null = null;
+                let errorResponse: ProxyErrorResponse | null = null;
                 try {
                     const cloned = await resp.clone().json();
                     if (cloned && typeof cloned === 'object' && 'code' in cloned && 'error' in cloned) {
-                        errorPayload = cloned as ProxyErrorPayload;
+                        errorResponse = cloned as ProxyErrorResponse;
                     }
                 } catch {}
 
                 const isProxyMiddlewareError = Boolean(
-                    errorPayload &&
-                    (errorPayload.code === 'BAD_GATEWAY' ||
-                     errorPayload.code === 'GATEWAY_TIMEOUT' ||
-                     errorPayload.code === 'SECURITY_BLOCKED' ||
-                     errorPayload.code === 'CLIENT_CLOSED' ||
-                     errorPayload.code === 'BAD_REQUEST')
+                    errorResponse &&
+                    (errorResponse.code === 'BAD_GATEWAY' ||
+                     errorResponse.code === 'GATEWAY_TIMEOUT' ||
+                     errorResponse.code === 'SECURITY_BLOCKED' ||
+                     errorResponse.code === 'CLIENT_CLOSED' ||
+                     errorResponse.code === 'BAD_REQUEST')
                 );
 
                 if (isProxyMiddlewareError) {
@@ -201,16 +203,17 @@ export class NetworkClient {
                     else if (status === 499) code = 'ABORTED';
                     else if (status === 403) code = 'SECURITY_BLOCKED';
 
-                    const message = errorPayload!.error;
+                    const message = errorResponse!.error;
                     const networkError = new NetworkError({
                         message,
                         code,
                         targetUrl,
                         status,
-                        cause: errorPayload?.details
+                        cause: errorResponse?.details
                     });
-                    this._logger.error(networkError.message);
+                    this._logger.error(message, networkError);
                     throw networkError;
+
                 }
 
                 // 目标生图后端业务层响应原样交付调用方解析

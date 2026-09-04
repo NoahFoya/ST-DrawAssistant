@@ -1,0 +1,55 @@
+/**
+ * @module domain/task/task-types
+ * @description 任务调度系统数据类型、状态机模型与调度事件定义
+ */
+
+import { GenerationRequest, GenerationResult } from '../types';
+
+/** 任务生命周期状态枚举 */
+export type TaskStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+
+/** 任务上下文标识信息 */
+export interface TaskContextIdentity {
+    readonly taskId: string;
+    readonly chatId?: string;
+    readonly messageId?: number;
+    readonly swipeId?: number;
+}
+
+/** 外部可查询的任务只读快照模型 */
+export interface TaskSnapshot {
+    readonly id: string;
+    readonly targetEngine: string;
+    readonly status: TaskStatus;
+    readonly request: GenerationRequest;
+    readonly progress: number;
+    readonly previewUrl?: string;
+    readonly result?: GenerationResult;
+    readonly error?: string;
+    readonly createdAt: number;
+    readonly startedAt?: number;
+    readonly finishedAt?: number;
+}
+
+/** 提交生图任务的选项参数 */
+export interface SubmitTaskOptions {
+    /** 经提示词流水线生成的标准化生图请求对象 */
+    request: GenerationRequest;
+    /** 任务关联的会话标识 (可选) */
+    chatId?: string;
+    /** 任务关联的消息楼层标识 (可选) */
+    messageId?: number;
+    /** 消息 Swipe 分支序号 (可选) */
+    swipeId?: number;
+}
+
+/** 任务调度中心事件定义 */
+export interface TaskEventMap {
+    'task:queued': { taskId: string; request: GenerationRequest };
+    'task:started': { taskId: string; request: GenerationRequest };
+    'task:progress': { taskId: string; progress: number; previewUrl?: string };
+    'task:completed': { taskId: string; result: GenerationResult };
+    'task:cancelled': { taskId: string; reason?: string };
+    'task:failed': { taskId: string; error: string };
+    'task:state_changed': { taskId: string; status: TaskStatus; error?: string };
+}

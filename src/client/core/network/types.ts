@@ -3,7 +3,10 @@
  * @description 客户端与服务端辅助插件通信数据格式定义
  */
 
-export { ProxyRelayPayload, ProxyErrorPayload } from '../../../common';
+export {
+    ProxyRelayRequest,
+    ProxyErrorResponse
+} from '../../../common';
 
 /** 服务端辅助插件信息声明 */
 export interface ServerPluginInfo {
