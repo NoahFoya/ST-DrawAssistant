@@ -7,7 +7,7 @@
 import type { Router, Request, Response } from 'express';
 import { PLUGIN_ID, EXTENSION_NAME, EXTENSION_VERSION } from '../common';
 import { handleProxyRequest, abortAllActiveProxyRequests } from './proxy';
-import { getConfiguredKeyStatus } from './server-config';
+import { getConfiguredKeyStatus, saveServerConfig } from './server-config';
 
 export interface PluginInfo {
     id: string;
@@ -40,6 +40,25 @@ export async function init(router: Router): Promise<void> {
 
     router.post('/proxy', (req: Request, res: Response) => {
         void handleProxyRequest(req, res);
+    });
+
+    router.post('/credentials', (req: Request, res: Response) => {
+        try {
+            const body = req.body || {};
+            saveServerConfig({
+                apiKeys: body.apiKeys || body.api_keys,
+                endpoints: body.endpoints
+            });
+            res.json({
+                success: true,
+                configuredKeys: getConfiguredKeyStatus()
+            });
+        } catch (err: any) {
+            res.status(500).json({
+                success: false,
+                error: err.message || String(err)
+            });
+        }
     });
 
     console.info(`[${info.name}] 服务端辅助代理路由已挂载就绪。`);

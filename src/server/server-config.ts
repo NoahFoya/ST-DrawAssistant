@@ -1,12 +1,20 @@
 /**
  * @module server/server-config
- * @description 服务端本地私密配置文件加载与访问模块
+ * @description 服务端本地私密配置文件加载与管理模块 (基于标准 YAML 规范)
  */
 
 import fs from 'fs';
 import path from 'path';
+import YAML from 'yaml';
 
 export interface ServerApiKeys {
+    novelai?: string;
+    openai?: string;
+    gemini?: string;
+    grok?: string;
+}
+
+export interface ServerEndpoints {
     novelai?: string;
     openai?: string;
     gemini?: string;
@@ -20,15 +28,9 @@ export interface ServerOptions {
     allowedHosts: string[];
 }
 
-export interface ServerConfigFile {
-    version?: string;
-    description?: string;
-    apiKeys?: ServerApiKeys;
-    serverOptions?: Partial<ServerOptions>;
-}
-
 export interface ServerConfig {
     apiKeys: ServerApiKeys;
+    endpoints: ServerEndpoints;
     serverOptions: ServerOptions;
 }
 
@@ -36,71 +38,153 @@ export const DEFAULT_SERVER_OPTIONS: ServerOptions = {
     proxyTimeoutMs: 180000,
     maxPayloadSizeMb: 50,
     enableProxyLog: false,
-    allowedHosts: ['*'] // 默认放行所有合法生图端点 (包含局域网、DDNS、云端与第三方中转站)，用户可按需在 config.json 中收紧白名单
+    allowedHosts: ['*']
+};
+
+export const DEFAULT_SERVER_CONFIG: ServerConfig = {
+    apiKeys: {
+        novelai: '',
+        openai: '',
+        gemini: '',
+        grok: ''
+    },
+    endpoints: {
+        novelai: '',
+        openai: '',
+        gemini: '',
+        grok: ''
+    },
+    serverOptions: { ...DEFAULT_SERVER_OPTIONS }
 };
 
 let _cachedConfig: ServerConfig | null = null;
 
 /**
- * 确定 config/config.json 的物理绝对路径
+ * 确定服务端配置文件的物理绝对路径
+ * 优先使用 config/config.yaml，其次兼容 config/config.json
  */
 export function resolveConfigFilePath(): string {
-    // 优先读取插件自身目录下的配置文件
-    const pluginConfig = path.resolve(__dirname, '..', 'config', 'config.json');
-    if (fs.existsSync(pluginConfig)) {
-        return pluginConfig;
+    const searchDirs = [
+        path.resolve(__dirname, '..', 'config'),
+        path.resolve(process.cwd(), 'config')
+    ];
+
+    const fileNames = ['config.yaml', 'config.yml', 'config.json'];
+
+    for (const dir of searchDirs) {
+        for (const name of fileNames) {
+            const candidate = path.join(dir, name);
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
     }
-    // 调试与独立运行环境下尝试当前工作目录
-    const cwdConfig = path.resolve(process.cwd(), 'config', 'config.json');
-    if (fs.existsSync(cwdConfig)) {
-        return cwdConfig;
+
+    // 默认创建/读取路径
+    return path.resolve(__dirname, '..', 'config', 'config.yaml');
+}
+
+/**
+ * 校验并规范化原始配置对象
+ */
+function normalizeServerConfig(raw: any): ServerConfig {
+    if (!raw || typeof raw !== 'object') {
+        throw new Error('配置文件根节点必须为对象');
     }
-    return pluginConfig;
+
+    const rawKeys = raw.api_keys || raw.apiKeys || {};
+    const rawEndpoints = raw.endpoints || {};
+    const rawServer = raw.server || raw.serverOptions || {};
+
+    const apiKeys: ServerApiKeys = {
+        novelai: typeof rawKeys.novelai === 'string' ? rawKeys.novelai.trim() : '',
+        openai: typeof rawKeys.openai === 'string' ? rawKeys.openai.trim() : '',
+        gemini: typeof rawKeys.gemini === 'string' ? rawKeys.gemini.trim() : '',
+        grok: typeof rawKeys.grok === 'string' ? rawKeys.grok.trim() : ''
+    };
+
+    const endpoints: ServerEndpoints = {
+        novelai: typeof rawEndpoints.novelai === 'string' ? rawEndpoints.novelai.trim() : '',
+        openai: typeof rawEndpoints.openai === 'string' ? rawEndpoints.openai.trim() : '',
+        gemini: typeof rawEndpoints.gemini === 'string' ? rawEndpoints.gemini.trim() : '',
+        grok: typeof rawEndpoints.grok === 'string' ? rawEndpoints.grok.trim() : ''
+    };
+
+    const serverOptions: ServerOptions = {
+        proxyTimeoutMs: typeof rawServer.proxy_timeout_ms === 'number'
+            ? rawServer.proxy_timeout_ms
+            : (typeof rawServer.proxyTimeoutMs === 'number' ? rawServer.proxyTimeoutMs : DEFAULT_SERVER_OPTIONS.proxyTimeoutMs),
+        maxPayloadSizeMb: typeof rawServer.max_payload_size_mb === 'number'
+            ? rawServer.max_payload_size_mb
+            : (typeof rawServer.maxPayloadSizeMb === 'number' ? rawServer.maxPayloadSizeMb : DEFAULT_SERVER_OPTIONS.maxPayloadSizeMb),
+        enableProxyLog: typeof rawServer.enable_proxy_log === 'boolean'
+            ? rawServer.enable_proxy_log
+            : (typeof rawServer.enableProxyLog === 'boolean' ? rawServer.enableProxyLog : DEFAULT_SERVER_OPTIONS.enableProxyLog),
+        allowedHosts: Array.isArray(rawServer.allowed_hosts)
+            ? rawServer.allowed_hosts
+            : (Array.isArray(rawServer.allowedHosts) ? rawServer.allowedHosts : DEFAULT_SERVER_OPTIONS.allowedHosts)
+    };
+
+    return { apiKeys, endpoints, serverOptions };
+}
+
+/**
+ * 应用环境变量最高优先级覆盖 (符合 12-Factor App 规范)
+ */
+function applyEnvironmentOverrides(config: ServerConfig): ServerConfig {
+    const env = process.env;
+
+    if (env.ST_DRAW_NOVELAI_API_KEY) config.apiKeys.novelai = env.ST_DRAW_NOVELAI_API_KEY.trim();
+    if (env.ST_DRAW_OPENAI_API_KEY) config.apiKeys.openai = env.ST_DRAW_OPENAI_API_KEY.trim();
+    if (env.ST_DRAW_GEMINI_API_KEY) config.apiKeys.gemini = env.ST_DRAW_GEMINI_API_KEY.trim();
+    if (env.ST_DRAW_GROK_API_KEY) config.apiKeys.grok = env.ST_DRAW_GROK_API_KEY.trim();
+
+    if (env.ST_DRAW_NOVELAI_ENDPOINT) config.endpoints.novelai = env.ST_DRAW_NOVELAI_ENDPOINT.trim();
+    if (env.ST_DRAW_OPENAI_ENDPOINT) config.endpoints.openai = env.ST_DRAW_OPENAI_ENDPOINT.trim();
+
+    if (env.ST_DRAW_ALLOWED_HOSTS) {
+        config.serverOptions.allowedHosts = env.ST_DRAW_ALLOWED_HOSTS.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    return config;
 }
 
 /**
  * 读取并解析本地配置文件
+ * 遇到文件内容语法错误时直接抛出异常，不静默吞错
+ *
  * @param customPath 自定义配置文件路径 (主要用于单元测试注入)
  */
 export function loadServerConfig(customPath?: string): ServerConfig {
     const filePath = customPath || resolveConfigFilePath();
 
-    try {
-        if (fs.existsSync(filePath)) {
-            const raw = fs.readFileSync(filePath, 'utf-8');
-            const parsed = JSON.parse(raw) as ServerConfigFile;
-
-            _cachedConfig = {
-                apiKeys: {
-                    novelai: (parsed.apiKeys?.novelai || '').trim(),
-                    openai: (parsed.apiKeys?.openai || '').trim(),
-                    gemini: (parsed.apiKeys?.gemini || '').trim(),
-                    grok: (parsed.apiKeys?.grok || '').trim()
-                },
-                serverOptions: {
-                    proxyTimeoutMs: parsed.serverOptions?.proxyTimeoutMs ?? DEFAULT_SERVER_OPTIONS.proxyTimeoutMs,
-                    maxPayloadSizeMb: parsed.serverOptions?.maxPayloadSizeMb ?? DEFAULT_SERVER_OPTIONS.maxPayloadSizeMb,
-                    enableProxyLog: parsed.serverOptions?.enableProxyLog ?? DEFAULT_SERVER_OPTIONS.enableProxyLog,
-                    allowedHosts: Array.isArray(parsed.serverOptions?.allowedHosts)
-                        ? parsed.serverOptions.allowedHosts
-                        : DEFAULT_SERVER_OPTIONS.allowedHosts
-                }
-            };
-            return _cachedConfig;
-        }
-    } catch (err) {
-        console.warn(`[ST-DrawAssistant][ServerConfig] 读取本地配置文件失败 [${filePath}]，将使用默认配置。原因:`, err);
+    if (!fs.existsSync(filePath)) {
+        const baseConfig: ServerConfig = JSON.parse(JSON.stringify(DEFAULT_SERVER_CONFIG));
+        _cachedConfig = applyEnvironmentOverrides(baseConfig);
+        return _cachedConfig;
     }
 
-    _cachedConfig = {
-        apiKeys: {},
-        serverOptions: { ...DEFAULT_SERVER_OPTIONS }
-    };
-    return _cachedConfig;
+    try {
+        const rawContent = fs.readFileSync(filePath, 'utf-8');
+        let parsed: any;
+
+        if (filePath.endsWith('.json')) {
+            parsed = JSON.parse(rawContent);
+        } else {
+            parsed = YAML.parse(rawContent);
+        }
+
+        const normalized = normalizeServerConfig(parsed);
+        _cachedConfig = applyEnvironmentOverrides(normalized);
+        return _cachedConfig;
+    } catch (err: any) {
+        console.error(`[ST-DrawAssistant][ServerConfig] 解析服务端配置文件失败 [${filePath}]:`, err.message || err);
+        throw new Error(`服务端配置文件解析失败 [${path.basename(filePath)}]: ${err.message || String(err)}`);
+    }
 }
 
 /**
- * 获取当前已缓存的服务端配置 (若未加载则自动加载)
+ * 获取已缓存的服务端配置 (若未加载则自动加载)
  */
 export function getServerConfig(): ServerConfig {
     if (!_cachedConfig) {
@@ -110,7 +194,63 @@ export function getServerConfig(): ServerConfig {
 }
 
 /**
- * 获取各服务端密钥的配置就绪状态 (返回布尔值字典，用于前端状态感知)
+ * 保存并更新服务端本地配置文件 (写回标准 YAML 格式)
+ *
+ * @param updates 需要增量更新的配置项
+ * @param customPath 自定义文件路径
+ */
+export function saveServerConfig(
+    updates: {
+        apiKeys?: Partial<ServerApiKeys>;
+        endpoints?: Partial<ServerEndpoints>;
+        serverOptions?: Partial<ServerOptions>;
+    },
+    customPath?: string
+): ServerConfig {
+    const current = getServerConfig();
+
+    const merged: ServerConfig = {
+        apiKeys: {
+            ...current.apiKeys,
+            ...updates.apiKeys
+        },
+        endpoints: {
+            ...current.endpoints,
+            ...updates.endpoints
+        },
+        serverOptions: {
+            ...current.serverOptions,
+            ...updates.serverOptions
+        }
+    };
+
+    const filePath = customPath || resolveConfigFilePath();
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // 格式化为整洁的 YAML 输出结构
+    const yamlDoc = {
+        api_keys: merged.apiKeys,
+        endpoints: merged.endpoints,
+        server: {
+            proxy_timeout_ms: merged.serverOptions.proxyTimeoutMs,
+            max_payload_size_mb: merged.serverOptions.maxPayloadSizeMb,
+            enable_proxy_log: merged.serverOptions.enableProxyLog,
+            allowed_hosts: merged.serverOptions.allowedHosts
+        }
+    };
+
+    const serialized = YAML.stringify(yamlDoc, { indent: 2 });
+    fs.writeFileSync(filePath, serialized, 'utf-8');
+
+    _cachedConfig = merged;
+    return _cachedConfig;
+}
+
+/**
+ * 获取当前各生图服务的密钥配置状态 (仅返回布尔值，用于前端状态感知)
  */
 export function getConfiguredKeyStatus(): Record<string, boolean> {
     const config = getServerConfig();
@@ -123,7 +263,7 @@ export function getConfiguredKeyStatus(): Record<string, boolean> {
 }
 
 /**
- * 重置配置缓存 (用于测试或配置重载)
+ * 重置配置缓存 (主要用于单元测试隔离)
  */
 export function resetServerConfigCache(): void {
     _cachedConfig = null;

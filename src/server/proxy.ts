@@ -6,7 +6,7 @@
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import type { Request, Response } from 'express';
-import { ProxyRelayPayload, ProxyErrorPayload } from '../common';
+import { ProxyRelayRequest, ProxyErrorResponse } from '../common';
 import { validateTargetUrl, sanitizeRequestHeaders, filterSafeResponseHeaders } from './security';
 import { getServerConfig, ServerConfig } from './server-config';
 
@@ -48,12 +48,12 @@ function isWritableStream(target: unknown): target is NodeJS.WritableStream {
 }
 
 /** 统一输出代理错误响应 */
-function sendProxyError(res: Response, status: number, payload: ProxyErrorPayload): void {
+function sendProxyError(res: Response, status: number, errorResponse: ProxyErrorResponse): void {
     res.status(status);
     if (typeof res.json === 'function') {
-        res.json(payload);
+        res.json(errorResponse);
     } else if (typeof res.send === 'function') {
-        res.send(payload as any);
+        res.send(errorResponse as any);
     }
 }
 
@@ -77,9 +77,9 @@ export function abortAllActiveProxyRequests(): void {
  * 反向代理请求处理入口
  */
 export async function handleProxyRequest(req: Request, res: Response): Promise<void> {
-    const payload = req.body as ProxyRelayPayload | undefined;
+    const relayRequest = req.body as ProxyRelayRequest | undefined;
 
-    if (!payload || typeof payload !== 'object' || !payload.url) {
+    if (!relayRequest || typeof relayRequest !== 'object' || !relayRequest.url) {
         sendProxyError(res, 400, {
             error: '无效的代理请求数据，缺少目标 url 参数',
             code: 'BAD_REQUEST'
@@ -87,11 +87,12 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         return;
     }
 
+
     const serverConfig = getServerConfig();
-    const targetUrl: string = payload.url;
-    const method: string = (payload.method || 'GET').toUpperCase();
-    const timeoutMs: number = typeof payload.timeoutMs === 'number' && payload.timeoutMs > 0
-        ? payload.timeoutMs
+    const targetUrl: string = relayRequest.url;
+    const method: string = (relayRequest.method || 'GET').toUpperCase();
+    const timeoutMs: number = typeof relayRequest.timeoutMs === 'number' && relayRequest.timeoutMs > 0
+        ? relayRequest.timeoutMs
         : (serverConfig.serverOptions.proxyTimeoutMs || 180000);
 
     const validation = validateTargetUrl(targetUrl, serverConfig.serverOptions.allowedHosts);
@@ -104,26 +105,60 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         return;
     }
 
-    const cleanedHeaders = sanitizeRequestHeaders(payload.headers || {});
+    const cleanedHeaders = sanitizeRequestHeaders(relayRequest.headers || {});
 
-    // 目标主机命中已知云端生图服务且请求未附带凭据时，自动补充服务端保存的 API Key
+    // 服务端自动凭据注入：优先按请求 serviceType 或目标 URL 路径推导服务类型
     let targetHostname = '';
     try {
         targetHostname = new URL(targetUrl).hostname.toLowerCase();
     } catch {}
 
-    for (const rule of CLOUD_AUTH_RULES) {
-        if (targetHostname === rule.domain || targetHostname.endsWith(`.${rule.domain}`)) {
-            const hasHeader = Object.keys(cleanedHeaders).some(
-                k => k.toLowerCase() === rule.headerName.toLowerCase()
-            );
-            if (!hasHeader) {
-                const headerValue = rule.getHeaderValue(serverConfig.apiKeys);
-                if (headerValue) {
-                    cleanedHeaders[rule.headerName] = headerValue;
+    const serviceType = relayRequest.serviceType || (
+        (targetHostname.includes('novelai') || targetUrl.includes('/novelai') || targetUrl.includes('/generate-image')) ? 'novelai' :
+        (targetHostname.includes('openai.com')) ? 'openai' :
+        (targetHostname.includes('googleapis.com')) ? 'gemini' :
+        (targetHostname.includes('api.x.ai')) ? 'grok' : undefined
+    );
+
+    if (serviceType === 'novelai' && serverConfig.apiKeys.novelai) {
+        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
+        if (!hasAuth) {
+            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.novelai}`;
+        }
+        const hasToken = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'token');
+        if (!hasToken) {
+            cleanedHeaders['Token'] = serverConfig.apiKeys.novelai;
+        }
+    } else if (serviceType === 'openai' && serverConfig.apiKeys.openai) {
+        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
+        if (!hasAuth) {
+            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.openai}`;
+        }
+    } else if (serviceType === 'gemini' && serverConfig.apiKeys.gemini) {
+        const hasKey = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'x-goog-api-key');
+        if (!hasKey) {
+            cleanedHeaders['x-goog-api-key'] = serverConfig.apiKeys.gemini;
+        }
+    } else if (serviceType === 'grok' && serverConfig.apiKeys.grok) {
+        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
+        if (!hasAuth) {
+            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.grok}`;
+        }
+    } else {
+        // 官方固定域名兜底匹配
+        for (const rule of CLOUD_AUTH_RULES) {
+            if (targetHostname === rule.domain || targetHostname.endsWith(`.${rule.domain}`)) {
+                const hasHeader = Object.keys(cleanedHeaders).some(
+                    k => k.toLowerCase() === rule.headerName.toLowerCase()
+                );
+                if (!hasHeader) {
+                    const headerValue = rule.getHeaderValue(serverConfig.apiKeys);
+                    if (headerValue) {
+                        cleanedHeaders[rule.headerName] = headerValue;
+                    }
                 }
+                break;
             }
-            break;
         }
     }
 
@@ -153,10 +188,10 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
             signal: controller.signal
         };
 
-        if (method !== 'GET' && method !== 'HEAD' && payload.body !== undefined) {
-            fetchOptions.body = typeof payload.body === 'string'
-                ? payload.body
-                : JSON.stringify(payload.body);
+        if (method !== 'GET' && method !== 'HEAD' && relayRequest.body !== undefined) {
+            fetchOptions.body = typeof relayRequest.body === 'string'
+                ? relayRequest.body
+                : JSON.stringify(relayRequest.body);
         }
 
         if (serverConfig.serverOptions.enableProxyLog) {
