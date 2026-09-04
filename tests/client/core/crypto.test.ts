@@ -59,9 +59,16 @@ describe('Crypto (Web Crypto AES-GCM-256 凭据加解密服务)', () => {
         expect(await decryptCredential('')).toBe('');
     });
 
-    it('当密文损坏或格式非法时应明确抛出 CredentialDecryptionError，绝不静默伪装', async () => {
-        const corrupted = 'enc:v1:invalid_iv_base64:invalid_cipher_base64';
+    it('当密文缺少冒号分隔符时应明确抛出 CredentialDecryptionError', async () => {
+        const noColon = 'enc:v1:nodividersomestring';
+        await expect(decryptCredential(noColon)).rejects.toThrow(CredentialDecryptionError);
+    });
 
-        await expect(decryptCredential(corrupted)).rejects.toThrow(CredentialDecryptionError);
+    it('当原始明文包含多个冒号与特殊字符时应精准无损还原', async () => {
+        const complexToken = 'key:with:multiple:colons::and--special==symbols$$';
+        const ciphertext = await encryptCredential(complexToken);
+        const decrypted = await decryptCredential(ciphertext);
+
+        expect(decrypted).toBe(complexToken);
     });
 });

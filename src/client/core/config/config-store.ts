@@ -11,9 +11,17 @@ import { encryptCredential, decryptCredential } from '../crypto';
 export type StateListener<T> = (state: T, keyPath?: string, oldState?: T) => void;
 export type KeyListener<V> = (newValue: V, oldValue: V) => void;
 
+/** 判断键名是否属于敏感 API 密钥字段 (支持常见命名风格通配) */
 function isSensitiveKey(keyName: string): boolean {
     const lower = keyName.toLowerCase();
-    return lower === 'apikey' || lower === 'api_key' || lower === 'naiapikey' || lower === 'openaiapikey';
+    return (
+        lower === 'apikey' ||
+        lower === 'api_key' ||
+        lower.endsWith('apikey') ||
+        lower.endsWith('api_key') ||
+        lower === 'token' ||
+        lower === 'secret'
+    );
 }
 
 /**
@@ -172,6 +180,7 @@ export class ConfigStore implements IDisposable {
     private _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly _debounceMs: number;
 
+    /** 初始配置密文异步解密就绪 Promise */
     public readonly ready: Promise<void>;
 
     constructor(
@@ -182,7 +191,8 @@ export class ConfigStore implements IDisposable {
         this._saveHandler = options?.onSave;
         this._debounceMs = options?.debounceMs ?? DEFAULT_SAVE_DEBOUNCE_MS;
 
-        // 异步解密初始配置中的密文凭据入内存
+        // 设计意图：双轨凭据机制——内存中透明持有解密后的明文供各驱动零负担消费；
+        // 宿主持久化落盘前则自动批量加密为 enc:v1: 密文，实现跨设备导出配置天然防泄露
         this.ready = decryptSettingsCredentials(this._state)
             .then((decrypted) => {
                 this._state = decrypted;

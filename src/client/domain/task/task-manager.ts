@@ -280,7 +280,9 @@ export class TaskManager implements IDisposable {
 
             const result = await adapter.generate(task.request, controller.signal, onProgress);
 
-            // 丢弃保护检查：若执行返回时任务已被取消，直接丢弃迟到的响应数据
+            // 设计意图：取消丢弃保护机制 (Cancel & Drop Guard)
+            // 防止用户取消任务或切换会话后，因网络延迟迟到的生图结果意外写入存储层，
+            // 进而污染当前新的对话楼层或造成孤立媒体文件堆积
             if (this.isTaskCancelled(task)) {
                 this._logger.info(`任务 [${taskId}] 已被取消，异步返回的结果已丢弃`);
                 return;

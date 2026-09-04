@@ -158,7 +158,12 @@ export async function decryptCredential(ciphertext: string): Promise<string> {
     }
 
     const payload = ciphertext.slice(CIPHER_PREFIX.length);
-    const [ivB64, cipherB64] = payload.split(':');
+    const colonIndex = payload.indexOf(':');
+    if (colonIndex === -1) {
+        throw new CredentialDecryptionError('密文格式异常，缺少 IV 与密文分隔符');
+    }
+    const ivB64 = payload.slice(0, colonIndex);
+    const cipherB64 = payload.slice(colonIndex + 1);
 
     if (!ivB64 || !cipherB64) {
         throw new CredentialDecryptionError('密文格式异常，缺少 IV 或密文载荷');
