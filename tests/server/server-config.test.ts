@@ -152,9 +152,9 @@ api_keys:
         }
     });
 
-    it('resolveConfigFilePath 应返回有效路径且优先寻找 config.yaml', () => {
+    it('resolveConfigFilePath 应返回有效路径且寻找 config.yaml 或 config.yml', () => {
         const resolved = resolveConfigFilePath();
         expect(typeof resolved).toBe('string');
-        expect(resolved.endsWith('.yaml') || resolved.endsWith('.yml') || resolved.endsWith('.json')).toBe(true);
+        expect(resolved.endsWith('.yaml') || resolved.endsWith('.yml')).toBe(true);
     });
 });

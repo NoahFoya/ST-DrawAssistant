@@ -61,7 +61,7 @@ let _cachedConfig: ServerConfig | null = null;
 
 /**
  * 确定服务端配置文件的物理绝对路径
- * 优先使用 config/config.yaml，其次兼容 config/config.json
+ * 以标准 config/config.yaml (或 config.yml) 为准
  */
 export function resolveConfigFilePath(): string {
     const searchDirs = [
@@ -69,7 +69,7 @@ export function resolveConfigFilePath(): string {
         path.resolve(process.cwd(), 'config')
     ];
 
-    const fileNames = ['config.yaml', 'config.yml', 'config.json'];
+    const fileNames = ['config.yaml', 'config.yml'];
 
     for (const dir of searchDirs) {
         for (const name of fileNames) {
@@ -85,16 +85,16 @@ export function resolveConfigFilePath(): string {
 }
 
 /**
- * 校验并规范化原始配置对象
+ * 校验并规范化标准 YAML 配置对象
  */
 function normalizeServerConfig(raw: any): ServerConfig {
     if (!raw || typeof raw !== 'object') {
         throw new Error('配置文件根节点必须为对象');
     }
 
-    const rawKeys = raw.api_keys || raw.apiKeys || {};
+    const rawKeys = raw.api_keys || {};
     const rawEndpoints = raw.endpoints || {};
-    const rawServer = raw.server || raw.serverOptions || {};
+    const rawServer = raw.server || {};
 
     const apiKeys: ServerApiKeys = {
         novelai: typeof rawKeys.novelai === 'string' ? rawKeys.novelai.trim() : '',
@@ -113,16 +113,16 @@ function normalizeServerConfig(raw: any): ServerConfig {
     const serverOptions: ServerOptions = {
         proxyTimeoutMs: typeof rawServer.proxy_timeout_ms === 'number'
             ? rawServer.proxy_timeout_ms
-            : (typeof rawServer.proxyTimeoutMs === 'number' ? rawServer.proxyTimeoutMs : DEFAULT_SERVER_OPTIONS.proxyTimeoutMs),
+            : DEFAULT_SERVER_OPTIONS.proxyTimeoutMs,
         maxPayloadSizeMb: typeof rawServer.max_payload_size_mb === 'number'
             ? rawServer.max_payload_size_mb
-            : (typeof rawServer.maxPayloadSizeMb === 'number' ? rawServer.maxPayloadSizeMb : DEFAULT_SERVER_OPTIONS.maxPayloadSizeMb),
+            : DEFAULT_SERVER_OPTIONS.maxPayloadSizeMb,
         enableProxyLog: typeof rawServer.enable_proxy_log === 'boolean'
             ? rawServer.enable_proxy_log
-            : (typeof rawServer.enableProxyLog === 'boolean' ? rawServer.enableProxyLog : DEFAULT_SERVER_OPTIONS.enableProxyLog),
+            : DEFAULT_SERVER_OPTIONS.enableProxyLog,
         allowedHosts: Array.isArray(rawServer.allowed_hosts)
             ? rawServer.allowed_hosts
-            : (Array.isArray(rawServer.allowedHosts) ? rawServer.allowedHosts : DEFAULT_SERVER_OPTIONS.allowedHosts)
+            : DEFAULT_SERVER_OPTIONS.allowedHosts
     };
 
     return { apiKeys, endpoints, serverOptions };
@@ -166,14 +166,7 @@ export function loadServerConfig(customPath?: string): ServerConfig {
 
     try {
         const rawContent = fs.readFileSync(filePath, 'utf-8');
-        let parsed: any;
-
-        if (filePath.endsWith('.json')) {
-            parsed = JSON.parse(rawContent);
-        } else {
-            parsed = YAML.parse(rawContent);
-        }
-
+        const parsed = YAML.parse(rawContent);
         const normalized = normalizeServerConfig(parsed);
         _cachedConfig = applyEnvironmentOverrides(normalized);
         return _cachedConfig;

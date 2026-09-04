@@ -49,12 +49,7 @@ function isWritableStream(target: unknown): target is NodeJS.WritableStream {
 
 /** 统一输出代理错误响应 */
 function sendProxyError(res: Response, status: number, errorResponse: ProxyErrorResponse): void {
-    res.status(status);
-    if (typeof res.json === 'function') {
-        res.json(errorResponse);
-    } else if (typeof res.send === 'function') {
-        res.send(errorResponse as any);
-    }
+    res.status(status).json(errorResponse);
 }
 
 /** 全局活跃代理请求控制器集合，供 exit 函数统一终止 */
@@ -108,10 +103,7 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
     const cleanedHeaders = sanitizeRequestHeaders(relayRequest.headers || {});
 
     // 服务端自动凭据注入：优先按请求 serviceType 或目标 URL 路径推导服务类型
-    let targetHostname = '';
-    try {
-        targetHostname = new URL(targetUrl).hostname.toLowerCase();
-    } catch {}
+    const targetHostname = new URL(targetUrl).hostname.toLowerCase();
 
     const serviceType = relayRequest.serviceType || (
         (targetHostname.includes('novelai') || targetUrl.includes('/novelai') || targetUrl.includes('/generate-image')) ? 'novelai' :
@@ -217,11 +209,9 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
                     res.destroy(streamErr instanceof Error ? streamErr : new Error(String(streamErr)));
                 }
             }
-        } else if (typeof res.send === 'function') {
+        } else {
             const arrayBuffer = await upstreamResp.arrayBuffer();
             res.send(Buffer.from(arrayBuffer));
-        } else {
-            res.end();
         }
     } catch (err: any) {
         if (res.headersSent || res.writableEnded) {
