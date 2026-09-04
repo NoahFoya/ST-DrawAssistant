@@ -5,7 +5,7 @@
 
 /** 扩展唯一标识与显示名称 */
 export const EXTENSION_NAME = 'ST-DrawAssistant';
-export const EXTENSION_VERSION = '0.1.3';
+export const EXTENSION_VERSION = '0.1.4';
 
 /** 服务端插件标识与 API 路由地址 */
 export const PLUGIN_ID = 'st-drawassistant';

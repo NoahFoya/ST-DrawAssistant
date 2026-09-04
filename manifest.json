@@ -4,7 +4,7 @@
   "js": "dist/index.js",
   "css": "styles/main.css",
   "author": "NoahFoya",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "SillyTavern context-aware AI image generation extension with multi-backend support",
   "loading_order": 10,
   "auto_update": false,
