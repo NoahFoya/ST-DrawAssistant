@@ -56,6 +56,13 @@ export const KNOWN_CLOUD_DOMAINS = new Set([
     'generativelanguage.googleapis.com'
 ]);
 
+/** 预置受信任的本地回环主机，允许服务端代理连接同机部署的 SD-WebUI / ComfyUI */
+export const DEFAULT_LOOPBACK_HOSTS = new Set([
+    '127.0.0.1',
+    'localhost',
+    '::1'
+]);
+
 /**
  * 解析 IPv4 字符串为 32 位无符号整数
  */
@@ -92,7 +99,7 @@ function matchCidr(ipStr: string, cidr: string): boolean {
 /**
  * 校验目标主机名是否符合受信任的安全策略
  *
- * 支持通配放行、内置已知云服务域名、CIDR 子网掩码与主机名/泛域名精确匹配。
+ * 支持通配放行、本地回环主机、内置已知云服务域名、CIDR 子网掩码与主机名/泛域名精确匹配。
  *
  * @param hostname 目标主机名
  * @param allowedHosts 服务端配置的主机白名单
@@ -108,6 +115,11 @@ export function isHostAllowed(
         if (rule.trim() === '*') {
             return true;
         }
+    }
+
+    // 放行本地回环主机 (便于连接同机部署的 SD-WebUI 或 ComfyUI)
+    if (DEFAULT_LOOPBACK_HOSTS.has(lower)) {
+        return true;
     }
 
     // 匹配内置受信任的云端生图服务域名

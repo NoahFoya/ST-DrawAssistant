@@ -88,7 +88,7 @@ server:
         expect(config.serverOptions.proxyTimeoutMs).toBe(180000);
         expect(config.serverOptions.maxPayloadSizeMb).toBe(50);
         expect(config.serverOptions.enableProxyLog).toBe(false);
-        expect(config.serverOptions.allowedHosts).toContain('*');
+        expect(config.serverOptions.allowedHosts).toEqual([]);
     });
 
     it('环境变量应以最高优先级覆盖本地配置文件的对应字段', () => {

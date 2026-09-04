@@ -11,34 +11,63 @@ import { validateTargetUrl, sanitizeRequestHeaders, filterSafeResponseHeaders } 
 import { getServerConfig, ServerConfig } from './server-config';
 
 interface CloudAuthRule {
+    serviceType: string;
     domain: string;
-    headerName: string;
-    getHeaderValue: (keys: ServerConfig['apiKeys']) => string | undefined;
+    inject: (headers: Record<string, string>, keys: ServerConfig['apiKeys']) => void;
+}
+
+function hasHeader(headers: Record<string, string>, name: string): boolean {
+    const target = name.toLowerCase();
+    return Object.keys(headers).some(k => k.toLowerCase() === target);
 }
 
 const CLOUD_AUTH_RULES: readonly CloudAuthRule[] = Object.freeze([
     {
+        serviceType: 'novelai',
         domain: 'image.novelai.net',
-        headerName: 'Authorization',
-        getHeaderValue: (keys) => keys.novelai ? `Bearer ${keys.novelai}` : undefined
+        inject: (headers, keys) => {
+            if (!keys.novelai) return;
+            if (!hasHeader(headers, 'authorization')) {
+                headers['Authorization'] = `Bearer ${keys.novelai}`;
+            }
+            if (!hasHeader(headers, 'token')) {
+                headers['Token'] = keys.novelai;
+            }
+        }
     },
     {
+        serviceType: 'openai',
         domain: 'api.openai.com',
-        headerName: 'Authorization',
-        getHeaderValue: (keys) => keys.openai ? `Bearer ${keys.openai}` : undefined
+        inject: (headers, keys) => {
+            if (keys.openai && !hasHeader(headers, 'authorization')) {
+                headers['Authorization'] = `Bearer ${keys.openai}`;
+            }
+        }
     },
     {
+        serviceType: 'grok',
         domain: 'api.x.ai',
-        headerName: 'Authorization',
-        getHeaderValue: (keys) => keys.grok ? `Bearer ${keys.grok}` : undefined
+        inject: (headers, keys) => {
+            if (keys.grok && !hasHeader(headers, 'authorization')) {
+                headers['Authorization'] = `Bearer ${keys.grok}`;
+            }
+        }
     },
     {
+        serviceType: 'gemini',
         domain: 'generativelanguage.googleapis.com',
-        headerName: 'x-goog-api-key',
-        getHeaderValue: (keys) => keys.gemini || undefined
+        inject: (headers, keys) => {
+            if (!keys.gemini) return;
+            if (!hasHeader(headers, 'x-goog-api-key')) {
+                headers['x-goog-api-key'] = keys.gemini;
+            }
+            if (!hasHeader(headers, 'authorization')) {
+                headers['Authorization'] = `Bearer ${keys.gemini}`;
+            }
+        }
     }
 ]);
-/** 判断目标对象是否为标准可写流 (WritableStream) */
+
 function isWritableStream(target: unknown): target is NodeJS.WritableStream {
     return Boolean(
         target &&
@@ -49,7 +78,11 @@ function isWritableStream(target: unknown): target is NodeJS.WritableStream {
 
 /** 统一输出代理错误响应 */
 function sendProxyError(res: Response, status: number, errorResponse: ProxyErrorResponse): void {
-    res.status(status).json(errorResponse);
+    if (typeof res.json === 'function') {
+        res.status(status).json(errorResponse);
+    } else if (typeof (res as any).send === 'function') {
+        (res as any).status(status).send(JSON.stringify(errorResponse));
+    }
 }
 
 /** 全局活跃代理请求控制器集合，供 exit 函数统一终止 */
@@ -102,7 +135,7 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
 
     const cleanedHeaders = sanitizeRequestHeaders(relayRequest.headers || {});
 
-    // 服务端自动凭据注入：优先按请求 serviceType 或目标 URL 路径推导服务类型
+    // 服务端自动凭据注入：根据 serviceType 或目标 URL/域名匹配规则表
     const targetHostname = new URL(targetUrl).hostname.toLowerCase();
 
     const serviceType = relayRequest.serviceType || (
@@ -112,48 +145,14 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         (targetHostname.includes('api.x.ai')) ? 'grok' : undefined
     );
 
-    // 服务端自动凭据注入：针对 NovelAI 同时注入 Authorization (官方标准) 与 Token (第三方反代非标头)，
-    // 使得同一配置在官方端点与第三方反代中转站间无缝通用
-    if (serviceType === 'novelai' && serverConfig.apiKeys.novelai) {
-        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
-        if (!hasAuth) {
-            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.novelai}`;
-        }
-        const hasToken = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'token');
-        if (!hasToken) {
-            cleanedHeaders['Token'] = serverConfig.apiKeys.novelai;
-        }
-    } else if (serviceType === 'openai' && serverConfig.apiKeys.openai) {
-        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
-        if (!hasAuth) {
-            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.openai}`;
-        }
-    } else if (serviceType === 'gemini' && serverConfig.apiKeys.gemini) {
-        const hasKey = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'x-goog-api-key');
-        if (!hasKey) {
-            cleanedHeaders['x-goog-api-key'] = serverConfig.apiKeys.gemini;
-        }
-    } else if (serviceType === 'grok' && serverConfig.apiKeys.grok) {
-        const hasAuth = Object.keys(cleanedHeaders).some(k => k.toLowerCase() === 'authorization');
-        if (!hasAuth) {
-            cleanedHeaders['Authorization'] = `Bearer ${serverConfig.apiKeys.grok}`;
-        }
-    } else {
-        // 官方固定域名兜底匹配
-        for (const rule of CLOUD_AUTH_RULES) {
-            if (targetHostname === rule.domain || targetHostname.endsWith(`.${rule.domain}`)) {
-                const hasHeader = Object.keys(cleanedHeaders).some(
-                    k => k.toLowerCase() === rule.headerName.toLowerCase()
-                );
-                if (!hasHeader) {
-                    const headerValue = rule.getHeaderValue(serverConfig.apiKeys);
-                    if (headerValue) {
-                        cleanedHeaders[rule.headerName] = headerValue;
-                    }
-                }
-                break;
-            }
-        }
+    const matchedRule = CLOUD_AUTH_RULES.find(
+        rule => (serviceType && rule.serviceType === serviceType) ||
+                targetHostname === rule.domain ||
+                targetHostname.endsWith(`.${rule.domain}`)
+    );
+
+    if (matchedRule) {
+        matchedRule.inject(cleanedHeaders, serverConfig.apiKeys);
     }
 
     const controller = new AbortController();

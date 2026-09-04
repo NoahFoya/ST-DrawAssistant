@@ -38,7 +38,7 @@ export const DEFAULT_SERVER_OPTIONS: ServerOptions = {
     proxyTimeoutMs: 180000,
     maxPayloadSizeMb: 50,
     enableProxyLog: false,
-    allowedHosts: ['*']
+    allowedHosts: []
 };
 
 export const DEFAULT_SERVER_CONFIG: ServerConfig = {

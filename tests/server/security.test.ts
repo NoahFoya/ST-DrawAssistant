@@ -6,12 +6,13 @@ import {
 
 describe('Server Security Guard', () => {
     describe('validateTargetUrl', () => {
-        it('应允许合法外部与本地绘图端点', () => {
-            expect(validateTargetUrl('http://127.0.0.1:8188/prompt').valid).toBe(true);
-            expect(validateTargetUrl('http://localhost:7860/sdapi/v1/txt2img').valid).toBe(true);
-            expect(validateTargetUrl('https://image.novelai.net/ai/generate-image').valid).toBe(true);
-            expect(validateTargetUrl('http://192.168.31.20:8188').valid).toBe(true);
-            expect(validateTargetUrl('https://api.openai.com/v1/images/generations').valid).toBe(true);
+        it('应允许在白名单内的外部与本地绘图端点', () => {
+            const allowed = ['127.0.0.1', 'localhost', '192.168.31.20'];
+            expect(validateTargetUrl('http://127.0.0.1:8188/prompt', allowed).valid).toBe(true);
+            expect(validateTargetUrl('http://localhost:7860/sdapi/v1/txt2img', allowed).valid).toBe(true);
+            expect(validateTargetUrl('https://image.novelai.net/ai/generate-image', allowed).valid).toBe(true);
+            expect(validateTargetUrl('http://192.168.31.20:8188', allowed).valid).toBe(true);
+            expect(validateTargetUrl('https://api.openai.com/v1/images/generations', allowed).valid).toBe(true);
         });
 
         it('应拒绝非 http/https 协议', () => {
@@ -56,16 +57,17 @@ describe('Server Security Guard', () => {
             expect(validateTargetUrl('http://100.100.100.200/latest/meta-data', wildcardAllowed).valid).toBe(false);
         });
 
-        it('当不传 allowedHosts 时应自动回退至默认配置 (放行合法目标)，传空数组 [] 时应严格拦截非已知域名', () => {
-            // 未传 allowedHosts，默认按通配符放行
-            expect(validateTargetUrl('http://192.168.1.100:8188/prompt').valid).toBe(true);
+        it('当不传 allowedHosts 时应自动回退至默认安全配置 (放行本地回环主机与已知云端域名)，拦截未授权外部与局域网目标', () => {
+            // 本地回环主机与内置云端域名在默认情况下自动放行 (保证本地 SD/ComfyUI 开箱即用)
+            expect(validateTargetUrl('http://localhost:8188/prompt').valid).toBe(true);
+            expect(validateTargetUrl('http://127.0.0.1:7860/sdapi/v1/txt2img').valid).toBe(true);
+            expect(validateTargetUrl('https://image.novelai.net/generate').valid).toBe(true);
+            expect(validateTargetUrl('https://api.openai.com/v1/images/generations').valid).toBe(true);
 
-            // 显式传 [] 空数组，严格阻断任意自定义目标
-            const emptyAllowed: string[] = [];
-            expect(validateTargetUrl('http://192.168.1.100:8188/prompt', emptyAllowed).valid).toBe(false);
-            expect(validateTargetUrl('http://localhost:8188/prompt', emptyAllowed).valid).toBe(false);
-            // 即使传空数组，内置受信任云端域名仍有最低保障
-            expect(validateTargetUrl('https://image.novelai.net/generate', emptyAllowed).valid).toBe(true);
+            // 未在白名单的非回环私网 IP 或外部未知域名应被严格拦截
+            expect(validateTargetUrl('http://192.168.1.100:8188/prompt').valid).toBe(false);
+            expect(validateTargetUrl('http://10.0.0.1:8188/prompt').valid).toBe(false);
+            expect(validateTargetUrl('http://malicious-site.com/exploit').valid).toBe(false);
         });
     });
 

@@ -43,6 +43,16 @@ export async function init(router: Router): Promise<void> {
     });
 
     router.post('/credentials', (req: Request, res: Response) => {
+        // 校验 SillyTavern 宿主发出的 CSRF 令牌，拒绝跨站伪造配置请求
+        const csrfToken = req.headers['x-csrf-token'];
+        if (!csrfToken || typeof csrfToken !== 'string') {
+            res.status(403).json({
+                success: false,
+                error: 'Forbidden: Missing CSRF token'
+            });
+            return;
+        }
+
         try {
             const body = req.body || {};
             saveServerConfig({
