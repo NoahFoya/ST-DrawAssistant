@@ -1,6 +1,6 @@
 /**
  * @module core
- * @description ST-DrawAssistant 客户端核心基础设施层统一导出出口
+ * @description 客户端核心服务模块导出
  */
 
 export * from './constants';

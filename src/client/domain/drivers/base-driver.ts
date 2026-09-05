@@ -1,15 +1,12 @@
 /**
  * @module domain/drivers/base-driver
- * @description 生图后端适配器抽象基类
+ * @description 生图后端适配器基类
  *
- * 核心职责：
- * 1. 依托 NetworkClient 处理网络通信与协议分发（直连/代理）；
- * 2. 统一实现任务取消与外部 AbortSignal 协同；
- * 3. 集中化错误分类与异常归一化处理。
+ * 1. 封装通用的网络请求（支持直连或代理）；
+ * 2. 统一支持任务取消（AbortSignal）；
+ * 3. 统一处理并转换各类网络和业务错误。
  */
 
-import { blobToBase64, base64ToBlob } from '../../../common/utils/binary';
-export { blobToBase64, base64ToBlob };
 import { Logger } from '../../core/logger';
 import { NetworkClient, HttpRequestOptions } from '../../core/network/client';
 import { NetworkError } from '../../core/network/error';
@@ -40,7 +37,7 @@ export interface BaseDriverOptions {
 
 /**
  * 生图驱动适配器基类
- * 负责通用网络通信、任务取消协同以及标准化错误转换
+ * 负责网络通信、任务取消与错误转换
  */
 export abstract class BaseDriver implements ImageEngineAdapter {
     public abstract readonly id: string;
@@ -64,10 +61,10 @@ export abstract class BaseDriver implements ImageEngineAdapter {
         this._getConfig = options.getConfig ?? (options.defaultConfig ? () => options.defaultConfig : undefined);
     }
 
-    /** 服务健康度检测与延迟统计 (各生图驱动实现类具体提供) */
+    /** 检测服务连通性与响应耗时 */
     public abstract checkHealth(): Promise<HealthCheckResult>;
 
-    /** 检测后端连通性 (统一委托 checkHealth 执行，消除各子类重复代码) */
+    /** 检测后端连通性 */
     public async ping(): Promise<boolean> {
         try {
             const res = await this.checkHealth();
@@ -82,7 +79,7 @@ export abstract class BaseDriver implements ImageEngineAdapter {
      */
     public async syncAssets(): Promise<ProviderAssetCatalog> {
         if (this._syncingPromise) {
-            this.logger.debug('已有资源同步任务在执行中，复用在途请求');
+            this.logger.debug('已有资源同步任务在执行中，复用正在进行的请求');
             return this._syncingPromise;
         }
 
@@ -139,7 +136,7 @@ export abstract class BaseDriver implements ImageEngineAdapter {
         }
     }
 
-    /** 释放驱动持有的本地资源与监听句柄 */
+    /** 释放驱动持有的资源 */
     public dispose(): void {
         this._cancelled = true;
         if (this._abortController) {

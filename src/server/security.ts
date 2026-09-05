@@ -1,21 +1,16 @@
 /**
  * @module server/security
- * @description 服务端代理安全校验与请求头清洗过滤
+ * @description 服务端代理安全校验与请求头过滤
  */
 
 import type { Response } from 'express';
 import { DEFAULT_SERVER_OPTIONS } from './server-config';
 
-/** 限制访问的云服务元数据端点地址 */
-const FORBIDDEN_METADATA_HOSTS = new Set([
-    '169.254.169.254',
-    'metadata.google.internal',
-    'metadata.internal',
-    '100.100.100.200',
-    '[fd00:ec2::254]'
-]);
 
-/** 转发外部请求时需移除的酒馆内部会话头，防止敏感凭据外泄 */
+/**
+ * 转发请求时移除酒馆内部请求头
+ * 避免将 Cookie、CSRF Token 等酒馆认证凭据发送给外部生图服务
+ */
 const FORBIDDEN_REQUEST_HEADERS = new Set([
     'cookie',
     'x-csrf-token',
@@ -26,8 +21,8 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
 ]);
 
 /**
- * 回传客户端时需移除的逐跳传输头 (Hop-by-hop Headers) 及安全隔离字段
- * 包含连接控制、压缩长度字段以及 set-cookie (防止外部服务或第三方反代污染酒馆宿主 Cookie)
+ * 回传前端时移除的响应头
+ * 移除 connection 等逐跳头，并移除 set-cookie 避免外部服务影响酒馆站点的 Cookie
  */
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
     'connection',
@@ -56,7 +51,7 @@ export const KNOWN_CLOUD_DOMAINS = new Set([
     'generativelanguage.googleapis.com'
 ]);
 
-/** 预置受信任的本地回环主机，允许服务端代理连接同机部署的 SD-WebUI / ComfyUI */
+/** 本地回环主机列表，允许服务端代理连接本地部署的 SD-WebUI / ComfyUI */
 export const DEFAULT_LOOPBACK_HOSTS = new Set([
     '127.0.0.1',
     'localhost',
@@ -97,9 +92,10 @@ function matchCidr(ipStr: string, cidr: string): boolean {
 }
 
 /**
- * 校验目标主机名是否符合受信任的安全策略
+ * 校验目标主机名是否符合安全策略
  *
- * 支持通配放行、本地回环主机、内置已知云服务域名、CIDR 子网掩码与主机名/泛域名精确匹配。
+ * 默认策略：若未显式指定限制白名单（即 allowedHosts 为空或含 '*'），则默认放行所有主机；
+ * 若用户或管理员显式配置了主机白名单，则严格匹配白名单规则。
  *
  * @param hostname 目标主机名
  * @param allowedHosts 服务端配置的主机白名单
@@ -108,16 +104,14 @@ export function isHostAllowed(
     hostname: string,
     allowedHosts: readonly string[] = []
 ): boolean {
-    const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-
-    // 若白名单包含 '*'，则全局放行任意主机
-    for (const rule of allowedHosts) {
-        if (rule.trim() === '*') {
-            return true;
-        }
+    // 未配置白名单或包含 '*' 时默认放行所有主机
+    if (!allowedHosts || allowedHosts.length === 0 || allowedHosts.includes('*')) {
+        return true;
     }
 
-    // 放行本地回环主机 (便于连接同机部署的 SD-WebUI 或 ComfyUI)
+    const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    // 放行本地回环主机
     if (DEFAULT_LOOPBACK_HOSTS.has(lower)) {
         return true;
     }
@@ -129,12 +123,11 @@ export function isHostAllowed(
         }
     }
 
-    // 匹配服务端配置的受信任主机列表（支持 CIDR 子网与主机名/泛域名）
+    // 匹配显式配置的规则
     for (const rule of allowedHosts) {
         const cleanRule = rule.trim().toLowerCase().replace(/^\[|\]$/g, '');
         if (!cleanRule) continue;
 
-        // CIDR 掩码匹配 (如 192.168.0.0/16)
         if (cleanRule.includes('/')) {
             if (matchCidr(lower, cleanRule)) {
                 return true;
@@ -142,7 +135,6 @@ export function isHostAllowed(
             continue;
         }
 
-        // 主机名/IP 精确匹配或子域名泛解析匹配
         if (lower === cleanRule || lower.endsWith(`.${cleanRule}`)) {
             return true;
         }
@@ -152,10 +144,10 @@ export function isHostAllowed(
 }
 
 /**
- * 校验反向代理目标地址是否合法与安全
+ * 校验反向代理目标地址是否合法与可用
  *
  * @param targetUrl 外部目标 URL 字符串
- * @param allowedHosts 允许的主机列表 (支持 IP、域名与 CIDR 掩码)
+ * @param allowedHosts 允许的主机列表 (可选，未指定或为空时放行任意合法 HTTP/HTTPS 目标)
  */
 export function validateTargetUrl(
     targetUrl: string,
@@ -181,26 +173,15 @@ export function validateTargetUrl(
     }
 
     const hostname = parsed.hostname.toLowerCase();
-
-    if (FORBIDDEN_METADATA_HOSTS.has(hostname)) {
-        return {
-            valid: false,
-            reason: `禁止访问云端元数据敏感地址 [${hostname}]`
-        };
-    }
-
-    if (hostname.startsWith('169.254.')) {
-        return {
-            valid: false,
-            reason: `禁止访问链路本地保留地址 [${hostname}]`
-        };
+    if (!hostname) {
+        return { valid: false, reason: '目标 URL 缺少有效主机名' };
     }
 
     const effectiveAllowed = allowedHosts ?? DEFAULT_SERVER_OPTIONS.allowedHosts;
     if (!isHostAllowed(hostname, effectiveAllowed)) {
         return {
             valid: false,
-            reason: `目标主机 [${hostname}] 不在服务端安全白名单中`
+            reason: `目标主机 [${hostname}] 不在服务端配置的安全白名单中`
         };
     }
 

@@ -85,11 +85,13 @@ function sendProxyError(res: Response, status: number, errorResponse: ProxyError
     }
 }
 
-/** 全局活跃代理请求控制器集合，供 exit 函数统一终止 */
+/** 活跃的代理请求控制器集合，供 exit 函数统一终止 */
 const _activeControllers = new Set<AbortController>();
 
 /**
  * 终止所有当前活跃的代理请求连接
+ *
+ * 服务端插件退出时调用，中断所有正在进行的外部请求，避免连接挂起。
  */
 export function abortAllActiveProxyRequests(): void {
     console.info(`[ST-DrawAssistant][Proxy] 正在终止所有活跃代理请求 (共 ${_activeControllers.size} 个)...`);
@@ -155,6 +157,7 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         matchedRule.inject(cleanedHeaders, serverConfig.apiKeys);
     }
 
+    // 记录当前请求的 AbortController，便于插件退出时统一取消
     const controller = new AbortController();
     _activeControllers.add(controller);
 
@@ -164,6 +167,7 @@ export async function handleProxyRequest(req: Request, res: Response): Promise<v
         controller.abort();
     }, timeoutMs);
 
+    // 客户端断开连接时，同步取消向上游生图服务的请求
     const onClientClose = () => {
         if (!res.writableEnded) {
             controller.abort();

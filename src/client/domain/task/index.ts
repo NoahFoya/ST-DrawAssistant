@@ -1,7 +1,8 @@
 /**
  * @module domain/task
- * @description 任务调度系统导出入口
+ * @description 生图任务模块导出
  */
 
 export * from './task-types';
 export * from './task-manager';
+export * from './result-integrator';

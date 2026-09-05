@@ -1,6 +1,6 @@
 /**
  * @module core/event-bus
- * @description 进程内事件总线 (TypedEventBus)
+ * @description 事件总线
  */
 
 import { IDisposable, toDisposable } from './types';
@@ -48,7 +48,7 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
     }
 
     /**
-     * 派发事件
+     * 触发事件
      * 捕获并记录单个处理器的执行异常，防止异常扩散影响其他监听器
      */
     public emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]): void {

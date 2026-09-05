@@ -1,6 +1,6 @@
 /**
- * @file src/common/index.ts
- * @description 跨端共享层统一导出
+ * @module common
+ * @description 通用公共模块导出
  */
 
 export * from './constants';

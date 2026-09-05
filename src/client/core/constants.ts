@@ -1,6 +1,6 @@
 /**
  * @module core/constants
- * @description 核心基础设施层全局配置常量与内置安全主题
+ * @description 核心常量与内置主题
  */
 
 export {

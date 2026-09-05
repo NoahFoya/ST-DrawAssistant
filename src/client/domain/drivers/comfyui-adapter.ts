@@ -1,14 +1,12 @@
 /**
  * @module domain/drivers/comfyui-adapter
- * @description ComfyUI 图像生成适配器实现 (API 工作流变量安全替换、WebSocket/HTTP 状态轮询、资源上传与动态发现)
+ * @description ComfyUI 图像生成适配器
  *
- * 核心特性：
- * 1. 纯领域驱动设计，解耦全局 UI Store；
- * 2. 支持 API 格式工作流 JSON 的变量安全替换 (数字保持数值型、字符串经 JSON.stringify 安全转义)；
- * 3. 支持底图/蒙版上传至 ComfyUI (/upload/image)；
- * 4. 支持持久化 clientId，通过 WebSocket 监听执行生命周期 (executing / progress / executed)，具备 HTTP 轮询保底机制；
- * 5. 最终图像通过 /view 端点拉取并归一化为标准 Blob；
- * 6. 支持队列删除与 /interrupt 协同取消，动态缓存与解析 /object_info。
+ * 1. 支持 API 格式工作流 JSON 的变量替换；
+ * 2. 支持上传底图与蒙版到 ComfyUI (/upload/image)；
+ * 3. 通过轮询 /history/{prompt_id} 获取任务完成状态与输出图片；
+ * 4. 通过 /view 端点获取图片并转为 Blob；
+ * 5. 支持调用 /interrupt 取消任务，支持获取模型列表 (/object_info)。
  */
 
 import { BaseDriver, BaseDriverOptions } from './base-driver';
@@ -25,17 +23,17 @@ import {
     ImageMetadata
 } from '../types';
 
-/** ComfyUI 专有请求选项 */
-export interface ComfyUIEngineOptions {
-    workflowJson?: string | Record<string, unknown>;
-    clientId?: string;
-    steps?: number;
-    cfgScale?: number;
-    samplerName?: string;
-    scheduler?: string;
-    width?: number;
-    height?: number;
-    seed?: number;
+/** ComfyUI 配置接口 */
+export interface ComfyUIEngineConfig {
+    serverUrl: string;
+    workflowJson: string;
+    inpaintWorkflowJson?: string;
+    steps: number;
+    cfgScale: number;
+    samplerName: string;
+    scheduler: string;
+    width: number;
+    height: number;
     ckptName?: string;
     clipName?: string;
     vaeName?: string;
@@ -44,6 +42,89 @@ export interface ComfyUIEngineOptions {
     inpaintGrowMask?: number;
     loras?: LoraItem[];
     [key: string]: unknown;
+}
+
+/** ComfyUI 默认配置 (包含基础文生图 API 工作流模板) */
+export const DEFAULT_COMFYUI_CONFIG: ComfyUIEngineConfig = {
+    serverUrl: 'http://127.0.0.1:8188',
+    workflowJson: JSON.stringify({
+        "3": {
+            "inputs": {
+                "seed": "%seed%",
+                "steps": "%steps%",
+                "cfg": "%cfg%",
+                "sampler_name": "%sampler_name%",
+                "scheduler": "%scheduler%",
+                "denoise": 1,
+                "model": ["4", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["5", 0]
+            },
+            "class_type": "KSampler"
+        },
+        "4": {
+            "inputs": {
+                "ckpt_name": "%ckpt_name%"
+            },
+            "class_type": "CheckpointLoaderSimple"
+        },
+        "5": {
+            "inputs": {
+                "width": "%width%",
+                "height": "%height%",
+                "batch_size": 1
+            },
+            "class_type": "EmptyLatentImage"
+        },
+        "6": {
+            "inputs": {
+                "text": "%prompt%",
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "7": {
+            "inputs": {
+                "text": "%negative_prompt%",
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "8": {
+            "inputs": {
+                "samples": ["3", 0],
+                "vae": ["4", 2]
+            },
+            "class_type": "VAEDecode"
+        },
+        "9": {
+            "inputs": {
+                "filename_prefix": "ST-Draw-",
+                "images": ["8", 0]
+            },
+            "class_type": "SaveImage"
+        }
+    }),
+    steps: 28,
+    cfgScale: 6.5,
+    samplerName: 'euler_ancestral',
+    scheduler: 'normal',
+    width: 832,
+    height: 1216,
+    ckptName: '',
+    clipName: '',
+    vaeName: '',
+    inpaintDenoise: 0.75,
+    inpaintMaskBlur: 8,
+    inpaintGrowMask: 6,
+    loras: []
+};
+
+/** ComfyUI 专有请求选项 */
+export interface ComfyUIEngineOptions extends Partial<ComfyUIEngineConfig> {
+    clientId?: string;
+    seed?: number;
 }
 
 export interface ComfyUIAdapterOptions extends BaseDriverOptions {}
@@ -144,7 +225,7 @@ export class ComfyUIAdapter extends BaseDriver {
         txt2img: true,
         img2img: true,
         lora: true,
-        progressWebSocket: true,
+        progressWebSocket: false,
         interrupt: true,
         syntaxType: 'nodeGraph'
     };
@@ -508,135 +589,14 @@ function formatComfyNodeErrors(nodeErrors: unknown): string {
     }
 
     /**
-     * 等待指定 promptId 完成 (优先通过 WebSocket，环境无 WS 则 HTTP 轮询)
+     * 等待指定 promptId 完成 (基于稳健的 HTTP /history 历史轮询，彻底避免 WebSocket 在代理/HTTPS 下报错)
      */
     private async waitForCompletion(
         promptId: string,
         signal?: AbortSignal,
         onProgress?: ProgressCallback
     ): Promise<void> {
-        // 尝试 WebSocket 连接
-        if (typeof WebSocket !== 'undefined') {
-            try {
-                await this.waitViaWebSocket(promptId, signal, onProgress);
-                return;
-            } catch (wsErr) {
-                // 关键区分：若属于领域错误 (如节点执行异常 execution_error 或任务被取消)，必须立即向外抛出；
-                // 仅在真正的底层网络连接异常 (如 WebSocket 意外断开) 时才降级为 HTTP 历史轮询
-                if (wsErr instanceof DriverError) {
-                    throw wsErr;
-                }
-                this.logger.debug('WebSocket 连接失败或中断，降级为 HTTP 历史轮询', wsErr);
-            }
-        }
-
-        // 降级使用 HTTP 历史轮询
         await this.waitViaHttpPolling(promptId, signal, onProgress);
-    }
-
-    private waitViaWebSocket(
-        promptId: string,
-        signal?: AbortSignal,
-        onProgress?: ProgressCallback
-    ): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
-            const base = this.getBaseUrl().replace(/^http/, 'ws');
-            const wsUrl = `${base}/ws?clientId=${this.getClientId()}`;
-            let ws: WebSocket | null = null;
-
-            const cleanup = () => {
-                if (ws) {
-                    ws.onclose = null;
-                    ws.onerror = null;
-                    ws.onmessage = null;
-                    try {
-                        ws.close();
-                    } catch {}
-                    ws = null;
-                }
-                if (signal) {
-                    signal.removeEventListener('abort', onAbort);
-                }
-            };
-
-            const onAbort = () => {
-                cleanup();
-                reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已取消'));
-            };
-
-            if (signal?.aborted) {
-                onAbort();
-                return;
-            }
-            signal?.addEventListener('abort', onAbort);
-
-            try {
-                ws = new WebSocket(wsUrl);
-            } catch (e) {
-                cleanup();
-                reject(e);
-                return;
-            }
-
-            ws.onmessage = (event) => {
-                if (typeof event.data !== 'string') return;
-                try {
-                    const msg = JSON.parse(event.data);
-                    const { type, data } = msg;
-
-                    if (type === 'status' || type === 'caching') return;
-
-                    // 进度事件
-                    if (type === 'progress' && data) {
-                        if (data.prompt_id === promptId || !data.prompt_id) {
-                            if (typeof data.value === 'number' && typeof data.max === 'number' && data.max > 0) {
-                                onProgress?.(data.value / data.max);
-                            }
-                        }
-                    }
-
-                    // 节点执行事件
-                    if (type === 'executing' && data) {
-                        if (data.prompt_id === promptId) {
-                            // node 为 null 表示整张图所有节点执行完成
-                            if (data.node === null) {
-                                cleanup();
-                                resolve();
-                            }
-                        }
-                    }
-
-                    // 异常事件
-                    if (type === 'execution_error' && data) {
-                        if (data.prompt_id === promptId) {
-                            cleanup();
-                            reject(new DriverError(
-                                DriverErrorType.BACKEND_ERROR,
-                                `ComfyUI 节点执行失败: ${data.exception_message || JSON.stringify(data)}`
-                            ));
-                        }
-                    }
-
-                    // 中断事件
-                    if (type === 'execution_interrupted' && data) {
-                        if (data.prompt_id === promptId) {
-                            cleanup();
-                            reject(new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已被后端中断'));
-                        }
-                    }
-                } catch {}
-            };
-
-            ws.onerror = (err) => {
-                cleanup();
-                reject(err);
-            };
-
-            ws.onclose = () => {
-                cleanup();
-                reject(new Error('WebSocket 意外断开'));
-            };
-        });
     }
 
     private async waitViaHttpPolling(

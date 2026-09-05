@@ -1,6 +1,6 @@
 /**
  * @module server/server-config
- * @description 服务端本地私密配置文件加载与管理模块 (基于标准 YAML 规范)
+ * @description 服务端配置文件加载与管理
  */
 
 import fs from 'fs';
@@ -60,8 +60,8 @@ export const DEFAULT_SERVER_CONFIG: ServerConfig = {
 let _cachedConfig: ServerConfig | null = null;
 
 /**
- * 确定服务端配置文件的物理绝对路径
- * 以标准 config/config.yaml (或 config.yml) 为准
+ * 获取服务端配置文件的绝对路径
+ * 以 config/config.yaml (或 config.yml) 为准
  */
 export function resolveConfigFilePath(): string {
     const searchDirs = [
@@ -129,7 +129,8 @@ function normalizeServerConfig(raw: any): ServerConfig {
 }
 
 /**
- * 应用环境变量最高优先级覆盖 (符合 12-Factor App 规范)
+ * 应用环境变量覆盖
+ * 支持直接从宿主或容器环境变量读取敏感 API Key 与端点，便于无文件部署与免重启调试
  */
 function applyEnvironmentOverrides(config: ServerConfig): ServerConfig {
     const env = process.env;

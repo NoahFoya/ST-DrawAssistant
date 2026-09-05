@@ -30,9 +30,9 @@ describe('Server HTTP Proxy Middleware', () => {
         expect(jsonBody.error).toContain('缺少目标 url');
     });
 
-    it('目标地址被安全网关拦截应返回 403', async () => {
+    it('非合法 HTTP/HTTPS 目标地址被安全网关拦截应返回 403', async () => {
         const req = {
-            body: { url: 'http://169.254.169.254/latest/meta-data' },
+            body: { url: 'file:///etc/passwd' },
             on: vi.fn(),
             removeListener: vi.fn()
         } as any;
@@ -53,6 +53,7 @@ describe('Server HTTP Proxy Middleware', () => {
 
         await handleProxyRequest(req, res);
         expect(statusCode).toBe(403);
+        expect(jsonBody.code).toBe('SECURITY_BLOCKED');
     });
 
     it('正常请求应完成转发并返回对应的状态码与响应内容', async () => {

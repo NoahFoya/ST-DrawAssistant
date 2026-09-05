@@ -96,7 +96,9 @@ export class ImageUrlPool implements IDisposable {
 
     /**
      * 释放指定图片的引用计数
-     * 计数归零后启动延时定时器，超时未被复用则执行 URL.revokeObjectURL
+     *
+     * 说明：引用计数归零时不立即撤销，而是启动延时定时器。
+     * 用户快速滚动列表时可复用已有 Object URL，超时未再引用的链接才真正释放内存。
      *
      * @param imageId 图片唯一 ID
      */

@@ -12,22 +12,24 @@ export * from './domain';
 let _activeCoreContext: CoreContext | null = null;
 let _activeDomainContext: DomainContext | null = null;
 
-/** 获取当前处于激活状态的基础设施服务容器 (供调试与状态检查使用) */
+/** 获取当前处于激活状态的核心服务容器 (供调试与状态检查使用) */
 export function getActiveCoreContext(): CoreContext | null {
     return _activeCoreContext;
 }
 
-/** 获取当前处于激活状态的领域业务服务容器 (供业务调用与状态检查使用) */
+/** 获取当前处于激活状态的领域服务容器 (供业务调用与状态检查使用) */
 export function getActiveDomainContext(): DomainContext | null {
     return _activeDomainContext;
 }
 
 /**
- * 插件全局引导入口
+ * 插件初始化入口
  *
- * 设计意图：按依赖顺序分步初始化系统。先建立核心基础设施服务（网络、存储、配置与宿主桥接），
- * 待宿主就绪并同步存储后，再组装领域层业务服务（驱动注册表、任务管理器、流水线），
- * 并在浏览器页面卸载时注册清理监听，确保所有后台任务与连接安全释放。
+ * 初始化流程：
+ * 1. 先初始化核心服务（网络、存储、配置与宿主通信）；
+ * 2. 宿主就绪后加载已保存配置并初始化本地数据库；
+ * 3. 创建领域层服务（驱动注册表、任务调度管理器与流水线）；
+ * 4. 页面关闭或刷新时自动释放资源。
  */
 export async function bootstrap(): Promise<{ core: CoreContext; domain: DomainContext }> {
     if (_activeCoreContext && _activeDomainContext) {
@@ -40,7 +42,7 @@ export async function bootstrap(): Promise<{ core: CoreContext; domain: DomainCo
     const core = createCoreContext();
     _activeCoreContext = core;
 
-    // 等待凭据解密完成，确保后续适配器可读取到已解密的明文配置
+    // 等待配置存储初始化就绪
     await core.store.ready;
 
     const domain = createDomainContext({ core });
@@ -55,7 +57,7 @@ export async function bootstrap(): Promise<{ core: CoreContext; domain: DomainCo
         }
         await core.storage.init();
         core.events.emit('host:ready', undefined);
-        core.logger.info('ST-DrawAssistant 核心基础设施与领域业务服务已就绪');
+        core.logger.info('ST-DrawAssistant 核心服务与领域服务已就绪');
     } catch (err) {
         core.logger.error('插件启动初始化检测异常', err);
     }
@@ -93,7 +95,7 @@ export function dispose(): void {
         try {
             _activeCoreContext.dispose();
         } catch (err) {
-            console.error(`[${EXTENSION_NAME}] 释放基础设施服务异常:`, err);
+            console.error(`[${EXTENSION_NAME}] 释放核心服务异常:`, err);
         } finally {
             _activeCoreContext = null;
             console.info(`[${EXTENSION_NAME}] 插件全部资源已释放。`);

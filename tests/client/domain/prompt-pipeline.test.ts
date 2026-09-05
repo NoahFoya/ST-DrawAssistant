@@ -146,6 +146,32 @@ describe('Prompt Pipeline & Hooks', () => {
             expect(result.request.targetEngine).toBe('sdwebui');
         });
 
+        it('未注册任何外部拦截器时，纯净流水线应独立完成管道切分与请求组装', async () => {
+            const pipeline = new PromptPipeline();
+
+            const input = 'masterpiece, 1girl, standing in forest\ncinematic lighting | low quality, distorted';
+            const result = await pipeline.process({
+                rawPrompt: input,
+                targetEngine: 'novelai',
+                contextInfo: {
+                    characterName: 'Megumin',
+                    userName: 'Kazuma',
+                    messageId: 100,
+                    chatId: 'chat_abc'
+                }
+            });
+
+            expect(result.prompt).toBe('masterpiece, 1girl, standing in forest\ncinematic lighting');
+            expect(result.request.prompt).toBe('masterpiece, 1girl, standing in forest\ncinematic lighting');
+            expect(result.request.negativePrompt).toBe('low quality, distorted');
+            expect(result.request.targetEngine).toBe('novelai');
+            expect(result.request.contextInfo?.characterName).toBe('Megumin');
+            expect(result.request.contextInfo?.userName).toBe('Kazuma');
+            expect(result.request.contextInfo?.messageId).toBe(100);
+
+            pipeline.dispose();
+        });
+
 
 
         it('流水线销毁后调用应抛错并清空所有已注册钩子', async () => {

@@ -1,18 +1,17 @@
 /**
  * @module core/config/config-store
- * @description 配置管理中心与深度合并服务
+ * @description 配置存储与深度合并
  */
 
 import { IDisposable, toDisposable, DrawAssistantSettings } from '../types';
 import { Logger } from '../logger';
 import { DEFAULT_SAVE_DEBOUNCE_MS, BUILTIN_THEMES, BUILTIN_THEME_DARK } from '../constants';
-import { encryptCredential, decryptCredential } from '../crypto';
 
 export type StateListener<T> = (state: T, keyPath?: string, oldState?: T) => void;
 export type KeyListener<V> = (newValue: V, oldValue: V) => void;
 
-/** 判断键名是否属于敏感 API 密钥字段 (支持常见命名风格通配) */
-function isSensitiveKey(keyName: string): boolean {
+/** 判断键名是否属于敏感 API 密钥字段 (支持常见命名风格通配，用于导出脱敏) */
+export function isSensitiveKey(keyName: string): boolean {
     const lower = keyName.toLowerCase();
     return (
         lower === 'apikey' ||
@@ -24,89 +23,21 @@ function isSensitiveKey(keyName: string): boolean {
     );
 }
 
-/** 遍历并转换配置中的敏感凭据 */
-async function mapSensitiveCredentials(
-    settings: DrawAssistantSettings,
-    transform: (value: string) => Promise<string>
-): Promise<{ result: DrawAssistantSettings; modified: boolean }> {
-    if (!settings.engineConfigs || typeof settings.engineConfigs !== 'object') {
-        return { result: settings, modified: false };
-    }
-
-    let modified = false;
-    const cloned = JSON.parse(JSON.stringify(settings));
-
-    for (const provider of Object.keys(cloned.engineConfigs)) {
-        const cfg = cloned.engineConfigs[provider];
-        if (cfg && typeof cfg === 'object') {
-            for (const k of Object.keys(cfg)) {
-                if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k]) {
-                    const original = cfg[k];
-                    const transformed = await transform(original);
-                    if (transformed !== original) {
-                        cfg[k] = transformed;
-                        modified = true;
-                    }
-                }
-            }
-        }
-    }
-
-    return { result: modified ? cloned : settings, modified };
-}
-
-/** 遍历并加密配置中的敏感凭据 */
-export async function encryptSettingsCredentials(settings: DrawAssistantSettings): Promise<DrawAssistantSettings> {
-    const { result } = await mapSensitiveCredentials(settings, (val) => {
-        return val.startsWith('enc:v1:') ? Promise.resolve(val) : encryptCredential(val);
-    });
-    return result;
-}
-
-/** 遍历并解密配置中的密文凭据 */
-export async function decryptSettingsCredentials(settings: DrawAssistantSettings): Promise<DrawAssistantSettings> {
-    const { result } = await mapSensitiveCredentials(settings, (val) => {
-        return val.startsWith('enc:v1:') ? decryptCredential(val) : Promise.resolve(val);
-    });
-    return result;
-}
-
-function hasSensitiveCredentials(settings: DrawAssistantSettings): boolean {
-    if (!settings.engineConfigs || typeof settings.engineConfigs !== 'object') return false;
-    for (const p of Object.keys(settings.engineConfigs)) {
-        const cfg = settings.engineConfigs[p];
-        if (cfg && typeof cfg === 'object') {
-            for (const k of Object.keys(cfg)) {
-                if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k] && !cfg[k].startsWith('enc:v1:')) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-function hasEncryptedCredentials(settings: DrawAssistantSettings): boolean {
-    if (!settings.engineConfigs || typeof settings.engineConfigs !== 'object') return false;
-    for (const p of Object.keys(settings.engineConfigs)) {
-        const cfg = settings.engineConfigs[p];
-        if (cfg && typeof cfg === 'object') {
-            for (const k of Object.keys(cfg)) {
-                if (isSensitiveKey(k) && typeof cfg[k] === 'string' && cfg[k].startsWith('enc:v1:')) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
 /** 插件默认配置 */
 export const DEFAULT_SETTINGS: DrawAssistantSettings = {
     enabled: true,
     activeProvider: 'comfyui',
     requestMode: 'browser',
     storageStrategy: 'split',
+    enableThumbnail: true,
+    deduplicateHash: true,
+    maxStoredImages: 500,
+    imageRetentionDays: 0,
+    hideButtonOnDone: false,
+    placeholderStart: 'image###',
+    placeholderEnd: '###',
+    cleanExtraSpacesAndLines: true,
+
     taskTimeoutMs: 180000,
     maxConcurrentTasks: 1,
     autoGenerate: false,
@@ -119,6 +50,7 @@ export const DEFAULT_SETTINGS: DrawAssistantSettings = {
     })),
     engineConfigs: {},
     uiPreferences: {},
+    extensions: {},
     customData: {}
 };
 
@@ -169,8 +101,8 @@ export function mergeSettingsWithDefaults(
 }
 
 /**
- * 配置状态管理中心
- * 提供单向数据流、按键订阅变更与防抖持久化能力
+ * 配置存储管理类
+ * 支持配置读写、变更监听与防抖保存
  */
 export class ConfigStore implements IDisposable {
     private _state: DrawAssistantSettings;
@@ -182,7 +114,7 @@ export class ConfigStore implements IDisposable {
     private _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly _debounceMs: number;
 
-    /** 初始配置密文异步解密就绪 Promise */
+    /** 配置存储初始化就绪 Promise */
     public readonly ready: Promise<void>;
 
     constructor(
@@ -193,14 +125,7 @@ export class ConfigStore implements IDisposable {
         this._saveHandler = options?.onSave;
         this._debounceMs = options?.debounceMs ?? DEFAULT_SAVE_DEBOUNCE_MS;
 
-        // 内存中维护解密后的明文凭据供各驱动读取；持久化前自动加密敏感字段
-        this.ready = decryptSettingsCredentials(this._state)
-            .then((decrypted) => {
-                this._state = decrypted;
-            })
-            .catch((err) => {
-                this._logger.warn('初始化解密敏感凭据异常，将保留原值:', err);
-            });
+        this.ready = Promise.resolve();
     }
 
     /** 获取当前全局配置快照 */
@@ -298,6 +223,35 @@ export class ConfigStore implements IDisposable {
         this.set('engineConfigs', nextEngineConfigs);
     }
 
+    /**
+     * 注册指定生图后端的默认配置
+     *
+     * 说明：
+     * 1. 配置存储保持通用，各生图后端的默认参数由各自的适配器提供；
+     * 2. 在适配器注册时补全该后端的默认配置（如 ComfyUI 工作流模板）；
+     * 3. 仅在内存中补齐缺失字段，不调用 scheduleSave，避免覆盖用户现有的配置文件。
+     */
+    public registerEngineDefaults(provider: string, defaults: Record<string, unknown>): void {
+        const current = this._state.engineConfigs[provider];
+        if (!current || Object.keys(current).length === 0) {
+            this._state = {
+                ...this._state,
+                engineConfigs: {
+                    ...this._state.engineConfigs,
+                    [provider]: deepClone(defaults)
+                }
+            };
+        } else {
+            this._state = {
+                ...this._state,
+                engineConfigs: {
+                    ...this._state.engineConfigs,
+                    [provider]: { ...deepClone(defaults), ...current }
+                }
+            };
+        }
+    }
+
     /** 注册全局配置变更监听器 */
     public subscribe(listener: StateListener<DrawAssistantSettings>): IDisposable {
         if (this._isDisposed) return toDisposable(() => {});
@@ -332,7 +286,7 @@ export class ConfigStore implements IDisposable {
         });
     }
 
-    /** 安排防抖保存 (持久化保存前自动加密凭据) */
+    /** 防抖保存设置 */
     private scheduleSave(): void {
         if (!this._saveHandler) return;
 
@@ -343,18 +297,8 @@ export class ConfigStore implements IDisposable {
         this._saveDebounceTimer = setTimeout(() => {
             const handler = this._saveHandler;
             const state = this._state;
-            const logger = this._logger;
             if (!handler) return;
-
-            if (!hasSensitiveCredentials(state)) {
-                handler(state);
-            } else {
-                void encryptSettingsCredentials(state).then((persistable) => {
-                    handler(persistable);
-                }).catch((err) => {
-                    logger.error('防抖保存加密失败', err);
-                });
-            }
+            handler(state);
         }, this._debounceMs);
     }
 
@@ -367,18 +311,8 @@ export class ConfigStore implements IDisposable {
 
         const handler = this._saveHandler;
         const state = this._state;
-        const logger = this._logger;
         if (!handler) return;
-
-        if (!hasSensitiveCredentials(state)) {
-            handler(state);
-        } else {
-            void encryptSettingsCredentials(state).then((persistable) => {
-                handler(persistable);
-            }).catch((err) => {
-                logger.error('立即保存失败', err);
-            });
-        }
+        handler(state);
     }
 
     /** 导出当前完整设置为 JSON 文本 (支持脱敏导出与完整导出) */
@@ -399,21 +333,12 @@ export class ConfigStore implements IDisposable {
     }
 
     /**
-     * 从持久化存储或外部源安全加载设置
-     * 自动解密已加密的敏感凭据，确保内存中均为明文，并派发变更通知
+     * 加载外部或持久化设置并派发变更通知
      */
     public async loadSettings(settings: unknown): Promise<void> {
         if (this._isDisposed || !settings) return;
 
-        let merged = mergeSettingsWithDefaults(settings, this._state);
-        if (hasEncryptedCredentials(merged)) {
-            try {
-                merged = await decryptSettingsCredentials(merged);
-            } catch (err) {
-                this._logger.warn('加载设置解密敏感凭据异常，保留原值:', err);
-            }
-        }
-
+        const merged = mergeSettingsWithDefaults(settings, this._state);
         const oldState = this._state;
         this._state = merged;
 
@@ -444,15 +369,6 @@ export class ConfigStore implements IDisposable {
             }
             const merged = mergeSettingsWithDefaults(parsed, this._state);
             this.update(merged);
-            if (hasEncryptedCredentials(merged)) {
-                void decryptSettingsCredentials(merged)
-                    .then((decrypted) => {
-                        this.update(decrypted);
-                    })
-                    .catch((err) => {
-                        this._logger.warn('导入配置解密敏感凭据异常，保留原值:', err);
-                    });
-            }
             return true;
         } catch (err) {
             this._logger.error('导入配置 JSON 失败', err);

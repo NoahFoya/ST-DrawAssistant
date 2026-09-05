@@ -19,7 +19,7 @@ export interface HostMessageEvent {
     readonly element?: HTMLElement;
 }
 
-interface SillyTavernMessage {
+export interface SillyTavernMessage {
     mes: string;
     is_user?: boolean;
     swipe_id?: number;
@@ -29,8 +29,17 @@ interface SillyTavernMessage {
 interface SillyTavernContext {
     chat: SillyTavernMessage[];
     chatId: string;
+    name?: string;
+    name1?: string;
+    userName?: string;
     characterId?: number | string;
-    characters?: Record<string | number, { name?: string; avatar?: string; description?: string }>;
+    characters?: Record<string | number, {
+        name?: string;
+        avatar?: string;
+        description?: string;
+        personality?: string;
+        data?: Record<string, unknown>;
+    }>;
     eventSource: {
         on: (event: string, fn: (...args: any[]) => void) => void;
         off?: (event: string, fn: (...args: any[]) => void) => void;
@@ -56,6 +65,10 @@ interface HostSubscriptionDescriptor {
  */
 export class HostClient implements IDisposable {
     private readonly _disposables = new Set<IDisposable>();
+    /**
+     * 待绑定的事件监听列表
+     * 若插件加载时酒馆环境尚未就绪，先暂存监听器，等酒馆加载完毕后再统一绑定
+     */
     private readonly _pendingSubscriptions = new Set<HostSubscriptionDescriptor>();
     private _isReady = false;
     private _readyPromise: Promise<void> | null = null;
@@ -280,8 +293,21 @@ export class HostClient implements IDisposable {
         return this.getST()?.chatId || null;
     }
 
-    /** 获取当前对话角色的基础信息 */
-    public getCurrentCharacter(): { name: string; avatar?: string; description?: string } | null {
+    /** 获取当前用户名称 (User Name) */
+    public getUserName(): string | null {
+        const ctx = this.getST();
+        if (!ctx) return null;
+        return ctx.name || ctx.name1 || (ctx as any).userName || null;
+    }
+
+    /** 获取当前对话角色的基础与卡片信息 */
+    public getCurrentCharacter(): {
+        name: string;
+        avatar?: string;
+        description?: string;
+        personality?: string;
+        data?: Record<string, unknown>;
+    } | null {
         const ctx = this.getST();
         if (!ctx) return null;
         const charId = ctx.characterId;
@@ -291,7 +317,9 @@ export class HostClient implements IDisposable {
         return {
             name: charObj.name || '',
             avatar: charObj.avatar || '',
-            description: charObj.description || ''
+            description: charObj.description || '',
+            personality: charObj.personality || '',
+            data: charObj.data as Record<string, unknown> | undefined
         };
     }
 
@@ -302,7 +330,8 @@ export class HostClient implements IDisposable {
     }
 
     /**
-     * 向指定消息的 message.extra[EXTENSION_KEY] 写入扩展数据并触发防抖保存
+     * 向指定消息的 message.extra 写入插件数据并防抖保存
+     * 变更后通知酒馆界面刷新
      */
     public writeChatMessageExtra(messageId: number, key: string, value: unknown): void {
         const ctx = this.getST();
@@ -317,6 +346,40 @@ export class HostClient implements IDisposable {
 
         ctx.eventSource.emit(ctx.event_types.MESSAGE_UPDATED, messageId);
         ctx.saveChatDebounced();
+    }
+
+    /**
+     * 读取指定消息的 message.extra[EXTENSION_KEY] 扩展数据
+     *
+     * @param messageId 消息索引
+     * @param key 字段键名 (可选，若不传则返回整个命名空间对象)
+     */
+    public readChatMessageExtra<T = unknown>(messageId: number, key?: string): T | undefined {
+        const ctx = this.getST();
+        if (!ctx?.chat) return undefined;
+
+        const message = ctx.chat[messageId];
+        if (!message?.extra) return undefined;
+
+        const extData = message.extra[HostClient.EXTENSION_KEY];
+        if (!extData) return undefined;
+
+        if (key) {
+            return extData[key] as T;
+        }
+        return extData as T;
+    }
+
+    /**
+     * 根据索引获取酒馆原始聊天消息对象
+     * 用于提取 swipe_id、楼层文本或校验楼层归属
+     *
+     * @param messageId 楼层索引
+     * @returns 消息对象或 null (若索引超出范围或宿主未就绪)
+     */
+    public getChatMessage(messageId: number): SillyTavernMessage | null {
+        const ctx = this.getST();
+        return ctx?.chat?.[messageId] || null;
     }
 
     /** 防抖保存当前聊天记录 */

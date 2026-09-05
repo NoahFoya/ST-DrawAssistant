@@ -1,14 +1,12 @@
 /**
  * @module domain/drivers/novelai-adapter
- * @description NovelAI 图像生成适配器实现
+ * @description NovelAI 图像生成适配器
  *
- * 核心特性：
- * 1. 纯领域驱动设计，解耦全局 UI Store；
- * 2. 自动将标准提示词权重语法转换为 NovelAI 官方规范的花括号 {tag} 与方括号 [tag]；
- * 3. 图像尺寸自动对齐至 64 的整倍数；
- * 4. 适配 V3 与 V4/V4.5/V5 模型差异（V4+ 剔除 legacy SMEA 参数，支持 v4_prompt 结构化参数）；
- * 5. 解析并解包二进制 ZIP/Deflate 响应流提取原始 PNG 图像；
- * 6. 支持元数据提取与参数双向还原。
+ * 1. 支持将权重语法转换为花括号 {tag} 与方括号 [tag]；
+ * 2. 图像宽高自动对齐为 64 的整倍数；
+ * 3. 兼容 V3 与 V4+ 模型参数差异；
+ * 4. 解压 ZIP 响应提取 PNG 图片；
+ * 5. 支持读取图片内嵌的生图参数。
  */
 
 import { BaseDriver, BaseDriverOptions } from './base-driver';
@@ -24,26 +22,45 @@ import {
     ImageMetadata
 } from '../types';
 
-/** NovelAI 专有请求选项 */
-export interface NovelAIEngineOptions {
-    model?: string;
-    scale?: number;
-    sampler?: string;
-    steps?: number;
-    width?: number;
-    height?: number;
-    seed?: number;
-    apiKey?: string;
+/** NovelAI 配置接口 */
+export interface NovelAIEngineConfig {
+    serverUrl: string;
+    apiKey: string;
+    model: string;
+    width: number;
+    height: number;
+    steps: number;
+    scale: number;
+    sampler: string;
     qualityToggle?: boolean;
     ucPreset?: number;
     smea?: boolean;
     smeaDyn?: boolean;
     decrisper?: boolean;
     uncondScale?: number;
-    v4Prompt?: Record<string, unknown>;
-    /** 是否将通用提示词加权语法转为 NovelAI 规范语法 (默认 true) */
     convertPromptSyntax?: boolean;
     [key: string]: unknown;
+}
+
+/** NovelAI 默认配置 */
+export const DEFAULT_NOVELAI_CONFIG: NovelAIEngineConfig = {
+    serverUrl: 'https://image.novelai.net',
+    apiKey: '',
+    model: 'nai-diffusion-4-curated-preview',
+    width: 832,
+    height: 1216,
+    steps: 28,
+    scale: 5.0,
+    sampler: 'k_euler',
+    qualityToggle: true,
+    ucPreset: 0,
+    convertPromptSyntax: true
+};
+
+/** NovelAI 专有请求选项 */
+export interface NovelAIEngineOptions extends Partial<NovelAIEngineConfig> {
+    seed?: number;
+    v4Prompt?: Record<string, unknown>;
 }
 
 export interface NovelAIAdapterOptions extends BaseDriverOptions {}
@@ -66,7 +83,7 @@ export function convertToNovelAIPromptSyntax(prompt: string): string {
 /**
  * 将尺寸数值规整为 64 的整倍数
  *
- * 设计意图：NovelAI V3/V4 底层基于 8x 潜空间 VAE 与分块注意力机制，
+ * NovelAI V3/V4 底层基于 8x 潜空间 VAE 与分块注意力机制，
  * 服务端 API 严格限制图像宽高必须为 64 的整数倍 (如 832x1216)，否则会导致 HTTP 400 校验失败。
  */
 export function snapTo64(val: number | undefined, fallback = 832): number {
@@ -77,13 +94,13 @@ export function snapTo64(val: number | undefined, fallback = 832): number {
 /**
  * 从 NovelAI 返回的二进制 Buffer (PNG 或 ZIP 归档) 中提取图像 Blob
  *
- * 设计意图：NovelAI 官方端点默认将生成的图像打包为单文件条目的 ZIP 归档回传，
+ * NovelAI 官方端点默认将生成的图像打包为单文件条目的 ZIP 归档回传，
  * 内部通常使用 Deflate-raw (算法 8) 无头压缩；本函数优先检测直接 PNG，次之解包 ZIP，
  * 若遇到非图像的错误文本响应则直接阻断并抛出异常，杜绝生成损坏的死图 Blob。
  */
 export async function extractImageFromZipBuffer(buffer: ArrayBuffer): Promise<Blob> {
     if (!buffer || buffer.byteLength === 0) {
-        throw new DriverError(DriverErrorType.BACKEND_ERROR, 'NovelAI 返回空响应数据载荷');
+        throw new DriverError(DriverErrorType.BACKEND_ERROR, 'NovelAI 返回空响应数据');
     }
 
     const bytes = new Uint8Array(buffer);

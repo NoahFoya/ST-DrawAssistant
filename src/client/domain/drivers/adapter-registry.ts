@@ -1,18 +1,16 @@
 /**
  * @module domain/drivers/adapter-registry
- * @description 生图引擎适配器注册中心
+ * @description 生图引擎适配器注册表
  *
- * 核心职责：
- * 1. 提供适配器实例的动态注册与注销管理；
- * 2. 支持根据引擎标识检索适配器实例；
- * 3. 驱动层作为插件化 SPI 接入，领域调度层面向注册中心获取当前激活的适配器。
+ * 1. 统一管理各生图后端适配器实例；
+ * 2. 支持根据引擎标识获取适配器。
  */
 
 import { IDisposable, toDisposable } from '../../../common';
 import { ImageEngineAdapter } from '../types';
 
 /**
- * 驱动适配器注册中心
+ * 生图引擎适配器注册表
  */
 export class AdapterRegistry implements IDisposable {
     private readonly _adapters = new Map<string, ImageEngineAdapter>();
@@ -85,7 +83,7 @@ export class AdapterRegistry implements IDisposable {
     }
 
     /**
-     * 销毁注册中心并清理所有已注册适配器
+     * 销毁注册表并清理所有已注册适配器
      */
     public dispose(): void {
         for (const adapter of this._adapters.values()) {

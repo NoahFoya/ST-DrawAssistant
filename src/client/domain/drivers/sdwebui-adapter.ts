@@ -1,14 +1,12 @@
 /**
  * @module domain/drivers/sdwebui-adapter
- * @description Stable Diffusion WebUI (A1111 / Forge / reForge / SD.Next) 适配器实现
+ * @description Stable Diffusion WebUI (A1111 / Forge / reForge / SD.Next) 适配器
  *
- * 核心特性：
- * 1. 纯领域驱动设计，解耦全局 UI Store，运行时参数由 GenerationRequest.engineOptions 与初始化配置供给；
- * 2. 消费流水线分离好的 prompt 与 negativePrompt，完成 LoRA 标签格式化与拼装；
- * 3. 支持 txt2img、img2img 与蒙版局部重绘；
- * 4. 支持 override_settings 针对单次请求设置 Checkpoint 与 CLIP Skip；
- * 5. 支持在生图过程中并发轮询 /sdapi/v1/progress 上报执行进度与预览帧；
- * 6. 支持 /sdapi/v1/interrupt 中断与元数据提取/参数双向还原。
+ * 1. 支持文生图、图生图与局部重绘；
+ * 2. 格式化 LoRA 标签并拼入提示词；
+ * 3. 支持通过 override_settings 指定模型与 CLIP Skip；
+ * 4. 支持轮询 /sdapi/v1/progress 获取生成进度与预览；
+ * 5. 支持调用 /sdapi/v1/interrupt 中断任务。
  */
 
 import { BaseDriver, BaseDriverOptions } from './base-driver';
@@ -26,18 +24,16 @@ import {
     ImageMetadata
 } from '../types';
 
-/** SD-WebUI 专属请求配置选项接口 */
-export interface SdWebUIEngineOptions {
-    steps?: number;
-    cfgScale?: number;
-    samplerName?: string;
-    scheduler?: string;
-    width?: number;
-    height?: number;
-    seed?: number;
-    subseed?: number;
-    subseedStrength?: number;
+/** SD-WebUI 配置接口 */
+export interface SdWebUIEngineConfig {
+    serverUrl: string;
     model?: string;
+    samplerName: string;
+    scheduler?: string;
+    steps: number;
+    cfgScale: number;
+    width: number;
+    height: number;
     clipSkip?: number;
     loras?: LoraItem[];
     enableHires?: boolean;
@@ -49,6 +45,34 @@ export interface SdWebUIEngineOptions {
     batchSize?: number;
     nIter?: number;
     [key: string]: unknown;
+}
+
+/** SD-WebUI 默认配置 */
+export const DEFAULT_SDWEBUI_CONFIG: SdWebUIEngineConfig = {
+    serverUrl: 'http://127.0.0.1:7860',
+    model: '',
+    samplerName: 'Euler a',
+    steps: 20,
+    cfgScale: 7.0,
+    width: 512,
+    height: 768,
+    clipSkip: 2,
+    enableHires: false,
+    hiresScale: 1.5,
+    hiresUpscaler: 'R-ESRGAN 4x+ Anime6B',
+    hiresSteps: 15,
+    hiresDenoise: 0.45,
+    denoisingStrength: 0.75,
+    batchSize: 1,
+    nIter: 1,
+    loras: []
+};
+
+/** SD-WebUI 专属请求配置选项接口 */
+export interface SdWebUIEngineOptions extends Partial<SdWebUIEngineConfig> {
+    seed?: number;
+    subseed?: number;
+    subseedStrength?: number;
 }
 
 export interface SdWebUIAdapterOptions extends BaseDriverOptions {}
@@ -242,32 +266,43 @@ export class SdWebUIAdapter extends BaseDriver {
             requestBody.denoising_strength = options.hiresDenoise ?? 0.5;
         }
 
-        // 独立并发轮询进度，避免阻塞生图主请求
-        let progressInterval: any = null;
-        if (onProgress) {
-            progressInterval = setInterval(async () => {
-                try {
-                    const prog = await this.getJson<ProgressResponse>('/sdapi/v1/progress?skip_current_image=false', {
-                        timeoutMs: 3000
-                    });
-                    if (prog && typeof prog.progress === 'number') {
-                        const previewUrl = prog.current_image
-                            ? `data:image/png;base64,${prog.current_image}`
-                            : undefined;
-                        onProgress(prog.progress, previewUrl);
-                    }
-                } catch {
-                    // 轮询异常不中断主任务
+        // 受控递归轮询进度，避免并发堆叠，请求完成后才安排下一次探测
+        let isPollingActive = Boolean(onProgress);
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        const pollProgress = async () => {
+            if (!isPollingActive || this._cancelled || signal?.aborted) return;
+            try {
+                const prog = await this.getJson<ProgressResponse>('/sdapi/v1/progress?skip_current_image=true', {
+                    timeoutMs: 3000,
+                    signal
+                });
+                if (isPollingActive && prog && typeof prog.progress === 'number') {
+                    const previewUrl = prog.current_image
+                        ? `data:image/png;base64,${prog.current_image}`
+                        : undefined;
+                    onProgress?.(prog.progress, previewUrl);
                 }
-            }, 600);
+            } catch {
+                // 轮询偶发异常不中断主生图流程
+            } finally {
+                if (isPollingActive && !this._cancelled && !signal?.aborted) {
+                    pollTimer = setTimeout(pollProgress, 800);
+                }
+            }
+        };
+
+        if (isPollingActive) {
+            pollTimer = setTimeout(pollProgress, 500);
         }
 
         let response: SdApiResponse;
         try {
             response = await this.postJson<SdApiResponse>(targetEndpoint, requestBody, { signal });
         } finally {
-            if (progressInterval) {
-                clearInterval(progressInterval);
+            isPollingActive = false;
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
             }
         }
 

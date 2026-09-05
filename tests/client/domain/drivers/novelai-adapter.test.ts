@@ -194,9 +194,9 @@ describe('NovelAIAdapter', () => {
         expect(restored.seed).toBe(7777);
     });
 
-    it('extractImageFromZipBuffer 遇到空载荷或非图像错误文本时应明确抛出 DriverError', async () => {
-        // 空载荷
-        await expect(extractImageFromZipBuffer(new ArrayBuffer(0))).rejects.toThrow(/NovelAI 返回空响应数据载荷/);
+    it('extractImageFromZipBuffer 遇到空响应数据或非图像错误文本时应明确抛出 DriverError', async () => {
+        // 空数据
+        await expect(extractImageFromZipBuffer(new ArrayBuffer(0))).rejects.toThrow(/NovelAI 返回空响应数据/);
 
         // JSON 错误响应 (既非 PNG 也非 ZIP)
         const errorJson = JSON.stringify({ error: 'insufficient_credits', message: '点数不足' });

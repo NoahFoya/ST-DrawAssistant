@@ -33,14 +33,14 @@ export class NetworkError extends Error {
     }
 }
 
-/** 常见的短时瞬态、可恢复 HTTP 状态码集合 (如超时、限流、网关短暂不可用) */
+/** 常见的可重试 HTTP 状态码集合 (如超时、限流、网关短暂不可用) */
 export const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 502, 503, 504]);
 
 /**
- * 判断网络错误或 HTTP 状态码是否属于可重试的短时瞬态错误
+ * 判断网络错误或 HTTP 状态码是否属于可重试错误
  *
  * 覆盖 408、425、429、502、503、504 与 TIMEOUT 超时；
- * 4xx 客户端参数或鉴权错误不纳入瞬态范围。
+ * 4xx 客户端参数或鉴权错误不纳入重试范围。
  *
  * @param error 异常对象或 HTTP 状态码
  */
@@ -55,7 +55,7 @@ export function isTransientError(error: unknown): boolean {
         if (typeof error.status === 'number') {
             return TRANSIENT_HTTP_STATUSES.has(error.status);
         }
-        // 强类型 NetworkError 若未匹配到超时、网关故障或瞬态状态码，明确判定为不可重试，禁止向下穿透
+        // NetworkError 若未匹配到超时、网关故障或可重试状态码，判定为不可重试
         return false;
     }
     if (error && typeof error === 'object' && 'status' in error && typeof (error as any).status === 'number') {

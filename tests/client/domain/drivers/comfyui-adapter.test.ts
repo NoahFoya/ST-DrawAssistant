@@ -28,7 +28,7 @@ describe('ComfyUIAdapter', () => {
         expect(adapter.id).toBe('comfyui');
         expect(adapter.name).toBe('ComfyUI');
         expect(adapter.capabilities.txt2img).toBe(true);
-        expect(adapter.capabilities.progressWebSocket).toBe(true);
+        expect(adapter.capabilities.progressWebSocket).toBe(false);
         expect(adapter.capabilities.syntaxType).toBe('nodeGraph');
     });
 
@@ -334,8 +334,7 @@ describe('ComfyUIAdapter', () => {
         expect(restored.loras).toEqual(testLoras);
     });
 
-    it('当 WebSocket 触发 execution_error 时应立即抛出 DriverError，绝不降级进入 HTTP 长轮询', async () => {
-        // 模拟提交 /prompt 成功返回 prompt_id
+    it('当 HTTP 轮询 /history 检测到任务状态为 error 时应立即抛出崩溃原因', async () => {
         mockFetchExternal.mockImplementation((url: string) => {
             if (url.includes('/prompt')) {
                 return Promise.resolve({
@@ -344,36 +343,22 @@ describe('ComfyUIAdapter', () => {
                     json: async () => ({ prompt_id: 'err-prompt-123' })
                 });
             }
-            if (url.includes('/history/')) {
-                throw new Error('不应该降级调用 /history 接口');
+            if (url.includes('/history/err-prompt-123')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        'err-prompt-123': {
+                            status: {
+                                status_str: 'error',
+                                messages: ['CUDA out of memory']
+                            }
+                        }
+                    })
+                });
             }
             return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
         });
-
-        // 模拟 WebSocket 立即推送 execution_error
-        const OrigWebSocket = globalThis.WebSocket;
-        class MockErrorWebSocket {
-            onmessage: any = null;
-            onerror: any = null;
-            onclose: any = null;
-            close = vi.fn();
-            constructor() {
-                setTimeout(() => {
-                    if (this.onmessage) {
-                        this.onmessage({
-                            data: JSON.stringify({
-                                type: 'execution_error',
-                                data: {
-                                    prompt_id: 'err-prompt-123',
-                                    exception_message: 'CUDA out of memory'
-                                }
-                            })
-                        });
-                    }
-                }, 10);
-            }
-        }
-        (globalThis as any).WebSocket = MockErrorWebSocket;
 
         const request: GenerationRequest = {
             taskId: 'task-comfy-err',
@@ -384,11 +369,7 @@ describe('ComfyUIAdapter', () => {
             }
         };
 
-        try {
-            await expect(adapter.generate(request)).rejects.toThrow(/ComfyUI 节点执行失败: CUDA out of memory/);
-        } finally {
-            (globalThis as any).WebSocket = OrigWebSocket;
-        }
+        await expect(adapter.generate(request)).rejects.toThrow(/ComfyUI 任务执行异常崩溃: CUDA out of memory/);
     });
 
     it('当传入底图或遮罩时，上传至 ComfyUI 的文件名应包含 taskId 前缀防止并发覆盖', async () => {
@@ -472,15 +453,6 @@ describe('ComfyUIAdapter', () => {
     });
 
     it('waitViaHttpPolling 应在收到 AbortSignal 时立即退出并抛出 CANCELLED 错误', async () => {
-        // 禁止 WebSocket 连接以触发 HTTP 轮询路径
-        const OrigWebSocket = globalThis.WebSocket;
-        class FailingWebSocket {
-            constructor() {
-                throw new Error('WebSocket disabled for polling test');
-            }
-        }
-        (globalThis as any).WebSocket = FailingWebSocket;
-
         mockFetchExternal.mockImplementation((url: string) => {
             if (url.includes('/prompt')) {
                 return Promise.resolve({
@@ -515,11 +487,7 @@ describe('ComfyUIAdapter', () => {
             controller.abort();
         }, 50);
 
-        try {
-            await expect(adapter.generate(request, controller.signal)).rejects.toThrow('ComfyUI 任务已取消');
-        } finally {
-            (globalThis as any).WebSocket = OrigWebSocket;
-        }
+        await expect(adapter.generate(request, controller.signal)).rejects.toThrow('ComfyUI 任务已取消');
     });
 
     it('当 ComfyUI 提交返回 node_errors 时，应准确解析具体节点并抛出包含详细原因的错误', async () => {
@@ -551,20 +519,6 @@ describe('ComfyUIAdapter', () => {
     });
 
     it('当 ComfyUI 任务在后端崩溃且历史记录 status_str 为 error 时，应抛出后端崩溃错误', async () => {
-        const OrigWebSocket = (globalThis as any).WebSocket;
-        class FailingWebSocket {
-            onclose: any = null;
-            onerror: any = null;
-            onmessage: any = null;
-            constructor() {
-                setTimeout(() => {
-                    if (this.onclose) this.onclose();
-                }, 10);
-            }
-            close() {}
-        }
-        (globalThis as any).WebSocket = FailingWebSocket;
-
         mockFetchExternal.mockImplementation((url: string) => {
             if (url.includes('/prompt')) {
                 return Promise.resolve({
@@ -596,10 +550,6 @@ describe('ComfyUIAdapter', () => {
             prompt: 'scenery'
         };
 
-        try {
-            await expect(adapter.generate(request)).rejects.toThrow('ComfyUI 任务执行异常崩溃: CUDA out of memory');
-        } finally {
-            (globalThis as any).WebSocket = OrigWebSocket;
-        }
+        await expect(adapter.generate(request)).rejects.toThrow('ComfyUI 任务执行异常崩溃: CUDA out of memory');
     });
 });

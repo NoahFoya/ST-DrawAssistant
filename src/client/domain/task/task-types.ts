@@ -1,6 +1,6 @@
 /**
  * @module domain/task/task-types
- * @description 任务调度系统数据类型、状态机模型与调度事件定义
+ * @description 生图任务数据类型与事件定义
  */
 
 import {
@@ -20,7 +20,7 @@ export interface TaskContextIdentity {
     readonly swipeId?: number;
 }
 
-/** 外部可查询的任务只读快照模型 */
+/** 外部可查询的任务只读快照 */
 export interface TaskSnapshot {
     readonly id: string;
     readonly targetEngine: string;
@@ -37,7 +37,7 @@ export interface TaskSnapshot {
 
 /** 提交生图任务的选项参数 */
 export interface SubmitTaskOptions {
-    /** 经提示词流水线生成的标准化生图请求对象 */
+    /** 提示词流水线生成的生图请求对象 */
     request: GenerationRequest;
     /** 任务关联的会话标识 (可选) */
     chatId?: string;
@@ -47,5 +47,5 @@ export interface SubmitTaskOptions {
     swipeId?: number;
 }
 
-/** 任务调度中心事件定义 (统一指向 CoreEventMap) */
+/** 任务事件定义 (统一指向 CoreEventMap) */
 export type TaskEventMap = CoreEventMap;

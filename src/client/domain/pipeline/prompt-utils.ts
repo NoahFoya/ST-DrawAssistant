@@ -4,7 +4,7 @@
  */
 
 /**
- * 安全拼接提示词片段，过滤空值并使用标准逗号连接
+ * 拼接提示词片段，过滤空值并使用逗号连接
  */
 export function joinPromptParts(...parts: Array<string | undefined | null>): string {
     return parts
@@ -16,8 +16,7 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
 /**
  * 依据首个管道符 | 分隔正向与负向提示词
  *
- * 设计意图：作为插件原生核心交互特性，完整保留文本内部的段落换行与自然标点，
- * 绝不对正负向提示词内容执行破坏性正则替换或强制单行扁平化。
+ * 保留文本内部的换行与标点，仅按第一个 | 拆分正负向提示词。
  */
 export function separatePromptByPipe(input: string): { positive: string; negative: string } {
     const safe = (input || '').trim();

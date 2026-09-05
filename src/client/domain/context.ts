@@ -1,36 +1,41 @@
 /**
  * @module domain/context
- * @description 领域服务组装容器 (集中组装驱动注册表、任务调度中心与提示词流水线)
+ * @description 领域服务容器 (组装驱动注册表、任务管理器与提示词流水线)
  */
 
 import { IDisposable } from '../../common';
 import { CoreContext } from '../core/context';
 import { Logger } from '../core/logger';
 import { AdapterRegistry } from './drivers/adapter-registry';
-import { SdWebUIAdapter } from './drivers/sdwebui-adapter';
-import { NovelAIAdapter } from './drivers/novelai-adapter';
-import { ComfyUIAdapter } from './drivers/comfyui-adapter';
-import { CloudAdapter } from './drivers/cloud-adapter';
+import { SdWebUIAdapter, DEFAULT_SDWEBUI_CONFIG, SdWebUIEngineConfig } from './drivers/sdwebui-adapter';
+import { NovelAIAdapter, DEFAULT_NOVELAI_CONFIG, NovelAIEngineConfig } from './drivers/novelai-adapter';
+import { ComfyUIAdapter, DEFAULT_COMFYUI_CONFIG, ComfyUIEngineConfig } from './drivers/comfyui-adapter';
+import { CloudAdapter, DEFAULT_CLOUD_CONFIG, CloudEngineConfig } from './drivers/cloud-adapter';
 import { PromptPipeline } from './pipeline/prompt-pipeline';
-import { createPipelineHooks } from './pipeline/pipeline-hooks';
-import { TaskManager } from './task/task-manager';
+import { PipelineHooks } from './pipeline/pipeline-hooks';
+import { TaskManager, ResultIntegrator } from './task';
 
 export interface DomainContextOptions {
     core: CoreContext;
 }
 
 /**
- * 领域服务容器类
- * 负责集中实例化生图后端驱动、任务调度管理器与流水线，
- * 并在扩展卸载时协调释放所有受管业务资源。
+ * 领域服务容器
+ * 负责初始化各生图驱动、任务调度器与流水线，并在扩展卸载时释放资源
  */
 export class DomainContext implements IDisposable {
     public readonly adapters: AdapterRegistry;
     public readonly pipeline: PromptPipeline;
     public readonly tasks: TaskManager;
+    public readonly results: ResultIntegrator;
     private readonly _core: CoreContext;
     private readonly _logger = new Logger('DomainContext');
     private _isDisposed = false;
+
+    /** 访问底层提示词流水线生命周期钩子容器，供外部扩展模块 (如角色管理扩展) 按需挂载 */
+    public get hooks(): PipelineHooks {
+        return this.pipeline.hooks;
+    }
 
     constructor(options: DomainContextOptions) {
         this._core = options.core;
@@ -38,8 +43,8 @@ export class DomainContext implements IDisposable {
         this.adapters = new AdapterRegistry();
         this.registerDefaultAdapters();
 
-        const hooks = createPipelineHooks();
-        this.pipeline = new PromptPipeline(hooks);
+        // 初始化插件本体基础提示词流水线
+        this.pipeline = new PromptPipeline();
 
         this.tasks = new TaskManager({
             adapters: this.adapters,
@@ -53,23 +58,37 @@ export class DomainContext implements IDisposable {
                 };
             }
         });
+
+        // 监听任务结果并进行保存或展示
+        this.results = new ResultIntegrator({
+            events: this._core.events,
+            storage: this._core.storage,
+            host: this._core.host,
+            tasks: this.tasks,
+            getSettings: () => this._core.store.getState()
+        });
     }
 
     /**
-     * 注册默认的内置后端驱动适配器
-     * 通过闭包动态读取各个引擎在 store 中的配置，解耦具体后端的内部参数变化
+     * 注册内置生图驱动并注入默认配置
      */
     private registerDefaultAdapters(): void {
         const store = this._core.store;
         const network = this._core.network;
+
+        // 注入各适配器的默认配置
+        store.registerEngineDefaults('sdwebui', DEFAULT_SDWEBUI_CONFIG);
+        store.registerEngineDefaults('novelai', DEFAULT_NOVELAI_CONFIG);
+        store.registerEngineDefaults('comfyui', DEFAULT_COMFYUI_CONFIG);
+        store.registerEngineDefaults('cloud', DEFAULT_CLOUD_CONFIG);
 
         // SD-WebUI 适配器
         const sdWebUi = new SdWebUIAdapter({
             network,
             driverName: 'SdWebUI',
             getEndpointUrl: () => {
-                const cfg = store.getEngineConfig<Record<string, string>>('sdwebui');
-                return cfg?.['serverUrl'] || 'http://127.0.0.1:7860';
+                const cfg = store.getEngineConfig<SdWebUIEngineConfig>('sdwebui');
+                return cfg?.serverUrl || DEFAULT_SDWEBUI_CONFIG.serverUrl;
             },
             getConfig: () => store.getEngineConfig('sdwebui')
         });
@@ -80,8 +99,8 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'NovelAI',
             getEndpointUrl: () => {
-                const cfg = store.getEngineConfig<Record<string, string>>('novelai');
-                return cfg?.['serverUrl'] || cfg?.['proxyUrl'] || 'https://image.novelai.net';
+                const cfg = store.getEngineConfig<NovelAIEngineConfig>('novelai');
+                return cfg?.serverUrl || DEFAULT_NOVELAI_CONFIG.serverUrl;
             },
             getConfig: () => store.getEngineConfig('novelai')
         });
@@ -92,8 +111,8 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'ComfyUI',
             getEndpointUrl: () => {
-                const cfg = store.getEngineConfig<Record<string, string>>('comfyui');
-                return cfg?.['serverUrl'] || 'http://127.0.0.1:8188';
+                const cfg = store.getEngineConfig<ComfyUIEngineConfig>('comfyui');
+                return cfg?.serverUrl || DEFAULT_COMFYUI_CONFIG.serverUrl;
             },
             getConfig: () => store.getEngineConfig('comfyui')
         });
@@ -104,8 +123,8 @@ export class DomainContext implements IDisposable {
             network,
             driverName: 'CloudAdapter',
             getEndpointUrl: () => {
-                const cfg = store.getEngineConfig<Record<string, string>>('cloud');
-                return cfg?.['proxyUrl'] || 'https://generativelanguage.googleapis.com';
+                const cfg = store.getEngineConfig<CloudEngineConfig>('cloud');
+                return cfg?.proxyUrl || DEFAULT_CLOUD_CONFIG.proxyUrl;
             },
             getConfig: () => store.getEngineConfig('cloud')
         });
@@ -119,7 +138,13 @@ export class DomainContext implements IDisposable {
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
-        this._logger.info('正在释放 Domain 领域层所有受管资源...');
+        this._logger.info('正在释放领域层资源...');
+
+        try {
+            this.results.dispose();
+        } catch (err) {
+            this._logger.error('释放 ResultIntegrator 异常', err);
+        }
 
         try {
             this.tasks.dispose();

@@ -1,6 +1,6 @@
 /**
  * @module domain/types
- * @description 领域层数据模型、绘图驱动标准接口与异常类型定义
+ * @description 领域数据类型、绘图驱动接口与异常类型定义
  */
 
 import { IDisposable } from '../../common';
@@ -22,7 +22,7 @@ export {
 };
 
 /**
- * 生图后端可用资产目录 (由各驱动连接后端时动态获取与刷新)
+ * 生图后端可用资源信息 (包含模型、采样器、调度器、LoRA 等)
  */
 export interface ProviderAssetCatalog {
     /** 可选 Checkpoint 模型列表 */
@@ -77,7 +77,7 @@ export interface EngineCapabilities {
     readonly syntaxType?: 'natural' | 'tagBased' | 'nodeGraph';
 }
 
-/** 驱动层标准化错误类型枚举 */
+/** 驱动错误类型枚举 */
 export enum DriverErrorType {
     NETWORK_ERROR = 'NETWORK_ERROR',
     TIMEOUT = 'TIMEOUT',
@@ -89,7 +89,7 @@ export enum DriverErrorType {
     UNKNOWN = 'UNKNOWN'
 }
 
-/** 驱动层标准化异常类 */
+/** 驱动异常类 */
 export class DriverError extends Error {
     public readonly type: DriverErrorType;
     public readonly statusCode?: number;
@@ -105,8 +105,8 @@ export class DriverError extends Error {
 }
 
 /**
- * 绘图引擎驱动标准接口
- * 调度中心统一面向此接口调用，具体后端的通信协议与专有参数由各驱动实现类自治
+ * 绘图引擎驱动接口
+ * 任务管理器统一面向此接口调用，具体后端的通信协议与特定参数由各驱动实现类自行处理
  */
 export interface ImageEngineAdapter extends IDisposable {
     /** 驱动唯一标识 (如 'comfyui', 'sdwebui', 'novelai', 'cloud') */
@@ -116,7 +116,7 @@ export interface ImageEngineAdapter extends IDisposable {
     /** 驱动支持的能力特性声明 */
     readonly capabilities: EngineCapabilities;
 
-    /** 校验专有配置项是否合法有效 */
+    /** 校验配置项是否合法有效 */
     validateConfig?(config: unknown): Promise<{ valid: boolean; error?: string }>;
 
     /** 同步获取后端的可用模型与算法列表 */

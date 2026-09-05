@@ -1,11 +1,10 @@
 /**
  * @module domain
- * @description 领域层核心导出入口 (类型、提示词处理流水线与后端驱动抽象)
+ * @description 领域模块导出 (类型、提示词处理流水线与生图驱动)
  */
 
 export * from './types';
-export * from './pipeline/pipeline-hooks';
-export * from './pipeline/prompt-pipeline';
+export * from './pipeline';
 export * from './drivers';
 export * from './task';
 export * from './context';

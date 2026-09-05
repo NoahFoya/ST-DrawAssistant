@@ -1,6 +1,6 @@
 /**
  * @module server/index
- * @description ST-DrawAssistant 宿主服务端辅助插件入口 (Node.js 运行域)
+ * @description ST-DrawAssistant 服务端辅助插件入口 (Node.js)
  * 实现 SillyTavern Server Plugin 标准接口 (info, init, exit)
  */
 
@@ -43,7 +43,7 @@ export async function init(router: Router): Promise<void> {
     });
 
     router.post('/credentials', (req: Request, res: Response) => {
-        // 校验 SillyTavern 宿主发出的 CSRF 令牌，拒绝跨站伪造配置请求
+        // 校验酒馆 CSRF 请求头，避免未携带凭据的外部请求修改配置
         const csrfToken = req.headers['x-csrf-token'];
         if (!csrfToken || typeof csrfToken !== 'string') {
             res.status(403).json({

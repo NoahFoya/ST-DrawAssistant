@@ -1,6 +1,6 @@
 /**
  * @module core/network/client
- * @description 网络请求客户端 (封装浏览器直连与宿主服务端代理分发，对外提供统一接口)
+ * @description 网络请求客户端 (支持浏览器直连与服务端代理模式)
  */
 
 import { Logger } from '../logger';
@@ -57,8 +57,8 @@ export function normalizeHeaders(headers?: HeadersInit): Record<string, string> 
 }
 
 /**
- * 网络请求管理客户端
- * 负责同源宿主通信与外部生图服务通信 (内部封装直连与服务端反向代理双通道)
+ * 网络请求客户端
+ * 负责向服务端接口或外部生图服务发送 HTTP 请求（支持浏览器直连与服务端代理模式）
  */
 export class NetworkClient {
     private readonly _logger = new Logger('NetworkClient');
@@ -139,11 +139,13 @@ export class NetworkClient {
     }
 
     /**
-     * 向外部生图后端发起网络请求
+     * 向外部生图后端发送网络请求
      *
-     * 支持两种请求模式：
-     * - server 模式：由服务端插件反向代理中继，解决跨域 (CORS) 与 Mixed Content 限制，并在服务端安全附加 API 凭据；
-     * - browser 模式：前端浏览器直接连接目标端点，剥离宿主敏感凭据并执行协议安全检查。
+     * 说明：
+     * 1. 服务端代理模式 (server)：
+     *    通过服务端插件转发请求，解决浏览器跨域 (CORS) 以及 HTTPS 页面无法访问外部 HTTP 的限制，并在服务端附加 API Key；
+     * 2. 浏览器直连模式 (browser)：
+     *    由浏览器直接发起请求，不携带 Cookie 凭据；若当前是 HTTPS 页面且目标为非本机 HTTP，会提前给出提示。
      *
      * @param targetUrl 目标生图服务端点 URL
      * @param options 请求配置选项
@@ -211,7 +213,7 @@ export class NetworkClient {
 
                 }
 
-                // 目标生图后端业务层响应原样交付调用方解析
+                // 响应结果直接返回给调用方
                 return resp;
             }
 
@@ -269,9 +271,7 @@ export class NetworkClient {
     }
 
     /**
-     * 轻量探测目标生图服务端点的连通性 (用于设置面板连通性测试与快速诊断)
-     *
-     * 采用轻量 GET 请求探测端点连通性，自动遵循当前配置的代理或直连网络模式。
+     * 测试生图服务端点的连通性
      *
      * @param targetUrl 目标端点地址
      * @param options 探测选项 (默认 8000ms 超时)

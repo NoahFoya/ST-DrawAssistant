@@ -2,19 +2,20 @@
  * @module domain/pipeline/prompt-pipeline
  * @description 提示词处理流水线
  *
- * 核心原则：
- * 1. 核心层绝不对原生提取的提示词执行破坏性正则清洗、换行替换或管道符强行切割；
- * 2. 作为纯粹的无状态数据通道与生命周期调度器，原样透传上下文；
- * 3. 语法解析与特定参数映射交由具体适配器或扩展模块处理。
+ * 1. 保留原始提取的提示词格式（换行与标点）；
+ * 2. 按首个管道符 | 分割正向与负向提示词；
+ * 3. 组织生命周期钩子调用（供未来独立扩展按需挂载）；
+ * 4. 组装标准化生图请求对象 (GenerationRequest)。
  */
 
 import { IDisposable } from '../../../common';
 import { GenerationRequest } from '../types';
-import { PipelineHooks, PipelineHookContext } from './pipeline-hooks';
+import { PipelineHooks, PipelineHookContext, createPipelineHooks } from './pipeline-hooks';
+import { separatePromptByPipe } from './prompt-utils';
 
 /** 流水线处理请求选项 */
 export interface PipelineProcessOptions {
-    /** 原始提取的提示词文本 (未经任何破坏性清洗) */
+    /** 原始提取的提示词文本 */
     rawPrompt: string;
     /** 可选的补充负向提示词 */
     negativePrompt?: string;
@@ -26,6 +27,7 @@ export interface PipelineProcessOptions {
     contextInfo?: {
         characterId?: string | number;
         characterName?: string;
+        userName?: string;
         messageId?: number;
         chatId?: string;
     };
@@ -44,37 +46,41 @@ export interface PipelineProcessOptions {
 
 /** 流水线处理输出结果 */
 export interface PipelineProcessResult {
-    /** 标准生图请求对象 */
+    /** 生图请求对象 */
     request: GenerationRequest;
-    /** 处理后的正向提示词描述 */
+    /** 处理后的正向提示词 */
     prompt: string;
 }
 
-export { joinPromptParts, separatePromptByPipe } from './prompt-utils';
-import { separatePromptByPipe } from './prompt-utils';
-
 /**
- * 提示词生命周期处理流水线
- * 负责组织生命周期钩子调度与上下文传递，不包含破坏性文本加工
+ * 提示词处理流水线
+ * 插件本体基础功能：负责正负向提示词切分与生图请求组装；
+ * 同时提供标准的生命周期钩子容器，供外部扩展按需挂载。
  */
 export class PromptPipeline implements IDisposable {
-    private readonly _hooks: PipelineHooks;
+    public readonly hooks: PipelineHooks;
     private _isDisposed = false;
 
-    constructor(hooks: PipelineHooks) {
-        this._hooks = hooks;
+    constructor(hooks?: PipelineHooks) {
+        this.hooks = hooks || createPipelineHooks();
     }
 
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
-        this._hooks.onRawInput.clear();
-        this._hooks.beforePromptBuild.clear();
-        this._hooks.beforeSubmit.clear();
+        this.hooks.onRawInput.clear();
+        this.hooks.beforePromptBuild.clear();
+        this.hooks.beforeSubmit.clear();
     }
 
     /**
      * 处理原始提示词并输出标准的生图请求对象 (GenerationRequest)
+     *
+     * 处理流程：
+     * 1. 调度 onRawInput 钩子（供扩展层按需介入初始文本）；
+     * 2. 管道符 | 分割正负向提示词；
+     * 3. 调度 beforePromptBuild 钩子（供未来扩展模块按需补充特征）；
+     * 4. 组装请求参数并调度 beforeSubmit 钩子校验。
      *
      * @param options 流水线调度参数
      * @param settings 全局配置快照 (可选)
@@ -88,25 +94,25 @@ export class PromptPipeline implements IDisposable {
             throw new Error('提示词流水线已被销毁，无法继续处理请求');
         }
 
-        const messageId = options.contextInfo?.messageId;
-        const chatId = options.contextInfo?.chatId;
-
         const context: PipelineHookContext = {
-            messageId,
-            chatId,
+            messageId: options.contextInfo?.messageId,
+            chatId: options.contextInfo?.chatId,
             rawPrompt: options.rawPrompt,
+            characterId: options.contextInfo?.characterId,
+            characterName: options.contextInfo?.characterName,
+            userName: options.contextInfo?.userName,
             metadata: options.metadata
         };
 
-        // 原始输入前置拦截
-        let safeInput = options.rawPrompt || '';
-        safeInput = await this._hooks.onRawInput.call(safeInput, context);
+        // 1. 原始输入预处理钩子：供扩展层按需介入初始文本
+        const rawInput = options.rawPrompt || '';
+        const safeInput = await this.hooks.onRawInput.call(rawInput, context);
 
-        // 插件原生功能：首个管道符 | 分隔正负向提示词，零破坏保留段落换行与自然标点
+        // 2. 按首个管道符 | 分隔正负向提示词，保留内部换行与标点
         const { positive: rawPositive, negative: rawNegative } = separatePromptByPipe(safeInput);
 
-        // 提示词构建前钩子，供扩展注入角色特征或风格词
-        const processedPositive = await this._hooks.beforePromptBuild.call(rawPositive, context);
+        // 3. 提示词组装前钩子：供外部扩展模块补充特征或风格
+        const processedPositive = await this.hooks.beforePromptBuild.call(rawPositive, context);
 
         // 合并可选负向提示词
         const combinedNegative = options.negativePrompt
@@ -126,13 +132,12 @@ export class PromptPipeline implements IDisposable {
             engineOptions: options.engineOptions || {}
         };
 
-        // 提交前钩子，允许在入队前调整或校验最终请求参数
-        const finalRequest = await this._hooks.beforeSubmit.call(initialRequest, context);
+        // 4. 提交前检查：允许外部扩展在提交任务前调整或校验请求参数
+        const finalRequest = await this.hooks.beforeSubmit.call(initialRequest, context);
 
         return {
             request: finalRequest,
             prompt: finalRequest.prompt
         };
-
     }
 }

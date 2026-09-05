@@ -63,6 +63,19 @@ describe('ConfigStore & mergeSettingsWithDefaults', () => {
             expect((DEFAULT_SETTINGS.engineConfigs as any)['polluteKey']).toBeUndefined();
             expect(DEFAULT_SETTINGS.customThemes.some(t => t.id === 'pollute')).toBe(false);
         });
+
+        it('应提供 extensions 独立扩展配置空间且隔离默认值', () => {
+            const userConfig = {
+                extensions: {
+                    characterManager: { autoFillTags: true, maxVisualTags: 10 }
+                }
+            };
+            const merged = mergeSettingsWithDefaults(userConfig);
+            expect(merged.extensions).toEqual({
+                characterManager: { autoFillTags: true, maxVisualTags: 10 }
+            });
+            expect(DEFAULT_SETTINGS.extensions).toEqual({});
+        });
     });
 
     describe('ConfigStore 状态管理与监听', () => {

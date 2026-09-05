@@ -1,6 +1,6 @@
 /**
  * @module domain/drivers
- * @description 生图后端驱动层聚合导出入口
+ * @description 生图引擎适配器与驱动模块导出
  */
 
 export * from './base-driver';

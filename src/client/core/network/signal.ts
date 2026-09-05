@@ -6,7 +6,7 @@
 export interface TimeoutSignalResult {
     /** 合成后的 AbortSignal 实例 */
     signal: AbortSignal;
-    /** 资源清理回调函数 (请求完成后在 finally 中调用) */
+    /** 资源清理回调函数 (请求完成后在 finally 中调用，解除父信号监听以防止内存泄漏) */
     cleanup: () => void;
     /** 是否因超时而中止 */
     isTimeout: () => boolean;
@@ -14,6 +14,11 @@ export interface TimeoutSignalResult {
 
 /**
  * 组合超时控制与外部取消信号
+ *
+ * 说明：
+ * 1. 将超时定时器与外部传入的父信号合并为一个 AbortSignal；
+ * 2. 请求结束时清理监听器与定时器，防止内存泄漏；
+ * 3. 区分主动取消与超时中断状态。
  *
  * @param timeoutMs 超时毫秒数
  * @param parentSignal 外部传入的父级 AbortSignal (可选)

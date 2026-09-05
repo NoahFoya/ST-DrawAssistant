@@ -1,11 +1,12 @@
 /**
  * @module domain/task/task-manager
- * @description 任务调度中心与状态机管理器
+ * @description 生图任务调度管理器
  *
- * 核心设计规则：
- * 1. 状态流转模型：PENDING (排队中) -> RUNNING (执行中) -> COMPLETED (成功) / FAILED (失败) / CANCELLED (取消)；
- * 2. 任务取消处理：执行中的任务被取消时状态置为 CANCELLED 并发出中断信号。因网络延迟返回的图片数据将被丢弃，避免写入存储或触发完成事件；
- * 3. 并发控制：受 maxConcurrentTasks 配额约束，任务终结后推进队列中的后续任务。
+ * 规则说明：
+ * 1. 任务状态包括：排队中 (PENDING)、执行中 (RUNNING)、已完成 (COMPLETED)、已失败 (FAILED)、已取消 (CANCELLED)；
+ * 2. 任务取消处理：执行中的任务被取消时状态置为 CANCELLED 并触发中断信号。若后续有网络延迟返回的图片将直接丢弃，不写入存储；
+ * 3. 并发控制：受 maxConcurrentTasks 限制，任务结束后自动开始队列中的下一个任务；
+ * 4. 会话隔离：监听 chat:changed 事件，切换聊天时自动取消旧会话未完成的任务，避免图片写错会话。
  */
 
 import { IDisposable, TypedEventBus, CoreEventMap } from '../../core';
@@ -46,7 +47,7 @@ export interface TaskManagerOptions {
 }
 
 /**
- * 任务调度中心
+ * 生图任务调度管理器
  */
 export class TaskManager implements IDisposable {
     private readonly _adapters: AdapterRegistry;
@@ -56,6 +57,7 @@ export class TaskManager implements IDisposable {
 
     private readonly _tasks = new Map<string, InternalTaskRecord>();
     private readonly _queue: string[] = [];
+    private readonly _disposables: IDisposable[] = [];
     private _activeCount = 0;
     private _isProcessingQueue = false;
     private _isDisposed = false;
@@ -67,10 +69,17 @@ export class TaskManager implements IDisposable {
         this._adapters = options.adapters;
         this._events = options.events;
         this._getConfig = options.getConfig;
+
+        // 监听会话变更事件，当用户切换会话时，自动取消旧会话中排队或运行的任务，避免跨会话污染
+        this._disposables.push(
+            this._events.on('chat:changed', ({ chatId }) => {
+                void this.cancelTasksExceptChatId(chatId, '会话已切换，旧会话未完成任务自动取消');
+            })
+        );
     }
 
     /**
-     * 提交生图任务进入调度队列
+     * 提交生图任务到队列
      *
      * @param options 任务提交选项
      * @returns 任务唯一标识 (taskId)
@@ -160,6 +169,42 @@ export class TaskManager implements IDisposable {
                     this._logger.warn(`通知适配器中断任务异常 [${taskId}]`, err);
                 }
             }
+        }
+    }
+
+    /**
+     * 取消属于特定会话的所有排队或运行中任务
+     *
+     * @param chatId 目标会话标识
+     * @param reason 取消原因
+     */
+    public async cancelTasksByChatId(chatId: string, reason = '会话切换取消'): Promise<void> {
+        const tasksToCancel: string[] = [];
+        for (const task of this._tasks.values()) {
+            if (task.identity.chatId === chatId && (task.status === 'PENDING' || task.status === 'RUNNING')) {
+                tasksToCancel.push(task.id);
+            }
+        }
+        for (const id of tasksToCancel) {
+            await this.cancelTask(id, reason);
+        }
+    }
+
+    /**
+     * 取消非指定会话的所有任务（用于会话切换时清理旧会话未完成的任务）
+     *
+     * @param activeChatId 当前激活的会话标识
+     * @param reason 取消原因
+     */
+    public async cancelTasksExceptChatId(activeChatId: string, reason = '会话已切换，旧会话未完成任务自动取消'): Promise<void> {
+        const tasksToCancel: string[] = [];
+        for (const task of this._tasks.values()) {
+            if (task.identity.chatId && task.identity.chatId !== activeChatId && (task.status === 'PENDING' || task.status === 'RUNNING')) {
+                tasksToCancel.push(task.id);
+            }
+        }
+        for (const id of tasksToCancel) {
+            await this.cancelTask(id, reason);
         }
     }
 
@@ -372,6 +417,10 @@ export class TaskManager implements IDisposable {
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
+        for (const d of this._disposables) {
+            d.dispose();
+        }
+        this._disposables.length = 0;
 
         for (const taskId of this._queue) {
             const task = this._tasks.get(taskId);

@@ -1,13 +1,11 @@
 /**
  * @module domain/drivers/cloud-adapter
- * @description 云端多模态生图适配器实现 (Google Gemini Nano Banana · xAI Grok Imagine · OpenAI GPT Image)
+ * @description 云端多模态生图适配器 (Google Gemini · xAI Grok · OpenAI GPT Image)
  *
- * 核心特性：
- * 1. 统一多云模型协议：支持 Google generateContent 原生协议与 OpenAI /images/generations 协议；
- * 2. 自然语言意图保障：直接使用连贯场景描述，杜绝 SD 风格 Tag 堆叠与无关负向词污染；
- * 3. 支持多参考图传递：将 referenceImageBlobs 转化为 inlineData parts (Gemini 最高支持 14 张参考图)；
- * 4. 响应归一化：支持从 inlineData parts 与 b64_json 结构中提取标准 Blob；
- * 5. 安全与错误分类：支持服务端安全代理密钥隔离与速率限制、内容安全拦截归一化。
+ * 1. 支持 Google generateContent 与 OpenAI /images/generations 接口协议；
+ * 2. 支持通过 referenceImageBlobs 传递多张参考图；
+ * 3. 将接口返回的图片数据解析为统一的 Blob 格式；
+ * 4. 统一处理接口报错、限流与审核拦截状态。
  */
 
 import { BaseDriver, BaseDriverOptions } from './base-driver';
@@ -24,19 +22,36 @@ import {
     ImageMetadata
 } from '../types';
 
-/** 云端生图专有配置选项 */
-export interface CloudEngineOptions {
-    provider?: 'google' | 'openai' | 'xai' | 'auto';
-    model?: string;
-    apiKey?: string;
+/** 云端多模态配置接口 */
+export interface CloudEngineConfig {
+    provider: 'google' | 'openai' | 'xai' | 'auto';
+    proxyUrl: string;
+    apiKey: string;
+    model: string;
     size?: string;
-    width?: number;
-    height?: number;
+    width: number;
+    height: number;
     quality?: string;
     style?: string;
     aspectRatio?: string;
     [key: string]: unknown;
 }
+
+/** 云端多模态默认配置 */
+export const DEFAULT_CLOUD_CONFIG: CloudEngineConfig = {
+    provider: 'openai',
+    proxyUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'dall-e-3',
+    width: 1024,
+    height: 1024,
+    size: '1024x1024',
+    quality: 'standard',
+    style: 'vivid'
+};
+
+/** 云端生图专有配置选项 */
+export interface CloudEngineOptions extends Partial<CloudEngineConfig> {}
 
 export interface CloudAdapterOptions extends BaseDriverOptions {}
 
@@ -88,30 +103,39 @@ export class CloudAdapter extends BaseDriver {
         const start = performance.now();
         const cfg = (this._getConfig?.() as CloudEngineOptions | undefined) || {};
         const apiKey = cfg.apiKey as string | undefined;
-        if (!apiKey) {
-            return {
-                ok: false,
-                latencyMs: 0,
-                message: '未配置 API 密钥，请在设置中配置对应的 API Key'
-            };
-        }
 
         try {
             const provider = this.detectProvider(cfg.model as string | undefined);
+            const baseUrl = this.getProviderBaseUrl(provider, cfg);
+            const cleanBase = baseUrl.replace(/\/+$/, '');
+
             if (provider === 'google') {
+                const googleEndpoint = `${cleanBase}/v1beta/models?pageSize=1`;
+                const headers: Record<string, string> = {};
+                if (apiKey) {
+                    headers['x-goog-api-key'] = apiKey;
+                }
+                await this.network.fetchExternal(googleEndpoint, {
+                    timeoutMs: 6000,
+                    headers,
+                    serviceType: 'gemini'
+                });
                 return {
                     ok: true,
                     latencyMs: Math.round(performance.now() - start)
                 };
             }
 
-            const baseUrl = this.getProviderBaseUrl(provider, cfg);
-            const cleanBase = baseUrl.replace(/\/+$/, '');
             const modelsEndpoint = cleanBase.endsWith('/v1') ? `${cleanBase}/models` : `${cleanBase}/v1/models`;
-            const headers: Record<string, string> = {
-                Authorization: `Bearer ${apiKey}`
-            };
-            await this.network.fetchExternal(modelsEndpoint, { timeoutMs: 6000, headers });
+            const headers: Record<string, string> = {};
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+            await this.network.fetchExternal(modelsEndpoint, {
+                timeoutMs: 6000,
+                headers,
+                serviceType: provider === 'openai' ? 'openai' : 'grok'
+            });
             return {
                 ok: true,
                 latencyMs: Math.round(performance.now() - start)
@@ -158,8 +182,9 @@ export class CloudAdapter extends BaseDriver {
             ? options.provider
             : this.detectProvider(model);
 
+        // 云端多模态模型基于自然语言理解，不支持独立的负向提示词，直接忽略 negativePrompt 避免影响生成效果
         if (request.negativePrompt) {
-            this.logger.debug('云端多模态模型原生不支持独立的负向提示词，已遵循方案 A 保持忽略，避免语义逆向污染');
+            this.logger.debug('云端多模态模型不支持独立负向提示词，已忽略');
         }
 
         let imageBlobs: Blob[];

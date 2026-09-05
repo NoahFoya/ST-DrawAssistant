@@ -1,6 +1,6 @@
 /**
  * @module core/context
- * @description 客户端基础设施层服务容器
+ * @description 客户端核心服务容器
  */
 
 import { IDisposable, CoreEventMap } from './types';
@@ -12,8 +12,8 @@ import { HostClient } from './host';
 import { NetworkClient } from './network';
 
 /**
- * 基础设施层服务容器
- * 集中装配底层各服务单例，并在扩展卸载时按反向依赖顺序安全释放资源
+ * 核心服务容器
+ * 初始化底层服务并在扩展卸载时释放资源
  */
 export class CoreContext implements IDisposable {
     public readonly host: HostClient;
@@ -30,7 +30,7 @@ export class CoreContext implements IDisposable {
         this.host = new HostClient();
         this.events = new TypedEventBus<CoreEventMap>();
 
-        // 建立配置持久化与广播通道：变更时经由宿主上下文防抖写入并派发总线事件
+        // 配置变更时保存到宿主设置并触发事件
         const initialSettings = initialSettingsOverride ?? this.host.getExtensionSettings();
         this.store = new ConfigStore(initialSettings, {
             onSave: (state) => {
@@ -60,7 +60,7 @@ export class CoreContext implements IDisposable {
         );
     }
 
-    /** 向上下文注册受管的 IDisposable 实例 */
+    /** 注册待释放的资源实例 */
     public addDisposable<T extends IDisposable>(disposable: T): T {
         if (this._isDisposed) {
             disposable.dispose();
@@ -70,11 +70,11 @@ export class CoreContext implements IDisposable {
         return disposable;
     }
 
-    /** 释放基础设施层所有托管服务与资源 */
+    /** 释放核心服务与资源 */
     public dispose(): void {
         if (this._isDisposed) return;
         this._isDisposed = true;
-        this.logger.info('正在释放 Core 基础设施层资源...');
+        this.logger.info('正在释放核心服务资源...');
 
         for (const d of this._disposables.reverse()) {
             try {
@@ -87,7 +87,7 @@ export class CoreContext implements IDisposable {
     }
 }
 
-/** 创建并初始化基础设施层上下文实例 */
+/** 创建核心服务容器实例 */
 export function createCoreContext(initialSettings?: unknown): CoreContext {
     return new CoreContext(initialSettings);
 }

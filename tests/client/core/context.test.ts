@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CoreContext, createCoreContext } from '../../../src/client/core/context';
 
-describe('CoreContext (基础设施服务容器)', () => {
+describe('CoreContext (核心服务容器)', () => {
     beforeEach(() => {
         (globalThis as any).SillyTavern = {
             getContext: () => ({

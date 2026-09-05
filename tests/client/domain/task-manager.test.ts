@@ -272,4 +272,79 @@ describe('TaskManager (任务调度中心与状态机)', () => {
         expect(failedEvents[0].taskId).toBe('timeout_t');
         expect(failedEvents[0].error).toContain('生图任务超时');
     });
+
+    it('会话切换时自动级联取消旧会话任务 (chat:changed 监听与生命周期管控)', async () => {
+        // 创建耗时任务适配器
+        let resolveGen: () => void;
+        const slowAdapter: ImageEngineAdapter = {
+            id: 'slow_chat',
+            name: 'Slow Chat Adapter',
+            capabilities: { txt2img: true, img2img: false },
+            checkHealth: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
+            generate: vi.fn().mockImplementation((_req: any, signal?: AbortSignal) => new Promise((resolve, reject) => {
+                if (signal?.aborted) {
+                    reject(new Error('Aborted'));
+                    return;
+                }
+                signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+                resolveGen = () => resolve({
+                    taskId: 'any',
+                    engine: 'slow_chat',
+                    images: [{ blob: new Blob(['x']), format: 'png' }],
+                    durationMs: 10
+                });
+            })),
+            interrupt: vi.fn().mockResolvedValue(undefined),
+            dispose: vi.fn()
+        };
+        adapters.register(slowAdapter);
+
+        const manager = new TaskManager({
+            adapters,
+            events,
+            getConfig: () => ({ maxConcurrentTasks: 1, taskTimeoutMs: 10000 })
+        });
+
+        // 提交旧会话运行中任务
+        const oldRunningId = await manager.submit({
+            request: { taskId: 'old_running', targetEngine: 'slow_chat', prompt: 'cat', engineOptions: {} },
+            chatId: 'chat_old'
+        });
+
+        // 提交旧会话排队中任务
+        const oldQueuedId = await manager.submit({
+            request: { taskId: 'old_queued', targetEngine: 'slow_chat', prompt: 'dog', engineOptions: {} },
+            chatId: 'chat_old'
+        });
+
+        // 提交一个与会话无关的任务
+        const globalTaskId = await manager.submit({
+            request: { taskId: 'global_task', targetEngine: 'slow_chat', prompt: 'fish', engineOptions: {} }
+        });
+
+        expect(manager.getTask(oldRunningId)?.status).toBe('RUNNING');
+        expect(manager.getTask(oldQueuedId)?.status).toBe('PENDING');
+        expect(manager.getTask(globalTaskId)?.status).toBe('PENDING');
+
+        // 派发会话切换事件，切换至 chat_new
+        events.emit('chat:changed', { chatId: 'chat_new' });
+
+        // 等待异步取消生效
+        await vi.waitFor(() => {
+            expect(manager.getTask(oldRunningId)?.status).toBe('CANCELLED');
+            expect(manager.getTask(oldQueuedId)?.status).toBe('CANCELLED');
+        });
+
+        expect(manager.getTask(oldRunningId)?.error).toContain('会话已切换');
+        expect(manager.getTask(oldQueuedId)?.error).toContain('会话已切换');
+        expect(slowAdapter.interrupt).toHaveBeenCalledWith('old_running');
+
+        // 无 chatId 关联的独立任务不受影响，并在队列推进后转为 RUNNING
+        await vi.waitFor(() => {
+            expect(manager.getTask(globalTaskId)?.status).toBe('RUNNING');
+        });
+
+        resolveGen!();
+    });
 });
+
