@@ -2,7 +2,7 @@
 
 > **SillyTavern 上下文感知 AI 绘图扩展** — 为酒馆对话场景打造的智能化 AI 图像生成插件。
 
-[![Version](https://img.shields.io/badge/version-v0.1.3-blue.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-v0.2.0-blue.svg)](./package.json)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Author](https://img.shields.io/badge/Author-NoahFoya-orange.svg)](https://github.com/NoahFoya)
 
@@ -11,8 +11,8 @@
 ## 🌟 功能特色
 
 - 💬 **上下文智能生图**：自动感知对话内容与画图指令，在消息下方挂载原生生成按键与进度条。
-- 🎨 **主流生图引擎支持**：原生支持对接 ComfyUI 与 Stable Diffusion WebUI 后端。
-- 🖌️ **可视化提示词与蓝图编辑器**：提供拖拽式节点网格画布、画质预设与提示词调整功能。
+- 🎨 **主流生图引擎全面支持**：原生支持对接 ComfyUI、Stable Diffusion WebUI (A1111/Forge)、NovelAI 以及云端多模态大模型 (Gemini, Grok, OpenAI)。
+- 🖌️ **可视化提示词与预设控制**：支持管道符正负提示词智能切分、画质预设与后端专属参数调节。
 - 🖼️ **本地图像管理与查看**：生成的图片本地独立托管，提供图像详情查看与提示词一键复制，不卡顿聊天记录。
 - 🌗 **自适应主题外观**：内置现代化主题，自动融入酒馆界面风格。
 
