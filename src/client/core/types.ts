@@ -3,8 +3,8 @@
  * @description 基础类型与全局配置模型定义
  */
 
-import { IDisposable, toDisposable } from '../../common';
-export { IDisposable, toDisposable };
+import { IDisposable, toDisposable, DisposableStore } from '../../common';
+export { IDisposable, toDisposable, DisposableStore };
 
 /** 日志输出级别 */
 export enum LogLevel {
@@ -161,6 +161,19 @@ export interface DrawAssistantSettings {
     }>;
     /** 各生图后端的独立配置空间 (由各后端驱动维护内部字段) */
     engineConfigs: Record<string, Record<string, any>>;
+
+    /** 悬浮球 (FAB) 显隐 (默认 true) */
+    fabVisible?: boolean;
+    /** 悬浮球透明度 (默认 0.95) */
+    fabOpacity?: number;
+    /** 悬浮球预设图标标识 (如 'palette', 'sparkles', 'wand', 'image', 'brush') */
+    fabPresetIcon?: string;
+    /** 悬浮球自定义图标 Base64 或 URL */
+    fabCustomIcon?: string;
+    /** 悬浮球屏幕记忆坐标 */
+    fabPosition?: { top: number; left: number };
+    /** 是否启用灯箱大图预览 (默认 true) */
+    lightboxEnabled?: boolean;
 
     /** UI 表现层偏好配置 (开放命名空间) */
     uiPreferences?: Record<string, unknown>;

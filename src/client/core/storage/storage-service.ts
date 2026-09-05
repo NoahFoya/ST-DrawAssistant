@@ -48,6 +48,14 @@ export class StorageService implements IDisposable {
         return await this.db.save(record, options);
     }
 
+    /** 保存图片记录便捷别名 */
+    public async save(
+        record: StoredImageRecord,
+        options?: { deduplicate?: boolean; maxStoredImages?: number }
+    ): Promise<string> {
+        return await this.saveImage(record, options);
+    }
+
     /**
      * 根据资产 ID 查询单条完整图像记录
      *
@@ -56,6 +64,11 @@ export class StorageService implements IDisposable {
      */
     public async getImage(id: string): Promise<StoredImageRecord | null> {
         return await this.db.get(id);
+    }
+
+    /** 查询单条图像记录便捷别名 */
+    public async get(id: string): Promise<StoredImageRecord | null> {
+        return await this.getImage(id);
     }
 
     /**
@@ -70,6 +83,11 @@ export class StorageService implements IDisposable {
         return await this.db.delete(id);
     }
 
+    /** 删除图片记录便捷别名 */
+    public async delete(id: string): Promise<boolean> {
+        return await this.deleteImage(id);
+    }
+
     /**
      * 分页查询已存储的图像资产记录
      *
@@ -78,6 +96,16 @@ export class StorageService implements IDisposable {
      */
     public async listImages(limit = 50, offset = 0): Promise<StoredImageRecord[]> {
         return await this.db.list(limit, offset);
+    }
+
+    /** 获取所有或分页图像记录便捷别名 */
+    public async getAll(limit = 100, offset = 0): Promise<StoredImageRecord[]> {
+        return await this.listImages(limit, offset);
+    }
+
+    /** 获取本地存储中的图像总数 */
+    public async count(): Promise<number> {
+        return await this.db.count();
     }
 
     /**

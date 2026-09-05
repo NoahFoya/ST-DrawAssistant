@@ -1,0 +1,121 @@
+/**
+ * @module styles/core/tokens
+ * @description 全局 CSS Design Tokens 变量定义
+ *
+ * 设计准则：紧凑、克制、高信息密度、精致微光
+ */
+
+:root {
+    /* ════ 1. 背景与表面阶梯 (Surfaces & Elevation System) ════ */
+    --da-color-scheme: dark;
+    --da-bg-primary: #181b24;
+    --da-bg-secondary: #202430;
+    --da-bg-sidebar: #13151d;
+    --da-bg-subtle: rgba(255, 255, 255, 0.03);
+    --da-bg-card: #202430;
+    --da-bg-card-hover: #262c3b;
+    --da-bg-input: #151720;
+    --da-bg-input-hover: #1f2330;
+    --da-bg-hover: rgba(255, 255, 255, 0.045);
+    --da-bg-active: rgba(var(--da-accent-rgb), 0.12);
+    --da-bg-modal: rgba(24, 27, 36, 0.96);
+    --da-bg-gradient: linear-gradient(160deg, #1d2130 0%, #181b24 100%);
+    --da-bg-overlay-modal: rgba(0, 0, 0, 0.62);
+    --da-bg-overlay-heavy: rgba(0, 0, 0, 0.85);
+    --da-card-bg-stream: rgba(255, 255, 255, 0.025);
+
+
+
+
+    /* ════ 2. 文字色彩 (Typography Colors) ════ */
+    --da-text-primary: #f3f4f6;
+    --da-text-secondary: #9ca3af;
+    --da-text-muted: #6b7280;
+    --da-text-on-accent: #0f172a;
+
+    /* ════ 3. 边框与微弱分割线 (Borders & Separators) ════ */
+    --da-border-color: rgba(255, 255, 255, 0.08);
+    --da-border-focus: var(--da-accent-color);
+    --da-separator: rgba(255, 255, 255, 0.04);
+    --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+
+    /* ════ 4. 品牌主色 (Brand Accent) ════ */
+    --da-accent-color: #38bdf8;
+    --da-accent-hover: #0ea5e9;
+    --da-accent-rgb: 56, 189, 248;
+
+    /* ════ 5. 语义状态色彩 (Status Colors) ════ */
+    --da-color-success: #30d158;
+    --da-color-error: #ff453a;
+    --da-color-warn: #ff9f0a;
+    --da-status-warning: #ff9f0a;
+    --da-color-fav: #eab308;
+
+    /* ════ 6. 终端日志与节点微标色彩 (Terminal & Badges) ════ */
+    --da-terminal-bg: #0c0e12;
+    --da-terminal-text: #e6edf3;
+    --da-terminal-muted: #8b949e;
+    --da-terminal-blue: #58a6ff;
+    --da-terminal-purple: #bc8cff;
+    --da-terminal-teal: #39c5bb;
+    --da-terminal-yellow: #d29922;
+    --da-terminal-red: #f85149;
+
+    --da-node-prompt: #c084fc;
+    --da-node-sampler: #fb923c;
+    --da-node-model: #60a5fa;
+    --da-node-size: #4ade80;
+    --da-node-output: #38bdf8;
+    --da-node-lora: #f43f5e;
+
+    /* ════ 7. 紧凑型间距系统 (Compact Spacing Scale) ════ */
+    --da-space-xs: 3px;
+    --da-space-sm: 6px;
+    --da-space-md: 10px;
+    --da-space-lg: 14px;
+    --da-space-xl: 18px;
+    --da-space-2xl: 22px;
+    --da-space-3xl: 28px;
+
+    /* ════ 8. 弹性自适应字号阶梯 (Fluid Typography Scale) ════ */
+    --da-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --da-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --da-font-size-xs: clamp(10px, 0.68rem, 11px);
+    --da-font-size-sm: clamp(11px, 0.73rem, 12px);
+    --da-font-size-base: clamp(12px, 0.78rem, 13px);
+    --da-font-size-md: clamp(12.5px, 0.84rem, 14px);
+    --da-font-size-lg: clamp(14px, 0.96rem, 16px);
+
+
+
+    /* ════ 9. 利落微圆角系统 (Crisp Border Radius Scale) ════ */
+    --da-radius-modal: 14px;
+    --da-radius-card: 10px;
+    --da-radius-input: 6px;
+    --da-radius-btn: 6px;
+    --da-radius-pill: 100px;
+    --da-radius-sm: 4px;
+    --da-radius-small: 4px;
+    --da-radius-xs: 3px;
+
+    /* ════ 10. 阴影与微光系统 (Elevation & Subtle Lighting) ════ */
+    --da-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    --da-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35), var(--da-inset-top-light);
+    --da-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+    --da-shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    /* ════ 11. 缓动曲线 (Transitions & Easing) ════ */
+    --da-ease: cubic-bezier(0.2, 0.9, 0.4, 1);
+    --da-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+    /* ════ 12. 毛玻璃与层级 (Glassmorphism & Z-Index) ════ */
+    --da-blur-modal: 12px;
+    --da-blur-panel: 18px;
+    --da-z-fab: 9999;
+    --da-z-modal: 10000;
+
+    /* ════ 13. 聚焦光晕 (Focus Ring) ════ */
+    --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.22);
+}
+
+

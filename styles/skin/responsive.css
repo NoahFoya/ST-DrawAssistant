@@ -1,0 +1,339 @@
+/**
+ * @module styles/skin/responsive
+ * @description 移动端与紧凑屏幕全场景自适应响应式规则
+ */
+
+/* ════ 1. 平板与中等屏幕 (<= 900px) ════ */
+@media (max-width: 900px) {
+    .da-settings-panel,
+    .da-main-modal-inner {
+        width: 96vw;
+        height: 92vh;
+    }
+
+    .da-sidebar-tabs {
+        width: 160px;
+        flex: 0 0 160px;
+    }
+
+    .da-blueprint-modal-inner {
+        width: 96vw;
+        height: 92vh;
+    }
+
+    .da-blueprint-inspector-panel {
+        width: 320px;
+    }
+
+    .da-diagnostics-env-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* ════ 2. 蓝图工作流与大中型弹窗响应式 (<= 768px) ════ */
+@media (max-width: 768px) {
+    .da-blueprint-modal-inner {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    .da-blueprint-toolbar {
+        flex-wrap: wrap !important;
+        padding: 6px 10px !important;
+        gap: 8px !important;
+    }
+
+    .da-blueprint-toolbar-left {
+        flex-wrap: wrap !important;
+        width: 100% !important;
+    }
+
+    .da-blueprint-search {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .da-blueprint-category-tabs {
+        overflow-x: auto;
+        width: 100%;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+
+    .da-blueprint-category-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-blueprint-category-btn {
+        flex-shrink: 0;
+    }
+
+    /* 蓝图工作空间：由横向双列转为纵向单列流式堆叠 */
+    .da-blueprint-workspace {
+        flex-direction: column !important;
+    }
+
+    .da-blueprint-canvas-wrapper {
+        flex: 1 1 45% !important;
+        min-height: 200px !important;
+        padding: 10px !important;
+    }
+
+    .da-blueprint-inspector-panel {
+        width: 100% !important;
+        flex: 1 1 55% !important;
+        border-left: none !important;
+        border-top: 1px solid var(--da-border-color) !important;
+        padding: 12px !important;
+    }
+
+    .da-blueprint-footer {
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    }
+
+    /* 宏变量下拉面板在移动端防止越界 */
+    .da-var-dropdown {
+        width: calc(100vw - 24px) !important;
+        max-width: 360px !important;
+        right: 12px !important;
+    }
+
+    /* 图像详情弹窗与元数据查看器响应式单列堆叠 */
+    .da-inspect-modal,
+    .da-info-panel {
+        width: 96vw !important;
+        max-height: 92vh !important;
+        border-radius: var(--da-radius-modal, 12px) !important;
+    }
+
+    .da-inspect-body,
+    .da-info-panel__body {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+        padding: 12px !important;
+    }
+
+    .da-inspect-preview-box,
+    .da-info-panel__preview-box {
+        max-height: 280px !important;
+    }
+
+    /* 宏观数据分析大盘趋势与模型分布双列转单列 */
+    .da-macro-stats__analytics-row {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+}
+
+/* ════ 3. 紧凑与移动端手机屏幕 (<= 680px) ════ */
+@media (max-width: 680px) {
+    :root, .st-da-root {
+        --da-font-size-xs: 10px !important;
+        --da-font-size-sm: 11px !important;
+        --da-font-size-base: 12px !important;
+        --da-font-size-md: 13px !important;
+        --da-font-size-lg: 15px !important;
+    }
+
+    /* 蒙层与全屏沉浸视口 */
+    .da-modal-backdrop {
+        padding: 0 !important;
+    }
+
+    .da-settings-panel,
+    .da-main-modal-inner {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    /* 顶栏文字弹性截断，防止挤压右侧快捷切换与关闭按钮 */
+    .da-header-bar {
+        padding: 0 var(--da-space-md, 10px) !important;
+    }
+
+    .da-header-title {
+        font-size: var(--da-font-size-base, 0.88rem) !important;
+        max-width: 140px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .da-modal-body {
+        flex-direction: column !important;
+    }
+
+    /* 移动端横向滑动 Tab 导航栏 */
+    .da-sidebar-tabs {
+        width: 100% !important;
+        flex: 0 0 auto !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: var(--da-space-xs, 4px) var(--da-space-sm, 8px) !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--da-border-color) !important;
+        gap: var(--da-space-xs, 6px) !important;
+    }
+
+    .da-sidebar-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-sidebar-item {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-height: 34px !important;
+        height: 34px !important;
+        padding: 0 12px !important;
+        white-space: nowrap !important;
+        font-size: 0.84rem !important;
+        border-radius: 6px !important;
+    }
+
+    .da-sidebar-item--active::before {
+        left: 6px !important;
+        right: 6px !important;
+        top: auto !important;
+        bottom: 0 !important;
+        width: auto !important;
+        height: 2px !important;
+        border-radius: 2px 2px 0 0 !important;
+    }
+
+    .da-modal-content {
+        padding: var(--da-space-sm, 10px) var(--da-space-md, 12px) !important;
+        overscroll-behavior: contain;
+    }
+
+    /* 移动端底栏与安全区 */
+    .da-footer-bar {
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+        font-size: 0.78em !important;
+    }
+
+    /* 顶部未保存脏数据浮动提醒条适配全宽与居中换行 */
+    .da-floating-unsaved-notice {
+        width: calc(100vw - 20px) !important;
+        max-width: calc(100vw - 20px) !important;
+        border-radius: var(--da-radius-card, 10px) !important;
+        padding: 8px 12px !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 8px !important;
+    }
+
+    .da-floating-notice-left {
+        justify-content: center !important;
+        text-align: center !important;
+        font-size: var(--da-font-size-xs, 0.78rem) !important;
+    }
+
+    .da-floating-notice-actions {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+
+    /* 诊断面板统计指标网格适配两列排布 */
+    .da-macro-stats__grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .da-diagnostics-toolbar {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .da-diagnostics-toolbar-left,
+    .da-diagnostics-toolbar-right {
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    .da-diagnostics-search {
+        width: 100% !important;
+    }
+
+    /* 图库底部悬浮批量控制台响应式 */
+    .da-batch-floating-bar {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        padding: 8px 12px !important;
+    }
+
+    /* 局部重绘与裁剪模态框在移动端满铺 */
+    .da-inpaint-modal-panel {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        padding: 10px !important;
+    }
+
+    .da-inpaint-canvas-wrapper {
+        min-height: 200px !important;
+    }
+
+    .da-inpaint-toolbar {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    .da-cropper-panel {
+        width: 94vw !important;
+    }
+
+    /* 触控靶心优化：小按钮隐式热区扩展 */
+    .da-btn-var-inject,
+    .da-modal-close-btn {
+        position: relative;
+    }
+
+    .da-btn-var-inject::after,
+    .da-modal-close-btn::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+    }
+
+    /* 显式声明自适应流式控件 */
+    .da-control--fluid {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ════ 4. 超窄屏手机屏幕 (<= 480px) ════ */
+@media (max-width: 480px) {
+    .da-storage-stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .da-diagnostics-env-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .da-quick-theme-capsule {
+        padding: 2px 6px !important;
+    }
+
+    .da-quick-theme-select {
+        max-width: 80px !important;
+    }
+
+    .da-action-panel {
+        width: 96% !important;
+        padding: 14px 16px !important;
+    }
+}

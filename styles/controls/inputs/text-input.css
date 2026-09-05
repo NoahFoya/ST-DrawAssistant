@@ -1,0 +1,135 @@
+/**
+ * @module styles/controls/inputs/text-input
+ * @description 单行文本输入框、数字输入框与带单位修饰输入框样式
+ */
+
+.da-input {
+    width: 200px;
+    max-width: 100%;
+    min-width: 100px;
+    height: 30px;
+    padding: 0 var(--da-space-md, 10px);
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    text-align: center;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background 0.14s var(--da-ease);
+}
+
+
+.da-input::placeholder {
+    color: var(--da-text-muted);
+    opacity: 0.7;
+    text-align: center;
+}
+
+.da-input:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-input-hover);
+}
+
+.da-input:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+
+
+/* 数字输入框标准规格变体 */
+.da-input-num-short {
+    width: 44px;
+    max-width: 44px;
+    flex: 0 0 44px;
+    text-align: center;
+    padding: 0 2px !important;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-input-num-small {
+    width: 58px;
+    max-width: 58px;
+    flex: 0 0 58px;
+    text-align: center;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-input-num-long {
+    width: 68px;
+    max-width: 68px;
+    flex: 0 0 68px;
+    text-align: center;
+    padding: 0 4px;
+    font-family: var(--da-font-mono, monospace);
+}
+
+
+/* 错误告警态 */
+.da-input.da-select-error {
+    border-color: var(--da-color-error, #ff453a);
+    background-color: rgba(255, 69, 58, 0.08);
+    color: var(--da-color-error, #ff453a);
+}
+
+.da-input.da-select-error:focus {
+    box-shadow: 0 0 0 2px rgba(255, 69, 58, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 带单位后缀包裹器 (.da-input-unit-wrapper)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+.da-input-unit-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 110px;
+    max-width: 110px;
+    flex: 0 0 110px !important;
+    flex-shrink: 0 !important;
+    height: 30px;
+    box-sizing: border-box;
+}
+
+.da-input-unit-wrapper .da-input,
+.da-input.da-input--has-unit {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    padding-left: 6px;
+    padding-right: 28px;
+    text-align: center;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-input-unit-badge {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    pointer-events: none;
+    user-select: none;
+    font-family: var(--da-font-mono, var(--da-font-family));
+    white-space: nowrap;
+}
+
+.da-unit {
+    display: flex;
+    align-items: center;
+    font-size: var(--da-font-size-sm, 0.80rem);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-family: var(--da-font-family);
+}
+

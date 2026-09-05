@@ -1,0 +1,65 @@
+/**
+ * animations.css
+ * 层级：core
+ * 职责：集中定义全局基础动画关键帧 (Global Keyframes)
+ */
+
+@keyframes da-fadein {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes da-modal-slide-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes da-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.65; }
+}
+
+@keyframes da-pulse-dot {
+    0%, 100% { box-shadow: 0 0 3px rgba(56, 189, 248, 0.4); }
+    50%       { box-shadow: 0 0 8px rgba(56, 189, 248, 0.8); }
+}
+
+@keyframes da-pulse-dirty {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 159, 10, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 6px 1px rgba(255, 159, 10, 0.3);
+    }
+}
+
+@keyframes da-update-pill-glow {
+    0%, 100% {
+        box-shadow: 0 0 6px rgba(48, 209, 88, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 10px rgba(48, 209, 88, 0.45);
+    }
+}
+
+@keyframes da-fab-pulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(var(--da-accent-rgb, 56, 189, 248), 0.35);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 18px rgba(var(--da-accent-rgb, 56, 189, 248), 0.75);
+        transform: scale(1.04);
+    }
+}
+
+.da-btn-pulse {
+    animation: da-fab-pulse 2s infinite ease-in-out;
+}
+

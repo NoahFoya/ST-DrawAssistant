@@ -1,0 +1,70 @@
+/**
+ * @module styles/controls/inputs/select
+ * @description 下拉选择器与选项层样式
+ */
+
+.da-select {
+    width: 200px;
+    max-width: 100%;
+    min-width: 100px;
+    height: 30px;
+    padding: 0 24px 0 var(--da-space-md, 10px);
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background-color: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    cursor: pointer;
+    outline: none;
+    text-align: center;
+    text-align-last: center;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(156, 163, 175, 0.85)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
+    color-scheme: var(--da-color-scheme, dark);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background 0.14s var(--da-ease);
+}
+
+.da-select:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background-color: var(--da-bg-input-hover);
+}
+
+.da-select:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+
+
+/* 下拉菜单 Option 弹出层 */
+.da-select option {
+    background-color: var(--da-bg-secondary);
+    color: var(--da-text-primary);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    padding: 6px 10px;
+    text-align: center;
+}
+
+.da-select option:checked {
+    background-color: var(--da-bg-hover);
+    color: var(--da-accent-color);
+    font-weight: 600;
+}
+
+/* 错误告警态 */
+.da-select.da-select-error {
+    border-color: var(--da-color-error, #ff453a);
+    background-color: rgba(255, 69, 58, 0.08);
+    color: var(--da-color-error, #ff453a);
+}
+
+.da-select.da-select-error:focus {
+    box-shadow: 0 0 0 2px rgba(255, 69, 58, 0.3);
+}
+

@@ -1,0 +1,103 @@
+/**
+ * @module styles/controls/inputs/toggle
+ * @description 平滑开关输入组件 (Toggle Switch)
+ */
+
+.da-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 38px;
+    height: 20px;
+    flex: 0 0 38px;
+    flex-shrink: 0;
+    margin: 0;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 核心：彻底切断宿主全局 label::after 注入的冒号与伪元素 */
+.da-toggle::before,
+.da-toggle::after {
+    content: none !important;
+    display: none !important;
+}
+
+.da-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+    margin: 0;
+    padding: 0;
+}
+
+.da-toggle__track {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--da-border-color);
+    transition: background-color 0.18s var(--da-ease), border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+    border-radius: var(--da-radius-pill, 20px);
+    box-sizing: border-box;
+}
+
+.da-toggle__track:before {
+    position: absolute;
+    content: '';
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    top: 2px;
+    background-color: #ffffff;
+    transition: transform 0.18s var(--da-ease-spring), background-color 0.15s ease;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.da-toggle input:checked + .da-toggle__track {
+    background-color: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring);
+}
+
+
+.da-toggle input:checked + .da-toggle__track:before {
+    transform: translateX(18px);
+}
+
+.da-toggle.is-disabled,
+.da-toggle:has(input:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* 微型尺寸变体 */
+.da-toggle--sm {
+    width: 30px;
+    height: 16px;
+    flex: 0 0 30px;
+}
+
+.da-toggle--sm .da-toggle__track {
+    border-radius: var(--da-radius-pill, 16px);
+}
+
+.da-toggle--sm .da-toggle__track:before {
+    height: 10px;
+    width: 10px;
+    left: 2px;
+    top: 2px;
+}
+
+.da-toggle--sm input:checked + .da-toggle__track:before {
+    transform: translateX(14px);
+}
+
+

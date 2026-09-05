@@ -258,6 +258,11 @@ export class HostClient implements IDisposable {
         );
     }
 
+    /** 监听消息分支切换事件便捷别名 */
+    public onChatSwiped(handler: (ev: { messageId: number; swipeId: number }) => void): IDisposable {
+        return this.onMessageSwiped(handler);
+    }
+
     /** 监听消息编辑或更新事件 */
     public onMessageUpdated(handler: (ev: { messageId: number }) => void): IDisposable {
         return this.subscribe(
@@ -382,6 +387,25 @@ export class HostClient implements IDisposable {
         return ctx?.chat?.[messageId] || null;
     }
 
+    /**
+     * 根据索引获取消息对象便捷别名
+     */
+    public getMessageById(messageId: number): SillyTavernMessage | null {
+        return this.getChatMessage(messageId);
+    }
+
+    /**
+     * 更新指定消息对象并触发防抖保存
+     */
+    public async updateMessage(messageId: number, message: SillyTavernMessage): Promise<void> {
+        const ctx = this.getST();
+        if (ctx?.chat && ctx.chat[messageId]) {
+            ctx.chat[messageId] = message;
+            ctx.eventSource?.emit?.(ctx.event_types?.MESSAGE_UPDATED || 'message_updated', messageId);
+        }
+        this.saveChatDebounced();
+    }
+
     /** 防抖保存当前聊天记录 */
     public saveChatDebounced(): void {
         this.getST()?.saveChatDebounced?.();
@@ -415,6 +439,29 @@ export class HostClient implements IDisposable {
     /** 获取酒馆 API CSRF 请求头 */
     public getRequestHeaders(): Record<string, string> {
         return this.getST()?.getRequestHeaders?.() || {};
+    }
+
+    /** 获取酒馆扩展设置抽屉容器 DOM 节点 */
+    public getExtensionDrawerContainer(): HTMLElement | null {
+        if (typeof document === 'undefined') return null;
+        return document.getElementById('extensions_settings');
+    }
+
+    /**
+     * 渲染酒馆扩展 HTML 模板
+     * @param templateName 模板名称 (如 'settings')
+     * @param data 渲染上下文数据
+     */
+    public async renderTemplate(templateName: string, data?: Record<string, unknown>): Promise<string> {
+        const ctx = this.getST();
+        if (ctx && typeof (ctx as any).renderExtensionTemplateAsync === 'function') {
+            try {
+                return await (ctx as any).renderExtensionTemplateAsync('third-party/ST-DrawAssistant', templateName, data);
+            } catch {
+                return await (ctx as any).renderExtensionTemplateAsync('ST-DrawAssistant', templateName, data);
+            }
+        }
+        return '';
     }
 
     public dispose(): void {

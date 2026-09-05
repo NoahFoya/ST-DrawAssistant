@@ -1,0 +1,86 @@
+/**
+ * rich-link-card.css
+ * 层级：controls/cards
+ * 职责：富链接导航卡片 (关于面板社区外链、文档跳转与专属主题微边框装饰)
+ */
+
+.da-about-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+
+.da-about-rich-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--da-bg-card, var(--da-bg-secondary));
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 10px);
+    text-decoration: none;
+    cursor: pointer;
+    box-sizing: border-box;
+    min-width: 0;
+    transition: transform 0.2s var(--da-ease-spring), border-color 0.2s var(--da-ease), box-shadow 0.2s var(--da-ease);
+}
+
+.da-about-rich-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-shadow-md), 0 0 12px rgba(var(--da-accent-rgb), 0.2);
+}
+
+.da-about-rich-card-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    flex-shrink: 0;
+}
+
+.da-about-rich-card-icon {
+    font-size: 1.35em;
+    line-height: 1;
+}
+
+.da-about-rich-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.da-about-rich-card-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-about-rich-card-sub {
+    font-size: 0.78em;
+    color: var(--da-text-muted);
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ════ 社区卡片主题微边框装饰 (Variants) ════ */
+.da-about-rich-card--github:hover   { border-color: #58a6ff; }
+.da-about-rich-card--license:hover  { border-color: #30d158; }
+.da-about-rich-card--comfy:hover    { border-color: var(--da-accent-color); }
+.da-about-rich-card--sd:hover       { border-color: #a855f7; }
+.da-about-rich-card--civitai:hover  { border-color: #3b82f6; }
+.da-about-rich-card--st:hover       { border-color: #ec4899; }

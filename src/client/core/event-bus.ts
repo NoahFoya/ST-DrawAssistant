@@ -13,6 +13,7 @@ export type EventHandler<T> = (payload: T) => void;
  * 用于各模块之间的事件订阅与通知
  */
 export class TypedEventBus<TEventMap extends Record<string, any>> implements IDisposable {
+
     private readonly _listeners = new Map<keyof TEventMap, Set<EventHandler<any>>>();
     private readonly _logger = new Logger('EventBus');
     private _isDisposed = false;
@@ -72,3 +73,6 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
         this._listeners.clear();
     }
 }
+
+export { TypedEventBus as EventBus };
+

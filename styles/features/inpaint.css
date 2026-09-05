@@ -1,0 +1,227 @@
+/**
+ * inpaint.css
+ * 层级：features
+ * 职责：图像局部重绘画布 (Inpaint)、局部裁剪器 (Cropper) 与操作卡片
+ */
+
+/* ════ 局部重绘画布弹窗 (Inpaint Modal) ════ */
+.da-inpaint-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-dialog, 100095);
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: da-fadein 0.2s var(--da-ease);
+}
+
+.da-inpaint-modal-panel {
+    width: 95%;
+    max-width: 980px;
+    max-height: 90vh;
+    padding: 18px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-lg);
+}
+
+.da-inpaint-canvas-wrapper {
+    flex: 1;
+    min-height: 360px;
+    max-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.da-inpaint-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    cursor: crosshair;
+}
+
+.da-inpaint-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ════ 图像裁剪组件 (Cropper) ════ */
+.da-cropper-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100085;
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: da-fadein 0.2s var(--da-ease);
+}
+
+.da-cropper-panel {
+    max-width: 460px;
+    width: 100%;
+}
+
+.da-cropper-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 14px;
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-small);
+    margin: 12px 0;
+}
+
+.da-cropper-preview-img {
+    max-width: 240px;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.da-action-panel {
+    width: 94%;
+    max-width: 680px;
+    padding: 18px 22px;
+    border-radius: 16px;
+    background: var(--da-bg-secondary-rgba, var(--da-bg-secondary));
+    backdrop-filter: blur(var(--da-blur-panel, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 20px));
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+}
+
+.da-action-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--da-border-color);
+    padding-bottom: 10px;
+}
+
+.da-action-panel__title {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+}
+
+.da-action-panel__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-tag-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: 10px;
+}
+
+.da-tag-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.da-tag-card__label {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+}
+
+.da-tag-card__btn-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-action-panel__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--da-border-color);
+    padding-top: 12px;
+}
+
+.da-action-panel__footer-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ════ 楼层图像包裹与角落操作触发胶囊 ════ */
+.da-generated-img-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+}
+
+.da-image-corner-trigger {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(18, 20, 26, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    opacity: 0.88;
+    transition: opacity 0.2s ease, transform 0.15s ease, background-color 0.2s ease;
+    z-index: 5;
+}
+
+.da-image-corner-trigger:hover {
+    opacity: 1;
+    transform: scale(1.08);
+    background: var(--da-accent-color, #4a88f7);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.da-image-corner-trigger:active {
+    transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .da-image-corner-trigger {
+        opacity: 0;
+    }
+    .da-generated-img-wrapper:hover .da-image-corner-trigger {
+        opacity: 0.95;
+    }
+}

@@ -1,0 +1,129 @@
+/**
+ * @module styles/layout/header-bar
+ * @description 弹窗顶部标题栏、版本胶囊、极简主题切换与关闭按钮
+ */
+
+.da-header-bar {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 46px;
+    min-height: 46px;
+    padding: 0 var(--da-space-lg, 14px);
+    background: transparent;
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+
+.da-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+}
+
+.da-header-title {
+    font-size: var(--da-font-size-md, 0.98rem);
+    font-weight: 700;
+    color: var(--da-text-primary);
+    letter-spacing: -0.015em;
+    font-family: var(--da-font-family);
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-xs, 3px);
+    margin: 0;
+    background: linear-gradient(135deg, #ffffff 0%, var(--da-accent-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.da-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-md, 10px);
+    position: relative;
+}
+
+.da-quick-theme-capsule {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-input, var(--da-bg-subtle));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-pill);
+    padding: 2px var(--da-space-md, 10px);
+    height: 26px;
+    box-sizing: border-box;
+    transition: border-color 0.16s var(--da-ease), background 0.16s var(--da-ease), box-shadow 0.16s var(--da-ease);
+}
+
+.da-quick-theme-capsule:hover {
+    border-color: rgba(var(--da-accent-rgb), 0.4);
+    background: var(--da-bg-hover);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.15);
+}
+
+.da-quick-theme-select {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: var(--da-text-primary) !important;
+    font-size: var(--da-font-size-xs, 0.74rem) !important;
+    font-weight: 600;
+    text-align: center !important;
+    text-align-last: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    line-height: 1.3 !important;
+    cursor: pointer;
+    min-width: 68px;
+    max-width: 110px !important;
+    width: auto !important;
+    appearance: none;
+    -webkit-appearance: none;
+    color-scheme: var(--da-color-scheme, dark);
+}
+
+.da-quick-theme-select option {
+    background-color: var(--da-bg-secondary, #1c1c1e) !important;
+    color: var(--da-text-primary, #ffffff) !important;
+    font-size: var(--da-font-size-sm, 0.80rem);
+    padding: 6px 10px;
+    text-align: center;
+}
+
+.da-modal-close-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 4px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.05));
+    color: var(--da-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.82em;
+    font-weight: 600;
+    line-height: 1;
+    transition: background 0.15s var(--da-ease), color 0.15s var(--da-ease), border-color 0.15s var(--da-ease), transform 0.12s var(--da-ease);
+}
+
+.da-modal-close-btn:hover {
+    background: var(--da-color-error, #ff453a);
+    color: #ffffff;
+    border-color: var(--da-color-error, #ff453a);
+    transform: scale(1.05);
+}
+
+.da-modal-close-btn:active {
+    transform: scale(0.94);
+}
+

@@ -1,0 +1,59 @@
+/**
+ * @module styles/layout/modal-shell
+ * @description 主弹窗背景蒙层、主视窗骨架与内部主体水平分栏容器
+ */
+
+/* ════ 1. 全屏毛玻璃遮罩蒙层 ════ */
+.da-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.62));
+    backdrop-filter: blur(var(--da-blur-modal, 12px)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 12px)) saturate(140%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--da-z-modal, 10000);
+    cursor: default;
+    box-sizing: border-box;
+    padding: 14px;
+    animation: da-fadein 0.16s var(--da-ease);
+}
+
+/* ════ 2. 弹窗主视窗外壳 ════ */
+.da-main-modal-inner {
+    width: min(880px, 94vw);
+    height: min(720px, 88vh);
+    max-height: calc(100vh - 28px);
+    padding: 0;
+    margin: 0 auto;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal);
+    animation: da-modal-slide-in 0.18s var(--da-ease-spring);
+    box-sizing: border-box;
+    position: relative;
+    transition: width 0.18s var(--da-ease), height 0.18s var(--da-ease), border-radius 0.18s var(--da-ease);
+}
+
+
+
+/* ════ 3. 弹窗主体水平分栏容器 ════ */
+.da-modal-body {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+

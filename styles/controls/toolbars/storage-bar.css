@@ -1,0 +1,121 @@
+/**
+ * storage-bar.css
+ * 层级：controls/toolbars
+ * 职责：IndexedDB 本地持久化存储仪表盘、容量占比进度条与状态指标卡片
+ */
+
+.da-storage-bar,
+.da-storage-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-storage-progress-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-storage-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-sm, 8px);
+}
+
+.da-storage-label {
+    font-size: var(--da-font-size-sm, 0.82rem);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+.da-storage-pct-badge {
+    font-size: var(--da-font-size-xs, 0.75rem);
+    font-weight: 700;
+    color: var(--da-accent-color);
+    background: var(--da-bg-primary);
+    padding: 2px var(--da-space-sm, 8px);
+    border-radius: var(--da-radius-pill);
+    border: 1px solid var(--da-separator);
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.da-storage-pct-badge.is-warning {
+    color: var(--da-color-warn-subtle, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.da-storage-pct-badge.is-danger {
+    color: var(--da-color-danger, #ef4444);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.da-storage-track {
+    width: 100%;
+    height: 8px;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-pill);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--da-separator);
+}
+
+.da-storage-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--da-accent-color), #38ef7d);
+    border-radius: var(--da-radius-pill);
+    transition: width 0.35s ease, background 0.35s ease;
+}
+
+.da-storage-fill.is-warning {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.da-storage-fill.is-danger {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.da-storage-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+}
+
+.da-storage-stat-card,
+.da-storage-metric-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 4px);
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    box-sizing: border-box;
+}
+
+.da-storage-stat-title,
+.da-storage-metric-label {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-secondary);
+    text-transform: uppercase;
+}
+
+.da-storage-stat-value,
+.da-storage-metric-num {
+    font-size: var(--da-font-size-base, 0.86rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+
+.da-storage-actions-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}

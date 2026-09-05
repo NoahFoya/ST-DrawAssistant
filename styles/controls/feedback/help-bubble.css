@@ -1,0 +1,90 @@
+/**
+ * help-bubble.css
+ * 层级：controls/feedback
+ * 职责：字段问号帮助提示按钮与浮动释义气泡
+ */
+
+.da-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    min-width: 13px;
+    min-height: 13px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--da-font-family);
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    opacity: 0.35;
+    transition: opacity 0.15s var(--da-ease), background 0.15s var(--da-ease), color 0.15s var(--da-ease), border-color 0.15s var(--da-ease), transform 0.12s var(--da-ease-spring);
+}
+
+.da-row:hover .da-help-btn,
+.da-field-title-row:hover .da-help-btn {
+    opacity: 0.85;
+}
+
+.da-help-btn:hover {
+    opacity: 1 !important;
+    background: rgba(var(--da-accent-rgb), 0.2);
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+    transform: scale(1.15);
+}
+
+.da-help-btn:active {
+    transform: scale(0.94);
+}
+
+
+.da-help-bubble {
+    width: 260px;
+    max-width: calc(100vw - 20px);
+    background: var(--da-bg-card, #202430);
+    color: var(--da-text-primary);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 8px);
+    padding: 8px 12px;
+    font-size: var(--da-font-size-sm, 0.80rem);
+    line-height: 1.45;
+    font-family: var(--da-font-family);
+    box-shadow: var(--da-shadow-modal), var(--da-inset-top-light);
+    backdrop-filter: blur(var(--da-blur-panel, 18px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px));
+    z-index: var(--da-z-dialog, 100090);
+    animation: da-fadein 0.14s var(--da-ease);
+    box-sizing: border-box;
+    white-space: normal;
+    word-break: break-word;
+}
+
+
+.da-help-bubble--top {
+    transform: translateY(-6px);
+}
+
+.da-help-bubble-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    font-size: var(--da-font-size-sm, 0.82rem);
+}
+
+.da-help-bubble-body {
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 0.76rem);
+    line-height: 1.4;
+}
+

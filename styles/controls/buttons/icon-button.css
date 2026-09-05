@@ -1,0 +1,63 @@
+/**
+ * icon-button.css
+ * 层级：controls/buttons
+ * 职责：微型图标按钮与状态变体 (删除、刷新、未保存脏标记)
+ */
+
+.da-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--da-radius-small, 8px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-secondary);
+    color: var(--da-text-secondary);
+    font-size: 0.9em;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.18s var(--da-ease);
+}
+
+.da-icon-btn:hover:not(:disabled) {
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+    background: var(--da-bg-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.da-icon-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.da-icon-btn:disabled {
+    opacity: 0.35 !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* 危险删除变体 */
+.da-icon-btn--danger {
+    background: rgba(255, 69, 58, 0.1);
+    border-color: rgba(255, 69, 58, 0.35);
+    color: var(--da-color-error, #ff453a);
+}
+
+.da-icon-btn--danger:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.22) !important;
+    border-color: rgba(255, 69, 58, 0.6) !important;
+    color: var(--da-color-error, #ff453a) !important;
+    box-shadow: 0 0 8px rgba(255, 69, 58, 0.2);
+}
+
+/* 脏数据高亮变体 */
+.da-icon-btn--dirty {
+    color: #ff9f0a !important;
+    border-color: rgba(255, 159, 10, 0.5) !important;
+    background: rgba(255, 159, 10, 0.15) !important;
+    box-shadow: 0 0 10px rgba(255, 159, 10, 0.4);
+    animation: da-pulse-dirty 1.6s ease-in-out infinite;
+}

@@ -1,0 +1,101 @@
+/**
+ * @module styles/layout/sidebar-tabs
+ * @description 弹窗侧边导航选项卡、高亮光标指示与脏数据红点 (Sidebar Navigation Styles)
+ */
+
+.da-sidebar-tabs {
+    flex: 0 0 170px;
+    width: 170px;
+    background: transparent;
+    border-right: 1px dashed var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 3px);
+    padding: var(--da-space-md, 10px) var(--da-space-sm, 6px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--da-border-color) transparent;
+}
+
+
+
+.da-sidebar-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--da-space-sm, 8px);
+    height: 34px;
+    min-height: 34px;
+    padding: 0 var(--da-space-md, 12px);
+    border-radius: var(--da-radius-btn, 6px);
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-base, 0.86rem);
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.14s var(--da-ease), color 0.14s var(--da-ease), transform 0.1s var(--da-ease);
+    box-sizing: border-box;
+    letter-spacing: -0.01em;
+    width: 100%;
+}
+
+
+
+.da-sidebar-item:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-sidebar-item:active {
+    transform: scale(0.98);
+}
+
+.da-sidebar-item--active {
+    background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.025)) !important;
+    color: var(--da-accent-color) !important;
+    font-weight: 600 !important;
+    border: 1px solid var(--da-border-color) !important;
+}
+
+.da-sidebar-item--active::before {
+    display: none;
+}
+
+
+.da-sidebar-item__icon {
+    font-size: 1.05em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.da-sidebar-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+
+.da-sidebar-item__dirty-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--da-color-warn, #ff9f0a);
+    box-shadow: 0 0 5px rgba(255, 159, 10, 0.7);
+    flex-shrink: 0;
+    display: inline-block;
+    animation: da-pulse-dirty 1.6s infinite ease-in-out;
+}
+
+

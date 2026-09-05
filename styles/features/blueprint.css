@@ -1,0 +1,491 @@
+/**
+ * blueprint.css
+ * 层级：features
+ * 职责：ComfyUI 蓝图工作流可视化编辑器、节点卡片、属性检查器与宏变量注入下拉菜单
+ * 字号约定：em
+ */
+
+.da-blueprint-modal-inner {
+    width: min(960px, 95vw);
+    max-width: 960px;
+    height: min(760px, 88vh);
+    max-height: calc(100vh - 28px);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, rgba(18, 20, 26, 0.96));
+    backdrop-filter: blur(var(--da-blur-panel, 18px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal);
+    overflow: hidden;
+    position: relative;
+    color: var(--da-text-primary);
+}
+
+.da-blueprint-header {
+    flex-shrink: 0;
+    height: 44px;
+    padding: 0 12px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-blueprint-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-blueprint-title {
+    font-size: var(--da-font-size-md, 0.96rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-blueprint-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.da-blueprint-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.da-blueprint-search {
+    width: 220px !important;
+    height: 28px !important;
+    font-size: var(--da-font-size-xs, 0.78rem) !important;
+    background: var(--da-bg-input) !important;
+    border-color: var(--da-border-color) !important;
+    color: var(--da-text-primary) !important;
+    border-radius: var(--da-radius-sm, 4px) !important;
+}
+
+.da-blueprint-category-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.da-blueprint-category-btn {
+    height: 26px !important;
+    padding: 0 8px !important;
+    font-size: var(--da-font-size-xs, 0.76rem) !important;
+    border-radius: 4px !important;
+}
+
+.da-blueprint-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-blueprint-zoom-group {
+    display: flex;
+    align-items: center;
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.da-blueprint-zoom-btn {
+    height: 26px !important;
+    width: 26px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--da-text-primary) !important;
+}
+
+.da-blueprint-zoom-btn-reset {
+    height: 26px !important;
+    padding: 0 6px !important;
+    font-size: 0.74em !important;
+    font-family: var(--da-font-mono, monospace) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--da-text-secondary) !important;
+}
+
+.da-blueprint-workspace {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+.da-blueprint-canvas-wrapper {
+    flex: 1;
+    background: radial-gradient(circle at 50% 50%, var(--da-border-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+    overflow: auto;
+    padding: 14px;
+    position: relative;
+}
+
+.da-blueprint-canvas-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    transform-origin: top left;
+    transition: transform 0.14s ease-out;
+}
+
+.da-blueprint-empty-canvas {
+    grid-column: 1 / -1;
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--da-text-muted);
+    font-size: var(--da-font-size-sm, 0.82rem);
+}
+
+.da-blueprint-mini-card {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-sm, 6px);
+    padding: 8px 10px;
+    cursor: pointer;
+    box-shadow: var(--da-inset-top-light);
+    transition: all 0.14s var(--da-ease);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+
+.da-blueprint-mini-card:hover {
+    background: var(--da-bg-hover);
+    border-color: rgba(var(--da-accent-rgb), 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.da-blueprint-mini-card.active {
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.12);
+    box-shadow: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35), 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.da-blueprint-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.da-blueprint-node-badge {
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    user-select: none;
+}
+
+.da-blueprint-badge--prompt {
+    background: rgba(192, 132, 252, 0.14);
+    color: var(--da-node-prompt);
+    border: 1px solid rgba(192, 132, 252, 0.3);
+}
+
+.da-blueprint-badge--sampler {
+    background: rgba(251, 146, 60, 0.14);
+    color: var(--da-node-sampler);
+    border: 1px solid rgba(251, 146, 60, 0.3);
+}
+
+.da-blueprint-badge--model {
+    background: rgba(96, 165, 250, 0.14);
+    color: var(--da-node-model);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.da-blueprint-badge--size {
+    background: rgba(74, 222, 128, 0.14);
+    color: var(--da-node-size);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.da-blueprint-badge--output {
+    background: rgba(56, 189, 248, 0.14);
+    color: var(--da-node-output);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.da-blueprint-badge--lora {
+    background: rgba(244, 63, 94, 0.14);
+    color: var(--da-node-lora);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.da-blueprint-badge--general {
+    background: var(--da-bg-card);
+    color: var(--da-text-secondary);
+    border: 1px solid var(--da-border-color);
+}
+
+
+.da-blueprint-node-id {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.75em;
+    font-weight: 700;
+    color: var(--da-accent-color);
+}
+
+.da-blueprint-card-title {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-blueprint-card-inputs {
+    font-size: 0.74em;
+    color: var(--da-text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: var(--da-font-mono, monospace);
+}
+
+/* ════ 属性抽屉面板 (Inspector) ════ */
+.da-blueprint-inspector-panel {
+    width: 390px;
+    background: var(--da-bg-subtle);
+    border-left: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    box-sizing: border-box;
+    gap: 14px;
+}
+
+.da-blueprint-empty-hint {
+    margin: auto;
+    text-align: center;
+    color: var(--da-text-muted);
+    font-size: 0.88em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-blueprint-empty-hint-icon {
+    font-size: 2.2em;
+    margin-bottom: 4px;
+}
+
+.da-blueprint-empty-hint-sub {
+    font-size: 0.8em;
+    margin-top: 4px;
+    opacity: 0.75;
+}
+
+.da-blueprint-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-blueprint-node-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-blueprint-class-type {
+    font-size: 0.78em;
+    color: var(--da-text-muted);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-blueprint-fields-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.da-blueprint-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.da-blueprint-field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.da-blueprint-key-label {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-blueprint-link-label {
+    font-size: 0.74em;
+    color: var(--da-accent-color);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-blueprint-input-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.da-blueprint-textinput {
+    flex: 1;
+    min-width: 0;
+    height: 32px !important;
+    font-size: 0.84em !important;
+    font-family: var(--da-font-mono, monospace) !important;
+    background: var(--da-bg-input) !important;
+    border-color: var(--da-border-color) !important;
+    color: var(--da-text-primary) !important;
+}
+
+.da-blueprint-textarea {
+    flex: 1;
+    min-width: 0;
+    min-height: 70px !important;
+    font-size: 0.82em !important;
+    font-family: var(--da-font-mono, monospace) !important;
+    background: var(--da-bg-input) !important;
+    border-color: var(--da-border-color) !important;
+    color: var(--da-text-primary) !important;
+}
+
+.da-blueprint-var-select {
+    font-size: 0.75em;
+    padding: 2px 4px;
+    margin-top: 2px;
+}
+
+.da-blueprint-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 10px 18px;
+    background: var(--da-bg-subtle);
+    border-top: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+}
+
+/* ════ 宏变量选择下拉浮层菜单 (Dropdown Overlay) ════ */
+.da-var-dropdown {
+    width: 320px;
+    max-height: 380px;
+    overflow-y: auto;
+    background: var(--da-bg-modal, rgba(30, 30, 36, 0.98));
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-small, 8px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+}
+
+.da-var-dropdown__group-title {
+    font-size: 0.74em;
+    font-weight: 700;
+    color: var(--da-text-muted);
+    padding: 6px 8px 2px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+}
+
+.da-var-dropdown__item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    border: 1px solid transparent;
+}
+
+.da-var-dropdown__item:hover {
+    background: var(--da-bg-hover);
+    border-color: rgba(var(--da-accent-rgb), 0.25);
+}
+
+.da-var-dropdown__item.recommended {
+    background: rgba(var(--da-accent-rgb), 0.08);
+    border-color: rgba(var(--da-accent-rgb), 0.2);
+}
+
+.da-var-dropdown__item.recommended:hover {
+    background: rgba(var(--da-accent-rgb), 0.16);
+    border-color: var(--da-accent-color);
+}
+
+.da-var-dropdown__item.active {
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.2);
+}
+
+.da-var-dropdown__item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-var-dropdown__label {
+    font-size: 0.84em;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-var-dropdown__badge {
+    font-size: 0.7em;
+    font-weight: 700;
+    color: var(--da-color-warn, #ff9f0a);
+    background: rgba(255, 159, 10, 0.12);
+    border: 1px solid rgba(255, 159, 10, 0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: auto;
+}
+
+.da-var-dropdown__tip {
+    font-size: 0.74em;
+    color: var(--da-text-secondary);
+    line-height: 1.35;
+    padding-left: 2px;
+}

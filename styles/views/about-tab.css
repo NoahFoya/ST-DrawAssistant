@@ -1,0 +1,217 @@
+/**
+ * about-tab.css
+ * 层级：views
+ * 职责：关于与帮助面板、版本与更新条带、更新日志列表与底部操作行
+ */
+
+.da-about-card-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 22px;
+    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.12) 0%, var(--da-bg-secondary) 60%);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.3);
+    border-radius: var(--da-radius-card, 12px);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+}
+
+.da-about-card-hero::after {
+    content: '';
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, rgba(var(--da-accent-rgb), 0.25) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.da-about-hero-header,
+.da-about-loading-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.da-about-title {
+    margin: 0;
+    font-size: 1.35em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    letter-spacing: -0.02em;
+}
+
+.da-about-desc {
+    font-size: 0.88em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+}
+
+.da-version-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 20px);
+    background: rgba(var(--da-accent-rgb), 0.16);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.35);
+    color: var(--da-accent-color);
+    font-size: 0.75em;
+    font-weight: 700;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-about-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85em;
+    color: var(--da-text-secondary);
+}
+
+.da-about-author,
+.da-about-copyright {
+    color: var(--da-text-muted);
+    font-size: 0.8em;
+}
+
+/* ════ 版本更新条带 ════ */
+.da-about-version-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.da-about-strip-left {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+}
+
+.da-about-strip-right {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 6px);
+}
+
+.da-about-branch-select {
+    padding: 2px 8px !important;
+    font-size: var(--da-font-size-xs, 0.74rem) !important;
+    height: 26px !important;
+    width: auto !important;
+    border-radius: 4px !important;
+    font-weight: 500 !important;
+}
+
+
+/* ════ 特性高亮芯片 ════ */
+.da-about-highlights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.da-about-highlight-chip {
+    padding: 4px 10px;
+    background: rgba(var(--da-accent-rgb), 0.08);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.2);
+    border-radius: var(--da-radius-pill, 100px);
+    font-size: 0.78em;
+    color: var(--da-text-primary);
+}
+
+/* ════ 更新日志容器与条目 ════ */
+.da-changelog-box {
+    margin-top: 10px;
+    padding: 14px 16px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    max-height: 280px;
+    overflow-y: auto;
+    font-size: 0.85em;
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+
+.da-about-cl-entry {
+    font-weight: 600;
+    color: var(--da-text-primary);
+    margin-bottom: 4px;
+}
+
+.da-about-cl-entry--sep {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--da-separator);
+}
+
+.da-about-cl-list {
+    margin: 0 0 6px 0;
+    padding-left: 18px;
+    color: var(--da-text-secondary);
+}
+
+.da-about-cl-item {
+    margin-bottom: 2px;
+}
+
+.da-about-status-hint,
+.da-about-empty-grid {
+    color: var(--da-text-muted);
+    font-size: 0.84em;
+    text-align: center;
+    padding: 16px 0;
+}
+
+.da-about-footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.da-about-btn-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-about-btn-reset {
+    margin-left: auto;
+}
+
+@media (max-width: 680px) {
+    .da-about-footer {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+
+    .da-about-btn-row {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .da-about-btn-reset {
+        grid-column: 1 / -1 !important;
+        margin-left: 0 !important;
+        justify-content: center !important;
+    }
+}
+

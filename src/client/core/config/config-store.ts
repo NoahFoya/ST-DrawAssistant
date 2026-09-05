@@ -49,6 +49,10 @@ export const DEFAULT_SETTINGS: DrawAssistantSettings = {
         tokens: { ...theme.tokens }
     })),
     engineConfigs: {},
+    fabVisible: true,
+    fabOpacity: 0.95,
+    fabPresetIcon: 'palette',
+    lightboxEnabled: true,
     uiPreferences: {},
     extensions: {},
     customData: {}
