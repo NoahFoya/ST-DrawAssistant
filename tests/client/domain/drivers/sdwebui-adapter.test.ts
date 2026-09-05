@@ -317,4 +317,41 @@ describe('SdWebUIAdapter', () => {
         expect(result.images[0].seed).toBe(10001);
         expect(result.images[1].seed).toBe(10002);
     });
+
+    it('执行生图时应正确拼接 promptPrefix, promptSuffix, negativePrefix, negativeSuffix', async () => {
+        let sentBody: any = null;
+        const dummyB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        mockFetchExternal.mockImplementation((url: string, init?: any) => {
+            if (url.includes('/txt2img')) {
+                sentBody = JSON.parse(init.body);
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        images: [dummyB64],
+                        info: JSON.stringify({ seed: 12345 })
+                    })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task-prefix-suffix',
+            targetEngine: 'sdwebui',
+            prompt: '1girl, smiling',
+            negativePrompt: 'bad anatomy',
+            engineOptions: {
+                promptPrefix: 'masterpiece, best quality',
+                promptSuffix: 'highly detailed',
+                negativePrefix: 'lowres',
+                negativeSuffix: 'worst quality'
+            }
+        };
+
+        await adapter.generate(request);
+
+        expect(sentBody).not.toBeNull();
+        expect(sentBody.prompt).toBe('masterpiece, best quality, 1girl, smiling, highly detailed');
+        expect(sentBody.negative_prompt).toBe('lowres, bad anatomy, worst quality');
+    });
 });

@@ -552,4 +552,62 @@ describe('ComfyUIAdapter', () => {
 
         await expect(adapter.generate(request)).rejects.toThrow('ComfyUI 任务执行异常崩溃: CUDA out of memory');
     });
+
+    it('执行生图时应正确拼接 promptPrefix, promptSuffix, negativePrefix, negativeSuffix', async () => {
+        let submittedWorkflow: any = null;
+        mockFetchExternal.mockImplementation((url: string, init?: any) => {
+            if (url.includes('/prompt')) {
+                const body = JSON.parse(init.body);
+                submittedWorkflow = body.prompt;
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ prompt_id: 'pid-prefix-suffix' })
+                });
+            }
+            if (url.includes('/history/pid-prefix-suffix')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        'pid-prefix-suffix': {
+                            outputs: {
+                                '9': { images: [{ filename: 'out.png', subfolder: '', type: 'output' }] }
+                            }
+                        }
+                    })
+                });
+            }
+            if (url.includes('/view')) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    blob: async () => new Blob(['fake-img'], { type: 'image/png' })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) });
+        });
+
+        const request: GenerationRequest = {
+            taskId: 'task-prefix-suffix',
+            targetEngine: 'comfyui',
+            prompt: '1girl, smile',
+            negativePrompt: 'bad anatomy',
+            engineOptions: {
+                promptPrefix: 'masterpiece, best quality',
+                promptSuffix: 'highly detailed',
+                negativePrefix: 'lowres',
+                negativeSuffix: 'worst quality',
+                workflowJson: {
+                    "6": { "inputs": { "text": "%prompt%" } },
+                    "7": { "inputs": { "text": "%negative_prompt%" } }
+                }
+            }
+        };
+
+        await adapter.generate(request);
+
+        expect(submittedWorkflow['6'].inputs.text).toBe('masterpiece, best quality, 1girl, smile, highly detailed');
+        expect(submittedWorkflow['7'].inputs.text).toBe('lowres, bad anatomy, worst quality');
+    });
 });

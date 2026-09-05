@@ -45,6 +45,26 @@ describe('Server Security Guard', () => {
             expect(validateTargetUrl('http://10.0.0.1:8188/prompt', allowed).valid).toBe(false);
             expect(validateTargetUrl('https://api.deepseek.com/v1/images/generations', allowed).valid).toBe(false);
         });
+
+        it('必须硬阻断云厂商元数据端点 (169.254.169.254 / metadata.google.internal)，无论白名单如何配置', () => {
+            expect(validateTargetUrl('http://169.254.169.254/latest/meta-data/').valid).toBe(false);
+            expect(validateTargetUrl('http://169.254.169.254:8080/').valid).toBe(false);
+            expect(validateTargetUrl('http://metadata.google.internal/computeMetadata/v1/').valid).toBe(false);
+            expect(validateTargetUrl('http://169.254.1.1/test').valid).toBe(false);
+            // 即使传入了 ['*'] 或显式白名单，也必须被硬阻断
+            expect(validateTargetUrl('http://169.254.169.254/', ['*']).valid).toBe(false);
+            expect(validateTargetUrl('http://169.254.169.254/', ['169.254.169.254']).valid).toBe(false);
+        });
+
+        it('当显式传入空白名单 allowedHosts: [] 时，严格拒绝自定义/未授权外部端点，但安全放行本地回环与内置云服务', () => {
+            const emptyAllowed: string[] = [];
+            // 自定义第三方端点必须被拒绝
+            expect(validateTargetUrl('http://10.0.0.1:8188/prompt', emptyAllowed).valid).toBe(false);
+            expect(validateTargetUrl('https://custom-proxy.example.com/v1', emptyAllowed).valid).toBe(false);
+            // 本地回环与内置云服务域名始终放行
+            expect(validateTargetUrl('http://127.0.0.1:8188/prompt', emptyAllowed).valid).toBe(true);
+            expect(validateTargetUrl('https://api.openai.com/v1/images/generations', emptyAllowed).valid).toBe(true);
+        });
     });
 
     describe('sanitizeRequestHeaders', () => {
