@@ -4,7 +4,6 @@
  */
 
 import type { Response } from 'express';
-import { DEFAULT_SERVER_OPTIONS } from './server-config';
 
 
 /**
@@ -43,6 +42,15 @@ export interface TargetValidationResult {
     reason?: string;
 }
 
+/** 已知的云服务器元数据地址与主机名 (强制阻断，防范 SSRF) */
+export const BLOCKED_METADATA_HOSTS = new Set([
+    '169.254.169.254',
+    'metadata.google.internal',
+    'metadata',
+    'instance-data',
+    'fd00:ec2::254'
+]);
+
 /** 已知的安全云端生图服务域名 */
 export const KNOWN_CLOUD_DOMAINS = new Set([
     'image.novelai.net',
@@ -57,6 +65,21 @@ export const DEFAULT_LOOPBACK_HOSTS = new Set([
     'localhost',
     '::1'
 ]);
+
+/**
+ * 判断目标是否为云服务器元数据地址或 link-local 敏感网段
+ */
+export function isMetadataHost(hostname: string): boolean {
+    const clean = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (BLOCKED_METADATA_HOSTS.has(clean)) {
+        return true;
+    }
+    // 检查 169.254.0.0/16 (IPv4 Link-Local / 云元数据网段)
+    if (matchCidr(clean, '169.254.0.0/16')) {
+        return true;
+    }
+    return false;
+}
 
 /**
  * 解析 IPv4 字符串为 32 位无符号整数
@@ -94,36 +117,43 @@ function matchCidr(ipStr: string, cidr: string): boolean {
 /**
  * 校验目标主机名是否符合安全策略
  *
- * 默认策略：若未显式指定限制白名单（即 allowedHosts 为空或含 '*'），则默认放行所有主机；
- * 若用户或管理员显式配置了主机白名单，则严格匹配白名单规则。
+ * 1. 任何情况下严格前置阻断云服务器元数据主机与 IP (169.254.169.254 等)；
+ * 2. 本地回环主机与内置安全云端生图服务域名始终安全放行；
+ * 3. 若配置包含 '*'，放行其他普通外部目标；
+ * 4. 若显式配置了白名单规则 (包含显式空数组 [])，严格匹配白名单，未命中则阻断。
  *
  * @param hostname 目标主机名
  * @param allowedHosts 服务端配置的主机白名单
  */
 export function isHostAllowed(
     hostname: string,
-    allowedHosts: readonly string[] = []
+    allowedHosts: readonly string[] = ['*']
 ): boolean {
-    // 未配置白名单或包含 '*' 时默认放行所有主机
-    if (!allowedHosts || allowedHosts.length === 0 || allowedHosts.includes('*')) {
-        return true;
-    }
-
     const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
 
-    // 放行本地回环主机
+    // 1. 强制阻断云服务器元数据地址，杜绝 SSRF 穿透
+    if (isMetadataHost(lower)) {
+        return false;
+    }
+
+    // 2. 本地回环主机始终安全放行 (用于本地 SD-WebUI / ComfyUI)
     if (DEFAULT_LOOPBACK_HOSTS.has(lower)) {
         return true;
     }
 
-    // 匹配内置受信任的云端生图服务域名
+    // 3. 内置受信任的云端生图服务域名始终放行
     for (const domain of KNOWN_CLOUD_DOMAINS) {
         if (lower === domain || lower.endsWith(`.${domain}`)) {
             return true;
         }
     }
 
-    // 匹配显式配置的规则
+    // 4. 通配符 '*' 放行任意合法外部端点
+    if (allowedHosts.includes('*')) {
+        return true;
+    }
+
+    // 5. 显式配置的白名单规则匹配 (域名或 CIDR)
     for (const rule of allowedHosts) {
         const cleanRule = rule.trim().toLowerCase().replace(/^\[|\]$/g, '');
         if (!cleanRule) continue;
@@ -147,7 +177,7 @@ export function isHostAllowed(
  * 校验反向代理目标地址是否合法与可用
  *
  * @param targetUrl 外部目标 URL 字符串
- * @param allowedHosts 允许的主机列表 (可选，未指定或为空时放行任意合法 HTTP/HTTPS 目标)
+ * @param allowedHosts 允许的主机列表 (可选，未指定时默认采用开发环境开放配置)
  */
 export function validateTargetUrl(
     targetUrl: string,
@@ -177,7 +207,15 @@ export function validateTargetUrl(
         return { valid: false, reason: '目标 URL 缺少有效主机名' };
     }
 
-    const effectiveAllowed = allowedHosts ?? DEFAULT_SERVER_OPTIONS.allowedHosts;
+    // 前置检查元数据 IP
+    if (isMetadataHost(hostname)) {
+        return {
+            valid: false,
+            reason: `目标主机 [${hostname}] 为受保护的云端元数据服务，已被安全策略硬性拦截`
+        };
+    }
+
+    const effectiveAllowed = allowedHosts ?? ['*'];
     if (!isHostAllowed(hostname, effectiveAllowed)) {
         return {
             valid: false,

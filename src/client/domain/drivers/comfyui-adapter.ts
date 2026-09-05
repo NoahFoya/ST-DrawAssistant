@@ -41,6 +41,10 @@ export interface ComfyUIEngineConfig {
     inpaintMaskBlur?: number;
     inpaintGrowMask?: number;
     loras?: LoraItem[];
+    promptPrefix?: string;
+    promptSuffix?: string;
+    negativePrefix?: string;
+    negativeSuffix?: string;
     [key: string]: unknown;
 }
 
@@ -118,6 +122,10 @@ export const DEFAULT_COMFYUI_CONFIG: ComfyUIEngineConfig = {
     inpaintDenoise: 0.75,
     inpaintMaskBlur: 8,
     inpaintGrowMask: 6,
+    promptPrefix: '',
+    promptSuffix: '',
+    negativePrefix: '',
+    negativeSuffix: '',
     loras: []
 };
 
@@ -164,9 +172,21 @@ export function substituteWorkflowVariables(
         ? options.seed
         : Math.floor(Math.random() * 1000000000000000);
 
+    const promptParts: string[] = [];
+    if (options.promptPrefix?.trim()) promptParts.push(options.promptPrefix.trim());
+    if (request.prompt?.trim()) promptParts.push(request.prompt.trim());
+    if (options.promptSuffix?.trim()) promptParts.push(options.promptSuffix.trim());
+    const finalPrompt = promptParts.join(', ');
+
+    const negParts: string[] = [];
+    if (options.negativePrefix?.trim()) negParts.push(options.negativePrefix.trim());
+    if (request.negativePrompt?.trim()) negParts.push(request.negativePrompt.trim());
+    if (options.negativeSuffix?.trim()) negParts.push(options.negativeSuffix.trim());
+    const finalNegativePrompt = negParts.join(', ');
+
     const baseValueMap: Record<string, string | number> = {
-        '%prompt%': request.prompt || '',
-        '%negative_prompt%': request.negativePrompt || '',
+        '%prompt%': finalPrompt,
+        '%negative_prompt%': finalNegativePrompt,
         '%seed%': seed,
         '%steps%': options.steps ?? 28,
         '%cfg%': options.cfgScale ?? 6.5,

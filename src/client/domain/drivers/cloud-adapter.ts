@@ -39,10 +39,10 @@ export interface CloudEngineConfig {
 
 /** 云端多模态默认配置 */
 export const DEFAULT_CLOUD_CONFIG: CloudEngineConfig = {
-    provider: 'openai',
-    proxyUrl: 'https://api.openai.com/v1',
+    provider: 'google',
+    proxyUrl: 'https://generativelanguage.googleapis.com',
     apiKey: '',
-    model: 'dall-e-3',
+    model: 'gemini-3.1-flash-image-preview',
     width: 1024,
     height: 1024,
     size: '1024x1024',
@@ -105,7 +105,9 @@ export class CloudAdapter extends BaseDriver {
         const apiKey = cfg.apiKey as string | undefined;
 
         try {
-            const provider = this.detectProvider(cfg.model as string | undefined);
+            const provider = cfg.provider && cfg.provider !== 'auto'
+                ? cfg.provider
+                : this.detectProvider(cfg.model as string | undefined);
             const baseUrl = this.getProviderBaseUrl(provider, cfg);
             const cleanBase = baseUrl.replace(/\/+$/, '');
 

@@ -30,6 +30,8 @@ export interface PipelineProcessOptions {
         userName?: string;
         messageId?: number;
         chatId?: string;
+        swipeId?: number;
+        buttonIndex?: number;
     };
     /** 关联的图像媒体输入 (可选) */
     imageInputs?: {

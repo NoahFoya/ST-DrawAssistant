@@ -36,6 +36,10 @@ export interface SdWebUIEngineConfig {
     height: number;
     clipSkip?: number;
     loras?: LoraItem[];
+    promptPrefix?: string;
+    promptSuffix?: string;
+    negativePrefix?: string;
+    negativeSuffix?: string;
     enableHires?: boolean;
     hiresScale?: number;
     hiresUpscaler?: string;
@@ -57,6 +61,10 @@ export const DEFAULT_SDWEBUI_CONFIG: SdWebUIEngineConfig = {
     width: 512,
     height: 768,
     clipSkip: 2,
+    promptPrefix: '',
+    promptSuffix: '',
+    negativePrefix: '',
+    negativeSuffix: '',
     enableHires: false,
     hiresScale: 1.5,
     hiresUpscaler: 'R-ESRGAN 4x+ Anime6B',
@@ -181,7 +189,13 @@ export class SdWebUIAdapter extends BaseDriver {
             ...(request.engineOptions as SdWebUIEngineOptions)
         };
 
-        let finalPrompt = (request.prompt || '').trim();
+        // 组装正向提示词（前缀 + 正文 + 后缀）
+        const promptParts: string[] = [];
+        if (options.promptPrefix?.trim()) promptParts.push(options.promptPrefix.trim());
+        if (request.prompt?.trim()) promptParts.push(request.prompt.trim());
+        if (options.promptSuffix?.trim()) promptParts.push(options.promptSuffix.trim());
+        let finalPrompt = promptParts.join(', ');
+
         const loras = options.loras || [];
         if (Array.isArray(loras) && loras.length > 0) {
             const loraTags = loras
@@ -195,6 +209,13 @@ export class SdWebUIAdapter extends BaseDriver {
                 }
             }
         }
+
+        // 组装负向提示词（前缀 + 正文 + 后缀）
+        const negParts: string[] = [];
+        if (options.negativePrefix?.trim()) negParts.push(options.negativePrefix.trim());
+        if (request.negativePrompt?.trim()) negParts.push(request.negativePrompt.trim());
+        if (options.negativeSuffix?.trim()) negParts.push(options.negativeSuffix.trim());
+        const finalNegativePrompt = negParts.join(', ');
 
         const overrideSettings: Record<string, unknown> = {};
         if (options.model) {
@@ -212,7 +233,7 @@ export class SdWebUIAdapter extends BaseDriver {
 
         const requestBody: Record<string, unknown> = {
             prompt: finalPrompt,
-            negative_prompt: request.negativePrompt || '',
+            negative_prompt: finalNegativePrompt,
             seed,
             steps: options.steps ?? 20,
             cfg_scale: options.cfgScale ?? 7.0,
