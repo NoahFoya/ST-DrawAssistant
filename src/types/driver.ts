@@ -15,9 +15,9 @@ export interface ModelAssetItem {
     name: string;
     /** 显示标题 (如 SD-WebUI 带 hash 的完整 title) */
     title?: string;
-    /** 公认模型形态类型: checkpoint / unet / gguf / nf4 / diffusers 等 */
+    /** 模型格式类型: checkpoint / unet / gguf / nf4 / diffusers 等 */
     type?: 'checkpoint' | 'unet' | 'gguf' | 'nf4' | 'diffusers' | string;
-    /** 公认基础模型架构: sd15, sd21, sdxl, flux, sd3, pony, illustrious, qwen, wan 等 */
+    /** 基础模型架构: sd15, sd21, sdxl, flux, sd3, pony, illustrious, qwen, wan 等 */
     architecture?: 'sd15' | 'sd21' | 'sdxl' | 'flux' | 'sd3' | 'pony' | 'illustrious' | 'qwen' | 'wan' | string;
     /** 模型哈希值 (可选) */
     hash?: string;
