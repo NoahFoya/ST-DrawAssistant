@@ -1,7 +1,8 @@
 const path = require('path');
 
 /** @type {import('webpack').Configuration} */
-module.exports = {
+const clientConfig = {
+    name: 'client',
     entry: './src/index.ts',
     target: ['web', 'es2020'],
     devtool: 'source-map',
@@ -18,6 +19,11 @@ module.exports = {
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.json'],
+        alias: {
+            '@types': path.resolve(__dirname, 'src/types'),
+            '@utils': path.resolve(__dirname, 'src/utils'),
+            '@constants': path.resolve(__dirname, 'src/constants.ts'),
+        },
     },
     module: {
         rules: [
@@ -39,7 +45,9 @@ module.exports = {
         ],
     },
     performance: {
-        maxAssetSize: 1048576, // 1MB 阈值，适配内置预设资产
+        maxAssetSize: 1048576,
         maxEntrypointSize: 1048576,
     },
 };
+
+module.exports = clientConfig;

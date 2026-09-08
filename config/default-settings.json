@@ -1,0 +1,69 @@
+{
+  "enabled": true,
+  "showHelp": true,
+  "activeProvider": "comfyui",
+  "saveToIndexedDB": true,
+  "embedToBase64": false,
+  "enableThumbnail": true,
+  "deduplicateHash": true,
+  "maxStoredImages": 500,
+  "hideButtonOnDone": false,
+  "placeholderStart": "image###",
+  "placeholderEnd": "###",
+  "taskTimeoutMs": 180000,
+  "maxConcurrentTasks": 1,
+  "autoGenerate": false,
+  "themePreset": "dark",
+  "presets": {
+    "themes": [],
+    "prompts": [],
+    "workflows": [],
+    "drawing": {
+      "comfyui": [],
+      "sdwebui": [],
+      "novelai": [],
+      "openai": []
+    }
+  },
+  "engineConfigs": {
+    "comfyui": {
+      "serverUrl": "http://127.0.0.1:8188",
+      "activeDrawingProfileId": "",
+      "activePromptProfileId": "",
+      "activeWorkflowProfileId": ""
+    },
+    "sdwebui": {
+      "serverUrl": "http://127.0.0.1:7860",
+      "activeDrawingProfileId": "",
+      "activePromptProfileId": ""
+    },
+    "novelai": {
+      "serverUrl": "https://image.novelai.net",
+      "apiKey": "",
+      "activeDrawingProfileId": "",
+      "activePromptProfileId": ""
+    },
+    "openai": {
+      "activeProvider": "openai-official",
+      "serverUrl": "https://api.openai.com/v1",
+      "apiKey": "",
+      "activeDrawingProfileId": ""
+    }
+  },
+  "fabVisible": true,
+  "fabOpacity": 0.95,
+  "fabPresetIcon": "palette",
+  "lightboxEnabled": true,
+  "enableActionPanel": true,
+  "imageDisplay": {
+    "align": "center",
+    "objectFit": "contain",
+    "maxHeight": 0,
+    "maxWidthPct": 100,
+    "rounded": true,
+    "collapsed": false
+  },
+  "uiPreferences": {},
+  "extensions": {},
+  "customData": {}
+}

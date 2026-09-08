@@ -1,55 +1,59 @@
-# Local Legacy Backup (Full source mirror for reference)
+# ==============================================================================
+# 1. 本地私有研究资料与个人草稿 (完全不进入 Git)
+# ==============================================================================
 _backup_legacy/
-
-# ST-DrawAssistant 项目专属忽略规则
+_backup_v0.6.0_server/
 docs/
+notes/
+local/
+*.local.*
+.agents/
+
+# ==============================================================================
+# 2. 自动化测试与覆盖率产物 (不纳入 Git 版本控制，保留本地开发测试)
+# ==============================================================================
 tests/
-test/
+coverage/
+.nyc_output/
+output/
 
-# TypeScript 增量构建缓存
-*.tsbuildinfo
-
-# Logs
-logs
+# ==============================================================================
+# 3. 日志与运行时临时文件
+# ==============================================================================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
-
-# Diagnostic reports
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Runtime data & locks
 pids
 *.pid
 *.seed
 *.pid.lock
-coverage
-*.lcov
-.nyc_output
+*.tsbuildinfo
 
-# Build Outputs & Bundles
-dist/
-build/
-out/
-.cache/
-
-# Dependencies
+# ==============================================================================
+# 4. 依赖管理与环境密钥
+# ==============================================================================
 node_modules/
 jspm_packages/
 web_modules/
-
-# Environment Variables & Secrets
 .env
 .env.*
 !.env.example
+config/config.json
+!config/config.example.json
 
-# OS & Editor Metadata
-.DS_Store
-Thumbs.db
+# ==============================================================================
+# 5. IDE 与操作系统元数据
+# ==============================================================================
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
 
-# Agent Skills (Local custom environment)
-.agents/
+# ==============================================================================
+# 6. 中间临时构建缓存 (明确保留 dist/ 用于酒馆直接安装)
+# ==============================================================================
+build/
+out/
+.cache/
