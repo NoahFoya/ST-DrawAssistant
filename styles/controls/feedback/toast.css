@@ -1,0 +1,27 @@
+/**
+ * toast.css
+ * 层级：controls/feedback
+ * 职责：全局轻量消息 Toast 提示样式
+ */
+
+/* ════ 全局轻量 Toast 提示 ════ */
+.da-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 14px;
+    border-radius: var(--da-radius-input, 6px);
+    background: var(--da-bg-modal, rgba(24, 27, 34, 0.92));
+    backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
+    color: var(--da-text-primary, #ffffff);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), var(--da-inset-top-light);
+    border: 1px solid var(--da-border-color);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    z-index: var(--da-z-toast, 50000);
+    pointer-events: none;
+    animation: da-fadein 0.15s ease;
+}
+
+

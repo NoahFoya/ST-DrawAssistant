@@ -1,0 +1,101 @@
+/**
+ * color-picker.css
+ * 层级：controls/inputs
+ * 职责：颜色选择器组件样式 (原生色板与 Hex 编码输入框)
+ */
+
+.da-color-picker-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    box-sizing: border-box;
+}
+
+/* 原生颜色选择器圆形色板 (30px 圆形) */
+.da-color-picker-native {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--da-border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+    outline: none;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.da-color-picker-native::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border-radius: 50%;
+}
+
+.da-color-picker-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+.da-color-picker-native:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.4);
+}
+
+.da-color-picker-native:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 十六进制 Hex 颜色输入框 (100px 紧凑单行框，统一 30px 高度，文本居中) */
+.da-color-hex-input {
+    width: 100px;
+    min-width: 90px;
+    height: 30px;
+    padding: 0 var(--da-space-sm, 8px);
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    text-transform: uppercase;
+    text-align: center;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
+    transition: border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-color-hex-input:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-input-hover);
+}
+
+.da-color-hex-input:focus {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    background: var(--da-bg-input);
+}
+
+.da-color-hex-input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+}
+
+/* 脏数据修改态 (黄色微光高亮) */
+.da-color-hex-input.is-dirty {
+    border-color: var(--da-color-warn, #ff9f0a) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
+}
+
+/* 非法 Hex 输入错误态 (红色微光高亮) */
+.da-color-hex-input.is-invalid {
+    border-color: var(--da-color-error, #ff453a) !important;
+    background-color: rgba(255, 69, 58, 0.08) !important;
+    color: var(--da-color-error, #ff453a);
+    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
+}

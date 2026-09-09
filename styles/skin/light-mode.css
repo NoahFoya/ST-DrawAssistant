@@ -1,0 +1,85 @@
+/**
+ * @module styles/skin/light-mode
+ * @description 浅色亮色主题微调规则 (Light Mode Enhancements)
+ *
+ * 规范：
+ * 1. 严禁使用硬编码色值与 !important 覆盖 ThemeService 注入的 --da-* 动态变量；
+ * 2. 仅负责浏览器原生控件 color-scheme 声明、SVG 箭头描边适配与浅色投影优化。
+ */
+
+[data-da-mode="light"] {
+    color-scheme: light;
+    --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.9), 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+    --da-bg-modal: rgba(255, 255, 255, 0.98);
+    --da-bg-overlay-modal: rgba(15, 23, 42, 0.4);
+    --da-card-bg-stream: rgba(0, 0, 0, 0.02);
+}
+
+
+
+[data-da-mode="light"] .da-input,
+[data-da-mode="light"] .da-select,
+[data-da-mode="light"] .da-textarea {
+    color-scheme: light;
+}
+
+
+/* 浅色模式下原生下拉框箭头深色描边 */
+[data-da-mode="light"] .da-select,
+[data-da-mode="light"] .da-preset-select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(15, 23, 42, 0.65)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+/* 浅色模式原生 option 弹出菜单 */
+[data-da-mode="light"] .da-select option {
+    background-color: var(--da-bg-secondary, #f8fafc);
+    color: var(--da-text-primary, #0f172a);
+}
+
+[data-da-mode="light"] .da-select option:checked {
+    background-color: var(--da-bg-hover, rgba(0, 0, 0, 0.06));
+    color: var(--da-accent-color);
+}
+
+/* 浅色模式全局基础文字颜色强化 */
+[data-da-mode="light"],
+.st-da-root[data-da-mode="light"],
+[data-da-mode="light"] .da-settings-modal {
+    color: var(--da-text-primary);
+}
+
+/* 浅色模式下输入控件与选择器 */
+[data-da-mode="light"] .da-input,
+[data-da-mode="light"] .da-select,
+[data-da-mode="light"] .da-textarea {
+    color: var(--da-text-primary);
+    background-color: var(--da-bg-input);
+    border-color: var(--da-border-color);
+}
+
+/* 浅色模式下默认次级按钮 */
+[data-da-mode="light"] .da-btn--secondary {
+    background-color: var(--da-bg-subtle);
+    color: var(--da-text-primary);
+    border-color: var(--da-border-color);
+}
+
+[data-da-mode="light"] .da-btn--secondary:hover {
+    background-color: var(--da-bg-hover);
+    color: var(--da-accent-color);
+}
+
+/* 浅色模式卡片投影微调 */
+[data-da-mode="light"] .da-card {
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06), 0 0 0 1px var(--da-border-color);
+}
+
+[data-da-mode="light"] .da-card--hoverable:hover {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+/* 浅色模式侧边栏虚线适配 */
+[data-da-mode="light"] .da-sidebar-tabs {
+    border-right-color: rgba(15, 23, 42, 0.18);
+}
+

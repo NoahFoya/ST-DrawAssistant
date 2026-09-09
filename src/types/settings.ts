@@ -135,8 +135,8 @@ export interface DrawAssistantSettings {
     fabCustomIcon?: string;
     /** 悬浮球记忆坐标 */
     fabPosition?: { top: number; left: number };
-    /** 是否启用灯箱大图查看器 */
-    lightboxEnabled?: boolean;
+    /** 是否启用大图全屏预览弹窗 */
+    imagePreviewEnabled?: boolean;
 
     /** 图片快捷操作与长按面板开关 */
     enableActionPanel?: boolean;

@@ -1,0 +1,49 @@
+/**
+ * image-preview.css
+ * 层级：controls/feedback
+ * 职责：大图全屏预览弹窗、居中遮罩与关闭按钮
+ */
+
+.da-image-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-modal, 100100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    cursor: zoom-out;
+    backdrop-filter: blur(var(--da-blur-modal, 14px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px));
+    animation: da-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.da-image-preview-img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: var(--da-radius-md, 8px);
+    box-shadow: var(--da-shadow-xl, 0 16px 36px rgba(0, 0, 0, 0.5));
+    cursor: default;
+}
+
+.da-image-preview-close {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.da-image-preview-close:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.1);
+}

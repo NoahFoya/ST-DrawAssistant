@@ -1,0 +1,162 @@
+/**
+ * 弹窗侧边导航选项卡、高亮指示与脏数据红点 (Sidebar Navigation Styles)
+ */
+
+.da-sidebar-tabs {
+    flex: 0 0 170px;
+    width: 170px;
+    background: transparent;
+    border-right: 1px dashed var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 3px);
+    padding: var(--da-space-md, 10px) var(--da-space-sm, 6px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--da-border-color) transparent;
+}
+
+.da-sidebar-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--da-space-sm, 8px);
+    height: 34px;
+    min-height: 34px;
+    padding: 0 var(--da-space-md, 12px);
+    border-radius: var(--da-radius-btn, 6px);
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-base, 0.86rem);
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.14s var(--da-ease), color 0.14s var(--da-ease), transform 0.1s var(--da-ease);
+    box-sizing: border-box;
+    letter-spacing: -0.01em;
+    width: 100%;
+}
+
+.da-sidebar-item:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-sidebar-item:active {
+    transform: scale(0.98);
+}
+
+/* 键盘 Tab 导航时在选项卡上呈现高对比度焦点指示 */
+.da-sidebar-item:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* 侧边栏语义分组细分割线：区分绘图核心区与系统配置区 */
+.da-sidebar-divider {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--da-border-color);
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.da-sidebar-item--active {
+    background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.025)) !important;
+    color: var(--da-accent-color) !important;
+    font-weight: 600 !important;
+    border: 1px solid var(--da-border-color) !important;
+}
+
+.da-sidebar-item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--da-accent-color);
+}
+
+.da-sidebar-item__icon {
+    font-size: 1.05em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+.da-sidebar-item__icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+}
+
+.da-sidebar-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+
+.da-sidebar-item__dirty-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--da-color-warn, #ff9f0a);
+    box-shadow: 0 0 5px rgba(255, 159, 10, 0.7);
+    flex-shrink: 0;
+    display: inline-block;
+    animation: da-pulse-dirty 1.6s infinite ease-in-out;
+}
+
+/* 引擎 Tab 折叠展开指示箭头 */
+.da-sidebar-item__chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: transform 0.18s var(--da-ease), opacity 0.14s var(--da-ease);
+}
+
+.da-sidebar-item__chevron.is-expanded {
+    transform: rotate(180deg);
+    opacity: 0.8;
+}
+
+.da-sidebar-item:hover .da-sidebar-item__chevron {
+    opacity: 0.75;
+}
+
+/* 引擎切换子项：缩进 + 字号略小 + 次要色 */
+.da-sidebar-subitem {
+    padding-left: calc(var(--da-space-md, 12px) + 18px) !important;
+    font-size: var(--da-font-size-sm, 0.80rem) !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    color: var(--da-text-muted) !important;
+    animation: da-fadein 0.14s var(--da-ease);
+}
+
+.da-sidebar-subitem:hover {
+    color: var(--da-text-primary) !important;
+}
