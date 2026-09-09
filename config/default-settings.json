@@ -3,6 +3,7 @@
   "showHelp": true,
   "activeProvider": "comfyui",
   "saveToIndexedDB": true,
+  "saveToServer": false,
   "embedToBase64": false,
   "enableThumbnail": true,
   "deduplicateHash": true,
@@ -28,14 +29,14 @@
   "engineConfigs": {
     "comfyui": {
       "serverUrl": "http://127.0.0.1:8188",
-      "activeDrawingProfileId": "",
-      "activePromptProfileId": "",
-      "activeWorkflowProfileId": ""
+      "activeDrawingProfileId": "comfyui_drawing_wai_default",
+      "activePromptProfileId": "prompt_anime_general",
+      "activeWorkflowProfileId": "comfyui_checkpoint_standard"
     },
     "sdwebui": {
       "serverUrl": "http://127.0.0.1:7860",
-      "activeDrawingProfileId": "",
-      "activePromptProfileId": ""
+      "activeDrawingProfileId": "default_sd15",
+      "activePromptProfileId": "prompt_anime_general"
     },
     "novelai": {
       "serverUrl": "https://image.novelai.net",

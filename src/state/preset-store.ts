@@ -6,6 +6,7 @@
 
 import { PresetItem, PresetsArchiveData } from '../types';
 import { SettingsStore } from './settings-store';
+import { reloadPresetsFromDisk } from './builtin-presets';
 import { Logger } from '../utils/logger';
 
 export class PresetStore {
@@ -25,17 +26,10 @@ export class PresetStore {
     }
 
     /**
-     * 读取指定分类下的预设方案列表
+     * 读取指定分类下的全量预设方案列表（包含 data 完整参数）
      */
     public static async list<T = any>(category: string, subCategory?: string): Promise<PresetItem<T>[]> {
         return this._getStore().getPresets<T>(category, subCategory);
-    }
-
-    /**
-     * 兼容别名：获取预设摘要列表
-     */
-    public static async listSummary<T = any>(category: string, subCategory?: string): Promise<PresetItem<T>[]> {
-        return this.list<T>(category, subCategory);
     }
 
     /**
@@ -97,8 +91,10 @@ export class PresetStore {
 
     /**
      * 清空自定义修改并恢复为出厂预设
+     * 优先尝试从本地磁盘重新加载模板配置，以反映用户或整合包作者对初始 JSON 的改动
      */
     public static async resetDefaults(): Promise<{ success: boolean; error?: string }> {
-        return this._getStore().resetPresets();
+        const reloaded = await reloadPresetsFromDisk();
+        return this._getStore().resetPresets(reloaded);
     }
 }

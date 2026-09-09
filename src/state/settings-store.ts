@@ -7,6 +7,7 @@ import { IDisposable, toDisposable, DrawAssistantSettings, PresetsArchiveData, P
 import { Logger } from '../utils/logger';
 import { DEFAULT_SAVE_DEBOUNCE_MS } from '../constants';
 import defaultSettingsJson from '../../config/default-settings.json';
+import { BUILTIN_PRESETS } from './builtin-presets';
 
 export type StateListener<T> = (state: T, keyPath?: string, oldState?: T) => void;
 export type KeyListener<V> = (newValue: V, oldValue: V) => void;
@@ -26,8 +27,11 @@ export function isSensitiveKey(keyName: string): boolean {
     );
 }
 
-/** 插件出厂默认配置 (静态导入自 config/default-settings.json) */
-export const DEFAULT_SETTINGS: DrawAssistantSettings = defaultSettingsJson as DrawAssistantSettings;
+/** 插件出厂默认配置 (静态导入自 config/default-settings.json 并装配出厂初始预设模板) */
+export const DEFAULT_SETTINGS: DrawAssistantSettings = {
+    ...(defaultSettingsJson as DrawAssistantSettings),
+    presets: JSON.parse(JSON.stringify(BUILTIN_PRESETS))
+};
 
 function isPlainObject(item: unknown): item is Record<string, any> {
     return Boolean(item && typeof item === 'object' && !Array.isArray(item));
@@ -447,8 +451,8 @@ export class SettingsStore implements IDisposable {
     }
 
     /** 恢复出厂默认预设方案 */
-    public resetPresets(): { success: boolean; error?: string } {
-        const defaultPresets = deepClone(DEFAULT_SETTINGS.presets);
+    public resetPresets(customPresets?: PresetsArchiveData): { success: boolean; error?: string } {
+        const defaultPresets = customPresets ? deepClone(customPresets) : deepClone(BUILTIN_PRESETS);
         this.set('presets', defaultPresets);
         return { success: true };
     }

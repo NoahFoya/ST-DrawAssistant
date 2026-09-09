@@ -11,12 +11,6 @@ export interface PresetItem<T = any> {
     isBuiltin?: boolean;
 }
 
-export interface PresetSummaryItem {
-    id: string;
-    name: string;
-    isBuiltin?: boolean;
-}
-
 export interface PresetsArchiveData {
     themes: PresetItem[];
     prompts: PresetItem[];

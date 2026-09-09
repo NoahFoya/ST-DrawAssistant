@@ -26,7 +26,7 @@ import {
 } from '../../services/drivers/openai-driver';
 import {
     bindPresetToolbar,
-    createFilePresetAdapter,
+    createPresetStoreAdapter,
     createOpenAIServiceCard,
     OpenAIServiceCardElement
 } from '../components';
@@ -76,7 +76,7 @@ export class OpenAITabView extends BaseTabView {
     private _seedInputEl?: HTMLInputElement;
 
     private _drawingToolbarHandle: any = null;
-    private _drawingProfileSummaries: OpenAIPresetItem<OpenAIDrawingProfileData>[] = [];
+    private _drawingProfiles: OpenAIPresetItem<OpenAIDrawingProfileData>[] = [];
     private _activeDrawingBaseline: OpenAIDrawingProfileData | null = null;
 
     constructor(
@@ -290,14 +290,14 @@ export class OpenAITabView extends BaseTabView {
         const header = createCardHeader({ title: '绘图参数预设' });
         card.header.appendChild(header);
 
-        const drawingAdapter = createFilePresetAdapter<OpenAIDrawingProfileData>({
+        const drawingAdapter = createPresetStoreAdapter<OpenAIDrawingProfileData>({
             category: 'drawing',
             subCategory: 'openai',
             label: '绘图参数',
             getPresets: () => this._getDrawingProfiles(),
             getActiveId: () => this._getActiveDrawingId(),
             onPresetsChange: (presets, activeId) => {
-                this._drawingProfileSummaries = presets;
+                this._drawingProfiles = presets;
                 this._engineStore.set('activeDrawingProfileId', activeId);
             },
             onApply: (preset) => {
@@ -871,7 +871,7 @@ export class OpenAITabView extends BaseTabView {
     }
 
     private _getDrawingProfiles(): OpenAIPresetItem<OpenAIDrawingProfileData>[] {
-        return this._drawingProfileSummaries;
+        return this._drawingProfiles;
     }
 
     private _getActiveDrawingId(): string {
@@ -933,31 +933,30 @@ export class OpenAITabView extends BaseTabView {
         }
     }
 
-    /** 按需加载预设方案 */
+    /** 异步按需加载预设方案与激活方案 */
     private async _loadDiskPresets(): Promise<void> {
         try {
-            const summaries = await PresetStore.listSummary<OpenAIDrawingProfileData>('drawing', 'openai');
-            this._drawingProfileSummaries = Array.isArray(summaries) ? summaries : [];
+            const presets = await PresetStore.list<OpenAIDrawingProfileData>('drawing', 'openai');
+            this._drawingProfiles = Array.isArray(presets) ? presets : [];
             const currentDrawingId = this._getActiveDrawingId();
-            const matched = this._drawingProfileSummaries.find((p) => p.id === currentDrawingId) || this._drawingProfileSummaries[0];
+            const matched = this._drawingProfiles.find((p) => p.id === currentDrawingId) || this._drawingProfiles[0];
             if (matched) {
                 this._engineStore.set('activeDrawingProfileId', matched.id);
-                const fullProfile = await PresetStore.get<OpenAIDrawingProfileData>('drawing', matched.id, 'openai');
-                if (fullProfile?.data) {
-                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(fullProfile.data));
-                    this._engineStore.update(fullProfile.data as any);
-                    this._updateProfileFields(fullProfile.data);
+                if (matched.data) {
+                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(matched.data));
+                    this._engineStore.update(matched.data as any);
+                    this._updateProfileFields(matched.data);
                     this._drawingToolbarHandle?.setDirty?.(false);
                 }
             } else {
                 this._engineStore.set('activeDrawingProfileId', '');
                 this._activeDrawingBaseline = null;
             }
-            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfileSummaries, this._engineStore.get('activeDrawingProfileId'));
+            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfiles, this._engineStore.get('activeDrawingProfileId'));
         } catch (err) {
             this._logger.error('OpenAITabView: 加载预设方案失败', err);
             FeedbackService.toastError('加载 OpenAI 预设方案失败');
-            this._drawingProfileSummaries = [];
+            this._drawingProfiles = [];
             this._drawingToolbarHandle?.refreshPresets?.([], '');
         }
     }

@@ -563,104 +563,26 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
 }
 
 /**
- * 针对基于 Store 内部预设列表数组的通用适配器构建选项
+ * 针对统一预设存储 (PresetStore) 的通用方案适配器构建选项
  */
-export interface StorePresetAdapterOptions<T> {
-    label: string;
-    getPresets: () => PresetItem<T>[];
-    getActiveId: () => string;
-    onPresetsChange: (presets: PresetItem<T>[], activeId: string) => void;
-    onApply?: (preset: PresetItem<T>) => void;
-}
-
-/**
- * 创建面向纯配置 Store 数组列表的预设方案适配器
- */
-export function createStorePresetAdapter<T>(options: StorePresetAdapterOptions<T>): PresetToolbarAdapter<T> {
-    const { label, getPresets, getActiveId, onPresetsChange, onApply } = options;
-
-    return {
-        label,
-        getProfiles: () => getPresets(),
-        getInitialId: () => getActiveId(),
-        createProfile: (name: string, data: T) => {
-            const newId = `preset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-            const list = [...getPresets(), { id: newId, name, data }];
-            onPresetsChange(list, newId);
-            return newId;
-        },
-        saveProfile: (id: string, data: T) => {
-            const list = getPresets();
-            const idx = list.findIndex((p) => p.id === id);
-            if (idx >= 0) {
-                const next = [...list];
-                next[idx] = { ...next[idx], data };
-                onPresetsChange(next, id);
-            }
-        },
-        renameProfile: (id: string, newName: string) => {
-            const list = getPresets();
-            const idx = list.findIndex((p) => p.id === id);
-            if (idx >= 0) {
-                const next = [...list];
-                next[idx] = { ...next[idx], name: newName };
-                onPresetsChange(next, id);
-            }
-        },
-        deleteProfile: (id: string) => {
-            const list = getPresets().filter((p) => p.id !== id);
-            const nextActiveId = list[0]?.id || '';
-            onPresetsChange(list, nextActiveId);
-            if (list[0] && onApply) {
-                onApply(list[0]);
-            }
-            return nextActiveId;
-        },
-        exportProfile: (_id: string, data: T) => {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${label}_方案.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        },
-        importProfile: (content: string, fileName: string) => {
-            const parsed = JSON.parse(content);
-            const name = fileName.replace(/\.json$/i, '');
-            const newId = `preset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-            const list = [...getPresets(), { id: newId, name, data: parsed }];
-            onPresetsChange(list, newId);
-            return newId;
-        },
-        onSelect: (id: string) => {
-            const profile = getPresets().find((p) => p.id === id);
-            if (profile && onApply) {
-                onApply(profile);
-            }
-            onPresetsChange(getPresets(), id);
-        }
-    };
-}
-
-/**
- * 针对本地配置持久化的通用预设方案适配器构建选项
- */
-export interface FilePresetAdapterOptions<T> {
+export interface PresetStoreAdapterOptions<T> {
     category: string;
     subCategory?: string;
     label: string;
     getPresets: () => PresetItem<T>[];
     getActiveId: () => string;
     onPresetsChange: (presets: PresetItem<T>[], activeId: string) => void;
-    onApply?: (preset: PresetItem<T>) => void;
+    onApply?: (preset: PresetItem<T>) => void | Promise<void>;
     generateId?: (name: string) => string;
 }
 
+/** 兼容旧命名类型 */
+export type FilePresetAdapterOptions<T> = PresetStoreAdapterOptions<T>;
+
 /**
- * 创建面向本地预设存储的方案适配器
+ * 创建面向统一预设存储 (PresetStore) 的通用方案适配器
  */
-export function createFilePresetAdapter<T>(options: FilePresetAdapterOptions<T>): PresetToolbarAdapter<T> {
+export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T>): PresetToolbarAdapter<T> {
     const { category, subCategory, label, getPresets, getActiveId, onPresetsChange, onApply, generateId } = options;
 
     return {
@@ -702,13 +624,7 @@ export function createFilePresetAdapter<T>(options: FilePresetAdapterOptions<T>)
             const list = getPresets();
             const idx = list.findIndex((p) => p.id === id);
             if (idx >= 0) {
-                let data = list[idx].data as T;
-                if (!data || Object.keys(data as any).length === 0) {
-                    const fetched = await PresetStore.get<T>(category, id, subCategory);
-                    if (fetched?.data) {
-                        data = fetched.data;
-                    }
-                }
+                const data = list[idx].data as T;
                 const ok = await PresetStore.save(category, { id, name: newName, data }, subCategory);
                 if (!ok) {
                     FeedbackService.toastError(`重命名${label}方案失败：无法写入本地存储`);
@@ -731,19 +647,12 @@ export function createFilePresetAdapter<T>(options: FilePresetAdapterOptions<T>)
             const nextActiveId = list[0]?.id || '';
             onPresetsChange(list, nextActiveId);
             if (list[0] && onApply) {
-                onApply(list[0]);
+                await onApply(list[0]);
             }
             return nextActiveId;
         },
         exportProfile: async (_id: string, data: T) => {
-            let exportData = data;
-            if (!exportData || Object.keys(exportData as any).length === 0) {
-                const fetched = await PresetStore.get<T>(category, _id, subCategory);
-                if (fetched?.data) {
-                    exportData = fetched.data;
-                }
-            }
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -767,21 +676,7 @@ export function createFilePresetAdapter<T>(options: FilePresetAdapterOptions<T>)
             return id;
         },
         onSelect: async (id: string) => {
-            let profile = getPresets().find((p) => p.id === id);
-
-            // 若当前条目仅为摘要信息 (未载入完整 data)，按需从存储精准获取详情
-            if (profile && (!profile.data || Object.keys(profile.data as any).length === 0)) {
-                const fetched = await PresetStore.get<T>(category, id, subCategory);
-                if (fetched?.data) {
-                    profile = { ...profile, data: fetched.data };
-                    const currentList = getPresets();
-                    const idx = currentList.findIndex((p) => p.id === id);
-                    if (idx >= 0) {
-                        currentList[idx] = profile;
-                    }
-                }
-            }
-
+            const profile = getPresets().find((p) => p.id === id);
             if (profile && onApply) {
                 await onApply(profile);
             }
@@ -789,4 +684,7 @@ export function createFilePresetAdapter<T>(options: FilePresetAdapterOptions<T>)
         }
     };
 }
+
+/** 兼容旧命名别名导出 */
+export const createFilePresetAdapter = createPresetStoreAdapter;
 

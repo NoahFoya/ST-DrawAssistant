@@ -1,0 +1,88 @@
+{
+  "8": {
+    "inputs": {
+      "samples": ["63", 0],
+      "vae": ["114", 2]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "%negative_prompt%",
+      "clip": ["113", 2]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "28": {
+    "inputs": {
+      "width": "%width%",
+      "height": "%height%",
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "63": {
+    "inputs": {
+      "seed": "%seed%",
+      "steps": "%steps%",
+      "cfg": "%cfg%",
+      "sampler_name": "%sampler_name%",
+      "scheduler": "%scheduler%",
+      "denoise": 1,
+      "model": ["113", 3],
+      "positive": ["113", 1],
+      "negative": ["12", 0],
+      "latent_image": ["28", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "99": {
+    "inputs": {
+      "filename_prefix": "ST-Draw-",
+      "images": ["8", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "113": {
+    "inputs": {
+      "positive": "%prompt%",
+      "auto_random": false,
+      "lora_str": "",
+      "temp_str": "",
+      "temp_lora_str": "",
+      "random_template": "",
+      "打开提示词编辑器": null,
+      "打开Lora堆": "",
+      "opt_clip": ["114", 1],
+      "opt_model": ["114", 0]
+    },
+    "class_type": "WeiLinPromptUI",
+    "_meta": {
+      "title": "WeiLin 全能提示词编辑器"
+    }
+  },
+  "114": {
+    "inputs": {
+      "ckpt_name": "%model_name%"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Checkpoint加载器（简易）"
+    }
+  }
+}

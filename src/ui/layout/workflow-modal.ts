@@ -44,7 +44,12 @@ export function getNodeBadgeMeta(_nodeId: string, nodeData: WorkflowNodeData) {
             isCore: true
         };
     }
-    if (classType.includes('checkpointloader') || classType.includes('unetloader')) {
+    if (
+        classType.includes('checkpointloader') ||
+        classType.includes('unetloader') ||
+        classType.includes('cliploader') ||
+        classType.includes('vaeloader')
+    ) {
         return {
             title,
             badgeText: '📦 模型加载',

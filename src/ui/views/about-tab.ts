@@ -423,9 +423,11 @@ export class AboutTabView extends BaseTabView {
                     return;
                 }
 
-                // 重置前端主配置为出厂默认值
+                // 重置前端主配置为出厂默认值（保留已由 resetDefaults 重新从磁盘载入的预设模板）
                 const { DEFAULT_SETTINGS } = await import('../../state/settings-store');
-                this._store.update(DEFAULT_SETTINGS);
+                const resetBase = { ...DEFAULT_SETTINGS };
+                delete (resetBase as any).presets;
+                this._store.update(resetBase);
                 this._store.commit();
 
                 // 广播重置事件通知所有 Tab 重新加载出厂方案

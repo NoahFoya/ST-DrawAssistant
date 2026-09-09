@@ -24,7 +24,7 @@ import {
     PresetProfileItem,
     WorkflowProfileData,
     bindPresetToolbar,
-    createFilePresetAdapter,
+    createPresetStoreAdapter,
     PresetItem,
     createPromptPresetManager,
     PromptPresetManagerHandle,
@@ -115,9 +115,9 @@ export class ComfyUITabView extends BaseTabView {
         'simple'
     ];
     private _cachedLoras: string[] = [];
-    private _drawingProfileSummaries: PresetItem<ComfyDrawingProfileData>[] = [];
-    private _promptProfileSummaries: PresetItem<PromptProfileData>[] = [];
-    private _workflowProfileSummaries: PresetItem<WorkflowProfileData>[] = [];
+    private _drawingProfiles: PresetItem<ComfyDrawingProfileData>[] = [];
+    private _promptProfiles: PresetItem<PromptProfileData>[] = [];
+    private _workflowProfiles: PresetItem<WorkflowProfileData>[] = [];
     private _activeDrawingBaseline: ComfyDrawingProfileData | null = null;
 
     constructor(
@@ -282,14 +282,14 @@ export class ComfyUITabView extends BaseTabView {
         };
 
         // 挂载顶部全宽绘图主方案工具栏
-        const drawingAdapter = createFilePresetAdapter<ComfyDrawingProfileData>({
+        const drawingAdapter = createPresetStoreAdapter<ComfyDrawingProfileData>({
             category: 'drawing',
             subCategory: 'comfyui',
             label: '绘图参数',
             getPresets: () => this._getDrawingProfiles(),
             getActiveId: () => this._engineStore.get('activeDrawingProfileId') || '',
             onPresetsChange: (presets, activeId) => {
-                this._drawingProfileSummaries = presets;
+                this._drawingProfiles = presets;
                 this._engineStore.set('activeDrawingProfileId', activeId);
             },
             onApply: (preset) => {
@@ -516,7 +516,7 @@ export class ComfyUITabView extends BaseTabView {
             cachedLoras: this._cachedLoras,
             showExtraWeights: true,
             onProfilesChange: (profiles, activeId) => {
-                this._promptProfileSummaries = profiles;
+                this._promptProfiles = profiles;
                 this._engineStore.set('activePromptProfileId', activeId);
                 this._refreshPromptProfileSelectOptions();
             },
@@ -546,7 +546,7 @@ export class ComfyUITabView extends BaseTabView {
             getCurrentProfileId: () => this._getActiveWorkflowId(),
             getCurrentJson: () => this._getActiveWorkflowJson(),
             onProfilesChange: (profiles, activeId) => {
-                this._workflowProfileSummaries = profiles;
+                this._workflowProfiles = profiles;
                 this._engineStore.set('activeWorkflowProfileId', activeId);
                 const active = profiles.find((p) => p.id === activeId) || profiles[0];
                 if (active?.data?.json) {
@@ -699,11 +699,11 @@ export class ComfyUITabView extends BaseTabView {
     }
 
     private _getPromptProfiles(): PresetItem<PromptProfileData>[] {
-        return this._promptProfileSummaries;
+        return this._promptProfiles;
     }
 
     private _getWorkflowProfiles(): PresetProfileItem<WorkflowProfileData>[] {
-        return this._workflowProfileSummaries;
+        return this._workflowProfiles;
     }
 
     private _getActiveWorkflowId(): string {
@@ -718,56 +718,55 @@ export class ComfyUITabView extends BaseTabView {
     }
 
     private _getDrawingProfiles(): PresetItem<ComfyDrawingProfileData>[] {
-        return this._drawingProfileSummaries;
+        return this._drawingProfiles;
     }
 
     /** 异步按需加载预设方案与激活方案 */
     private async _loadDiskPresets(): Promise<void> {
         try {
-            // 1. 绘图主方案：仅拉取轻量摘要列表
-            const summaries = await PresetStore.listSummary<ComfyDrawingProfileData>('drawing', 'comfyui');
-            this._drawingProfileSummaries = Array.isArray(summaries) ? summaries : [];
+            // 1. 绘图主方案：拉取预设列表并应用激活项
+            const presets = await PresetStore.list<ComfyDrawingProfileData>('drawing', 'comfyui');
+            this._drawingProfiles = Array.isArray(presets) ? presets : [];
             const currentDrawingId = this._engineStore.get('activeDrawingProfileId');
-            const matched = this._drawingProfileSummaries.find((p) => p.id === currentDrawingId) || this._drawingProfileSummaries[0];
+            const matched = this._drawingProfiles.find((p) => p.id === currentDrawingId) || this._drawingProfiles[0];
             if (matched) {
                 this._engineStore.set('activeDrawingProfileId', matched.id);
-                const fullProfile = await PresetStore.get<ComfyDrawingProfileData>('drawing', matched.id, 'comfyui');
-                if (fullProfile?.data) {
-                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(fullProfile.data));
-                    this._engineStore.update(fullProfile.data);
+                if (matched.data) {
+                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(matched.data));
+                    this._engineStore.update(matched.data);
                     this._drawingToolbarHandle?.setDirty?.(false);
                 }
             } else {
                 this._engineStore.set('activeDrawingProfileId', '');
                 this._activeDrawingBaseline = null;
             }
-            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfileSummaries, this._engineStore.get('activeDrawingProfileId'));
+            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfiles, this._engineStore.get('activeDrawingProfileId'));
 
-            // 2. 通用提示词预设：仅拉取轻量摘要列表
-            const promptSummaries = await PresetStore.listSummary<PromptProfileData>('prompts');
-            this._promptProfileSummaries = Array.isArray(promptSummaries) ? promptSummaries : [];
+            // 2. 通用提示词预设：拉取预设列表并刷新组件
+            const promptPresets = await PresetStore.list<PromptProfileData>('prompts');
+            this._promptProfiles = Array.isArray(promptPresets) ? promptPresets : [];
             this._refreshPromptProfileSelectOptions();
             this._promptPresetManagerHandle?.refresh();
             this._promptPresetManagerHandle?.toolbar?.refreshPresets?.(
-                this._promptProfileSummaries,
-                this._engineStore.get('activePromptProfileId') || (this._promptProfileSummaries[0]?.id ?? '')
+                this._promptProfiles,
+                this._engineStore.get('activePromptProfileId') || (this._promptProfiles[0]?.id ?? '')
             );
 
-            // 3. 工作流预设：仅拉取轻量摘要列表
-            const workflowSummaries = await PresetStore.listSummary<WorkflowProfileData>('workflows');
-            this._workflowProfileSummaries = Array.isArray(workflowSummaries) ? workflowSummaries : [];
+            // 3. 工作流预设：拉取预设列表并刷新组件
+            const workflowPresets = await PresetStore.list<WorkflowProfileData>('workflows');
+            this._workflowProfiles = Array.isArray(workflowPresets) ? workflowPresets : [];
             this._refreshWorkflowProfileSelectOptions();
             this._workflowCardHandle?.refresh();
             this._workflowCardHandle?.toolbar?.refreshPresets?.(
-                this._workflowProfileSummaries,
-                this._getActiveWorkflowId() || (this._workflowProfileSummaries[0]?.id ?? '')
+                this._workflowProfiles,
+                this._getActiveWorkflowId() || (this._workflowProfiles[0]?.id ?? '')
             );
         } catch (err) {
             this._logger.error('ComfyUITabView: 加载预设方案失败', err);
             FeedbackService.toastError('加载 ComfyUI 预设方案失败');
-            this._drawingProfileSummaries = [];
-            this._promptProfileSummaries = [];
-            this._workflowProfileSummaries = [];
+            this._drawingProfiles = [];
+            this._promptProfiles = [];
+            this._workflowProfiles = [];
             this._drawingToolbarHandle?.refreshPresets?.([], '');
         }
     }

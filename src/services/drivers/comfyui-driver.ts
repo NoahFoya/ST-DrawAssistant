@@ -51,6 +51,9 @@ export interface ComfyUIEngineConfig {
 
 export const DEFAULT_COMFYUI_CONFIG: ComfyUIEngineConfig = {
     serverUrl: 'http://127.0.0.1:8188',
+    activeDrawingProfileId: 'comfyui_drawing_wai_default',
+    activePromptProfileId: 'prompt_anime_general',
+    activeWorkflowProfileId: 'comfyui_checkpoint_standard',
     workflowJson: JSON.stringify({
         "3": {
             "inputs": {

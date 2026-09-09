@@ -24,11 +24,10 @@ import {
 } from '../components';
 import {
     ThemeService,
-    DEFAULT_THEME_DATA,
-    DEFAULT_LIGHT_THEME_DATA,
     ThemeData,
     FALLBACK_SAFE_THEME
 } from '../foundation/theme-service';
+import { BUILTIN_PRESET_THEMES } from '../../state/builtin-presets';
 import { FeedbackService } from '../feedback/feedback';
 import { BaseTabView } from '../foundation/tab-view';
 
@@ -37,11 +36,8 @@ export class ThemeTabView extends BaseTabView {
     private _toolbarEl?: PresetToolbarElement;
     private readonly _colorControls = new Map<keyof ThemeData, ColorPickerHandle>();
     private readonly _sliderControls = new Map<keyof ThemeData, SliderHandle>();
-    /** 全量主题方案列表：由本地配置与预设加载，默认包含深浅基础方案 */
-    private _presets: PresetItem<ThemeData>[] = [
-        { id: 'dark', name: '深色夜间', data: { ...DEFAULT_THEME_DATA } },
-        { id: 'light', name: '明亮日间', data: { ...DEFAULT_LIGHT_THEME_DATA } }
-    ];
+    /** 全量主题方案列表：由初始模板与持久化预设加载 */
+    private _presets: PresetItem<ThemeData>[] = (BUILTIN_PRESET_THEMES as unknown as PresetItem<ThemeData>[]) || [];
 
     constructor(
         private readonly _store: SettingsStore,
@@ -90,30 +86,32 @@ export class ThemeTabView extends BaseTabView {
                         id: p.id,
                         name: p.name || p.id,
                         data: {
-                            accentColor: d.accentColor || DEFAULT_THEME_DATA.accentColor,
-                            bgPrimary: d.bgPrimary || DEFAULT_THEME_DATA.bgPrimary,
-                            bgSecondary: d.bgSecondary || DEFAULT_THEME_DATA.bgSecondary,
-                            bgGradientEnd: d.bgGradientEnd || d.bgPrimary || DEFAULT_THEME_DATA.bgGradientEnd,
-                            bgGradientAngle: Number(d.bgGradientAngle ?? DEFAULT_THEME_DATA.bgGradientAngle),
-                            bgOpacity: Number(d.bgOpacity ?? DEFAULT_THEME_DATA.bgOpacity),
-                            textPrimary: d.textPrimary || DEFAULT_THEME_DATA.textPrimary,
-                            textSecondary: d.textSecondary || DEFAULT_THEME_DATA.textSecondary,
-                            borderColor: d.borderColor || DEFAULT_THEME_DATA.borderColor,
-                            borderRadius: Number(d.borderRadius ?? DEFAULT_THEME_DATA.borderRadius),
-                            blurRadius: Number(d.blurRadius ?? DEFAULT_THEME_DATA.blurRadius)
+                            accentColor: d.accentColor || FALLBACK_SAFE_THEME.accentColor,
+                            bgPrimary: d.bgPrimary || FALLBACK_SAFE_THEME.bgPrimary,
+                            bgSecondary: d.bgSecondary || FALLBACK_SAFE_THEME.bgSecondary,
+                            bgGradientEnd: d.bgGradientEnd || d.bgPrimary || FALLBACK_SAFE_THEME.bgGradientEnd,
+                            bgGradientAngle: Number(d.bgGradientAngle ?? FALLBACK_SAFE_THEME.bgGradientAngle),
+                            bgOpacity: Number(d.bgOpacity ?? FALLBACK_SAFE_THEME.bgOpacity),
+                            textPrimary: d.textPrimary || FALLBACK_SAFE_THEME.textPrimary,
+                            textSecondary: d.textSecondary || FALLBACK_SAFE_THEME.textSecondary,
+                            borderColor: d.borderColor || FALLBACK_SAFE_THEME.borderColor,
+                            borderRadius: Number(d.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius),
+                            blurRadius: Number(d.blurRadius ?? FALLBACK_SAFE_THEME.blurRadius)
                         }
                     };
                 });
+            } else {
+                this._presets = (BUILTIN_PRESET_THEMES as unknown as PresetItem<ThemeData>[]) || [];
+            }
 
-                ThemeService.registerThemes(this._presets);
-                const currentId = this._getActiveThemeId();
-                this._toolbarEl?.refreshPresets?.(this._presets, currentId);
+            ThemeService.registerThemes(this._presets);
+            const currentId = this._getActiveThemeId();
+            this._toolbarEl?.refreshPresets?.(this._presets, currentId);
 
-                const activeProfile = this._presets.find((p) => p.id === currentId);
-                if (activeProfile?.data) {
-                    this._currentThemeData = { ...activeProfile.data };
-                    this._syncControls();
-                }
+            const activeProfile = this._presets.find((p) => p.id === currentId);
+            if (activeProfile?.data) {
+                this._currentThemeData = { ...activeProfile.data };
+                this._syncControls();
             }
         } catch {
             // 离线或服务未就绪时保持内存安全方案
@@ -197,7 +195,7 @@ export class ThemeTabView extends BaseTabView {
                 ThemeService.unregisterTheme(id);
                 FeedbackService.toastSuccess('已删除主题方案');
 
-                const nextId = this._presets[0]?.id || 'dark';
+                const nextId = this._presets[0]?.id || '';
                 this._store.set('themePreset', nextId);
                 return nextId;
             },
@@ -223,17 +221,17 @@ export class ThemeTabView extends BaseTabView {
                 const id = `imported_${Date.now()}`;
                 const d = parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed;
                 const data: ThemeData = {
-                    accentColor: d.accentColor || DEFAULT_THEME_DATA.accentColor,
-                    bgPrimary: d.bgPrimary || DEFAULT_THEME_DATA.bgPrimary,
-                    bgSecondary: d.bgSecondary || DEFAULT_THEME_DATA.bgSecondary,
-                    bgGradientEnd: d.bgGradientEnd || d.bgPrimary || DEFAULT_THEME_DATA.bgGradientEnd,
-                    bgGradientAngle: Number(d.bgGradientAngle ?? DEFAULT_THEME_DATA.bgGradientAngle),
-                    bgOpacity: Number(d.bgOpacity ?? DEFAULT_THEME_DATA.bgOpacity),
-                    textPrimary: d.textPrimary || DEFAULT_THEME_DATA.textPrimary,
-                    textSecondary: d.textSecondary || DEFAULT_THEME_DATA.textSecondary,
-                    borderColor: d.borderColor || DEFAULT_THEME_DATA.borderColor,
-                    borderRadius: Number(d.borderRadius ?? DEFAULT_THEME_DATA.borderRadius),
-                    blurRadius: Number(d.blurRadius ?? DEFAULT_THEME_DATA.blurRadius)
+                    accentColor: d.accentColor || FALLBACK_SAFE_THEME.accentColor,
+                    bgPrimary: d.bgPrimary || FALLBACK_SAFE_THEME.bgPrimary,
+                    bgSecondary: d.bgSecondary || FALLBACK_SAFE_THEME.bgSecondary,
+                    bgGradientEnd: d.bgGradientEnd || d.bgPrimary || FALLBACK_SAFE_THEME.bgGradientEnd,
+                    bgGradientAngle: Number(d.bgGradientAngle ?? FALLBACK_SAFE_THEME.bgGradientAngle),
+                    bgOpacity: Number(d.bgOpacity ?? FALLBACK_SAFE_THEME.bgOpacity),
+                    textPrimary: d.textPrimary || FALLBACK_SAFE_THEME.textPrimary,
+                    textSecondary: d.textSecondary || FALLBACK_SAFE_THEME.textSecondary,
+                    borderColor: d.borderColor || FALLBACK_SAFE_THEME.borderColor,
+                    borderRadius: Number(d.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius),
+                    blurRadius: Number(d.blurRadius ?? FALLBACK_SAFE_THEME.blurRadius)
                 };
 
                 const ok = await PresetStore.save('themes', { id, name, data });
@@ -300,38 +298,38 @@ export class ThemeTabView extends BaseTabView {
                 key: 'accentColor',
                 label: '主题高光强调色',
                 helpTooltip: '控制界面关键操作按钮、单选高亮框与激活态边框的全局主色调。',
-                def: DEFAULT_THEME_DATA.accentColor
+                def: FALLBACK_SAFE_THEME.accentColor
             },
             {
                 key: 'bgPrimary',
                 label: '界面主背景色',
                 helpTooltip: '控制插件主弹窗底层与侧边栏导航的基础背景颜色。',
-                def: DEFAULT_THEME_DATA.bgPrimary
+                def: FALLBACK_SAFE_THEME.bgPrimary
             },
             {
                 key: 'bgGradientEnd',
                 label: '背景渐变结束色',
-                def: DEFAULT_THEME_DATA.bgGradientEnd
+                def: FALLBACK_SAFE_THEME.bgGradientEnd
             },
             {
                 key: 'bgSecondary',
                 label: '卡片容器背景色',
-                def: DEFAULT_THEME_DATA.bgSecondary
+                def: FALLBACK_SAFE_THEME.bgSecondary
             },
             {
                 key: 'textPrimary',
                 label: '主文本文字颜色',
-                def: DEFAULT_THEME_DATA.textPrimary
+                def: FALLBACK_SAFE_THEME.textPrimary
             },
             {
                 key: 'textSecondary',
                 label: '次级说明文字颜色',
-                def: DEFAULT_THEME_DATA.textSecondary
+                def: FALLBACK_SAFE_THEME.textSecondary
             },
             {
                 key: 'borderColor',
                 label: '边框分界线颜色',
-                def: DEFAULT_THEME_DATA.borderColor
+                def: FALLBACK_SAFE_THEME.borderColor
             }
         ];
 
@@ -375,7 +373,7 @@ export class ThemeTabView extends BaseTabView {
             title: '背景渐变角度'
         }));
         const angleSlider = createSlider({
-            value: Number(this._currentThemeData.bgGradientAngle ?? DEFAULT_THEME_DATA.bgGradientAngle),
+            value: Number(this._currentThemeData.bgGradientAngle ?? FALLBACK_SAFE_THEME.bgGradientAngle),
             min: 0,
             max: 360,
             step: 5,
@@ -396,7 +394,7 @@ export class ThemeTabView extends BaseTabView {
         opacityRow.slots[0].appendChild(createFieldLabel({
             title: '背景不透明度'
         }));
-        const rawOpacity = Number(this._currentThemeData.bgOpacity ?? DEFAULT_THEME_DATA.bgOpacity);
+        const rawOpacity = Number(this._currentThemeData.bgOpacity ?? FALLBACK_SAFE_THEME.bgOpacity);
         const opacitySlider = createSlider({
             value: Math.round(rawOpacity > 1 ? rawOpacity : rawOpacity * 100),
             min: 10,
@@ -421,7 +419,7 @@ export class ThemeTabView extends BaseTabView {
             helpTooltip: '控制弹窗底层的半透明虚化程度。设为 0 可完全关闭虚化以提升低配设备渲染帧率。'
         }));
         const blurSlider = createSlider({
-            value: Number(this._currentThemeData.blurRadius ?? DEFAULT_THEME_DATA.blurRadius),
+            value: Number(this._currentThemeData.blurRadius ?? FALLBACK_SAFE_THEME.blurRadius),
             min: 0,
             max: 40,
             step: 1,
@@ -443,7 +441,7 @@ export class ThemeTabView extends BaseTabView {
             title: '全局界面圆角'
         }));
         const radiusSlider = createSlider({
-            value: Number(this._currentThemeData.borderRadius ?? DEFAULT_THEME_DATA.borderRadius),
+            value: Number(this._currentThemeData.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius),
             min: 0,
             max: 24,
             step: 1,
@@ -477,7 +475,7 @@ export class ThemeTabView extends BaseTabView {
         for (const key of colorKeys) {
             const handle = this._colorControls.get(key);
             if (handle) {
-                const val = String(this._currentThemeData[key] || DEFAULT_THEME_DATA[key]);
+                const val = String(this._currentThemeData[key] || FALLBACK_SAFE_THEME[key]);
                 handle.colorInputElement.value = val.startsWith('#') ? val : '#000000';
                 handle.hexInputElement.value = val;
             }
@@ -485,23 +483,23 @@ export class ThemeTabView extends BaseTabView {
 
         const angleHandle = this._sliderControls.get('bgGradientAngle');
         if (angleHandle) {
-            angleHandle.setValue(Number(this._currentThemeData.bgGradientAngle ?? DEFAULT_THEME_DATA.bgGradientAngle));
+            angleHandle.setValue(Number(this._currentThemeData.bgGradientAngle ?? FALLBACK_SAFE_THEME.bgGradientAngle));
         }
 
         const opacityHandle = this._sliderControls.get('bgOpacity');
         if (opacityHandle) {
-            const raw = Number(this._currentThemeData.bgOpacity ?? DEFAULT_THEME_DATA.bgOpacity);
+            const raw = Number(this._currentThemeData.bgOpacity ?? FALLBACK_SAFE_THEME.bgOpacity);
             opacityHandle.setValue(Math.round(raw > 1 ? raw : raw * 100));
         }
 
         const blurHandle = this._sliderControls.get('blurRadius');
         if (blurHandle) {
-            blurHandle.setValue(Number(this._currentThemeData.blurRadius ?? DEFAULT_THEME_DATA.blurRadius));
+            blurHandle.setValue(Number(this._currentThemeData.blurRadius ?? FALLBACK_SAFE_THEME.blurRadius));
         }
 
         const radiusHandle = this._sliderControls.get('borderRadius');
         if (radiusHandle) {
-            radiusHandle.setValue(Number(this._currentThemeData.borderRadius ?? DEFAULT_THEME_DATA.borderRadius));
+            radiusHandle.setValue(Number(this._currentThemeData.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius));
         }
     }
 }

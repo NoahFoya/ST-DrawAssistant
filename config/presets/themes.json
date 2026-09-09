@@ -1,0 +1,146 @@
+[
+  {
+    "id": "dark",
+    "name": "深色夜间",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#3b82f6",
+      "bgPrimary": "#181b24",
+      "bgSecondary": "#202430",
+      "bgGradientEnd": "#252b3b",
+      "bgGradientAngle": 140,
+      "bgOpacity": 0.95,
+      "textPrimary": "#f8fafc",
+      "textSecondary": "#94a3b8",
+      "borderColor": "rgba(255, 255, 255, 0.09)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "light",
+    "name": "明亮日间",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#0284c7",
+      "bgPrimary": "#f8fafc",
+      "bgSecondary": "#ffffff",
+      "bgGradientEnd": "#e2e8f0",
+      "bgGradientAngle": 140,
+      "bgOpacity": 0.98,
+      "textPrimary": "#0f172a",
+      "textSecondary": "#475569",
+      "borderColor": "rgba(15, 23, 42, 0.12)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "deep-blue",
+    "name": "深海蓝",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#38bdf8",
+      "bgPrimary": "#181b24",
+      "bgSecondary": "#202430",
+      "bgGradientEnd": "#252b3b",
+      "bgGradientAngle": 140,
+      "bgOpacity": 0.95,
+      "textPrimary": "#f8fafc",
+      "textSecondary": "#94a3b8",
+      "borderColor": "rgba(255, 255, 255, 0.09)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "sky-light",
+    "name": "晴空白",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#0284c7",
+      "bgPrimary": "#f3f4f6",
+      "bgSecondary": "#ffffff",
+      "bgGradientEnd": "#e5e7eb",
+      "bgGradientAngle": 135,
+      "bgOpacity": 0.98,
+      "textPrimary": "#1e293b",
+      "textSecondary": "#64748b",
+      "borderColor": "rgba(2, 132, 199, 0.16)",
+      "borderRadius": 10,
+      "blurRadius": 16
+    }
+  },
+  {
+    "id": "iris-purple",
+    "name": "鸢尾紫",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#818cf8",
+      "bgPrimary": "#1a1d24",
+      "bgSecondary": "#222630",
+      "bgGradientEnd": "#282d3a",
+      "bgGradientAngle": 180,
+      "bgOpacity": 0.95,
+      "textPrimary": "#fafafa",
+      "textSecondary": "#a1a1aa",
+      "borderColor": "rgba(129, 140, 248, 0.16)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "mint-green",
+    "name": "薄荷绿",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#34d399",
+      "bgPrimary": "#131c19",
+      "bgSecondary": "#1b2622",
+      "bgGradientEnd": "#23322d",
+      "bgGradientAngle": 150,
+      "bgOpacity": 0.95,
+      "textPrimary": "#f0fdf4",
+      "textSecondary": "#a7f3d0",
+      "borderColor": "rgba(52, 211, 153, 0.18)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "warm-amber",
+    "name": "暖杏金",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#fbbf24",
+      "bgPrimary": "#1e1b18",
+      "bgSecondary": "#27231f",
+      "bgGradientEnd": "#322d27",
+      "bgGradientAngle": 140,
+      "bgOpacity": 0.95,
+      "textPrimary": "#fffbeb",
+      "textSecondary": "#d6c7b2",
+      "borderColor": "rgba(251, 191, 36, 0.18)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  },
+  {
+    "id": "berry-pink",
+    "name": "浆果粉",
+    "isBuiltin": true,
+    "data": {
+      "accentColor": "#fb7185",
+      "bgPrimary": "#1a1624",
+      "bgSecondary": "#231e30",
+      "bgGradientEnd": "#2d263d",
+      "bgGradientAngle": 135,
+      "bgOpacity": 0.94,
+      "textPrimary": "#fdf4ff",
+      "textSecondary": "#c084fc",
+      "borderColor": "rgba(251, 113, 133, 0.2)",
+      "borderRadius": 10,
+      "blurRadius": 18
+    }
+  }
+]

@@ -22,8 +22,12 @@ export interface ThemeData {
     [key: string]: unknown;
 }
 
-/** 静态深色夜间主题数据（用于安全回退） */
-export const DEFAULT_THEME_DATA: ThemeData = Object.freeze({
+/**
+ * 静态硬编码兜底安全主题数据
+ * 仅用于系统安全启动兜底以及所有预设被删后的白屏防御；
+ * 不进入主题列表，仅在无可用主题时被直接加载。
+ */
+export const FALLBACK_SAFE_THEME: ThemeData = Object.freeze({
     accentColor: '#38bdf8',
     bgPrimary: '#181b24',
     bgSecondary: '#202430',
@@ -37,22 +41,8 @@ export const DEFAULT_THEME_DATA: ThemeData = Object.freeze({
     blurRadius: 18
 });
 
-/** 静态明亮日间主题数据（用于安全回退） */
-export const DEFAULT_LIGHT_THEME_DATA: ThemeData = Object.freeze({
-    accentColor: '#0284c7',
-    bgPrimary: '#f8fafc',
-    bgSecondary: '#ffffff',
-    bgGradientEnd: '#e2e8f0',
-    bgGradientAngle: 140,
-    bgOpacity: 0.98,
-    textPrimary: '#0f172a',
-    textSecondary: '#475569',
-    borderColor: 'rgba(15, 23, 42, 0.12)',
-    borderRadius: 10,
-    blurRadius: 18
-});
-
-export const FALLBACK_SAFE_THEME: ThemeData = { ...DEFAULT_THEME_DATA };
+/** 兼容引用：指向唯一的硬编码兜底安全主题 */
+export const DEFAULT_THEME_DATA: ThemeData = FALLBACK_SAFE_THEME;
 
 export interface IThemeService extends IDisposable {
     applyTheme(themeData?: Partial<ThemeData>, targetNode?: HTMLElement): void;
@@ -203,11 +193,12 @@ export class ThemeService implements IThemeService {
 
     /**
      * 获取当前已注册的主题方案列表（含展示名称）
+     * 仅返回注册表中的主题，硬编码兜底安全主题不进入主题列表
      */
     public static getRegisteredThemes(): Array<{ id: string; name: string }> {
         const list: Array<{ id: string; name: string }> = [];
         ThemeService._themeRegistry.forEach((_, id) => {
-            const name = ThemeService._themeNames.get(id) || (id === 'dark' ? '深色夜间' : id === 'light' ? '明亮日间' : id);
+            const name = ThemeService._themeNames.get(id) || id;
             list.push({ id, name });
         });
         return list;
@@ -222,20 +213,25 @@ export class ThemeService implements IThemeService {
 
     /**
      * 获取当前生效的主题数据
-     * 优先从已注册的主题字典中检索，未命中时以静态日夜方案作为安全回退
+     * 优先从已注册的主题字典中检索；若当前 ID 未命中，尝试使用注册表中的第一个可用主题；
+     * 若注册表为空（如用户删除了所有主题），则以硬编码安全主题作为终极兜底直接加载。
      */
     public getCurrentTheme(): ThemeData {
-        const presetId = this._store.getState().themePreset || 'dark';
+        const presetId = this._store.getState().themePreset || '';
 
         const registered = ThemeService._themeRegistry.get(presetId);
         if (registered) {
             return { ...registered };
         }
 
-        if (presetId === 'light') {
-            return { ...DEFAULT_LIGHT_THEME_DATA };
+        // 若当前选中的 preset 未在注册表中找到，尝试使用注册表中的第一个主题
+        const firstEntry = ThemeService._themeRegistry.values().next();
+        if (!firstEntry.done && firstEntry.value) {
+            return { ...firstEntry.value };
         }
-        return { ...DEFAULT_THEME_DATA };
+
+        // 终极安全兜底：无任何可用主题时加载硬编码安全主题（不进入主题列表）
+        return { ...FALLBACK_SAFE_THEME };
     }
 
     public setThemePreset(presetId: string): void {

@@ -23,7 +23,7 @@ import {
     createConnectionCard,
     SelectHandle,
     bindPresetToolbar,
-    createFilePresetAdapter,
+    createPresetStoreAdapter,
     PresetItem,
     createPromptPresetManager,
     PromptPresetManagerHandle,
@@ -70,8 +70,8 @@ export class SDWebUITabView extends BaseTabView {
     private _cachedSchedulers: string[] = ['Automatic', 'Karras', 'Exponential', 'SGM Uniform', 'Simple'];
     private _cachedUpscalers: string[] = ['R-ESRGAN 4x+ Anime6B', 'R-ESRGAN 4x+', 'Latent', 'ESRGAN_4x', 'ScuNET'];
     private _cachedLoras: string[] = [];
-    private _drawingProfileSummaries: PresetItem<SDDrawingProfileData>[] = [];
-    private _promptProfileSummaries: PresetItem<PromptProfileData>[] = [];
+    private _drawingProfiles: PresetItem<SDDrawingProfileData>[] = [];
+    private _promptProfiles: PresetItem<PromptProfileData>[] = [];
     private _activeDrawingBaseline: SDDrawingProfileData | null = null;
 
     constructor(
@@ -234,14 +234,14 @@ export class SDWebUITabView extends BaseTabView {
         };
 
         // 挂载顶部全宽绘图主方案工具栏
-        const drawingAdapter = createFilePresetAdapter<SDDrawingProfileData>({
+        const drawingAdapter = createPresetStoreAdapter<SDDrawingProfileData>({
             category: 'drawing',
             subCategory: 'sdwebui',
             label: '绘图参数',
             getPresets: () => this._getDrawingProfiles(),
             getActiveId: () => this._getActiveDrawingId(),
             onPresetsChange: (presets, activeId) => {
-                this._drawingProfileSummaries = presets;
+                this._drawingProfiles = presets;
                 this._engineStore.set('activeDrawingProfileId', activeId);
             },
             onApply: (preset) => {
@@ -526,7 +526,7 @@ export class SDWebUITabView extends BaseTabView {
             getProfiles: () => this._getPromptProfiles(),
             getCurrentProfileId: () => this._getActivePromptId(),
             onProfilesChange: (profiles, activeId) => {
-                this._promptProfileSummaries = profiles;
+                this._promptProfiles = profiles;
                 this._engineStore.set('activePromptProfileId', activeId);
                 this._refreshPromptProfileSelectOptions();
             },
@@ -569,7 +569,7 @@ export class SDWebUITabView extends BaseTabView {
     }
 
     private _getDrawingProfiles(): PresetItem<SDDrawingProfileData>[] {
-        return this._drawingProfileSummaries;
+        return this._drawingProfiles;
     }
 
     private _getActiveDrawingId(): string {
@@ -577,7 +577,7 @@ export class SDWebUITabView extends BaseTabView {
     }
 
     private _getPromptProfiles(): PresetItem<PromptProfileData>[] {
-        return this._promptProfileSummaries;
+        return this._promptProfiles;
     }
 
     private _getActivePromptId(): string {
@@ -676,42 +676,41 @@ export class SDWebUITabView extends BaseTabView {
         FeedbackService.toastInfo(`已同步远端资产: ${modelCount} 模型, ${vaeCount} VAE, ${loraCount} LoRA`);
     }
 
-    /** 异步按需加载预设方案 (先加载轻量摘要列表，仅按需加载当前激活项详情) */
+    /** 异步按需加载预设方案与激活方案 */
     private async _loadDiskPresets(): Promise<void> {
         try {
-            // 1. 绘图参数主方案：仅拉取轻量摘要列表
-            const summaries = await PresetStore.listSummary<SDDrawingProfileData>('drawing', 'sdwebui');
-            this._drawingProfileSummaries = Array.isArray(summaries) ? summaries : [];
+            // 1. 绘图参数主方案：拉取预设列表并应用激活项
+            const presets = await PresetStore.list<SDDrawingProfileData>('drawing', 'sdwebui');
+            this._drawingProfiles = Array.isArray(presets) ? presets : [];
             const currentDrawingId = this._getActiveDrawingId();
-            const matched = this._drawingProfileSummaries.find((p) => p.id === currentDrawingId) || this._drawingProfileSummaries[0];
+            const matched = this._drawingProfiles.find((p) => p.id === currentDrawingId) || this._drawingProfiles[0];
             if (matched) {
                 this._engineStore.set('activeDrawingProfileId', matched.id);
-                const fullProfile = await PresetStore.get<SDDrawingProfileData>('drawing', matched.id, 'sdwebui');
-                if (fullProfile?.data) {
-                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(fullProfile.data));
-                    this._engineStore.update(fullProfile.data);
+                if (matched.data) {
+                    this._activeDrawingBaseline = JSON.parse(JSON.stringify(matched.data));
+                    this._engineStore.update(matched.data);
                     this._drawingToolbarHandle?.setDirty?.(false);
                 }
             } else {
                 this._engineStore.set('activeDrawingProfileId', '');
                 this._activeDrawingBaseline = null;
             }
-            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfileSummaries, this._engineStore.get('activeDrawingProfileId'));
+            this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfiles, this._engineStore.get('activeDrawingProfileId'));
 
-            // 2. 通用提示词预设：仅拉取轻量摘要列表
-            const promptSummaries = await PresetStore.listSummary<PromptProfileData>('prompts');
-            this._promptProfileSummaries = Array.isArray(promptSummaries) ? promptSummaries : [];
+            // 2. 通用提示词预设：拉取预设列表并刷新组件
+            const promptPresets = await PresetStore.list<PromptProfileData>('prompts');
+            this._promptProfiles = Array.isArray(promptPresets) ? promptPresets : [];
             this._refreshPromptProfileSelectOptions();
             this._promptPresetManagerHandle?.refresh();
             this._promptPresetManagerHandle?.toolbar?.refreshPresets?.(
-                this._promptProfileSummaries,
-                this._engineStore.get('activePromptProfileId') || (this._promptProfileSummaries[0]?.id ?? '')
+                this._promptProfiles,
+                this._engineStore.get('activePromptProfileId') || (this._promptProfiles[0]?.id ?? '')
             );
         } catch (err) {
             this._logger.error('SdWebUITabView: 加载预设方案失败', err);
             FeedbackService.toastError('加载 SD-WebUI 预设方案失败');
-            this._drawingProfileSummaries = [];
-            this._promptProfileSummaries = [];
+            this._drawingProfiles = [];
+            this._promptProfiles = [];
             this._drawingToolbarHandle?.refreshPresets?.([], '');
         }
     }

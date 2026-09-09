@@ -20,7 +20,7 @@ import {
 } from './input-controls';
 import {
     bindPresetToolbar,
-    createFilePresetAdapter,
+    createPresetStoreAdapter,
     PresetItem,
     PresetToolbarElement
 } from './preset-toolbar';
@@ -120,7 +120,7 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
 
     // 1. 方案管理工具栏
     const toolbar = bindPresetToolbar<PromptProfileData>({
-        adapter: createFilePresetAdapter<PromptProfileData>({
+        adapter: createPresetStoreAdapter<PromptProfileData>({
             category: 'prompts',
             label: '提示词',
             getPresets: () => options.getProfiles(),

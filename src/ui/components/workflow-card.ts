@@ -11,7 +11,7 @@ import {
     createFieldLabel
 } from '../layout/container-factory';
 import { createTextarea, TextareaHandle } from './input-controls';
-import { bindPresetToolbar, PresetToolbarElement, createFilePresetAdapter } from './preset-toolbar';
+import { bindPresetToolbar, PresetToolbarElement, createPresetStoreAdapter } from './preset-toolbar';
 import { ModalService } from '../layout/modal-service';
 import { FeedbackService } from '../feedback/feedback';
 import { escapeHtml } from '../foundation/utils';
@@ -58,6 +58,18 @@ export const COMFYUI_VARIABLE_DEFINITIONS = [
         label: '主模型',
         matchKeys: ['ckpt_name', 'unet_name', 'model_name'],
         tip: '主模型文件名 (通常位于 CheckpointLoaderSimple 或 UNETLoader 节点)'
+    },
+    {
+        variable: '%clip_name%',
+        label: 'CLIP 模型',
+        matchKeys: ['clip_name'],
+        tip: 'CLIP 文本特征提取模型 (通常位于 CLIPLoader 节点)'
+    },
+    {
+        variable: '%vae_name%',
+        label: 'VAE 编解码器',
+        matchKeys: ['vae_name'],
+        tip: 'VAE 图像编解码模型 (通常位于 VAELoader 节点)'
     },
     {
         variable: '%prompt%',
@@ -403,7 +415,7 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
 
     // 1. 顶部工作流预设方案工具栏
     toolbarEl = bindPresetToolbar({
-        adapter: createFilePresetAdapter<WorkflowProfileData>({
+        adapter: createPresetStoreAdapter<WorkflowProfileData>({
             category: 'workflows',
             label: options.label,
             generateId: () => `${options.workflowMode}_wf_${Date.now()}`,

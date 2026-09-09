@@ -9,8 +9,9 @@ import { PresetsArchiveData } from './preset';
  * 图像存储策略
  * - split: 原图保存至浏览器 IndexedDB，聊天记录中只保存轻量级索引信息
  * - embedded: 原图转换为 Base64 直接内嵌在聊天记录中
+ * - server: 原图上传至酒馆服务端静态目录，聊天记录中保存相对 URL
  */
-export type StorageStrategy = 'split' | 'embedded';
+export type StorageStrategy = 'split' | 'embedded' | 'server';
 
 /**
  * 生图元数据快照
@@ -96,6 +97,8 @@ export interface DrawAssistantSettings {
     activeProvider: string;
     /** 是否将生成的图片存入 IndexedDB */
     saveToIndexedDB: boolean;
+    /** 是否将生成的图片上传并保存至酒馆宿主服务端 (默认 false) */
+    saveToServer?: boolean;
     /** 是否将图片以 Base64 内嵌在会话文本中 */
     embedToBase64: boolean;
     /** 是否生成 256x256 缩略图以加快画廊渲染速度 */
