@@ -155,9 +155,7 @@ export class NovelAITabView extends BaseTabView {
         this._root.appendChild(this._buildPromptPresetCard());
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 1: 服务连接与凭据 (Connection & Auth)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 1: 服务连接与凭据 (Connection & Auth) ---
 
     private _buildConnectionCard(): HTMLElement {
         const driver = this._driverRegistry?.get('novelai');
@@ -215,9 +213,7 @@ export class NovelAITabView extends BaseTabView {
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 2: 绘图参数预设 (主方案管理器)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 2: 绘图参数预设 (主方案管理器) ---
 
     private _buildDrawingPresetCard(): HTMLElement {
         const card = createCard({ hoverable: true });
@@ -618,9 +614,7 @@ export class NovelAITabView extends BaseTabView {
         this._resolutionSelectHandle.setValue(found ? found.value : 'custom');
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 3: 提示词预设管理器 (PromptPresetManager 纯文本无 LoRA 模式)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 3: 提示词预设管理器 (PromptPresetManager 纯文本模式) ---
 
     private _buildPromptPresetCard(): HTMLElement {
         this._promptPresetManagerHandle = createPromptPresetManager({
@@ -644,9 +638,7 @@ export class NovelAITabView extends BaseTabView {
         return this._promptPresetManagerHandle;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 内部数据流与方案选项联动
-    // ─────────────────────────────────────────────────────────────
+    // --- 内部数据流与方案选项联动 ---
 
     private _extractCurrentDrawingData(): NovelAIDrawingProfileData {
         const s = this._engineStore.getState();

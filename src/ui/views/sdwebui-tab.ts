@@ -151,9 +151,7 @@ export class SDWebUITabView extends BaseTabView {
         this._root.appendChild(this._buildPromptPresetCard());
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 1: 服务连接 (ConnectionCard)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 1: 服务连接 (ConnectionCard) ---
 
     private _buildConnectionCard(): HTMLElement {
         const driver = this._driverRegistry?.get('sdwebui');
@@ -212,9 +210,7 @@ export class SDWebUITabView extends BaseTabView {
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 2: 绘图参数预设 (主方案管理器)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 2: 绘图参数预设 (主方案管理器) ---
 
     private _buildDrawingPresetCard(): HTMLElement {
         const card = createCard({ hoverable: true });
@@ -520,9 +516,7 @@ export class SDWebUITabView extends BaseTabView {
         return card.root;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 3: 提示词预设管理器 (PromptPresetManager 独立组件)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 3: 提示词预设管理器 (PromptPresetManager 独立组件) ---
 
     private _buildPromptPresetCard(): HTMLElement {
         this._promptPresetManagerHandle = createPromptPresetManager({
@@ -548,9 +542,7 @@ export class SDWebUITabView extends BaseTabView {
         return this._promptPresetManagerHandle;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 内部数据流与联动更新
-    // ─────────────────────────────────────────────────────────────
+    // --- 内部数据流与联动更新 ---
 
     private _extractCurrentDrawingData(): SDDrawingProfileData {
         const s = this._engineStore.getState();

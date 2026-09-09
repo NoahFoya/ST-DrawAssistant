@@ -30,11 +30,21 @@
     font-family: var(--da-font-family);
     display: flex;
     align-items: center;
-    gap: var(--da-space-xs, 3px);
+    gap: var(--da-space-xs, 4px);
     margin: 0;
     background: linear-gradient(135deg, var(--da-text-primary, #ffffff) 0%, var(--da-accent-color, #7053ff) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+
+.da-header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-accent-color);
+    margin-right: 2px;
+    -webkit-text-fill-color: var(--da-accent-color);
+    flex-shrink: 0;
 }
 
 .da-header-right {

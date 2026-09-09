@@ -1,8 +1,7 @@
 /**
  * 主设置弹窗控制器 (SettingsModal)
  * 负责主设置界面的 DOM 结构组装（顶栏、侧边栏、内容区与底栏），
- * 协调选项卡（Tab）的动态注册渲染、切换与生命周期受管销毁，
- * 以及全局主题样式分发与运行状态遥测。
+ * 协调选项卡的渲染、切换与销毁清理，并监听配置变更同步界面提示。
  */
 
 import { IDisposable, DisposableStore } from '../../types';
@@ -16,20 +15,20 @@ import { FeedbackService } from '../feedback/feedback';
 
 /** 侧边栏内置标准 SVG 矢量图标字典 (Feather 图标规范) */
 export const TAB_SVG_ICONS: Record<string, string> = {
-    general: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`,
-    comfyui: `<svg viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>`,
-    sdwebui: `<svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`,
-    cloud: `<svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`,
-    openai: `<svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`,
-    novelai: `<svg viewBox="0 0 24 24"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg>`,
-    theme: `<svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"></path></svg>`,
-    fab: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>`,
-    diagnostics: `<svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>`,
-    gallery: `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
-    about: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
+    general: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`,
+    comfyui: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>`,
+    sdwebui: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`,
+    cloud: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`,
+    openai: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`,
+    novelai: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg>`,
+    theme: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"></path></svg>`,
+    fab: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>`,
+    diagnostics: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>`,
+    gallery: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
+    about: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
 };
 
-export const DEFAULT_TAB_SVG = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
+export const DEFAULT_TAB_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
 
 /** 后端专属配置 Tab 标识集合 */
 export const BACKEND_TAB_IDS = new Set<string>(['comfyui', 'sdwebui', 'novelai', 'openai']);
@@ -38,11 +37,11 @@ export const BACKEND_TAB_IDS = new Set<string>(['comfyui', 'sdwebui', 'novelai',
  * 主设置弹窗初始化依赖配置项
  */
 export interface SettingsModalOptions {
-    /** 选项卡插槽注册中心 */
+    /** 选项卡插槽注册表 */
     uiRegistry: IUIRegistry;
-    /** 全局模态弹窗堆栈管理服务 */
+    /** 弹窗宿主服务 */
     modalService: IModalService;
-    /** 全局响应式配置存储 */
+    /** 插件设置存储 */
     store: SettingsStore;
     /** 生图引擎驱动注册中心 (可选，供系统诊断面板检测连通性) */
     drivers?: DriverRegistry;
@@ -62,7 +61,7 @@ export class SettingsModal implements IDisposable {
 
     private _modalHandle?: IDisposable;
     private _activeTabId = 'general';
-    private _isEngineExpanded = false;
+    private _isEnginesExpanded = false;
     private _sidebarEl?: HTMLElement;
     private _contentAreaEl?: HTMLElement;
     private _currentTabDisposable?: IDisposable;
@@ -104,17 +103,19 @@ export class SettingsModal implements IDisposable {
         const floatingNotice = createUnsavedFloatingNotice();
         dialog.appendChild(floatingNotice.element);
 
-        // 组装主体侧边栏与内容区
+        // 主体双栏容器
         const bodyContainer = document.createElement('div');
-        bodyContainer.className = 'da-modal-body';
+        bodyContainer.className = 'da-modal-body-container';
 
         const sidebar = document.createElement('div');
-        sidebar.className = 'da-sidebar-tabs';
+        sidebar.className = 'da-sidebar';
+        sidebar.setAttribute('role', 'tablist');
         this._sidebarEl = sidebar;
 
         const contentArea = document.createElement('div');
+        contentArea.className = 'da-content-area';
         contentArea.id = 'da-modal-content-area';
-        contentArea.className = 'da-modal-content';
+        contentArea.setAttribute('role', 'tabpanel');
         this._contentAreaEl = contentArea;
 
         bodyContainer.appendChild(sidebar);
@@ -129,139 +130,17 @@ export class SettingsModal implements IDisposable {
 
         // 挂载浮层宿主容器并同步当前主题
         OverlayHost.getInstance().mount(backdrop);
-        ThemeService.applyCurrentThemeToNode(backdrop);
-
-        // 动态渲染侧边栏选项卡列表，统一使用 SVG 矢量图标
-        const refreshTabs = () => {
-            sidebar.innerHTML = '';
-            const allTabs = this._uiRegistry.getTabs();
-            const activeProvider = (this._store.get('activeProvider') || 'comfyui').toLowerCase();
-            const dirtyProviders = FeedbackService.unsavedStateManager.getDirtyProviders();
-
-            allTabs.forEach((tab) => {
-                const tabIdLower = tab.id.toLowerCase();
-                const isEngineTab = BACKEND_TAB_IDS.has(tabIdLower);
-                const isTabDirty = dirtyProviders.some((p) => p.tabId === tab.id);
-
-                // 非活动引擎 Tab 不渲染为顶层项，展开时以子项呈现
-                if (isEngineTab && tabIdLower !== activeProvider) {
-                    return;
-                }
-
-                // 在核心绘图区（通用、当前引擎、图库）与系统配置区（外观、悬浮球、诊断、关于）之间插入微弱视觉分割线
-                if (tabIdLower === 'theme') {
-                    const divider = document.createElement('div');
-                    divider.className = 'da-sidebar-divider';
-                    sidebar.appendChild(divider);
-                }
-
-                const isActive = tab.id === this._activeTabId;
-                const itemBtn = document.createElement('button');
-                itemBtn.className = `da-sidebar-item ${isActive ? 'da-sidebar-item--active' : ''}`;
-                itemBtn.setAttribute('role', 'tab');
-                itemBtn.setAttribute('aria-selected', String(isActive));
-                itemBtn.id = `da-tab-btn-${tab.id}`;
-
-                const icon = document.createElement('span');
-                icon.className = 'da-sidebar-item__icon';
-                if (tab.icon && tab.icon.includes('<svg')) {
-                    icon.innerHTML = tab.icon;
-                } else {
-                    const svgContent = TAB_SVG_ICONS[tabIdLower] || DEFAULT_TAB_SVG;
-                    icon.innerHTML = svgContent;
-                }
-                itemBtn.appendChild(icon);
-
-                const label = document.createElement('span');
-                label.className = 'da-sidebar-item__label';
-                label.textContent = tab.title;
-                itemBtn.appendChild(label);
-
-                // 若当前 Tab 存在未保存草稿修改，显示醒目红点提示
-                if (isTabDirty) {
-                    const dirtyDot = document.createElement('span');
-                    dirtyDot.className = 'da-status-dot da-status-dot--warning da-tab-dirty-dot';
-                    dirtyDot.title = '此面板有未保存的修改';
-                    dirtyDot.style.marginLeft = 'auto';
-                    dirtyDot.style.width = '6px';
-                    dirtyDot.style.height = '6px';
-                    dirtyDot.style.borderRadius = '50%';
-                    dirtyDot.style.backgroundColor = 'var(--da-warning, #f59e0b)';
-                    dirtyDot.style.boxShadow = '0 0 4px var(--da-warning, #f59e0b)';
-                    itemBtn.appendChild(dirtyDot);
-                }
-
-                // 引擎 Tab 末尾附加折叠展开指示箭头
-                if (isEngineTab) {
-                    const chevron = document.createElement('span');
-                    chevron.className = `da-sidebar-item__chevron${this._isEngineExpanded ? ' is-expanded' : ''}`;
-                    chevron.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-                    itemBtn.appendChild(chevron);
-                }
-
-                itemBtn.addEventListener('click', () => {
-                    if (isEngineTab && isActive) {
-                        // 点击已激活的引擎 Tab 时切换折叠状态
-                        this._isEngineExpanded = !this._isEngineExpanded;
-                        refreshTabs();
-                    } else {
-                        void this.switchTab(tab.id, contentArea);
-                    }
-                });
-
-                sidebar.appendChild(itemBtn);
-
-                // 引擎 Tab 展开时，在其后方插入其余引擎作为缩进子项
-                if (isEngineTab && this._isEngineExpanded) {
-                    allTabs.forEach((subTab) => {
-                        const subIdLower = subTab.id.toLowerCase();
-                        if (!BACKEND_TAB_IDS.has(subIdLower) || subIdLower === activeProvider) {
-                            return;
-                        }
-
-                        const subBtn = document.createElement('button');
-                        subBtn.className = 'da-sidebar-item da-sidebar-subitem';
-                        subBtn.setAttribute('role', 'tab');
-                        subBtn.setAttribute('aria-selected', 'false');
-                        subBtn.id = `da-tab-btn-${subTab.id}`;
-
-                        const subIcon = document.createElement('span');
-                        subIcon.className = 'da-sidebar-item__icon';
-                        subIcon.innerHTML = TAB_SVG_ICONS[subIdLower] || DEFAULT_TAB_SVG;
-                        subBtn.appendChild(subIcon);
-
-                        const subLabel = document.createElement('span');
-                        subLabel.className = 'da-sidebar-item__label';
-                        subLabel.textContent = subTab.title;
-                        subBtn.appendChild(subLabel);
-
-                        subBtn.addEventListener('click', () => {
-                            // 切换活动引擎并跳转至对应配置面板
-                            this._store.set('activeProvider', subTab.id);
-                            this._isEngineExpanded = false;
-                            void this.switchTab(subTab.id, contentArea);
-                        });
-
-                        sidebar.appendChild(subBtn);
-                    });
-                }
-            });
-        };
-
-        refreshTabs();
+        // 初始化渲染侧边栏
+        this.refreshSidebarTabs();
 
         // 订阅未保存状态变更以实时刷新侧边栏红点
         const unsavedUnsub = FeedbackService.unsavedStateManager.subscribeStateChange(() => {
-            refreshTabs();
+            this.refreshSidebarTabs();
         });
 
-        // 监听生图引擎切换：自动更新侧边栏并切换至对应引擎面板
-        const providerSub = this._store.subscribeKey('activeProvider', (newProvider) => {
-            refreshTabs();
-            const currentProvider = String(newProvider || '').toLowerCase();
-            if (BACKEND_TAB_IDS.has(this._activeTabId.toLowerCase()) && this._activeTabId.toLowerCase() !== currentProvider) {
-                void this.switchTab(currentProvider || 'general', contentArea);
-            }
+        // 监听生图引擎切换：自动同步刷新侧边栏指示徽标
+        const providerSub = this._store.subscribeKey('activeProvider', () => {
+            this.refreshSidebarTabs();
         });
 
         // 监听主题与辅助提示显隐变更
@@ -296,7 +175,7 @@ export class SettingsModal implements IDisposable {
         };
         window.addEventListener('keydown', onKeyDown);
 
-        // 注册至模态弹窗堆栈服务并处理关闭时的级联资源释放
+        // 注册至弹窗服务，并在弹窗关闭时释放相关资源
         this._modalHandle = this._modalService.open(backdrop, {
             closeOnBackdrop: false,
             closeOnEscape: false,
@@ -331,7 +210,7 @@ export class SettingsModal implements IDisposable {
 
         const appName = document.createElement('span');
         appName.className = 'da-header-title';
-        appName.innerHTML = '✨ Starlight DrawAssistant';
+        appName.innerHTML = `<span class="da-header-icon"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span> Starlight DrawAssistant`;
 
         const versionBadge = createVersionBadge({
             onClick: () => {
@@ -443,6 +322,127 @@ export class SettingsModal implements IDisposable {
     }
 
     /**
+     * 动态渲染与刷新侧边栏导航选项卡列表
+     * 生图引擎平权列出；收拢态下仅展示代表引擎，展开态下列出全部平级引擎。
+     * 支持双击或微型指示器切换展开/收拢；点击任意引擎纯粹切换查看，不强改默认引擎。
+     */
+    private refreshSidebarTabs(): void {
+        if (!this._sidebarEl) return;
+        this._sidebarEl.innerHTML = '';
+        const allTabs = this._uiRegistry.getTabs();
+        const activeProvider = (this._store.get('activeProvider') || 'comfyui').toLowerCase();
+        const dirtyProviders = FeedbackService.unsavedStateManager.getDirtyProviders();
+
+        // 确定收拢态下代表展示的引擎 Tab：
+        // 若当前选中的 Tab 正是某个生图引擎，展示该当前引擎；否则展示全局默认引擎 activeProvider
+        const currentTabLower = this._activeTabId.toLowerCase();
+        const representativeEngineId = BACKEND_TAB_IDS.has(currentTabLower)
+            ? currentTabLower
+            : activeProvider;
+
+        allTabs.forEach((tab) => {
+            const tabIdLower = tab.id.toLowerCase();
+            const isEngineTab = BACKEND_TAB_IDS.has(tabIdLower);
+            const isTabDirty = dirtyProviders.some((p) => p.tabId === tab.id);
+
+            // 当引擎列表处于收拢态时，只渲染代表当前视角的单个引擎 Tab
+            if (isEngineTab && !this._isEnginesExpanded && tabIdLower !== representativeEngineId) {
+                return;
+            }
+
+            // 在系统设置与工具区之前插入语义分割线
+            if (tabIdLower === 'theme') {
+                const divider = document.createElement('div');
+                divider.className = 'da-sidebar-divider';
+                this._sidebarEl!.appendChild(divider);
+            }
+
+            const isActive = tab.id === this._activeTabId;
+            const itemBtn = document.createElement('button');
+            itemBtn.className = `da-sidebar-item ${isActive ? 'da-sidebar-item--active' : ''}`;
+            itemBtn.setAttribute('role', 'tab');
+            itemBtn.setAttribute('aria-selected', String(isActive));
+            itemBtn.id = `da-tab-btn-${tab.id}`;
+
+            const icon = document.createElement('span');
+            icon.className = 'da-sidebar-item__icon';
+            if (tab.icon && tab.icon.includes('<svg')) {
+                icon.innerHTML = tab.icon;
+            } else {
+                const svgContent = TAB_SVG_ICONS[tabIdLower] || DEFAULT_TAB_SVG;
+                icon.innerHTML = svgContent;
+            }
+            itemBtn.appendChild(icon);
+
+            const label = document.createElement('span');
+            label.className = 'da-sidebar-item__label';
+            label.textContent = tab.title;
+            itemBtn.appendChild(label);
+
+            // 未保存修改黄色指示圆点
+            if (isTabDirty) {
+                const dirtyDot = document.createElement('span');
+                dirtyDot.className = 'da-status-dot da-status-dot--warning da-tab-dirty-dot';
+                dirtyDot.title = '此面板有未保存的修改';
+                dirtyDot.style.marginLeft = 'auto';
+                dirtyDot.style.width = '6px';
+                dirtyDot.style.height = '6px';
+                dirtyDot.style.borderRadius = '50%';
+                dirtyDot.style.backgroundColor = 'var(--da-warning, #f59e0b)';
+                dirtyDot.style.boxShadow = '0 0 4px var(--da-warning, #f59e0b)';
+                itemBtn.appendChild(dirtyDot);
+            }
+
+            // 生图引擎选项卡的平权双击收拢/展开与默认徽标
+            if (isEngineTab) {
+                // 展开态下，为全局默认引擎项标示 [默认] 微标
+                if (this._isEnginesExpanded && tabIdLower === activeProvider) {
+                    const defaultBadge = document.createElement('span');
+                    defaultBadge.className = 'da-sidebar-item__default-badge';
+                    defaultBadge.textContent = '默认';
+                    defaultBadge.title = '当前全局默认生图引擎';
+                    itemBtn.appendChild(defaultBadge);
+                }
+
+                // 展开/收拢微型指示器：
+                // 收拢态下展示在代表引擎右侧；展开态下展示在当前选中（或代表）引擎右侧
+                const shouldShowTrigger = !this._isEnginesExpanded
+                    ? tabIdLower === representativeEngineId
+                    : isActive;
+
+                if (shouldShowTrigger) {
+                    const trigger = document.createElement('span');
+                    trigger.className = `da-sidebar-item__expand-trigger ${this._isEnginesExpanded ? 'is-expanded' : ''}`;
+                    trigger.title = this._isEnginesExpanded ? '收起其他生图引擎 (可双击Tab)' : '展开更多生图引擎 (可双击Tab)';
+                    trigger.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+                    trigger.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this._isEnginesExpanded = !this._isEnginesExpanded;
+                        this.refreshSidebarTabs();
+                    });
+                    itemBtn.appendChild(trigger);
+                }
+
+                // 双击事件：快速切换展开/收拢其他生图引擎
+                itemBtn.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    this._isEnginesExpanded = !this._isEnginesExpanded;
+                    this.refreshSidebarTabs();
+                });
+                itemBtn.title = `${tab.title} (双击展开/收拢其他生图引擎)`;
+            }
+
+            // 单击事件：纯粹切换视图查看配置，绝不篡改全局 activeProvider
+            itemBtn.addEventListener('click', () => {
+                void this.switchTab(tab.id);
+            });
+
+            this._sidebarEl!.appendChild(itemBtn);
+        });
+    }
+
+    /**
      * 切换主弹窗的内容选项卡 (Tab)
      */
     public async switchTab(tabId: string, container?: HTMLElement): Promise<boolean> {
@@ -467,14 +467,8 @@ export class SettingsModal implements IDisposable {
         targetContainer.scrollTop = 0;
         this._activeTabId = tabId;
 
-        // 同步侧边栏选中状态与无障碍属性
-        if (this._sidebarEl) {
-            this._sidebarEl.querySelectorAll('.da-sidebar-item').forEach((btn) => {
-                const isCurrent = btn.id === `da-tab-btn-${tabId}`;
-                btn.classList.toggle('da-sidebar-item--active', isCurrent);
-                btn.setAttribute('aria-selected', String(isCurrent));
-            });
-        }
+        // 同步刷新侧边栏全部 DOM 状态与选中高亮
+        this.refreshSidebarTabs();
 
         // 渲染目标选项卡视图
         const tab = this._uiRegistry.getTab(tabId);

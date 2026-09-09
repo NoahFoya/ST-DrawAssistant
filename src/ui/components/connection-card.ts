@@ -165,10 +165,13 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
         credentialInput.addEventListener('input', syncCredential);
         credentialInput.addEventListener('change', syncCredential);
 
+        const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
         toggleEyeBtn = document.createElement('button');
         toggleEyeBtn.type = 'button';
-        toggleEyeBtn.className = 'da-btn da-btn--secondary';
-        toggleEyeBtn.textContent = '👁️';
+        toggleEyeBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+        toggleEyeBtn.innerHTML = EYE_SVG;
         toggleEyeBtn.title = '显示/隐藏凭据';
         toggleEyeBtn.style.padding = '0 10px';
 
@@ -176,10 +179,10 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             if (!credentialInput || !toggleEyeBtn) return;
             if (credentialInput.type === 'password') {
                 credentialInput.type = 'text';
-                toggleEyeBtn.textContent = '🔒';
+                toggleEyeBtn.innerHTML = EYE_OFF_SVG;
             } else {
                 credentialInput.type = 'password';
-                toggleEyeBtn.textContent = '👁️';
+                toggleEyeBtn.innerHTML = EYE_SVG;
             }
         };
         toggleEyeBtn.addEventListener('click', onToggleEye);

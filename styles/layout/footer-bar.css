@@ -7,9 +7,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 30px;
-    min-height: 30px;
-    padding: 0 var(--da-space-lg, 14px);
+    height: 34px;
+    min-height: 34px;
+    padding: 0 var(--da-space-lg, 16px);
     background: transparent;
     border-top: 1px solid var(--da-border-color);
     font-size: var(--da-font-size-xs, 0.74rem);
@@ -20,12 +20,32 @@
     font-family: var(--da-font-family);
 }
 
+.da-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 12px);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.06));
+    box-sizing: border-box;
+    cursor: default;
+    transition: background 0.14s ease, border-color 0.14s ease;
+}
 
-.da-status-item,
+.da-status-item#da-server-status-container {
+    cursor: pointer;
+}
+
+.da-status-item#da-server-status-container:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.06));
+    border-color: rgba(var(--da-accent-rgb), 0.3);
+}
+
 .da-status-info,
 .da-server-status-container,
 .da-memory-status-container {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: var(--da-space-xs, 5px);
 }

@@ -96,9 +96,7 @@ function bindControlStateHandlers(options: ControlStateBindingOptions) {
     };
 }
 
-// ---------------------------------------------------------------------------
-// 1. Toggle 开关控件
-// ---------------------------------------------------------------------------
+// --- 1. Toggle 开关控件 ---
 
 export interface ToggleOptions extends BaseControlOptions {
     value: boolean;
@@ -152,9 +150,7 @@ export function createToggle(options: ToggleOptions): ToggleHandle {
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 2. Select 下拉选择器控件
-// ---------------------------------------------------------------------------
+// --- 2. Select 下拉选择器控件 ---
 
 export interface SelectOptionItem {
     label: string;
@@ -230,9 +226,7 @@ export function createSelect(options: SelectOptions): SelectHandle {
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 3. Number 数值输入控件
-// ---------------------------------------------------------------------------
+// --- 3. Number 数值输入控件 ---
 
 export interface NumberInputOptions extends BaseControlOptions {
     value?: number;
@@ -329,15 +323,15 @@ export function createNumberInput(options: NumberInputOptions): NumberInputHandl
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 4. TextInput 单行文本输入控件
-// ---------------------------------------------------------------------------
+// --- 4. TextInput 单行文本输入控件 ---
 
 export interface TextInputOptions extends BaseControlOptions {
     value?: string | number;
     defaultValue?: string | number;
     type?: string;
     placeholder?: string;
+    align?: 'left' | 'center';
+    variant?: 'short' | 'long';
     onChange?: (val: string) => void;
 }
 
@@ -347,12 +341,16 @@ export interface TextInputHandle extends IControlHandle<string> {
 
 /**
  * 创建单行文本输入控件
- * 赋予 .da-input--text 类名，保证长文本（如服务器地址、密钥、提示词等）左对齐显示与自然定位。
+ * 支持居中（短文本/标志符）与靠左（长文本/地址）对齐模式。
  */
 export function createTextInput(options: TextInputOptions): TextInputHandle {
     const input = document.createElement('input');
     input.type = options.type || 'text';
-    input.className = 'da-input da-input--text';
+
+    const alignClass = options.align === 'center' || options.variant === 'short' ? 'da-input--center' : 'da-input--text';
+    const variantClass = options.variant === 'short' ? 'da-input-short' : (options.variant === 'long' ? 'da-input-long' : '');
+    input.className = `da-input ${alignClass} ${variantClass}`.trim();
+
     input.placeholder = options.placeholder || '';
     input.value = options.value !== undefined ? String(options.value) : (options.defaultValue !== undefined ? String(options.defaultValue) : '');
     applyBaseAttributes(input, options);
@@ -380,9 +378,7 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 5. Textarea 多行文本域控件
-// ---------------------------------------------------------------------------
+// --- 5. Textarea 多行文本域控件 ---
 
 export interface TextareaOptions extends BaseControlOptions {
     value?: string;
@@ -430,9 +426,7 @@ export function createTextarea(options: TextareaOptions): TextareaHandle {
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 6. ColorPicker 颜色选择器控件
-// ---------------------------------------------------------------------------
+// --- 6. ColorPicker 颜色选择器控件 ---
 
 export interface ColorPickerOptions extends BaseControlOptions {
     value?: string;
@@ -518,9 +512,7 @@ export function createColorPicker(options: ColorPickerOptions): ColorPickerHandl
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 7. Slider 滑块数值联动输入控件
-// ---------------------------------------------------------------------------
+// --- 7. Slider 滑块数值联动输入控件 ---
 
 export interface SliderOptions extends BaseControlOptions {
     value?: number;
@@ -617,9 +609,7 @@ export function createSlider(options: SliderOptions): SliderHandle {
     return handle;
 }
 
-// ---------------------------------------------------------------------------
-// 8. SegmentedControl 分段切换按钮组控件
-// ---------------------------------------------------------------------------
+// --- 8. SegmentedControl 分段切换按钮组控件 ---
 
 export interface SegmentedItem {
     label: string;

@@ -252,9 +252,19 @@
 }
 
 .da-diagnostics-env-icon {
-    font-size: var(--da-font-size-md, 0.98rem);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
     flex-shrink: 0;
+    color: var(--da-accent-color);
+}
+
+.da-diagnostics-env-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    display: block;
 }
 
 .da-diagnostics-env-title {

@@ -401,6 +401,7 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
     });
     card.header.appendChild(header);
 
+    // 1. 顶部工作流预设方案工具栏
     toolbarEl = bindPresetToolbar({
         adapter: createFilePresetAdapter<WorkflowProfileData>({
             category: 'workflows',
@@ -435,7 +436,7 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
     });
     card.body.appendChild(toolbarEl);
 
-    // JSON 标题与操作按钮组
+    // 2. 标题与操作按钮组
     const actionsWrapper = document.createElement('div');
     actionsWrapper.className = 'da-flex-center-row da-gap-sm';
 
@@ -477,7 +478,7 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
     titleRow.slots[1].appendChild(actionsWrapper);
     card.body.appendChild(titleRow.root);
 
-    // JSON 代码编辑行
+    // 3. JSON 代码编辑行
     const textareaRow = createRow(['full'], { divided: true });
     inputHandleEl = createTextarea({
         rows: 6,

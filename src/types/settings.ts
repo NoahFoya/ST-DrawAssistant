@@ -125,7 +125,7 @@ export interface DrawAssistantSettings {
     /** 各生图引擎独立配置空间 (各自维护其特有字段) */
     engineConfigs: Record<string, Record<string, any>>;
 
-    /** 屏幕悬浮球可见性 */
+    /** 悬浮球可见性 */
     fabVisible?: boolean;
     /** 悬浮球不透明度 (0.1 ~ 1.0) */
     fabOpacity?: number;

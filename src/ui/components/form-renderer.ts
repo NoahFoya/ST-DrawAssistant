@@ -52,6 +52,10 @@ export interface FormRowSchema<TState extends object> {
     unit?: string;
     /** 占位提示符 */
     placeholder?: string;
+    /** 文本对齐方式 ('center' 居中，'left' 靠左) */
+    align?: 'left' | 'center';
+    /** 尺寸规格变体 ('short' 紧凑居中，'long' 弹性拉伸) */
+    variant?: 'short' | 'long';
     /** 分段控制器选项列表 (type === 'segmented') */
     segmentedItems?: SegmentedItem[];
     /** 是否采用块级上下垂直排布 (全宽展示如图标选择网格、多选标签组等复合控件) */
@@ -288,6 +292,8 @@ export class FormRenderer<TState extends object> implements IDisposable {
                     id: controlId,
                     value: initialValue,
                     placeholder: schema.placeholder,
+                    align: schema.align,
+                    variant: schema.variant,
                     onChange: (value) => {
                         this._writeVal(schema, value);
                     }

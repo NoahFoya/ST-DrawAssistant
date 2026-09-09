@@ -11,13 +11,13 @@
     box-sizing: border-box;
 }
 
-/* 原生颜色选择器圆形色板 (30px 圆形) */
+/* 原生颜色选择器圆形色板 (32px 圆形) */
 .da-color-picker-native {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 1px solid var(--da-border-color);
     border-radius: 50%;
@@ -49,11 +49,11 @@
     transform: none;
 }
 
-/* 十六进制 Hex 颜色输入框 (100px 紧凑单行框，统一 30px 高度，文本居中) */
+/* 十六进制 Hex 颜色输入框 (100px 紧凑单行框，统一 32px 高度，文本居中) */
 .da-color-hex-input {
     width: 100px;
     min-width: 90px;
-    height: 30px;
+    height: 32px;
     padding: 0 var(--da-space-sm, 8px);
     box-sizing: border-box;
     border-radius: var(--da-radius-input, 6px);

@@ -8,7 +8,7 @@
     width: 200px;
     max-width: 100%;
     min-width: 100px;
-    height: 30px;
+    height: 32px;
     padding: 0 var(--da-space-md, 10px);
     box-sizing: border-box;
     border-radius: var(--da-radius-input, 6px);
@@ -54,9 +54,35 @@
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* 文本类输入框：左对齐，保证长文本、链接与提示词的光标定位与可读性 */
-.da-input--text {
+/* 长文本类输入框：左对齐，保证长文本、链接与提示词的光标定位与可读性 */
+.da-input--text,
+.da-input--left,
+.da-input-long {
     text-align: left;
+}
+
+.da-input--text::placeholder,
+.da-input--left::placeholder,
+.da-input-long::placeholder {
+    text-align: left;
+}
+
+/* 短文本类输入框：居中对齐，适用于指令标志符、短代码与短名称 */
+.da-input--center,
+.da-input-short {
+    text-align: center;
+    font-family: var(--da-font-mono, var(--da-font-family));
+}
+
+.da-input--center::placeholder,
+.da-input-short::placeholder {
+    text-align: center;
+}
+
+.da-input-short {
+    width: 130px;
+    max-width: 130px;
+    flex: 0 0 130px;
 }
 
 /* 数值类输入框：居中排版，采用等宽数字以统一紧凑卡片读数 */
@@ -125,7 +151,7 @@
     max-width: 110px;
     flex: 0 0 110px !important;
     flex-shrink: 0 !important;
-    height: 30px;
+    height: 32px;
     box-sizing: border-box;
 }
 
@@ -135,7 +161,7 @@
     max-width: 100%;
     flex: 1 1 auto;
     min-width: 0;
-    height: 30px;
+    height: 32px;
     padding-left: 6px;
     padding-right: 28px;
     text-align: center;

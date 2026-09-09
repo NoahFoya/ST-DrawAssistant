@@ -50,7 +50,7 @@ export interface CreateUIContextOptions {
 
 /**
  * 组装并挂载 UI 表现层
- * 实例化外观主题、Tab 视图注册中心、主设置弹窗、原生抽屉扩展入口、屏幕悬浮球 (FAB) 与楼层生图按钮。
+ * 实例化外观主题、Tab 视图注册中心、主设置弹窗、原生抽屉扩展入口、悬浮球 (FAB) 与楼层生图按钮。
  */
 export function createUIContext(options: CreateUIContextOptions): UIContext {
     const disposables = new DisposableStore();
@@ -104,7 +104,7 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
     });
     disposables.add(drawerEntry);
 
-    // 挂载屏幕悬浮球容器
+    // 挂载悬浮球容器
     const fabContainer = new FABContainer({
         store,
         settingsModal,

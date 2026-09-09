@@ -55,6 +55,8 @@ export class FloorButtonContainer implements IDisposable {
     private readonly _contextMap = new Map<string, FloorButtonContext>();
     private readonly _trackedObjectUrls = new Set<string>();
     private readonly _activeTaskUnbinds = new Map<string, () => void>();
+    private _intersectionObserver: IntersectionObserver | null = null;
+    private _observedMsgNodes = new WeakSet<HTMLElement>();
     private _isDisposed = false;
 
     private static readonly BUTTON_LABELS: Record<ButtonState, string> = {
@@ -73,15 +75,47 @@ export class FloorButtonContainer implements IDisposable {
         this._pipeline = options.pipeline;
         this._storage = options.storage;
 
+        this.initIntersectionObserver();
         this.initHostEventListeners();
         this.scanAllMessages();
+    }
+
+    /**
+     * 初始化视口可见性观察器 (IntersectionObserver)
+     * 以酒馆聊天窗口容器为根视口，提供 300px 上下预加载缓冲区
+     * 仅当消息进入视口区域时动态注入与恢复插槽，离开远端视口时按需轻量化
+     */
+    private initIntersectionObserver(): void {
+        if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
+
+        const chatRoot = document.querySelector<HTMLElement>('#chat') || null;
+        this._intersectionObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const target = entry.target as HTMLElement;
+                    const id = parseInt(target.getAttribute('mesid') || '', 10);
+                    if (isNaN(id)) return;
+
+                    if (entry.isIntersecting) {
+                        void this.scanAndInjectMessage(id);
+                    } else {
+                        // 离开视口较远时释放 Blob URL 防内存泄露
+                        this.lightenMessageOutOfViewport(id);
+                    }
+                });
+            },
+            {
+                root: chatRoot,
+                rootMargin: '300px 0px'
+            }
+        );
     }
 
     private initHostEventListeners(): void {
         this._disposables.add(
             this._host.onCharacterMessageRendered((ev) => {
                 if (!ev.isUser && ev.messageId !== undefined) {
-                    void this.scanAndInjectMessage(ev.messageId);
+                    this.observeAndScanMessage(ev.messageId);
                 }
             })
         );
@@ -89,7 +123,7 @@ export class FloorButtonContainer implements IDisposable {
         this._disposables.add(
             this._host.onUserMessageRendered((ev) => {
                 if (ev.messageId !== undefined) {
-                    void this.scanAndInjectMessage(ev.messageId);
+                    this.observeAndScanMessage(ev.messageId);
                 }
             })
         );
@@ -98,13 +132,15 @@ export class FloorButtonContainer implements IDisposable {
         this._disposables.add(
             this._host.onMessageUpdated((ev) => {
                 if (ev.messageId !== undefined) {
-                    void this.scanAndInjectMessage(ev.messageId);
+                    this.observeAndScanMessage(ev.messageId);
                 }
             })
         );
 
         this._disposables.add(
             this._host.onChatChanged(() => {
+                this._intersectionObserver?.disconnect();
+                this._observedMsgNodes = new WeakSet<HTMLElement>();
                 this.cleanupTrackedUrls();
                 this._contextMap.clear();
                 this.scanAllMessages();
@@ -114,7 +150,7 @@ export class FloorButtonContainer implements IDisposable {
         this._disposables.add(
             this._host.onChatSwiped((ev) => {
                 if (ev.messageId !== undefined) {
-                    void this.scanAndInjectMessage(ev.messageId);
+                    this.observeAndScanMessage(ev.messageId);
                 }
             })
         );
@@ -156,33 +192,69 @@ export class FloorButtonContainer implements IDisposable {
     }
 
     /**
-     * 扫描消息并维持滑动窗口：仅对视口里最近 3 个楼层的消息渲染生图按钮
-     * 超出最近 3 楼的历史消息，自动清理移除其插槽与上下文，保持页面极致轻量
+     * 将单条消息加入视口观察并按需处理
+     */
+    private observeAndScanMessage(messageId: number): void {
+        if (typeof document === 'undefined' || this._isDisposed) return;
+        const msgNode = document.querySelector<HTMLElement>(`.mes[mesid="${messageId}"]`);
+        if (!msgNode) return;
+
+        if (this._intersectionObserver && !this._observedMsgNodes.has(msgNode)) {
+            this._intersectionObserver.observe(msgNode);
+            this._observedMsgNodes.add(msgNode);
+        }
+
+        // 新消息渲染时直接优先扫描一次
+        void this.scanAndInjectMessage(messageId);
+    }
+
+    /**
+     * 扫描消息：通过 IntersectionObserver 动态跟随视口管理
      */
     public scanAllMessages(): void {
         if (typeof document === 'undefined' || this._isDisposed) return;
         const allMsgNodes = Array.from(document.querySelectorAll<HTMLElement>('.mes[mesid]'));
         if (allMsgNodes.length === 0) return;
 
-        // 仅保留最近 3 个楼层的消息 ID
-        const recentNodes = allMsgNodes.slice(-3);
-        const recentIds = new Set(
-            recentNodes
-                .map((node) => parseInt(node.getAttribute('mesid') || '', 10))
-                .filter((id) => !isNaN(id))
-        );
-
         allMsgNodes.forEach((node) => {
             const id = parseInt(node.getAttribute('mesid') || '', 10);
             if (isNaN(id)) return;
 
-            if (recentIds.has(id)) {
-                void this.scanAndInjectMessage(id);
+            if (this._intersectionObserver) {
+                if (!this._observedMsgNodes.has(node)) {
+                    this._intersectionObserver.observe(node);
+                    this._observedMsgNodes.add(node);
+                }
             } else {
-                // 超出最近 3 楼的历史消息，清理其 DOM 元素与上下文缓存
-                this.cleanMessageFloorSlots(id);
+                // 浏览器不支持 IntersectionObserver 时兜底直接扫描
+                void this.scanAndInjectMessage(id);
             }
         });
+
+        // 优先即时渲染最新 3 条消息，确保初次进房或底部新消息瞬间呈现
+        const recentNodes = allMsgNodes.slice(-3);
+        recentNodes.forEach((node) => {
+            const id = parseInt(node.getAttribute('mesid') || '', 10);
+            if (!isNaN(id)) {
+                void this.scanAndInjectMessage(id);
+            }
+        });
+    }
+
+    /**
+     * 消息移出视口较远时的轻量化处理：释放临时 Blob URL 降低内存开销
+     */
+    private lightenMessageOutOfViewport(messageId: number): void {
+        for (const [key, ctx] of this._contextMap.entries()) {
+            if (key.startsWith(`${messageId}_`)) {
+                const img = ctx.imgSlot.querySelector<HTMLImageElement>('.da-generated-img');
+                if (img?.dataset?.ownsBlob === 'true' && img.src?.startsWith('blob:')) {
+                    URL.revokeObjectURL(img.src);
+                    this._trackedObjectUrls.delete(img.src);
+                    img.dataset.ownsBlob = 'false';
+                }
+            }
+        }
     }
 
     /**
@@ -210,22 +282,44 @@ export class FloorButtonContainer implements IDisposable {
 
     /**
      * 在文本容器中查找目标指令符并将其替换为生图插槽容器，插入到对应段落
+     * 自动清除前后多余的空白符与换行，当父级段落只含有该指令时直接整段替换，根除多余空行
      */
     private insertSlotAtMatchedText(container: HTMLElement, targetText: string, elementToInsert: HTMLElement): boolean {
         if (!targetText) return false;
         const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
         let node: Node | null;
+
         while ((node = walker.nextNode())) {
             const text = node.textContent || '';
             const idx = text.indexOf(targetText);
             if (idx !== -1) {
                 const textNode = node as Text;
-                const afterNode = textNode.splitText(idx);
-                // 剔除正文中原本的标志符文本
-                afterNode.textContent = afterNode.textContent?.slice(targetText.length) || '';
-                // 将生图按钮与图片插槽精准插入到标志符原所在的段落位置
-                afterNode.parentNode?.insertBefore(elementToInsert, afterNode);
-                return true;
+                const parent = textNode.parentElement;
+
+                // 检查直接父元素（如 <p>）是否在剔除目标文本及紧邻空白后为空段落
+                if (parent && parent !== container && (parent.tagName === 'P' || parent.tagName === 'DIV')) {
+                    const rawParentText = parent.textContent || '';
+                    const remainingText = rawParentText.replace(targetText, '').trim();
+                    // 若父级段落除该指令文本外无其他实际文字内容，直接替换整个父段落，避免非法嵌套与产生多余空行
+                    if (remainingText.length === 0) {
+                        parent.replaceWith(elementToInsert);
+                        return true;
+                    }
+                }
+
+                // 若处于包含其他实质文字的段落内部，则进行节点切分并修剪前后断点的换行与多余空白
+                const beforeText = text.slice(0, idx).replace(/[\r\n]+$/, '');
+                const afterText = text.slice(idx + targetText.length).replace(/^[\r\n]+/, '');
+
+                textNode.textContent = beforeText;
+                const afterNode = document.createTextNode(afterText);
+
+                const parentNode = textNode.parentNode;
+                if (parentNode) {
+                    parentNode.insertBefore(elementToInsert, textNode.nextSibling);
+                    parentNode.insertBefore(afterNode, elementToInsert.nextSibling);
+                    return true;
+                }
             }
         }
         return false;
@@ -591,6 +685,10 @@ export class FloorButtonContainer implements IDisposable {
 
         this._activeTaskUnbinds.forEach((unbind) => unbind());
         this._activeTaskUnbinds.clear();
+
+        this._intersectionObserver?.disconnect();
+        this._intersectionObserver = null;
+        this._observedMsgNodes = new WeakSet<HTMLElement>();
 
         this.cleanupTrackedUrls();
         this._disposables.dispose();

@@ -1,6 +1,6 @@
 /**
  * UI 插槽与贡献点注册中心
- * 统一管理设置 Tab 页、楼层操作按钮与屏幕悬浮球动作插槽
+ * 统一管理设置 Tab 页、楼层操作按钮与悬浮球动作插槽
  */
 
 import { IDisposable, toDisposable } from '../../types';

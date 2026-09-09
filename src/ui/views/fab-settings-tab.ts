@@ -1,5 +1,5 @@
 /**
- * 屏幕悬浮快捷球设置面板视图 (FABSettingsTabView)
+ * 悬浮球设置面板视图 (FABSettingsTabView)
  * 控制悬浮球启用状态、不透明度、预设与自定义图标及停靠位置
  */
 
@@ -25,7 +25,7 @@ export class FABSettingsTabView extends BaseTabView {
 
         const cardSchema: SectionCardSchema<DrawAssistantSettings> = {
             title: '悬浮球设置',
-            description: '配置屏幕悬浮球的启用状态、不透明度、图标与停靠位置',
+            description: '配置悬浮球的启用状态、不透明度、图标与停靠位置',
             rows: [
                 {
                     key: 'fabVisible',
@@ -186,8 +186,8 @@ export class FABSettingsTabView extends BaseTabView {
                             if (typeof window !== 'undefined' && window.localStorage) {
                                 localStorage.removeItem('da_fab_position');
                             }
-                            if (store.get('fabPosition' as any) !== undefined) {
-                                store.set('fabPosition' as any, undefined);
+                            if (store.get('fabPosition') !== undefined) {
+                                store.set('fabPosition', undefined);
                             }
                             if (typeof window !== 'undefined') {
                                 window.dispatchEvent(new CustomEvent('da:reset_fab_position'));

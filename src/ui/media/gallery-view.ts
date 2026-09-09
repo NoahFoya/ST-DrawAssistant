@@ -132,7 +132,7 @@ export function renderStorageBar(
 }
 
 /**
- * 创建历史图库画廊管理器
+ * 创建画廊管理器
  * 支持单页 24 张分页浏览，翻页时主动释放上一页的临时 Object URL 避免内存滞留。
  * 提供无引用图片检索与分类、标星收藏以及批量操作工具栏（全选、反选、批量收藏与批量删除）。
  */
@@ -671,7 +671,7 @@ export function createGalleryManager(
                 if (!storage) return;
                 const ok = await FeedbackService.confirm({
                     title: '删除图片确认',
-                    message: '确定要从本地图库永久删除此图片吗？此操作无法撤销。',
+                    message: '确定要从画廊永久删除此图片吗？此操作无法撤销。',
                     confirmText: '确认删除'
                 });
                 if (ok) {
@@ -746,7 +746,7 @@ export function createGalleryManager(
                 allRecords = allRecords.filter((r) => r.id !== record.id);
                 selectedIds.delete(record.id);
                 await onStorageChange?.();
-                FeedbackService.toastSuccess('图片已从本地图库移除');
+                FeedbackService.toastSuccess('图片已从画廊移除');
                 renderToolbar();
                 renderFloatingBatchBar();
                 renderStream();

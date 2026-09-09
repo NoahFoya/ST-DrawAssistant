@@ -2,7 +2,7 @@
  * 选项卡视图基类与生命周期契约 (ITabView / ISection / BaseTabView)
  * 规范选项卡面板与子分区的生命周期管理，统一响应 dispose() 销毁事件。
  * 遵循状态驱动模式，视图通过 Store 与 FormRenderer 渲染，不私自保留持久化业务状态。
- * BaseTabView 提供受管根容器 _root 与 DisposableStore 资源池，供主设置弹窗统一调度级联销毁。
+ * BaseTabView 封装了根容器 _root 与 DisposableStore，在视图销毁时自动释放事件监听与子组件。
  */
 
 import { IDisposable, DisposableStore } from '../../types';
@@ -33,7 +33,7 @@ export interface ISection extends IDisposable {
  * 封装根容器节点与 `DisposableStore`，统一管理 DOM 挂载、事件订阅及子组件的级联清理。
  */
 export abstract class BaseTabView implements ITabView {
-    /** 内部受管资源存储池，dispose 时自动级联释放所有注册的监听器与子组件 */
+    /** 内部资源清理池，dispose 时自动释放所有注册的监听器与子组件 */
     protected readonly _disposables = new DisposableStore();
     /** 视图根容器节点 */
     protected readonly _root: HTMLElement;

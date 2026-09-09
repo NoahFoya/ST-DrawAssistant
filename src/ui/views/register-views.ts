@@ -10,6 +10,7 @@ import { DriverRegistry } from '../../services/drivers';
 import { StorageService } from '../../state';
 import { HostClient } from '../../host';
 import { IUIRegistry } from '../foundation/ui-registry';
+import { TAB_SVG_ICONS } from '../layout/settings-modal';
 import { GeneralTabView } from './general-tab';
 import { ComfyUITabView } from './comfyui-tab';
 import { SDWebUITabView } from './sdwebui-tab';
@@ -42,7 +43,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'general',
             title: '通用设置',
-            icon: '⚙️',
+            icon: TAB_SVG_ICONS['general'],
             order: 10,
             isBuiltIn: true,
             render: (container) => {
@@ -58,7 +59,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'comfyui',
             title: 'ComfyUI',
-            icon: '🧩',
+            icon: TAB_SVG_ICONS['comfyui'],
             order: 20,
             isBuiltIn: true,
             render: (container) => {
@@ -73,7 +74,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'sdwebui',
             title: 'SD-WebUI',
-            icon: '🎨',
+            icon: TAB_SVG_ICONS['sdwebui'],
             order: 30,
             isBuiltIn: true,
             render: (container) => {
@@ -88,7 +89,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'openai',
             title: 'OpenAI 兼容',
-            icon: '☁️',
+            icon: TAB_SVG_ICONS['openai'],
             order: 35,
             isBuiltIn: true,
             render: (container) => {
@@ -103,7 +104,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'novelai',
             title: 'NovelAI',
-            icon: '📖',
+            icon: TAB_SVG_ICONS['novelai'],
             order: 38,
             isBuiltIn: true,
             render: (container) => {
@@ -119,7 +120,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'theme',
             title: '外观主题',
-            icon: '🎭',
+            icon: TAB_SVG_ICONS['theme'],
             order: 40,
             isBuiltIn: true,
             render: (container) => {
@@ -133,8 +134,8 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
     disposables.add(
         uiRegistry.registerTab({
             id: 'fab',
-            title: '屏幕悬浮球',
-            icon: '🔘',
+            title: '悬浮球',
+            icon: TAB_SVG_ICONS['fab'],
             order: 50,
             isBuiltIn: true,
             render: (container) => {
@@ -145,12 +146,12 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         })
     );
 
-    // 系统工具 (诊断 / 图库 / 关于)
+    // 系统工具 (日志与统计 / 画廊 / 关于)
     disposables.add(
         uiRegistry.registerTab({
             id: 'diagnostics',
-            title: '运行诊断',
-            icon: '🩺',
+            title: '日志与统计',
+            icon: TAB_SVG_ICONS['diagnostics'],
             order: 60,
             isBuiltIn: true,
             render: (container) => {
@@ -164,8 +165,8 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
     disposables.add(
         uiRegistry.registerTab({
             id: 'gallery',
-            title: '历史图库',
-            icon: '🖼️',
+            title: '画廊',
+            icon: TAB_SVG_ICONS['gallery'],
             order: 70,
             isBuiltIn: true,
             render: (container) => {
@@ -180,7 +181,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         uiRegistry.registerTab({
             id: 'about',
             title: '关于',
-            icon: 'ℹ️',
+            icon: TAB_SVG_ICONS['about'],
             order: 80,
             isBuiltIn: true,
             render: (container) => {

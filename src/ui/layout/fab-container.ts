@@ -1,5 +1,5 @@
 /**
- * 屏幕悬浮快捷球控制器 (FABContainer)
+ * 悬浮球控制器 (FABContainer)
  * 渲染屏幕边缘可拖拽悬浮球，提供快速打开主面板与任务状态动画指示
  */
 
@@ -224,7 +224,11 @@ export class FABContainer implements IDisposable {
         if (!this._fabElement) return;
 
         let pos: { top: number; left: number } | null = null;
-        if (typeof window !== 'undefined' && window.localStorage) {
+        // 优先从 SettingsStore 扩展配置中读取
+        const storePos = this._store.get('fabPosition');
+        if (storePos && typeof storePos.top === 'number' && typeof storePos.left === 'number') {
+            pos = storePos;
+        } else if (typeof window !== 'undefined' && window.localStorage) {
             try {
                 const stored = localStorage.getItem('da_fab_position');
                 if (stored) {
@@ -269,7 +273,7 @@ export class FABContainer implements IDisposable {
     /**
      * 启用悬浮球拖拽交互
      * 统一绑定鼠标与触摸事件，通过 3px 位移死区严格区分单点点击与拖拽移动；
-     * 拖拽时将坐标约束在视口边界内，并在释放后持久化坐标到当前设备 localStorage。
+     * 拖拽时将坐标约束在视口边界内，并在释放后持久化坐标到 SettingsStore 与 localStorage。
      */
     private enableDrag(el: HTMLElement): void {
         let isDragging = false;
@@ -323,7 +327,10 @@ export class FABContainer implements IDisposable {
                     left: Math.round(rect.left)
                 };
 
-                // 悬浮球位置属于设备本地偏好，仅存入当前浏览器 localStorage，避免干扰多端其他设备
+                // 持久化至酒馆扩展配置 SettingsStore
+                this._store.set('fabPosition', pos);
+
+                // 设备本地辅助缓存
                 if (typeof window !== 'undefined' && window.localStorage) {
                     try {
                         localStorage.setItem('da_fab_position', JSON.stringify(pos));

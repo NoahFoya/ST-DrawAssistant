@@ -8,7 +8,7 @@
     width: 200px;
     max-width: 100%;
     min-width: 100px;
-    height: 30px;
+    height: 32px;
     padding: 0 24px 0 var(--da-space-md, 10px);
     box-sizing: border-box;
     border-radius: var(--da-radius-input, 6px);

@@ -8,7 +8,7 @@
     min-width: 0 !important;
     width: 100%;
     min-height: 0;
-    padding: var(--da-space-md, 10px) var(--da-space-lg, 14px) 20px var(--da-space-lg, 14px);
+    padding: 14px 18px 24px 18px;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
@@ -39,7 +39,7 @@
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: var(--da-space-md, 10px);
+    gap: var(--da-space-lg, 16px);
     box-sizing: border-box !important;
     padding: 2px 0 16px 0;
     animation: da-fadein 0.15s var(--da-ease);
@@ -86,7 +86,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--da-space-md, 10px);
+    gap: var(--da-space-lg, 16px);
     width: 100%;
     min-height: 0;
 }

@@ -171,9 +171,7 @@ export class OpenAITabView extends BaseTabView {
         this._applyProviderCapabilities(activeProvider);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 1: 独立服务连接卡片挂载与事件调度
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 1: 独立服务连接卡片挂载与事件调度 ---
 
     private _buildConnectionCard(): HTMLElement {
         const activeProvider = this._engineStore.get('activeProvider') || 'openai-official';
@@ -285,9 +283,7 @@ export class OpenAITabView extends BaseTabView {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 2: 绘图参数预设与动态参数自适应卡片
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 2: 绘图参数预设与动态参数自适应卡片 ---
 
     private _buildDrawingPresetCard(): HTMLElement {
         const card = createCard({ hoverable: true });
@@ -719,9 +715,7 @@ export class OpenAITabView extends BaseTabView {
         return group.root;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 提供商特性动态联动
-    // ─────────────────────────────────────────────────────────────
+    // --- 提供商特性动态联动 ---
 
     private _getActiveSettings(): OpenAIProviderSettings {
         const { settings } = getActiveProviderSettings(this._engineStore.getAll());

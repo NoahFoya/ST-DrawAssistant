@@ -78,3 +78,31 @@
   box-sizing: border-box;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * 3. 表单右侧控件统一对齐基线 (Control Slot Baseline)
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+.da-slot--right {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--da-space-sm, 8px);
+}
+
+.da-slot--right > .da-input,
+.da-slot--right > .da-select,
+.da-slot--right > .da-btn,
+.da-slot--right > .da-input-unit-wrapper,
+.da-slot--right > .da-color-picker-wrapper {
+  flex-shrink: 0;
+}
+
+/* 开关与滑块垂直对齐到 32px 基准高 */
+.da-slot--right > .da-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+}
+

@@ -1,5 +1,5 @@
 /**
- * 运行诊断与统计面板视图 (DiagnosticsTabView)
+ * 日志与统计面板视图 (DiagnosticsTabView)
  * 包含生图数据统计、运行环境状态、后端连通性测试与运行日志
  */
 
@@ -282,12 +282,42 @@ export class DiagnosticsTabView extends BaseTabView {
         const isOnline = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
         const isStConnected = typeof window !== 'undefined' && Boolean((window as any).SillyTavern?.getContext);
         const items = [
-            { label: '本地数据库存储', status: isIndexedDBOk ? '正常可用' : '不可用', ok: isIndexedDBOk, icon: '💾' },
-            { label: 'Canvas 绘图加速', status: isCanvasOk ? '已启用' : '异常', ok: isCanvasOk, icon: '🎨' },
-            { label: '后台多线程加速', status: isWorkerOk ? '支持' : '不支持', ok: isWorkerOk, icon: '⚡' },
-            { label: '网络在线状态', status: isOnline ? '已联网' : '未联网', ok: isOnline, icon: '🌐' },
-            { label: 'SillyTavern 宿主', status: isStConnected ? '上下文就绪' : '离线运行', ok: isStConnected, icon: '🎭' },
-            { label: '生图通信模式', status: '浏览器直连', ok: true, icon: '🔌' }
+            {
+                label: '本地数据库存储',
+                status: isIndexedDBOk ? '正常可用' : '不可用',
+                ok: isIndexedDBOk,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>`
+            },
+            {
+                label: 'Canvas 绘图加速',
+                status: isCanvasOk ? '已启用' : '异常',
+                ok: isCanvasOk,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`
+            },
+            {
+                label: '后台多线程加速',
+                status: isWorkerOk ? '支持' : '不支持',
+                ok: isWorkerOk,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`
+            },
+            {
+                label: '网络在线状态',
+                status: isOnline ? '已联网' : '未联网',
+                ok: isOnline,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`
+            },
+            {
+                label: 'SillyTavern 宿主',
+                status: isStConnected ? '上下文就绪' : '离线运行',
+                ok: isStConnected,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`
+            },
+            {
+                label: '生图通信模式',
+                status: '浏览器直连',
+                ok: true,
+                icon: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`
+            }
         ];
 
         items.forEach((item) => {

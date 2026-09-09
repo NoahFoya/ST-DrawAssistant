@@ -198,9 +198,7 @@ export class ComfyUITabView extends BaseTabView {
         this._root.appendChild(this._buildWorkflowPresetCard());
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 1: 服务连接
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 1: 服务连接 (ConnectionCard) ---
 
     private _buildConnectionCard(): HTMLElement {
         const driver = this._driverRegistry?.get('comfyui');
@@ -259,10 +257,8 @@ export class ComfyUITabView extends BaseTabView {
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 2: 绘图参数预设 (主方案管理器)
+    // --- 卡片 2: 绘图参数预设 (主方案管理器) ---
     // 排序层级：顶部方案条 → 【模型设置】 → 【采样设置】 → 【提示词预设设置】 → 【工作流设置】
-    // ─────────────────────────────────────────────────────────────
 
     private _buildDrawingProfileCard(): HTMLElement {
         const card = createCard({ hoverable: true });
@@ -510,9 +506,7 @@ export class ComfyUITabView extends BaseTabView {
         return card.root;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 3: 提示词预设管理器 (PromptPresetManager 独立组件)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 3: 提示词预设管理器 (PromptPresetManager 独立组件) ---
 
     private _buildPromptPresetCard(): HTMLElement {
         this._promptPresetManagerHandle = createPromptPresetManager({
@@ -538,9 +532,7 @@ export class ComfyUITabView extends BaseTabView {
         return this._promptPresetManagerHandle;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 卡片 4: 工作流预设管理器 (WorkflowPresetManager 独立组件)
-    // ─────────────────────────────────────────────────────────────
+    // --- 卡片 4: 工作流预设管理器 (WorkflowPresetManager 独立组件) ---
 
     private _buildWorkflowPresetCard(): HTMLElement {
         this._workflowCardHandle = createWorkflowPresetCard({
@@ -581,9 +573,7 @@ export class ComfyUITabView extends BaseTabView {
         return this._workflowCardHandle;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 内部数据流与联动更新
-    // ─────────────────────────────────────────────────────────────
+    // --- 内部数据流与联动更新 ---
 
     private _extractCurrentDrawingData(): ComfyDrawingProfileData {
         const model = this._engineStore.get('model') || '';

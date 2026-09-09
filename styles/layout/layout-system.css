@@ -39,8 +39,8 @@
 
 /* 卡片内置分割线行 (支持悬停高亮与底部边框) */
 .da-row--divided {
-  padding: 7px 12px;
-  min-height: 32px;
+  padding: 8px 16px;
+  min-height: 44px;
   border-bottom: 1px solid var(--da-separator);
   transition: background 0.12s var(--da-ease);
 }
@@ -232,7 +232,7 @@
 
 .da-card__header {
   position: relative;
-  padding: 8px 14px 8px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--da-separator);
   background: var(--da-bg-subtle, rgba(255, 255, 255, 0.025));
   display: flex;

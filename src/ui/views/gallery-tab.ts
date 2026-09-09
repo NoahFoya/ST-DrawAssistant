@@ -1,6 +1,6 @@
 /**
- * 本地图库面板视图 (GalleryTabView)
- * 包含存储空间概览与历史图库画廊，挂载至主设置面板的图库标签页
+ * 画廊面板视图 (GalleryTabView)
+ * 包含存储空间概览与画廊图片管理，挂载至主设置面板的画廊标签页
  */
 
 import { StorageService } from '../../state';
@@ -109,17 +109,17 @@ export class GalleryTabView extends BaseTabView {
             FeedbackService.toastSuccess('存储空间与资产统计已刷新');
         };
 
-        // 按钮 4: 清空全部图库 (危险)
+        // 按钮 4: 清空全部画廊 (危险)
         const clearAllBtn = document.createElement('button');
         clearAllBtn.type = 'button';
         clearAllBtn.className = 'da-btn da-btn--danger da-btn--sm';
-        clearAllBtn.textContent = '清空全部图库';
+        clearAllBtn.textContent = '清空画廊';
         clearAllBtn.title = '清空本地存储中的所有生图记录与元数据（包含收藏图片）';
         clearAllBtn.onclick = async () => {
             if (!this._storage) return;
             const { FeedbackService } = await import('../feedback/feedback');
             const confirmed = await FeedbackService.confirm({
-                title: '⚠️ 危险：清空全部图库确认',
+                title: '⚠️ 危险：清空画廊确认',
                 message: '此操作将永久清空本地数据库中的全部历史生图记录（包含所有已标星收藏的图片），且无法恢复！是否确定全部清空？',
                 confirmText: '确认全部清空'
             });
@@ -127,7 +127,7 @@ export class GalleryTabView extends BaseTabView {
                 await this._storage.clearAll();
                 await this._storageBarHandle?.refresh();
                 await this._galleryManagerHandle?.reload();
-                FeedbackService.toastSuccess('已清空全部本地图库数据');
+                FeedbackService.toastSuccess('已清空全部画廊数据');
             }
         };
 
@@ -139,10 +139,10 @@ export class GalleryTabView extends BaseTabView {
 
         this._root.appendChild(cardStorage.root);
 
-        // 历史图库卡片
+        // 画廊卡片
         const cardManager = createCard({ hoverable: true });
         const headerManager = createCardHeader({
-            title: '历史图库',
+            title: '画廊',
             description: '检索、预览与批量管理历史生图资产'
         });
         cardManager.header.appendChild(headerManager);

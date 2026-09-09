@@ -9,7 +9,7 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    height: 30px;
+    height: 32px;
     padding: 0 12px;
     border-radius: var(--da-radius-btn, 6px);
     border: 1px solid var(--da-border-color);

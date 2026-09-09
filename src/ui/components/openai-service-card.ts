@@ -82,9 +82,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         return providersMap[p];
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. 服务供应商选择行 (Provider Select & Badge)
-    // ─────────────────────────────────────────────────────────────
+    // --- 1. 服务供应商选择行 (Provider Select & Badge) ---
     const providerRow = createRow(['left', 'right'], { align: 'center', divided: true });
     providerRow.slots[0].appendChild(createFieldLabel({
         title: '服务供应商',
@@ -128,9 +126,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     providerRow.slots[1].appendChild(providerContainer);
     card.body.appendChild(providerRow.root);
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. 接口 Base URL 行
-    // ─────────────────────────────────────────────────────────────
+    // --- 2. 接口 Base URL 行 ---
     const urlRow = createRow(['left', 'right'], { align: 'center', divided: true });
     urlRow.slots[0].appendChild(createFieldLabel({
         title: '接口 Base URL',
@@ -153,7 +149,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     const resetUrlBtn = document.createElement('button');
     resetUrlBtn.type = 'button';
     resetUrlBtn.className = 'da-btn da-btn--secondary';
-    resetUrlBtn.textContent = '🔄 默认';
+    resetUrlBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>恢复默认`;
     resetUrlBtn.title = '恢复为当前提供商推荐的官方默认地址';
     resetUrlBtn.style.padding = '4px 8px';
 
@@ -177,9 +173,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     urlRow.slots[1].appendChild(urlContainer);
     card.body.appendChild(urlRow.root);
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. API Key 访问密钥行
-    // ─────────────────────────────────────────────────────────────
+    // --- 3. API Key 访问密钥行 ---
     const keyRow = createRow(['left', 'right'], { align: 'center', divided: true });
     keyRow.slots[0].appendChild(createFieldLabel({
         title: 'API Key (访问密钥)',
@@ -208,19 +202,22 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     keyInputEl.addEventListener('input', syncKeyChange);
     keyInputEl.addEventListener('change', syncKeyChange);
 
+    const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
     const toggleEyeBtn = document.createElement('button');
     toggleEyeBtn.type = 'button';
-    toggleEyeBtn.className = 'da-btn da-btn--secondary';
-    toggleEyeBtn.textContent = '👁️';
+    toggleEyeBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+    toggleEyeBtn.innerHTML = EYE_SVG;
     toggleEyeBtn.title = '显示/隐藏密钥';
     toggleEyeBtn.style.padding = '0 10px';
     toggleEyeBtn.onclick = () => {
         if (keyInputEl.type === 'password') {
             keyInputEl.type = 'text';
-            toggleEyeBtn.textContent = '🔒';
+            toggleEyeBtn.innerHTML = EYE_OFF_SVG;
         } else {
             keyInputEl.type = 'password';
-            toggleEyeBtn.textContent = '👁️';
+            toggleEyeBtn.innerHTML = EYE_SVG;
         }
     };
 
@@ -229,9 +226,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     keyRow.slots[1].appendChild(keyContainer);
     card.body.appendChild(keyRow.root);
 
-    // ─────────────────────────────────────────────────────────────
-    // 4. 专属请求头 (JSON) 行
-    // ─────────────────────────────────────────────────────────────
+    // --- 4. 专属请求头 (JSON) 行 ---
     const headersRow = createRow(['left', 'right'], { align: 'center', divided: true });
     headersRow.slots[0].appendChild(createFieldLabel({
         title: '专享请求头 (JSON)',
@@ -253,9 +248,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     headersRow.slots[1].appendChild(headersInputEl);
     card.body.appendChild(headersRow.root);
 
-    // ─────────────────────────────────────────────────────────────
-    // 5. 连通性测试与模型同步操作行
-    // ─────────────────────────────────────────────────────────────
+    // --- 5. 连通性测试与模型同步操作行 ---
     const actionRow = createRow(['left', 'right'], { align: 'center' });
     actionRow.slots[0].appendChild(createFieldLabel({
         title: '连通性与模型同步',
@@ -289,9 +282,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     actionRow.slots[1].appendChild(actionContainer);
     card.body.appendChild(actionRow.root);
 
-    // ─────────────────────────────────────────────────────────────
-    // 核心切换与绑定逻辑
-    // ─────────────────────────────────────────────────────────────
+    // --- 核心切换与绑定逻辑 ---
     const bindProvider = (newProvider: OpenAIProviderType) => {
         currentProvider = newProvider;
         const s = getSettings(newProvider);

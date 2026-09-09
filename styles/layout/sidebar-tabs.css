@@ -127,36 +127,45 @@
     animation: da-pulse-dirty 1.6s infinite ease-in-out;
 }
 
-/* 引擎 Tab 折叠展开指示箭头 */
-.da-sidebar-item__chevron {
+/* 引擎 Tab 展开/收拢微型指示器 (支持单击展开/收起) */
+.da-sidebar-item__expand-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     margin-left: auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--da-text-secondary);
+    opacity: 0.6;
     flex-shrink: 0;
-    opacity: 0.5;
-    transition: transform 0.18s var(--da-ease), opacity 0.14s var(--da-ease);
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease), opacity 0.14s var(--da-ease), background 0.14s var(--da-ease);
 }
 
-.da-sidebar-item__chevron.is-expanded {
+.da-sidebar-item__expand-trigger:hover {
+    opacity: 1;
+    color: var(--da-text-primary);
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.da-sidebar-item__expand-trigger.is-expanded {
     transform: rotate(180deg);
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
-.da-sidebar-item:hover .da-sidebar-item__chevron {
-    opacity: 0.75;
-}
-
-/* 引擎切换子项：缩进 + 字号略小 + 次要色 */
-.da-sidebar-subitem {
-    padding-left: calc(var(--da-space-md, 12px) + 18px) !important;
-    font-size: var(--da-font-size-sm, 0.80rem) !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    color: var(--da-text-muted) !important;
-    animation: da-fadein 0.14s var(--da-ease);
-}
-
-.da-sidebar-subitem:hover {
-    color: var(--da-text-primary) !important;
+/* 默认生图引擎微标 (平级展示时标识当前生效的默认引擎) */
+.da-sidebar-item__default-badge {
+    margin-left: auto;
+    font-size: 0.66rem;
+    line-height: 1.2;
+    padding: 1px 5px;
+    border-radius: var(--da-radius-pill, 10px);
+    background: rgba(var(--da-accent-rgb), 0.15);
+    color: var(--da-accent-color);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.35);
+    font-weight: 600;
+    flex-shrink: 0;
+    letter-spacing: 0;
+    user-select: none;
 }

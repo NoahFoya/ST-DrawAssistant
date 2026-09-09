@@ -97,13 +97,17 @@ export class GeneralTabView extends BaseTabView {
                     type: 'input',
                     label: '生图指令前缀',
                     helpTooltip: '用于从 AI 回复中截取提示词。支持在前后缀包裹的内容中使用竖线“|”分隔正向与反向提示词，例如：image### 1girl, cute | bad hands ###',
-                    placeholder: 'image###'
+                    placeholder: 'image###',
+                    align: 'center',
+                    variant: 'short'
                 },
                 {
                     key: 'placeholderEnd',
                     type: 'input',
                     label: '生图指令后缀',
-                    placeholder: '###'
+                    placeholder: '###',
+                    align: 'center',
+                    variant: 'short'
                 },
                 {
                     key: 'autoGenerate',
@@ -202,8 +206,8 @@ export class GeneralTabView extends BaseTabView {
                 {
                     key: 'saveToIndexedDB',
                     type: 'toggle',
-                    label: '保存至本地图库',
-                    helpTooltip: '（推荐开启）保存在当前浏览器的本地数据库 (IndexedDB) 中，供本地图库浏览，不增加聊天记录体积。'
+                    label: '保存至画廊',
+                    helpTooltip: '（推荐开启）保存在当前浏览器的本地数据库 (IndexedDB) 中，供画廊浏览，不增加聊天记录体积。'
                 },
                 {
                     key: 'embedToBase64',
@@ -215,7 +219,7 @@ export class GeneralTabView extends BaseTabView {
                     key: 'maxStoredImages',
                     type: 'select',
                     label: '历史图片保留上限',
-                    helpTooltip: '本地图库最多保存的图片数量。超出上限后自动清理较早且未收藏的图片；已收藏的图片不会被清理。',
+                    helpTooltip: '画廊最多保存的图片数量。超出上限后自动清理较早且未收藏的图片；已收藏的图片不会被清理。',
                     options: [
                         { label: '100 张', value: '100' },
                         { label: '300 张', value: '300' },
