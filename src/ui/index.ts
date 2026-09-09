@@ -17,6 +17,7 @@ import { HostClient } from '../host/host-client';
 import { DriverRegistry } from '../services/drivers';
 import { PromptPipeline } from '../pipeline/prompt-pipeline';
 import { TaskManager } from '../tasks/task-manager';
+import { FloorTaskService } from '../tasks/floor-task-service';
 
 import { ThemeService } from './foundation/theme-service';
 import { UIRegistry } from './foundation/ui-registry';
@@ -34,6 +35,7 @@ export interface UIContext extends IDisposable {
     readonly settingsModal: SettingsModal;
     readonly drawerEntry: DrawerEntryController;
     readonly fabContainer: FABContainer;
+    readonly floorTaskService: FloorTaskService;
     readonly floorButtonContainer: FloorButtonContainer;
 }
 
@@ -112,13 +114,22 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
     });
     disposables.add(fabContainer);
 
-    // 挂载消息楼层生图按钮容器
+    // 实例化楼层生图业务服务
+    const floorTaskService = new FloorTaskService({
+        host,
+        store,
+        taskManager: tasks,
+        pipeline,
+        storage
+    });
+    disposables.add(floorTaskService);
+
+    // 挂载消息楼层生图按钮表现层容器
     const floorButtonContainer = new FloorButtonContainer({
         host,
         events,
         store,
-        taskManager: tasks,
-        pipeline,
+        floorTaskService,
         storage
     });
     disposables.add(floorButtonContainer);
@@ -129,6 +140,7 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
         settingsModal,
         drawerEntry,
         fabContainer,
+        floorTaskService,
         floorButtonContainer,
         dispose: () => {
             disposables.dispose();

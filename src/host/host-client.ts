@@ -9,6 +9,7 @@ import {
     DEFAULT_HOST_READY_TIMEOUT_MS,
     DEFAULT_HOST_READY_POLL_INTERVAL_MS
 } from '../constants';
+import { blobToBase64 } from '../utils/binary';
 
 export interface HostMessageEvent {
     readonly messageId: number;
@@ -281,6 +282,15 @@ export class HostClient implements IDisposable {
         );
     }
 
+    public onSettingsUpdated(handler: (settings?: unknown) => void): IDisposable {
+        return this.subscribe(
+            (ctx) => ctx.event_types.SETTINGS_UPDATED,
+            (_ctx, settings) => {
+                handler(settings);
+            }
+        );
+    }
+
     public getCurrentChatId(): string | null {
         return this.getST()?.chatId || null;
     }
@@ -329,7 +339,6 @@ export class HostClient implements IDisposable {
         message.extra[HostClient.EXTENSION_KEY] = message.extra[HostClient.EXTENSION_KEY] || {};
         message.extra[HostClient.EXTENSION_KEY][key] = value;
 
-        ctx.eventSource.emit(ctx.event_types.MESSAGE_UPDATED, messageId);
         ctx.saveChatDebounced();
     }
 
@@ -409,6 +418,80 @@ export class HostClient implements IDisposable {
 
     public getRequestHeaders(): Record<string, string> {
         return this.getST()?.getRequestHeaders?.() || {};
+    }
+
+    /**
+     * 上传图片至 SillyTavern 宿主服务端静态资产目录 (/api/images/upload)
+     * 生成跨设备全局可访问的静态相对路径，规避客户端 IndexedDB 易失与跨端裂图问题
+     */
+    public async uploadImageToServer(
+        blob: Blob,
+        options?: { filename?: string; characterName?: string; format?: string }
+    ): Promise<{ path: string } | null> {
+        if (typeof fetch === 'undefined') return null;
+        try {
+            const base64Data = await blobToBase64(blob);
+            const format = options?.format || (blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png');
+            const uploadBody: Record<string, unknown> = {
+                image: base64Data,
+                format
+            };
+            if (options?.characterName) {
+                uploadBody.ch_name = options.characterName;
+            }
+            if (options?.filename) {
+                uploadBody.filename = options.filename;
+            }
+
+            const headers: Record<string, string> = {
+                ...this.getRequestHeaders(),
+                'Content-Type': 'application/json'
+            };
+
+            const response = await fetch('/api/images/upload', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(uploadBody)
+            });
+
+            if (!response.ok) {
+                console.warn('[ST-DrawAssistant][HostClient] 上传图片至酒馆服务端失败:', response.status, response.statusText);
+                return null;
+            }
+
+            const data = await response.json();
+            if (data?.path) {
+                const normalizedPath = String(data.path).startsWith('/') ? data.path : `/${data.path}`;
+                return { path: normalizedPath };
+            }
+            return null;
+        } catch (err) {
+            console.warn('[ST-DrawAssistant][HostClient] 上传图片至酒馆服务端异常:', err);
+            return null;
+        }
+    }
+
+    /**
+     * 从 SillyTavern 宿主服务端删除指定图片资产 (/api/images/delete)
+     */
+    public async deleteImageFromServer(path: string): Promise<boolean> {
+        if (typeof fetch === 'undefined' || !path) return false;
+        try {
+            const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+            const headers: Record<string, string> = {
+                ...this.getRequestHeaders(),
+                'Content-Type': 'application/json'
+            };
+            const response = await fetch('/api/images/delete', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ path: cleanPath })
+            });
+            return response.ok;
+        } catch (err) {
+            console.warn('[ST-DrawAssistant][HostClient] 从酒馆服务端删除图片异常:', err);
+            return false;
+        }
     }
 
     public getExtensionDrawerContainer(): HTMLElement | null {

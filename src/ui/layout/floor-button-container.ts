@@ -1,67 +1,93 @@
 /**
- * 楼层生图按钮注入与交互管理控制器 (FloorButtonContainer)
- * 监听酒馆消息渲染与滚动更新，解析提示词占位符并注入交互按钮与图片槽位
+ * 楼层生图按钮表现层控制器 (FloorButtonContainer)
+ * 职责：纯 UI 表现层，负责正文占位符 TreeWalker 扫描、Range 原位替换、思维链/代码块排除、
+ * 运行时无状态动态 DOM 寻址，并将提示词流水线与任务派发全权委托给 FloorTaskService。
  */
 
-import { IDisposable, DisposableStore, CoreEventMap, ChatImagesRoot } from '../../types';
-import { TypedEventBus } from '../../utils';
-import { SettingsStore } from '../../state';
-import { base64ToBlob } from '../../utils';
+import { IDisposable, DisposableStore, CoreEventMap } from '../../types';
+import { TypedEventBus, base64ToBlob } from '../../utils';
+import { SettingsStore, StorageService } from '../../state';
 import { HostClient } from '../../host';
-import { StorageService } from '../../state';
-import { TaskManager } from '../../tasks';
-import { PromptPipeline } from '../../pipeline';
-import { extractPlaceholders } from '../../pipeline';
+import { TaskManager, FloorTaskService } from '../../tasks';
+import { PromptPipeline, separatePromptByPipe } from '../../pipeline';
 import { openInpaintCanvasModal } from '../media/image-editor';
 import { renderImageToMessage, ImageActionCallbacks } from '../media/image-renderer';
 import { FeedbackService } from '../feedback/feedback';
+
+/** 需严格跳过的代码块容器标签 */
+const CODE_RELATED_TAGS = new Set([
+    'SCRIPT',
+    'STYLE',
+    'BUTTON',
+    'PRE',
+    'CODE',
+    'TEXTAREA',
+    'KBD',
+    'SAMP',
+    'VAR'
+]);
+
+/** 需严格跳过的高亮代码块样式类模式 */
+const CODE_CLASS_PATTERNS = ['hljs', 'highlight', 'prism', 'language-', 'CodeMirror', 'ace_'];
+
+/** 需严格跳过的思维链与思考折叠容器样式类模式 */
+const THINKING_CLASS_PATTERNS = ['think', 'thinking', 'thought', 'reasoning', 'chat-thought', 'mind-fold', 'thinking-details'];
+
+function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+interface NodeRangeInfo {
+    node: Node;
+    start: number;
+    end: number;
+}
 
 export interface FloorButtonContainerOptions {
     host: HostClient;
     events: TypedEventBus<CoreEventMap>;
     store: SettingsStore;
-    taskManager: TaskManager;
-    pipeline: PromptPipeline;
+    floorTaskService?: FloorTaskService;
+    taskManager?: TaskManager;
+    pipeline?: PromptPipeline;
     storage: StorageService;
 }
 
-type ButtonState = 'default' | 'loading' | 'progress' | 'done' | 'error';
+type ButtonState = 'default' | 'loading' | 'pending' | 'progress' | 'done' | 'error';
 
-interface FloorButtonContext {
-    btn: HTMLButtonElement;
+/** 运行时从 DOM 动态提取的无状态插槽上下文 */
+interface DynamicSlotContext {
     wrapper: HTMLElement;
+    btn: HTMLButtonElement;
     imgSlot: HTMLElement;
+    messageId: number;
+    swipeId: number;
+    slotIndex: number;
     promptText: string;
+    rawNegativePrompt?: string;
     overridePrompt?: string;
     overrideNegativePrompt?: string;
     overrideInpaintData?: { initImageBlob: Blob; maskImageBlob: Blob };
-    rawNegativePrompt?: string;
     currentTaskId: string | null;
-    currentAssetId?: string | null;
+    currentAssetId: string | null;
     state: ButtonState;
-    messageId: number;
-    swipeId: number;
-    buttonIndex: number;
 }
 
 export class FloorButtonContainer implements IDisposable {
     private readonly _host: HostClient;
     private readonly _events: TypedEventBus<CoreEventMap>;
     private readonly _store: SettingsStore;
-    private readonly _taskManager: TaskManager;
-    private readonly _pipeline: PromptPipeline;
+    private readonly _floorTaskService: FloorTaskService;
     private readonly _storage: StorageService;
     private readonly _disposables = new DisposableStore();
-    private readonly _contextMap = new Map<string, FloorButtonContext>();
     private readonly _trackedObjectUrls = new Set<string>();
     private readonly _activeTaskUnbinds = new Map<string, () => void>();
-    private _intersectionObserver: IntersectionObserver | null = null;
-    private _observedMsgNodes = new WeakSet<HTMLElement>();
     private _isDisposed = false;
 
     private static readonly BUTTON_LABELS: Record<ButtonState, string> = {
         default: '生成图像',
         loading: '提交中...',
+        pending: '排队中 (点击取消)',
         progress: '生成中 (点击取消)',
         done: '重新生成',
         error: '重试'
@@ -71,107 +97,37 @@ export class FloorButtonContainer implements IDisposable {
         this._host = options.host;
         this._events = options.events;
         this._store = options.store;
-        this._taskManager = options.taskManager;
-        this._pipeline = options.pipeline;
         this._storage = options.storage;
 
-        this.initIntersectionObserver();
+        if (options.floorTaskService) {
+            this._floorTaskService = options.floorTaskService;
+        } else if (options.taskManager && options.pipeline) {
+            // 向后兼容兜底实例化
+            this._floorTaskService = new FloorTaskService({
+                host: options.host,
+                store: options.store,
+                taskManager: options.taskManager,
+                pipeline: options.pipeline,
+                storage: options.storage
+            });
+            this._disposables.add(this._floorTaskService);
+        } else {
+            throw new Error('FloorButtonContainer 缺少 FloorTaskService 依赖');
+        }
+
         this.initHostEventListeners();
-        this.scanAllMessages();
+        void this.scanAllMessages();
     }
 
-    /**
-     * 初始化视口可见性观察器 (IntersectionObserver)
-     * 以酒馆聊天窗口容器为根视口，提供 300px 上下预加载缓冲区
-     * 仅当消息进入视口区域时动态注入与恢复插槽，离开远端视口时按需轻量化
-     */
-    private initIntersectionObserver(): void {
-        if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
-
-        const chatRoot = document.querySelector<HTMLElement>('#chat') || null;
-        this._intersectionObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    const target = entry.target as HTMLElement;
-                    const id = parseInt(target.getAttribute('mesid') || '', 10);
-                    if (isNaN(id)) return;
-
-                    if (entry.isIntersecting) {
-                        void this.scanAndInjectMessage(id);
-                    } else {
-                        // 离开视口较远时释放 Blob URL 防内存泄露
-                        this.lightenMessageOutOfViewport(id);
-                    }
-                });
-            },
-            {
-                root: chatRoot,
-                rootMargin: '300px 0px'
-            }
-        );
-    }
+    // 1. 宿主生命周期事件订阅与自动生图调度
 
     private initHostEventListeners(): void {
+        // 生成结束消息定稿后等待全量扫描挂载完毕，再触发自动生图，彻底避免异步时序扑空
         this._disposables.add(
-            this._host.onCharacterMessageRendered((ev) => {
-                if (!ev.isUser && ev.messageId !== undefined) {
-                    this.observeAndScanMessage(ev.messageId);
-                }
-            })
-        );
+            this._host.onGenerationEnded(async () => {
+                // 确保全量消息扫描与 DOM 原位插槽挂载确凿完成
+                await this.scanAllMessages();
 
-        this._disposables.add(
-            this._host.onUserMessageRendered((ev) => {
-                if (ev.messageId !== undefined) {
-                    this.observeAndScanMessage(ev.messageId);
-                }
-            })
-        );
-
-        // 监听用户编辑消息事件，正文修改后动态重新解析并刷新段落插槽
-        this._disposables.add(
-            this._host.onMessageUpdated((ev) => {
-                if (ev.messageId !== undefined) {
-                    this.observeAndScanMessage(ev.messageId);
-                }
-            })
-        );
-
-        this._disposables.add(
-            this._host.onChatChanged(() => {
-                this._intersectionObserver?.disconnect();
-                this._observedMsgNodes = new WeakSet<HTMLElement>();
-                this.cleanupTrackedUrls();
-                this._contextMap.clear();
-                this.scanAllMessages();
-            })
-        );
-
-        this._disposables.add(
-            this._host.onChatSwiped((ev) => {
-                if (ev.messageId !== undefined) {
-                    this.observeAndScanMessage(ev.messageId);
-                }
-            })
-        );
-
-        // 监听图像资产保存完成事件，将生成的持久化 uuid 绑定到插槽上下文，消除删除与缓存读取时序差
-        this._disposables.add(
-            this._events.on('asset:saved', (ev) => {
-                const info = ev.record?.metadata?.contextInfo;
-                if (info && typeof info.messageId === 'number') {
-                    const contextKey = `${info.messageId}_${info.swipeId ?? 0}_${info.buttonIndex ?? 0}`;
-                    const ctx = this._contextMap.get(contextKey);
-                    if (ctx) {
-                        ctx.currentAssetId = ev.assetId;
-                    }
-                }
-            })
-        );
-
-        // 自动生图时机收敛至整条消息完全生成定稿后触发，杜绝流式打字过程中的抢跑与并发冲突
-        this._disposables.add(
-            this._host.onGenerationEnded(() => {
                 const settings = this._store.getState();
                 if (!settings.autoGenerate) return;
 
@@ -181,153 +137,115 @@ export class FloorButtonContainer implements IDisposable {
                 const lastMsg = chat[lastIndex];
                 if (lastMsg.is_user) return;
 
-                const swipeId = lastMsg.swipe_id ?? 0;
-                for (const [key, ctx] of this._contextMap.entries()) {
-                    if (key.startsWith(`${lastIndex}_${swipeId}_`) && ctx.state === 'default') {
-                        void this.triggerGeneration(ctx);
+                // 此时 DOM 插槽已 100% 挂载就绪，按序触发该楼层内所有处于 default 态的按钮入队
+                const lastMsgNode = document.querySelector<HTMLElement>(`.mes[mesid="${lastIndex}"]`);
+                if (lastMsgNode) {
+                    const slots = Array.from(lastMsgNode.querySelectorAll<HTMLElement>('.da-floor-slot'));
+                    for (const slot of slots) {
+                        const ctx = this.getSlotContext(slot);
+                        if (ctx && ctx.state === 'default') {
+                            void this.triggerGeneration(ctx);
+                        }
                     }
+                }
+            })
+        );
+
+        // 切换消息分支（Swipe）时刷新对应楼层插槽与图片展示
+        this._disposables.add(
+            this._host.onChatSwiped((ev) => {
+                if (ev.messageId !== undefined) {
+                    void this.scanAndInjectMessage(ev.messageId);
+                }
+            })
+        );
+
+        // 监听用户编辑消息事件，修改后重新扫描解析
+        this._disposables.add(
+            this._host.onMessageUpdated((ev) => {
+                if (ev.messageId !== undefined) {
+                    void this.scanAndInjectMessage(ev.messageId);
+                }
+            })
+        );
+
+        // 会话切换时清理临时创建的 Object URL，并重新扫描当前会话消息
+        this._disposables.add(
+            this._host.onChatChanged(() => {
+                this.cleanupTrackedUrls();
+                void this.scanAllMessages();
+            })
+        );
+    }
+
+    // 2. 运行时动态 DOM 寻址 (无状态解耦核心)
+
+    /**
+     * 从 DOM 节点向上实时解析楼层号与插槽上下文
+     * 核心设计：消息自身持有图片数据，删楼时 DOM mesid 会由酒馆内核自动向前顺移；
+     * 插件在用户点击的瞬间动态调用 closest('.mes[mesid]') 向上取号，天然 100% 免疫任何删楼位移。
+     */
+    private getSlotContext(target: HTMLElement): DynamicSlotContext | null {
+        const wrapper = target.closest<HTMLElement>('.da-floor-slot');
+        if (!wrapper) return null;
+
+        const mesNode = wrapper.closest<HTMLElement>('.mes[mesid]');
+        const rawMesId = mesNode?.getAttribute('mesid');
+        const messageId = rawMesId !== null && rawMesId !== undefined ? parseInt(rawMesId, 10) : NaN;
+        if (isNaN(messageId)) return null;
+
+        const slotIndex = parseInt(wrapper.dataset.slotIndex || '0', 10);
+        const swipeId = parseInt(wrapper.dataset.swipeId || '0', 10);
+        const promptRaw = wrapper.dataset.prompt || '';
+        const { positive, negative } = separatePromptByPipe(promptRaw);
+
+        const btn = wrapper.querySelector<HTMLButtonElement>('.da-floor-btn');
+        const imgSlot = wrapper.querySelector<HTMLElement>('.da-floor-btn-img-slot');
+        if (!btn || !imgSlot) return null;
+
+        const state = (wrapper.dataset.state as ButtonState) || 'default';
+        const currentTaskId = wrapper.dataset.taskId || null;
+        const currentAssetId = wrapper.dataset.assetId || null;
+
+        return {
+            wrapper,
+            btn,
+            imgSlot,
+            messageId,
+            swipeId,
+            slotIndex,
+            promptText: positive,
+            rawNegativePrompt: negative || undefined,
+            overridePrompt: wrapper.dataset.overridePrompt || undefined,
+            overrideNegativePrompt: wrapper.dataset.overrideNegativePrompt || undefined,
+            currentTaskId,
+            currentAssetId,
+            state
+        };
+    }
+
+    // 3. 正文扫描、TreeWalker 过滤与 Range 原位插装
+
+    /**
+     * 扫描全部当前在 DOM 中的消息楼层（返回 Promise 确保可可靠等待）
+     */
+    public async scanAllMessages(): Promise<void> {
+        if (typeof document === 'undefined' || this._isDisposed) return;
+        const allMsgNodes = Array.from(document.querySelectorAll<HTMLElement>('.mes[mesid]'));
+        await Promise.all(
+            allMsgNodes.map(async (node) => {
+                const id = parseInt(node.getAttribute('mesid') || '', 10);
+                if (!isNaN(id)) {
+                    await this.scanAndInjectMessage(id);
                 }
             })
         );
     }
 
     /**
-     * 将单条消息加入视口观察并按需处理
-     */
-    private observeAndScanMessage(messageId: number): void {
-        if (typeof document === 'undefined' || this._isDisposed) return;
-        const msgNode = document.querySelector<HTMLElement>(`.mes[mesid="${messageId}"]`);
-        if (!msgNode) return;
-
-        if (this._intersectionObserver && !this._observedMsgNodes.has(msgNode)) {
-            this._intersectionObserver.observe(msgNode);
-            this._observedMsgNodes.add(msgNode);
-        }
-
-        // 新消息渲染时直接优先扫描一次
-        void this.scanAndInjectMessage(messageId);
-    }
-
-    /**
-     * 扫描消息：通过 IntersectionObserver 动态跟随视口管理
-     */
-    public scanAllMessages(): void {
-        if (typeof document === 'undefined' || this._isDisposed) return;
-        const allMsgNodes = Array.from(document.querySelectorAll<HTMLElement>('.mes[mesid]'));
-        if (allMsgNodes.length === 0) return;
-
-        allMsgNodes.forEach((node) => {
-            const id = parseInt(node.getAttribute('mesid') || '', 10);
-            if (isNaN(id)) return;
-
-            if (this._intersectionObserver) {
-                if (!this._observedMsgNodes.has(node)) {
-                    this._intersectionObserver.observe(node);
-                    this._observedMsgNodes.add(node);
-                }
-            } else {
-                // 浏览器不支持 IntersectionObserver 时兜底直接扫描
-                void this.scanAndInjectMessage(id);
-            }
-        });
-
-        // 优先即时渲染最新 3 条消息，确保初次进房或底部新消息瞬间呈现
-        const recentNodes = allMsgNodes.slice(-3);
-        recentNodes.forEach((node) => {
-            const id = parseInt(node.getAttribute('mesid') || '', 10);
-            if (!isNaN(id)) {
-                void this.scanAndInjectMessage(id);
-            }
-        });
-    }
-
-    /**
-     * 消息移出视口较远时的轻量化处理：释放临时 Blob URL 降低内存开销
-     */
-    private lightenMessageOutOfViewport(messageId: number): void {
-        for (const [key, ctx] of this._contextMap.entries()) {
-            if (key.startsWith(`${messageId}_`)) {
-                const img = ctx.imgSlot.querySelector<HTMLImageElement>('.da-generated-img');
-                if (img?.dataset?.ownsBlob === 'true' && img.src?.startsWith('blob:')) {
-                    URL.revokeObjectURL(img.src);
-                    this._trackedObjectUrls.delete(img.src);
-                    img.dataset.ownsBlob = 'false';
-                }
-            }
-        }
-    }
-
-    /**
-     * 清理单条消息内挂载的楼层生图插槽与上下文
-     */
-    public cleanMessageFloorSlots(messageId: number): void {
-        if (typeof document === 'undefined') return;
-        const msgNode = document.querySelector<HTMLElement>(`.mes[mesid="${messageId}"]`);
-        if (msgNode) {
-            msgNode.querySelectorAll<HTMLElement>('.da-floor-slot, .da-floor-root').forEach((el) => {
-                el.remove();
-            });
-        }
-        for (const [key, ctx] of Array.from(this._contextMap.entries())) {
-            if (key.startsWith(`${messageId}_`)) {
-                const oldImg = ctx.imgSlot.querySelector<HTMLImageElement>('.da-generated-img');
-                if (oldImg?.dataset?.ownsBlob === 'true' && oldImg.src?.startsWith('blob:')) {
-                    URL.revokeObjectURL(oldImg.src);
-                    this._trackedObjectUrls.delete(oldImg.src);
-                }
-                this._contextMap.delete(key);
-            }
-        }
-    }
-
-    /**
-     * 在文本容器中查找目标指令符并将其替换为生图插槽容器，插入到对应段落
-     * 自动清除前后多余的空白符与换行，当父级段落只含有该指令时直接整段替换，根除多余空行
-     */
-    private insertSlotAtMatchedText(container: HTMLElement, targetText: string, elementToInsert: HTMLElement): boolean {
-        if (!targetText) return false;
-        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
-        let node: Node | null;
-
-        while ((node = walker.nextNode())) {
-            const text = node.textContent || '';
-            const idx = text.indexOf(targetText);
-            if (idx !== -1) {
-                const textNode = node as Text;
-                const parent = textNode.parentElement;
-
-                // 检查直接父元素（如 <p>）是否在剔除目标文本及紧邻空白后为空段落
-                if (parent && parent !== container && (parent.tagName === 'P' || parent.tagName === 'DIV')) {
-                    const rawParentText = parent.textContent || '';
-                    const remainingText = rawParentText.replace(targetText, '').trim();
-                    // 若父级段落除该指令文本外无其他实际文字内容，直接替换整个父段落，避免非法嵌套与产生多余空行
-                    if (remainingText.length === 0) {
-                        parent.replaceWith(elementToInsert);
-                        return true;
-                    }
-                }
-
-                // 若处于包含其他实质文字的段落内部，则进行节点切分并修剪前后断点的换行与多余空白
-                const beforeText = text.slice(0, idx).replace(/[\r\n]+$/, '');
-                const afterText = text.slice(idx + targetText.length).replace(/^[\r\n]+/, '');
-
-                textNode.textContent = beforeText;
-                const afterNode = document.createTextNode(afterText);
-
-                const parentNode = textNode.parentNode;
-                if (parentNode) {
-                    parentNode.insertBefore(elementToInsert, textNode.nextSibling);
-                    parentNode.insertBefore(afterNode, elementToInsert.nextSibling);
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 扫描单条消息并在对应段落替换插入生图按钮及图片插槽
-     * 捕获到绘图标志符后，替换正文中的标志符内容，并在原段落位置就地插入插槽
+     * 扫描单条消息并在对应段落原位替换插入生图按钮及图片插槽
+     * 采用 TreeWalker 构建逻辑文本映射，结合 Range 精确删除占位符并在原位就地插装，
+     * 严格排除代码块与思维链标签，杜绝打字过程抢跑与父级段落破坏
      */
     public async scanAndInjectMessage(messageId: number): Promise<void> {
         if (typeof document === 'undefined' || this._isDisposed) return;
@@ -340,101 +258,236 @@ export class FloorButtonContainer implements IDisposable {
 
         const msg = this._host.getMessageById(messageId);
         const swipeId = msg?.swipe_id ?? 0;
+        const doc = textNode.ownerDocument || document;
 
-        const text = textNode.textContent || '';
+        // 使用 TreeWalker 收集有效文本与 <br>，严格排除代码块、思维链与已有插槽
+        const walker = doc.createTreeWalker(
+            textNode,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+            {
+                acceptNode: (node: Node) => {
+                    const parent = node.parentElement;
+                    const parentTag = parent?.tagName || '';
+
+                    if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName !== 'BR') {
+                        return NodeFilter.FILTER_SKIP;
+                    }
+
+                    // 过滤已注入的插槽内部内容
+                    if (parent?.classList.contains('da-floor-slot') || parent?.closest('.da-floor-slot')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+
+                    // 严格过滤代码块相关容器及其祖先
+                    if (CODE_RELATED_TAGS.has(parentTag) || parent?.closest('pre, code, textarea, kbd, samp')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+
+                    // 严格过滤思维链与思考折叠容器及其祖先 (如 details.thinking, .think, .thought)
+                    const thinkingAncestor = parent?.closest('details.thinking, .think, .thinking, .thought, .reasoning, .chat-thought, .mind-fold, details[class*="think"]');
+                    if (thinkingAncestor) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+
+                    // 过滤高亮代码块与思维链样式类
+                    if (parent?.className && typeof parent.className === 'string') {
+                        for (const pattern of CODE_CLASS_PATTERNS) {
+                            if (parent.className.includes(pattern)) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                        }
+                        for (const pattern of THINKING_CLASS_PATTERNS) {
+                            if (parent.className.includes(pattern)) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                        }
+                    }
+
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }
+        );
+
+        const nodeInfos: NodeRangeInfo[] = [];
+        let logicalText = '';
+        let n: Node | null;
+
+        while ((n = walker.nextNode())) {
+            const start = logicalText.length;
+            let text = '';
+            if (n.nodeType === Node.TEXT_NODE) {
+                text = n.textContent || '';
+            } else if ((n as Element).tagName === 'BR') {
+                text = '\n';
+            }
+            logicalText += text;
+            nodeInfos.push({ node: n, start, end: logicalText.length });
+        }
+
         const startTag = this._store.get('placeholderStart') || 'image###';
         const endTag = this._store.get('placeholderEnd') || '###';
+        const pattern = new RegExp(`${escapeRegExp(startTag)}([\\s\\S]*?)${escapeRegExp(endTag)}`, 'g');
 
-        const matches = extractPlaceholders(text, startTag, endTag);
+        interface MatchItem {
+            fullMatch: string;
+            content: string;
+            startIndex: number;
+            endIndex: number;
+        }
+
+        const matches: MatchItem[] = [];
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(logicalText)) !== null) {
+            matches.push({
+                fullMatch: match[0],
+                content: match[1],
+                startIndex: match.index,
+                endIndex: match.index + match[0].length
+            });
+        }
+
         if (matches.length === 0) {
-            // 当前分支或消息无绘图指令符时，主动清理可能存在的旧插槽
             this.cleanMessageFloorSlots(messageId);
             return;
         }
 
-        matches.forEach((item, index) => {
-            const contextKey = `${messageId}_${swipeId}_${index}`;
-            let ctx = this._contextMap.get(contextKey);
+        // 逆序遍历匹配项，基于 Range 精确删除占位符并原位插入插槽
+        for (let i = matches.length - 1; i >= 0; i--) {
+            const matchItem = matches[i];
+            const slotIndex = i;
+            const contextKey = `${messageId}_${swipeId}_${slotIndex}`;
 
-            // 检查 DOM 中是否已存在对应段落插槽
+            // 若已有插槽已挂载且处于 DOM 中，更新提示词并刷新已有图片显示
             const existingSlot = textNode.querySelector<HTMLElement>(`[data-slot-key="${contextKey}"]`);
-
-            if (!ctx || !existingSlot || !existingSlot.isConnected) {
-                // 如果旧插槽悬挂但未连接，先清理
-                if (existingSlot) {
-                    existingSlot.remove();
+            if (existingSlot && existingSlot.isConnected) {
+                existingSlot.dataset.prompt = matchItem.content.trim();
+                existingSlot.dataset.swipeId = String(swipeId);
+                existingSlot.dataset.slotIndex = String(slotIndex);
+                const ctx = this.getSlotContext(existingSlot);
+                if (ctx) {
+                    this.restoreExistingImage(ctx);
                 }
-
-                const wrapper = document.createElement('div');
-                wrapper.className = 'da-floor-btn-wrapper da-floor-slot st-da-root';
-                wrapper.dataset.slotKey = contextKey;
-                wrapper.dataset.swipeId = String(swipeId);
-
-                const imgSlot = document.createElement('div');
-                imgSlot.className = 'da-floor-btn-img-slot';
-
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'da-btn da-floor-btn da-floor-btn--default';
-                btn.textContent = FloorButtonContainer.BUTTON_LABELS.default;
-
-                wrapper.appendChild(imgSlot);
-                wrapper.appendChild(btn);
-
-                // 替换正文中的标志符内容，并将按钮与插槽就地插入到对应段落
-                const inserted = item.rawMatch
-                    ? this.insertSlotAtMatchedText(textNode, item.rawMatch, wrapper)
-                    : false;
-
-                // 若因特殊格式未精确匹配到文本节点，则置于段落末尾作为兜底
-                if (!inserted) {
-                    textNode.appendChild(wrapper);
-                }
-
-                ctx = {
-                    btn,
-                    wrapper,
-                    imgSlot,
-                    promptText: item.prompt,
-                    rawNegativePrompt: item.negativePrompt,
-                    currentTaskId: null,
-                    state: 'default',
-                    messageId,
-                    swipeId,
-                    buttonIndex: index
-                };
-
-                btn.onclick = () => {
-                    if (ctx!.state === 'progress' && ctx!.currentTaskId) {
-                        this._taskManager.cancelTask(ctx!.currentTaskId, '用户在楼层主动中断');
-                    } else if (ctx!.state === 'default' || ctx!.state === 'done' || ctx!.state === 'error') {
-                        void this.triggerGeneration(ctx!);
-                    }
-                };
-
-                this._contextMap.set(contextKey, ctx);
-            } else {
-                ctx.promptText = item.prompt;
-                ctx.rawNegativePrompt = item.negativePrompt;
-                // 如果正文中依然有 rawMatch 文本未替换，尝试替换
-                if (item.rawMatch && textNode.textContent?.includes(item.rawMatch)) {
-                    this.insertSlotAtMatchedText(textNode, item.rawMatch, ctx.wrapper);
-                }
+                continue;
             }
 
-            // 检查消息中是否已持久化了图片并恢复
-            this.restoreExistingImage(ctx);
+            const nodesToProcess = nodeInfos.filter(
+                (info) => matchItem.startIndex < info.end && matchItem.endIndex > info.start
+            );
+            if (nodesToProcess.length === 0) continue;
+
+            const firstNodeInfo = nodesToProcess[0];
+            const lastNodeInfo = nodesToProcess[nodesToProcess.length - 1];
+
+            const range = doc.createRange();
+            try {
+                const startOffset = matchItem.startIndex - firstNodeInfo.start;
+                if (firstNodeInfo.node.nodeType === Node.TEXT_NODE) {
+                    const startLen = firstNodeInfo.node.textContent?.length ?? 0;
+                    range.setStart(firstNodeInfo.node, Math.min(Math.max(0, startOffset), startLen));
+                } else {
+                    range.setStartBefore(firstNodeInfo.node);
+                }
+
+                const endOffset = matchItem.endIndex - lastNodeInfo.start;
+                if (lastNodeInfo.node.nodeType === Node.TEXT_NODE) {
+                    const endLen = lastNodeInfo.node.textContent?.length ?? 0;
+                    range.setEnd(lastNodeInfo.node, Math.min(Math.max(0, endOffset), endLen));
+                } else {
+                    range.setEndAfter(lastNodeInfo.node);
+                }
+            } catch (err) {
+                console.warn('[FloorButtonContainer] Range 边界计算异常，跳过此占位符', err);
+                continue;
+            }
+
+            // 精准删除原占位符内容，不伤害外部段落结构
+            range.deleteContents();
+
+            // 构建插槽容器，无状态保存在 dataset 中
+            const wrapper = doc.createElement('div');
+            wrapper.className = 'da-floor-btn-wrapper da-floor-slot st-da-root';
+            wrapper.dataset.slotKey = contextKey;
+            wrapper.dataset.slotIndex = String(slotIndex);
+            wrapper.dataset.swipeId = String(swipeId);
+            wrapper.dataset.prompt = matchItem.content.trim();
+            wrapper.dataset.state = 'default';
+            wrapper.dataset.daInserted = 'true';
+
+            const imgSlot = doc.createElement('div');
+            imgSlot.className = 'da-floor-btn-img-slot';
+
+            const btn = doc.createElement('button');
+            btn.type = 'button';
+            btn.className = 'da-btn da-floor-btn da-floor-btn--default';
+            btn.textContent = FloorButtonContainer.BUTTON_LABELS.default;
+
+            wrapper.appendChild(imgSlot);
+            wrapper.appendChild(btn);
+
+            // 在原位精准插入
+            range.insertNode(wrapper);
+
+            btn.onclick = () => {
+                const currentCtx = this.getSlotContext(btn);
+                if (!currentCtx) return;
+
+                if ((currentCtx.state === 'progress' || currentCtx.state === 'pending') && currentCtx.currentTaskId) {
+                    this._floorTaskService.cancelTask(currentCtx.currentTaskId, '用户在楼层主动中断');
+                } else if (currentCtx.state === 'default' || currentCtx.state === 'done' || currentCtx.state === 'error') {
+                    void this.triggerGeneration(currentCtx);
+                }
+            };
+
+            const ctx = this.getSlotContext(wrapper);
+            if (ctx) {
+                this.restoreExistingImage(ctx);
+            }
+        }
+
+        // 清理当前消息内多余的废弃旧插槽（例如用户编辑消息删减了部分占位符）
+        const currentSlots = Array.from(textNode.querySelectorAll<HTMLElement>('.da-floor-slot'));
+        currentSlots.forEach((slot) => {
+            const idx = parseInt(slot.dataset.slotIndex || '0', 10);
+            if (idx >= matches.length) {
+                const oldImg = slot.querySelector<HTMLImageElement>('.da-generated-img');
+                if (oldImg?.dataset?.ownsBlob === 'true' && oldImg.src?.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldImg.src);
+                    this._trackedObjectUrls.delete(oldImg.src);
+                }
+                slot.remove();
+            }
         });
     }
 
-    private restoreExistingImage(ctx: FloorButtonContext): void {
-        const daImages = this._host.readChatMessageExtra<ChatImagesRoot>(ctx.messageId, 'da_images');
-        const swipeId = ctx.swipeId;
-        const entry = daImages ? daImages[swipeId]?.[ctx.buttonIndex] : undefined;
+    /**
+     * 清理单条消息内挂载的楼层生图插槽
+     */
+    public cleanMessageFloorSlots(messageId: number): void {
+        if (typeof document === 'undefined') return;
+        const msgNode = document.querySelector<HTMLElement>(`.mes[mesid="${messageId}"]`);
+        if (msgNode) {
+            msgNode.querySelectorAll<HTMLElement>('.da-floor-slot, .da-floor-root').forEach((el) => {
+                const img = el.querySelector<HTMLImageElement>('.da-generated-img');
+                if (img?.dataset?.ownsBlob === 'true' && img.src?.startsWith('blob:')) {
+                    URL.revokeObjectURL(img.src);
+                    this._trackedObjectUrls.delete(img.src);
+                }
+                el.remove();
+            });
+        }
+    }
+
+    // 4. 图片回溯、三级回退显示与交互反馈
+
+    /**
+     * 读取消息持有图片，依服务端静态 URL > Base64 > 本地 IndexedDB 优先级进行三级回退渲染
+     */
+    private restoreExistingImage(ctx: DynamicSlotContext): void {
+        const entry = this._floorTaskService.getImageEntry(ctx.messageId, ctx.swipeId, ctx.slotIndex);
 
         if (!entry) {
-            ctx.currentAssetId = null;
-            // 当切换到无持久化图片的分支时，清空之前分支留存的图片并复位按钮状态
+            ctx.wrapper.dataset.assetId = '';
+            // 分支无图片记录时清空旧图片并复位按钮
             const oldImg = ctx.imgSlot.querySelector<HTMLImageElement>('.da-generated-img');
             if (oldImg?.dataset?.ownsBlob === 'true' && oldImg.src?.startsWith('blob:')) {
                 URL.revokeObjectURL(oldImg.src);
@@ -450,17 +503,21 @@ export class FloorButtonContainer implements IDisposable {
             return;
         }
 
-        ctx.currentAssetId = entry.uuid || null;
+        ctx.wrapper.dataset.assetId = entry.uuid || '';
 
         let src = '';
-        if (entry.storageStrategy === 'embedded' && entry.base64) {
-            src = entry.base64;
-        } else if (entry.url) {
+        // 优先级 1：酒馆服务端静态相对路径
+        if (entry.url) {
             src = entry.url;
+        } else if (entry.storageStrategy === 'embedded' && entry.base64) {
+            // 优先级 2：聊天记录内嵌 Base64
+            src = entry.base64;
         } else if (entry.uuid) {
+            // 优先级 3：本地 IndexedDB Blob URL 回退
+            const swipeId = ctx.swipeId;
             void this._storage.getImageUrl(entry.uuid).then((url) => {
                 if (url) {
-                    // 防滑动竞态：异步读取完成时校验当前楼层实际活跃的 swipe_id，避免旧分支图片错挂到新分支
+                    // 防滑动竞态：异步读取完成时校验当前楼层实际活跃分支
                     const currentMsg = this._host.getMessageById(ctx.messageId);
                     if (currentMsg && (currentMsg.swipe_id ?? 0) !== swipeId) {
                         return;
@@ -478,55 +535,59 @@ export class FloorButtonContainer implements IDisposable {
     }
 
     private mountRenderedImage(
-        ctx: FloorButtonContext,
+        ctx: DynamicSlotContext,
         src: string,
         prompt: string,
         negativePrompt?: string
     ): void {
+        // 内存防漏保护：在重新生成或覆盖图片前，显式释放该插槽此前可能占用的旧 Blob URL
+        const oldImg = ctx.imgSlot.querySelector<HTMLImageElement>('.da-generated-img');
+        if (oldImg?.dataset?.ownsBlob === 'true' && oldImg.src?.startsWith('blob:')) {
+            URL.revokeObjectURL(oldImg.src);
+            this._trackedObjectUrls.delete(oldImg.src);
+        }
+
         const settings = this._store.getState();
         const actionCallbacks: ImageActionCallbacks = {
             promptText: prompt,
             negativePrompt,
             messageIndex: ctx.messageId,
-            buttonIndex: ctx.buttonIndex,
+            buttonIndex: ctx.slotIndex,
             storage: this._storage,
             onRegenerate: () => {
-                void this.triggerGeneration(ctx);
+                const refreshed = this.getSlotContext(ctx.wrapper);
+                if (refreshed) void this.triggerGeneration(refreshed);
             },
             onInpaint: () => {
                 openInpaintCanvasModal({
                     imageSrc: src,
                     initialPrompt: prompt,
                     onConfirm: (res) => {
-                        ctx.overridePrompt = res.prompt;
-                        ctx.overrideInpaintData = {
+                        const refreshed = this.getSlotContext(ctx.wrapper);
+                        if (!refreshed) return;
+                        refreshed.overridePrompt = res.prompt;
+                        refreshed.overrideInpaintData = {
                             initImageBlob: base64ToBlob(res.initImage),
                             maskImageBlob: base64ToBlob(res.maskImage)
                         };
-                        void this.triggerGeneration(ctx);
+                        void this.triggerGeneration(refreshed);
                     }
                 });
             },
             onDelete: async () => {
                 ctx.imgSlot.innerHTML = '';
                 this.updateButtonState(ctx, 'default');
-                const daImages = this._host.readChatMessageExtra<ChatImagesRoot>(ctx.messageId, 'da_images');
-                const swipeId = ctx.swipeId;
-                const entry = daImages ? daImages[swipeId]?.[ctx.buttonIndex] : undefined;
-                const uuidToDelete = ctx.currentAssetId || entry?.uuid;
-                ctx.currentAssetId = null;
+                const refreshed = this.getSlotContext(ctx.wrapper) || ctx;
+                const assetId = refreshed.currentAssetId || undefined;
+                refreshed.wrapper.dataset.assetId = '';
 
-                if (daImages && entry) {
-                    delete daImages[swipeId][ctx.buttonIndex];
-                    if (Object.keys(daImages[swipeId]).length === 0) {
-                        delete daImages[swipeId];
-                    }
-                    this._host.writeChatMessageExtra(ctx.messageId, 'da_images', daImages);
-                }
-                if (uuidToDelete) {
-                    this._storage.releaseImageUrl(uuidToDelete);
-                    await this._storage.delete(uuidToDelete);
-                }
+                // 级联清理委托给 FloorTaskService
+                await this._floorTaskService.deleteImage(
+                    refreshed.messageId,
+                    refreshed.swipeId,
+                    refreshed.slotIndex,
+                    assetId
+                );
             }
         };
 
@@ -540,44 +601,29 @@ export class FloorButtonContainer implements IDisposable {
         }
     }
 
-    private async triggerGeneration(ctx: FloorButtonContext): Promise<void> {
-        if (ctx.state === 'progress' || ctx.state === 'loading') return;
+    // 5. 任务触发与进度同步
 
-        const settings = this._store.getState();
-        const activeProvider = settings.activeProvider || 'comfyui';
+    private async triggerGeneration(ctx: DynamicSlotContext): Promise<void> {
+        if (ctx.state === 'progress' || ctx.state === 'loading' || ctx.state === 'pending') return;
 
         this.updateButtonState(ctx, 'loading');
 
         try {
-            const promptToUse = ctx.overridePrompt || ctx.promptText;
-            const negativeToUse = ctx.overrideNegativePrompt || ctx.rawNegativePrompt;
+            const targetSwipeId = this._host.getMessageById(ctx.messageId)?.swipe_id ?? ctx.swipeId;
 
-            const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            ctx.currentTaskId = taskId;
+            // 业务层处理与提交
+            const { taskId, processResult } = await this._floorTaskService.submitTask({
+                prompt: ctx.promptText,
+                negativePrompt: ctx.rawNegativePrompt,
+                messageId: ctx.messageId,
+                swipeId: targetSwipeId,
+                slotIndex: ctx.slotIndex,
+                overridePrompt: ctx.overridePrompt,
+                overrideNegativePrompt: ctx.overrideNegativePrompt,
+                overrideInpaintData: ctx.overrideInpaintData
+            });
 
-            const engineConfig = this._store.getEngineConfig(activeProvider) || {};
-
-            const imageInputs = ctx.overrideInpaintData ? {
-                initImageBlob: ctx.overrideInpaintData.initImageBlob,
-                maskImageBlob: ctx.overrideInpaintData.maskImageBlob
-            } : undefined;
-
-            const targetSwipeId = this._host.getMessageById(ctx.messageId)?.swipe_id ?? 0;
-
-            // 提示词流水线处理并组装标准化请求
-            const processResult = await this._pipeline.process({
-                rawPrompt: promptToUse,
-                negativePrompt: negativeToUse,
-                targetEngine: activeProvider,
-                taskId,
-                engineOptions: engineConfig as Record<string, unknown>,
-                imageInputs,
-                contextInfo: {
-                    messageId: ctx.messageId,
-                    swipeId: targetSwipeId,
-                    buttonIndex: ctx.buttonIndex
-                }
-            }, settings);
+            ctx.wrapper.dataset.taskId = taskId;
 
             // 监听任务生命周期并同步进度至按钮
             const unsubProgress = this._events.on('task:progress', (ev) => {
@@ -589,7 +635,7 @@ export class FloorButtonContainer implements IDisposable {
             const unsubCompleted = this._events.on('task:completed', (ev) => {
                 if (ev.taskId === taskId) {
                     cleanupTask();
-                    ctx.currentTaskId = null;
+                    ctx.wrapper.dataset.taskId = '';
                     const firstImage = ev.result.images[0];
                     if (firstImage) {
                         const currentSwipeId = this._host.getMessageById(ctx.messageId)?.swipe_id ?? 0;
@@ -605,7 +651,7 @@ export class FloorButtonContainer implements IDisposable {
             const unsubFailed = this._events.on('task:failed', (ev) => {
                 if (ev.taskId === taskId) {
                     cleanupTask();
-                    ctx.currentTaskId = null;
+                    ctx.wrapper.dataset.taskId = '';
                     this.updateButtonState(ctx, 'error');
                     FeedbackService.toastError(`生图任务失败: ${ev.error}`);
                 }
@@ -614,7 +660,7 @@ export class FloorButtonContainer implements IDisposable {
             const unsubCancelled = this._events.on('task:cancelled', (ev) => {
                 if (ev.taskId === taskId) {
                     cleanupTask();
-                    ctx.currentTaskId = null;
+                    ctx.wrapper.dataset.taskId = '';
                     this.updateButtonState(ctx, 'default');
                     FeedbackService.toastWarn('生图任务已取消');
                 }
@@ -630,13 +676,8 @@ export class FloorButtonContainer implements IDisposable {
 
             this._activeTaskUnbinds.set(taskId, cleanupTask);
 
-            // 提交任务到任务管理器
-            await this._taskManager.submit({
-                request: processResult.request,
-                messageId: ctx.messageId
-            });
-
-            this.updateButtonState(ctx, 'progress');
+            // 提交成功后置为排队中状态（若并发度为 1 且前面有任务，按钮清晰反馈排队中；若出队执行将通过 task:progress 切换为 progress）
+            this.updateButtonState(ctx, 'pending');
         } catch (err: any) {
             this.updateButtonState(ctx, 'error');
             FeedbackService.toastError(`生图触发异常: ${err?.message || err}`);
@@ -644,7 +685,7 @@ export class FloorButtonContainer implements IDisposable {
     }
 
     private onImageGenerated(
-        ctx: FloorButtonContext,
+        ctx: DynamicSlotContext,
         blob: Blob,
         prompt: string,
         negativePrompt?: string
@@ -652,13 +693,13 @@ export class FloorButtonContainer implements IDisposable {
         const blobUrl = URL.createObjectURL(blob);
         this._trackedObjectUrls.add(blobUrl);
 
-        // 挂载到图片插槽中
         this.mountRenderedImage(ctx, blobUrl, prompt, negativePrompt);
         FeedbackService.toastSuccess('生图完成！');
     }
 
-    private updateButtonState(ctx: FloorButtonContext, state: ButtonState, progress?: number): void {
+    private updateButtonState(ctx: DynamicSlotContext, state: ButtonState, progress?: number): void {
         ctx.state = state;
+        ctx.wrapper.dataset.state = state;
         ctx.btn.className = `da-btn da-floor-btn da-floor-btn--${state}`;
         if (state === 'progress') {
             if (typeof progress === 'number' && progress > 0) {
@@ -686,16 +727,11 @@ export class FloorButtonContainer implements IDisposable {
         this._activeTaskUnbinds.forEach((unbind) => unbind());
         this._activeTaskUnbinds.clear();
 
-        this._intersectionObserver?.disconnect();
-        this._intersectionObserver = null;
-        this._observedMsgNodes = new WeakSet<HTMLElement>();
-
         this.cleanupTrackedUrls();
         this._disposables.dispose();
 
         if (typeof document !== 'undefined') {
             document.querySelectorAll('.da-floor-slot, .da-floor-root').forEach((el) => el.remove());
         }
-        this._contextMap.clear();
     }
 }

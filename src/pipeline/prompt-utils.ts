@@ -14,20 +14,39 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
 }
 
 /**
+ * 规范化提示词标点与符号
+ * 将中文全角标点（，；：（））统一转换为半角英文标点，并清理多余杂糅空白，
+ * 彻底防止 SD/ComfyUI/NovelAI 等后端的 CLIP/T5 分词器因全角中文标点出现异常合并与画风劣化。
+ */
+export function normalizePromptPunctuation(text: string): string {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/，/g, ', ')
+        .replace(/；/g, '; ')
+        .replace(/：/g, ': ')
+        .replace(/（/g, '(')
+        .replace(/）/g, ')')
+        .replace(/[\t\f\v ]+/g, ' ')
+        .replace(/ ,/g, ',')
+        .replace(/ ;/g, ';')
+        .trim();
+}
+
+/**
  * 依据首个管道符 | 分隔正向与负向提示词
- * 保留文本内部的换行与标点，仅按首个管道符拆分
+ * 自动规范化全角中文标点，按首个管道符拆分正负向提示词
  */
 export function separatePromptByPipe(input: string): { positive: string; negative: string } {
-    const safe = (input || '').trim();
-    const pipeIdx = safe.indexOf('|');
+    const normalized = normalizePromptPunctuation(input || '');
+    const pipeIdx = normalized.indexOf('|');
     if (pipeIdx !== -1) {
         return {
-            positive: safe.substring(0, pipeIdx).trim(),
-            negative: safe.substring(pipeIdx + 1).trim()
+            positive: normalized.substring(0, pipeIdx).trim(),
+            negative: normalized.substring(pipeIdx + 1).trim()
         };
     }
     return {
-        positive: safe,
+        positive: normalized,
         negative: ''
     };
 }

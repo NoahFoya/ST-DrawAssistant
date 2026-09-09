@@ -146,6 +146,16 @@ export async function bootstrap(options?: BootstrapOptions): Promise<DrawAssista
         if (savedSettings) {
             await store.loadSettings(savedSettings);
         }
+
+        // 监听宿主配置外部更新（如多窗口修改、用户 Profile 切换或配置导入）并平滑同步
+        host.onSettingsUpdated(() => {
+            const externalSettings = host.getExtensionSettings();
+            if (externalSettings) {
+                void store.loadSettings(externalSettings);
+                logger.info('已同步宿主外部配置变更');
+            }
+        });
+
         await storage.init();
         events.emit('host:ready', undefined);
         logger.info('ST-DrawAssistant 基础服务已就绪');

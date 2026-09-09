@@ -6,7 +6,7 @@
 
 import { IDisposable, GenerationRequest } from '../types';
 import { PipelineHooks, PipelineHookContext, createPipelineHooks } from './pipeline-hooks';
-import { separatePromptByPipe } from './prompt-utils';
+import { separatePromptByPipe, normalizePromptPunctuation } from './prompt-utils';
 
 export interface PipelineProcessOptions {
     rawPrompt: string;
@@ -81,8 +81,9 @@ export class PromptPipeline implements IDisposable {
 
         const processedPositive = await this.hooks.beforePromptBuild.call(rawPositive, context);
 
-        const combinedNegative = options.negativePrompt
-            ? (rawNegative ? `${rawNegative}, ${options.negativePrompt}` : options.negativePrompt)
+        const normalizedExtraNeg = options.negativePrompt ? normalizePromptPunctuation(options.negativePrompt) : '';
+        const combinedNegative = normalizedExtraNeg
+            ? (rawNegative ? `${rawNegative}, ${normalizedExtraNeg}` : normalizedExtraNeg)
             : rawNegative;
 
         const taskId = options.taskId || `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;

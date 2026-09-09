@@ -68,9 +68,8 @@ export class ResultIntegrator implements IDisposable {
 
         const settings = this._getSettings();
         const shouldSaveToIndexedDB = settings.saveToIndexedDB !== false;
+        const shouldSaveToServer = Boolean(settings.saveToServer);
         const shouldEmbedBase64 = Boolean(settings.embedToBase64);
-
-        const strategy = shouldEmbedBase64 ? 'embedded' : 'split';
 
         const contextInfo = task.request.contextInfo;
         const messageId = contextInfo?.messageId;
@@ -112,6 +111,7 @@ export class ResultIntegrator implements IDisposable {
             };
 
             let finalAssetId = assetId;
+            // 基础底座：默认持久化至浏览器本地 IndexedDB
             if (shouldSaveToIndexedDB) {
                 try {
                     const returnedId = await this._storage.saveImage(record, {
@@ -131,16 +131,44 @@ export class ResultIntegrator implements IDisposable {
                 savedRecords.push(record);
             }
 
-            if (typeof messageId === 'number') {
+            // 可选叠加项 1：写入酒馆服务端静态资产目录 (/api/images/upload)
+            let serverStaticUrl: string | undefined;
+            if (shouldSaveToServer) {
                 try {
-                    let embeddedBase64: string | undefined;
-
-                    if (shouldEmbedBase64) {
-                        const rawB64 = await blobToBase64(img.blob);
-                        embeddedBase64 = `data:image/${img.format || 'png'};base64,${rawB64}`;
+                    const charName = this._host.getCurrentCharacter()?.name || undefined;
+                    const filename = `${finalAssetId}.${img.format || 'png'}`;
+                    const uploadRes = await this._host.uploadImageToServer(img.blob, {
+                        filename,
+                        characterName: charName,
+                        format: img.format
+                    });
+                    if (uploadRes?.path) {
+                        serverStaticUrl = uploadRes.path;
+                        this._logger.info(`已上传图片至酒馆服务端静态目录: ${serverStaticUrl}`);
                     }
+                } catch (uploadErr) {
+                    this._logger.warn(`上传图片至酒馆服务端失败 [${finalAssetId}]，安全降级至本地`, uploadErr);
+                }
+            }
 
-                    const effectiveSlotIndex = result.images.length > 1 ? buttonIndex + i : buttonIndex;
+            // 可选叠加项 2：写入聊天记录内嵌 Base64
+            let embeddedBase64: string | undefined;
+            if (shouldEmbedBase64) {
+                try {
+                    const rawB64 = await blobToBase64(img.blob);
+                    embeddedBase64 = `data:image/${img.format || 'png'};base64,${rawB64}`;
+                } catch (b64Err) {
+                    this._logger.warn(`生成 Base64 内嵌数据异常 [${finalAssetId}]`, b64Err);
+                }
+            }
+
+            const strategy = serverStaticUrl ? 'server' : (shouldEmbedBase64 ? 'embedded' : 'split');
+
+            // 聊天消息插槽严格强隔离：仅当前任务所属的 buttonIndex 对应此插槽
+            // 若单次任务返回多张图 (Batch)，第 1 张作为当前插槽的主展示图，其余图已落盘至本地库与画廊，绝不跨插槽外溢覆盖
+            if (typeof messageId === 'number' && i === 0) {
+                try {
+                    const slotIndex = buttonIndex;
                     const chatEntry: ChatImageEntry = {
                         uuid: finalAssetId,
                         mime: `image/${img.format || 'png'}`,
@@ -150,16 +178,18 @@ export class ResultIntegrator implements IDisposable {
                         negativePrompt: task.request.negativePrompt,
                         timestamp: metadata.createdAt,
                         storageStrategy: strategy,
+                        url: serverStaticUrl,
                         base64: embeddedBase64,
                         metadata: {
                             durationMs: result.durationMs,
-                            params: task.request.engineOptions
+                            params: task.request.engineOptions,
+                            batchCount: result.images.length
                         }
                     };
 
                     const prevDaImages = (this._host.readChatMessageExtra<ChatImagesRoot>(messageId, 'da_images') || {}) as ChatImagesRoot;
                     const swipeImages = { ...(prevDaImages[effectiveSwipeId] || {}) };
-                    swipeImages[effectiveSlotIndex] = chatEntry;
+                    swipeImages[slotIndex] = chatEntry;
 
                     const updatedRoot: ChatImagesRoot = {
                         ...prevDaImages,
@@ -167,7 +197,7 @@ export class ResultIntegrator implements IDisposable {
                     };
 
                     this._host.writeChatMessageExtra(messageId, 'da_images', updatedRoot);
-                    this._logger.info(`已将生图资产写入楼层 #${messageId} (Swipe: ${effectiveSwipeId}, Button: ${effectiveSlotIndex})`);
+                    this._logger.info(`已将生图资产写入楼层 #${messageId} (Swipe: ${effectiveSwipeId}, Slot: ${slotIndex})`);
                 } catch (err) {
                     this._logger.error(`写入消息元数据异常 [楼层: ${messageId}]`, err);
                 }

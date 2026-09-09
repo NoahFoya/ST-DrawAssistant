@@ -49,6 +49,18 @@ export function getPresetSvg(key?: string): string {
     return FAB_PRESET_ICONS[targetKey]?.svg || FAB_PRESET_ICONS[defaultKey].svg;
 }
 
+/**
+ * 校验悬浮球坐标是否合法
+ * 过滤 null/undefined、NaN 以及小于 15px 的左上角异常贴边脏数据
+ */
+export function isValidFabPosition(pos: any): pos is { top: number; left: number } {
+    if (!pos || typeof pos !== 'object') return false;
+    if (typeof pos.top !== 'number' || typeof pos.left !== 'number') return false;
+    if (isNaN(pos.top) || isNaN(pos.left)) return false;
+    if (pos.top < 15 && pos.left < 15) return false;
+    return true;
+}
+
 export interface FABContainerOptions {
     store: SettingsStore;
     settingsModal: SettingsModal;
@@ -140,12 +152,6 @@ export class FABContainer implements IDisposable {
                 })
             );
         }
-
-        if (typeof window !== 'undefined') {
-            const onResize = () => this.clampToViewport();
-            window.addEventListener('resize', onResize);
-            this._disposables.add({ dispose: () => window.removeEventListener('resize', onResize) });
-        }
     }
 
     private updateGeneratingState(): void {
@@ -226,48 +232,62 @@ export class FABContainer implements IDisposable {
         let pos: { top: number; left: number } | null = null;
         // 优先从 SettingsStore 扩展配置中读取
         const storePos = this._store.get('fabPosition');
-        if (storePos && typeof storePos.top === 'number' && typeof storePos.left === 'number') {
+        if (isValidFabPosition(storePos)) {
             pos = storePos;
         } else if (typeof window !== 'undefined' && window.localStorage) {
             try {
                 const stored = localStorage.getItem('da_fab_position');
                 if (stored) {
-                    pos = JSON.parse(stored);
+                    const parsed = JSON.parse(stored);
+                    if (isValidFabPosition(parsed)) {
+                        pos = parsed;
+                    } else {
+                        // 清除本地遗留的左上角脏坐标
+                        localStorage.removeItem('da_fab_position');
+                    }
                 }
             } catch {
                 pos = null;
             }
         }
 
-        if (pos && typeof pos.top === 'number' && typeof pos.left === 'number') {
+        if (pos) {
             this._fabElement.style.top = `${pos.top}px`;
             this._fabElement.style.left = `${pos.left}px`;
             this._fabElement.style.right = 'auto';
             this._fabElement.style.bottom = 'auto';
-            this.clampToViewport();
+            // 待布局完全回流后再执行安全视口边界约束，杜绝未就绪时被挤压到 0
+            if (typeof window !== 'undefined') {
+                window.requestAnimationFrame(() => this.clampToViewport());
+            }
         } else {
-            const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
-            const winW = typeof window !== 'undefined' ? window.innerWidth : 1200;
-            const defaultTop = Math.max(20, Math.round(winH / 2 - 24));
-            const defaultLeft = Math.max(20, winW - 68);
-            this._fabElement.style.top = `${defaultTop}px`;
-            this._fabElement.style.left = `${defaultLeft}px`;
-            this._fabElement.style.right = 'auto';
-            this._fabElement.style.bottom = 'auto';
+            // 无自定义有效坐标时清除行内样式，直接生效 CSS 默认的安全右下角停靠
+            this._fabElement.style.top = '';
+            this._fabElement.style.left = '';
+            this._fabElement.style.right = '';
+            this._fabElement.style.bottom = '';
         }
     }
 
     private clampToViewport(): void {
         if (!this._fabElement || typeof window === 'undefined') return;
-        const rect = this._fabElement.getBoundingClientRect();
-        const maxX = Math.max(0, window.innerWidth - (this._fabElement.offsetWidth || 48));
-        const maxY = Math.max(0, window.innerHeight - (this._fabElement.offsetHeight || 48));
+        // 未应用行内 top/left（即正在使用 CSS 默认停靠）时不执行绝对像素约束
+        if (!this._fabElement.style.top && !this._fabElement.style.left) return;
+        if (window.innerWidth <= 100 || window.innerHeight <= 100) return;
 
-        const clampedX = Math.max(0, Math.min(rect.left, maxX));
-        const clampedY = Math.max(0, Math.min(rect.top, maxY));
+        const rect = this._fabElement.getBoundingClientRect();
+        const fabW = this._fabElement.offsetWidth || 48;
+        const fabH = this._fabElement.offsetHeight || 48;
+        const maxX = Math.max(0, window.innerWidth - fabW);
+        const maxY = Math.max(0, window.innerHeight - fabH);
+
+        const clampedX = Math.max(10, Math.min(rect.left, maxX - 10));
+        const clampedY = Math.max(10, Math.min(rect.top, maxY - 10));
 
         this._fabElement.style.left = `${clampedX}px`;
         this._fabElement.style.top = `${clampedY}px`;
+        this._fabElement.style.right = 'auto';
+        this._fabElement.style.bottom = 'auto';
     }
 
     /**
@@ -327,15 +347,15 @@ export class FABContainer implements IDisposable {
                     left: Math.round(rect.left)
                 };
 
-                // 持久化至酒馆扩展配置 SettingsStore
-                this._store.set('fabPosition', pos);
-
-                // 设备本地辅助缓存
-                if (typeof window !== 'undefined' && window.localStorage) {
-                    try {
-                        localStorage.setItem('da_fab_position', JSON.stringify(pos));
-                    } catch {
-                        // 忽略配额或隐身模式限制
+                // 仅当坐标属于合法区域时持久化，防止异常写入 0, 0 死锁
+                if (isValidFabPosition(pos)) {
+                    this._store.set('fabPosition', pos);
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        try {
+                            localStorage.setItem('da_fab_position', JSON.stringify(pos));
+                        } catch {
+                            // 忽略配额或隐身模式限制
+                        }
                     }
                 }
 

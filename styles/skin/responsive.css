@@ -110,6 +110,14 @@
         right: 12px !important;
     }
 
+    /* 悬浮球移动端默认安全边距 */
+    .da-fab-btn,
+    .da-fab-button,
+    #da-fab-button {
+        right: 16px;
+        bottom: 72px;
+    }
+
     /* 图像详情与元数据查看器单列流式堆叠 */
     .da-inspect-modal,
     .da-info-panel {
