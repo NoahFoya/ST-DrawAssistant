@@ -3,7 +3,7 @@
  */
 
 export const EXTENSION_NAME = 'ST-DrawAssistant';
-export const EXTENSION_VERSION = '0.1.0';
+export const EXTENSION_VERSION = '0.2.0';
 export const PLUGIN_ID = 'st-drawassistant';
 
 /** 酒馆宿主标准图库上传端点 */

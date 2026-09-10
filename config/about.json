@@ -1,6 +1,6 @@
 {
   "name": "Starlight DrawAssistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Starlight DrawAssistant 专为 SillyTavern 酒馆对话场景打造，深度融合角色上下文、LoRA 触发词与多后端生图能力。支持消息楼层生图、ComfyUI / SD-WebUI / NovelAI / OpenAI 多驱动直连、本地持久化与日志统计。",
   "license": "GPL-3.0",
   "highlights": [
