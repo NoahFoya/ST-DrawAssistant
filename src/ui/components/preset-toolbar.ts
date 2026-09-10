@@ -685,6 +685,3 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
     };
 }
 
-/** 兼容旧命名别名导出 */
-export const createFilePresetAdapter = createPresetStoreAdapter;
-

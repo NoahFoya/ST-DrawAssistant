@@ -49,18 +49,6 @@ export function getPresetSvg(key?: string): string {
     return FAB_PRESET_ICONS[targetKey]?.svg || FAB_PRESET_ICONS[defaultKey].svg;
 }
 
-/**
- * 校验悬浮球坐标是否合法
- * 过滤 null/undefined、NaN 以及小于 15px 的左上角异常贴边脏数据
- */
-export function isValidFabPosition(pos: any): pos is { top: number; left: number } {
-    if (!pos || typeof pos !== 'object') return false;
-    if (typeof pos.top !== 'number' || typeof pos.left !== 'number') return false;
-    if (isNaN(pos.top) || isNaN(pos.left)) return false;
-    if (pos.top < 15 && pos.left < 15) return false;
-    return true;
-}
-
 export interface FABContainerOptions {
     store: SettingsStore;
     settingsModal: SettingsModal;
@@ -230,50 +218,39 @@ export class FABContainer implements IDisposable {
         if (!this._fabElement) return;
 
         let pos: { top: number; left: number } | null = null;
-        // 优先从 SettingsStore 扩展配置中读取
-        const storePos = this._store.get('fabPosition');
-        if (isValidFabPosition(storePos)) {
-            pos = storePos;
-        } else if (typeof window !== 'undefined' && window.localStorage) {
+        if (typeof window !== 'undefined' && window.localStorage) {
             try {
                 const stored = localStorage.getItem('da_fab_position');
                 if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (isValidFabPosition(parsed)) {
-                        pos = parsed;
-                    } else {
-                        // 清除本地遗留的左上角脏坐标
-                        localStorage.removeItem('da_fab_position');
-                    }
+                    pos = JSON.parse(stored);
                 }
             } catch {
                 pos = null;
             }
         }
 
-        if (pos) {
+        if (pos && typeof pos.top === 'number' && typeof pos.left === 'number' && !isNaN(pos.top) && !isNaN(pos.left)) {
             this._fabElement.style.top = `${pos.top}px`;
             this._fabElement.style.left = `${pos.left}px`;
             this._fabElement.style.right = 'auto';
             this._fabElement.style.bottom = 'auto';
-            // 待布局完全回流后再执行安全视口边界约束，杜绝未就绪时被挤压到 0
-            if (typeof window !== 'undefined') {
-                window.requestAnimationFrame(() => this.clampToViewport());
-            }
+            this.clampToViewport();
         } else {
-            // 无自定义有效坐标时清除行内样式，直接生效 CSS 默认的安全右下角停靠
-            this._fabElement.style.top = '';
-            this._fabElement.style.left = '';
-            this._fabElement.style.right = '';
-            this._fabElement.style.bottom = '';
+            // 无本地自定义坐标时，默认定位在屏幕右侧、垂直居中偏上（约 38% 高度位置），自适应不同窗口尺寸
+            const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
+            const winW = typeof window !== 'undefined' ? window.innerWidth : 1200;
+            const defaultTop = Math.max(20, Math.round(winH * 0.38 - 24));
+            const defaultLeft = Math.max(20, winW - 68);
+            this._fabElement.style.top = `${defaultTop}px`;
+            this._fabElement.style.left = `${defaultLeft}px`;
+            this._fabElement.style.right = 'auto';
+            this._fabElement.style.bottom = 'auto';
         }
     }
 
     private clampToViewport(): void {
         if (!this._fabElement || typeof window === 'undefined') return;
-        // 未应用行内 top/left（即正在使用 CSS 默认停靠）时不执行绝对像素约束
-        if (!this._fabElement.style.top && !this._fabElement.style.left) return;
-        if (window.innerWidth <= 100 || window.innerHeight <= 100) return;
+        if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
 
         const rect = this._fabElement.getBoundingClientRect();
         const fabW = this._fabElement.offsetWidth || 48;
@@ -281,19 +258,24 @@ export class FABContainer implements IDisposable {
         const maxX = Math.max(0, window.innerWidth - fabW);
         const maxY = Math.max(0, window.innerHeight - fabH);
 
-        const clampedX = Math.max(10, Math.min(rect.left, maxX - 10));
-        const clampedY = Math.max(10, Math.min(rect.top, maxY - 10));
+        const currentLeft = Number.isFinite(parseFloat(this._fabElement.style.left))
+            ? parseFloat(this._fabElement.style.left)
+            : rect.left;
+        const currentTop = Number.isFinite(parseFloat(this._fabElement.style.top))
+            ? parseFloat(this._fabElement.style.top)
+            : rect.top;
+
+        const clampedX = Math.max(0, Math.min(currentLeft, maxX));
+        const clampedY = Math.max(0, Math.min(currentTop, maxY));
 
         this._fabElement.style.left = `${clampedX}px`;
         this._fabElement.style.top = `${clampedY}px`;
-        this._fabElement.style.right = 'auto';
-        this._fabElement.style.bottom = 'auto';
     }
 
     /**
      * 启用悬浮球拖拽交互
      * 统一绑定鼠标与触摸事件，通过 3px 位移死区严格区分单点点击与拖拽移动；
-     * 拖拽时将坐标约束在视口边界内，并在释放后持久化坐标到 SettingsStore 与 localStorage。
+     * 拖拽时将坐标约束在视口边界内，并在释放后持久化坐标到当前设备 localStorage。
      */
     private enableDrag(el: HTMLElement): void {
         let isDragging = false;
@@ -347,15 +329,12 @@ export class FABContainer implements IDisposable {
                     left: Math.round(rect.left)
                 };
 
-                // 仅当坐标属于合法区域时持久化，防止异常写入 0, 0 死锁
-                if (isValidFabPosition(pos)) {
-                    this._store.set('fabPosition', pos);
-                    if (typeof window !== 'undefined' && window.localStorage) {
-                        try {
-                            localStorage.setItem('da_fab_position', JSON.stringify(pos));
-                        } catch {
-                            // 忽略配额或隐身模式限制
-                        }
+                // 悬浮球位置属于设备本地偏好，仅存入当前浏览器 localStorage，避免干扰多端其他设备
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    try {
+                        localStorage.setItem('da_fab_position', JSON.stringify(pos));
+                    } catch {
+                        // 忽略配额或隐身模式限制
                     }
                 }
 

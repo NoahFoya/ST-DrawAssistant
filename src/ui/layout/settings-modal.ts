@@ -105,15 +105,15 @@ export class SettingsModal implements IDisposable {
 
         // 主体双栏容器
         const bodyContainer = document.createElement('div');
-        bodyContainer.className = 'da-modal-body-container';
+        bodyContainer.className = 'da-modal-body';
 
         const sidebar = document.createElement('div');
-        sidebar.className = 'da-sidebar';
+        sidebar.className = 'da-sidebar-tabs';
         sidebar.setAttribute('role', 'tablist');
         this._sidebarEl = sidebar;
 
         const contentArea = document.createElement('div');
-        contentArea.className = 'da-content-area';
+        contentArea.className = 'da-modal-content';
         contentArea.id = 'da-modal-content-area';
         contentArea.setAttribute('role', 'tabpanel');
         this._contentAreaEl = contentArea;
@@ -393,18 +393,9 @@ export class SettingsModal implements IDisposable {
                 itemBtn.appendChild(dirtyDot);
             }
 
-            // 生图引擎选项卡的平权双击收拢/展开与默认徽标
+            // 生图引擎选项卡的收拢/展开控制
             if (isEngineTab) {
-                // 展开态下，为全局默认引擎项标示 [默认] 微标
-                if (this._isEnginesExpanded && tabIdLower === activeProvider) {
-                    const defaultBadge = document.createElement('span');
-                    defaultBadge.className = 'da-sidebar-item__default-badge';
-                    defaultBadge.textContent = '默认';
-                    defaultBadge.title = '当前全局默认生图引擎';
-                    itemBtn.appendChild(defaultBadge);
-                }
-
-                // 展开/收拢微型指示器：
+                // 展开/收拢指示器：
                 // 收拢态下展示在代表引擎右侧；展开态下展示在当前选中（或代表）引擎右侧
                 const shouldShowTrigger = !this._isEnginesExpanded
                     ? tabIdLower === representativeEngineId
@@ -413,8 +404,9 @@ export class SettingsModal implements IDisposable {
                 if (shouldShowTrigger) {
                     const trigger = document.createElement('span');
                     trigger.className = `da-sidebar-item__expand-trigger ${this._isEnginesExpanded ? 'is-expanded' : ''}`;
-                    trigger.title = this._isEnginesExpanded ? '收起其他生图引擎 (可双击Tab)' : '展开更多生图引擎 (可双击Tab)';
-                    trigger.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+                    trigger.title = this._isEnginesExpanded ? '收起其他生图引擎' : '展开更多生图引擎';
+                    trigger.setAttribute('aria-label', trigger.title);
+                    trigger.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 
                     trigger.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -423,19 +415,16 @@ export class SettingsModal implements IDisposable {
                     });
                     itemBtn.appendChild(trigger);
                 }
-
-                // 双击事件：快速切换展开/收拢其他生图引擎
-                itemBtn.addEventListener('dblclick', (e) => {
-                    e.preventDefault();
-                    this._isEnginesExpanded = !this._isEnginesExpanded;
-                    this.refreshSidebarTabs();
-                });
-                itemBtn.title = `${tab.title} (双击展开/收拢其他生图引擎)`;
             }
 
-            // 单击事件：纯粹切换视图查看配置，绝不篡改全局 activeProvider
+            // 单击事件：未激活时切换视图；已激活的当前引擎 Tab 再次点击直接切换折叠/展开
             itemBtn.addEventListener('click', () => {
-                void this.switchTab(tab.id);
+                if (isEngineTab && isActive) {
+                    this._isEnginesExpanded = !this._isEnginesExpanded;
+                    this.refreshSidebarTabs();
+                } else {
+                    void this.switchTab(tab.id);
+                }
             });
 
             this._sidebarEl!.appendChild(itemBtn);
