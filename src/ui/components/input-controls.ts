@@ -79,7 +79,6 @@ function bindControlStateHandlers(options: ControlStateBindingOptions) {
         setError: (hasError: boolean, tooltip?: string): void => {
             container.classList.toggle('is-invalid', hasError);
             inputElement.classList.toggle('is-invalid', hasError);
-            inputElement.classList.toggle('da-select-error', hasError);
             extraElements.forEach((el) => el.classList.toggle('is-invalid', hasError));
 
             if (hasError && tooltip) {
@@ -155,6 +154,7 @@ export function createToggle(options: ToggleOptions): ToggleHandle {
 export interface SelectOptionItem {
     label: string;
     value: string | number;
+    group?: string;
 }
 
 export interface SelectOptions extends BaseControlOptions {
@@ -172,7 +172,7 @@ export interface SelectHandle extends IControlHandle<string> {
 
 /**
  * 创建下拉选择框控件
- * 支持动态更新选项列表与选中态回退。
+ * 支持动态更新选项列表、optgroup 视觉分组与选中态回退。
  */
 export function createSelect(options: SelectOptions): SelectHandle {
     const select = document.createElement('select');
@@ -181,19 +181,37 @@ export function createSelect(options: SelectOptions): SelectHandle {
 
     const renderOptions = (items: Array<SelectOptionItem | string>, currentSelected?: string | number) => {
         select.innerHTML = '';
+        const optGroups = new Map<string, HTMLOptGroupElement>();
+
         items.forEach((item) => {
             const opt = document.createElement('option');
+            let groupName: string | undefined;
+
             if (typeof item === 'object' && item !== null) {
                 opt.value = String(item.value);
                 opt.textContent = item.label;
+                groupName = item.group;
             } else {
                 opt.value = String(item);
                 opt.textContent = String(item);
             }
+
             if (currentSelected !== undefined && String(opt.value) === String(currentSelected)) {
                 opt.selected = true;
             }
-            select.appendChild(opt);
+
+            if (groupName) {
+                let groupElem = optGroups.get(groupName);
+                if (!groupElem) {
+                    groupElem = document.createElement('optgroup');
+                    groupElem.label = groupName;
+                    optGroups.set(groupName, groupElem);
+                    select.appendChild(groupElem);
+                }
+                groupElem.appendChild(opt);
+            } else {
+                select.appendChild(opt);
+            }
         });
     };
 
@@ -404,14 +422,18 @@ export function createTextarea(options: TextareaOptions): TextareaHandle {
     applyBaseAttributes(textarea, options);
 
     const changeListener = () => {
-        options.onChange?.(textarea.value.trim());
+        options.onChange?.(textarea.value);
     };
+    textarea.addEventListener('input', changeListener);
     textarea.addEventListener('change', changeListener);
 
     const stateHandlers = bindControlStateHandlers({
         container: textarea,
         inputElement: textarea,
-        cleanups: [() => textarea.removeEventListener('change', changeListener)]
+        cleanups: [
+            () => textarea.removeEventListener('input', changeListener),
+            () => textarea.removeEventListener('change', changeListener)
+        ]
     });
 
     const handle: TextareaHandle = Object.assign(textarea, {

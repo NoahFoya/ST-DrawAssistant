@@ -53,10 +53,6 @@ export function createLoraManagerControl(options: LoraManagerOptions): LoraManag
         // 容器顶部统计头：已启用数量与总项数位于左侧
         const headerEl = document.createElement('div');
         headerEl.className = 'da-lora-container__header';
-        headerEl.style.display = 'flex';
-        headerEl.style.alignItems = 'center';
-        headerEl.style.justifyContent = 'flex-start';
-        headerEl.style.gap = '8px';
 
         if (options.title) {
             const headerTitle = document.createElement('div');
@@ -105,19 +101,20 @@ export function createLoraManagerControl(options: LoraManagerOptions): LoraManag
                 const titleBox = document.createElement('div');
                 titleBox.className = 'da-lora-item__title-box';
 
+                if (isMissing) {
+                    const stateBadge = document.createElement('span');
+                    stateBadge.className = 'da-control-state-badge da-control-state-badge--invalid';
+                    stateBadge.textContent = '!';
+                    stateBadge.setAttribute('aria-hidden', 'true');
+                    titleBox.appendChild(stateBadge);
+                    titleBox.title = '已失效：未在生图后端列表中找到此 LoRA 模型，生成时可能失效';
+                }
+
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'da-lora-item__name';
                 nameSpan.textContent = lora.name;
-                nameSpan.title = lora.name;
+                nameSpan.title = isMissing ? '已失效：未在生图后端列表中找到此 LoRA 模型，生成时可能失效' : lora.name;
                 titleBox.appendChild(nameSpan);
-
-                if (isMissing) {
-                    const warnBadge = document.createElement('span');
-                    warnBadge.className = 'da-badge da-lora-badge da-lora-badge--missing';
-                    warnBadge.title = '未在生图后端列表中找到此 LoRA 模型，生成时可能失效';
-                    warnBadge.textContent = '⚠️ 后端未找到';
-                    titleBox.appendChild(warnBadge);
-                }
 
                 headerRow.appendChild(titleBox);
 
@@ -267,7 +264,7 @@ export function createLoraManagerControl(options: LoraManagerOptions): LoraManag
         footerEl.className = 'da-lora-container__footer da-lora-add-row';
 
         const select = document.createElement('select');
-        select.className = 'da-select da-lora-add-select';
+        select.className = 'da-select da-lora-add-select da-flex-1';
 
         const availableOptions = cachedList.filter(
             (name) => !currentLoras.some((l) => l.name === name)

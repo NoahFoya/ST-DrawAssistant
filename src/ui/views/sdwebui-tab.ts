@@ -79,7 +79,7 @@ export class SDWebUITabView extends BaseTabView {
         driverRegistry?: DriverRegistry,
         private readonly _events?: TypedEventBus<CoreEventMap>
     ) {
-        super('da-sdwebui-tab');
+        super();
         this._driverRegistry = driverRegistry;
 
         const storedConfig: Record<string, any> = (this._mainStore.getEngineConfig('sdwebui') as any) || {};
@@ -164,24 +164,20 @@ export class SDWebUITabView extends BaseTabView {
             if (initialCatalog.upscalers) this._cachedUpscalers = [...initialCatalog.upscalers];
             if (initialCatalog.loras) this._cachedLoras = [...initialCatalog.loras];
         }
-        const isInitiallyConnected = driver?.isConnected?.() || !!initialCatalog;
 
         return createConnectionCard({
             title: '服务连接',
             currentUrl: this._engineStore.get('serverUrl'),
             defaultUrl: DEFAULT_SDWEBUI_CONFIG.serverUrl,
             placeholder: 'http://127.0.0.1:7860',
-            buttonText: isInitiallyConnected ? '刷新链接状态' : '测试连接',
+            buttonText: '测试连接',
             onUrlChange: (newUrl) => this._engineStore.set('serverUrl', newUrl),
-            onTest: async (_url, btn) => {
-                const isRefreshing = btn.textContent === '刷新链接状态';
-                btn.disabled = true;
-                btn.textContent = isRefreshing ? '刷新中...' : '连接中...';
-                let success = false;
+            onTest: async (_url, _btn, card) => {
+                card?.setStatus('testing');
                 try {
                     const res = await driver?.checkHealth();
                     if (res?.ok) {
-                        success = true;
+                        card?.setStatus('success', '连接成功');
                         FeedbackService.toastSuccess(`连接成功 (延迟 ${res.latencyMs}ms)`);
 
                         // 测试成功后立即跳过防抖保存至宿主配置文件 settings.json
@@ -198,13 +194,16 @@ export class SDWebUITabView extends BaseTabView {
                             // 资产同步探测失败不阻断整体连通状态
                         }
                     } else {
-                        FeedbackService.toastError(`连接失败: ${res?.message || '无法访问后端服务'}`);
+                        const errMsg = res?.message || '无法访问后端服务';
+                        card?.setStatus('error', '连接失败');
+                        card?.setError(true, `已失效：${errMsg}`);
+                        FeedbackService.toastError(`连接失败: ${errMsg}`);
                     }
                 } catch (e: any) {
-                    FeedbackService.toastError(`连接异常: ${e?.message || e}`);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = success ? '刷新链接状态' : '测试连接';
+                    const errMsg = e?.message || String(e);
+                    card?.setStatus('error', '连接异常');
+                    card?.setError(true, `已失效：${errMsg}`);
+                    FeedbackService.toastError(`连接异常: ${errMsg}`);
                 }
             }
         });
@@ -299,22 +298,22 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'model',
                 type: 'select',
-                label: '主模型 Checkpoint',
-                description: '基础生图底模文件名',
+                label: '生图主模型 (Base Model)',
+                helpTooltip: '去噪生成核心底模。支持全量整合包 (Checkpoint)、独立扩散核心 (UNet / DiT) 与量化模型 (GGUF / NF4)。',
                 options: this._getModelSelectOptions()
             },
             {
                 key: 'vae',
                 type: 'select',
-                label: 'VAE 滤镜',
-                description: '色彩与纹理编解码模型 (可选)',
+                label: 'VAE 模型 (VAE)',
+                helpTooltip: '用于将潜空间特征解码为可视图像，影响画面的色彩饱和度与精细度。',
                 options: this._getVaeSelectOptions()
             },
             {
                 key: 'clipSkip',
                 type: 'number',
-                label: 'CLIP 跳过层',
-                description: 'SD 1.5 建议为 1，二次元动漫模型建议为 2',
+                label: 'CLIP 跳过层数 (Clip Skip)',
+                helpTooltip: 'SD 1.5 模型通常建议为 1，二次元动漫模型通常建议为 2。',
                 min: 1,
                 max: 12,
                 step: 1,
@@ -334,7 +333,6 @@ export class SDWebUITabView extends BaseTabView {
             {
                 type: 'select',
                 label: '分辨率预设',
-                description: '常用画幅比例预设，选择后自动同步宽高数值',
                 options: [...SDWEBUI_RESOLUTION_PRESETS],
                 onCreated: (handle) => {
                     resolutionSelectHandle = handle;
@@ -355,7 +353,7 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'width',
                 type: 'number',
-                label: '生成宽度',
+                label: '生成宽度 (Width)',
                 min: 64,
                 max: 2048,
                 step: 64,
@@ -364,13 +362,13 @@ export class SDWebUITabView extends BaseTabView {
                     widthHandle = handle;
                 },
                 onChangeHook: () => {
-                    updateResolutionPresetSelect();
+                    resolutionSelectHandle?.setValue('custom');
                 }
             },
             {
                 key: 'height',
                 type: 'number',
-                label: '生成高度',
+                label: '生成高度 (Height)',
                 min: 64,
                 max: 2048,
                 step: 64,
@@ -379,19 +377,19 @@ export class SDWebUITabView extends BaseTabView {
                     heightHandle = handle;
                 },
                 onChangeHook: () => {
-                    updateResolutionPresetSelect();
+                    resolutionSelectHandle?.setValue('custom');
                 }
             },
             {
                 key: 'samplerName',
                 type: 'select',
-                label: '采样算法 (Sampler)',
+                label: '采样方法 (Sampler)',
                 options: this._cachedSamplers.map((s) => ({ label: s, value: s }))
             },
             {
                 key: 'scheduler',
                 type: 'select',
-                label: '调度算法 (Scheduler)',
+                label: '调度类型 (Schedule type)',
                 options: this._cachedSchedulers.map((s) => ({ label: s, value: s }))
             },
             {
@@ -406,8 +404,8 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'cfgScale',
                 type: 'number',
-                label: '引导系数 (CFG Scale)',
-                description: '提示词贴合程度，通常建议 6.0 ~ 8.0',
+                label: '提示词引导系数 (CFG Scale)',
+                helpTooltip: '提示词贴合程度，数值越高越贴合提示词，通常建议 6.0 ~ 8.0。',
                 min: 1.0,
                 max: 30.0,
                 step: 0.5
@@ -416,7 +414,7 @@ export class SDWebUITabView extends BaseTabView {
                 key: 'seed',
                 type: 'number',
                 label: '随机种子 (Seed)',
-                description: '-1 为完全随机，填入固定数值可复现构图',
+                helpTooltip: '-1 为完全随机，填入固定数值可复现构图。',
                 min: -1,
                 max: 2147483647,
                 step: 1
@@ -424,12 +422,13 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'restoreFaces',
                 type: 'toggle',
-                label: '面部修复'
+                label: '面部修复 (Restore Faces)'
             },
             {
                 key: 'denoisingStrength',
                 type: 'number',
-                label: '图生图去噪幅度',
+                label: '重绘幅度 (Denoising strength)',
+                helpTooltip: '图生图或局部重绘时的变化强度，数值越小越接近原图，默认推荐 0.6 ~ 0.75。',
                 min: 0.05,
                 max: 1.0,
                 step: 0.05
@@ -453,14 +452,14 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'hiresUpscaler',
                 type: 'select',
-                label: '放大算法',
+                label: '放大算法 (Upscaler)',
                 disabledWhen: (s) => !s.enableHires,
                 options: this._cachedUpscalers.map((u) => ({ label: u, value: u }))
             },
             {
                 key: 'hiresScale',
                 type: 'number',
-                label: '放大倍数',
+                label: '放大倍率 (Upscale by)',
                 disabledWhen: (s) => !s.enableHires,
                 min: 1.1,
                 max: 4.0,
@@ -470,8 +469,8 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'hiresSteps',
                 type: 'number',
-                label: '高清修复步数',
-                description: '设为 0 表示复用原采样步数',
+                label: '高分重绘步数 (Hires steps)',
+                helpTooltip: '设为 0 表示复用原采样步数。',
                 disabledWhen: (s) => !s.enableHires,
                 min: 0,
                 max: 100,
@@ -481,7 +480,8 @@ export class SDWebUITabView extends BaseTabView {
             {
                 key: 'hiresDenoise',
                 type: 'number',
-                label: '高清修复去噪幅度',
+                label: '重绘幅度 (Denoising strength)',
+                helpTooltip: '高清潜空间去噪强度，数值过大可能导致画面崩坏，推荐 0.3 ~ 0.45。',
                 disabledWhen: (s) => !s.enableHires,
                 min: 0.05,
                 max: 1.0,
@@ -491,9 +491,9 @@ export class SDWebUITabView extends BaseTabView {
         hiresRows.forEach((r) => hiresGroup.body.appendChild(this._renderer.renderRow(r)));
         card.body.appendChild(hiresGroup.root);
 
-        // 4. 提示词预设设置分组 (默认展开)
+        // 4. 关联提示词预设设置分组 (默认展开)
         const promptGroup = createSectionGroup({
-            title: '提示词预设设置',
+            title: '关联提示词预设',
             collapsible: true,
             defaultOpen: true
         });
@@ -502,7 +502,7 @@ export class SDWebUITabView extends BaseTabView {
                 key: 'promptProfileId',
                 type: 'select',
                 label: '关联提示词方案',
-                description: '选择当前绘图主方案绑定的提示词预设方案',
+                helpTooltip: '生图时将自动合并该方案的正向提示词前缀、后缀、负向词与 LoRA 模型。',
                 options: this._getPromptProfileSelectOptions(),
                 onChangeHook: (selectedId: string) => {
                     this._engineStore.set('activePromptProfileId', selectedId);
@@ -602,19 +602,40 @@ export class SDWebUITabView extends BaseTabView {
         }));
     }
 
-    private _getModelSelectOptions() {
+    private _getModelSelectOptions(): Array<{ label: string; value: string; group?: string }> {
         const cur = this._engineStore.get('model');
-        const opts = [
+        const opts: Array<{ label: string; value: string; group?: string }> = [
             { label: '留空使用后端默认模型', value: '' },
             ...this._cachedModels.map((m) => {
                 const val = typeof m === 'string' ? m : (m.title || m.name);
-                return { label: formatModelDisplayLabel(m), value: val };
+                return {
+                    label: formatModelDisplayLabel(m),
+                    value: val,
+                    group: this._getModelGroupName(m)
+                };
             })
         ];
         if (cur && !opts.some((o) => o.value === cur)) {
-            opts.push({ label: `${cur} (当前配置)`, value: cur });
+            opts.push({ label: `${cur} (当前配置)`, value: cur, group: '当前配置' });
         }
         return opts;
+    }
+
+    private _getModelGroupName(item: string | ModelAssetItem): string {
+        if (typeof item === 'string') return '全量模型 (Checkpoints)';
+        switch ((item.type || '').toLowerCase()) {
+            case 'unet':
+            case 'diffusion_model':
+                return '独立扩散核心 (Diffusion Models / UNet)';
+            case 'gguf':
+            case 'nf4':
+                return '量化模型 (GGUF / NF4)';
+            case 'diffusers':
+                return '分立管道 (Diffusers)';
+            case 'checkpoint':
+            default:
+                return '全量模型 (Checkpoints)';
+        }
     }
 
     private _getVaeSelectOptions() {
@@ -649,7 +670,7 @@ export class SDWebUITabView extends BaseTabView {
 
         if (Array.isArray(catalog.samplers) && catalog.samplers.length > 0) {
             this._cachedSamplers = [...catalog.samplers];
-            const samplerHandle = this._renderer.getHandle<SelectHandle>('sampler');
+            const samplerHandle = this._renderer.getHandle<SelectHandle>('samplerName');
             samplerHandle?.setOptions(this._cachedSamplers.map((s) => ({ label: s, value: s })));
         }
 

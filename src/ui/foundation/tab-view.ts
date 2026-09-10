@@ -40,7 +40,7 @@ export abstract class BaseTabView implements ITabView {
 
     /**
      * 创建选项卡视图实例
-     * @param className 附加到根容器的自定义 CSS 类名 (如 'da-general-tab')
+     * @param className 附加到根容器的可选扩展 CSS 类名
      */
     constructor(className?: string) {
         this._root = document.createElement('div');

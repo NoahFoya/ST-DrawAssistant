@@ -125,7 +125,7 @@ export class ComfyUITabView extends BaseTabView {
         driverRegistry?: DriverRegistry,
         private readonly _events?: TypedEventBus<CoreEventMap>
     ) {
-        super('da-comfyui-tab');
+        super();
         this._driverRegistry = driverRegistry;
 
         const storedConfig: Record<string, any> = (this._mainStore.getEngineConfig('comfyui') as any) || {};
@@ -211,24 +211,20 @@ export class ComfyUITabView extends BaseTabView {
             if (initialCatalog.schedulers) this._cachedSchedulers = [...initialCatalog.schedulers];
             if (initialCatalog.loras) this._cachedLoras = [...initialCatalog.loras];
         }
-        const isInitiallyConnected = driver?.isConnected?.() || !!initialCatalog;
 
         return createConnectionCard({
             title: '服务连接',
             currentUrl: this._engineStore.get('serverUrl'),
             defaultUrl: 'http://127.0.0.1:8188',
             placeholder: 'http://127.0.0.1:8188',
-            buttonText: isInitiallyConnected ? '刷新链接状态' : '测试连接',
+            buttonText: '测试连接',
             onUrlChange: (newUrl) => this._engineStore.set('serverUrl', newUrl),
-            onTest: async (_url, btn) => {
-                const isRefreshing = btn.textContent === '刷新链接状态';
-                btn.disabled = true;
-                btn.textContent = isRefreshing ? '刷新中...' : '连接中...';
-                let success = false;
+            onTest: async (_url, _btn, card) => {
+                card?.setStatus('testing');
                 try {
                     const res = await driver?.checkHealth();
                     if (res?.ok) {
-                        success = true;
+                        card?.setStatus('success', '连接成功');
                         FeedbackService.toastSuccess(`连接成功 (延迟 ${res.latencyMs}ms)`);
 
                         // 测试成功后立即跳过防抖保存至宿主配置文件 settings.json
@@ -245,13 +241,16 @@ export class ComfyUITabView extends BaseTabView {
                             // 资产探测失败不阻断连通成功状态
                         }
                     } else {
-                        FeedbackService.toastError(`连接失败: ${res?.message || '无法访问后端服务'}`);
+                        const errMsg = res?.message || '无法访问后端服务';
+                        card?.setStatus('error', '连接失败');
+                        card?.setError(true, `已失效：${errMsg}`);
+                        FeedbackService.toastError(`连接失败: ${errMsg}`);
                     }
                 } catch (e: any) {
-                    FeedbackService.toastError(`连接异常: ${e?.message || e}`);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = success ? '刷新链接状态' : '测试连接';
+                    const errMsg = e?.message || String(e);
+                    card?.setStatus('error', '连接异常');
+                    card?.setError(true, `已失效：${errMsg}`);
+                    FeedbackService.toastError(`连接异常: ${errMsg}`);
                 }
             }
         });
@@ -333,9 +332,9 @@ export class ComfyUITabView extends BaseTabView {
         this._drawingToolbarHandle = drawingToolbar;
         card.body.appendChild(drawingToolbar);
 
-        // 1. 模型设置分组 (默认展开)
+        // 1. 生图底模与核心组件设置分组 (默认展开)
         const modelGroup = createSectionGroup({
-            title: '模型设置',
+            title: '生图底模与核心组件 (Base Model / CLIP / VAE)',
             collapsible: true,
             defaultOpen: true
         });
@@ -343,22 +342,22 @@ export class ComfyUITabView extends BaseTabView {
             {
                 key: 'model',
                 type: 'select',
-                label: '主模型',
-                description: '生成基础模型文件名',
+                label: '生图主模型 (Base Model)',
+                helpTooltip: '去噪生成核心底模。支持全量整合包 (Checkpoint)、独立扩散核心 (UNet / DiT) 与量化模型 (GGUF / NF4)。',
                 options: this._getModelSelectOptions()
             },
             {
                 key: 'clipName',
                 type: 'select',
-                label: 'CLIP 模型',
-                description: '文本特征提取模型 (可选)',
+                label: 'CLIP 文本编码器 (CLIP)',
+                helpTooltip: '独立文本编码模型（如 SDXL 或 FLUX 所需的 clip_l / t5xxl），若工作流中 Checkpoint 已内置 CLIP 可留空。',
                 options: this._getClipSelectOptions()
             },
             {
                 key: 'vaeName',
                 type: 'select',
-                label: 'VAE 滤镜',
-                description: '图像编解码模型 (可选)',
+                label: 'VAE 模型 (VAE)',
+                helpTooltip: '图像变分自编码器模型（如 ae.safetensors），若工作流已内置 VAE 可留空使用工作流默认。',
                 options: this._getVaeSelectOptions()
             }
         ];
@@ -375,7 +374,6 @@ export class ComfyUITabView extends BaseTabView {
             {
                 type: 'select',
                 label: '分辨率预设',
-                description: '常用画幅比例预设，选择后自动同步宽高数值',
                 options: [...COMFYUI_RESOLUTION_PRESETS],
                 onCreated: (handle) => {
                     resolutionSelectHandle = handle;
@@ -396,7 +394,7 @@ export class ComfyUITabView extends BaseTabView {
             {
                 key: 'width',
                 type: 'number',
-                label: '生成宽度',
+                label: '生成宽度 (Width)',
                 min: 64,
                 max: 2048,
                 step: 64,
@@ -405,13 +403,13 @@ export class ComfyUITabView extends BaseTabView {
                     widthHandle = handle;
                 },
                 onChangeHook: () => {
-                    updateResolutionPresetSelect();
+                    resolutionSelectHandle?.setValue('custom');
                 }
             },
             {
                 key: 'height',
                 type: 'number',
-                label: '生成高度',
+                label: '生成高度 (Height)',
                 min: 64,
                 max: 2048,
                 step: 64,
@@ -420,19 +418,19 @@ export class ComfyUITabView extends BaseTabView {
                     heightHandle = handle;
                 },
                 onChangeHook: () => {
-                    updateResolutionPresetSelect();
+                    resolutionSelectHandle?.setValue('custom');
                 }
             },
             {
                 key: 'samplerName',
                 type: 'select',
-                label: '采样算法 (Sampler)',
+                label: '采样器 (Sampler)',
                 options: this._cachedSamplers.map((s) => ({ label: s, value: s }))
             },
             {
                 key: 'scheduler',
                 type: 'select',
-                label: '调度算法 (Scheduler)',
+                label: '调度器 (Scheduler)',
                 options: this._cachedSchedulers.map((s) => ({ label: s, value: s }))
             },
             {
@@ -456,9 +454,9 @@ export class ComfyUITabView extends BaseTabView {
         samplingRows.forEach((r) => samplingGroup.body.appendChild(this._renderer.renderRow(r)));
         card.body.appendChild(samplingGroup.root);
 
-        // 3. 提示词预设设置分组 (默认展开)
+        // 3. 关联提示词方案分组 (默认展开)
         const promptGroup = createSectionGroup({
-            title: '提示词预设设置',
+            title: '关联提示词方案',
             collapsible: true,
             defaultOpen: true
         });
@@ -466,17 +464,21 @@ export class ComfyUITabView extends BaseTabView {
             {
                 key: 'promptProfileId',
                 type: 'select',
-                label: '提示词预设方案',
-                description: '选择当前生效的提示词与 LoRA 方案',
-                options: this._getPromptProfileSelectOptions()
+                label: '关联提示词方案',
+                helpTooltip: '生图时将自动合并该方案的正向提示词前缀、后缀、负向词与 LoRA 模型。',
+                options: this._getPromptProfileSelectOptions(),
+                onChangeHook: (selectedId: string) => {
+                    this._engineStore.set('activePromptProfileId', selectedId);
+                    this._promptPresetManagerHandle?.refresh();
+                }
             }
         ];
         promptRows.forEach((r) => promptGroup.body.appendChild(this._renderer.renderRow(r)));
         card.body.appendChild(promptGroup.root);
 
-        // 4. 工作流设置分组 (默认展开)
+        // 4. 生图工作流绑定分组 (默认展开)
         const workflowGroup = createSectionGroup({
-            title: '工作流设置',
+            title: '生图工作流绑定',
             collapsible: true,
             defaultOpen: true
         });
@@ -484,19 +486,19 @@ export class ComfyUITabView extends BaseTabView {
             {
                 key: 'txt2imgWorkflowId',
                 type: 'select',
-                label: '文生图工作流',
+                label: '文生图工作流 (txt2img)',
                 options: this._getWorkflowProfileSelectOptions()
             },
             {
                 key: 'img2imgWorkflowId',
                 type: 'select',
-                label: '图生图工作流',
+                label: '图生图工作流 (img2img)',
                 options: this._getWorkflowProfileSelectOptions()
             },
             {
                 key: 'inpaintWorkflowId',
                 type: 'select',
-                label: '局部重绘工作流',
+                label: '局部重绘工作流 (inpaint)',
                 options: this._getWorkflowProfileSelectOptions()
             }
         ];
@@ -630,19 +632,42 @@ export class ComfyUITabView extends BaseTabView {
         );
     }
 
-    private _getModelSelectOptions(): Array<{ label: string; value: string }> {
-        const opts: Array<{ label: string; value: string }> = [{ label: '请选择或同步主模型...', value: '' }];
+    private _getModelSelectOptions(): Array<{ label: string; value: string; group?: string }> {
+        const opts: Array<{ label: string; value: string; group?: string }> = [
+            { label: '请选择或同步主模型...', value: '' }
+        ];
         if (this._cachedModels.length > 0) {
             this._cachedModels.forEach((m) => {
                 const val = typeof m === 'string' ? m : m.name;
-                opts.push({ label: formatModelDisplayLabel(m), value: val });
+                opts.push({
+                    label: formatModelDisplayLabel(m),
+                    value: val,
+                    group: this._getModelGroupName(m)
+                });
             });
         }
         const cur = this._engineStore.get('model');
         if (cur && !opts.some((o) => o.value === cur)) {
-            opts.push({ label: `${cur} (当前配置)`, value: cur });
+            opts.push({ label: `${cur} (当前配置)`, value: cur, group: '当前配置' });
         }
         return opts;
+    }
+
+    private _getModelGroupName(item: string | ModelAssetItem): string {
+        if (typeof item === 'string') return '全量模型 (Checkpoints)';
+        switch ((item.type || '').toLowerCase()) {
+            case 'unet':
+            case 'diffusion_model':
+                return '独立扩散核心 (Diffusion Models / UNet)';
+            case 'gguf':
+            case 'nf4':
+                return '量化模型 (GGUF / NF4)';
+            case 'diffusers':
+                return '分立管道 (Diffusers)';
+            case 'checkpoint':
+            default:
+                return '全量模型 (Checkpoints)';
+        }
     }
 
     private _getClipSelectOptions(): Array<{ label: string; value: string }> {
@@ -670,7 +695,7 @@ export class ComfyUITabView extends BaseTabView {
     }
 
     private _getPromptProfileSelectOptions(): Array<{ label: string; value: string }> {
-        const profiles: PresetItem<PromptProfileData>[] = this._engineStore.get('promptProfiles') || [];
+        const profiles = this._getPromptProfiles();
         return profiles.map((p) => ({ label: p.name, value: p.id }));
     }
 

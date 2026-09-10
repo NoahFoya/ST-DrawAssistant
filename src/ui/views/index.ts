@@ -9,7 +9,7 @@ export * from './openai-tab';
 export * from './novelai-tab';
 export * from './theme-tab';
 export * from './fab-settings-tab';
-export * from './diagnostics-tab';
+export * from './logs-and-stats-tab';
 export * from './gallery-tab';
 export * from './about-tab';
 export * from './register-views';

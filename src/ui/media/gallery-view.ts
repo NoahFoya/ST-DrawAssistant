@@ -64,7 +64,7 @@ export function renderStorageBar(
 
     // 存储指标数据卡片网格
     const statsWrapper = document.createElement('div');
-    statsWrapper.className = 'da-storage-stats-grid';
+    statsWrapper.className = 'da-stat-grid da-stat-grid--3-cols';
     container.appendChild(statsWrapper);
 
     const refreshData = async () => {
@@ -101,17 +101,17 @@ export function renderStorageBar(
                 const refIds = hostClient?.getReferencedImageIds ? hostClient.getReferencedImageIds() : new Set<string>();
                 const stats = await storage.getStorageStats(refIds);
                 statsWrapper.innerHTML = `
-                    <div class="da-storage-metric-card">
-                        <div class="da-storage-metric-num">${stats.totalCount}</div>
-                        <div class="da-storage-metric-label">本地生图总数</div>
+                    <div class="da-stat-card">
+                        <div class="da-stat-card__val">${stats.totalCount}</div>
+                        <div class="da-stat-card__label">本地生图总数</div>
                     </div>
-                    <div class="da-storage-metric-card is-fav">
-                        <div class="da-storage-metric-num">${stats.favoriteCount}</div>
-                        <div class="da-storage-metric-label">⭐ 标星收藏</div>
+                    <div class="da-stat-card da-stat-card--fav">
+                        <div class="da-stat-card__val">${stats.favoriteCount}</div>
+                        <div class="da-stat-card__label">⭐ 标星收藏</div>
                     </div>
-                    <div class="da-storage-metric-card is-iso">
-                        <div class="da-storage-metric-num">${stats.isolatedCount}</div>
-                        <div class="da-storage-metric-label">无引用图片</div>
+                    <div class="da-stat-card da-stat-card--iso">
+                        <div class="da-stat-card__val">${stats.isolatedCount}</div>
+                        <div class="da-stat-card__label">无引用图片</div>
                     </div>
                 `;
             } catch (err) {
@@ -235,14 +235,14 @@ export function createGalleryManager(
     const renderToolbar = () => {
         toolbarSection.innerHTML = '';
 
-        // 行 1: 搜索框 + 排序按钮 + 批量管理切换
+        // 行 1: 搜索框 + 排序按钮 + 批量管理切换 (通用 .da-filter-bar)
         const rowPrimary = document.createElement('div');
-        rowPrimary.className = 'da-gallery-toolbar-row-primary';
+        rowPrimary.className = 'da-filter-bar';
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.className = 'da-input da-gallery-search';
-        searchInput.placeholder = '搜索提示词、模型或 ID...';
+        searchInput.className = 'da-input da-input--search';
+        searchInput.placeholder = '搜索提示词 / 图像 ID / 模型名...';
         searchInput.value = currentSearch;
         searchInput.oninput = () => {
             currentSearch = searchInput.value.trim().toLowerCase();
@@ -252,7 +252,7 @@ export function createGalleryManager(
 
         const sortBtn = document.createElement('button');
         sortBtn.type = 'button';
-        sortBtn.className = 'da-btn da-btn--secondary da-gallery-sort-btn';
+        sortBtn.className = 'da-btn da-btn--secondary';
         sortBtn.textContent = currentSortOrder === 'desc' ? '最新优先' : '最早优先';
         sortBtn.onclick = () => {
             currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
@@ -262,7 +262,7 @@ export function createGalleryManager(
 
         const batchToggleBtn = document.createElement('button');
         batchToggleBtn.type = 'button';
-        batchToggleBtn.className = `da-btn da-btn--secondary da-gallery-batch-toggle ${isBatchMode ? 'is-active' : ''}`;
+        batchToggleBtn.className = `da-btn da-btn--secondary ${isBatchMode ? 'is-active' : ''}`.trim();
         batchToggleBtn.textContent = isBatchMode ? '退出批量' : '批量管理';
         batchToggleBtn.onclick = () => {
             isBatchMode = !isBatchMode;
@@ -277,9 +277,9 @@ export function createGalleryManager(
         rowPrimary.appendChild(sortBtn);
         rowPrimary.appendChild(batchToggleBtn);
 
-        // 行 2: 状态分类筛选器 (带统计徽标)
+        // 行 2: 状态分类筛选器 (通用 .da-filter-bar + .da-chip-group)
         const rowSecondary = document.createElement('div');
-        rowSecondary.className = 'da-gallery-toolbar-row-secondary';
+        rowSecondary.className = 'da-filter-bar';
 
         const refIds = hostClient?.getReferencedImageIds ? hostClient.getReferencedImageIds() : new Set<string>();
         const totalAll = allRecords.length;
@@ -287,19 +287,19 @@ export function createGalleryManager(
         const totalIso = allRecords.filter((r) => !refIds.has(r.id) && !r.isFavorite).length;
 
         const filterGroup = document.createElement('div');
-        filterGroup.className = 'da-gallery-filter-chips';
+        filterGroup.className = 'da-chip-group';
 
         const filterItems: { mode: 'all' | 'favorite' | 'isolated'; label: string; count: number }[] = [
             { mode: 'all', label: '全部图片', count: totalAll },
-            { mode: 'favorite', label: '⭐ 仅看收藏', count: totalFav },
+            { mode: 'favorite', label: '⭐ 标星收藏', count: totalFav },
             { mode: 'isolated', label: '无引用图片', count: totalIso }
         ];
 
         filterItems.forEach(({ mode, label, count }) => {
             const chip = document.createElement('button');
             chip.type = 'button';
-            chip.className = `da-gallery-chip ${filterMode === mode ? 'is-active' : ''}`;
-            chip.innerHTML = `<span>${label}</span><span class="da-chip-badge">${count}</span>`;
+            chip.className = `da-chip da-chip--filter ${filterMode === mode ? 'is-active' : ''}`.trim();
+            chip.innerHTML = `<span>${label}</span><span class="da-chip__badge">${count}</span>`;
             chip.onclick = () => {
                 filterMode = mode;
                 currentPage = 1;
@@ -568,9 +568,9 @@ export function createGalleryManager(
 
         if (total === 0) {
             const emptyEl = document.createElement('div');
-            emptyEl.className = 'da-gallery-empty';
+            emptyEl.className = 'da-empty-tip da-empty-tip--card';
             emptyEl.innerHTML = `
-                <div style="font-size: 28px; margin-bottom: 8px;">🖼️</div>
+                <div class="da-empty-tip__icon">🖼️</div>
                 <div>暂无符合条件的历史生图记录</div>
             `;
             streamSection.appendChild(emptyEl);
@@ -578,19 +578,19 @@ export function createGalleryManager(
         }
 
         const grid = document.createElement('div');
-        grid.className = 'da-gallery-grid da-media-grid';
+        grid.className = 'da-media-grid';
 
         const startIdx = (currentPage - 1) * pageSize;
         const pageRecords = filtered.slice(startIdx, startIdx + pageSize);
 
         pageRecords.forEach((record) => {
             const item = document.createElement('div');
-            item.className = `da-gallery-item da-media-card ${selectedIds.has(record.id) ? 'is-selected' : ''}`;
+            item.className = `da-media-card ${selectedIds.has(record.id) ? 'is-selected' : ''}`;
             item.title = `${record.prompt || '无提示词'}\n点击查看全图与生成参数`;
 
             // 缩略图视口
             const img = document.createElement('img');
-            img.className = 'da-gallery-thumb da-media-card__thumb';
+            img.className = 'da-media-card__thumb';
             img.alt = record.prompt || 'Gallery Image';
             img.loading = 'lazy';
 
@@ -604,7 +604,7 @@ export function createGalleryManager(
             if (isBatchMode) {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.className = 'da-gallery-checkbox da-media-card__checkbox';
+                checkbox.className = 'da-media-card__checkbox';
                 checkbox.checked = selectedIds.has(record.id);
                 checkbox.onclick = (e) => {
                     e.stopPropagation();
@@ -623,19 +623,19 @@ export function createGalleryManager(
             // 常驻标星角标
             if (record.isFavorite) {
                 const favBadge = document.createElement('span');
-                favBadge.className = 'da-gallery-fav-badge da-media-card__fav-badge';
+                favBadge.className = 'da-media-card__fav-badge';
                 favBadge.textContent = '⭐';
                 item.appendChild(favBadge);
             }
 
             // 悬停快捷操作栏
             const actions = document.createElement('div');
-            actions.className = 'da-gallery-actions da-media-card__overlay';
+            actions.className = 'da-media-card__overlay';
 
             // 快捷标星/取消标星按钮
             const starBtn = document.createElement('button');
             starBtn.type = 'button';
-            starBtn.className = 'da-gallery-action-btn';
+            starBtn.className = 'da-overlay-btn';
             starBtn.innerHTML = record.isFavorite ? '⭐' : '☆';
             starBtn.title = record.isFavorite ? '取消收藏' : '添加标星收藏';
             starBtn.onclick = async (e) => {
@@ -652,7 +652,7 @@ export function createGalleryManager(
             // 详情按钮
             const infoBtn = document.createElement('button');
             infoBtn.type = 'button';
-            infoBtn.className = 'da-gallery-action-btn';
+            infoBtn.className = 'da-overlay-btn';
             infoBtn.title = '查看元数据与生图参数';
             infoBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
             infoBtn.onclick = (e) => {
@@ -663,7 +663,7 @@ export function createGalleryManager(
             // 删除按钮
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
-            delBtn.className = 'da-gallery-action-btn danger';
+            delBtn.className = 'da-overlay-btn da-overlay-btn--danger';
             delBtn.title = '删除此图片';
             delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
             delBtn.onclick = async (e) => {
@@ -760,7 +760,7 @@ export function createGalleryManager(
     const reload = async () => {
         renderToolbar();
         if (!storage) {
-            streamSection.innerHTML = '<div style="color:var(--da-text-muted);text-align:center;padding:24px;">未挂载本地存储引擎</div>';
+            streamSection.innerHTML = '<div class="da-empty-tip">未挂载本地存储引擎</div>';
             return;
         }
 
@@ -770,7 +770,7 @@ export function createGalleryManager(
             renderFloatingBatchBar();
             renderStream();
         } catch (err: any) {
-            streamSection.innerHTML = `<div style="color:var(--da-error);text-align:center;padding:24px;">读取画廊失败: ${escapeHtml(err?.message || err)}</div>`;
+            streamSection.innerHTML = `<div class="da-empty-tip da-empty-tip--error">读取画廊失败: ${escapeHtml(err?.message || err)}</div>`;
         }
     };
 

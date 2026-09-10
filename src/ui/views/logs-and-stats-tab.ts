@@ -1,0 +1,449 @@
+/**
+ * 日志与统计面板视图 (LogsAndStatsTabView)
+ * 装配生图历史统计看板与系统运行事件日志两组核心卡片
+ */
+
+import { Logger, StatisticsCollector, LogEntry, exportStatisticsJSON, exportStatisticsCSV } from '../../utils';
+import { SettingsStore } from '../../state';
+import { createCard, createCardHeader } from '../layout/container-factory';
+import { FeedbackService } from '../feedback/feedback';
+import { BaseTabView } from '../foundation/tab-view';
+
+export class LogsAndStatsTabView extends BaseTabView {
+    constructor(private readonly _store: SettingsStore) {
+        super();
+        this._buildCards();
+    }
+
+    private _buildCards(): void {
+        this._buildStatisticsCard();
+        this._buildLogsAndExportCard();
+    }
+
+    /** 1. 生图数据统计 */
+    private _buildStatisticsCard(): void {
+        const card = createCard({ hoverable: true });
+        const header = createCardHeader({
+            title: '生图数据统计',
+            description: '查看生图总量、成功率、平均耗时、模型使用与近期趋势'
+        });
+        card.header.appendChild(header);
+
+        const container = document.createElement('div');
+        container.className = 'da-stat-dashboard';
+
+        const renderStatsView = () => {
+            container.innerHTML = '';
+
+            const collector = StatisticsCollector.getInstance();
+            const snap = collector.getSnapshot();
+
+            const totalTasks = snap.totalTasks;
+            const successCount = snap.successCount;
+            const successRate = collector.getSuccessRate();
+            const avgDurationMs = collector.getAverageDuration();
+            const avgSec = (avgDurationMs / 1000).toFixed(1);
+            const minSec = snap.minDurationMs > 0 ? (snap.minDurationMs / 1000).toFixed(1) : '0';
+
+            let lastTimeStr = '暂无记录';
+            if (snap.timeStats.lastTaskAt > 0) {
+                const diffMin = Math.floor((Date.now() - snap.timeStats.lastTaskAt) / 60000);
+                if (diffMin < 1) lastTimeStr = '刚刚';
+                else if (diffMin < 60) lastTimeStr = `${diffMin}分钟前`;
+                else if (diffMin < 1440) lastTimeStr = `${Math.floor(diffMin / 60)}小时前`;
+                else lastTimeStr = new Date(snap.timeStats.lastTaskAt).toISOString().split('T')[0];
+            }
+
+            // 核心指标数据卡片网格
+            const grid = document.createElement('div');
+            grid.className = 'da-stat-grid';
+
+            const createMetricCard = (label: string, val: string, sub: string, isSuccess?: boolean) => {
+                const itemCard = document.createElement('div');
+                itemCard.className = `da-stat-card ${isSuccess ? 'da-stat-card--success' : ''}`.trim();
+
+                const labelEl = document.createElement('div');
+                labelEl.className = 'da-stat-card__label';
+                labelEl.textContent = label;
+
+                const valEl = document.createElement('div');
+                valEl.className = 'da-stat-card__val';
+                valEl.textContent = val;
+
+                const subEl = document.createElement('div');
+                subEl.className = 'da-stat-card__sub';
+                subEl.textContent = sub;
+
+                itemCard.appendChild(labelEl);
+                itemCard.appendChild(valEl);
+                itemCard.appendChild(subEl);
+                return itemCard;
+            };
+
+            grid.appendChild(createMetricCard('累计生图量', `${successCount} 张`, `总任务 ${totalTasks} 次`));
+            grid.appendChild(
+                createMetricCard(
+                    '生图成功率',
+                    totalTasks > 0 ? `${successRate}%` : '100%',
+                    `成功 ${successCount} / 失败 ${snap.errorCount}`,
+                    true
+                )
+            );
+            grid.appendChild(
+                createMetricCard(
+                    '平均生成耗时',
+                    `${avgSec} 秒/张`,
+                    snap.minDurationMs > 0 ? `最快 ${minSec}s · 单张耗时` : '单张耗时'
+                )
+            );
+            grid.appendChild(createMetricCard('最近生图活动', lastTimeStr, '生成活跃度'));
+            container.appendChild(grid);
+
+            // 双列统计分析：常用模型分布与趋势柱状图
+            const analyticsRow = document.createElement('div');
+            analyticsRow.className = 'da-stat-analytics-row';
+
+            // 左侧：常用模型分布
+            const modelSection = document.createElement('div');
+            modelSection.className = 'da-stat-section';
+
+            const modelTitle = document.createElement('div');
+            modelTitle.className = 'da-stat-section__title';
+            modelTitle.textContent = '常用模型分布';
+            modelSection.appendChild(modelTitle);
+
+            const modelList = document.createElement('div');
+            modelList.className = 'da-distribution-list';
+
+            const topModels = collector.getTopItems(snap.paramStats.models, 4);
+            if (topModels.length === 0) {
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'da-empty-tip';
+                emptyEl.textContent = '暂无模型使用记录';
+                modelList.appendChild(emptyEl);
+            } else {
+                topModels.forEach((item) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'da-distribution-item';
+
+                    const infoEl = document.createElement('div');
+                    infoEl.className = 'da-distribution-info';
+
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'da-distribution-name';
+                    nameEl.textContent = item.name;
+                    nameEl.title = item.name;
+
+                    const pctEl = document.createElement('span');
+                    pctEl.className = 'da-distribution-pct';
+                    pctEl.textContent = `${item.percentage}% (${item.count}次)`;
+
+                    infoEl.appendChild(nameEl);
+                    infoEl.appendChild(pctEl);
+
+                    const trackEl = document.createElement('div');
+                    trackEl.className = 'da-distribution-track';
+                    const fillEl = document.createElement('div');
+                    fillEl.className = 'da-distribution-fill';
+                    fillEl.style.width = `${item.percentage}%`;
+                    trackEl.appendChild(fillEl);
+
+                    itemEl.appendChild(infoEl);
+                    itemEl.appendChild(trackEl);
+                    modelList.appendChild(itemEl);
+                });
+            }
+
+            modelSection.appendChild(modelList);
+            analyticsRow.appendChild(modelSection);
+
+            // 右侧：近 7 日产出趋势
+            const trendSection = document.createElement('div');
+            trendSection.className = 'da-stat-section';
+
+            const trendTitle = document.createElement('div');
+            trendTitle.className = 'da-stat-section__title';
+            trendTitle.textContent = '近 7 日产出趋势';
+            trendSection.appendChild(trendTitle);
+
+            const chartEl = document.createElement('div');
+            chartEl.className = 'da-trend-chart';
+
+            const dailyList = collector.getDailyTrend(7);
+            const maxDaily = Math.max(1, ...dailyList.map((d) => d.count));
+
+            dailyList.forEach((item, index) => {
+                const col = document.createElement('div');
+                col.className = 'da-trend-col';
+
+                const countText = document.createElement('div');
+                countText.className = 'da-trend-count';
+                countText.textContent = item.count > 0 ? String(item.count) : '';
+
+                const barWrapper = document.createElement('div');
+                barWrapper.className = 'da-trend-bar-wrapper';
+
+                const bar = document.createElement('div');
+                bar.className = 'da-trend-bar';
+                const heightPct = Math.round((item.count / maxDaily) * 100);
+                bar.style.height = `${Math.max(item.count > 0 ? 8 : 2, heightPct)}%`;
+                if (item.count === 0) {
+                    bar.style.opacity = '0.3';
+                }
+
+                barWrapper.appendChild(bar);
+
+                const dateText = document.createElement('div');
+                dateText.className = 'da-trend-date';
+                dateText.textContent = index === 6 ? '今日' : item.date.substring(5);
+
+                col.appendChild(countText);
+                col.appendChild(barWrapper);
+                col.appendChild(dateText);
+                chartEl.appendChild(col);
+            });
+
+            trendSection.appendChild(chartEl);
+            analyticsRow.appendChild(trendSection);
+            container.appendChild(analyticsRow);
+
+            // 统计报表操作栏
+            const actionsRow = document.createElement('div');
+            actionsRow.className = 'da-stat-dashboard__actions';
+
+            const btnExportJSON = document.createElement('button');
+            btnExportJSON.type = 'button';
+            btnExportJSON.className = 'da-btn da-btn--secondary da-btn--sm';
+            btnExportJSON.textContent = '导出统计数据 (.json)';
+            btnExportJSON.onclick = () => {
+                exportStatisticsJSON(snap);
+                FeedbackService.toastSuccess('生图统计报表已导出 (.json)');
+            };
+
+            const btnExportCSV = document.createElement('button');
+            btnExportCSV.type = 'button';
+            btnExportCSV.className = 'da-btn da-btn--secondary da-btn--sm';
+            btnExportCSV.textContent = '导出生成趋势 (.csv)';
+            btnExportCSV.onclick = () => {
+                exportStatisticsCSV(snap);
+                FeedbackService.toastSuccess('生图趋势报表已导出 (.csv)');
+            };
+
+            const btnReset = document.createElement('button');
+            btnReset.type = 'button';
+            btnReset.className = 'da-btn da-btn--danger da-btn--sm';
+            btnReset.textContent = '重置统计数据';
+            btnReset.onclick = async () => {
+                const confirmed = await FeedbackService.confirm({
+                    title: '重置生图统计确认',
+                    message: '确定要清空所有历史生图统计数据吗？此操作无法撤销。',
+                    confirmText: '确认清空'
+                });
+                if (confirmed) {
+                    await collector.reset();
+                    FeedbackService.toastSuccess('生图历史统计已成功清空');
+                    renderStatsView();
+                }
+            };
+
+            actionsRow.appendChild(btnExportJSON);
+            actionsRow.appendChild(btnExportCSV);
+            actionsRow.appendChild(btnReset);
+            container.appendChild(actionsRow);
+        };
+
+        renderStatsView();
+        card.body.appendChild(container);
+        this._root.appendChild(card.root);
+    }
+
+    /** 2. 系统日志与排障简报导出 */
+    private _buildLogsAndExportCard(): void {
+        const card = createCard({ hoverable: true });
+        const header = createCardHeader({
+            title: '系统日志',
+            description: '实时查看与过滤插件运行事件日志，支持导出排障简报'
+        });
+        card.header.appendChild(header);
+
+        // 终端过滤工具栏
+        const toolbar = document.createElement('div');
+        toolbar.className = 'da-filter-bar';
+
+        const leftGroup = document.createElement('div');
+        leftGroup.className = 'da-filter-bar__left';
+
+        const levelSelect = document.createElement('select');
+        levelSelect.className = 'da-select da-select--sm';
+        levelSelect.innerHTML = `
+            <option value="ALL">全部级别 (ALL)</option>
+            <option value="INFO">信息 (INFO)</option>
+            <option value="WARN">警告 (WARN)</option>
+            <option value="ERROR">错误 (ERROR)</option>
+            <option value="DEBUG">调试 (DEBUG)</option>
+        `;
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'da-input da-input--sm da-input--search';
+        searchInput.placeholder = '过滤日志关键词 (模块/内容)...';
+
+        leftGroup.appendChild(levelSelect);
+        leftGroup.appendChild(searchInput);
+
+        const rightGroup = document.createElement('div');
+        rightGroup.className = 'da-filter-bar__right';
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.type = 'button';
+        refreshBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        refreshBtn.textContent = '刷新日志';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        clearBtn.textContent = '清屏 (保留缓冲)';
+        clearBtn.title = '仅清空视口渲染，内存中的日志缓冲完整保留，随时可刷新恢复';
+
+        rightGroup.appendChild(refreshBtn);
+        rightGroup.appendChild(clearBtn);
+
+        toolbar.appendChild(leftGroup);
+        toolbar.appendChild(rightGroup);
+        card.body.appendChild(toolbar);
+
+        // 日志终端流视口
+        const terminalBox = document.createElement('div');
+        terminalBox.className = 'da-log-terminal';
+
+        const renderLogStream = () => {
+            terminalBox.innerHTML = '';
+            const levelVal = levelSelect.value;
+            const searchVal = searchInput.value.trim().toLowerCase();
+
+            let entries = [...Logger.getGlobalBuffer().getAll()];
+            if (levelVal !== 'ALL') {
+                entries = entries.filter((e: LogEntry) => e.level === levelVal);
+            }
+            if (searchVal) {
+                entries = entries.filter((e: LogEntry) => {
+                    const line = `${e.namespace} ${e.message} ${e.level}`.toLowerCase();
+                    return line.includes(searchVal);
+                });
+            }
+
+            if (entries.length === 0) {
+                terminalBox.innerHTML = '<div class="da-empty-tip">暂无匹配的系统运行日志</div>';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            entries.forEach((e: LogEntry) => {
+                const line = document.createElement('div');
+                line.className = 'da-log-line';
+
+                const ts = new Date(e.timestamp).toTimeString().split(' ')[0];
+                const levelClass = `da-log-level da-log-level--${e.level.toLowerCase()}`;
+
+                const tsSpan = document.createElement('span');
+                tsSpan.className = 'da-log-timestamp';
+                tsSpan.textContent = `[${ts}]`;
+
+                const lvlSpan = document.createElement('span');
+                lvlSpan.className = levelClass;
+                lvlSpan.textContent = `[${e.level}]`;
+
+                const nsSpan = document.createElement('span');
+                nsSpan.className = 'da-log-namespace';
+                nsSpan.textContent = `[${e.namespace}]`;
+
+                const msgSpan = document.createElement('span');
+                msgSpan.className = 'da-log-msg';
+                msgSpan.textContent = e.message;
+
+                line.appendChild(tsSpan);
+                line.appendChild(lvlSpan);
+                line.appendChild(nsSpan);
+                line.appendChild(msgSpan);
+
+                fragment.appendChild(line);
+            });
+
+            terminalBox.appendChild(fragment);
+            terminalBox.scrollTop = terminalBox.scrollHeight;
+        };
+
+        searchInput.oninput = () => renderLogStream();
+        levelSelect.onchange = () => renderLogStream();
+        refreshBtn.onclick = () => renderLogStream();
+        clearBtn.onclick = () => {
+            terminalBox.innerHTML = '<div class="da-empty-tip">日志视口已清屏 (内存历史依然完整保留，点击“刷新日志”可随时恢复)</div>';
+        };
+
+        renderLogStream();
+        card.body.appendChild(terminalBox);
+
+        // 排障报告导出操作栏
+        const exportRow = document.createElement('div');
+        exportRow.className = 'da-card-action-row';
+
+        const exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'da-btn da-btn--primary da-btn--sm';
+        exportBtn.textContent = '导出排障报告';
+        exportBtn.onclick = () => {
+            const rawSettings = this._store.exportJson(true);
+            const statsSnapshot = StatisticsCollector.getInstance().getSnapshot();
+            const logsSnapshot = Logger.getGlobalBuffer().getAll().slice(-100);
+
+            const report = {
+                timestamp: new Date().toISOString(),
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+                activeProvider: this._store.get('activeProvider'),
+                statistics: statsSnapshot,
+                settings: rawSettings,
+                logs: logsSnapshot
+            };
+
+            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `st-drawassistant-logs-${Date.now()}.json`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            FeedbackService.toastSuccess('已导出排障报告');
+        };
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        copyBtn.textContent = '复制简报';
+        copyBtn.onclick = () => {
+            const stats = StatisticsCollector.getInstance().getSnapshot();
+            const summary = [
+                `### ST-DrawAssistant 运行与排障简报`,
+                `- **生成时间**: ${new Date().toLocaleString()}`,
+                `- **当前生图引擎**: ${this._store.get('activeProvider') || '未指定'}`,
+                `- **生图通信链路**: 浏览器直连`,
+                `- **生图概览**: 成功 ${stats.successCount} / 失败 ${stats.errorCount} (成功率 ${StatisticsCollector.getInstance().getSuccessRate()}%)`,
+                `- **平均生成耗时**: ${(StatisticsCollector.getInstance().getAverageDuration() / 1000).toFixed(1)} 秒/张`,
+                `- **宿主环境**: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'Node.js'}`
+            ].join('\n');
+
+            if (navigator?.clipboard?.writeText) {
+                void navigator.clipboard.writeText(summary).then(() => {
+                    FeedbackService.toastSuccess('排障简报已复制到剪贴板');
+                });
+            } else {
+                FeedbackService.toastSuccess('排障简报已生成');
+            }
+        };
+
+        exportRow.appendChild(exportBtn);
+        exportRow.appendChild(copyBtn);
+        card.body.appendChild(exportRow);
+
+        this._root.appendChild(card.root);
+    }
+}

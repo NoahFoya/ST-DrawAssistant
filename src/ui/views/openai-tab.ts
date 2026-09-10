@@ -74,6 +74,7 @@ export class OpenAITabView extends BaseTabView {
     private _stepsInputEl?: HTMLInputElement;
     private _cfgInputEl?: HTMLInputElement;
     private _seedInputEl?: HTMLInputElement;
+    private _extraInputEl?: HTMLInputElement;
 
     private _drawingToolbarHandle: any = null;
     private _drawingProfiles: OpenAIPresetItem<OpenAIDrawingProfileData>[] = [];
@@ -84,7 +85,7 @@ export class OpenAITabView extends BaseTabView {
         driverRegistry?: DriverRegistry,
         private readonly _events?: TypedEventBus<CoreEventMap>
     ) {
-        super('da-openai-tab');
+        super();
         this._driverRegistry = driverRegistry;
 
         const stored = _mainStore.getEngineConfig('openai') as Partial<OpenAIEngineConfig> | undefined;
@@ -157,6 +158,42 @@ export class OpenAITabView extends BaseTabView {
         const current = this._extractCurrentDrawingData();
         const isDirty = JSON.stringify(current) !== JSON.stringify(this._activeDrawingBaseline);
         this._drawingToolbarHandle.setDirty?.(isDirty);
+        this._checkFieldDirty();
+    }
+
+    private _checkFieldDirty(): void {
+        const base = this._activeDrawingBaseline;
+        const curData = this._extractCurrentDrawingData();
+
+        const modelDirty = !!base && curData.model !== base.model;
+        this._modelSelectEl?.classList.toggle('is-dirty', modelDirty);
+        this._customModelInputEl?.classList.toggle('is-dirty', modelDirty);
+
+        const widthDirty = !!base && curData.width !== base.width;
+        this._widthInputEl?.classList.toggle('is-dirty', widthDirty);
+        const heightDirty = !!base && curData.height !== base.height;
+        this._heightInputEl?.classList.toggle('is-dirty', heightDirty);
+
+        const qualityDirty = !!base && curData.quality !== base.quality;
+        this._qualitySelectEl?.classList.toggle('is-dirty', qualityDirty);
+
+        const styleDirty = !!base && curData.style !== base.style;
+        this._styleSelectEl?.classList.toggle('is-dirty', styleDirty);
+
+        const negDirty = !!base && (curData.negativePrompt || '') !== (base.negativePrompt || '');
+        this._negPromptInputEl?.classList.toggle('is-dirty', negDirty);
+
+        const stepsDirty = !!base && curData.steps !== base.steps;
+        this._stepsInputEl?.classList.toggle('is-dirty', stepsDirty);
+
+        const cfgDirty = !!base && curData.cfgScale !== base.cfgScale;
+        this._cfgInputEl?.classList.toggle('is-dirty', cfgDirty);
+
+        const seedDirty = !!base && curData.seed !== base.seed;
+        this._seedInputEl?.classList.toggle('is-dirty', seedDirty);
+
+        const extraDirty = !!base && (curData.extraBodyJson || '') !== (base.extraBodyJson || '');
+        this._extraInputEl?.classList.toggle('is-dirty', extraDirty);
     }
 
     private _buildCards(): void {
@@ -201,14 +238,13 @@ export class OpenAITabView extends BaseTabView {
                     this._engineStore.set('apiKey', newSettings.apiKey);
                 }
             },
-            onTestConnection: async (provider, settings, btn) => {
-                btn.disabled = true;
-                btn.textContent = '测试中...';
-
+            onTestConnection: async (provider, settings, _btn) => {
+                this._serviceCard?.setStatus('testing');
                 try {
                     const driver = this._driverRegistry?.get('openai');
                     const res = await driver?.checkHealth();
                     if (res?.ok) {
+                        this._serviceCard?.setStatus('success');
                         this._serviceCard?.updateStatusBadge(res.latencyMs);
                         settings.lastLatencyMs = res.latencyMs;
                         settings.lastConnectedAt = Date.now();
@@ -223,13 +259,26 @@ export class OpenAITabView extends BaseTabView {
                         // 自动触发同步远端模型目录
                         void this._syncModelsForProvider(provider, settings, true);
                     } else {
-                        FeedbackService.toastError(`连接失败: ${res?.message || '无法访问服务端点'}`);
+                        const errMsg = res?.message || '无法访问服务端点';
+                        const isAuthError = /token|auth|401|key|密钥|令牌/i.test(errMsg);
+                        this._serviceCard?.setStatus('error', '连接失败');
+                        if (isAuthError) {
+                            this._serviceCard?.setError(true, `已失效：${errMsg}`, 'key');
+                        } else {
+                            this._serviceCard?.setError(true, `已失效：${errMsg}`, 'url');
+                        }
+                        FeedbackService.toastError(`连接失败: ${errMsg}`);
                     }
                 } catch (e: any) {
-                    FeedbackService.toastError(`测试异常: ${e?.message || e}`);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = '测试连接';
+                    const errMsg = e?.message || String(e);
+                    const isAuthError = /token|auth|401|key|密钥|令牌/i.test(errMsg);
+                    this._serviceCard?.setStatus('error', '测试异常');
+                    if (isAuthError) {
+                        this._serviceCard?.setError(true, `已失效：${errMsg}`, 'key');
+                    } else {
+                        this._serviceCard?.setError(true, `已失效：${errMsg}`, 'url');
+                    }
+                    FeedbackService.toastError(`测试异常: ${errMsg}`);
                 }
             },
             onSyncModels: async (provider, settings, btn) => {
@@ -306,6 +355,7 @@ export class OpenAITabView extends BaseTabView {
                     this._engineStore.update(preset.data as any);
                     this._updateProfileFields(preset.data);
                     this._drawingToolbarHandle?.setDirty?.(false);
+                    this._checkFieldDirty();
                 }
             }
         });
@@ -317,6 +367,7 @@ export class OpenAITabView extends BaseTabView {
                     await drawingAdapter.saveProfile(id, data);
                     this._activeDrawingBaseline = JSON.parse(JSON.stringify(data));
                     this._drawingToolbarHandle?.setDirty?.(false);
+                    this._checkFieldDirty();
                 }
             },
             getCurrentData: () => this._extractCurrentDrawingData(),
@@ -335,6 +386,7 @@ export class OpenAITabView extends BaseTabView {
                     this._engineStore.update(this._activeDrawingBaseline as any);
                     this._updateProfileFields(this._activeDrawingBaseline);
                     this._drawingToolbarHandle?.setDirty?.(false);
+                    this._checkFieldDirty();
                 }
             }
         });
@@ -360,8 +412,8 @@ export class OpenAITabView extends BaseTabView {
 
         const modelRow = createRow(['left', 'right'], { align: 'center', divided: true });
         modelRow.slots[0].appendChild(createFieldLabel({
-            title: '模型选择',
-            description: '选择常用推荐模型或远端探测拉取到的可用模型'
+            title: '生图模型 (Model)',
+            helpTooltip: '选择常用推荐模型或远端探测拉取到的可用模型。'
         }));
 
         this._modelSelectEl = document.createElement('select');
@@ -387,8 +439,8 @@ export class OpenAITabView extends BaseTabView {
 
         const customModelRow = createRow(['left', 'right'], { align: 'center' });
         customModelRow.slots[0].appendChild(createFieldLabel({
-            title: '手动指定模型',
-            description: '直接输入自定义或私有微调模型完整标识'
+            title: '自定义模型 ID',
+            helpTooltip: '直接输入自定义或私有微调模型完整标识。'
         }));
 
         this._customModelInputEl = document.createElement('input');
@@ -429,8 +481,7 @@ export class OpenAITabView extends BaseTabView {
 
         const presetRow = createRow(['left', 'right'], { align: 'center', divided: true });
         presetRow.slots[0].appendChild(createFieldLabel({
-            title: '常用比例预设',
-            description: '快速选择标准化画幅尺寸'
+            title: '分辨率预设'
         }));
 
         this._resPresetSelectEl = document.createElement('select');
@@ -455,6 +506,7 @@ export class OpenAITabView extends BaseTabView {
                 if (this._widthInputEl) this._widthInputEl.value = String(w);
                 if (this._heightInputEl) this._heightInputEl.value = String(h);
                 this._updateCurrentProfile({ width: w, height: h, sizePreset: val });
+                this._checkFieldDirty();
             }
         });
 
@@ -463,20 +515,16 @@ export class OpenAITabView extends BaseTabView {
 
         const customSizeRow = createRow(['left', 'right'], { align: 'center' });
         customSizeRow.slots[0].appendChild(createFieldLabel({
-            title: '分辨率数值 (宽 × 高)',
-            description: '精确像素尺寸 (常见推荐: 1024x1024 / 1792x1024)'
+            title: '生成尺寸 (宽 × 高)',
+            helpTooltip: '精确像素尺寸 (常见推荐: 1024x1024 / 1792x1024)。'
         }));
 
         const sizeContainer = document.createElement('div');
-        sizeContainer.style.display = 'flex';
-        sizeContainer.style.alignItems = 'center';
-        sizeContainer.style.gap = '8px';
-        sizeContainer.style.width = '100%';
+        sizeContainer.className = 'da-input-group';
 
         this._widthInputEl = document.createElement('input');
         this._widthInputEl.type = 'number';
-        this._widthInputEl.className = 'da-input da-input--number';
-        this._widthInputEl.style.flex = '1';
+        this._widthInputEl.className = 'da-input da-input--number da-flex-1';
         this._widthInputEl.min = '256';
         this._widthInputEl.max = '4096';
         this._widthInputEl.step = '64';
@@ -485,13 +533,11 @@ export class OpenAITabView extends BaseTabView {
 
         const xLabel = document.createElement('span');
         xLabel.textContent = '×';
-        xLabel.style.fontWeight = 'bold';
-        xLabel.style.color = 'var(--da-text-muted)';
+        xLabel.className = 'da-text-bold da-text-muted';
 
         this._heightInputEl = document.createElement('input');
         this._heightInputEl.type = 'number';
-        this._heightInputEl.className = 'da-input da-input--number';
-        this._heightInputEl.style.flex = '1';
+        this._heightInputEl.className = 'da-input da-input--number da-flex-1';
         this._heightInputEl.min = '256';
         this._heightInputEl.max = '4096';
         this._heightInputEl.step = '64';
@@ -524,7 +570,7 @@ export class OpenAITabView extends BaseTabView {
         this._qualityRowEl = qualityRow.root;
         qualityRow.slots[0].appendChild(createFieldLabel({
             title: '图像画质 (Quality)',
-            description: 'DALL-E 3、Grok 等服务支持的画质精度等级'
+            helpTooltip: 'DALL-E 3、Grok 等服务支持的画质精度等级。'
         }));
 
         this._qualitySelectEl = document.createElement('select');
@@ -545,7 +591,7 @@ export class OpenAITabView extends BaseTabView {
         this._styleRowEl = styleRow.root;
         styleRow.slots[0].appendChild(createFieldLabel({
             title: '画面风格 (Style)',
-            description: '画面表现风格倾向 (vivid 生动戏剧化 / natural 自然纪实)'
+            helpTooltip: '画面表现风格倾向 (vivid 生动戏剧化 / natural 自然纪实)。'
         }));
 
         this._styleSelectEl = document.createElement('select');
@@ -573,7 +619,7 @@ export class OpenAITabView extends BaseTabView {
     /** 分组 4: 开源扩散模型进阶参数 (硅基流动 / Together 等) */
     private _buildDiffusionControlsGroup(): HTMLElement {
         const group = createSectionGroup({
-            title: '开源扩散参数 (FLUX / Kolors / SD3.5)',
+            title: '开源扩散模型参数 (FLUX / Kolors / SD)',
             collapsible: true,
             defaultOpen: true
         });
@@ -585,8 +631,8 @@ export class OpenAITabView extends BaseTabView {
         // 1. 负向提示词
         const negRow = createRow(['left', 'right'], { align: 'top', divided: true });
         negRow.slots[0].appendChild(createFieldLabel({
-            title: '方案专属负向词',
-            description: '仅在当前供应商支持负向提示词时生效 (如 Kolors/SD 等)'
+            title: '负向提示词 (Negative Prompt)',
+            helpTooltip: '仅在当前提供商支持负向提示词时生效 (如 Kolors/SD 等)。'
         }));
 
         this._negPromptInputEl = document.createElement('textarea');
@@ -603,20 +649,16 @@ export class OpenAITabView extends BaseTabView {
         // 2. 采样步数与 CFG Scale
         const numRow = createRow(['left', 'right'], { align: 'center', divided: true });
         numRow.slots[0].appendChild(createFieldLabel({
-            title: '步数与引导系数',
-            description: 'Steps (推理步数) 与 CFG (提示词引导系数)'
+            title: '推理步数与引导系数',
+            helpTooltip: '推理步数 (Steps) 与提示词引导系数 (CFG)。'
         }));
 
         const numContainer = document.createElement('div');
-        numContainer.style.display = 'flex';
-        numContainer.style.alignItems = 'center';
-        numContainer.style.gap = '8px';
-        numContainer.style.width = '100%';
+        numContainer.className = 'da-input-group';
 
         this._stepsInputEl = document.createElement('input');
         this._stepsInputEl.type = 'number';
-        this._stepsInputEl.className = 'da-input da-input--number';
-        this._stepsInputEl.style.flex = '1';
+        this._stepsInputEl.className = 'da-input da-input--number da-flex-1';
         this._stepsInputEl.min = '1';
         this._stepsInputEl.max = '100';
         this._stepsInputEl.value = String(currentProfile?.steps ?? s.steps ?? 20);
@@ -627,8 +669,7 @@ export class OpenAITabView extends BaseTabView {
 
         this._cfgInputEl = document.createElement('input');
         this._cfgInputEl.type = 'number';
-        this._cfgInputEl.className = 'da-input da-input--number';
-        this._cfgInputEl.style.flex = '1';
+        this._cfgInputEl.className = 'da-input da-input--number da-flex-1';
         this._cfgInputEl.min = '0';
         this._cfgInputEl.max = '30';
         this._cfgInputEl.step = '0.5';
@@ -647,19 +688,15 @@ export class OpenAITabView extends BaseTabView {
         const seedRow = createRow(['left', 'right'], { align: 'center' });
         seedRow.slots[0].appendChild(createFieldLabel({
             title: '随机种子 (Seed)',
-            description: '-1 表示每次生成使用随机数种子'
+            helpTooltip: '-1 表示每次生成使用随机数种子。'
         }));
 
         const seedContainer = document.createElement('div');
-        seedContainer.style.display = 'flex';
-        seedContainer.style.alignItems = 'center';
-        seedContainer.style.gap = '6px';
-        seedContainer.style.width = '100%';
+        seedContainer.className = 'da-input-group';
 
         this._seedInputEl = document.createElement('input');
         this._seedInputEl.type = 'number';
-        this._seedInputEl.className = 'da-input da-input--number';
-        this._seedInputEl.style.flex = '1';
+        this._seedInputEl.className = 'da-input da-input--number da-flex-1';
         this._seedInputEl.value = String(currentProfile?.seed ?? s.seed ?? -1);
         this._seedInputEl.addEventListener('change', () => {
             this._updateCurrentProfile({ seed: Number(this._seedInputEl!.value) });
@@ -667,10 +704,9 @@ export class OpenAITabView extends BaseTabView {
 
         const randomSeedBtn = document.createElement('button');
         randomSeedBtn.type = 'button';
-        randomSeedBtn.className = 'da-btn da-btn--secondary';
+        randomSeedBtn.className = 'da-btn da-btn--secondary da-btn--sm da-nowrap';
         randomSeedBtn.textContent = '🎲 随机';
         randomSeedBtn.title = '重置为 -1 随机种子';
-        randomSeedBtn.style.padding = '4px 8px';
         randomSeedBtn.onclick = () => {
             this._seedInputEl!.value = '-1';
             this._updateCurrentProfile({ seed: -1 });
@@ -698,7 +734,7 @@ export class OpenAITabView extends BaseTabView {
         const extraRow = createRow(['left', 'right'], { align: 'center' });
         extraRow.slots[0].appendChild(createFieldLabel({
             title: '方案附加请求载荷 (JSON)',
-            description: '合并至 POST 请求体的底层 JSON 参数'
+            helpTooltip: '合并至 POST 请求体的底层 JSON 参数。'
         }));
 
         const extraInput = document.createElement('input');
@@ -709,6 +745,7 @@ export class OpenAITabView extends BaseTabView {
         extraInput.addEventListener('change', () => {
             this._updateCurrentProfile({ extraBodyJson: extraInput.value.trim() });
         });
+        this._extraInputEl = extraInput;
         extraRow.slots[1].appendChild(extraInput);
         group.body.appendChild(extraRow.root);
 
@@ -867,7 +904,11 @@ export class OpenAITabView extends BaseTabView {
         if (this._negPromptInputEl) {
             this._negPromptInputEl.value = profile.negativePrompt || '';
         }
+        if (this._extraInputEl) {
+            this._extraInputEl.value = profile.extraBodyJson || '';
+        }
         this._updateResolutionPresetMatch();
+        this._checkFieldDirty();
     }
 
     private _getDrawingProfiles(): OpenAIPresetItem<OpenAIDrawingProfileData>[] {
@@ -910,13 +951,17 @@ export class OpenAITabView extends BaseTabView {
 
     private _updateCurrentProfile(partial: Partial<OpenAIDrawingProfileData>): void {
         this._engineStore.update(partial as any);
+        this._checkFieldDirty();
     }
 
     private _handleDimensionChange(): void {
         const w = Number(this._widthInputEl?.value) || 1024;
         const h = Number(this._heightInputEl?.value) || 1024;
-        this._updateResolutionPresetMatch();
-        this._updateCurrentProfile({ width: w, height: h });
+        if (this._resPresetSelectEl) {
+            this._resPresetSelectEl.value = 'custom';
+        }
+        this._updateCurrentProfile({ width: w, height: h, sizePreset: 'custom' });
+        this._checkFieldDirty();
     }
 
     private _updateResolutionPresetMatch(): void {
@@ -947,10 +992,12 @@ export class OpenAITabView extends BaseTabView {
                     this._engineStore.update(matched.data as any);
                     this._updateProfileFields(matched.data);
                     this._drawingToolbarHandle?.setDirty?.(false);
+                    this._checkFieldDirty();
                 }
             } else {
                 this._engineStore.set('activeDrawingProfileId', '');
                 this._activeDrawingBaseline = null;
+                this._checkFieldDirty();
             }
             this._drawingToolbarHandle?.refreshPresets?.(this._drawingProfiles, this._engineStore.get('activeDrawingProfileId'));
         } catch (err) {

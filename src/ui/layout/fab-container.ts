@@ -174,7 +174,7 @@ export class FABContainer implements IDisposable {
 
         fab.innerHTML = `
             <span class="da-fab-icon"></span>
-            <span class="da-fab-badge" style="display: none;"></span>
+            <span class="da-fab-badge da-hidden"></span>
         `;
         ThemeService.applyCurrentThemeToNode(fab);
 
@@ -208,7 +208,7 @@ export class FABContainer implements IDisposable {
         const presetIcon = this._store.get('fabPresetIcon');
 
         if (customIcon) {
-            iconSlot.innerHTML = `<img src="${customIcon}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;pointer-events:none;" alt="FAB Icon" />`;
+            iconSlot.innerHTML = `<img src="${customIcon}" alt="FAB Icon" />`;
         } else {
             iconSlot.innerHTML = getPresetSvg(presetIcon);
         }
@@ -303,7 +303,7 @@ export class FABContainer implements IDisposable {
             if (!isDragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
                 isDragging = true;
                 this._justDragged = true;
-                el.classList.add('dragging');
+                el.classList.add('is-dragging');
             }
 
             if (isDragging && typeof window !== 'undefined') {
@@ -322,7 +322,7 @@ export class FABContainer implements IDisposable {
 
         const endDrag = () => {
             if (isDragging) {
-                el.classList.remove('dragging');
+                el.classList.remove('is-dragging');
                 const rect = el.getBoundingClientRect();
                 const pos = {
                     top: Math.round(rect.top),

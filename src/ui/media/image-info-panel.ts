@@ -159,7 +159,7 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
     };
 
     const panel = document.createElement('div');
-    panel.className = 'da-info-panel da-inspect-modal st-da-root';
+    panel.className = 'da-inspect-modal st-da-root';
     ThemeService.applyCurrentThemeToNode(panel);
     backdrop.appendChild(panel);
 
@@ -519,9 +519,8 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
         rightCol.appendChild(previewBox);
     } else {
         const noImgCard = document.createElement('div');
-        noImgCard.className = 'da-empty-tip';
-        noImgCard.style.cssText = 'padding: 30px; text-align: center; color: var(--da-text-muted); font-size: 0.88em;';
-        noImgCard.innerHTML = `暂无图像文件预览<br><span style="font-size:0.8em;opacity:0.7">（图像数据已离线或待载入）</span>`;
+        noImgCard.className = 'da-empty-tip da-empty-tip--card';
+        noImgCard.innerHTML = `暂无图像文件预览<div class="da-empty-tip__sub">（图像数据已离线或待载入）</div>`;
         rightCol.appendChild(noImgCard);
     }
 

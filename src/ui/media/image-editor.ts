@@ -124,8 +124,7 @@ export function openImageCropperModal(options: ImageCropperOptions): IDisposable
     slider.max = '3.0';
     slider.step = '0.05';
     slider.value = '1.0';
-    slider.className = 'da-input-range';
-    slider.style.flex = '1';
+    slider.className = 'da-slider-range da-flex-1';
     slider.oninput = () => {
         scale = parseFloat(slider.value) || 1.0;
         scaleLabel.textContent = `${Math.round(scale * 100)}%`;
@@ -425,7 +424,7 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposabl
     }, { passive: false });
 
     const toolbar = document.createElement('div');
-    toolbar.className = 'da-inpaint-toolbar';
+    toolbar.className = 'da-filter-bar';
 
     const brushSizeInput = document.createElement('input');
     brushSizeInput.type = 'number';

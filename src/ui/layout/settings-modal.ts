@@ -23,7 +23,7 @@ export const TAB_SVG_ICONS: Record<string, string> = {
     novelai: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg>`,
     theme: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"></path></svg>`,
     fab: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>`,
-    diagnostics: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>`,
+    logs: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`,
     gallery: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
     about: `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
 };
@@ -43,7 +43,7 @@ export interface SettingsModalOptions {
     modalService: IModalService;
     /** 插件设置存储 */
     store: SettingsStore;
-    /** 生图引擎驱动注册中心 (可选，供系统诊断面板检测连通性) */
+    /** 生图引擎驱动注册中心 (可选，用于底栏活动驱动连接状态与心跳探测) */
     drivers?: DriverRegistry;
     /** 插件发布版本号 (可选) */
     version?: string;
@@ -99,7 +99,7 @@ export class SettingsModal implements IDisposable {
         const header = this.renderHeaderBar();
         dialog.appendChild(header);
 
-        // 挂载顶置未保存脏数据浮动提醒条
+        // 挂载未保存修改提醒条
         const floatingNotice = createUnsavedFloatingNotice();
         dialog.appendChild(floatingNotice.element);
 
@@ -379,17 +379,11 @@ export class SettingsModal implements IDisposable {
             label.textContent = tab.title;
             itemBtn.appendChild(label);
 
-            // 未保存修改黄色指示圆点
+            // 未保存修改指示圆点
             if (isTabDirty) {
                 const dirtyDot = document.createElement('span');
-                dirtyDot.className = 'da-status-dot da-status-dot--warning da-tab-dirty-dot';
+                dirtyDot.className = 'da-sidebar-item__dirty-dot';
                 dirtyDot.title = '此面板有未保存的修改';
-                dirtyDot.style.marginLeft = 'auto';
-                dirtyDot.style.width = '6px';
-                dirtyDot.style.height = '6px';
-                dirtyDot.style.borderRadius = '50%';
-                dirtyDot.style.backgroundColor = 'var(--da-warning, #f59e0b)';
-                dirtyDot.style.boxShadow = '0 0 4px var(--da-warning, #f59e0b)';
                 itemBtn.appendChild(dirtyDot);
             }
 

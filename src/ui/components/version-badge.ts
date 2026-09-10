@@ -28,18 +28,31 @@ export function createVersionBadge(options: VersionBadgeOptions = {}): VersionBa
     el.appendChild(textSpan);
 
     const dotSpan = document.createElement('span');
-    dotSpan.className = 'da-version-update-indicator';
+    dotSpan.className = 'da-version-update-dot da-version-update-indicator';
     dotSpan.style.display = options.showUpdateTag ? 'inline-block' : 'none';
     el.appendChild(dotSpan);
 
+    if (options.showUpdateTag) {
+        el.classList.add('da-version-badge--has-update');
+    }
+
     if (options.onClick) {
         el.style.cursor = 'pointer';
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
         el.onclick = options.onClick;
+        el.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                options.onClick!();
+            }
+        };
     }
 
     return Object.assign(el, {
         setUpdateTag: (show: boolean) => {
             dotSpan.style.display = show ? 'inline-block' : 'none';
+            el.classList.toggle('da-version-badge--has-update', show);
         },
         dispose: () => {
             el.remove();

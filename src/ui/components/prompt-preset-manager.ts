@@ -8,14 +8,11 @@ import { FeedbackService } from '../feedback/feedback';
 import {
     createCard,
     createCardHeader,
-    createRow,
     createCol,
     createFieldLabel
 } from '../layout/container-factory';
 import {
-    createTextInput,
     createTextarea,
-    TextInputHandle,
     TextareaHandle
 } from './input-controls';
 import {
@@ -64,11 +61,14 @@ export interface PromptPresetManagerHandle extends HTMLElement, IDisposable {
  */
 export function createPromptPresetManager(options: PromptPresetManagerOptions): PromptPresetManagerHandle {
     const card = createCard({ hoverable: true });
-    const header = createCardHeader({ title: options.title || '提示词预设管理器' });
+    const header = createCardHeader({
+        title: options.title || '提示词预设管理器',
+        description: '管理全局或引擎独立的起手式、负向词与 LoRA 模型绑定方案'
+    });
     card.header.appendChild(header);
 
-    let prefixInput: TextInputHandle;
-    let suffixInput: TextInputHandle;
+    let prefixInput: TextareaHandle;
+    let suffixInput: TextareaHandle;
     let negativeInput: TextareaHandle;
     let loraManagerEl: LoraManagerElement | null = null;
     let currentCachedLoras = [...(options.cachedLoras || [])];
@@ -98,10 +98,28 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
         return JSON.stringify(a || {}) === JSON.stringify(b || {});
     };
 
+    const updateFieldDirty = (input?: TextareaHandle, currentVal?: string, baselineVal?: string) => {
+        if (!input) return;
+        const cur = (currentVal || '').trim();
+        const base = (baselineVal || '').trim();
+        const isDirty = cur !== base;
+        input.setDirty?.(isDirty);
+        if (isDirty) {
+            input.inputElement.title = '已修改';
+        } else {
+            input.inputElement.removeAttribute('title');
+        }
+    };
+
     const checkDirty = () => {
         const draft = getCurrentDraftData();
         const isDirty = !isDataEqual(draft, activeBaseline);
         toolbar.setDirty?.(isDirty);
+
+        // 各文本框局部参数级状态反馈 (无图标，仅琥珀色边框与悬浮提示)
+        updateFieldDirty(prefixInput, draft.promptPrefix, activeBaseline.promptPrefix);
+        updateFieldDirty(suffixInput, draft.promptSuffix, activeBaseline.promptSuffix);
+        updateFieldDirty(negativeInput, draft.negativePrompt, activeBaseline.negativePrompt);
     };
 
     const applyProfileToUI = (data?: PromptProfileData) => {
@@ -110,9 +128,21 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
         const negative = data?.negativePrompt || '';
         const loras = data?.loras || [];
 
-        if (prefixInput) prefixInput.setValue(prefix);
-        if (suffixInput) suffixInput.setValue(suffix);
-        if (negativeInput) negativeInput.setValue(negative);
+        if (prefixInput) {
+            prefixInput.setValue(prefix);
+            prefixInput.setDirty?.(false);
+            prefixInput.inputElement.removeAttribute('title');
+        }
+        if (suffixInput) {
+            suffixInput.setValue(suffix);
+            suffixInput.setDirty?.(false);
+            suffixInput.inputElement.removeAttribute('title');
+        }
+        if (negativeInput) {
+            negativeInput.setValue(negative);
+            negativeInput.setDirty?.(false);
+            negativeInput.inputElement.removeAttribute('title');
+        }
         if (loraManagerEl) {
             loraManagerEl.update?.(loras, currentCachedLoras, isExtraWeights);
         }
@@ -161,42 +191,46 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
 
     const disposables = new DisposableStore();
 
-    // 2. 正向提示词前缀
-    const prefixRow = createRow(['left', 'right'], { align: 'center', divided: true });
-    prefixRow.slots[0].appendChild(createFieldLabel({
+    // 2. 正向提示词前缀 (全宽垂直多行编辑框)
+    const prefixCol = createCol(2, { gap: '6px' });
+    prefixCol.root.classList.add('da-row--divided');
+    prefixCol.slots[0].appendChild(createFieldLabel({
         title: '正向提示词前缀',
-        description: '自动置于生成提示词最前方的通用起手式'
+        helpTooltip: '拼接在正向提示词最前方'
     }));
-    prefixInput = createTextInput({
+    prefixInput = createTextarea({
         value: initialActive?.promptPrefix || '',
         placeholder: 'masterpiece, best quality, ...',
+        rows: 2,
         onChange: () => checkDirty()
     });
     disposables.add(prefixInput);
-    prefixRow.slots[1].appendChild(prefixInput);
-    card.body.appendChild(prefixRow.root);
+    prefixCol.slots[1].appendChild(prefixInput);
+    card.body.appendChild(prefixCol.root);
 
-    // 3. 正向提示词后缀
-    const suffixRow = createRow(['left', 'right'], { align: 'center', divided: true });
-    suffixRow.slots[0].appendChild(createFieldLabel({
+    // 3. 正向提示词后缀 (全宽垂直多行编辑框)
+    const suffixCol = createCol(2, { gap: '6px' });
+    suffixCol.root.classList.add('da-row--divided');
+    suffixCol.slots[0].appendChild(createFieldLabel({
         title: '正向提示词后缀',
-        description: '自动置于生成提示词最末尾的修饰词'
+        helpTooltip: '拼接在正向提示词最后方'
     }));
-    suffixInput = createTextInput({
+    suffixInput = createTextarea({
         value: initialActive?.promptSuffix || '',
         placeholder: 'highly detailed, ...',
+        rows: 2,
         onChange: () => checkDirty()
     });
     disposables.add(suffixInput);
-    suffixRow.slots[1].appendChild(suffixInput);
-    card.body.appendChild(suffixRow.root);
+    suffixCol.slots[1].appendChild(suffixInput);
+    card.body.appendChild(suffixCol.root);
 
-    // 4. 通用负向提示词
+    // 4. 通用负向提示词 (全宽垂直多行编辑框)
     const negCol = createCol(2, { gap: '6px' });
     negCol.root.classList.add('da-row--divided');
     negCol.slots[0].appendChild(createFieldLabel({
         title: '通用负向提示词',
-        description: '统一生效的负向过滤词，出图时自动合并'
+        helpTooltip: '出图时与负向提示词自动合并'
     }));
     negativeInput = createTextarea({
         value: initialActive?.negativePrompt || '',
@@ -214,7 +248,7 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
         loraWrapper.root.classList.add('da-row--divided');
         loraWrapper.slots[0].appendChild(createFieldLabel({
             title: 'LoRA 模型',
-            description: '提示词预设方案绑定的 LoRA 模型与权重配置'
+            helpTooltip: '当前预设方案绑定的 LoRA 模型与权重配置'
         }));
 
         loraManagerEl = createLoraManagerControl({

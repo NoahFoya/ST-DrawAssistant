@@ -233,7 +233,8 @@ export function analyzeAndReplaceWorkflowVariables(jsonStr: string): WorkflowAna
 export function openWorkflowFormatModal(
     rawJson: string,
     onApply: (formattedJson: string) => void,
-    onOpenWorkflow?: (currentJson: string) => void
+    onOpenWorkflow?: (currentJson: string) => void,
+    onOpenBlueprint?: (currentJson: string) => void
 ): void {
     const analysis = analyzeAndReplaceWorkflowVariables(rawJson);
 
@@ -264,15 +265,18 @@ export function openWorkflowFormatModal(
         const unrepCount = analysis.unmatched.length;
 
         let html = `
-            <div class="da-workflow-format-summary">
-                扫描完成：共识别并自动绑定 <strong>${repCount}</strong> 处变量占位符，另有 <strong>${unrepCount}</strong> 项变量未自动匹配。
+            <div class="da-workflow-format-summary da-flex-between">
+                <span>扫描完成：共识别并自动绑定 <strong>${repCount}</strong> 处变量占位符，另有 <strong>${unrepCount}</strong> 项变量未自动匹配。</span>
+                <span class="da-workflow-status-badge ${unrepCount === 0 ? 'da-workflow-status-badge--matched' : 'da-workflow-status-badge--unmatched'}">
+                    ${unrepCount === 0 ? '全部匹配' : '部分未匹配'}
+                </span>
             </div>
         `;
 
         if (repCount > 0) {
             html += `
                 <div class="da-workflow-format-section">
-                    <div class="da-workflow-format-section-title success">
+                    <div class="da-workflow-format-section-title da-workflow-format-section-title--success">
                         <svg class="da-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                         </svg> 已成功自动匹配替换 (${repCount})
@@ -281,7 +285,7 @@ export function openWorkflowFormatModal(
             `;
             analysis.replaced.forEach((r) => {
                 html += `
-                    <div class="da-workflow-var-item matched">
+                    <div class="da-workflow-var-item da-workflow-var-item--matched">
                         <span class="da-macro-tag">${escapeHtml(r.variable)}</span>
                         <span class="da-workflow-var-target">➔ 节点 #${escapeHtml(r.nodeId)} (<code>${escapeHtml(r.classType)}.${escapeHtml(r.field)}</code>)</span>
                     </div>
@@ -293,7 +297,7 @@ export function openWorkflowFormatModal(
         if (unrepCount > 0) {
             html += `
                 <div class="da-workflow-format-section">
-                    <div class="da-workflow-format-section-title warning">
+                    <div class="da-workflow-format-section-title da-workflow-format-section-title--warning">
                         <svg class="da-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg> 未自动匹配到的变量 (${unrepCount})
@@ -302,8 +306,8 @@ export function openWorkflowFormatModal(
             `;
             analysis.unmatched.forEach((u) => {
                 html += `
-                    <div class="da-workflow-var-item unmatched">
-                        <span class="da-macro-tag warning">${escapeHtml(u.variable)}</span>
+                    <div class="da-workflow-var-item da-workflow-var-item--unmatched">
+                        <span class="da-macro-tag da-macro-tag--warning">${escapeHtml(u.variable)}</span>
                         <span class="da-workflow-var-label">${escapeHtml(u.label)}</span>
                         <span class="da-workflow-var-tip">${escapeHtml(u.tip)}</span>
                     </div>
@@ -327,16 +331,17 @@ export function openWorkflowFormatModal(
 
     actions.appendChild(cancelBtn);
 
-    if (onOpenWorkflow) {
-        const workflowBtn = document.createElement('button');
-        workflowBtn.type = 'button';
-        workflowBtn.className = 'da-btn da-btn--secondary da-btn-open-workflow';
-        workflowBtn.textContent = '打开工作流编辑器';
-        workflowBtn.onclick = () => {
+    const openEditor = onOpenBlueprint || onOpenWorkflow;
+    if (openEditor) {
+        const blueprintBtn = document.createElement('button');
+        blueprintBtn.type = 'button';
+        blueprintBtn.className = 'da-btn da-btn--secondary da-btn-open-blueprint';
+        blueprintBtn.textContent = '打开蓝图手动配置';
+        blueprintBtn.onclick = () => {
             modalHandle?.dispose();
-            onOpenWorkflow(rawJson);
+            openEditor(rawJson);
         };
-        actions.appendChild(workflowBtn);
+        actions.appendChild(blueprintBtn);
     }
 
     const applyBtn = document.createElement('button');
@@ -371,11 +376,12 @@ export function openWorkflowFormatModal(
  */
 export interface WorkflowPresetCardOptions {
     title: string;
-    description: string;
+    description?: string;
     collapsible?: boolean;
     defaultOpen?: boolean;
     label: string;
-    workflowMode: 'txt2img' | 'inpaint';
+    workflowMode?: 'txt2img' | 'inpaint';
+    blueprintMode?: 'txt2img' | 'inpaint';
     fieldLabel: string;
     helpTooltip: string;
     placeholder?: string;
@@ -386,6 +392,7 @@ export interface WorkflowPresetCardOptions {
     onJsonChange: (json: string) => void;
     onRefresh: () => void;
     onOpenWorkflow?: (currentJson: string) => void;
+    onOpenBlueprint?: (currentJson: string) => void;
 }
 
 export interface WorkflowPresetCardHandle extends HTMLElement, IDisposable {
@@ -409,16 +416,44 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
     });
     const header = createCardHeader({
         title: options.title,
-        description: options.description
+        description: options.description || ''
     });
     card.header.appendChild(header);
+
+    let activeBaselineJson: string = (options.getCurrentJson() || '').trim();
+
+    const checkJsonState = (val: string) => {
+        const trimmed = val.trim();
+        const isDirty = trimmed !== activeBaselineJson;
+        toolbarEl?.setDirty?.(isDirty);
+
+        if (!trimmed) {
+            inputHandleEl?.setError?.(false);
+            inputHandleEl?.setDirty?.(false);
+            inputHandleEl?.inputElement?.removeAttribute('title');
+            return;
+        }
+
+        try {
+            JSON.parse(trimmed);
+            inputHandleEl?.setError?.(false);
+            inputHandleEl?.setDirty?.(isDirty);
+            if (isDirty) {
+                inputHandleEl.inputElement.title = '已修改';
+            } else {
+                inputHandleEl?.inputElement?.removeAttribute('title');
+            }
+        } catch (err: any) {
+            inputHandleEl?.setError?.(true, `已失效：JSON 语法错误 (${err?.message || err})`);
+        }
+    };
 
     // 1. 顶部工作流预设方案工具栏
     toolbarEl = bindPresetToolbar({
         adapter: createPresetStoreAdapter<WorkflowProfileData>({
             category: 'workflows',
             label: options.label,
-            generateId: () => `${options.workflowMode}_wf_${Date.now()}`,
+            generateId: () => `${options.blueprintMode || options.workflowMode || 'txt2img'}_wf_${Date.now()}`,
             getPresets: () =>
                 options.getProfiles().map((p) => ({
                     id: p.id,
@@ -431,18 +466,43 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
             },
             onApply: (profile) => {
                 if (profile?.data?.json) {
+                    activeBaselineJson = profile.data.json.trim();
                     options.onJsonChange(profile.data.json);
                     options.onRefresh();
+                    inputHandleEl?.setValue(profile.data.json);
+                    inputHandleEl?.setDirty?.(false);
+                    inputHandleEl?.setError?.(false);
+                    inputHandleEl?.inputElement?.removeAttribute('title');
+                    toolbarEl.setDirty?.(false);
                 }
             }
         }),
         getCurrentData: () => ({
             json: options.getCurrentJson()
         }),
-        onApplied: (profile) => {
+        applyData: (id: string) => {
+            const profile = options.getProfiles().find((p) => p.id === id);
             if (profile?.data?.json) {
+                activeBaselineJson = profile.data.json.trim();
                 options.onJsonChange(profile.data.json);
                 options.onRefresh();
+                inputHandleEl?.setValue(profile.data.json);
+                inputHandleEl?.setDirty?.(false);
+                inputHandleEl?.setError?.(false);
+                inputHandleEl?.inputElement?.removeAttribute('title');
+                toolbarEl.setDirty?.(false);
+            }
+        },
+        onApplied: (profile) => {
+            if (profile?.data?.json) {
+                activeBaselineJson = profile.data.json.trim();
+                options.onJsonChange(profile.data.json);
+                options.onRefresh();
+                inputHandleEl?.setValue(profile.data.json);
+                inputHandleEl?.setDirty?.(false);
+                inputHandleEl?.setError?.(false);
+                inputHandleEl?.inputElement?.removeAttribute('title');
+                toolbarEl.setDirty?.(false);
             }
         }
     });
@@ -463,22 +523,26 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
             (updatedStr) => {
                 options.onJsonChange(updatedStr);
                 options.onRefresh();
+                inputHandleEl?.setValue(updatedStr);
+                checkJsonState(updatedStr);
             },
-            options.onOpenWorkflow
+            options.onOpenWorkflow,
+            options.onOpenBlueprint
         );
     };
 
     actionsWrapper.appendChild(formatBtn);
 
-    if (options.onOpenWorkflow) {
-        const workflowBtn = document.createElement('button');
-        workflowBtn.type = 'button';
-        workflowBtn.className = 'da-btn da-btn--secondary da-btn--sm da-btn-workflow';
-        workflowBtn.textContent = '编辑工作流';
-        workflowBtn.onclick = () => {
-            options.onOpenWorkflow!(options.getCurrentJson());
+    const openEditor = options.onOpenBlueprint || options.onOpenWorkflow;
+    if (openEditor) {
+        const blueprintBtn = document.createElement('button');
+        blueprintBtn.type = 'button';
+        blueprintBtn.className = 'da-btn da-btn--secondary da-btn--sm da-btn-blueprint';
+        blueprintBtn.textContent = '打开蓝图';
+        blueprintBtn.onclick = () => {
+            openEditor(options.getCurrentJson());
         };
-        actionsWrapper.appendChild(workflowBtn);
+        actionsWrapper.appendChild(blueprintBtn);
     }
 
     const titleRow = createRow(['left', 'right'], { align: 'center', divided: true });
@@ -498,6 +562,7 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
         placeholder: options.placeholder || '{\n  "3": {\n    "class_type": "KSampler",\n    ...\n  }\n}',
         onChange: (val) => {
             options.onJsonChange(val);
+            checkJsonState(val);
         }
     });
     textareaRow.slots[0].appendChild(inputHandleEl);
@@ -507,9 +572,15 @@ export function createWorkflowPresetCard(options: WorkflowPresetCardOptions): Wo
         toolbar: toolbarEl!,
         inputHandle: inputHandleEl!,
         refresh: () => {
+            activeBaselineJson = (options.getCurrentJson() || '').trim();
             if (inputHandleEl) {
                 inputHandleEl.setValue(options.getCurrentJson());
+                inputHandleEl.setDirty?.(false);
+                inputHandleEl.setError?.(false);
+                inputHandleEl.inputElement?.removeAttribute('title');
             }
+            toolbarEl?.refreshPresets?.(options.getProfiles(), options.getCurrentProfileId());
+            toolbarEl?.setDirty?.(false);
         },
         dispose: () => {
             (toolbarEl as any)?.dispose?.();

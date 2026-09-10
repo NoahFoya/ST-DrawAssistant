@@ -1,6 +1,6 @@
 /**
  * 悬浮球设置面板视图 (FABSettingsTabView)
- * 控制悬浮球启用状态、不透明度、预设与自定义图标及停靠位置
+ * 控制悬浮球启用状态、透明度、预设与自定义图标及停靠位置
  */
 
 import { DrawAssistantSettings } from '../../types';
@@ -14,7 +14,7 @@ export class FABSettingsTabView extends BaseTabView {
     private readonly _renderer: FormRenderer<DrawAssistantSettings>;
 
     constructor(private readonly _store: SettingsStore) {
-        super('da-fab-settings-tab');
+        super();
         this._renderer = new FormRenderer<DrawAssistantSettings>(_store);
         this._disposables.add(this._renderer);
         this._root.appendChild(this._buildSettingsCard());
@@ -25,7 +25,7 @@ export class FABSettingsTabView extends BaseTabView {
 
         const cardSchema: SectionCardSchema<DrawAssistantSettings> = {
             title: '悬浮球设置',
-            description: '配置悬浮球的启用状态、不透明度、图标与停靠位置',
+            description: '配置悬浮球的启用状态、透明度、图标与停靠位置',
             rows: [
                 {
                     key: 'fabVisible',
@@ -35,7 +35,7 @@ export class FABSettingsTabView extends BaseTabView {
                 {
                     key: 'fabOpacity',
                     type: 'slider',
-                    label: '不透明度',
+                    label: '悬浮球透明度',
                     min: 20,
                     max: 100,
                     step: 5,
@@ -82,12 +82,9 @@ export class FABSettingsTabView extends BaseTabView {
                     isBlock: true,
                     renderCustom: () => {
                         const container = document.createElement('div');
-                        container.style.display = 'flex';
-                        container.style.flexDirection = 'column';
-                        container.style.gap = '8px';
-                        container.style.width = '100%';
+                        container.className = 'da-flex-col da-gap-sm da-w-full';
 
-                        // 上方操作行：头像微缩预览 + 本地上传按钮 + 恢复默认按钮
+                        // 上方操作行：微缩预览 + 本地上传按钮 + 还原默认按钮
                         const actionRow = document.createElement('div');
                         actionRow.className = 'da-fab-custom-icon-wrapper';
 
@@ -98,7 +95,7 @@ export class FABSettingsTabView extends BaseTabView {
                         const fileInput = document.createElement('input');
                         fileInput.type = 'file';
                         fileInput.accept = 'image/*';
-                        fileInput.style.display = 'none';
+                        fileInput.className = 'da-hidden';
 
                         const uploadBtn = document.createElement('button');
                         uploadBtn.type = 'button';
@@ -108,7 +105,7 @@ export class FABSettingsTabView extends BaseTabView {
                         const resetBtn = document.createElement('button');
                         resetBtn.type = 'button';
                         resetBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-                        resetBtn.textContent = '恢复默认预设';
+                        resetBtn.textContent = '还原预设图标';
 
                         const textInput = document.createElement('input');
                         textInput.type = 'text';
@@ -150,7 +147,7 @@ export class FABSettingsTabView extends BaseTabView {
                         resetBtn.onclick = () => {
                             store.set('fabCustomIcon', undefined);
                             updatePreview();
-                            FeedbackService.toastSuccess('已恢复为预设图标');
+                            FeedbackService.toastSuccess('已还原为预设图标');
                         };
 
                         textInput.addEventListener('change', () => {

@@ -30,6 +30,8 @@ export interface OpenAIServiceCardOptions {
     onSyncModels: (provider: OpenAIProviderType, settings: OpenAIProviderSettings, btn: HTMLButtonElement) => Promise<void>;
 }
 
+export type OpenAIServiceFieldTarget = 'all' | 'url' | 'key' | 'headers';
+
 export interface OpenAIServiceCardElement extends HTMLElement, IDisposable {
     /** 外部程序化切换激活的提供商 */
     setProvider: (provider: OpenAIProviderType) => void;
@@ -39,6 +41,14 @@ export interface OpenAIServiceCardElement extends HTMLElement, IDisposable {
     getCurrentProvider: () => OpenAIProviderType;
     /** 获取当前选中的提供商配置 */
     getCurrentSettings: () => OpenAIProviderSettings;
+    /** 设置字段修改态 */
+    setDirty: (isDirty: boolean, target?: OpenAIServiceFieldTarget) => void;
+    /** 设置字段失效报错 */
+    setError: (hasError: boolean, tooltip?: string, target?: OpenAIServiceFieldTarget) => void;
+    /** 设置测试操作状态反馈 */
+    setStatus: (status: 'idle' | 'testing' | 'success' | 'error', text?: string) => void;
+    /** 固化当前提供商的基准值 */
+    resetBaseline: () => void;
 }
 
 const PROVIDER_SELECT_OPTIONS: Array<{ value: OpenAIProviderType; label: string }> = [
@@ -49,6 +59,24 @@ const PROVIDER_SELECT_OPTIONS: Array<{ value: OpenAIProviderType; label: string 
     { value: 'together', label: 'Together AI (云端开源大模型推理)' },
     { value: 'custom', label: '自定义兼容服务 (自主配置)' }
 ];
+
+interface FieldState {
+    isDirty: boolean;
+    hasError: boolean;
+    errorTooltip: string;
+}
+
+function updateFieldVisual(el: HTMLInputElement, state: FieldState): void {
+    el.classList.toggle('is-invalid', state.hasError);
+    el.classList.toggle('is-dirty', state.isDirty && !state.hasError);
+    if (state.hasError) {
+        el.title = state.errorTooltip;
+    } else if (state.isDirty) {
+        el.title = '已修改';
+    } else {
+        el.removeAttribute('title');
+    }
+}
 
 /**
  * 创建独立的大模型服务连接卡片
@@ -73,31 +101,42 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         }
     }
 
+    // 各提供商独立基准快照 (用于脏值精准判定)
+    const baselines: Record<OpenAIProviderType, { serverUrl: string; apiKey: string; customHeadersJson: string }> = {} as any;
+    for (const key of Object.keys(defaults) as OpenAIProviderType[]) {
+        baselines[key] = {
+            serverUrl: providersMap[key].serverUrl || '',
+            apiKey: providersMap[key].apiKey || '',
+            customHeadersJson: providersMap[key].customHeadersJson || ''
+        };
+    }
+
     let currentProvider: OpenAIProviderType = options.activeProvider || 'openai-official';
 
     const getSettings = (p: OpenAIProviderType): OpenAIProviderSettings => {
         if (!providersMap[p]) {
-            providersMap[p] = { ...defaults[p] || defaults['custom'] };
+            providersMap[p] = { ...(defaults[p] || defaults['custom']) };
         }
         return providersMap[p];
     };
+
+    // 局部参数字段状态
+    const urlState: FieldState = { isDirty: false, hasError: false, errorTooltip: '已失效：无法连接到目标服务地址' };
+    const keyState: FieldState = { isDirty: false, hasError: false, errorTooltip: '已失效：授权凭据无效' };
+    const headersState: FieldState = { isDirty: false, hasError: false, errorTooltip: '已失效：请求头格式错误' };
 
     // --- 1. 服务供应商选择行 (Provider Select & Badge) ---
     const providerRow = createRow(['left', 'right'], { align: 'center', divided: true });
     providerRow.slots[0].appendChild(createFieldLabel({
         title: '服务供应商',
-        description: '切换当前生效的大模型生图服务商，各服务商独立保存端点与密钥'
+        helpTooltip: '切换当前生效的大模型生图服务商，各服务商独立保存端点与密钥'
     }));
 
     const providerContainer = document.createElement('div');
-    providerContainer.style.display = 'flex';
-    providerContainer.style.alignItems = 'center';
-    providerContainer.style.gap = '8px';
-    providerContainer.style.width = '100%';
+    providerContainer.className = 'da-input-group';
 
     const providerSelectEl = document.createElement('select');
-    providerSelectEl.className = 'da-select';
-    providerSelectEl.style.flex = '1';
+    providerSelectEl.className = 'da-select da-flex-1';
 
     for (const opt of PROVIDER_SELECT_OPTIONS) {
         const optionEl = document.createElement('option');
@@ -130,34 +169,34 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     const urlRow = createRow(['left', 'right'], { align: 'center', divided: true });
     urlRow.slots[0].appendChild(createFieldLabel({
         title: '接口 Base URL',
-        description: 'OpenAI 兼容端点基地址，自动补充 /v1 并过滤多余路径'
+        helpTooltip: 'OpenAI 兼容端点基地址，自动补充 /v1 并过滤多余路径'
     }));
 
     const urlContainer = document.createElement('div');
-    urlContainer.style.display = 'flex';
-    urlContainer.style.alignItems = 'center';
-    urlContainer.style.gap = '6px';
-    urlContainer.style.width = '100%';
+    urlContainer.className = 'da-input-group';
 
     const urlInputEl = document.createElement('input');
     urlInputEl.type = 'text';
-    urlInputEl.className = 'da-input da-input--text';
-    urlInputEl.style.flex = '1';
+    urlInputEl.className = 'da-input da-input--text da-flex-1';
     urlInputEl.value = getSettings(currentProvider).serverUrl;
     urlInputEl.placeholder = 'https://api.openai.com/v1';
 
     const resetUrlBtn = document.createElement('button');
     resetUrlBtn.type = 'button';
-    resetUrlBtn.className = 'da-btn da-btn--secondary';
-    resetUrlBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>恢复默认`;
+    resetUrlBtn.className = 'da-btn da-btn--secondary da-btn--sm da-nowrap';
+    resetUrlBtn.innerHTML = `<svg class="da-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>恢复默认`;
     resetUrlBtn.title = '恢复为当前提供商推荐的官方默认地址';
-    resetUrlBtn.style.padding = '4px 8px';
 
     const syncUrlChange = () => {
         const normalized = normalizeOpenAiBaseUrl(urlInputEl.value);
         const settings = getSettings(currentProvider);
         settings.serverUrl = normalized;
         options.onSettingsChange(currentProvider, settings);
+
+        // 自愈解除失效，并计算脏值
+        urlState.hasError = false;
+        urlState.isDirty = normalized.trim() !== (baselines[currentProvider]?.serverUrl || '').trim();
+        updateFieldVisual(urlInputEl, urlState);
     };
     urlInputEl.addEventListener('input', syncUrlChange);
     urlInputEl.addEventListener('change', syncUrlChange);
@@ -177,19 +216,15 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     const keyRow = createRow(['left', 'right'], { align: 'center', divided: true });
     keyRow.slots[0].appendChild(createFieldLabel({
         title: 'API Key (访问密钥)',
-        description: 'Bearer 授权令牌，保存在浏览器本地扩展配置中，直连时携带'
+        helpTooltip: 'Bearer 授权令牌，保存在浏览器本地扩展配置中，直连时携带'
     }));
 
     const keyContainer = document.createElement('div');
-    keyContainer.style.display = 'flex';
-    keyContainer.style.alignItems = 'center';
-    keyContainer.style.gap = '6px';
-    keyContainer.style.width = '100%';
+    keyContainer.className = 'da-input-group';
 
     const keyInputEl = document.createElement('input');
     keyInputEl.type = 'password';
-    keyInputEl.className = 'da-input da-input--text';
-    keyInputEl.style.flex = '1';
+    keyInputEl.className = 'da-input da-input--text da-flex-1';
     keyInputEl.value = getSettings(currentProvider).apiKey;
     keyInputEl.placeholder = 'sk-...';
 
@@ -198,11 +233,16 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         const settings = getSettings(currentProvider);
         settings.apiKey = val;
         options.onSettingsChange(currentProvider, settings);
+
+        // 自愈解除失效，并计算脏值
+        keyState.hasError = false;
+        keyState.isDirty = val !== (baselines[currentProvider]?.apiKey || '').trim();
+        updateFieldVisual(keyInputEl, keyState);
     };
     keyInputEl.addEventListener('input', syncKeyChange);
     keyInputEl.addEventListener('change', syncKeyChange);
 
-    const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
     const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
     const toggleEyeBtn = document.createElement('button');
@@ -210,7 +250,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     toggleEyeBtn.className = 'da-btn da-btn--secondary da-icon-btn';
     toggleEyeBtn.innerHTML = EYE_SVG;
     toggleEyeBtn.title = '显示/隐藏密钥';
-    toggleEyeBtn.style.padding = '0 10px';
+    toggleEyeBtn.setAttribute('aria-label', '显示/隐藏密钥');
     toggleEyeBtn.onclick = () => {
         if (keyInputEl.type === 'password') {
             keyInputEl.type = 'text';
@@ -230,7 +270,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     const headersRow = createRow(['left', 'right'], { align: 'center', divided: true });
     headersRow.slots[0].appendChild(createFieldLabel({
         title: '专享请求头 (JSON)',
-        description: '如 OpenRouter 要求的 HTTP-Referer 或网关鉴权头'
+        helpTooltip: '如 OpenRouter 要求的 HTTP-Referer 或网关鉴权头'
     }));
 
     const headersInputEl = document.createElement('input');
@@ -239,11 +279,18 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     headersInputEl.placeholder = '{"HTTP-Referer": "https://sillytavern.app"}';
     headersInputEl.value = getSettings(currentProvider).customHeadersJson || '';
 
-    headersInputEl.addEventListener('change', () => {
+    const syncHeadersChange = () => {
+        const val = headersInputEl.value.trim();
         const settings = getSettings(currentProvider);
-        settings.customHeadersJson = headersInputEl.value.trim();
+        settings.customHeadersJson = val;
         options.onSettingsChange(currentProvider, settings);
-    });
+
+        headersState.hasError = false;
+        headersState.isDirty = val !== (baselines[currentProvider]?.customHeadersJson || '').trim();
+        updateFieldVisual(headersInputEl, headersState);
+    };
+    headersInputEl.addEventListener('input', syncHeadersChange);
+    headersInputEl.addEventListener('change', syncHeadersChange);
 
     headersRow.slots[1].appendChild(headersInputEl);
     card.body.appendChild(headersRow.root);
@@ -252,12 +299,11 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     const actionRow = createRow(['left', 'right'], { align: 'center' });
     actionRow.slots[0].appendChild(createFieldLabel({
         title: '连通性与模型同步',
-        description: '探测端点有效性，并拉取同步最新生图模型目录'
+        helpTooltip: '探测端点有效性，并拉取同步最新生图模型目录'
     }));
 
     const actionContainer = document.createElement('div');
-    actionContainer.style.display = 'flex';
-    actionContainer.style.gap = '8px';
+    actionContainer.className = 'da-flex-row da-gap-sm';
 
     const testBtn = document.createElement('button');
     testBtn.type = 'button';
@@ -282,6 +328,44 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     actionRow.slots[1].appendChild(actionContainer);
     card.body.appendChild(actionRow.root);
 
+    const setStatus = (status: 'idle' | 'testing' | 'success' | 'error', text?: string) => {
+        testBtn.classList.remove('is-loading', 'da-btn--success', 'da-btn--danger');
+        if (status === 'testing') {
+            testBtn.classList.add('is-loading');
+            testBtn.disabled = true;
+            testBtn.textContent = text || '测试中...';
+        } else if (status === 'success') {
+            testBtn.classList.add('da-btn--success');
+            testBtn.disabled = false;
+            testBtn.textContent = text || '连接成功';
+
+            // 连通成功固化当前输入为当前提供商的新基准值
+            baselines[currentProvider] = {
+                serverUrl: urlInputEl.value.trim(),
+                apiKey: keyInputEl.value.trim(),
+                customHeadersJson: headersInputEl.value.trim()
+            };
+            urlState.isDirty = false;
+            urlState.hasError = false;
+            updateFieldVisual(urlInputEl, urlState);
+
+            keyState.isDirty = false;
+            keyState.hasError = false;
+            updateFieldVisual(keyInputEl, keyState);
+
+            headersState.isDirty = false;
+            headersState.hasError = false;
+            updateFieldVisual(headersInputEl, headersState);
+        } else if (status === 'error') {
+            testBtn.classList.add('da-btn--danger');
+            testBtn.disabled = false;
+            testBtn.textContent = text || '连接失败';
+        } else {
+            testBtn.disabled = false;
+            testBtn.textContent = text || '测试连接';
+        }
+    };
+
     // --- 核心切换与绑定逻辑 ---
     const bindProvider = (newProvider: OpenAIProviderType) => {
         currentProvider = newProvider;
@@ -292,6 +376,23 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         keyInputEl.value = s.apiKey;
         headersInputEl.value = s.customHeadersJson || '';
         updateBadge(s.lastLatencyMs);
+
+        // 切换提供商时清除旧提供商的 dirty / invalid 状态
+        urlState.isDirty = false;
+        urlState.hasError = false;
+        updateFieldVisual(urlInputEl, urlState);
+
+        keyState.isDirty = false;
+        keyState.hasError = false;
+        updateFieldVisual(keyInputEl, keyState);
+
+        headersState.isDirty = false;
+        headersState.hasError = false;
+        updateFieldVisual(headersInputEl, headersState);
+
+        testBtn.classList.remove('is-loading', 'da-btn--success', 'da-btn--danger');
+        testBtn.disabled = false;
+        testBtn.textContent = '测试连接';
 
         options.onProviderChange(newProvider, s);
     };
@@ -311,11 +412,68 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     };
     rootEl.getCurrentProvider = () => currentProvider;
     rootEl.getCurrentSettings = () => getSettings(currentProvider);
+
+    rootEl.setDirty = (isDirty: boolean, target: OpenAIServiceFieldTarget = 'all') => {
+        if (target === 'all' || target === 'url') {
+            urlState.isDirty = isDirty;
+            updateFieldVisual(urlInputEl, urlState);
+        }
+        if (target === 'all' || target === 'key') {
+            keyState.isDirty = isDirty;
+            updateFieldVisual(keyInputEl, keyState);
+        }
+        if (target === 'all' || target === 'headers') {
+            headersState.isDirty = isDirty;
+            updateFieldVisual(headersInputEl, headersState);
+        }
+    };
+
+    rootEl.setError = (hasError: boolean, tooltip?: string, target: OpenAIServiceFieldTarget = 'url') => {
+        if (target === 'all' || target === 'url') {
+            urlState.hasError = hasError;
+            if (tooltip) urlState.errorTooltip = tooltip;
+            updateFieldVisual(urlInputEl, urlState);
+        }
+        if (target === 'all' || target === 'key') {
+            keyState.hasError = hasError;
+            if (tooltip) keyState.errorTooltip = tooltip;
+            updateFieldVisual(keyInputEl, keyState);
+        }
+        if (target === 'all' || target === 'headers') {
+            headersState.hasError = hasError;
+            if (tooltip) headersState.errorTooltip = tooltip;
+            updateFieldVisual(headersInputEl, headersState);
+        }
+    };
+
+    rootEl.setStatus = setStatus;
+
+    rootEl.resetBaseline = () => {
+        baselines[currentProvider] = {
+            serverUrl: urlInputEl.value.trim(),
+            apiKey: keyInputEl.value.trim(),
+            customHeadersJson: headersInputEl.value.trim()
+        };
+        urlState.isDirty = false;
+        urlState.hasError = false;
+        updateFieldVisual(urlInputEl, urlState);
+
+        keyState.isDirty = false;
+        keyState.hasError = false;
+        updateFieldVisual(keyInputEl, keyState);
+
+        headersState.isDirty = false;
+        headersState.hasError = false;
+        updateFieldVisual(headersInputEl, headersState);
+    };
+
     rootEl.dispose = () => {
         urlInputEl.removeEventListener('input', syncUrlChange);
         urlInputEl.removeEventListener('change', syncUrlChange);
         keyInputEl.removeEventListener('input', syncKeyChange);
         keyInputEl.removeEventListener('change', syncKeyChange);
+        headersInputEl.removeEventListener('input', syncHeadersChange);
+        headersInputEl.removeEventListener('change', syncHeadersChange);
     };
 
     return rootEl;

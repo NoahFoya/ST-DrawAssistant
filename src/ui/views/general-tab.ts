@@ -17,7 +17,7 @@ export class GeneralTabView extends BaseTabView {
     constructor(
         private readonly _store: SettingsStore
     ) {
-        super('da-general-tab');
+        super();
 
         this._renderer = new FormRenderer<DrawAssistantSettings>(_store);
         this._disposables.add(this._renderer);
@@ -47,7 +47,7 @@ export class GeneralTabView extends BaseTabView {
                 {
                     key: 'showHelp',
                     type: 'toggle',
-                    label: '显示提示说明'
+                    label: '显示气泡帮助提示'
                 },
                 {
                     key: 'activeProvider',
@@ -95,8 +95,8 @@ export class GeneralTabView extends BaseTabView {
                 {
                     key: 'placeholderStart',
                     type: 'input',
-                    label: '生图指令前缀',
-                    helpTooltip: '用于从 AI 回复中截取提示词。支持在前后缀包裹的内容中使用竖线“|”分隔正向与反向提示词，例如：image### 1girl, cute | bad hands ###',
+                    label: '生图提取起始标记',
+                    helpTooltip: '用于从 AI 回复中截取提示词。支持在标记包裹的内容中使用竖线“|”分隔正向与反向提示词，例如：image### 1girl, cute | bad hands ###',
                     placeholder: 'image###',
                     align: 'center',
                     variant: 'short'
@@ -104,7 +104,7 @@ export class GeneralTabView extends BaseTabView {
                 {
                     key: 'placeholderEnd',
                     type: 'input',
-                    label: '生图指令后缀',
+                    label: '生图提取结束标记',
                     placeholder: '###',
                     align: 'center',
                     variant: 'short'
@@ -185,7 +185,7 @@ export class GeneralTabView extends BaseTabView {
                 {
                     keyPath: ['imageDisplay', 'rounded'] as const,
                     type: 'toggle',
-                    label: '图片圆角'
+                    label: '开启图片圆角'
                 },
                 {
                     keyPath: ['imageDisplay', 'collapsed'] as const,

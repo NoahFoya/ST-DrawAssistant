@@ -1,6 +1,6 @@
 /**
- * 画廊面板视图 (GalleryTabView)
- * 包含存储空间概览与画廊图片管理，挂载至主设置面板的画廊标签页
+ * 生图画廊面板视图 (GalleryTabView)
+ * 包含本地存储占用概览与生图画廊图片管理，挂载至主设置面板的画廊标签页
  */
 
 import { StorageService } from '../../state';
@@ -22,7 +22,7 @@ export class GalleryTabView extends BaseTabView {
         private readonly _storage?: StorageService,
         private readonly _hostClient?: HostClient
     ) {
-        super('da-gallery-tab');
+        super();
         this._buildCards();
     }
 
@@ -44,14 +44,17 @@ export class GalleryTabView extends BaseTabView {
 
         // 存储空间操作栏 (清理无引用 / 清理未收藏 / 刷新统计 / 清空全部)
         const actionRow = document.createElement('div');
-        actionRow.className = 'da-storage-actions-toolbar';
-        actionRow.style.display = 'flex';
-        actionRow.style.alignItems = 'center';
-        actionRow.style.gap = '8px';
-        actionRow.style.marginTop = '12px';
-        actionRow.style.paddingTop = '12px';
-        actionRow.style.borderTop = '1px solid var(--da-separator)';
-        actionRow.style.flexWrap = 'wrap';
+        actionRow.className = 'da-card-action-row';
+
+        // 检查本地存储服务可用性，若处于无痕模式或存储服务初始化失败则拦截操作并提示，防静默失败
+        const ensureStorage = async (): Promise<boolean> => {
+            if (!this._storage) {
+                const { FeedbackService } = await import('../feedback/feedback');
+                FeedbackService.toastWarning('本地存储服务未初始化或已停用');
+                return false;
+            }
+            return true;
+        };
 
         // 按钮 1: 清理无引用图片
         const cleanIsoBtn = document.createElement('button');
@@ -60,7 +63,7 @@ export class GalleryTabView extends BaseTabView {
         cleanIsoBtn.textContent = '清理无引用图片';
         cleanIsoBtn.title = '扫描当前会话，清除已被聊天删除的孤立历史图片（保留已标星收藏图片）';
         cleanIsoBtn.onclick = async () => {
-            if (!this._storage) return;
+            if (!await ensureStorage()) return;
             const { FeedbackService } = await import('../feedback/feedback');
             const refIds = this._hostClient?.getReferencedImageIds ? this._hostClient.getReferencedImageIds() : new Set<string>();
             const confirmed = await FeedbackService.confirm({
@@ -68,7 +71,7 @@ export class GalleryTabView extends BaseTabView {
                 message: '确定要清理当前聊天上下文中已失去引用的历史图片吗？已标星收藏的图片会保留。',
                 confirmText: '确认清理'
             });
-            if (confirmed) {
+            if (confirmed && this._storage) {
                 const count = await this._storage.cleanIsolatedImages(refIds);
                 await this._storageBarHandle?.refresh();
                 await this._galleryManagerHandle?.reload();
@@ -83,18 +86,18 @@ export class GalleryTabView extends BaseTabView {
         cleanUnfavBtn.textContent = '清理未收藏图片';
         cleanUnfavBtn.title = '清理所有未加星标收藏的本地生图记录，已标星的图片将永久保留';
         cleanUnfavBtn.onclick = async () => {
-            if (!this._storage) return;
+            if (!await ensureStorage()) return;
             const { FeedbackService } = await import('../feedback/feedback');
             const confirmed = await FeedbackService.confirm({
                 title: '清理未收藏图片确认',
-                message: '确定要清理所有未加星标收藏的本地生图记录吗？已标星的图片将受到永久保护保留。',
+                message: '确定要清理所有未加星标收藏的本地生图记录吗？已标星收藏的图片将被保留。',
                 confirmText: '确认清理'
             });
-            if (confirmed) {
+            if (confirmed && this._storage) {
                 const count = await this._storage.clearUnfavorited();
                 await this._storageBarHandle?.refresh();
                 await this._galleryManagerHandle?.reload();
-                FeedbackService.toastSuccess(`已成功清理 ${count} 张未收藏的本地生图记录`);
+                FeedbackService.toastSuccess(`已清理 ${count} 张未收藏图片`);
             }
         };
 
@@ -116,14 +119,14 @@ export class GalleryTabView extends BaseTabView {
         clearAllBtn.textContent = '清空画廊';
         clearAllBtn.title = '清空本地存储中的所有生图记录与元数据（包含收藏图片）';
         clearAllBtn.onclick = async () => {
-            if (!this._storage) return;
+            if (!await ensureStorage()) return;
             const { FeedbackService } = await import('../feedback/feedback');
             const confirmed = await FeedbackService.confirm({
                 title: '⚠️ 危险：清空画廊确认',
                 message: '此操作将永久清空本地数据库中的全部历史生图记录（包含所有已标星收藏的图片），且无法恢复！是否确定全部清空？',
                 confirmText: '确认全部清空'
             });
-            if (confirmed) {
+            if (confirmed && this._storage) {
                 await this._storage.clearAll();
                 await this._storageBarHandle?.refresh();
                 await this._galleryManagerHandle?.reload();
@@ -142,7 +145,7 @@ export class GalleryTabView extends BaseTabView {
         // 画廊卡片
         const cardManager = createCard({ hoverable: true });
         const headerManager = createCardHeader({
-            title: '画廊',
+            title: '生图画廊',
             description: '检索、预览与批量管理历史生图资产'
         });
         cardManager.header.appendChild(headerManager);

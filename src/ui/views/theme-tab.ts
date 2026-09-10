@@ -43,7 +43,7 @@ export class ThemeTabView extends BaseTabView {
         private readonly _store: SettingsStore,
         private readonly _events?: TypedEventBus<CoreEventMap>
     ) {
-        super('da-theme-tab');
+        super();
         ThemeService.registerThemes(this._presets);
         this._currentThemeData = { ...this._getActiveThemeData() };
         this._buildCards();
@@ -149,7 +149,6 @@ export class ThemeTabView extends BaseTabView {
                 this._presets.push({ id: newId, name, data: { ...data } });
                 ThemeService.registerThemes(this._presets);
                 this._store.set('themePreset', newId);
-                FeedbackService.toastSuccess(`已创建并保存主题：${name}`);
                 return newId;
             },
             saveProfile: async (id: string, data: ThemeData) => {
@@ -170,7 +169,7 @@ export class ThemeTabView extends BaseTabView {
 
                 ThemeService.registerThemes(this._presets);
                 ThemeService.applyThemeVariables(data, document.documentElement);
-                FeedbackService.toastSuccess(`已保存主题方案：${name}`);
+                this._checkFieldDirty();
             },
             renameProfile: async (id: string, newName: string) => {
                 const preset = this._presets.find((p) => p.id === id);
@@ -181,7 +180,6 @@ export class ThemeTabView extends BaseTabView {
                         return;
                     }
                     preset.name = newName;
-                    FeedbackService.toastSuccess(`已重命名主题为：${newName}`);
                 }
             },
             deleteProfile: async (id: string) => {
@@ -193,7 +191,6 @@ export class ThemeTabView extends BaseTabView {
 
                 this._presets = this._presets.filter((p) => p.id !== id);
                 ThemeService.unregisterTheme(id);
-                FeedbackService.toastSuccess('已删除主题方案');
 
                 const nextId = this._presets[0]?.id || '';
                 this._store.set('themePreset', nextId);
@@ -243,7 +240,6 @@ export class ThemeTabView extends BaseTabView {
                 this._presets.push({ id, name, data });
                 ThemeService.registerThemes(this._presets);
                 this._store.set('themePreset', id);
-                FeedbackService.toastSuccess(`已导入并应用主题: ${name}`);
                 return id;
             },
             onSelect: (presetId: string) => {
@@ -256,14 +252,37 @@ export class ThemeTabView extends BaseTabView {
                 }
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._syncControls();
-                FeedbackService.toastSuccess(`已激活主题：${profile?.name || presetId}`);
             }
         };
 
         this._toolbarEl = bindPresetToolbar<ThemeData>({
             adapter,
             getCurrentData: () => this._currentThemeData,
+            onBeforeSelect: async (_newId) => {
+                if (this._toolbarEl?.isDirty?.()) {
+                    return await FeedbackService.confirm({
+                        title: '未保存修改提示',
+                        message: '当前主题方案有未保存的修改，切换方案将放弃这些修改，是否继续？',
+                        confirmText: '放弃修改并切换'
+                    });
+                }
+                return true;
+            },
+            onResetOverride: () => {
+                const currentId = this._getActiveThemeId();
+                const profile = this._presets.find((p) => p.id === currentId);
+                if (profile?.data) {
+                    this._currentThemeData = { ...profile.data };
+                } else {
+                    this._currentThemeData = { ...this._getActiveThemeData() };
+                }
+                ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
+                this._syncControls();
+                this._toolbarEl?.setDirty?.(false);
+                this._checkFieldDirty();
+            },
             applyData: (id: string) => {
+                this._store.set('themePreset', id);
                 const profile = this._presets.find((p) => p.id === id);
                 if (profile?.data) {
                     this._currentThemeData = { ...profile.data };
@@ -272,6 +291,7 @@ export class ThemeTabView extends BaseTabView {
                 }
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._syncControls();
+                this._checkFieldDirty();
             }
         });
 
@@ -288,47 +308,47 @@ export class ThemeTabView extends BaseTabView {
     private _buildColorCard(): HTMLElement {
         const card = createCard({ hoverable: true });
         const header = createCardHeader({
-            title: '界面色彩配置',
-            description: '配置主调高光、背景色板与文字对比度'
+            title: '界面配色方案',
+            description: '配置主调强调色、背景色板与文本对比度'
         });
         card.header.appendChild(header);
 
         const colorFields: Array<{ key: keyof ThemeData; label: string; helpTooltip?: string; def: string }> = [
             {
                 key: 'accentColor',
-                label: '主题高光强调色',
+                label: '主题强调色',
                 helpTooltip: '控制界面关键操作按钮、单选高亮框与激活态边框的全局主色调。',
                 def: FALLBACK_SAFE_THEME.accentColor
             },
             {
                 key: 'bgPrimary',
-                label: '界面主背景色',
+                label: '主背景色',
                 helpTooltip: '控制插件主弹窗底层与侧边栏导航的基础背景颜色。',
                 def: FALLBACK_SAFE_THEME.bgPrimary
             },
             {
                 key: 'bgGradientEnd',
-                label: '背景渐变结束色',
+                label: '渐变结束色',
                 def: FALLBACK_SAFE_THEME.bgGradientEnd
             },
             {
                 key: 'bgSecondary',
-                label: '卡片容器背景色',
+                label: '卡片背景色',
                 def: FALLBACK_SAFE_THEME.bgSecondary
             },
             {
                 key: 'textPrimary',
-                label: '主文本文字颜色',
+                label: '主文本颜色',
                 def: FALLBACK_SAFE_THEME.textPrimary
             },
             {
                 key: 'textSecondary',
-                label: '次级说明文字颜色',
+                label: '次要文本颜色',
                 def: FALLBACK_SAFE_THEME.textSecondary
             },
             {
                 key: 'borderColor',
-                label: '边框分界线颜色',
+                label: '边框线条颜色',
                 def: FALLBACK_SAFE_THEME.borderColor
             }
         ];
@@ -348,6 +368,7 @@ export class ThemeTabView extends BaseTabView {
                     (this._currentThemeData as any)[f.key] = val;
                     ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                     this._toolbarEl?.setDirty?.(true);
+                    this._checkFieldDirty();
                 }
             });
             this._disposables.add(picker);
@@ -362,8 +383,8 @@ export class ThemeTabView extends BaseTabView {
     private _buildEffectsCard(): HTMLElement {
         const card = createCard({ hoverable: true });
         const header = createCardHeader({
-            title: '视觉质感与圆角',
-            description: '调节界面模糊度、圆角弧度与不透明度'
+            title: '质感与圆角调节',
+            description: '调节背景渐变、虚化程度、不透明度与界面圆角半径'
         });
         card.header.appendChild(header);
 
@@ -382,6 +403,7 @@ export class ThemeTabView extends BaseTabView {
                 this._currentThemeData.bgGradientAngle = val;
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._toolbarEl?.setDirty?.(true);
+                this._checkFieldDirty();
             }
         });
         this._disposables.add(angleSlider);
@@ -405,6 +427,7 @@ export class ThemeTabView extends BaseTabView {
                 this._currentThemeData.bgOpacity = val / 100;
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._toolbarEl?.setDirty?.(true);
+                this._checkFieldDirty();
             }
         });
         this._disposables.add(opacitySlider);
@@ -412,10 +435,10 @@ export class ThemeTabView extends BaseTabView {
         opacityRow.slots[1].appendChild(opacitySlider);
         card.body.appendChild(opacityRow.root);
 
-        // 毛玻璃虚化 (Slider + 数值)
+        // 背景虚化 (Slider + 数值)
         const blurRow = createRow(['fill', 'auto'], { align: 'center' });
         blurRow.slots[0].appendChild(createFieldLabel({
-            title: '毛玻璃模糊半径',
+            title: '背景毛玻璃虚化',
             helpTooltip: '控制弹窗底层的半透明虚化程度。设为 0 可完全关闭虚化以提升低配设备渲染帧率。'
         }));
         const blurSlider = createSlider({
@@ -428,6 +451,7 @@ export class ThemeTabView extends BaseTabView {
                 this._currentThemeData.blurRadius = val;
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._toolbarEl?.setDirty?.(true);
+                this._checkFieldDirty();
             }
         });
         this._disposables.add(blurSlider);
@@ -438,7 +462,7 @@ export class ThemeTabView extends BaseTabView {
         // 全局圆角 (Slider + 数值)
         const radiusRow = createRow(['fill', 'auto'], { align: 'center' });
         radiusRow.slots[0].appendChild(createFieldLabel({
-            title: '全局界面圆角'
+            title: '全局圆角半径'
         }));
         const radiusSlider = createSlider({
             value: Number(this._currentThemeData.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius),
@@ -450,6 +474,7 @@ export class ThemeTabView extends BaseTabView {
                 this._currentThemeData.borderRadius = val;
                 ThemeService.applyThemeVariables(this._currentThemeData, document.documentElement);
                 this._toolbarEl?.setDirty?.(true);
+                this._checkFieldDirty();
             }
         });
         this._disposables.add(radiusSlider);
@@ -500,6 +525,52 @@ export class ThemeTabView extends BaseTabView {
         const radiusHandle = this._sliderControls.get('borderRadius');
         if (radiusHandle) {
             radiusHandle.setValue(Number(this._currentThemeData.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius));
+        }
+
+        this._checkFieldDirty();
+    }
+
+    private _checkFieldDirty(): void {
+        const currentId = this._getActiveThemeId();
+        const activeProfile = this._presets.find((p) => p.id === currentId);
+        const baseline = activeProfile?.data || FALLBACK_SAFE_THEME;
+
+        const colorKeys: (keyof ThemeData)[] = [
+            'accentColor',
+            'bgPrimary',
+            'bgGradientEnd',
+            'bgSecondary',
+            'textPrimary',
+            'textSecondary',
+            'borderColor'
+        ];
+
+        for (const key of colorKeys) {
+            const handle = this._colorControls.get(key);
+            if (handle) {
+                const cur = String(this._currentThemeData[key] || '').toLowerCase();
+                const base = String(baseline[key] || '').toLowerCase();
+                const isDirty = cur !== base;
+                handle.classList.toggle('is-dirty', isDirty);
+                handle.hexInputElement.classList.toggle('is-dirty', isDirty);
+            }
+        }
+
+        const sliderKeys: (keyof ThemeData)[] = [
+            'bgGradientAngle',
+            'bgOpacity',
+            'blurRadius',
+            'borderRadius'
+        ];
+
+        for (const key of sliderKeys) {
+            const handle = this._sliderControls.get(key);
+            if (handle) {
+                const cur = Number(this._currentThemeData[key] ?? 0);
+                const base = Number(baseline[key] ?? 0);
+                const isDirty = Math.abs(cur - base) > 0.001;
+                handle.classList.toggle('is-dirty', isDirty);
+            }
         }
     }
 }

@@ -208,7 +208,7 @@ export function openWorkflowModal(
             recommendedList.forEach((m) => {
                 const isSelected = currentValue === m.variable;
                 html += `
-                    <div class="da-var-dropdown__item recommended ${isSelected ? 'active' : ''}" data-val="${escapeHtml(m.variable)}">
+                    <div class="da-var-dropdown__item da-var-dropdown__item--recommended ${isSelected ? 'da-var-dropdown__item--active' : ''}" data-val="${escapeHtml(m.variable)}">
                         <div class="da-var-dropdown__item-header">
                             <span class="da-macro-tag">${escapeHtml(m.variable)}</span>
                             <span class="da-var-dropdown__label">${escapeHtml(m.label)}</span>
@@ -225,7 +225,7 @@ export function openWorkflowModal(
             otherList.forEach((m) => {
                 const isSelected = currentValue === m.variable;
                 html += `
-                    <div class="da-var-dropdown__item ${isSelected ? 'active' : ''}" data-val="${escapeHtml(m.variable)}">
+                    <div class="da-var-dropdown__item ${isSelected ? 'da-var-dropdown__item--active' : ''}" data-val="${escapeHtml(m.variable)}">
                         <div class="da-var-dropdown__item-header">
                             <span class="da-macro-tag">${escapeHtml(m.variable)}</span>
                             <span class="da-var-dropdown__label">${escapeHtml(m.label)}</span>
@@ -288,12 +288,12 @@ export function openWorkflowModal(
     modalBackdrop.className = 'da-modal-backdrop st-da-root';
 
     const modalInner = document.createElement('div');
-    modalInner.className = 'st-da-root';
+    modalInner.className = 'da-workflow-modal-inner st-da-root';
     modalInner.addEventListener('click', (e) => e.stopPropagation());
 
     // 顶栏工具条
     const header = document.createElement('div');
-    header.className = 'da-header-bar';
+    header.className = 'da-workflow-header da-header-bar';
 
     const headerLeft = document.createElement('div');
     headerLeft.className = 'da-workflow-header-left';
@@ -301,7 +301,7 @@ export function openWorkflowModal(
     const titleSt = document.createElement('span');
     titleSt.className = 'da-workflow-title';
     titleSt.innerHTML = `
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+        <svg class="da-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
             <rect x="14" y="14" width="7" height="7"></rect>
@@ -332,17 +332,17 @@ export function openWorkflowModal(
     header.appendChild(closeBtn);
     modalInner.appendChild(header);
 
-    // 搜索与缩放控制工具栏
+    // 搜索与缩放控制工具栏 (复用全域通用 .da-filter-bar 与 .da-btn-group)
     const toolbar = document.createElement('div');
-    toolbar.className = 'da-workflow-toolbar';
+    toolbar.className = 'da-filter-bar';
 
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.placeholder = '🔍 搜索节点 ID、类名或标题...';
-    searchInput.className = 'da-input';
+    searchInput.className = 'da-input da-input--sm da-input--search';
 
     const catTabs = document.createElement('div');
-    catTabs.className = 'da-workflow-category-tabs';
+    catTabs.className = 'da-chip-group';
 
     const categories = [
         { id: 'ALL', label: '全部' },
@@ -356,7 +356,7 @@ export function openWorkflowModal(
         catTabs.innerHTML = '';
         categories.forEach((cat) => {
             const btn = document.createElement('button');
-            btn.className = `da-btn ${
+            btn.className = `da-btn da-btn--sm ${
                 currentCategoryFilter === cat.id ? 'da-btn--primary' : 'da-btn--secondary'
             }`;
             btn.textContent = cat.label;
@@ -371,19 +371,19 @@ export function openWorkflowModal(
     renderTabs();
 
     const zoomGroup = document.createElement('div');
-    zoomGroup.className = 'da-workflow-zoom-group';
+    zoomGroup.className = 'da-btn-group';
 
     const zoomOutBtn = document.createElement('button');
-    zoomOutBtn.className = 'da-btn da-btn--secondary';
+    zoomOutBtn.className = 'da-btn da-btn--secondary da-btn--sm';
     zoomOutBtn.textContent = '－';
     zoomOutBtn.title = '缩小画布';
 
     const zoomResetBtn = document.createElement('button');
-    zoomResetBtn.className = 'da-btn da-btn--secondary';
+    zoomResetBtn.className = 'da-btn da-btn--secondary da-btn--sm';
     zoomResetBtn.textContent = '100%';
 
     const zoomInBtn = document.createElement('button');
-    zoomInBtn.className = 'da-btn da-btn--secondary';
+    zoomInBtn.className = 'da-btn da-btn--secondary da-btn--sm';
     zoomInBtn.textContent = '＋';
     zoomInBtn.title = '放大画布';
 
@@ -404,12 +404,12 @@ export function openWorkflowModal(
     zoomGroup.appendChild(zoomInBtn);
 
     const toolbarLeft = document.createElement('div');
-    toolbarLeft.className = 'da-workflow-toolbar-left';
+    toolbarLeft.className = 'da-filter-bar__left';
     toolbarLeft.appendChild(searchInput);
     toolbarLeft.appendChild(catTabs);
 
     const toolbarRight = document.createElement('div');
-    toolbarRight.className = 'da-workflow-toolbar-right';
+    toolbarRight.className = 'da-filter-bar__right';
     toolbarRight.appendChild(zoomGroup);
 
     toolbar.appendChild(toolbarLeft);
@@ -440,11 +440,11 @@ export function openWorkflowModal(
 
         if (!selectedNodeId || !parsed[selectedNodeId]) {
             const emptyHint = document.createElement('div');
-            emptyHint.className = 'da-workflow-empty-hint';
+            emptyHint.className = 'da-empty-tip da-empty-tip--auto-margin';
             emptyHint.innerHTML = `
-                <div class="da-workflow-empty-hint-icon">🖱️</div>
-                <div style="font-weight:600;">点击左侧画布上的节点卡片</div>
-                <div class="da-workflow-empty-hint-sub">即可在此编辑参数与绑定宏变量</div>
+                <div class="da-empty-tip__icon">🖱️</div>
+                <div class="da-empty-tip__title">点击左侧画布上的节点卡片</div>
+                <div class="da-empty-tip__sub">即可在此编辑参数与绑定宏变量</div>
             `;
             inspectorPanel.appendChild(emptyHint);
             return;
@@ -458,7 +458,7 @@ export function openWorkflowModal(
 
         cardHeader.innerHTML = `
             <div class="da-workflow-header-row">
-                <span class="${badgeMeta.badgeClass}">${badgeMeta.badgeText}</span>
+                <span class="da-workflow-node-badge ${badgeMeta.badgeClass}">${badgeMeta.badgeText}</span>
                 <span class="da-workflow-node-id">#${selectedNodeId}</span>
             </div>
             <div class="da-workflow-node-title">${escapeHtml(badgeMeta.title)}</div>
@@ -504,7 +504,7 @@ export function openWorkflowModal(
 
                 if (isLongText) {
                     const txtArea = document.createElement('textarea');
-                    txtArea.className = 'da-input';
+                    txtArea.className = 'da-input da-workflow-textarea';
                     txtArea.value = val !== undefined && val !== null ? String(val) : '';
                     txtArea.addEventListener('input', () => {
                         nodeData.inputs[key] = txtArea.value;
@@ -514,7 +514,7 @@ export function openWorkflowModal(
                 } else {
                     const txtInput = document.createElement('input');
                     txtInput.type = 'text';
-                    txtInput.className = 'da-input';
+                    txtInput.className = 'da-input da-workflow-textinput';
                     txtInput.value = val !== undefined && val !== null ? String(val) : '';
                     txtInput.addEventListener('input', () => {
                         const rawVal = txtInput.value.trim();
@@ -605,7 +605,7 @@ export function openWorkflowModal(
 
             miniCard.innerHTML = `
                 <div class="da-workflow-header-row">
-                    <span class="${meta.badgeClass}">${meta.badgeText}</span>
+                    <span class="da-workflow-node-badge ${meta.badgeClass}">${meta.badgeText}</span>
                     <span class="da-workflow-node-id">#${nodeId}</span>
                 </div>
                 <div class="da-workflow-card-title">${escapeHtml(meta.title)}</div>
@@ -634,7 +634,7 @@ export function openWorkflowModal(
 
     // 底栏操作区
     const footer = document.createElement('div');
-    footer.className = 'da-footer-bar';
+    footer.className = 'da-workflow-footer da-footer-bar';
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'da-btn da-btn--primary';

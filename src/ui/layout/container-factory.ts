@@ -79,7 +79,7 @@ export interface FieldLabelOptions {
     title: string;
     /** 关联的目标输入控件 DOM ID，点击标签文本可直接激活或聚焦控件 */
     forId?: string;
-    /** 字段次要详细描述说明 */
+    /** 字段次要详细描述说明 @deprecated 仅卡片允许副标题，表单行设置项统一不渲染副标题，提示请使用 helpTooltip */
     description?: string;
     /** 帮助释义气泡文本 */
     helpTooltip?: string;
@@ -257,7 +257,8 @@ export function createCard(options?: CardOptions): CardResult {
 }
 
 /**
- * 创建表单字段标签组 (包含主标题、帮助说明气泡与次要描述)
+ * 创建表单字段标签组 (包含主标题与帮助说明气泡)
+ * 注：依据设计规范，只有卡片允许副标题，设置项与常规表单行统一不渲染副标题，详细说明由问号气泡承载。
  * 若提供 forId，主标题渲染为 <label for="...">，点击文本可直接激活或聚焦对应控件。
  * 帮助问号按钮保持在 label 外部同级排布，防止点击查看说明时意外触发表单控件。
  */
@@ -295,13 +296,6 @@ export function createFieldLabel(options: FieldLabelOptions): HTMLElement {
     }
 
     group.appendChild(titleRow);
-
-    if (options.description) {
-        const descEl = document.createElement('span');
-        descEl.className = 'da-field-desc';
-        descEl.textContent = options.description;
-        group.appendChild(descEl);
-    }
 
     return group;
 }

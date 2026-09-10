@@ -18,7 +18,7 @@ import { OpenAITabView } from './openai-tab';
 import { NovelAITabView } from './novelai-tab';
 import { ThemeTabView } from './theme-tab';
 import { FABSettingsTabView } from './fab-settings-tab';
-import { DiagnosticsTabView } from './diagnostics-tab';
+import { LogsAndStatsTabView } from './logs-and-stats-tab';
 import { AboutTabView } from './about-tab';
 import { GalleryTabView } from './gallery-tab';
 
@@ -146,16 +146,16 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
         })
     );
 
-    // 系统工具 (日志与统计 / 画廊 / 关于)
+    // 系统工具 (日志与统计 / 生图画廊 / 关于)
     disposables.add(
         uiRegistry.registerTab({
-            id: 'diagnostics',
+            id: 'logs',
             title: '日志与统计',
-            icon: TAB_SVG_ICONS['diagnostics'],
+            icon: TAB_SVG_ICONS['logs'],
             order: 60,
             isBuiltIn: true,
             render: (container) => {
-                const view = new DiagnosticsTabView(store, drivers);
+                const view = new LogsAndStatsTabView(store);
                 container.appendChild(view.element);
                 return view;
             }
@@ -165,7 +165,7 @@ export function registerCoreViews(options: RegisterViewsOptions): IDisposable {
     disposables.add(
         uiRegistry.registerTab({
             id: 'gallery',
-            title: '画廊',
+            title: '生图画廊',
             icon: TAB_SVG_ICONS['gallery'],
             order: 70,
             isBuiltIn: true,

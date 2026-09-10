@@ -63,6 +63,7 @@ export interface PresetToolbarAdapter<T = unknown> {
     exportProfile?: (id: string, data: T) => void;
     importProfile?: (content: string, fileName: string) => string | null | Promise<string | null>;
     onSelect?: (id: string) => Promise<void> | void;
+    onApply?: (preset: PresetItem<T>) => void | Promise<void>;
 }
 
 /**
@@ -74,6 +75,15 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const leftPart = document.createElement('div');
     leftPart.className = 'da-preset-toolbar-left';
+
+    const selectWrapper = document.createElement('div');
+    selectWrapper.className = 'da-preset-select-wrapper da-control-with-state-badge';
+
+    const stateBadge = document.createElement('span');
+    stateBadge.className = 'da-control-state-badge';
+    stateBadge.textContent = '!';
+    stateBadge.setAttribute('aria-hidden', 'true');
+    stateBadge.style.display = 'none';
 
     const select = document.createElement('select');
     select.className = 'da-select da-preset-select';
@@ -98,19 +108,9 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
     };
 
     renderSelectOptions(options.profiles, options.currentId);
-    leftPart.appendChild(select);
-
-    const draftBadge = document.createElement('span');
-    draftBadge.className = 'da-badge da-badge--dirty';
-    draftBadge.style.display = options.isDraftDirty ? 'inline-flex' : 'none';
-    draftBadge.textContent = '已修改';
-    leftPart.appendChild(draftBadge);
-
-    const invalidBadge = document.createElement('span');
-    invalidBadge.className = 'da-badge da-badge--invalid';
-    invalidBadge.style.display = options.isInvalid ? 'inline-flex' : 'none';
-    invalidBadge.textContent = '失效';
-    leftPart.appendChild(invalidBadge);
+    selectWrapper.appendChild(stateBadge);
+    selectWrapper.appendChild(select);
+    leftPart.appendChild(selectWrapper);
 
     const rightPart = document.createElement('div');
     rightPart.className = 'da-preset-toolbar-right';
@@ -145,7 +145,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
     ) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `da-icon-btn ${isDanger ? 'da-icon-btn--danger' : ''} ${extraClass}`.trim();
+        btn.className = `da-preset-btn da-icon-btn ${isDanger ? 'da-icon-btn--danger' : ''} ${extraClass}`.trim();
         btn.title = titleText;
         btn.setAttribute('aria-label', titleText);
         btn.innerHTML = svgHtml;
@@ -174,11 +174,11 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
     });
 
     // 方案操作按钮组
-    const newBtn = createIconButton(SVG_ICONS.plus, '新建预设方案', () => options.onNew?.(), false, false, 'da-preset-btn--new');
+    const newBtn = createIconButton(SVG_ICONS.plus, '新建方案', () => options.onNew?.(), false, false, 'da-preset-btn--new');
 
     const saveBtn = createIconButton(
         SVG_ICONS.save,
-        options.isDraftDirty ? '当前方案有未保存的修改 (点击保存)' : '保存当前方案',
+        '保存方案',
         () => options.onSave?.(),
         true,
         false,
@@ -188,7 +188,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const copyBtn = createIconButton(
         SVG_ICONS.copy,
-        '另存为 / 复制当前方案',
+        '复制方案',
         () => options.onCopy?.(),
         true,
         false,
@@ -197,7 +197,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const renameBtn = createIconButton(
         SVG_ICONS.rename,
-        '重命名方案',
+        '重命名',
         () => options.onRename?.(),
         true,
         false,
@@ -206,7 +206,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const importBtn = createIconButton(
         SVG_ICONS.import,
-        '导入 JSON 预设文件',
+        '导入方案',
         () => hiddenFileInput.click(),
         false,
         false,
@@ -215,7 +215,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const exportBtn = createIconButton(
         SVG_ICONS.export,
-        '导出方案为 JSON 文件',
+        '导出方案',
         () => options.onExport?.(),
         true,
         false,
@@ -224,7 +224,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const resetBtn = createIconButton(
         SVG_ICONS.reset,
-        '放弃未保存修改 / 还原方案快照',
+        '重置修改',
         () => options.onReset?.(),
         true,
         false,
@@ -233,7 +233,7 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
 
     const deleteBtn = createIconButton(
         SVG_ICONS.delete,
-        '删除当前方案',
+        '删除方案',
         () => options.onDelete?.(),
         true,
         true,
@@ -252,31 +252,53 @@ export function renderPresetToolbar(options: PresetToolbarOptions): PresetToolba
     container.appendChild(leftPart);
     container.appendChild(rightPart);
 
+    let currentDirty = Boolean(options.isDraftDirty);
+    let currentInvalid = Boolean(options.isInvalid);
+    let currentInvalidReason = options.invalidReason || '';
+
+    const updateStateFeedback = () => {
+        if (currentInvalid) {
+            selectWrapper.classList.add('has-state-badge');
+            stateBadge.className = 'da-control-state-badge da-control-state-badge--invalid';
+            stateBadge.style.display = 'inline-flex';
+            select.classList.add('is-invalid');
+            select.classList.remove('is-dirty');
+            const tooltip = currentInvalidReason ? `已失效：${currentInvalidReason}` : '已失效';
+            select.title = tooltip;
+            selectWrapper.title = tooltip;
+        } else if (currentDirty) {
+            selectWrapper.classList.add('has-state-badge');
+            stateBadge.className = 'da-control-state-badge da-control-state-badge--dirty';
+            stateBadge.style.display = 'inline-flex';
+            select.classList.remove('is-invalid');
+            select.classList.add('is-dirty');
+            const tooltip = '已修改';
+            select.title = tooltip;
+            selectWrapper.title = tooltip;
+        } else {
+            selectWrapper.classList.remove('has-state-badge');
+            stateBadge.style.display = 'none';
+            select.classList.remove('is-invalid', 'is-dirty');
+            select.title = '切换预设方案';
+            selectWrapper.title = '切换预设方案';
+        }
+
+        saveBtn.classList.toggle('is-dirty', currentDirty);
+        saveBtn.title = currentDirty ? '已修改 (点击覆盖保存)' : '保存方案';
+    };
+
     const setSelectDirty = (isDirty: boolean) => {
-        select.classList.toggle('is-dirty', isDirty);
-        draftBadge.style.display = isDirty ? 'inline-flex' : 'none';
-        saveBtn.classList.toggle('is-dirty', isDirty);
-        saveBtn.title = isDirty ? '当前方案有未保存的修改 (点击保存)' : '保存当前方案';
+        currentDirty = isDirty;
+        updateStateFeedback();
     };
 
     const setSelectError = (isInvalid: boolean, tooltip?: string) => {
-        select.classList.toggle('is-invalid', isInvalid);
-        select.classList.toggle('da-select-error', isInvalid);
-        invalidBadge.style.display = isInvalid ? 'inline-flex' : 'none';
-        if (tooltip) {
-            invalidBadge.title = tooltip;
-            select.title = isInvalid ? tooltip : '切换预设方案';
-        } else {
-            select.title = '切换预设方案';
-        }
+        currentInvalid = isInvalid;
+        currentInvalidReason = tooltip || '';
+        updateStateFeedback();
     };
 
-    if (options.isDraftDirty) {
-        setSelectDirty(true);
-    }
-    if (options.isInvalid) {
-        setSelectError(true, options.invalidReason);
-    }
+    updateStateFeedback();
 
     updateActionButtonsState();
 
@@ -321,6 +343,18 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
     let currentId = adapter.getInitialId() || profiles[0]?.id || '';
     let isDraftDirty = false;
 
+    const applyProfileById = async (id: string) => {
+        if (!id) return;
+        if (options.applyData) {
+            options.applyData(id);
+        } else if (adapter.onApply) {
+            const p = adapter.getProfiles().find((item) => item.id === id);
+            if (p) {
+                await adapter.onApply(p);
+            }
+        }
+    };
+
     const toolbar = renderPresetToolbar({
         profiles,
         currentId,
@@ -334,9 +368,7 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
                 }
             }
             currentId = id;
-            if (options.applyData) {
-                options.applyData(id);
-            }
+            await applyProfileById(id);
             if (options.onRefresh) {
                 options.onRefresh();
             }
@@ -362,9 +394,7 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
             const currentData = options.getCurrentData ? options.getCurrentData() : ({} as T);
             const newId = await adapter.createProfile(trimmedName, currentData);
             currentId = newId;
-            if (options.applyData) {
-                options.applyData(newId);
-            }
+            await applyProfileById(newId);
             if (options.onRefresh) {
                 options.onRefresh();
             }
@@ -420,9 +450,7 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
             const currentData = options.getCurrentData ? options.getCurrentData() : (((current.data || {}) as unknown) as T);
             const newId = await adapter.createProfile(trimmed, currentData);
             currentId = newId;
-            if (options.applyData) {
-                options.applyData(newId);
-            }
+            await applyProfileById(newId);
             if (options.onRefresh) {
                 options.onRefresh();
             }
@@ -470,7 +498,7 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
                 a.href = url;
                 a.download = `${current.name || 'preset'}.json`;
                 a.click();
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
                 FeedbackService.toastSuccess(`已导出方案文件: ${current.name}.json`);
             }
         },
@@ -480,9 +508,7 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
                     const importedId = await adapter.importProfile(content, fileName);
                     if (importedId) {
                         currentId = importedId;
-                        if (options.applyData) {
-                            options.applyData(importedId);
-                        }
+                        await applyProfileById(importedId);
                         if (options.onRefresh) {
                             options.onRefresh();
                         }
@@ -490,13 +516,14 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
                         toolbar.refreshPresets?.(adapter.getProfiles(), currentId, isDraftDirty);
                     }
                 } else {
-                    const parsed = JSON.parse(content);
+                    let parsed = JSON.parse(content);
+                    if (parsed && typeof parsed === 'object' && 'data' in parsed && parsed.data !== undefined) {
+                        parsed = parsed.data;
+                    }
                     const name = fileName.replace(/\.json$/i, '');
                     const newId = await adapter.createProfile(name, parsed);
                     currentId = newId;
-                    if (options.applyData) {
-                        options.applyData(newId);
-                    }
+                    await applyProfileById(newId);
                     if (options.onRefresh) {
                         options.onRefresh();
                     }
@@ -518,8 +545,8 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
 
             if (options.onResetOverride) {
                 options.onResetOverride();
-            } else if (currentId && options.applyData) {
-                options.applyData(currentId);
+            } else if (currentId) {
+                await applyProfileById(currentId);
             }
             if (options.onRefresh) {
                 options.onRefresh();
@@ -539,8 +566,8 @@ export function bindPresetToolbar<T = unknown>(options: BoundPresetToolbarOption
 
             const nextId = await adapter.deleteProfile(currentId);
             currentId = nextId || '';
-            if (nextId && options.applyData) {
-                options.applyData(nextId);
+            if (nextId) {
+                await applyProfileById(nextId);
             }
             if (options.onRefresh) {
                 options.onRefresh();
@@ -597,7 +624,6 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
                 FeedbackService.toastError(`新建${label}方案失败：无法写入本地存储`);
                 throw new Error(`新建方案失败: 本地存储写入异常`);
             }
-            FeedbackService.toastSuccess(`方案已保存: ${name}`);
             const list = [...getPresets(), { id, name, data }];
             onPresetsChange(list, id);
             return id;
@@ -611,7 +637,6 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
                 FeedbackService.toastError(`保存${label}方案失败：无法更新本地存储`);
                 return;
             }
-            FeedbackService.toastSuccess(`方案已成功保存: ${name}`);
             if (idx >= 0) {
                 const next = [...list];
                 next[idx] = { ...next[idx], data };
@@ -630,7 +655,6 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
                     FeedbackService.toastError(`重命名${label}方案失败：无法写入本地存储`);
                     return;
                 }
-                FeedbackService.toastSuccess(`方案已重命名为: ${newName}`);
                 const next = [...list];
                 next[idx] = { ...next[idx], name: newName };
                 onPresetsChange(next, id);
@@ -642,7 +666,6 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
                 FeedbackService.toastError(`删除${label}方案失败：无法删除本地预设`);
                 throw new Error(`删除方案失败: 本地操作异常`);
             }
-            FeedbackService.toastInfo(`方案已删除`);
             const list = getPresets().filter((p) => p.id !== id);
             const nextActiveId = list[0]?.id || '';
             onPresetsChange(list, nextActiveId);
@@ -651,17 +674,22 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
             }
             return nextActiveId;
         },
-        exportProfile: async (_id: string, data: T) => {
+        exportProfile: async (id: string, data: T) => {
+            const profile = getPresets().find((p) => p.id === id);
+            const exportName = profile?.name ? profile.name.trim() : `${label}_方案`;
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${label}_方案.json`;
+            a.download = `${exportName}.json`;
             a.click();
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
         importProfile: async (content: string, fileName: string) => {
-            const parsed = JSON.parse(content);
+            let parsed = JSON.parse(content);
+            if (parsed && typeof parsed === 'object' && 'data' in parsed && parsed.data !== undefined) {
+                parsed = parsed.data;
+            }
             const name = fileName.replace(/\.json$/i, '');
             const rawId = `${subCategory || category}_${Date.now()}`;
             const id = rawId.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -670,9 +698,11 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
                 FeedbackService.toastError(`导入${label}方案失败：无法写入本地存储`);
                 throw new Error(`导入方案失败: 本地写入异常`);
             }
-            FeedbackService.toastSuccess(`已成功导入方案: ${name}`);
             const list = [...getPresets(), { id, name, data: parsed }];
             onPresetsChange(list, id);
+            if (onApply) {
+                await onApply({ id, name, data: parsed });
+            }
             return id;
         },
         onSelect: async (id: string) => {
