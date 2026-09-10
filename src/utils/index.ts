@@ -7,3 +7,4 @@ export * from './log-buffer';
 export * from './event-bus';
 export * from './binary';
 export * from './statistics-collector';
+export * from './version-util';

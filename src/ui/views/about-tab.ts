@@ -1,10 +1,10 @@
 /**
  * 关于与使用帮助面板视图 (AboutTabView)
- * 静态导入插件元数据、更新履历与生态链接，提供配置备份恢复与出厂重置
+ * 静态导入插件元数据、更新日志与开源社区链接，提供配置备份恢复与出厂重置
  */
 
 import { CoreEventMap } from '../../types';
-import { TypedEventBus } from '../../utils';
+import { TypedEventBus, compareVersions, pullExtensionUpdate } from '../../utils';
 import { SettingsStore, PresetStore } from '../../state';
 import { EXTENSION_VERSION } from '../../constants';
 import { createCard, createCardHeader } from '../layout/container-factory';
@@ -52,7 +52,7 @@ export class AboutTabView extends BaseTabView {
         private readonly _store: SettingsStore,
         private readonly _events?: TypedEventBus<CoreEventMap>
     ) {
-        super('da-about-tab');
+        super();
         this._buildCards();
     }
 
@@ -66,7 +66,7 @@ export class AboutTabView extends BaseTabView {
     /** 插件概览与协议卡片 */
     private _buildHeroCard(): void {
         this._heroCardEl = document.createElement('div');
-        this._heroCardEl.className = 'da-about-card-hero';
+        this._heroCardEl.className = 'da-hero-card';
         this._renderHeroContent();
         this._root.appendChild(this._heroCardEl);
     }
@@ -76,10 +76,10 @@ export class AboutTabView extends BaseTabView {
 
         // 头部行：标题 + 版本徽标 + 协议徽标
         const headerRow = document.createElement('div');
-        headerRow.className = 'da-about-hero-header';
+        headerRow.className = 'da-hero-card__header';
 
         const title = document.createElement('h2');
-        title.className = 'da-about-title';
+        title.className = 'da-hero-card__title';
         title.textContent = this._aboutData.name || 'Starlight DrawAssistant';
 
         const versionBadge = document.createElement('span');
@@ -87,7 +87,7 @@ export class AboutTabView extends BaseTabView {
         versionBadge.textContent = `v${this._aboutData.version || EXTENSION_VERSION}`;
 
         const licenseBadge = document.createElement('span');
-        licenseBadge.className = 'da-version-badge da-license-badge';
+        licenseBadge.className = 'da-badge da-badge--success';
         licenseBadge.textContent = this._aboutData.license || 'GPL-3.0';
 
         headerRow.appendChild(title);
@@ -97,17 +97,17 @@ export class AboutTabView extends BaseTabView {
 
         // 详细功能说明
         const desc = document.createElement('p');
-        desc.className = 'da-about-desc';
+        desc.className = 'da-hero-card__desc';
         desc.textContent = this._aboutData.description;
         this._heroCardEl.appendChild(desc);
 
         // 特性亮点芯片
         if (this._aboutData.highlights && this._aboutData.highlights.length > 0) {
             const highlightsBox = document.createElement('div');
-            highlightsBox.className = 'da-about-highlights';
+            highlightsBox.className = 'da-chip-group';
             this._aboutData.highlights.forEach((h) => {
                 const chip = document.createElement('span');
-                chip.className = 'da-about-highlight-chip';
+                chip.className = 'da-chip';
                 chip.textContent = h;
                 highlightsBox.appendChild(chip);
             });
@@ -116,14 +116,14 @@ export class AboutTabView extends BaseTabView {
 
         // 底部作者与版权
         const footer = document.createElement('div');
-        footer.className = 'da-about-footer';
+        footer.className = 'da-hero-card__info da-flex-row da-gap-md';
 
         const author = document.createElement('div');
-        author.className = 'da-about-author';
+        author.className = 'da-hero-card__meta';
         author.textContent = `作者：${this._aboutData.author}`;
 
         const copyright = document.createElement('div');
-        copyright.className = 'da-about-copyright';
+        copyright.className = 'da-hero-card__meta';
         copyright.textContent = this._aboutData.copyright;
 
         footer.appendChild(author);
@@ -131,21 +131,21 @@ export class AboutTabView extends BaseTabView {
         this._heroCardEl.appendChild(footer);
     }
 
-    /** 2. 版本与更新履历卡片 */
+    /** 2. 版本与更新日志卡片 */
     private _buildChangelogCard(): void {
         const card = createCard({ hoverable: true });
         const header = createCardHeader({
-            title: '版本与更新履历',
+            title: '更新日志',
             description: '查阅当前运行版本与各阶段功能演进记录'
         });
         card.header.appendChild(header);
 
         // 版本条带
         const strip = document.createElement('div');
-        strip.className = 'da-about-version-strip';
+        strip.className = 'da-action-strip';
 
         const leftGroup = document.createElement('div');
-        leftGroup.className = 'da-about-strip-left';
+        leftGroup.className = 'da-action-strip__left';
         const versionBadge = createVersionBadge({
             version: `v${EXTENSION_VERSION}`
         });
@@ -153,12 +153,117 @@ export class AboutTabView extends BaseTabView {
         leftGroup.appendChild(versionBadge);
 
         const rightGroup = document.createElement('div');
-        rightGroup.className = 'da-about-strip-right';
-        const statusText = document.createElement('span');
-        statusText.style.fontSize = '12px';
-        statusText.style.color = 'var(--da-text-secondary)';
-        statusText.textContent = `当前运行版本: v${this._aboutData?.version || EXTENSION_VERSION} 正式版`;
-        rightGroup.appendChild(statusText);
+        rightGroup.className = 'da-action-strip__right';
+        const checkUpdateBtn = document.createElement('button');
+        checkUpdateBtn.type = 'button';
+        checkUpdateBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        checkUpdateBtn.textContent = '检查更新';
+        let hasUpdate = false;
+
+        checkUpdateBtn.onclick = async () => {
+            if (!hasUpdate) {
+                // ===== 阶段 1：检查更新 =====
+                checkUpdateBtn.disabled = true;
+                checkUpdateBtn.textContent = '检查中...';
+                FeedbackService.toastInfo('正在检查版本更新...');
+
+                try {
+                    // 直接请求 GitHub Releases 最新版本标签，使用 8 秒超时防挂死，真实反映请求状态
+                    const res = await fetch('https://api.github.com/repos/NoahFoya/ST-DrawAssistant/releases/latest', {
+                        headers: { Accept: 'application/vnd.github.v3+json' },
+                        signal: AbortSignal.timeout(8000)
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        const remoteTag = String(data.tag_name || '').trim();
+                        const remoteVersion = remoteTag.replace(/^v/i, '');
+                        const currentVersion = EXTENSION_VERSION.replace(/^v/i, '');
+                        const comp = compareVersions(remoteVersion, currentVersion);
+
+                        if (comp > 0) {
+                            hasUpdate = true;
+                            checkUpdateBtn.textContent = '立即更新';
+                            checkUpdateBtn.className = 'da-btn da-btn--primary da-btn--sm';
+                            checkUpdateBtn.disabled = false;
+                            FeedbackService.toastInfo(`检测到新版本 v${remoteVersion}，可点击“立即更新”拉取最新代码`);
+                            return;
+                        } else if (comp === 0) {
+                            FeedbackService.toastSuccess(`当前已是最新版本 (v${EXTENSION_VERSION})`);
+                        } else {
+                            FeedbackService.toastInfo(`当前运行版本 (v${EXTENSION_VERSION}) 高于远端最新版本`);
+                        }
+                    } else if (res.status === 403) {
+                        FeedbackService.toastWarning('检查更新失败：GitHub API 访问频次受限，请稍后重试');
+                    } else if (res.status === 404) {
+                        FeedbackService.toastInfo('暂未获取到远端发布版本记录');
+                    } else {
+                        FeedbackService.toastError(`检查更新失败 (HTTP ${res.status})`);
+                    }
+                } catch (err: unknown) {
+                    const isTimeout = err instanceof DOMException && err.name === 'TimeoutError';
+                    if (isTimeout) {
+                        FeedbackService.toastError('检查更新超时，请检查网络连接');
+                    } else {
+                        FeedbackService.toastError('无法连接至 GitHub 服务，请稍后重试');
+                    }
+                } finally {
+                    if (!hasUpdate) {
+                        checkUpdateBtn.disabled = false;
+                        checkUpdateBtn.textContent = '检查更新';
+                        checkUpdateBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+                    }
+                }
+            } else {
+                // ===== 阶段 2：立即更新（调用酒馆原生 Git 拉取端点） =====
+                checkUpdateBtn.disabled = true;
+                checkUpdateBtn.textContent = '正在更新...';
+                FeedbackService.toastInfo('正在通过 Git 拉取最新代码，请稍候...');
+
+                try {
+                    const res = await pullExtensionUpdate();
+                    if (!res.ok) {
+                        if (res.status === 403) {
+                            FeedbackService.toastError('更新失败：当前用户无权更新全局插件（需要管理员权限）');
+                        } else if (res.status === 404) {
+                            FeedbackService.toastError('更新失败：未找到插件目录，请确认是否通过 git clone 安装');
+                        } else if (res.status === 500) {
+                            FeedbackService.toastError('更新失败：酒馆后端 Git 拉取失败，请检查网络或控制台日志');
+                        } else {
+                            FeedbackService.toastError(`更新失败 (HTTP ${res.status})`);
+                        }
+                        checkUpdateBtn.disabled = false;
+                        checkUpdateBtn.textContent = '立即更新';
+                        return;
+                    }
+
+                    const result = await res.json().catch(() => ({}));
+                    if (result && result.isUpToDate) {
+                        FeedbackService.toastSuccess('当前插件仓库代码已是最新');
+                        hasUpdate = false;
+                        checkUpdateBtn.disabled = false;
+                        checkUpdateBtn.textContent = '检查更新';
+                        checkUpdateBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+                        return;
+                    }
+
+                    // 成功拉取最新提交，提示并准备自动刷新
+                    FeedbackService.toastSuccess('插件更新成功！3 秒后自动刷新页面...');
+                    checkUpdateBtn.textContent = '更新完成';
+
+                    setTimeout(() => {
+                        if (typeof window !== 'undefined') {
+                            window.location.reload();
+                        }
+                    }, 3000);
+                } catch (err: unknown) {
+                    FeedbackService.toastError('调用更新接口失败，请检查酒馆网络或服务状态');
+                    checkUpdateBtn.disabled = false;
+                    checkUpdateBtn.textContent = '立即更新';
+                }
+            }
+        };
+        rightGroup.appendChild(checkUpdateBtn);
 
         strip.appendChild(leftGroup);
         strip.appendChild(rightGroup);
@@ -166,7 +271,7 @@ export class AboutTabView extends BaseTabView {
 
         // 更新日志明细框
         this._changelogBoxEl = document.createElement('div');
-        this._changelogBoxEl.className = 'da-changelog-box';
+        this._changelogBoxEl.className = 'da-changelog';
         this._renderChangelogItems();
         card.body.appendChild(this._changelogBoxEl);
 
@@ -178,27 +283,27 @@ export class AboutTabView extends BaseTabView {
         this._changelogBoxEl.innerHTML = '';
 
         if (!this._changelogData) {
-            this._changelogBoxEl.innerHTML = '<div class="da-about-status-hint">正在加载更新履历...</div>';
+            this._changelogBoxEl.innerHTML = '<div class="da-empty-tip">正在加载更新日志...</div>';
             return;
         }
 
         if (this._changelogData.length === 0) {
-            this._changelogBoxEl.innerHTML = '<div class="da-about-status-hint">暂未获取到更新履历</div>';
+            this._changelogBoxEl.innerHTML = '<div class="da-empty-tip">暂未获取到更新日志</div>';
             return;
         }
 
         const fragment = document.createDocumentFragment();
         this._changelogData.forEach((entry, idx) => {
             const entryTitle = document.createElement('div');
-            entryTitle.className = `da-about-cl-entry ${idx > 0 ? 'da-about-cl-entry--sep' : ''}`;
+            entryTitle.className = `da-changelog__entry ${idx > 0 ? 'da-changelog__entry--sep' : ''}`;
             entryTitle.textContent = entry.title || `v${entry.version} (${entry.date})`;
 
             const list = document.createElement('ul');
-            list.className = 'da-about-cl-list';
+            list.className = 'da-changelog__list';
 
             (entry.items || []).forEach((itemText) => {
                 const li = document.createElement('li');
-                li.className = 'da-about-cl-item';
+                li.className = 'da-changelog__item';
                 li.textContent = itemText;
                 list.appendChild(li);
             });
@@ -210,17 +315,17 @@ export class AboutTabView extends BaseTabView {
         this._changelogBoxEl.appendChild(fragment);
     }
 
-    /** 3. 社区与生态链接卡片 (富链接网格) */
+    /** 3. 社区与文档链接卡片 */
     private _buildCommunityCard(): void {
         const card = createCard({ hoverable: true });
         const header = createCardHeader({
-            title: '开源社区与生态',
-            description: '查看官方开源仓库、使用协议与相关生态链接'
+            title: '社区与文档',
+            description: '访问 GitHub 官方仓库、开源许可协议与生图引擎官方文档'
         });
         card.header.appendChild(header);
 
         this._communityGridEl = document.createElement('div');
-        this._communityGridEl.className = 'da-about-card-grid';
+        this._communityGridEl.className = 'da-rich-link-grid';
         this._renderCommunityLinks();
         card.body.appendChild(this._communityGridEl);
 
@@ -232,40 +337,40 @@ export class AboutTabView extends BaseTabView {
         this._communityGridEl.innerHTML = '';
 
         if (!this._aboutData) {
-            this._communityGridEl.innerHTML = '<div class="da-about-empty-grid">正在读取社区生态配置...</div>';
+            this._communityGridEl.innerHTML = '<div class="da-empty-tip">正在读取社区与文档配置...</div>';
             return;
         }
 
         const links = this._aboutData.communityLinks || [];
         if (links.length === 0) {
-            this._communityGridEl.innerHTML = '<div class="da-about-empty-grid">暂无生态链接数据</div>';
+            this._communityGridEl.innerHTML = '<div class="da-empty-tip">暂无社区与文档链接</div>';
             return;
         }
 
         const fragment = document.createDocumentFragment();
         links.forEach((linkItem) => {
             const a = document.createElement('a');
-            a.className = `da-about-rich-card ${linkItem.themeClass || ''}`.trim();
+            a.className = `da-rich-link-card ${linkItem.themeClass || ''}`.trim();
             a.href = linkItem.href;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
 
             const iconBox = document.createElement('div');
-            iconBox.className = 'da-about-rich-card-icon-box';
+            iconBox.className = 'da-rich-link-card__icon-box';
             const iconSpan = document.createElement('span');
-            iconSpan.className = 'da-about-rich-card-icon';
+            iconSpan.className = 'da-rich-link-card__icon';
             iconSpan.textContent = linkItem.icon;
             iconBox.appendChild(iconSpan);
 
             const contentBox = document.createElement('div');
-            contentBox.className = 'da-about-rich-card-content';
+            contentBox.className = 'da-rich-link-card__content';
 
             const cardTitle = document.createElement('div');
-            cardTitle.className = 'da-about-rich-card-title';
+            cardTitle.className = 'da-rich-link-card__title';
             cardTitle.textContent = linkItem.title;
 
             const cardSub = document.createElement('div');
-            cardSub.className = 'da-about-rich-card-sub';
+            cardSub.className = 'da-rich-link-card__sub';
             cardSub.textContent = linkItem.subtitle;
 
             contentBox.appendChild(cardTitle);
@@ -279,17 +384,17 @@ export class AboutTabView extends BaseTabView {
         this._communityGridEl.appendChild(fragment);
     }
 
-    /** 4. 配置备份与恢复卡片 (自解释界面) */
+    /** 4. 配置备份与恢复卡片 */
     private _buildBackupCard(): void {
         const card = createCard({ hoverable: true });
         const header = createCardHeader({
             title: '配置备份与恢复',
-            description: '导出或导入插件全量配置归档（含生图主配置、网络凭据与所有本地预设方案），支持跨设备迁移或出厂重置'
+            description: '导出或导入插件全量配置归档（含生图主配置、网络凭据与所有本地预设方案），支持跨设备迁移与重置'
         });
         card.header.appendChild(header);
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'da-about-btn-row';
+        btnRow.className = 'da-btn-row';
 
         // 导出完整配置 (双模选择)
         const exportBtn = document.createElement('button');
@@ -346,7 +451,7 @@ export class AboutTabView extends BaseTabView {
                     return;
                 }
 
-                // 严格格式校验，不作历史妥协
+                // 严格校验归档格式与必要结构，格式不符时直接终止导入
                 const validation = this._store.validateArchive(parsed);
                 if (!validation.valid || !validation.data) {
                     FeedbackService.toastError(validation.error || '无效的 ST-DrawAssistant 全量归档文件');
@@ -403,14 +508,14 @@ export class AboutTabView extends BaseTabView {
         importBtn.textContent = '导入配置文件';
         importBtn.onclick = () => fileInput.click();
 
-        // 恢复出厂默认设置 (清空并以出厂模板重新载入)
+        // 恢复出厂设置 (清空并以出厂模板重新载入)
         const resetBtn = document.createElement('button');
         resetBtn.type = 'button';
-        resetBtn.className = 'da-btn da-btn--danger da-btn--sm da-about-btn-reset';
-        resetBtn.textContent = '恢复出厂默认设置';
+        resetBtn.className = 'da-btn da-btn--danger da-btn--sm';
+        resetBtn.textContent = '恢复出厂设置';
         resetBtn.onclick = async () => {
             const confirmed = await FeedbackService.confirm({
-                title: '恢复出厂默认设置确认',
+                title: '恢复出厂设置确认',
                 message: '此操作将清空本地所有自定义预设方案与网络配置文件，并以出厂默认模板重新载入初始化（不会删除本地历史图片）。所有生图参数与主题将还原为初始状态，是否继续？',
                 confirmText: '确认清空并重置',
                 isDangerous: true
