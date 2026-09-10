@@ -1,9 +1,15 @@
 /**
- * segmented.css
- * 层级：controls/inputs
- * 职责：分段切换单选按钮组样式 (Segmented Control)
+ * @module styles/controls/inputs/segmented
+ * @layer controls/inputs (Layer 3)
+ * @description 分段单选切换器 (Segmented Control) 与单选组状态
+ *
+ * 核心边界与约束：
+ * 1. 采用语义化 role="radiogroup" 容器与 role="radio" 互斥子项；
+ * 2. 状态管道：统一对接未保存修改 (.is-dirty)、校验错误 (.is-invalid) 与禁用 (.is-disabled)；
+ * 3. 交互可访问性：子项支持 :focus-visible 键盘导航高对比度焦点环。
  */
 
+/* --- 1. 分段切换器外壳 --- */
 .da-segmented {
     display: inline-flex;
     align-items: center;
@@ -14,8 +20,10 @@
     box-sizing: border-box;
     gap: 2px;
     user-select: none;
+    transition: border-color 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
 }
 
+/* --- 2. 分段单选子项 --- */
 .da-segmented-item {
     border: none;
     background: transparent;
@@ -31,6 +39,7 @@
     white-space: nowrap;
     transition: background 0.14s var(--da-ease), color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease);
     box-sizing: border-box;
+    outline: none;
 }
 
 .da-segmented-item:hover:not(.is-active):not(:disabled) {
@@ -42,11 +51,29 @@
     transform: scale(0.97);
 }
 
+.da-segmented-item:focus-visible {
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* --- 3. 选中激活态 --- */
 .da-segmented-item.is-active {
     background: var(--da-accent-color);
     color: #ffffff !important;
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* --- 4. 表单状态联动 (未保存修改 / 校验错误 / 禁用) --- */
+/* 未保存修改态 (黄色高亮) */
+.da-segmented.is-dirty {
+    border-color: var(--da-color-warn, #ff9f0a) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 6px rgba(255, 159, 10, 0.25) !important;
+}
+
+/* 错误校验态 (红色高亮) */
+.da-segmented.is-invalid {
+    border-color: var(--da-color-error, #ff453a) !important;
+    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 6px rgba(255, 69, 58, 0.25) !important;
 }
 
 /* 禁用态 */
@@ -56,3 +83,4 @@
     cursor: not-allowed;
     pointer-events: none;
 }
+

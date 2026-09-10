@@ -1,9 +1,16 @@
 /**
- * image-info.css
- * 层级：features
- * 职责：图像元数据详情与多后端生成参数抽屉弹窗 (ImageInfoPanel)
+ * @module styles/features/image-info
+ * @layer features (Layer 4)
+ * @description 图像元数据详情与多后端生成参数检查器弹窗 (ImageInfoPanel)
+ *
+ * 职责与约束：
+ * 1. 负责呈现已生成图像的完整技术元数据，包括正/反向提示词、LoRA 列表、步数、CFG、Seed 等；
+ * 2. 桌面端采用左右双列（1fr 340px）网格排布，左侧展示长文本参数，右侧展示 1:1 预览与操作动作；
+ * 3. 提示词采用 min-width: 0 与 word-break: break-word 阻断长词撑破网格；
+ * 4. 参数表格每个单元格支持点击一键复制取值，支持悬停交互反馈。
  */
 
+/* --- 1. 图像详情弹窗外壳 --- */
 .da-inspect-modal {
     width: 95%;
     max-width: 1060px;
@@ -20,6 +27,7 @@
     animation: da-fadein 0.22s var(--da-ease);
 }
 
+/* 2. 顶栏标题与元数据徽标 (.da-inspect-header) */
 .da-inspect-header {
     display: flex;
     align-items: center;
@@ -62,6 +70,8 @@
     border: 1px solid var(--da-border-color);
 }
 
+/* 3. 详情主体双列网格 (.da-inspect-body)
+   采用 1fr 340px 左右列划分，内部具备独立垂直滚动能力 */
 .da-inspect-body {
     flex: 1;
     overflow-y: auto;
@@ -71,7 +81,9 @@
     padding: 20px;
 }
 
-/* ════════ 左栏：终态提示词与专属参数矩阵 ════════ */
+/* 4. 左栏：提示词与生成参数 (.da-inspect-col-meta)
+   承载正向提示词、反向提示词、LoRA 列表与生成参数表格；
+   min-width: 0 保证长提示词自动换行折行，避免将 Grid 网格列挤压撑破。 */
 .da-inspect-col-meta {
     display: flex;
     flex-direction: column;
@@ -135,7 +147,7 @@
     user-select: text;
 }
 
-/* LoRA 标签容器 */
+/* 5. LoRA 标签芯片容器 (.da-inspect-lora-box) */
 .da-inspect-lora-box {
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);
@@ -190,7 +202,9 @@
     font-weight: 600;
 }
 
-/* 后端参数表格矩阵 */
+/* 6. 生成参数双列网格与点击复制 (.da-inspect-params-matrix)
+   采用双列等宽网格（repeat(2, 1fr)）展示步数、CFG、种子、模型、采样器等核心元数据；
+   每个单元格支持鼠标悬停高亮与点击快速复制取值。 */
 .da-inspect-params-matrix {
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);
@@ -239,7 +253,8 @@
     text-decoration: underline;
 }
 
-/* ════════ 右栏：视觉展示与快捷工具箱 ════════ */
+/* 7. 右栏：图像预览视窗与操作工具箱 (.da-inspect-col-visual)
+   桌面端固定宽度 340px 容器，包含 1:1 正方形预览视窗、快捷操作按钮组（以图生图、重绘、导出、删除）及文件尺寸信息。 */
 .da-inspect-col-visual {
     display: flex;
     flex-direction: column;
@@ -289,7 +304,7 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* 技术参数指标 */
+/* 技术规格参数指标 */
 .da-inspect-tech-specs {
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);

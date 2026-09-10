@@ -1,16 +1,21 @@
 /**
- * toggle.css
- * 层级：controls/inputs
- * 职责：平滑开关输入组件 (Toggle Switch)
+ * @module styles/controls/inputs/toggle
+ * @layer controls/inputs (Layer 3)
+ * @description 布尔开关切换组件 (Toggle Switch) 与状态交互
+ *
+ * 核心边界与约束：
+ * 1. 采用原生隐藏复选框 + 模拟轨道方案，保障键盘 Tab 导航与 Space 切换无障碍可用；
+ * 2. 宿主隔离：显式清除宿主全局注入的 label 冒号伪元素，防止开关布局错位；
+ * 3. 状态管道：统一对接未保存修改 (.is-dirty)、校验错误 (.is-invalid) 与禁用 (.is-disabled)。
  */
 
+/* --- 1. 基础结构与宿主隔离 --- */
 .da-toggle {
     position: relative;
     display: inline-flex;
     align-items: center;
     width: 38px;
     height: 20px;
-    flex: 0 0 38px;
     flex-shrink: 0;
     margin: 0;
     box-sizing: border-box;
@@ -18,13 +23,14 @@
     user-select: none;
 }
 
-/* 避免宿主全局 label::after 伪元素注入冒号破坏开关排版 */
+/* 宿主兼容：清除 SillyTavern 全局 label::after 注入的冒号，防止开关错位 */
 .da-toggle::before,
 .da-toggle::after {
     content: none !important;
     display: none !important;
 }
 
+/* 隐藏原生复选框，同时保留键盘与屏幕阅读器无障碍能力 */
 .da-toggle input {
     opacity: 0;
     width: 0;
@@ -34,6 +40,7 @@
     padding: 0;
 }
 
+/* --- 2. 轨道与滑块圆钮 --- */
 .da-toggle__track {
     position: absolute;
     cursor: pointer;
@@ -61,12 +68,16 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
+.da-toggle:hover:not(.is-disabled) .da-toggle__track {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+}
+
+/* --- 3. 选中激活与键盘焦点环 --- */
 .da-toggle input:checked + .da-toggle__track {
     background-color: var(--da-accent-color);
     border-color: var(--da-accent-color);
 }
 
-/* 键盘 Tab 导航聚焦至开关输入框时，在轨道外侧呈现清晰的高对比度焦点环 */
 .da-toggle input:focus-visible + .da-toggle__track {
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
@@ -75,33 +86,24 @@
     transform: translateX(18px);
 }
 
+/* --- 4. 表单状态联动 (未保存修改 / 校验错误 / 禁用) --- */
+/* 未保存修改态 (黄色高亮) */
+.da-toggle.is-dirty .da-toggle__track {
+    border-color: var(--da-color-warn, #ff9f0a) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 6px rgba(255, 159, 10, 0.25) !important;
+}
+
+/* 错误校验态 (红色高亮) */
+.da-toggle.is-invalid .da-toggle__track {
+    border-color: var(--da-color-error, #ff453a) !important;
+    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 6px rgba(255, 69, 58, 0.25) !important;
+}
+
+/* 禁用态 */
 .da-toggle.is-disabled,
 .da-toggle:has(input:disabled) {
     opacity: 0.45;
     cursor: not-allowed;
     pointer-events: none;
 }
-
-/* 微型尺寸变体 */
-.da-toggle--sm {
-    width: 30px;
-    height: 16px;
-    flex: 0 0 30px;
-}
-
-.da-toggle--sm .da-toggle__track {
-    border-radius: var(--da-radius-pill, 16px);
-}
-
-.da-toggle--sm .da-toggle__track:before {
-    height: 10px;
-    width: 10px;
-    left: 2px;
-    top: 2px;
-}
-
-.da-toggle--sm input:checked + .da-toggle__track:before {
-    transform: translateX(14px);
-}
-
 

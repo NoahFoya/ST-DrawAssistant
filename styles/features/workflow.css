@@ -1,10 +1,15 @@
 /**
- * workflow.css
- * 层级：features
- * 职责：工作流卡片状态、工作流变量格式化诊断弹窗与宏标签
- * 字号约定：em
+ * @module styles/features/workflow
+ * @layer features (Layer 4)
+ * @description ComfyUI 工作流卡片状态、工作流宏变量格式化诊断弹窗与占位符标签
+ *
+ * 职责与约束：
+ * 1. 负责工作流卡片匹配状态标签（.da-workflow-status-badge）；
+ * 2. 负责工作流变量格式化诊断弹窗（.da-workflow-format-modal），展示宏变量解析匹配率；
+ * 3. 规范等宽宏占位符标签（.da-macro-tag）的高亮色彩规范。
  */
 
+/* 1. 工作流卡片外壳与匹配状态微标 (.da-workflow-card) */
 .da-workflow-card {
     display: flex;
     flex-direction: column;
@@ -23,19 +28,25 @@
     font-weight: 500;
 }
 
+.da-workflow-status-badge--matched,
+.da-workflow-status-badge.is-matched,
 .da-workflow-status-badge.matched {
     background: rgba(48, 209, 88, 0.15);
     color: var(--da-color-success);
     border: 1px solid rgba(48, 209, 88, 0.35);
 }
 
+.da-workflow-status-badge--unmatched,
+.da-workflow-status-badge.is-unmatched,
 .da-workflow-status-badge.unmatched {
     background: rgba(255, 159, 10, 0.15);
     color: var(--da-status-warning);
     border: 1px solid rgba(255, 159, 10, 0.35);
 }
 
-/* ════ 工作流变量格式化诊断弹窗 ════ */
+/* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
+   用于呈现 ComfyUI 工作流中的宏变量替换诊断报告，
+   展示变量匹配率、缺失占位符警示以及格式化前后的 JSON 结构比对。 */
 .da-workflow-format-modal {
     max-height: 85vh;
     display: flex;
@@ -75,14 +86,19 @@
     gap: 6px;
 }
 
+.da-workflow-format-section-title--success,
+.da-workflow-format-section-title.is-success,
 .da-workflow-format-section-title.success {
     color: var(--da-color-success, #30d158);
 }
 
+.da-workflow-format-section-title--warning,
+.da-workflow-format-section-title.is-warning,
 .da-workflow-format-section-title.warning {
     color: var(--da-status-warning, #ff9f0a);
 }
 
+/* 3. 宏变量列表与匹配项 (.da-workflow-var-item) */
 .da-workflow-var-list {
     display: flex;
     flex-direction: column;
@@ -99,16 +115,21 @@
     box-sizing: border-box;
 }
 
+.da-workflow-var-item--matched,
+.da-workflow-var-item.is-matched,
 .da-workflow-var-item.matched {
     background: rgba(48, 209, 88, 0.08);
     border: 1px solid rgba(48, 209, 88, 0.2);
 }
 
+.da-workflow-var-item--unmatched,
+.da-workflow-var-item.is-unmatched,
 .da-workflow-var-item.unmatched {
     background: rgba(255, 159, 10, 0.08);
     border: 1px solid rgba(255, 159, 10, 0.2);
 }
 
+/* 等宽宏变量标签 (.da-macro-tag) */
 .da-macro-tag {
     font-family: var(--da-font-mono, monospace);
     font-size: 0.85em;
@@ -121,6 +142,8 @@
     flex-shrink: 0;
 }
 
+.da-macro-tag--warning,
+.da-macro-tag.is-warning,
 .da-macro-tag.warning {
     color: var(--da-status-warning, #ff9f0a);
     background: rgba(255, 159, 10, 0.12);

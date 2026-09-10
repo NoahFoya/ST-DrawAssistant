@@ -1,9 +1,15 @@
 /**
- * storage-bar.css
- * 层级：controls/toolbars
- * 职责：IndexedDB 本地持久化存储状态栏、容量占比进度条与指标卡片
+ * @module styles/controls/toolbars/storage-bar
+ * @layer controls/toolbars (Layer 3)
+ * @description IndexedDB 本地持久化存储状态栏、容量占比进度条与操作条带
+ *
+ * 职责与约束：
+ * 1. 用于画廊与设置面板，可视化展现浏览器 IndexedDB 存储使用量与剩余配额；
+ * 2. 进度条根据使用率动态切换渐变色：正常（绿色/品牌色）、警戒（橙黄色 >75%）、告急（红色 >90%）；
+ * 3. 底部集成 3 列统计卡片网格与快捷存储维护操作（导出备份、清空缓存）。
  */
 
+/* 1. 存储状态栏主体容器 (.da-storage-bar) */
 .da-storage-bar {
     display: flex;
     flex-direction: column;
@@ -12,6 +18,7 @@
     box-sizing: border-box;
 }
 
+/* 2. 存储进度条区域 (.da-storage-progress-wrapper) */
 .da-storage-progress-wrapper {
     display: flex;
     flex-direction: column;
@@ -31,6 +38,7 @@
     font-weight: 500;
 }
 
+/* 容量百分比药丸微标 */
 .da-storage-pct-badge {
     font-size: var(--da-font-size-xs, 0.75rem);
     font-weight: 700;
@@ -52,6 +60,7 @@
     border-color: rgba(239, 68, 68, 0.4);
 }
 
+/* --- 3. 进度条轨道与填充条 --- */
 .da-storage-track {
     width: 100%;
     height: 8px;
@@ -77,6 +86,8 @@
     background: linear-gradient(90deg, #ef4444, #f87171);
 }
 
+/* 4. 存储统计指标卡片网格与操作条带 (.da-storage-stats-grid)
+   3 列等宽网格，内嵌 stat-card 指标展示 */
 .da-storage-stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -84,37 +95,20 @@
     width: 100%;
 }
 
-.da-storage-stat-card,
-.da-storage-metric-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--da-space-xs, 4px);
-    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
-    background: var(--da-bg-primary);
-    border: 1px solid var(--da-separator);
-    border-radius: var(--da-radius-sm, 8px);
-    box-sizing: border-box;
-}
-
-.da-storage-stat-title,
-.da-storage-metric-label {
-    font-size: var(--da-font-size-xs, 0.74rem);
-    color: var(--da-text-secondary);
-    text-transform: uppercase;
-}
-
-.da-storage-stat-value,
-.da-storage-metric-num {
-    font-size: var(--da-font-size-base, 0.86rem);
-    font-weight: 600;
-    color: var(--da-text-primary);
-    font-family: var(--da-font-mono, monospace);
-}
-
-
 .da-storage-actions-toolbar {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-top: 6px;
+}
+
+/* 存储配额异常或超限错误提示条 */
+.da-storage-error-hint {
+    color: var(--da-color-error, #ff453a);
+    font-size: var(--da-font-size-xs, 0.76rem);
+    padding: 6px 10px;
+    background: rgba(255, 69, 58, 0.08);
+    border: 1px solid rgba(255, 69, 58, 0.25);
+    border-radius: var(--da-radius-sm, 6px);
+    text-align: center;
 }

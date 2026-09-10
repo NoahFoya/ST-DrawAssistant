@@ -1,14 +1,21 @@
 /**
- * animations.css
- * 层级：core
- * 职责：集中定义全局基础动画关键帧 (Global Keyframes)
+ * @module styles/core/animations
+ * @layer core (Layer 1)
+ * @description 集中维护全局基础动画关键帧、状态指示脉冲与无障碍减弱动效
+ *
+ * 职责与约束：
+ * 1. 集中定义模态弹窗淡入平移、悬浮球生图状态脉冲、未保存修改指示等全局关键帧；
+ * 2. 严禁滥用长时间或高频循环动画，限制在必要的生图状态与未保存警示场景；
+ * 3. 严格遵循 prefers-reduced-motion 无障碍偏好，在系统要求减弱动效时禁用循环动画。
  */
 
+/* 1. 视图进入与平滑淡入关键帧 */
 @keyframes da-fadein {
     from { opacity: 0; transform: translateY(3px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
+/* 模态弹窗带微弱缩放的进入动画（从 0.97 缩放至 1.0） */
 @keyframes da-modal-slide-in {
     from {
         opacity: 0;
@@ -20,16 +27,20 @@
     }
 }
 
+/* 2. 状态指示脉冲动画关键帧 */
+/* 基础透明度闪烁 */
 @keyframes da-pulse {
     0%, 100% { opacity: 1; }
-    50%       { opacity: 0.65; }
+    50%      { opacity: 0.65; }
 }
 
+/* 连通探测与更新指示小圆点发光脉冲 */
 @keyframes da-pulse-dot {
     0%, 100% { box-shadow: 0 0 3px rgba(56, 189, 248, 0.4); }
-    50%       { box-shadow: 0 0 8px rgba(56, 189, 248, 0.8); }
+    50%      { box-shadow: 0 0 8px rgba(56, 189, 248, 0.8); }
 }
 
+/* 未保存修改状态指示小圆点轻量脉冲动画 */
 @keyframes da-pulse-dirty {
     0%, 100% {
         box-shadow: 0 0 0 0 rgba(255, 159, 10, 0.4);
@@ -39,6 +50,7 @@
     }
 }
 
+/* 版本更新徽标柔和发光动画 */
 @keyframes da-update-pill-glow {
     0%, 100% {
         box-shadow: 0 0 6px rgba(48, 209, 88, 0.2);
@@ -48,6 +60,7 @@
     }
 }
 
+/* 全局悬浮球（FAB）在生成图片期间的微缩放与光晕脉冲 */
 @keyframes da-fab-pulse {
     0%, 100% {
         box-shadow: 0 0 8px rgba(var(--da-accent-rgb, 56, 189, 248), 0.35);
@@ -63,7 +76,8 @@
     animation: da-fab-pulse 2s infinite ease-in-out;
 }
 
-/* 动效减弱偏好支持：当系统开启减少动态效果时，停用循环呼吸与位移动画，避免无意义的 GPU 持续消耗与视觉眩晕 */
+/* 3. 无障碍动效减弱偏好支持 (prefers-reduced-motion)
+   当系统开启减少动态效果时，停用循环脉冲与过渡动画，避免无意义的 GPU 持续消耗与视觉眩晕 */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -83,4 +97,3 @@
         animation: none !important;
     }
 }
-

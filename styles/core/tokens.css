@@ -1,12 +1,16 @@
 /**
  * @module styles/core/tokens
+ * @layer core (Layer 1)
  * @description 全局 CSS Design Tokens 变量定义
  *
- * 设计准则：紧凑、克制、高信息密度、精致微光
+ * 职责与约束：
+ * 1. 建立全局统一的设计令牌（Tokens），包括颜色、字阶、间距、圆角、阴影、层级与缓动曲线；
+ * 2. 严禁在业务组件中硬编码绝对色彩数值，均应统一引用 var(--da-*) 变量；
+ * 3. 动态主题切换通过 ThemeService 运行时修改 :root 或根容器上的这些变量实现。
  */
 
 :root {
-    /* ════ 1. 背景与表面阶梯 (Surfaces & Elevation System) ════ */
+    /* 1. 背景与表面颜色 */
     --da-color-scheme: dark;
     --da-bg-primary: #181b24;
     --da-bg-secondary: #202430;
@@ -24,34 +28,31 @@
     --da-bg-overlay-heavy: rgba(0, 0, 0, 0.85);
     --da-card-bg-stream: rgba(255, 255, 255, 0.025);
 
-
-
-
-    /* ════ 2. 文字色彩 (Typography Colors) ════ */
+    /* 2. 文字颜色 */
     --da-text-primary: #f3f4f6;
     --da-text-secondary: #9ca3af;
     --da-text-muted: #6b7280;
     --da-text-on-accent: #0f172a;
 
-    /* ════ 3. 边框与微弱分割线 (Borders & Separators) ════ */
+    /* 3. 边框与分割线 */
     --da-border-color: rgba(255, 255, 255, 0.08);
     --da-border-focus: var(--da-accent-color);
     --da-separator: rgba(255, 255, 255, 0.04);
     --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 
-    /* ════ 4. 品牌主色 (Brand Accent) ════ */
+    /* 4. 品牌主色与 RGB 分量（用于透明度通道计算） */
     --da-accent-color: #38bdf8;
     --da-accent-hover: #0ea5e9;
     --da-accent-rgb: 56, 189, 248;
 
-    /* ════ 5. 语义状态色彩 (Status Colors) ════ */
+    /* 5. 语义状态颜色 */
     --da-color-success: #30d158;
     --da-color-error: #ff453a;
     --da-color-warn: #ff9f0a;
     --da-status-warning: #ff9f0a;
     --da-color-fav: #eab308;
 
-    /* ════ 6. 终端日志与节点微标色彩 (Terminal & Badges) ════ */
+    /* 6. 终端日志与工作流节点分类颜色 */
     --da-terminal-bg: #0c0e12;
     --da-terminal-text: #e6edf3;
     --da-terminal-muted: #8b949e;
@@ -68,7 +69,7 @@
     --da-node-output: #38bdf8;
     --da-node-lora: #f43f5e;
 
-    /* ════ 7. 紧凑型间距系统 (Compact Spacing Scale) ════ */
+    /* 7. 间距标度体系 */
     --da-space-xs: 3px;
     --da-space-sm: 6px;
     --da-space-md: 10px;
@@ -77,7 +78,7 @@
     --da-space-2xl: 22px;
     --da-space-3xl: 28px;
 
-    /* ════ 8. 弹性自适应字号阶梯 (Fluid Typography Scale) ════ */
+    /* 8. 字体族与流式字阶 (clamp 保证视口缩放平滑) */
     --da-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --da-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --da-font-size-xs: clamp(10px, 0.68rem, 11px);
@@ -86,9 +87,7 @@
     --da-font-size-md: clamp(12.5px, 0.84rem, 14px);
     --da-font-size-lg: clamp(14px, 0.96rem, 16px);
 
-
-
-    /* ════ 9. 利落微圆角系统 (Crisp Border Radius Scale) ════ */
+    /* 9. 圆角梯度标度 */
     --da-radius-modal: 14px;
     --da-radius-card: 10px;
     --da-radius-input: 6px;
@@ -98,27 +97,23 @@
     --da-radius-small: 4px;
     --da-radius-xs: 3px;
 
-    /* ════ 10. 阴影与微光系统 (Elevation & Subtle Lighting) ════ */
+    /* 10. 阴影深度阶梯 */
     --da-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
     --da-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35), var(--da-inset-top-light);
     --da-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
     --da-shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-    /* ════ 11. 缓动曲线 (Transitions & Easing) ════ */
+    /* 11. 动画缓动贝塞尔曲线 */
     --da-ease: cubic-bezier(0.2, 0.9, 0.4, 1);
     --da-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 
-    /* ════ 12. 毛玻璃与层级 (Glassmorphism & Z-Index) ════ */
+    /* 12. 遮罩模糊与层叠上下文 (z-index) */
     --da-blur-modal: 12px;
     --da-blur-panel: 18px;
     --da-z-fab: 9999;
     --da-z-modal: 10000;
 
-    /* ════ 13. 聚焦光晕与键盘焦点环 (Focus System) ════ */
-    /* 鼠标或触控常规聚焦时的柔和边界光晕 */
+    /* 13. 无障碍高对比度焦点环 */
     --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.25);
-    /* 键盘 Tab 导航时的高对比度焦点环 (内层底色隔离 + 外层品牌色，保证暗色与明亮模式下的清晰辨识) */
     --da-focus-visible-ring: 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color);
 }
-
-

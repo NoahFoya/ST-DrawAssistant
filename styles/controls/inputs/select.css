@@ -1,9 +1,16 @@
 /**
- * select.css
- * 层级：controls/inputs
- * 职责：下拉选择器与选项层样式
+ * @module styles/controls/inputs/select
+ * @layer controls/inputs (Layer 3)
+ * @description 下拉选择器、内联 SVG 下拉箭头与状态管道
+ *
+ * 核心边界与约束：
+ * 1. 结构与对齐：基类 (.da-select) 高度与按钮、输入框基线完全对齐；
+ * 2. 离线图标：采用内联数据 URI SVG 下拉箭头，杜绝外部静态资源加载失败导致箭头丢失；
+ * 3. 状态管道：统一支持未保存修改 (.is-dirty) 与校验错误 (.is-invalid)；
+ * 4. 菜单定制：显式声明 option 样式，避免宿主原生明亮/暗黑主题冲突。
  */
 
+/* --- 1. 下拉选择器基类 --- */
 .da-select {
     width: 200px;
     max-width: 100%;
@@ -35,14 +42,12 @@
     background-color: var(--da-bg-input-hover);
 }
 
-/* 鼠标或触控点击时的柔和聚焦指示 */
 .da-select:focus {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
     background: var(--da-bg-input);
 }
 
-/* 键盘 Tab 导航时的高对比度焦点环 */
 .da-select:focus-visible {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring)), inset 0 1px 2px rgba(0, 0, 0, 0.15);
@@ -55,15 +60,14 @@
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* 脏数据修改态 (黄色微光高亮) */
-.da-select.is-dirty,
-.da-select.da-select--dirty {
+/* --- 2. 表单状态联动 (未保存修改 / 校验错误) --- */
+/* 未保存修改态 (黄色高亮) */
+.da-select.is-dirty {
     border-color: var(--da-color-warn, #ff9f0a) !important;
     box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
 }
 
-/* 错误告警态 (红色微光高亮) */
-.da-select.da-select-error,
+/* 错误校验态 (红色高亮) */
 .da-select.is-invalid {
     border-color: var(--da-color-error, #ff453a) !important;
     background-color: rgba(255, 69, 58, 0.08) !important;
@@ -71,7 +75,15 @@
     box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
 }
 
-/* 下拉菜单 Option 弹出层 */
+/* --- 3. 紧凑尺寸规格变体 --- */
+.da-select--sm {
+    height: 26px !important;
+    padding: 0 20px 0 8px !important;
+    font-size: var(--da-font-size-xs, 0.74rem) !important;
+    background-position: right 6px center !important;
+}
+
+/* --- 4. 原生选项菜单 (option / optgroup) 着色 --- */
 .da-select option {
     background-color: var(--da-bg-secondary);
     color: var(--da-text-primary);
@@ -85,4 +97,15 @@
     color: var(--da-accent-color);
     font-weight: 600;
 }
+
+.da-select optgroup {
+    background-color: var(--da-bg-tertiary, var(--da-bg-secondary));
+    color: var(--da-text-muted);
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-weight: 600;
+    font-style: normal;
+    text-align: left;
+    padding: 4px 6px;
+}
+
 

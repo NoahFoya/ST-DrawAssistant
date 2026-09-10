@@ -1,14 +1,22 @@
 /**
- * main.css
- * ST-DrawAssistant 样式总入口 (Style Registry Entry)
+ * @module styles/main
+ * @layer root (Style Entry)
+ * @description ST-DrawAssistant 样式系统单一总入口 (ITCSS 5-Layer Style Registry)
+ *
+ * 架构规范：
+ * Layer 1 (Core):     令牌变量、局部重置、全局动画 (tokens, reset, animations)
+ * Layer 2 (Layout):   弹窗骨架、侧边栏、栅格插槽、顶栏、底栏、悬浮球 (layout-system, modal-shell, header-bar, sidebar-tabs, content-area, footer-bar, fab)
+ * Layer 3 (Controls): 基础输入、按钮、卡片、工具栏、反馈气泡 (inputs, buttons, cards, toolbars, feedback)
+ * Layer 4 (Features): 独立业务特性领域样式 (gallery, workflow-modal, workflow, inpaint, image-info, image-collapse, changelog, terminal)
+ * Layer 5 (Skin):     浅色主题修饰与设备响应式规则 (light-mode, responsive)
  */
 
-/* ════════ 1. Core 核心设计基础与变量 ════════ */
+/* 1. Core 核心基础与设计令牌 (Layer 1) */
 @import url('./core/tokens.css');
 @import url('./core/reset.css');
 @import url('./core/animations.css');
 
-/* ════════ 2. Layout 全局骨架与容器布局 ════════ */
+/* 2. Layout 全局骨架与容器布局 (Layer 2) */
 @import url('./layout/layout-system.css');
 @import url('./layout/modal-shell.css');
 @import url('./layout/header-bar.css');
@@ -17,7 +25,7 @@
 @import url('./layout/footer-bar.css');
 @import url('./layout/fab.css');
 
-/* ════════ 3. Controls 按控件类型系统化管理 ════════ */
+/* 3. Controls 通用组件控件库 (Layer 3) */
 /* (1) 输入控件族 (Inputs) */
 @import url('./controls/inputs/form-field.css');
 @import url('./controls/inputs/text-input.css');
@@ -31,37 +39,37 @@
 /* (2) 按钮控件族 (Buttons) */
 @import url('./controls/buttons/buttons.css');
 @import url('./controls/buttons/icon-button.css');
+@import url('./controls/buttons/overlay-button.css');
 
 /* (3) 卡片与容器族 (Cards & Containers) */
 @import url('./controls/cards/item-card.css');
-@import url('./controls/cards/metric-card.css');
+@import url('./controls/cards/stat-card.css');
+@import url('./controls/cards/hero-card.css');
 @import url('./controls/cards/rich-link-card.css');
 
 /* (4) 工具栏与复合控制栏 (Toolbars) */
 @import url('./controls/toolbars/preset-toolbar.css');
 @import url('./controls/toolbars/storage-bar.css');
+@import url('./controls/toolbars/filter-bar.css');
 
 /* (5) 反馈与提示控件族 (Feedback & Overlays) */
 @import url('./controls/feedback/toast.css');
 @import url('./controls/feedback/dialog.css');
 @import url('./controls/feedback/help-bubble.css');
 @import url('./controls/feedback/badge.css');
+@import url('./controls/feedback/chip.css');
 @import url('./controls/feedback/image-preview.css');
 
-/* ════════ 4. Features 业务功能领域专用样式 ════════ */
+/* 4. Features 业务功能领域专用样式 (Layer 4) */
 @import url('./features/gallery.css');
 @import url('./features/workflow-modal.css');
 @import url('./features/workflow.css');
 @import url('./features/inpaint.css');
 @import url('./features/image-info.css');
 @import url('./features/image-collapse.css');
+@import url('./features/changelog.css');
+@import url('./features/terminal.css');
 
-/* ════════ 5. Views 视图级定制样式 ════════ */
-@import url('./views/general-tab.css');
-@import url('./views/about-tab.css');
-@import url('./views/diagnostics-tab.css');
-
-
-/* ════════ 6. Skin 主题皮肤与设备响应式 ════════ */
+/* 5. Skin 主题皮肤与设备响应式 (Layer 5) */
 @import url('./skin/light-mode.css');
 @import url('./skin/responsive.css');

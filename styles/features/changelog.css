@@ -1,0 +1,49 @@
+/**
+ * @module styles/features/changelog
+ * @layer features (Layer 4)
+ * @description 版本变更历史与时间线更新日志组件 (Changelog)
+ *
+ * 职责与约束：
+ * 1. 用于“关于”选项卡，展示插件各迭代版本的历史变更记录与功能特性；
+ * 2. 限制最大高度 280px，支持独立垂直滚动；
+ * 3. 各版本日志条目（.da-changelog__entry）与分割线（.da-changelog__entry--sep）保持清晰层次。
+ */
+
+/* 1. 更新日志卡片外壳 (.da-changelog)
+   限制 280px 最大视高，内部垂直滚动，行高 1.6 优化条目阅读体验 */
+.da-changelog {
+    margin-top: 10px;
+    padding: 14px 16px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    max-height: 280px;
+    overflow-y: auto;
+    font-size: 0.85em;
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+
+/* 2. 版本号标题与条目分割 */
+.da-changelog__entry {
+    font-weight: 600;
+    color: var(--da-text-primary);
+    margin-bottom: 4px;
+}
+
+.da-changelog__entry--sep {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--da-separator);
+}
+
+/* 3. 变更点列表与单项 (.da-changelog__list, .da-changelog__item) */
+.da-changelog__list {
+    margin: 0 0 6px 0;
+    padding-left: 18px;
+    color: var(--da-text-secondary);
+}
+
+.da-changelog__item {
+    margin-bottom: 2px;
+}

@@ -1,10 +1,12 @@
 /**
- * dialog.css
- * 层级：controls/feedback
- * 职责：模态确认对话框、Portal 全屏毛玻璃遮罩与操作面板
+ * @module styles/controls/feedback/dialog
+ * @layer controls/feedback (Layer 3)
+ * @description 二次确认模态对话框、Portal 遮罩蒙层与居中操作卡片
  */
 
-/* ════ 全屏毛玻璃遮罩 Backdrop ════ */
+/* 1. 对话框全屏半透明遮罩层 (.da-dialog-backdrop)
+   独立于主弹窗的顶层遮罩（z-index: var(--da-z-dialog, 30000)），
+   提供高斯模糊虚化，防止用户在弹窗出现时误操作底层界面。 */
 .da-dialog-backdrop,
 .da-main-modal-backdrop {
     position: fixed;
@@ -30,7 +32,8 @@
     pointer-events: auto;
 }
 
-/* ════ 对话框主体面板 ════ */
+/* 2. 对话框主体面板 (.da-dialog-panel)
+   限制最大宽度 400px 的紧凑模态卡片，包含标题、确认信息说明与底部操作按钮组。 */
 .da-dialog-panel {
     width: 90%;
     max-width: 400px;
@@ -60,9 +63,10 @@
     word-break: break-word;
 }
 
+/* 对话框底部操作按钮行：右对齐弹性排布“取消”与“确认”等操作按钮 */
 .da-dialog-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: var(--da-space-sm, 8px);
 }
-

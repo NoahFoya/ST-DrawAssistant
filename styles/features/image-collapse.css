@@ -1,9 +1,16 @@
 /**
- * image-collapse.css
- * 层级：features
- * 职责：消息区图像折叠与展开组件、楼层生图插槽容器与生成图像渲染规范
+ * @module styles/features/image-collapse
+ * @layer features (Layer 4)
+ * @description 消息区图像折叠与展开组件、楼层生图插槽容器与生成图像实体渲染
+ *
+ * 职责与约束：
+ * 1. 管理聊天消息中生成图片的折叠/展开胶囊按钮与对其容器（居左/居中/居右）；
+ * 2. 规范楼层生图插槽（.da-floor-btn-img-slot）的横向排布；
+ * 3. 规范嵌入消息气泡中的生成图片实体（.da-generated-img）的圆角、阴影与悬停放大。
  */
 
+/* 1. 图像折叠容器 (.da-image-collapse-wrapper)
+   提供左对齐、居中对齐与右对齐三种排版修饰符，契合不同角色气泡排布 */
 .da-image-collapse-wrapper {
     display: flex;
     flex-direction: column;
@@ -23,6 +30,8 @@
     align-items: flex-end;
 }
 
+/* 2. 折叠/展开控制按钮 (.da-image-collapse-toggle)
+   提供类似胶囊的折叠切换按钮，指示当前收起或展开状态 */
 .da-image-collapse-toggle {
     display: inline-flex;
     align-items: center;
@@ -37,7 +46,6 @@
     transition: background 0.14s var(--da-ease), transform 0.1s var(--da-ease);
 }
 
-
 .da-image-collapse-toggle:hover {
     transform: translateY(-1px);
 }
@@ -46,6 +54,8 @@
     transform: translateY(0);
 }
 
+/* 3. 楼层生图插槽容器 (.da-floor-btn-img-slot)
+   承载生图完成后的图片实体，支持左、中、右对齐排版 */
 .da-floor-btn-img-slot {
     display: flex;
     width: 100%;
@@ -65,7 +75,8 @@
     justify-content: flex-start;
 }
 
-/* ════ 渲染的生成图像实体 ════ */
+/* 4. 楼层生成最终图像实体 (.da-generated-img)
+   嵌入楼层消息中的生成图像，包含轻量阴影、圆角变体与鼠标悬停微放大交互。 */
 .da-generated-img {
     box-shadow: var(--da-shadow-sm);
     cursor: pointer;
@@ -78,4 +89,10 @@
 
 .da-generated-img--rounded {
     border-radius: var(--da-radius-small, 8px);
+}
+
+.da-image-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
 }

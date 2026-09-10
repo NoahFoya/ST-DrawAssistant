@@ -1,10 +1,12 @@
 /**
- * toast.css
- * 层级：controls/feedback
- * 职责：全局轻量消息 Toast 提示样式
+ * @module styles/controls/feedback/toast
+ * @layer controls/feedback (Layer 3)
+ * @description 全局轻量非模态 Toast 消息气泡提示
  */
 
-/* ════ 全局轻量 Toast 提示 ════ */
+/* 全局非阻塞 Toast 提示气泡 (.da-toast)
+   固定定位在视口底部中央（bottom: 20px; left: 50%; transform: translateX(-50%)）；
+   高 z-index（50000）确保可见，pointer-events: none 保证消息呈现时不阻断用户操作底层的点击事件。 */
 .da-toast {
     position: fixed;
     bottom: 20px;
@@ -23,5 +25,3 @@
     pointer-events: none;
     animation: da-fadein 0.15s ease;
 }
-
-

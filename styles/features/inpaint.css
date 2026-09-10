@@ -1,10 +1,16 @@
 /**
- * inpaint.css
- * 层级：features
- * 职责：图像局部重绘画布 (Inpaint)、局部裁剪器 (Cropper) 与操作卡片
+ * @module styles/features/inpaint
+ * @layer features (Layer 4)
+ * @description 局部重绘画布 (Inpaint Modal)、头像裁剪器 (Circular Cropper) 与楼层图像角标交互
+ *
+ * 职责与约束：
+ * 1. 负责局部重绘蒙版绘制视窗，提供十字准星（cursor: crosshair）与画笔尺寸调节；
+ * 2. 负责悬浮球正圆形头像裁剪器（.da-cropper-panel），运用 9999px 阴影构建圆外暗化遮罩；
+ * 3. 规范嵌入消息气泡中的图片右上角悬浮操作角标（.da-image-corner-trigger）。
  */
 
-/* ════ 局部重绘画布弹窗 (Inpaint Modal) ════ */
+/* 1. 局部重绘画布弹窗 (Inpaint Modal)
+   高 z-index 全屏模糊遮罩与居中操作面板，包含画布绘图视窗、画笔大小调节与图层清除/应用控制。 */
 .da-inpaint-backdrop {
     position: fixed;
     inset: 0;
@@ -52,15 +58,12 @@
     cursor: crosshair;
 }
 
-.da-inpaint-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+.da-brush-size-input {
+    width: 60px;
 }
 
-/* ════ 悬浮球图像正圆形裁剪组件 (Circular Cropper) ════ */
+/* 2. 悬浮球头像正圆形裁剪组件 (Circular Cropper)
+   居中浮动裁剪弹窗，承载正圆形预览蒙版，用于悬浮球自定义头像的平移与缩放裁剪。 */
 .da-cropper-backdrop {
     position: fixed;
     inset: 0;
@@ -87,6 +90,7 @@
     gap: 14px;
 }
 
+/* 裁剪工作台舞台 (280px × 280px) */
 .da-cropper-stage {
     position: relative;
     width: 280px;
@@ -115,6 +119,7 @@
     pointer-events: none;
 }
 
+/* 正圆形裁剪框：运用 box-shadow 9999px 超大阴影对圆框外侧区域形成遮罩暗化 */
 .da-cropper-mask-circle {
     position: absolute;
     top: 50%;
@@ -146,6 +151,7 @@
     color: var(--da-text-secondary);
 }
 
+/* 3. 快捷操作卡片面板 (.da-action-panel) */
 .da-action-panel {
     width: 94%;
     max-width: 680px;
@@ -225,7 +231,9 @@
     gap: 8px;
 }
 
-/* ════ 楼层图像包裹与操作触发栏 ════ */
+/* 4. 楼层生成图像右上角快捷触发栏 (.da-image-corner-trigger)
+   在生成的楼层图片右上角绝对定位圆形半透明按钮；
+   在精确鼠标设备下默认隐藏，悬停图片时平滑显现。 */
 .da-generated-img-wrapper {
     position: relative;
     display: inline-block;

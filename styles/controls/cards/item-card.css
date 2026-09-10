@@ -1,10 +1,17 @@
 /**
- * item-card.css
- * 层级：controls/cards
- * 职责：动态列表条目卡片 (LoRA 模型卡片、工作流预设卡片、角色条目卡片)
+ * @module styles/controls/cards/item-card
+ * @layer controls/cards (Layer 3)
+ * @description 动态条目卡片 (LoRA 模型卡片、工作流预设条目卡片与参数调节行)
+ *
+ * 职责与约束：
+ * 1. 负责管理多条目动态列表容器（如挂载的 LoRA 模型列表）；
+ * 2. 单个 LoRA 卡片集成名称、缺失检测、模型权重/CLIP 权重双数字调节输入框与启用开关；
+ * 3. 当后端目录中对应 LoRA 文件缺失时通过 .da-lora-item--missing 警示用户；
+ * 4. 底部包含跨设备自适应的添加选择行（.da-lora-add-row）。
  */
 
-/* ════ LoRA 容器与列表集 (分层卡片) ════ */
+/* 1. LoRA 模型卡片列表容器 (.da-lora-container)
+   管理多个挂载的 LoRA 卡片列表，包含标题、计数指示、折叠控制与滚动区。 */
 .da-lora-manager,
 .da-lora-container {
     display: flex;
@@ -17,7 +24,8 @@
 .da-lora-container__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: var(--da-space-sm, 8px);
     padding: 0 2px;
 }
 
@@ -34,7 +42,9 @@
     color: var(--da-accent-color);
 }
 
-.da-lora-container__badge {
+/* 列表计数徽标：展示已挂载的 LoRA 数量 */
+.da-lora-container__badge,
+.da-lora-count-badge {
     font-size: var(--da-font-size-xs, 0.74rem);
     font-weight: 500;
     padding: 1px 6px;
@@ -44,6 +54,7 @@
     border: 1px solid var(--da-border-color);
 }
 
+/* LoRA 卡片集合包裹容器 */
 .da-lora-list-set,
 .da-lora-manager__list {
     display: flex;
@@ -57,6 +68,8 @@
     border-radius: var(--da-radius-card, 8px);
 }
 
+/* 2. 空状态引导 (.da-lora-empty)
+   在未添加任何 LoRA 时居中展示占位图标与提示信息 */
 .da-lora-empty {
     display: flex;
     flex-direction: column;
@@ -84,6 +97,8 @@
     margin-top: 8px;
 }
 
+/* 3. 单个 LoRA 模型条目卡片 (.da-lora-item)
+   微型卡片，支持悬停高亮、禁用划线与模型文件缺失警示 */
 .da-lora-item {
     display: flex;
     flex-direction: column;
@@ -102,6 +117,7 @@
     border-color: rgba(var(--da-accent-rgb), 0.35);
 }
 
+/* 禁用态：降低透明度并在名称上添加删除线 */
 .da-lora-item.is-disabled {
     opacity: 0.5;
 }
@@ -111,11 +127,14 @@
     opacity: 0.75;
 }
 
+/* 缺失态：当后端模型列表不存在此模型时，边框与背景变红警示 */
 .da-lora-item--missing {
     border-color: rgba(255, 69, 58, 0.4) !important;
     background: rgba(255, 69, 58, 0.04) !important;
 }
 
+/* 4. LoRA 卡片头部 (.da-lora-item__header)
+   水平排列模型图标、模型文件名、缺失标签与删除按钮 */
 .da-lora-item__header {
     display: flex;
     align-items: center;
@@ -147,13 +166,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     user-select: text;
-.da-lora-badge--missing {
-    color: var(--da-color-warn, #ff9f0a) !important;
-    background: rgba(255, 159, 10, 0.15) !important;
-    border: 1px solid rgba(255, 159, 10, 0.4) !important;
-    font-size: var(--da-font-size-xs, 0.74rem);
-    padding: 1px 6px;
-    border-radius: var(--da-radius-pill, 100px);
+}
+
+.da-lora-item__title-box .da-control-state-badge {
+    margin-right: 2px;
 }
 
 .da-lora-item__actions {
@@ -164,78 +180,80 @@
 }
 
 .da-lora-item__del {
-    width: 26px !important;
-    height: 26px !important;
-    padding: 0 !important;
-    border-radius: var(--da-radius-small, 6px) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
-.da-lora-item__del svg {
-    width: 14px;
-    height: 14px;
-    pointer-events: none;
+.da-lora-item__weight {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.1);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
+    padding: 1px 6px;
+    border-radius: var(--da-radius-sm, 4px);
 }
 
+.da-lora-item__delete {
+    color: var(--da-text-muted);
+    transition: color 0.15s ease;
+}
+
+.da-lora-item__delete:hover {
+    color: var(--da-color-error, #ff453a);
+}
+
+/* 5. LoRA 参数调节细微布局 (.da-lora-item__body)
+   卡片内部的次级参数控制行，水平排列模型权重、CLIP 权重微调输入框与单项启用/禁用开关；
+   窄屏下支持自动换行堆叠。 */
 .da-lora-item__body {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding-top: 5px;
-    border-top: 1px solid var(--da-separator);
-    width: 100%;
-    box-sizing: border-box;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.05));
 }
 
 .da-lora-item__params {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     flex-wrap: wrap;
-    flex: 1;
-}
-
-.da-lora-item__toggle-box {
-    display: flex;
-    align-items: center;
-    margin-left: auto;
-    flex-shrink: 0;
 }
 
 .da-lora-param {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 .da-lora-param__label {
-    font-size: 0.74em;
-    font-weight: 600;
+    font-size: var(--da-font-size-xs, 0.74rem);
     color: var(--da-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
+    font-weight: 500;
 }
 
 .da-lora-param__input {
-    height: 24px !important;
-    width: 44px !important;
-    max-width: 44px !important;
-    flex: 0 0 44px !important;
-    padding: 0 2px !important;
-    font-size: 0.78rem !important;
-    border-radius: 4px !important;
-    text-align: center;
-    font-family: var(--da-font-mono, monospace);
+    height: 26px;
 }
 
-/* ════ LoRA 底部追加栏 ════ */
-.da-lora-container__footer {
+.da-lora-item__toggle-box {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* 6. LoRA 底部追加栏 (.da-lora-add-row)
+   包含可用 LoRA 模型下拉选择器与“添加”按钮，水平铺开撑满卡片底部。 */
+.da-lora-container__footer,
+.da-lora-add-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
     gap: var(--da-space-sm, 8px);
     width: 100%;
     box-sizing: border-box;
@@ -244,8 +262,7 @@
 
 .da-lora-add-select {
     flex: 1 1 auto;
-    width: 100%;
-    min-width: 120px;
+    min-width: 140px;
     height: 30px;
 }
 
@@ -260,23 +277,34 @@
     flex-shrink: 0;
 }
 
-/* ════ 工作流预设条目卡片 ════ */
-.da-workflow-card {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
-    background: var(--da-bg-card, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-sm, 6px);
-    box-sizing: border-box;
-    box-shadow: var(--da-inset-top-light);
-    transition: border-color 0.14s ease, background 0.14s ease;
-}
+@media (max-width: 520px) {
+    .da-lora-container__footer,
+    .da-lora-add-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
 
-.da-workflow-card:hover {
-    border-color: var(--da-accent-color);
-    background: var(--da-bg-hover);
-}
+    .da-lora-add-select {
+        width: 100%;
+        max-width: 100%;
+    }
 
+    .da-lora-add-btn {
+        width: 100%;
+        height: 34px;
+        justify-content: center;
+    }
+
+    .da-lora-item__body {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .da-lora-item__toggle-box {
+        margin-left: auto;
+        align-self: flex-end;
+    }
+}
 

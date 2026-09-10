@@ -1,8 +1,16 @@
 /**
  * @module styles/layout/footer-bar
+ * @layer layout (Layer 2)
  * @description 弹窗底部状态栏、就绪状态指示器与状态指示标签
+ *
+ * 职责与约束：
+ * 1. 作为主弹窗底部固定的微型状态条，展示当前生图后端连接态与宿主内存开销；
+ * 2. 左侧展示后端引擎就绪指示小圆点与端点地址，右侧展示系统内存监控指标；
+ * 3. 连通探测中状态通过黄色小圆点搭配 da-pulse-dot 动画向用户提供清晰的异步反馈。
  */
 
+/* 1. 底部状态栏外壳 (.da-footer-bar)
+   紧凑单行高度，两端对齐排布，顶部细边框隔离内容区域 */
 .da-footer-bar {
     display: flex;
     align-items: center;
@@ -20,6 +28,9 @@
     font-family: var(--da-font-family);
 }
 
+/* 2. 状态胶囊项 (.da-status-item)
+   包裹状态圆点与说明文本的药丸形容器；
+   后端服务状态容器具备指针手势，支持点击即时重新探测连通性。 */
 .da-status-item {
     display: inline-flex;
     align-items: center;
@@ -42,6 +53,12 @@
     border-color: rgba(var(--da-accent-rgb), 0.3);
 }
 
+.da-status-item#da-server-status-container:focus-visible {
+    outline: none;
+    border-color: var(--da-accent);
+    box-shadow: 0 0 0 2px var(--da-focus-ring);
+}
+
 .da-status-info,
 .da-server-status-container,
 .da-memory-status-container {
@@ -57,9 +74,10 @@
     font-size: var(--da-font-size-xs, 0.74rem);
 }
 
-.da-status-indicator,
+/* 3. 状态指示小圆点与语义色彩变体 (.da-status-dot, .da-status-indicator)
+   正圆指示点，通过发光阴影强化视觉状态识别 */
 .da-status-dot,
-.da-server-status-dot {
+.da-status-indicator {
     display: inline-block;
     width: 7px;
     height: 7px;
@@ -68,55 +86,44 @@
     transition: background 0.2s var(--da-ease), box-shadow 0.2s var(--da-ease);
 }
 
-.da-status-indicator.da-status-ok,
-.da-status-indicator--ready,
-.da-status-dot--ready,
-.da-server-status-dot--ready {
+/* 绿色就绪态 (已成功建立连接并获取后端信息) */
+.da-status-dot.da-status-ok,
+.da-status-dot.is-ok,
+.da-status-dot.is-ready,
+.da-status-indicator.da-status-ok {
     background: var(--da-color-success, #30d158);
     box-shadow: 0 0 5px rgba(48, 209, 88, 0.6);
 }
 
-.da-status-indicator.da-status-error,
-.da-status-indicator--error,
-.da-status-dot--error,
-.da-server-status-dot--error {
+/* 红色异常态 (连接失败、端口未开启或鉴权未通过) */
+.da-status-dot.da-status-error,
+.da-status-dot.is-error,
+.da-status-indicator.da-status-error {
     background: var(--da-color-error, #ff453a);
     box-shadow: 0 0 5px rgba(255, 69, 58, 0.6);
 }
 
-.da-status-indicator.da-status-checking,
-.da-status-indicator--checking,
-.da-status-dot--checking,
-.da-server-status-dot--checking {
+/* 黄色探测中态 (正在执行 HTTP 健康检查或轮询任务) */
+.da-status-dot.da-status-checking,
+.da-status-dot.is-checking,
+.da-status-indicator.da-status-checking {
     background: var(--da-color-warn, #ffd60a);
     box-shadow: 0 0 5px rgba(255, 214, 10, 0.6);
     animation: da-pulse-dot 1.2s ease-in-out infinite;
 }
 
-.da-status-indicator--warn {
+/* 警告态 */
+.da-status-dot.da-status-warn,
+.da-status-dot.is-warn,
+.da-status-indicator.da-status-warn {
     background: var(--da-status-warning, #ff9f0a);
     box-shadow: 0 0 5px rgba(255, 159, 10, 0.6);
 }
 
-.da-status-indicator--idle {
+/* 空闲待命态 */
+.da-status-dot.da-status-idle,
+.da-status-dot.is-idle,
+.da-status-indicator.da-status-idle {
     background: var(--da-text-muted, #636366);
     box-shadow: none;
-}
-
-/* 对齐 telemetry-service.ts 的实际类名输出：
-   状态点元素只有 .da-status-dot 基类，需要组合选择器才能命中颜色规则 */
-.da-status-dot.da-status-ok {
-    background: var(--da-color-success, #30d158);
-    box-shadow: 0 0 5px rgba(48, 209, 88, 0.5);
-}
-
-.da-status-dot.da-status-error {
-    background: var(--da-color-error, #ff453a);
-    box-shadow: 0 0 5px rgba(255, 69, 58, 0.5);
-}
-
-.da-status-dot.da-status-checking {
-    background: var(--da-color-warn, #ff9f0a);
-    box-shadow: 0 0 5px rgba(255, 159, 10, 0.5);
-    animation: da-pulse-dot 1.2s ease-in-out infinite;
 }

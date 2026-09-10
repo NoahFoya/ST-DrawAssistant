@@ -1,15 +1,16 @@
 /**
- * layout-system.css
- * 层级：layout
- * 职责：基础行列与网格布局样式系统 (Flex & Grid Layout System)
+ * @module styles/layout/layout-system
+ * @layer layout (Layer 2)
+ * @description 基础行列流式容器、插槽对齐策略、卡片骨架与通用布局原子工具类
  *
- * 容器只负责划分空间（行/列/插槽），不包含具体业务逻辑；
- * 统一采用 var(--da-*) 设计 Token。
+ * 架构契约：
+ * 1. 容器只负责划分几何空间（行/列/插槽），不耦合业务状态；
+ * 2. 颜色、边框、间距与圆角统一采用 var(--da-*) 设计令牌。
  */
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 1. 基础流式容器 (Flex Containers)
- * ═══════════════════════════════════════════════════════════════════════════════ */
+/* 1. 基础流式容器 (Flex Containers)
+   核心行列弹性容器体系，统一负责网格划分与弹性拉伸；
+   .da-row 默认两端对齐与垂直居中，.da-col 负责垂直堆叠并占满整宽。 */
 
 /* 水平行容器：两端对齐，垂直居中，拉伸占满 100% */
 .da-row {
@@ -37,10 +38,10 @@
   align-items: flex-start;
 }
 
-/* 卡片内置分割线行 (支持悬停高亮与底部边框) */
+/* 卡片内置分割线行 (支持悬停高亮与底部边框，标准 38px 紧凑行) */
 .da-row--divided {
-  padding: 8px 16px;
-  min-height: 44px;
+  padding: 3px 16px;
+  min-height: 38px;
   border-bottom: 1px solid var(--da-separator);
   transition: background 0.12s var(--da-ease);
 }
@@ -73,9 +74,11 @@
   align-items: center;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 2. 几何插槽策略与对齐规范 (Slots & Sizing Policies)
- * ═══════════════════════════════════════════════════════════════════════════════ */
+/* 2. 插槽策略与尺寸规范 (Slots & Sizing Policies)
+   严格定义表单行内的几何布局插槽契约：
+   .da-slot--left 负责标题与说明文案的弹性分配（flex: 1 1 auto），
+   .da-slot--right 负责交互控件的右对齐紧贴（flex: 0 0 auto; margin-left: auto），
+   保持跨页面、跨卡片的右侧交互基线严格对齐。 */
 
 /* 基础插槽单元：自适应无约束 */
 .da-slot {
@@ -113,7 +116,7 @@
   margin-left: auto;
 }
 
-/* 半宽插槽-左 (50% 宽度，向左对齐) */
+/* 半宽插槽-左 (向左对齐) */
 .da-slot--half-left {
   display: flex;
   flex-direction: column;
@@ -124,7 +127,7 @@
   max-width: 50%;
 }
 
-/* 半宽插槽-右 (50% 宽度，向右对齐) */
+/* 半宽插槽-右 (向右对齐) */
 .da-slot--half-right {
   display: flex;
   flex-direction: row;
@@ -135,13 +138,13 @@
   max-width: 50%;
 }
 
-/* 三分之一宽插槽 (33.333% 宽度) */
+/* 三分之一宽插槽 */
 .da-slot--third {
   flex: 0 0 33.333%;
   max-width: 33.333%;
 }
 
-/* 三分之二宽插槽 (66.666% 宽度) */
+/* 三分之二宽插槽 */
 .da-slot--two-third {
   flex: 0 0 66.666%;
   max-width: 66.666%;
@@ -186,9 +189,9 @@
   margin-left: auto;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 3. 卡片外壳结构 (Card Shell)
- * ═══════════════════════════════════════════════════════════════════════════════ */
+/* 3. 通用卡片外壳结构 (Card Shell)
+   核心配置承载容器，包含基础边框、圆角、背景色与内阴影；
+   支持 :hover 悬停高亮增强、不可用禁用态 (.is-disabled) 与折叠展开交互。 */
 
 .da-card {
   position: relative;
@@ -265,9 +268,8 @@
   box-sizing: border-box;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 3.1 卡片内部分组 (Section Group)
- * ═══════════════════════════════════════════════════════════════════════════════ */
+/* 3.1 卡片内部分组 (Section Group)
+   用于复合长卡片内部的二级逻辑分组，通过分割线与可折叠小箭头提供二级收拢交互。 */
 
 .da-section-group {
   width: 100%;
@@ -340,30 +342,126 @@
 }
 
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 4. 弹性布局通用工具类 (Layout Utilities)
- * ═══════════════════════════════════════════════════════════════════════════════ */
-
-.da-gap-xs { gap: var(--da-space-xs, 4px); }
-.da-gap-sm { gap: var(--da-space-sm, 8px); }
-.da-gap-md { gap: var(--da-space-md, 12px); }
-.da-gap-lg { gap: var(--da-space-lg, 16px); }
+/* 4. 弹性布局通用工具类 (Layout Utilities)
+   提供通用的间距（gap/margin/padding）、尺寸撑满与文本状态原子类，
+   避免在各个业务组件与视图中零散重复书写基础规则。 */
 
 .da-pad-sm { padding: var(--da-space-sm, 8px); }
 .da-pad-md { padding: var(--da-space-md, 12px); }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 5. 全局悬浮与下拉容器类 (Portal Dropdown)
- * ═══════════════════════════════════════════════════════════════════════════════ */
-
+/* 5. 浮动与全局下拉容器 (Portal Dropdown)
+   挂载到全局 body/portal 根层的高 z-index 定位容器，
+   专门承载自动完成下拉列表、变量插入面板等，避免被父级 overflow: hidden 意外裁剪。 */
 .da-portal-dropdown {
   position: fixed;
   z-index: 100060;
   box-sizing: border-box;
 }
 
-.da-pad-lg { padding: var(--da-space-lg, 16px); }
-
 .da-w-full { width: 100%; box-sizing: border-box; }
 .da-flex-center { display: flex; align-items: center; justify-content: center; }
+.da-flex-row { display: flex; flex-direction: row; align-items: center; }
+.da-flex-col { display: flex; flex-direction: column; }
+.da-flex-1 { flex: 1 1 0%; min-width: 0; }
+.da-flex-auto { flex: 0 0 auto; }
+.da-flex-center-row { display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.da-hidden { display: none !important; }
+
+/* 间距原子工具类 */
+.da-gap-xs { gap: var(--da-space-xs, 4px); }
+.da-gap-sm { gap: var(--da-space-sm, 8px); }
+.da-gap-md { gap: var(--da-space-md, 12px); }
+.da-gap-lg { gap: var(--da-space-lg, 16px); }
+
+.da-mb-xs { margin-bottom: var(--da-space-xs, 4px); }
+.da-mb-sm { margin-bottom: var(--da-space-sm, 8px); }
+.da-mb-md { margin-bottom: var(--da-space-md, 12px); }
+.da-mb-lg { margin-bottom: var(--da-space-lg, 16px); }
+
+.da-mt-xs { margin-top: var(--da-space-xs, 4px); }
+.da-mt-sm { margin-top: var(--da-space-sm, 8px); }
+.da-mt-md { margin-top: var(--da-space-md, 12px); }
+.da-mt-lg { margin-top: var(--da-space-lg, 16px); }
+
+/* 表单行内右侧多输入项/选择项横向组合容器 (通用可复用组件) */
+.da-input-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--da-space-sm, 8px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 文本状态原子类 */
+.da-text-muted { color: var(--da-text-muted) !important; }
+.da-text-danger { color: var(--da-color-error) !important; }
+.da-text-success { color: var(--da-color-success) !important; }
+.da-text-warn { color: var(--da-color-warn) !important; }
+.da-text-bold { font-weight: 600 !important; }
+.da-nowrap { white-space: nowrap !important; }
+.da-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+
+/* 卡片底部分隔操作按钮栏 (通用操作插槽) */
+.da-card-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--da-space-sm, 8px);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--da-separator);
+  flex-wrap: wrap;
+}
+
+/* 6. 通用空状态引导提示 (.da-empty-tip)
+   全局通用的无数据、无匹配项或服务未就绪时的引导占位组件；
+   支持图标、主标题与辅助说明三段排版，支持在网格容器内自动跨全列展示（grid-column: 1 / -1），
+   以及卡片虚线边框形态（.da-empty-tip--card）。 */
+.da-empty-tip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--da-space-lg, 20px) var(--da-space-md, 12px);
+  color: var(--da-text-muted);
+  font-size: var(--da-font-size-xs, 0.76rem);
+  user-select: none;
+  box-sizing: border-box;
+  width: 100%;
+  grid-column: 1 / -1;
+  gap: var(--da-space-xs, 4px);
+}
+
+.da-empty-tip--auto-margin {
+  margin: auto;
+}
+
+.da-empty-tip--error {
+  color: var(--da-error, #ff453a);
+}
+
+.da-empty-tip__icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: var(--da-space-xs, 4px);
+}
+
+.da-empty-tip__title {
+  font-weight: 600;
+  color: var(--da-text-secondary);
+}
+
+.da-empty-tip__sub {
+  font-size: 0.82em;
+  opacity: 0.75;
+}
+
+/* 虚线边框卡片形态空状态 (如画廊空状态) */
+.da-empty-tip--card {
+  padding: 40px 16px;
+  background: var(--da-bg-secondary);
+  border: 1px dashed var(--da-separator);
+  border-radius: var(--da-radius-card, 10px);
+}
 

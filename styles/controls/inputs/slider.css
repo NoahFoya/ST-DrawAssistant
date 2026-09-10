@@ -1,9 +1,15 @@
 /**
- * slider.css
- * 层级：controls/inputs
- * 职责：滑块与数值输入联动控件样式 (Slider Control)
+ * @module styles/controls/inputs/slider
+ * @layer controls/inputs (Layer 3)
+ * @description 滑块输入组件 (Slider Control) 与跨内核拇指滑块美化
+ *
+ * 核心边界与约束：
+ * 1. 组合 input[type="range"] 滑轨与精准数字输入框双向同步；
+ * 2. 跨浏览器适配：统一适配 WebKit (::-webkit-slider-thumb) 与 Gecko (::-moz-range-thumb)；
+ * 3. 状态联动：支持容器禁用与键盘聚焦焦点指示。
  */
 
+/* --- 1. 滑块容器包裹器 --- */
 .da-slider-wrapper {
     display: inline-flex;
     align-items: center;
@@ -13,7 +19,7 @@
     box-sizing: border-box;
 }
 
-/* 滑块 Range 轨道 */
+/* --- 2. 原生滑块轨道 --- */
 .da-slider-range {
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -34,7 +40,12 @@
     background: rgba(var(--da-accent-rgb), 0.35);
 }
 
-/* WebKit 拇指滑块 */
+.da-slider-range:focus-visible {
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* --- 3. 跨浏览器拇指滑块 (WebKit / Gecko) --- */
+/* WebKit (Chrome, Edge, Safari) */
 .da-slider-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
@@ -57,7 +68,7 @@
     transform: scale(0.95);
 }
 
-/* Gecko (Firefox) 拇指滑块 */
+/* Gecko (Firefox) */
 .da-slider-range::-moz-range-thumb {
     width: 14px;
     height: 14px;
@@ -74,7 +85,12 @@
     box-shadow: 0 0 6px rgba(var(--da-accent-rgb), 0.6);
 }
 
-/* 禁用态 */
+/* --- 4. 禁用态联动 --- */
+.da-slider-wrapper.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
 .da-slider-range:disabled {
     opacity: 0.45;
     cursor: not-allowed;
@@ -93,3 +109,4 @@
     transform: none;
     box-shadow: none;
 }
+

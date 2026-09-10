@@ -1,9 +1,12 @@
 /**
  * @module styles/layout/modal-shell
- * @description 主弹窗背景蒙层、主视窗骨架与内部主体水平分栏容器
+ * @layer layout (Layer 2)
+ * @description 主弹窗背景遮罩蒙层、主视窗骨架结构、主体左右分栏容器与未保存提示条
  */
 
-/* ════ 1. 全屏毛玻璃遮罩蒙层 ════ */
+/* 1. 全屏遮罩层 (.da-modal-backdrop)
+   覆盖整个浏览器视口的固定定位半透明背景，使用 backdrop-filter 提供背景虚化，
+   高 z-index 确保隔离 SillyTavern 宿主界面；内部使用 flex 居中承载弹窗主体。 */
 .da-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -22,7 +25,10 @@
     animation: da-fadein 0.16s var(--da-ease);
 }
 
-/* ════ 2. 弹窗主视窗外壳 ════ */
+/* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
+   主弹窗视窗骨架，限制桌面端最大尺寸 880px / 720px 与视口边界；
+   内部采用 flex 纵向排列组织 Header、Body 与 Footer 三段；
+   position: relative 作为未保存浮动条等绝对定位元素的定位参考系。 */
 .da-main-modal-inner {
     width: min(880px, 94vw);
     height: min(720px, 88vh);
@@ -42,9 +48,9 @@
     transition: width 0.18s var(--da-ease), height 0.18s var(--da-ease), border-radius 0.18s var(--da-ease);
 }
 
-
-
-/* ════ 3. 弹窗主体水平分栏容器 ════ */
+/* 3. 弹窗主体水平分栏容器 (.da-modal-body)
+   承载左侧导航侧边栏（.da-sidebar-tabs）与右侧内容滚动区（.da-modal-content）的水平弹性容器；
+   overflow: hidden 与 min-height: 0 保证内部各子容器建立局部独立滚动上下文，避免撑爆外壳。 */
 .da-modal-body {
     display: flex !important;
     flex-direction: row !important;
@@ -57,7 +63,10 @@
     box-sizing: border-box;
 }
 
-/* ════ 4. 顶置未保存脏数据浮动提醒条 ════ */
+/* 4. 浮动未保存提示条 (.da-floating-unsaved-notice)
+   位于弹窗顶栏下方的浮动胶囊提示条，当选项卡存在未保存修改时通过 .is-visible 显现；
+   绝对定位且水平居中（left: 50%; transform: translateX(-50%)），悬浮于内容之上，
+   提供保存与重置快捷操作入口。 */
 .da-floating-unsaved-notice {
     position: absolute;
     top: 54px;
@@ -97,6 +106,12 @@
     font-size: 14px;
 }
 
+.da-floating-notice-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--da-text-primary, #fff);
+}
+
 .da-floating-notice-sub {
     font-size: 11px;
     color: var(--da-text-secondary, #94a3b8);
@@ -107,5 +122,3 @@
     align-items: center;
     gap: 6px;
 }
-
-

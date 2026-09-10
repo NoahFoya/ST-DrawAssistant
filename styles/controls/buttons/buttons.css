@@ -1,9 +1,16 @@
 /**
- * buttons.css
- * 层级：controls/buttons
- * 职责：核心通用按钮及其语义化变体 (Primary / Secondary / Danger / 楼层按钮)
+ * @module styles/controls/buttons/buttons
+ * @layer controls/buttons (Layer 3)
+ * @description 核心通用按钮、语义化变体、楼层生图按钮状态机与复合按钮组
+ *
+ * 职责与约束：
+ * 1. 统一全局标准按钮基类（.da-btn），高度固定 32px，内边距横向 12px；
+ * 2. 提供 Primary（渐变主操作）、Secondary（次要半透明）、Danger（危险警示）与 Success 语义变体；
+ * 3. 楼层生图按钮（.da-floor-btn）维护就绪、生成中（进度脉冲）、出图完成与异常失败完整状态机；
+ * 4. 按钮组（.da-btn-group）实现子按钮拼接收拢与外边框统一圆角。
  */
 
+/* --- 1. 核心通用按钮基类 --- */
 .da-btn {
     display: inline-flex;
     align-items: center;
@@ -43,7 +50,8 @@
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
-/* Primary 主要按钮 */
+/* 2. 语义化按钮变体 */
+/* Primary 主要按钮：品牌色渐变背景，文字为高对比度深色/反白色 */
 .da-btn--primary {
     background: linear-gradient(135deg, var(--da-accent-color) 0%, var(--da-accent-hover) 100%) !important;
     border-color: var(--da-accent-color) !important;
@@ -59,16 +67,14 @@
     color: var(--da-text-on-accent, #ffffff) !important;
 }
 
-
-
-/* Secondary 次要按钮 */
+/* Secondary 次要按钮：半透明低对比度底色 */
 .da-btn--secondary {
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.04));
     border-color: var(--da-border-color);
     color: var(--da-text-primary);
 }
 
-/* Danger 危险按钮 */
+/* Danger 危险按钮：警示红半透明背景与红边框，用于清空与删除操作 */
 .da-btn--danger {
     background: rgba(255, 69, 58, 0.12);
     border-color: rgba(255, 69, 58, 0.35);
@@ -80,7 +86,7 @@
     box-shadow: 0 0 8px rgba(255, 69, 58, 0.2);
 }
 
-/* Success 成功按钮变体 */
+/* Success 成功按钮变体：用于保存完毕或连通验证成功的即时反馈 */
 .da-btn--success {
     background: rgba(52, 199, 89, 0.15) !important;
     border-color: rgba(52, 199, 89, 0.4) !important;
@@ -99,13 +105,15 @@
     cursor: not-allowed !important;
 }
 
-/* 尺寸变体 */
+/* 3. 尺寸与形态修饰符 */
+/* 紧凑小型尺寸 (26px) */
 .da-btn--sm {
     height: 26px !important;
     padding: 0 8px !important;
     font-size: var(--da-font-size-xs, 0.74rem) !important;
 }
 
+/* 药丸胶囊微型按钮 (24px) */
 .da-btn-pill-small {
     padding: 2px 10px !important;
     font-size: var(--da-font-size-xs, 0.76rem) !important;
@@ -114,8 +122,25 @@
     height: 24px !important;
 }
 
-/* 楼层生图触发按钮插槽容器 */
-.da-floor-btn-wrapper {
+/* 蓝图可视化编辑器专用唤起按钮 */
+.da-btn-blueprint {
+    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.12) 0%, rgba(var(--da-accent-rgb), 0.22) 100%) !important;
+    border-color: rgba(var(--da-accent-rgb), 0.35) !important;
+    color: var(--da-accent-color) !important;
+    font-weight: 600 !important;
+}
+
+.da-btn-blueprint:hover {
+    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.22) 0%, rgba(var(--da-accent-rgb), 0.35) 100%) !important;
+    border-color: var(--da-accent-color) !important;
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.3) !important;
+}
+
+/* 4. 楼层生图触发按钮组件与生命周期状态机 (.da-floor-btn)
+   嵌入 SillyTavern 聊天消息楼层下方，作为触发单图生成的核心入口；
+   胶囊药丸造型（border-radius: 100px），支持多种业务生命周期状态。 */
+.da-floor-btn-wrapper,
+.da-floor-slot {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -155,7 +180,6 @@
     transform: scale(0.96);
 }
 
-/* 键盘导航至楼层生图按钮时的焦点指示 */
 .da-floor-btn:focus-visible {
     outline: none;
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
@@ -172,7 +196,8 @@
     color: var(--da-text-primary);
 }
 
-/* 楼层生图进行中状态：强调边框与微光呼吸动效 */
+/* 楼层生图进行中状态 (.da-floor-btn--progress)
+   展示任务执行中的高亮渐变背景与发光脉冲关键帧动画，提示用户后台生图正在进行。 */
 .da-floor-btn--progress {
     background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.18) 0%, rgba(var(--da-accent-rgb), 0.3) 100%);
     border-color: var(--da-accent-color);
@@ -186,7 +211,8 @@
     border-color: var(--da-accent-hover);
 }
 
-/* 楼层生图完成状态：克制的成功色调微调 */
+/* 楼层生图完成状态 (.da-floor-btn--done)
+   使用柔和绿色调边框与背景表示成功出图，鼠标悬停时增强对比度。 */
 .da-floor-btn--done {
     background: rgba(48, 209, 88, 0.12);
     border-color: rgba(48, 209, 88, 0.32);
@@ -199,7 +225,8 @@
     color: #ffffff;
 }
 
-/* 楼层生图异常状态：柔和错误警示色与重试引导 */
+/* 楼层生图异常状态 (.da-floor-btn--error)
+   使用错误警示红色调提示生图失败或网络中断，点击可引导重试。 */
 .da-floor-btn--error {
     background: rgba(255, 69, 58, 0.12);
     border-color: rgba(255, 69, 58, 0.35);
@@ -232,3 +259,41 @@
     color: var(--da-text-primary);
 }
 
+/* 5. 通用操作按钮行与紧凑按钮组 */
+/* 通用操作按钮行 (.da-btn-row)
+   横向弹性排列多个按钮，统一间距并在超出宽度时自动换行。 */
+.da-btn-row {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    flex-wrap: wrap;
+}
+
+/* 紧凑按钮组 (.da-btn-group)
+   无缝拼接多个小按钮（如放大、缩小、适应画布、重置），
+   子按钮移除圆角与内边框，组外壳统一收拢圆角与边框。 */
+.da-btn-group {
+    display: inline-flex;
+    align-items: center;
+    background: var(--da-bg-card, var(--da-bg-secondary));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-sm, 6px);
+    overflow: hidden;
+}
+
+.da-btn-group > .da-btn {
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border-right: 1px solid var(--da-border-color) !important;
+    box-shadow: none !important;
+}
+
+.da-btn-group > .da-btn:last-child {
+    border-right: none !important;
+}
+
+.da-btn-group > .da-btn:hover:not(:disabled) {
+    background: var(--da-bg-hover) !important;
+    color: var(--da-text-primary) !important;
+}

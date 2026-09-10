@@ -1,9 +1,16 @@
 /**
- * text-input.css
- * 层级：controls/inputs
- * 职责：单行文本输入框、数字输入框与带单位修饰输入框样式
+ * @module styles/controls/inputs/text-input
+ * @layer controls/inputs (Layer 3)
+ * @description 单行文本输入框、数字输入框与带单位复合输入控件
+ *
+ * 核心边界与约束：
+ * 1. 结构规范：基础单行输入框 (.da-input) 高度与按钮、下拉框保持基线一致；
+ * 2. 数字排版：数值类输入框支持等宽数字 (tabular-nums)，避免数值变动发生宽度跳动；
+ * 3. 状态管道：统一对接未保存修改 (.is-dirty) 与校验错误 (.is-invalid)；
+ * 4. 复合输入：支持带绝对定位单位徽章的复合输入框 (.da-input-unit-wrapper)。
  */
 
+/* --- 1. 单行文本输入框基类 --- */
 .da-input {
     width: 200px;
     max-width: 100%;
@@ -34,14 +41,12 @@
     background: var(--da-bg-input-hover);
 }
 
-/* 鼠标或触控点击时的柔和聚焦指示 */
 .da-input:focus {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
     background: var(--da-bg-input);
 }
 
-/* 键盘 Tab 导航时的高对比度焦点环 */
 .da-input:focus-visible {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring)), inset 0 1px 2px rgba(0, 0, 0, 0.15);
@@ -54,7 +59,8 @@
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* 长文本类输入框：左对齐，保证长文本、链接与提示词的光标定位与可读性 */
+/* --- 2. 文本对齐与语义排版 --- */
+/* 长文本类：左对齐，适配链接、说明与提示词 */
 .da-input--text,
 .da-input--left,
 .da-input-long {
@@ -67,7 +73,7 @@
     text-align: left;
 }
 
-/* 短文本类输入框：居中对齐，适用于指令标志符、短代码与短名称 */
+/* 短文本类：居中等宽排布，适配标识符与简短参数 */
 .da-input--center,
 .da-input-short {
     text-align: center;
@@ -85,7 +91,7 @@
     flex: 0 0 130px;
 }
 
-/* 数值类输入框：居中排版，采用等宽数字以统一紧凑卡片读数 */
+/* 数值类：居中等宽数字排版，避免动态跳动 */
 .da-input--number,
 .da-input[type="number"] {
     text-align: center;
@@ -98,22 +104,31 @@
     text-align: center;
 }
 
-/* 脏数据修改态 (黄色微光高亮) */
+/* --- 3. 表单状态联动 (未保存修改 / 校验错误) --- */
+/* 未保存修改态 (黄色高亮) */
 .da-input.is-dirty {
     border-color: var(--da-color-warn, #ff9f0a) !important;
     box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
 }
 
-/* 错误校验态 (红色微光高亮) */
-.da-input.is-invalid,
-.da-input.da-select-error {
+/* 错误校验态 (红色高亮) */
+.da-input.is-invalid {
     border-color: var(--da-color-error, #ff453a) !important;
     background-color: rgba(255, 69, 58, 0.08) !important;
     color: var(--da-color-error, #ff453a);
     box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
 }
 
-/* 数字输入框标准规格变体 */
+/* --- 4. 尺寸与数字宽度规格变体 --- */
+/* 紧凑型单行框 (对齐小号按钮规格) */
+.da-input--sm,
+.da-input-sm {
+    height: 26px !important;
+    padding: 0 8px !important;
+    font-size: var(--da-font-size-xs, 0.74rem) !important;
+}
+
+/* 超短数字输入框 (适配 2 位整型步数或权重微调) */
 .da-input-num-short {
     width: 44px;
     max-width: 44px;
@@ -123,6 +138,7 @@
     font-family: var(--da-font-mono, monospace);
 }
 
+/* 小型数字输入框 (适配 3-4 位分辨率等数值) */
 .da-input-num-small {
     width: 58px;
     max-width: 58px;
@@ -131,6 +147,7 @@
     font-family: var(--da-font-mono, monospace);
 }
 
+/* 中长数字输入框 (适配种子数或端口号) */
 .da-input-num-long {
     width: 68px;
     max-width: 68px;
@@ -140,9 +157,7 @@
     font-family: var(--da-font-mono, monospace);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
- * 带单位后缀包裹器 (.da-input-unit-wrapper)
- * ═══════════════════════════════════════════════════════════════════════════════ */
+/* --- 5. 带单位后缀复合输入框 --- */
 .da-input-unit-wrapper {
     position: relative;
     display: inline-flex;
@@ -168,6 +183,7 @@
     font-family: var(--da-font-mono, monospace);
 }
 
+/* 单位后缀绝对定位徽标 (如 px, s, %) */
 .da-input-unit-badge {
     position: absolute;
     right: 6px;
@@ -190,5 +206,11 @@
     white-space: nowrap;
     flex-shrink: 0;
     font-family: var(--da-font-family);
+}
+
+/* 搜索过滤框：弹性填满可用空间 */
+.da-input--search {
+    flex: 1;
+    min-width: 160px;
 }
 

@@ -1,0 +1,80 @@
+/**
+ * @module styles/controls/cards/hero-card
+ * @layer controls/cards (Layer 3)
+ * @description 焦点展板卡片组件 (用于产品概述、欢迎横幅、版本头图与视觉焦点卡)
+ *
+ * 职责与约束：
+ * 1. 用于“关于”选项卡或重要功能页顶部，作为突出主视觉的大型展板卡片；
+ * 2. 采用 135deg 品牌色渐变背景与右上角半透明径向发光光晕（::after）；
+ * 3. 容纳标题、副标题描述、元数据行与操作按钮区，overflow: hidden 防止光晕溢出。
+ */
+
+/* --- 1. 展板卡片外壳 --- */
+.da-hero-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 22px;
+    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.12) 0%, var(--da-bg-secondary) 60%);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.3);
+    border-radius: var(--da-radius-card, 12px);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+}
+
+/* 右上角径向光晕装饰，pointer-events: none 避免阻挡鼠标事件 */
+.da-hero-card::after {
+    content: '';
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, rgba(var(--da-accent-rgb), 0.25) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* 2. 头部标题与描述区 */
+.da-hero-card__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.da-hero-card__title {
+    margin: 0;
+    font-size: 1.35em;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    letter-spacing: -0.02em;
+}
+
+.da-hero-card__desc {
+    font-size: 0.88em;
+    color: var(--da-text-secondary);
+    line-height: 1.5;
+}
+
+/* 3. 信息行与操作按钮区 */
+.da-hero-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85em;
+    color: var(--da-text-secondary);
+}
+
+.da-hero-card__meta {
+    color: var(--da-text-muted);
+    font-size: 0.8em;
+}
+
+.da-hero-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}

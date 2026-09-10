@@ -1,18 +1,26 @@
 /**
- * rich-link-card.css
- * 层级：controls/cards
- * 职责：富链接导航卡片 (关于面板社区外链、文档跳转与专属主题微边框装饰)
+ * @module styles/controls/cards/rich-link-card
+ * @layer controls/cards (Layer 3)
+ * @description 通用富外链导航卡片与自适应网格 (文档跳转、社区外链、代码仓库等)
+ *
+ * 职责与约束：
+ * 1. 提供卡片式外部跳转链接（.da-rich-link-card）与自适应网格（.da-rich-link-grid）；
+ * 2. 采用 repeat(auto-fit, minmax(150px, 1fr)) 流式布局，小屏自动折行；
+ * 3. 左侧统一 38px 方形图标盒子，右侧展示标题与简介，并为各大开源社区提供专属悬停边框色。
  */
 
-.da-about-card-grid {
+/* 1. 外链自适应网格 (.da-rich-link-grid)
+   自适应流动网格，卡片最小宽度 150px，间距 12px */
+.da-rich-link-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     gap: 12px;
     width: 100%;
 }
 
-
-.da-about-rich-card {
+/* 2. 外链卡片主体 (.da-rich-link-card)
+   弹性水平排列，hover 产生 -2px 弹簧浮起与发光阴影效果 */
+.da-rich-link-card {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -27,13 +35,14 @@
     transition: transform 0.2s var(--da-ease-spring), border-color 0.2s var(--da-ease), box-shadow 0.2s var(--da-ease);
 }
 
-.da-about-rich-card:hover {
+.da-rich-link-card:hover {
     transform: translateY(-2px);
     border-color: var(--da-accent-color);
     box-shadow: var(--da-shadow-md), 0 0 12px rgba(var(--da-accent-rgb), 0.2);
 }
 
-.da-about-rich-card-icon-box {
+/* 3. 左侧图标盒子与文本内容区 */
+.da-rich-link-card__icon-box {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -45,12 +54,12 @@
     flex-shrink: 0;
 }
 
-.da-about-rich-card-icon {
+.da-rich-link-card__icon {
     font-size: 1.35em;
     line-height: 1;
 }
 
-.da-about-rich-card-content {
+.da-rich-link-card__content {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -59,7 +68,7 @@
     overflow: hidden;
 }
 
-.da-about-rich-card-title {
+.da-rich-link-card__title {
     font-size: 0.9em;
     font-weight: 600;
     color: var(--da-text-primary);
@@ -68,7 +77,7 @@
     text-overflow: ellipsis;
 }
 
-.da-about-rich-card-sub {
+.da-rich-link-card__sub {
     font-size: 0.78em;
     color: var(--da-text-muted);
     line-height: 1.35;
@@ -77,10 +86,10 @@
     text-overflow: ellipsis;
 }
 
-/* ════ 社区卡片主题微边框装饰 (Variants) ════ */
-.da-about-rich-card--github:hover   { border-color: #58a6ff; }
-.da-about-rich-card--license:hover  { border-color: #30d158; }
-.da-about-rich-card--comfy:hover    { border-color: var(--da-accent-color); }
-.da-about-rich-card--sd:hover       { border-color: #a855f7; }
-.da-about-rich-card--civitai:hover  { border-color: #3b82f6; }
-.da-about-rich-card--st:hover       { border-color: #ec4899; }
+/* 4. 品牌专属悬停边框色 (Brand Color Variants) */
+.da-rich-link-card--github:hover   { border-color: #58a6ff; }
+.da-rich-link-card--license:hover  { border-color: #30d158; }
+.da-rich-link-card--comfy:hover    { border-color: var(--da-accent-color); }
+.da-rich-link-card--sd:hover       { border-color: #a855f7; }
+.da-rich-link-card--civitai:hover  { border-color: #3b82f6; }
+.da-rich-link-card--st:hover       { border-color: #ec4899; }

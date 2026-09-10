@@ -1,7 +1,16 @@
 /**
- * 弹窗顶部标题栏、版本徽标、主题切换与关闭按钮
+ * @module styles/layout/header-bar
+ * @layer layout (Layer 2)
+ * @description 弹窗顶部标题栏、版本徽标、快捷主题切换与关闭按钮
+ *
+ * 职责与约束：
+ * 1. 作为主配置弹窗的固定高度顶部导航条（height: 46px），flex-shrink: 0 防止被内容挤压；
+ * 2. 左侧展示渐变艺术标题与版本徽标，右侧容纳快捷主题下拉选择胶囊与关闭模态按钮；
+ * 3. 底部通过 1px solid var(--da-border-color) 分割线与下方的 Body 内容区分离。
  */
 
+/* 1. 顶部标题栏固定外壳 (.da-header-bar)
+   采用两端对齐（space-between）弹性布局，内边距横向 14px，固定 46px 紧凑高度 */
 .da-header-bar {
     display: flex;
     flex-direction: row;
@@ -16,12 +25,14 @@
     box-sizing: border-box;
 }
 
+/* 2. 左侧品牌标题与版本区 (.da-header-left) */
 .da-header-left {
     display: flex;
     align-items: center;
     gap: var(--da-space-sm, 6px);
 }
 
+/* 艺术渐变标题文本（白色渐变至品牌色，启用 background-clip: text 裁剪） */
 .da-header-title {
     font-size: var(--da-font-size-md, 0.98rem);
     font-weight: 700;
@@ -47,6 +58,7 @@
     flex-shrink: 0;
 }
 
+/* 3. 右侧快捷操作区 (.da-header-right) */
 .da-header-right {
     display: flex;
     align-items: center;
@@ -54,6 +66,7 @@
     position: relative;
 }
 
+/* 快捷主题切换胶囊胶囊外壳 (.da-quick-theme-selector) */
 .da-quick-theme-selector {
     display: inline-flex;
     align-items: center;
@@ -73,6 +86,7 @@
     box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.15);
 }
 
+/* 胶囊内原生下拉选择器（清除默认外观以契合胶囊造型） */
 .da-quick-theme-select {
     background: transparent !important;
     border: none !important;
@@ -104,6 +118,8 @@
     text-align: center;
 }
 
+/* 4. 模态弹窗关闭按钮 (.da-modal-close-btn)
+   26px 紧凑方形按钮，hover 呈现醒目的红色危险告警反馈 */
 .da-modal-close-btn {
     width: 26px;
     height: 26px;
@@ -134,4 +150,3 @@
 .da-modal-close-btn:active {
     transform: scale(0.94);
 }
-

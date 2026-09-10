@@ -1,14 +1,25 @@
 /**
- * help-bubble.css
- * 层级：controls/feedback
- * 职责：字段问号帮助提示按钮与浮动释义气泡
+ * @module styles/controls/feedback/help-bubble
+ * @layer controls/feedback (Layer 3)
+ * @description 字段问号帮助提示按钮与浮动释义气泡
+ *
+ * 职责与约束：
+ * 1. 提供紧凑的圆形问号图标按钮（.da-help-btn），嵌入表单行标题侧边；
+ * 2. 支持通过全局属性 [data-da-show-help="false"] 一键隐藏所有帮助按钮，保持界面清爽；
+ * 3. 释义浮层气泡（.da-help-bubble）采用高 z-index（100090）浮于主弹窗之上，支持模糊背景与自适应宽度。
  */
 
+/* 1. 全局显隐开关控制
+   根据用户在通用设置中的偏好，通过宿主根节点属性快速隐藏所有问号按钮 */
 [data-da-show-help="false"] .da-help-btn,
 .st-da-root[data-da-show-help="false"] .da-help-btn {
     display: none !important;
 }
 
+/* 2. 问号帮助按钮外壳与交互态 (.da-help-btn)
+   尺寸限制为 13px 圆形徽标，平时保持低透明度（0.35）弱化视觉干扰；
+   当所在行或字段标题被 hover 时透明度提升至 0.85，引导用户发现；
+   自身 hover 时放大至 1.15 倍并呈现品牌色背景。 */
 .da-help-btn {
     display: inline-flex;
     align-items: center;
@@ -50,7 +61,9 @@
     transform: scale(0.94);
 }
 
-
+/* 3. 浮动释义气泡卡片 (.da-help-bubble)
+   固定最大宽度 260px，超小屏限制 calc(100vw - 20px) 避免越界；
+   多层阴影搭配高斯模糊虚化底层内容，保障帮助文本的高可读性。 */
 .da-help-bubble {
     width: 260px;
     max-width: calc(100vw - 20px);
@@ -72,7 +85,6 @@
     word-break: break-word;
 }
 
-
 .da-help-bubble--top {
     transform: translateY(-6px);
 }
@@ -92,4 +104,3 @@
     font-size: var(--da-font-size-xs, 0.76rem);
     line-height: 1.4;
 }
-

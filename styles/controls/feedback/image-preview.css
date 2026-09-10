@@ -1,9 +1,18 @@
 /**
- * image-preview.css
- * 层级：controls/feedback
- * 职责：大图全屏预览弹窗、居中遮罩与关闭按钮
+ * @module styles/controls/feedback/image-preview
+ * @layer controls/feedback (Layer 3)
+ * @description 大图全屏预览弹窗、居中遮罩与关闭按钮
+ *
+ * 职责与约束：
+ * 1. 提供全局独立的大图全屏预览视窗，由 ModalService 统一接管层级与快捷键生命周期；
+ * 2. z-index 设为 100100，确保高于主配置弹窗（10000）与二级对话框（30000）的层叠上下文；
+ * 3. 遮罩层支持点击背景退出，搭配 Esc 按键与右上角关闭按钮提供多路安全退出路径。
  */
 
+/* 1. 全屏放大遮罩层 (.da-image-preview-backdrop)
+   使用高数值 z-index 穿透并覆盖所有界面元素；
+   高斯模糊虚化底层内容减少背景视觉干扰；
+   鼠标指针设置为 zoom-out 明确提示用户点击空白处即可退出预览。 */
 .da-image-preview-backdrop {
     position: fixed;
     inset: 0;
@@ -18,6 +27,10 @@
     animation: da-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* 2. 预览图片承载容器 (.da-image-preview-img)
+   使用 92vw / 92vh 限制最大显示尺寸，确保四周预留 4% 的可视留白以感知全屏遮罩；
+   object-fit: contain 严格保持原图比例并完整显示；
+   重置指针为 default，避免在图片本体上点击时与遮罩层的退出操作混淆。 */
 .da-image-preview-img {
     max-width: 92vw;
     max-height: 92vh;
@@ -27,6 +40,9 @@
     cursor: default;
 }
 
+/* 3. 右上角悬浮关闭按钮 (.da-image-preview-close)
+   绝对定位固定在右上角，采用 36px 正圆形半透明磨砂按钮；
+   在点击遮罩背景与按 Esc 之外提供直观显式的关闭途径。 */
 .da-image-preview-close {
     position: absolute;
     top: 24px;
@@ -41,9 +57,15 @@
     cursor: pointer;
     font-size: 18px;
     transition: background 0.2s ease, transform 0.2s ease;
+    user-select: none;
+    box-sizing: border-box;
 }
 
 .da-image-preview-close:hover {
     background: rgba(255, 255, 255, 0.25);
     transform: scale(1.1);
+}
+
+.da-image-preview-close:active {
+    transform: scale(0.95);
 }

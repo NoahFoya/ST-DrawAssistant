@@ -1,9 +1,15 @@
 /**
- * color-picker.css
- * 层级：controls/inputs
- * 职责：颜色选择器组件样式 (原生色板与 Hex 编码输入框)
+ * @module styles/controls/inputs/color-picker
+ * @layer controls/inputs (Layer 3)
+ * @description 颜色选择器组件 (原生色盘与十六进制 Hex 输入框联动)
+ *
+ * 核心边界与约束：
+ * 1. 跨内核兼容：分别适配 WebKit (::-webkit-color-swatch) 与 Gecko (::-moz-color-swatch) 圆形色板；
+ * 2. 状态管道：统一对接未保存修改 (.is-dirty)、校验错误 (.is-invalid) 与容器禁用 (.is-disabled)；
+ * 3. 输入规范：Hex 输入框大写呈现与等宽字符对齐。
  */
 
+/* --- 1. 容器包裹器 --- */
 .da-color-picker-wrapper {
     display: inline-flex;
     align-items: center;
@@ -11,7 +17,12 @@
     box-sizing: border-box;
 }
 
-/* 原生颜色选择器圆形色板 (32px 圆形) */
+.da-color-picker-wrapper.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* --- 2. 原生颜色选择器圆形色板 (WebKit / Gecko) --- */
 .da-color-picker-native {
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -28,12 +39,19 @@
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* WebKit 色盘伪元素重置 */
 .da-color-picker-native::-webkit-color-swatch-wrapper {
     padding: 0;
     border-radius: 50%;
 }
 
 .da-color-picker-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* Gecko (Firefox) 色盘伪元素重置 */
+.da-color-picker-native::-moz-color-swatch {
     border: none;
     border-radius: 50%;
 }
@@ -49,7 +67,7 @@
     transform: none;
 }
 
-/* 十六进制 Hex 颜色输入框 (100px 紧凑单行框，统一 32px 高度，文本居中) */
+/* --- 3. 十六进制 Hex 编码输入框 --- */
 .da-color-hex-input {
     width: 100px;
     min-width: 90px;
@@ -86,16 +104,26 @@
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* 脏数据修改态 (黄色微光高亮) */
+/* --- 4. 表单状态联动 (未保存修改 / 校验错误) --- */
+/* 未保存修改态 (黄色高亮) */
 .da-color-hex-input.is-dirty {
     border-color: var(--da-color-warn, #ff9f0a) !important;
     box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
 }
 
-/* 非法 Hex 输入错误态 (红色微光高亮) */
+.da-color-picker-native.is-dirty {
+    box-shadow: 0 0 0 2px var(--da-color-warn, #ff9f0a);
+}
+
+/* 错误输入态 (红色高亮，提示非法 Hex 格式) */
 .da-color-hex-input.is-invalid {
     border-color: var(--da-color-error, #ff453a) !important;
     background-color: rgba(255, 69, 58, 0.08) !important;
     color: var(--da-color-error, #ff453a);
     box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
 }
+
+.da-color-picker-native.is-invalid {
+    box-shadow: 0 0 0 2px var(--da-color-error, #ff453a);
+}
+

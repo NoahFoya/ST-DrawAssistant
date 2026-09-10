@@ -1,6 +1,7 @@
 /**
- * 预设方案管理工具栏样式 (Preset Toolbar Styles)
- * 支持 8 个 SVG 图标按钮操作组、预设选择下拉框、已修改与失效高亮指示
+ * @module styles/controls/toolbars/preset-toolbar
+ * @layer controls/toolbars (Layer 3)
+ * @description 预设方案管理工具栏（方案选择下拉、8 键操作按钮排与未保存高亮指示）
  */
 
 .da-preset-toolbar {
@@ -18,7 +19,9 @@
     flex-wrap: wrap;
 }
 
-/* 嵌在卡片或行内部时：消除双重卡片背景嵌套与内边距冲突 */
+/* 嵌入上下文样式适配：
+   当工具栏嵌套在卡片体 (.da-card__body) 或行容器 (.da-row) 内部时，
+   清除重复的外框、背景色与内外边距，维持扁平紧凑风格。 */
 .da-card > .da-card__body > .da-preset-toolbar {
     background: transparent;
     border: none;
@@ -38,6 +41,7 @@
     box-shadow: none;
 }
 
+/* 左侧插槽：预设方案下拉选择器容器 (.da-preset-toolbar-left) */
 .da-preset-toolbar-left {
     display: flex;
     align-items: center;
@@ -46,12 +50,17 @@
     min-width: 180px;
 }
 
-.da-preset-select {
+.da-preset-select-wrapper {
     flex: 1;
     min-width: 140px;
+}
+
+.da-preset-select {
+    width: 100%;
     height: 32px;
 }
 
+/* 右侧插槽：8 键快捷操作按钮组（新建、保存、复制、重命名、导入、导出、重置、删除） */
 .da-preset-toolbar-right {
     display: inline-flex;
     align-items: center;
@@ -60,23 +69,11 @@
     flex-wrap: wrap;
 }
 
-/* 脏数据徽标与失效徽标 */
-.da-preset-toolbar .da-badge--dirty {
-    color: var(--da-color-warn, #ff9f0a);
-    background: rgba(255, 159, 10, 0.15);
-    border: 1px solid rgba(255, 159, 10, 0.4);
-}
-
-.da-preset-toolbar .da-badge--invalid {
-    color: var(--da-color-error, #ff453a);
-    background: rgba(255, 69, 58, 0.15);
-    border: 1px solid rgba(255, 69, 58, 0.4);
-}
-
-.da-preset-btn {
+.da-preset-btn,
+.da-preset-toolbar-right .da-icon-btn {
+    width: 32px;
     height: 32px;
-    padding: 0 var(--da-space-md, 12px);
-    font-size: var(--da-font-size-sm, 0.82rem);
+    padding: 0;
     border-radius: var(--da-radius-btn, 8px);
     border: 1px solid var(--da-border-color);
     background: var(--da-bg-input);
@@ -84,48 +81,78 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--da-space-xs, 4px);
     cursor: pointer;
     transition: all 0.15s ease;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
-.da-preset-btn:hover {
+.da-preset-btn:hover,
+.da-preset-toolbar-right .da-icon-btn:hover:not(:disabled) {
     background: var(--da-bg-hover);
     color: var(--da-text-primary);
     border-color: rgba(var(--da-accent-rgb), 0.35);
 }
 
-.da-preset-btn.danger {
+.da-preset-btn:focus-visible,
+.da-preset-toolbar-right .da-icon-btn:focus-visible {
+    outline: none;
+    border-color: var(--da-accent);
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+.da-preset-btn:disabled,
+.da-preset-btn.is-disabled,
+.da-preset-toolbar-right .da-icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.da-preset-btn.danger,
+.da-preset-toolbar-right .da-icon-btn--danger {
     border-color: rgba(255, 69, 58, 0.3);
     color: var(--da-color-error, #ff453a);
 }
 
-.da-preset-btn.danger:hover {
+.da-preset-btn.danger:hover,
+.da-preset-toolbar-right .da-icon-btn--danger:hover:not(:disabled) {
     background: var(--da-color-error, #ff453a);
     color: #ffffff;
     border-color: var(--da-color-error, #ff453a);
 }
 
+/* 未保存修改状态高亮：当方案配置有变动且未持久化时，保存按钮切换为警示色高亮，提醒用户保存 */
 .da-preset-btn--save.is-dirty {
-    background: var(--da-status-warning, #ff9f0a);
-    border-color: var(--da-status-warning, #ff9f0a);
-    color: #000000;
+    background: var(--da-status-warning, #ff9f0a) !important;
+    border-color: var(--da-status-warning, #ff9f0a) !important;
+    color: #000000 !important;
     font-weight: 600;
-    box-shadow: 0 0 10px rgba(255, 159, 10, 0.4);
+    box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
     animation: da-pulse-dirty 1.6s ease-in-out infinite;
 }
 
-.da-preset-btn--dirty-pulse {
-    animation: da-pulse-dirty 1.6s ease-in-out infinite;
-}
-
-@keyframes da-pulse-dirty {
-    0%, 100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 159, 10, 0.4);
+/* 移动端自适应 (max-width: 520px)：
+   由横向两端对齐转为上下两行排布；右侧按钮排开启水平单行滑动并隐藏原生滚动条。 */
+@media (max-width: 520px) {
+    .da-preset-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
     }
-    50% {
-        transform: scale(1.03);
-        box-shadow: 0 0 0 6px rgba(255, 159, 10, 0);
+
+    .da-preset-toolbar-left,
+    .da-preset-toolbar-right {
+        width: 100%;
+    }
+
+    .da-preset-toolbar-right {
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .da-preset-toolbar-right::-webkit-scrollbar {
+        display: none;
     }
 }

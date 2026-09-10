@@ -1,7 +1,10 @@
 /**
- * 弹窗侧边导航选项卡、高亮指示与脏数据红点 (Sidebar Navigation Styles)
+ * @module styles/layout/sidebar-tabs
+ * @layer layout (Layer 2)
+ * @description 弹窗侧边导航选项卡、高亮指示线、未保存修改指示与分组折叠
  */
 
+/* --- 1. 侧边导航选项卡容器 --- */
 .da-sidebar-tabs {
     flex: 0 0 170px;
     width: 170px;
@@ -18,6 +21,7 @@
     scrollbar-color: var(--da-border-color) transparent;
 }
 
+/* --- 2. 选项卡条目按钮与交互态 --- */
 .da-sidebar-item {
     position: relative;
     display: flex;
@@ -60,7 +64,8 @@
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
-/* 侧边栏语义分组细分割线：区分绘图核心区与系统配置区 */
+/* 3. 侧边栏语义分组细分割线 (.da-sidebar-divider)
+   用于划分“绘图核心驱动区”（ComfyUI/SD/NovelAI）与“系统管理区”（通用/外观/悬浮球/画廊/关于） */
 .da-sidebar-divider {
     height: 1px;
     margin: 4px 6px;
@@ -69,6 +74,7 @@
     flex-shrink: 0;
 }
 
+/* 选项卡激活态：深色半透明背景搭配品牌色文字，左侧通过 ::before 呈现 3px 竖向指示条 */
 .da-sidebar-item--active {
     background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.025)) !important;
     color: var(--da-accent-color) !important;
@@ -87,6 +93,7 @@
     background: var(--da-accent-color);
 }
 
+/* 选项卡内部图标容器与 SVG 尺寸约束 */
 .da-sidebar-item__icon {
     font-size: 1.05em;
     display: inline-flex;
@@ -115,8 +122,10 @@
     text-align: center;
 }
 
-
-.da-sidebar-item__dirty-dot {
+/* 4. 未保存状态指示红点 (.da-sidebar-item__dirty-dot)
+   当该 Tab 页面内有被用户修改但尚未保存的表单字段时显示在右侧，提醒保存 */
+.da-sidebar-item__dirty-dot,
+.da-tab-dirty-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
@@ -124,10 +133,12 @@
     box-shadow: 0 0 5px rgba(255, 159, 10, 0.7);
     flex-shrink: 0;
     display: inline-block;
+    margin-left: auto;
     animation: da-pulse-dirty 1.6s infinite ease-in-out;
 }
 
-/* 引擎 Tab 展开/收拢指示器 (支持单击展开/收起) */
+/* 5. 驱动 Tab 展开/收起指示器 (.da-sidebar-item__expand-trigger)
+   支持快捷折叠或展开下属模型预设，点击时触发平滑 180 度旋转 */
 .da-sidebar-item__expand-trigger {
     display: inline-flex;
     align-items: center;

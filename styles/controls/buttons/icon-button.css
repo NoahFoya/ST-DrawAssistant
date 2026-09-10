@@ -1,9 +1,15 @@
 /**
- * icon-button.css
- * 层级：controls/buttons
- * 职责：微型图标按钮与状态变体 (删除、刷新、未保存脏标记)
+ * @module styles/controls/buttons/icon-button
+ * @layer controls/buttons (Layer 3)
+ * @description 微型正方形图标按钮与语义状态变体 (删除、刷新、未保存修改警示)
+ *
+ * 职责与约束：
+ * 1. 正方形图标按钮（.da-icon-btn），SVG 图标居中显示；
+ * 2. 内部 SVG 设置 pointer-events: none，防止事件目标冒泡不一致导致点击失效；
+ * 3. 状态联动：支持 Danger 危险删除变体与未保存修改 (.is-dirty) 警示色脉冲高亮。
  */
 
+/* --- 1. 正方形图标按钮基类 --- */
 .da-icon-btn {
     display: inline-flex;
     align-items: center;
@@ -46,6 +52,7 @@
     pointer-events: none;
 }
 
+/* 内部嵌入的矢量图标尺寸标准化，禁止鼠标穿透 */
 .da-icon-btn svg {
     width: 16px;
     height: 16px;
@@ -53,7 +60,8 @@
     flex-shrink: 0;
 }
 
-/* 危险删除变体 */
+/* 2. 语义化变体修饰符 */
+/* 危险删除变体 (用于删除预设方案、清空日志等高危操作) */
 .da-icon-btn--danger {
     background: rgba(255, 69, 58, 0.1);
     border-color: rgba(255, 69, 58, 0.35);
@@ -67,8 +75,7 @@
     box-shadow: 0 0 8px rgba(255, 69, 58, 0.2);
 }
 
-/* 脏数据高亮变体 */
-.da-icon-btn--dirty,
+/* 未保存修改高亮态 (.da-icon-btn.is-dirty) */
 .da-icon-btn.is-dirty {
     color: #ff9f0a !important;
     border-color: rgba(255, 159, 10, 0.5) !important;
