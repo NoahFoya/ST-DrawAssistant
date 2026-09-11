@@ -54,6 +54,7 @@
   "fabVisible": true,
   "fabOpacity": 0.95,
   "fabPresetIcon": "palette",
+  "fabAutoSnap": false,
   "lightboxEnabled": true,
   "enableActionPanel": true,
   "imageDisplay": {

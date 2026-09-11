@@ -60,7 +60,7 @@ export class FABContainer implements IDisposable {
     private readonly _settingsModal: SettingsModal;
     private _fabElement?: HTMLElement;
     private readonly _disposables = new DisposableStore();
-    private _justDragged = false;
+    private _hasDragged = false;
 
     constructor(options: FABContainerOptions) {
         this._store = options.store;
@@ -86,6 +86,11 @@ export class FABContainer implements IDisposable {
         this._disposables.add(
             this._store.subscribeKey('fabPosition', (pos) => this.applyPosition(pos as FabDockPosition | undefined, true))
         );
+        this._disposables.add(
+            this._store.subscribeKey('fabAutoSnap', () => {
+                this.applyPosition(undefined, true);
+            })
+        );
 
         // 监听悬浮球位置重置事件，执行平滑复位归位
         const onResetPos = () => this.applyPosition(undefined, true);
@@ -94,7 +99,7 @@ export class FABContainer implements IDisposable {
             this._disposables.add(toDisposable(() => window.removeEventListener('da:reset_fab_position', onResetPos)));
         }
 
-        // 监听屏幕窗口尺寸变化，自适应更新停靠坐标，杜绝出界与漂移
+        // 监听屏幕窗口尺寸变化，自动限制坐标在可视区域内
         if (typeof window !== 'undefined') {
             const onResize = () => this.applyPosition();
             window.addEventListener('resize', onResize);
@@ -139,8 +144,8 @@ export class FABContainer implements IDisposable {
 
         fab.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (this._justDragged) {
-                this._justDragged = false;
+            if (this._hasDragged) {
+                this._hasDragged = false;
                 return;
             }
             this._settingsModal.open();
@@ -179,6 +184,7 @@ export class FABContainer implements IDisposable {
 
     /**
      * 计算当前视口下悬浮球的目标停靠坐标
+     * 优先遵循自由比例模型 (xRatio, yRatio)，兼容侧边吸附模型 (dockSide, topRatio) 与绝对像素坐标
      */
     public computeCoordinates(pos?: FabDockPosition | { top: number; left: number }): { top: number; left: number } {
         const winW = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 1200;
@@ -186,29 +192,56 @@ export class FABContainer implements IDisposable {
         const fabW = this._fabElement?.offsetWidth || 48;
         const fabH = this._fabElement?.offsetHeight || 48;
 
-        // 内部调用时若未传入显式配置，从 Store 读取（唯一数据源）
+        const maxAvailableW = Math.max(0, winW - fabW);
+        const maxAvailableH = Math.max(0, winH - fabH);
+
+        // 内部调用时若未传入显式配置，从 Store 读取
         if (!pos) {
             pos = this._store.get('fabPosition');
         }
 
-        // 无任何记忆数据时，采用默认位置算法：屏幕右侧、垂直偏上 38% 高度
+        // 无任何记忆数据时的默认推荐位置：屏幕右侧避让安全区、垂直 38% 高度处
         if (!pos) {
             const defaultTop = Math.max(20, Math.round(winH * 0.38 - 24));
             const defaultLeft = Math.max(20, winW - 68);
             return { top: defaultTop, left: defaultLeft };
         }
 
-        // 兴趣点：實际 FabDockPosition 型目前仅需小数 topRatio 与 dockSide 两字段
+        // 1. 自由停靠比例坐标体系 (xRatio 与 yRatio)
         const dockPos = pos as FabDockPosition;
-        const edgeOffset = dockPos.edgeOffset ?? 12;
-        const topRatio = dockPos.topRatio ?? 0.38;
-        const isLeft = dockPos.dockSide === 'left';
+        if (typeof dockPos.xRatio === 'number' && typeof dockPos.yRatio === 'number') {
+            const rawLeft = Math.round(dockPos.xRatio * maxAvailableW);
+            const rawTop = Math.round(dockPos.yRatio * maxAvailableH);
+            const left = Math.max(8, Math.min(Math.max(8, maxAvailableW - 8), rawLeft));
+            const top = Math.max(8, Math.min(Math.max(8, maxAvailableH - 8), rawTop));
+            return { top, left };
+        }
 
-        const rawTop = Math.round(winH * topRatio);
-        const top = Math.max(8, Math.min(rawTop, winH - fabH - 8));
-        const left = isLeft ? edgeOffset : Math.max(edgeOffset, winW - fabW - edgeOffset);
+        // 2. 传统侧边吸附模型兼容 (dockSide 与 topRatio)
+        if (dockPos.dockSide) {
+            const edgeOffset = dockPos.edgeOffset ?? 12;
+            const topRatio = dockPos.topRatio ?? 0.38;
+            const isLeft = dockPos.dockSide === 'left';
 
-        return { top, left };
+            const rawTop = Math.round(winH * topRatio);
+            const top = Math.max(8, Math.min(maxAvailableH - 8, rawTop));
+            const left = isLeft ? edgeOffset : Math.max(edgeOffset, winW - fabW - edgeOffset);
+            return { top, left };
+        }
+
+        // 3. 历史绝对像素坐标兼容 ({ top, left })
+        const absPos = pos as { top?: number; left?: number };
+        if (typeof absPos.top === 'number' || typeof absPos.left === 'number') {
+            const top = Math.max(8, Math.min(maxAvailableH - 8, absPos.top ?? Math.round(winH * 0.38)));
+            const left = Math.max(8, Math.min(maxAvailableW - 8, absPos.left ?? (winW - fabW - 16)));
+            return { top, left };
+        }
+
+        // 兜底返回默认推荐位置
+        return {
+            top: Math.max(20, Math.round(winH * 0.38 - 24)),
+            left: Math.max(20, winW - 68)
+        };
     }
 
     /**
@@ -238,7 +271,7 @@ export class FABContainer implements IDisposable {
     }
 
     /**
-     * 启用悬浮球拖拽交互与磁吸贴边逻辑
+     * 启用悬浮球拖拽交互（标准 PointerEvent + 自由放置 + 可选贴边吸附）
      */
     private enableDrag(el: HTMLElement): void {
         let isDragging = false;
@@ -247,25 +280,30 @@ export class FABContainer implements IDisposable {
         let origLeft = 0;
         let origTop = 0;
 
-        const startDrag = (clientX: number, clientY: number) => {
+        const onPointerDown = (e: PointerEvent) => {
+            if (e.button !== 0) return;
             isDragging = false;
-            this._justDragged = false;
-            startX = clientX;
-            startY = clientY;
+            startX = e.clientX;
+            startY = e.clientY;
 
             const rect = el.getBoundingClientRect();
             origLeft = rect.left;
             origTop = rect.top;
             el.style.transition = '';
+
+            try {
+                el.setPointerCapture(e.pointerId);
+            } catch {}
         };
 
-        const moveDrag = (clientX: number, clientY: number) => {
-            const dx = clientX - startX;
-            const dy = clientY - startY;
+        const onPointerMove = (e: PointerEvent) => {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
 
-            if (!isDragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+            // 6px 阈值防手抖与微颤误触发
+            if (!isDragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
                 isDragging = true;
-                this._justDragged = true;
+                this._hasDragged = true;
                 el.classList.add('is-dragging');
             }
 
@@ -283,76 +321,70 @@ export class FABContainer implements IDisposable {
             }
         };
 
-        const endDrag = () => {
+        const onPointerUp = (e: PointerEvent) => {
+            try {
+                el.releasePointerCapture(e.pointerId);
+            } catch {}
+
             if (isDragging) {
                 el.classList.remove('is-dragging');
+                isDragging = false;
+
                 const rect = el.getBoundingClientRect();
                 const winW = typeof window !== 'undefined' ? window.innerWidth : 1200;
                 const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
                 const fabW = el.offsetWidth || 48;
+                const fabH = el.offsetHeight || 48;
+                const maxAvailableW = Math.max(1, winW - fabW);
+                const maxAvailableH = Math.max(1, winH - fabH);
 
-                const centerX = rect.left + fabW / 2;
-                const dockSide: 'left' | 'right' = centerX < winW / 2 ? 'left' : 'right';
-                const topRatio = Math.max(0.04, Math.min(0.92, rect.top / winH));
+                const autoSnap = this._store.get('fabAutoSnap') === true;
 
-                const dockPos: FabDockPosition = {
-                    dockSide,
-                    topRatio,
-                    edgeOffset: 12
-                };
+                if (autoSnap) {
+                    // 吸附贴边模式
+                    const centerX = rect.left + fabW / 2;
+                    const dockSide: 'left' | 'right' = centerX < winW / 2 ? 'left' : 'right';
+                    const topRatio = Math.max(0.04, Math.min(0.92, rect.top / maxAvailableH));
+                    const dockPos: FabDockPosition = {
+                        dockSide,
+                        topRatio,
+                        edgeOffset: 12,
+                        xRatio: dockSide === 'left' ? 0 : 1,
+                        yRatio: topRatio
+                    };
+                    this.applyPosition(dockPos, true);
+                    this._store.set('fabPosition', dockPos);
+                } else {
+                    // 默认自由停靠模式：直接保存当前视口相对比例，下次缩放时按比例自适应
+                    const safeLeft = Math.max(8, Math.min(maxAvailableW - 8, rect.left));
+                    const safeTop = Math.max(8, Math.min(maxAvailableH - 8, rect.top));
+                    const xRatio = Math.max(0, Math.min(1, safeLeft / maxAvailableW));
+                    const yRatio = Math.max(0, Math.min(1, safeTop / maxAvailableH));
 
-                // 执行磁吸贴边动画并写入 Store（唯一永久化来源）
-                this.applyPosition(dockPos, true);
-                this._store.set('fabPosition', dockPos);
-
-                setTimeout(() => {
-                    this._justDragged = false;
-                }, 50);
+                    const freePos: FabDockPosition = {
+                        xRatio,
+                        yRatio,
+                        topRatio: yRatio
+                    };
+                    this.applyPosition(freePos, false);
+                    this._store.set('fabPosition', freePos);
+                }
             }
         };
 
-        const onMouseDown = (e: MouseEvent) => {
-            if (e.button !== 0) return;
-            startDrag(e.clientX, e.clientY);
+        el.addEventListener('pointerdown', onPointerDown);
+        el.addEventListener('pointermove', onPointerMove);
+        el.addEventListener('pointerup', onPointerUp);
+        el.addEventListener('pointercancel', onPointerUp);
 
-            const onMouseMove = (moveEvt: MouseEvent) => moveDrag(moveEvt.clientX, moveEvt.clientY);
-            const onMouseUp = () => {
-                window.removeEventListener('mousemove', onMouseMove);
-                window.removeEventListener('mouseup', onMouseUp);
-                endDrag();
-            };
-
-            window.addEventListener('mousemove', onMouseMove);
-            window.addEventListener('mouseup', onMouseUp);
-        };
-
-        const onTouchStart = (e: TouchEvent) => {
-            if (e.touches.length !== 1) return;
-            const touch = e.touches[0];
-            startDrag(touch.clientX, touch.clientY);
-
-            const onTouchMove = (moveEvt: TouchEvent) => {
-                if (moveEvt.touches.length !== 1) return;
-                moveDrag(moveEvt.touches[0].clientX, moveEvt.touches[0].clientY);
-                if (isDragging && moveEvt.cancelable) {
-                    moveEvt.preventDefault();
-                }
-            };
-
-            const onTouchEnd = () => {
-                window.removeEventListener('touchmove', onTouchMove);
-                window.removeEventListener('touchend', onTouchEnd);
-                window.removeEventListener('touchcancel', onTouchEnd);
-                endDrag();
-            };
-
-            window.addEventListener('touchmove', onTouchMove, { passive: false });
-            window.addEventListener('touchend', onTouchEnd);
-            window.addEventListener('touchcancel', onTouchEnd);
-        };
-
-        el.addEventListener('mousedown', onMouseDown);
-        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        this._disposables.add(
+            toDisposable(() => {
+                el.removeEventListener('pointerdown', onPointerDown);
+                el.removeEventListener('pointermove', onPointerMove);
+                el.removeEventListener('pointerup', onPointerUp);
+                el.removeEventListener('pointercancel', onPointerUp);
+            })
+        );
     }
 
     public dispose(): void {

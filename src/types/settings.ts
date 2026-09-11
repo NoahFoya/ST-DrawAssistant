@@ -136,8 +136,10 @@ export interface DrawAssistantSettings {
     fabPresetIcon?: string;
     /** 悬浮球自定义图标 Base64 或 URL */
     fabCustomIcon?: string;
-    /** 悬浮球记忆停靠位置（支持自适应侧边相对停靠模型与历史绝对像素坐标兼容） */
+    /** 悬浮球记忆停靠位置（支持自由相对比例停靠模型与历史绝对像素坐标兼容） */
     fabPosition?: FabDockPosition | { top: number; left: number };
+    /** 悬浮球是否开启贴边吸附 (默认 false 自由停靠) */
+    fabAutoSnap?: boolean;
     /** 是否启用大图全屏预览弹窗 */
     imagePreviewEnabled?: boolean;
 
@@ -182,13 +184,18 @@ export interface ClientExtension extends IDisposable {
 }
 
 /**
- * 悬浮球自适应侧边停靠模型
+ * 悬浮球自适应停靠模型
+ * 支持自由视口比例定位 (xRatio, yRatio) 与侧边吸附模型 (dockSide, topRatio) 双向兼容
  */
 export interface FabDockPosition {
-    /** 停靠侧边：靠左或靠右 */
-    dockSide: 'left' | 'right';
-    /** 垂直高度相对视口比例 (0.0 ~ 1.0)，如 0.38 代表视口 38% 高度处 */
-    topRatio: number;
+    /** 停靠侧边：靠左或靠右 (吸附模式下使用) */
+    dockSide?: 'left' | 'right';
+    /** 垂直高度相对视口可用高度比例 (0.0 ~ 1.0) */
+    topRatio?: number;
+    /** 水平位置相对视口可用宽度比例 (0.0 ~ 1.0，自由停靠模式使用) */
+    xRatio?: number;
+    /** 垂直位置相对视口可用高度比例 (0.0 ~ 1.0，自由停靠模式使用) */
+    yRatio?: number;
     /** 贴边安全边距 (默认 12px) */
     edgeOffset?: number;
 }

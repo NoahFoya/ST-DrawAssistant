@@ -28,44 +28,81 @@
 }
 
 /* 2. 预览图片承载容器 (.da-image-preview-img)
-   使用 92vw / 92vh 限制最大显示尺寸，确保四周预留 4% 的可视留白以感知全屏遮罩；
-   object-fit: contain 严格保持原图比例并完整显示；
-   重置指针为 default，避免在图片本体上点击时与遮罩层的退出操作混淆。 */
+   默认 92vw / 92vh 适屏展示；
+   支持点击/双击切换原始尺寸与平移浏览。 */
 .da-image-preview-img {
     max-width: 92vw;
     max-height: 92vh;
     object-fit: contain;
     border-radius: var(--da-radius-md, 8px);
     box-shadow: var(--da-shadow-xl, 0 16px 36px rgba(0, 0, 0, 0.5));
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: transform 0.15s ease-out;
+}
+
+/* 放大原图模式：解除视口最大限制，允许全屏滚动与平移浏览长图 */
+.da-image-preview-backdrop.is-zoomed {
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 36px;
     cursor: default;
 }
 
-/* 3. 右上角悬浮关闭按钮 (.da-image-preview-close)
-   绝对定位固定在右上角，采用 36px 正圆形半透明磨砂按钮；
-   在点击遮罩背景与按 Esc 之外提供直观显式的关闭途径。 */
-.da-image-preview-close {
-    position: absolute;
+.da-image-preview-backdrop.is-zoomed .da-image-preview-img {
+    max-width: none;
+    max-height: none;
+    cursor: zoom-out;
+    margin: auto;
+    flex-shrink: 0;
+}
+
+/* 3. 悬浮快捷操作栏 (.da-image-preview-toolbar) */
+.da-image-preview-toolbar {
+    position: fixed;
     top: 24px;
     right: 28px;
-    width: 36px;
-    height: 36px;
-    line-height: 36px;
-    text-align: center;
-    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: calc(var(--da-z-modal, 100100) + 1);
+}
+
+.da-image-preview-btn {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 16, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 18px;
-    transition: background 0.2s ease, transform 0.2s ease;
+    font-size: 14px;
+    transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
     user-select: none;
     box-sizing: border-box;
 }
 
-.da-image-preview-close:hover {
+.da-image-preview-btn:hover {
     background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.08);
 }
 
-.da-image-preview-close:active {
+.da-image-preview-btn:active {
     transform: scale(0.95);
+}
+
+.da-image-preview-btn svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
 }

@@ -86,7 +86,7 @@ export class SettingsModal implements IDisposable {
     public open(initialTabId?: string): void {
         if (this._modalHandle || typeof document === 'undefined') return;
 
-        // 单次弹窗会话专属生命周期容器，弹窗关闭时集中彻底释放
+        // 弹窗会话生命周期容器，弹窗关闭时统一释放
         const sessionDisposables = new DisposableStore();
 
         // 背景遮罩容器

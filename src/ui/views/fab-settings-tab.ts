@@ -44,6 +44,12 @@ export class FABSettingsTabView extends BaseTabView {
                     toStore: (pct) => pct / 100
                 },
                 {
+                    key: 'fabAutoSnap',
+                    type: 'toggle',
+                    label: '自动贴边吸附',
+                    description: '开启后松开拖拽将自动吸附至最近侧边；关闭时可在屏幕任意空白处自由停靠'
+                },
+                {
                     type: 'custom',
                     label: '预设图标',
                     isBlock: true,

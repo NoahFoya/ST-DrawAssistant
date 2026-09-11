@@ -196,8 +196,9 @@
     color: var(--da-text-primary);
 }
 
-/* 楼层生图进行中状态 (.da-floor-btn--progress)
-   展示任务执行中的高亮渐变背景与发光脉冲关键帧动画，提示用户后台生图正在进行。 */
+/* 楼层生图排队与进行中状态 (.da-floor-btn--pending / .da-floor-btn--progress)
+   展示任务执行中的高亮渐变背景与发光脉冲关键帧动画，提示用户后台生图正在进行，并支持点击取消。 */
+.da-floor-btn--pending,
 .da-floor-btn--progress {
     background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.18) 0%, rgba(var(--da-accent-rgb), 0.3) 100%);
     border-color: var(--da-accent-color);
@@ -206,6 +207,7 @@
     animation: da-floor-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.da-floor-btn--pending:hover,
 .da-floor-btn--progress:hover {
     background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.28) 0%, rgba(var(--da-accent-rgb), 0.42) 100%);
     border-color: var(--da-accent-hover);
