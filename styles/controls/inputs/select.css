@@ -1,22 +1,24 @@
 /**
  * @module styles/controls/inputs/select
  * @layer controls/inputs (Layer 3)
- * @description 下拉选择器、内联 SVG 下拉箭头与状态管道
+ * @description 下拉选择器与画幅比例预设核心控件
  *
- * 核心边界与约束：
- * 1. 结构与对齐：基类 (.da-select) 高度与按钮、输入框基线完全对齐；
- * 2. 离线图标：采用内联数据 URI SVG 下拉箭头，杜绝外部静态资源加载失败导致箭头丢失；
- * 3. 状态管道：统一支持未保存修改 (.is-dirty) 与校验错误 (.is-invalid)；
- * 4. 菜单定制：显式声明 option 样式，避免宿主原生明亮/暗黑主题冲突。
+ * 规范约束与技术原因：
+ * 1. 居中对齐：显式设置 text-align 与 text-align-last 为 center，确保不同浏览器内核下选中文案与展开选项均居中；
+ * 2. 离线图标：采用内联 SVG 数据 URI，杜绝外部静态资源加载异常导致下拉指示箭头缺失；
+ * 3. 未保存状态反馈：支持 .is-dirty 琥珀色标记；当输入值改回基准快照时，自动移除该类；
+ * 4. 架构原则：画幅与分辨率等预设延续标准 Select 下拉框，不引入多余分段器以保持 DOM 紧凑。
  */
 
-/* --- 1. 下拉选择器基类 --- */
+/* 1. 下拉选择器基类 */
 .da-select {
     width: 240px;
-    max-width: 100%;
+    max-width: 240px;
+    flex: 0 0 240px;
     min-width: 120px;
-    height: 34px;
-    padding: 0 26px 0 var(--da-space-md, 12px);
+    height: 32px;
+    /* 右侧内边距预留 28px 防止长文字与内联箭头重叠 */
+    padding: 0 28px 0 12px;
     box-sizing: border-box;
     border-radius: var(--da-radius-input, 6px);
     border: 1px solid var(--da-border-color);
@@ -26,15 +28,16 @@
     font-size: var(--da-font-size-sm, 13px);
     cursor: pointer;
     outline: none;
-    text-align: left;
-    text-align-last: left;
+    /* 跨浏览器居中兼容：text-align 作用于选中文本，text-align-last 覆盖 WebKit/Gecko 原生下拉行居中 */
+    text-align: center;
+    text-align-last: center;
     background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(156, 163, 175, 0.85)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
     background-repeat: no-repeat;
     background-position: right 8px center;
     background-size: 10px;
     color-scheme: var(--da-color-scheme, dark);
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
-    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background 0.14s var(--da-ease);
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background-color 0.14s var(--da-ease);
 }
 
 .da-select:hover:not(:disabled) {
@@ -45,51 +48,51 @@
 .da-select:focus {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
-    background: var(--da-bg-input);
+    background-color: var(--da-bg-input);
 }
 
 .da-select:focus-visible {
     border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring)), inset 0 1px 2px rgba(0, 0, 0, 0.15);
-    background: var(--da-bg-input);
+    background-color: var(--da-bg-input);
 }
 
 .da-select:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    background-color: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* --- 2. 表单状态联动 (未保存修改 / 校验错误) --- */
-/* 未保存修改态 (黄色高亮) */
+/* 2. 表单状态联动 (未保存修改 / 校验错误) */
+/* 未保存修改态：琥珀色高亮，提示存在与基准快照不一致的变更 */
 .da-select.is-dirty {
-    border-color: var(--da-color-warn, #ff9f0a) !important;
-    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
 }
 
-/* 错误校验态 (红色高亮) */
+/* 校验错误态：红色高亮提示格式或选项不可用 */
 .da-select.is-invalid {
-    border-color: var(--da-color-error, #ff453a) !important;
-    background-color: rgba(255, 69, 58, 0.08) !important;
-    color: var(--da-color-error, #ff453a);
-    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
+    color: var(--da-color-error);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
 }
 
-/* --- 3. 紧凑尺寸规格变体 --- */
+/* 3. 紧凑尺寸规格变体 */
 .da-select--sm {
     height: 28px !important;
-    padding: 0 22px 0 8px !important;
+    padding: 0 24px 0 8px !important;
     font-size: var(--da-font-size-xs, 12px) !important;
     background-position: right 6px center !important;
 }
 
-/* --- 4. 原生选项菜单 (option / optgroup) 着色 --- */
+/* 4. 原生选项菜单 (option / optgroup) 排版 */
 .da-select option {
     background-color: var(--da-bg-secondary);
     color: var(--da-text-primary);
     font-size: var(--da-font-size-sm, 13px);
     padding: 6px 10px;
-    text-align: left;
+    text-align: center;
 }
 
 .da-select option:checked {
@@ -104,8 +107,6 @@
     font-size: var(--da-font-size-xs, 0.74rem);
     font-weight: 600;
     font-style: normal;
-    text-align: left;
+    text-align: center;
     padding: 4px 6px;
 }
-
-

@@ -88,7 +88,7 @@
 }
 
 .da-generated-img--rounded {
-    border-radius: var(--da-radius-small, 8px);
+    border-radius: var(--da-radius-sm, 4px);
 }
 
 .da-image-wrapper {

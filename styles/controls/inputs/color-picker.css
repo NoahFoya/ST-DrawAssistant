@@ -9,11 +9,15 @@
  * 3. 输入规范：Hex 输入框大写呈现与等宽字符对齐。
  */
 
-/* --- 1. 容器包裹器 --- */
+/* --- 1. 容器包裹器 (240px 宽度协调对齐) --- */
 .da-color-picker-wrapper {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--da-space-sm, 8px);
+    width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px;
     box-sizing: border-box;
 }
 
@@ -67,10 +71,11 @@
     transform: none;
 }
 
-/* --- 3. 十六进制 Hex 编码输入框 --- */
+/* --- 3. 十六进制 Hex 编码输入框 (200px + 32px 色块 + 8px 间距 = 240px) --- */
 .da-color-hex-input {
-    width: 100px;
-    min-width: 90px;
+    width: 200px;
+    max-width: 200px;
+    flex: 0 0 200px;
     height: 32px;
     padding: 0 var(--da-space-sm, 8px);
     box-sizing: border-box;
@@ -105,25 +110,25 @@
 }
 
 /* --- 4. 表单状态联动 (未保存修改 / 校验错误) --- */
-/* 未保存修改态 (黄色高亮) */
+/* 未保存修改态 */
 .da-color-hex-input.is-dirty {
-    border-color: var(--da-color-warn, #ff9f0a) !important;
-    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
 }
 
 .da-color-picker-native.is-dirty {
-    box-shadow: 0 0 0 2px var(--da-color-warn, #ff9f0a);
+    box-shadow: 0 0 0 2px var(--da-color-warn);
 }
 
-/* 错误输入态 (红色高亮，提示非法 Hex 格式) */
+/* 错误输入态 (提示非法 Hex 格式) */
 .da-color-hex-input.is-invalid {
-    border-color: var(--da-color-error, #ff453a) !important;
-    background-color: rgba(255, 69, 58, 0.08) !important;
-    color: var(--da-color-error, #ff453a);
-    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
+    color: var(--da-color-error);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
 }
 
 .da-color-picker-native.is-invalid {
-    box-shadow: 0 0 0 2px var(--da-color-error, #ff453a);
+    box-shadow: 0 0 0 2px var(--da-color-error);
 }
 

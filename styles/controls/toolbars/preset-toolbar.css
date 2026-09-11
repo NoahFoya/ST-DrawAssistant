@@ -97,7 +97,7 @@
 .da-preset-btn:focus-visible,
 .da-preset-toolbar-right .da-icon-btn:focus-visible {
     outline: none;
-    border-color: var(--da-accent);
+    border-color: var(--da-accent-color);
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
@@ -109,13 +109,13 @@
     pointer-events: none;
 }
 
-.da-preset-btn.danger,
+.da-preset-btn--danger,
 .da-preset-toolbar-right .da-icon-btn--danger {
     border-color: rgba(255, 69, 58, 0.3);
     color: var(--da-color-error, #ff453a);
 }
 
-.da-preset-btn.danger:hover,
+.da-preset-btn--danger:hover,
 .da-preset-toolbar-right .da-icon-btn--danger:hover:not(:disabled) {
     background: var(--da-color-error, #ff453a);
     color: #ffffff;
@@ -124,8 +124,8 @@
 
 /* 未保存修改状态高亮：当方案配置有变动且未持久化时，保存按钮切换为警示色高亮，提醒用户保存 */
 .da-preset-btn--save.is-dirty {
-    background: var(--da-status-warning, #ff9f0a) !important;
-    border-color: var(--da-status-warning, #ff9f0a) !important;
+    background: var(--da-color-warn, #f59e0b) !important;
+    border-color: var(--da-color-warn, #f59e0b) !important;
     color: #000000 !important;
     font-weight: 600;
     box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);

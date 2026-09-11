@@ -25,20 +25,26 @@
     background: transparent;
     box-sizing: border-box;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+    scrollbar-color: rgba(var(--da-accent-rgb), 0.22) transparent;
 }
 
 .da-modal-content::-webkit-scrollbar {
-    width: 5px;
+    width: 6px;
+}
+
+.da-modal-content::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .da-modal-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(var(--da-accent-rgb), 0.22);
     border-radius: 4px;
+    transition: background 0.15s ease;
 }
 
 .da-modal-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(var(--da-accent-rgb), 0.45);
+    box-shadow: 0 0 6px rgba(var(--da-accent-rgb), 0.35);
 }
 
 /* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
@@ -52,7 +58,7 @@
     gap: var(--da-space-lg, 16px);
     box-sizing: border-box;
     padding: 2px 0 16px 0;
-    animation: da-fadein 0.15s var(--da-ease);
+    animation: da-fadein 0.18s var(--da-ease);
 }
 
 /* 3. 二级子选项卡导航条 (.da-sub-tab-nav)
@@ -79,7 +85,7 @@
     background: transparent;
     color: var(--da-text-secondary);
     cursor: pointer;
-    transition: all 0.14s ease;
+    transition: all 0.15s var(--da-ease);
 }
 
 .da-sub-tab-btn:hover {
@@ -87,11 +93,12 @@
     color: var(--da-text-primary);
 }
 
-/* 二级 Tab 激活态：微亮半透明底色搭配品牌色文字与细微边框 */
+/* 二级 Tab 激活态：半透明底色搭配品牌色文字与边框 */
 .da-sub-tab-btn.active {
-    background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.025));
+    background: rgba(var(--da-accent-rgb), 0.12);
     color: var(--da-accent-color);
-    border-color: var(--da-border-color);
+    border-color: var(--da-border-focus);
+    box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.15);
     font-weight: 600;
 }
 

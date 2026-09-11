@@ -1,26 +1,49 @@
 /**
  * @module styles/controls/inputs/textarea
  * @layer controls/inputs (Layer 3)
- * @description 多行文本域与长配置提示词输入控件
+ * @description 全宽多行长文本域与提示词/JSON 工作流编辑控件
  *
- * 核心边界与约束：
- * 1. 字体对齐：采用等宽字体 (--da-font-mono) 保持提示词权重与括号符号对齐；
- * 2. 缩放限制：仅允许纵向调整大小 (resize: vertical)，禁止横向拉伸破坏弹窗布局；
- * 3. 状态管道：统一对接未保存修改 (.is-dirty) 与校验错误 (.is-invalid)。
+ * 规范约束与技术原因：
+ * 1. 100% 全宽左对齐：长文本提示词与 JSON 统一占据整宽并左对齐，杜绝在单行表单中挤压截断；
+ * 2. 缩放限制：仅允许纵向调整大小 (resize: vertical)，禁止横向拉伸破坏弹窗网格布局；
+ * 3. 字体规范：使用等宽字体 (--da-font-mono)，保持提示词括号与 JSON 缩进结构清晰；
+ * 4. 状态联动：支持 .is-dirty 琥珀色微光与 .is-invalid 语法校验报错红框。
  */
 
-/* --- 1. 多行文本输入域基类 --- */
+/* 1. 多行文本域行容器 (.da-textarea-row) */
+.da-textarea-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--da-separator);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-textarea-row:last-child {
+    border-bottom: none;
+}
+
+.da-textarea-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+/* 2. 多行文本输入域基类 */
 .da-textarea {
     width: 100%;
     min-width: 100%;
     max-width: 100%;
     display: block;
-    min-height: 84px;
+    min-height: 72px;
     padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
     background: var(--da-bg-input);
     color: var(--da-text-primary);
     border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-input, 8px);
+    border-radius: var(--da-radius-input, 6px);
     font-family: var(--da-font-mono, monospace);
     font-size: var(--da-font-size-sm, 0.82rem);
     line-height: 1.5;
@@ -28,7 +51,7 @@
     outline: none;
     text-align: left;
     box-sizing: border-box;
-    transition: border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+    transition: border-color 0.16s var(--da-ease), box-shadow 0.16s var(--da-ease);
 }
 
 .da-textarea:hover:not(:disabled) {
@@ -37,7 +60,7 @@
 
 .da-textarea:focus {
     border-color: var(--da-accent-color);
-    box-shadow: 0 0 0 1px var(--da-accent-color), 0 0 0 3px rgba(var(--da-accent-rgb), 0.18);
+    box-shadow: var(--da-focus-ring);
     background: var(--da-bg-input);
 }
 
@@ -53,18 +76,17 @@
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
 }
 
-/* --- 2. 表单状态联动 (未保存修改 / 校验错误) --- */
-/* 未保存修改态 (黄色高亮) */
+/* 3. 表单状态联动 (未保存修改 / 校验错误) */
+/* 未保存修改态 */
 .da-textarea.is-dirty {
-    border-color: var(--da-color-warn, #ff9f0a) !important;
-    box-shadow: 0 0 0 1px var(--da-color-warn, #ff9f0a), 0 0 8px rgba(255, 159, 10, 0.25) !important;
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
 }
 
-/* 错误校验态 (红色高亮，提示语法或格式异常) */
+/* 错误校验态 (提示 JSON 语法或括号不匹配等错误) */
 .da-textarea.is-invalid {
-    border-color: var(--da-color-error, #ff453a) !important;
-    background-color: rgba(255, 69, 58, 0.08) !important;
-    color: var(--da-color-error, #ff453a);
-    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a), 0 0 8px rgba(255, 69, 58, 0.25) !important;
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
+    color: var(--da-color-error);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
 }
-

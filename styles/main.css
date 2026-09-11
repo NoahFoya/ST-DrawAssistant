@@ -33,8 +33,6 @@
 @import url('./controls/inputs/select.css');
 @import url('./controls/inputs/toggle.css');
 @import url('./controls/inputs/color-picker.css');
-@import url('./controls/inputs/slider.css');
-@import url('./controls/inputs/segmented.css');
 
 /* (2) 按钮控件族 (Buttons) */
 @import url('./controls/buttons/buttons.css');

@@ -327,7 +327,7 @@
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-small, 8px);
+    border-radius: var(--da-radius-sm, 4px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
     padding: 8px;
     display: flex;

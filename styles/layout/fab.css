@@ -1,18 +1,16 @@
 /**
  * @module styles/layout/fab
  * @layer layout (Layer 2)
- * @description 全局悬浮球控件 (FAB)、生图状态指示、未读微标及设置面板图标选择器
+ * @description 全局悬浮球控件 (FAB)、未读徽标及设置面板图标选择器
  *
  * 职责与约束：
  * 1. 作为常驻浏览器的悬浮快速入口，支持在屏幕四周边沿任意拖拽定位；
  * 2. 拖拽时通过 touch-action: none 阻止触控设备默认滚动行为，并临时设置 transition: none 保证位移实时无迟滞；
- * 3. 后端生图运行时通过 is-generating 类名触发旋转与发光脉冲动画，提供即时状态反馈；
- * 4. 包含在悬浮球设置选项卡中使用的预设 SVG 图标网格与自定义圆形头像裁剪预览组件。
+ * 3. 包含在悬浮球设置选项卡中使用的预设 SVG 图标网格与自定义圆形头像裁剪预览组件。
  */
 
-/* 1. 悬浮球基础结构与指针交互态 (ID 选择器提供高特异性对抗宿主干扰) */
+/* 1. 悬浮球基础结构与指针交互态 */
 .da-fab-btn,
-.da-fab-button,
 #da-fab-button {
     position: fixed;
     width: 48px;
@@ -36,7 +34,6 @@
 }
 
 .da-fab-btn:hover,
-.da-fab-button:hover,
 #da-fab-button:hover {
     transform: scale(1.08);
     border-color: var(--da-accent-color) !important;
@@ -44,33 +41,18 @@
 }
 
 .da-fab-btn:active,
-.da-fab-button:active,
 #da-fab-button:active {
     transform: scale(0.94);
     cursor: grabbing;
 }
 
-/* 拖拽进行中状态：禁用 transition 确保指针与悬浮球坐标绝对同步 */
-.da-fab-btn.dragging,
-.da-fab-btn.is-dragging,
-.da-fab-btn--dragging {
+/* 拖拽进行中状态：禁用 transition 确保指针与悬浮球坐标同步 */
+.da-fab-btn.is-dragging {
     transition: none !important;
     cursor: grabbing !important;
 }
 
-/* 2. 生图运行中状态与脉冲动画 */
-.da-fab-btn.is-generating,
-.da-fab-btn.is-busy {
-    border-color: var(--da-accent-color) !important;
-    box-shadow: 0 0 18px rgba(var(--da-accent-rgb), 0.75) !important;
-    animation: da-fab-pulse 1.8s infinite ease-in-out;
-}
-
-.da-fab-btn.is-generating .da-fab-icon {
-    animation: da-fab-spin 3s linear infinite;
-}
-
-/* 3. 悬浮球内部图标与未读徽标 */
+/* 2. 悬浮球内部图标与未读徽标 */
 .da-fab-icon {
     display: flex;
     align-items: center;
@@ -117,7 +99,7 @@
     pointer-events: none;
 }
 
-/* 4. 悬浮球预设图标选择网格 */
+/* 3. 悬浮球预设图标选择网格 */
 .da-fab-icon-grid {
     display: flex;
     align-items: center;
@@ -137,7 +119,7 @@
     padding: 0;
     background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-small, 10px);
+    border-radius: var(--da-radius-sm, 4px);
     color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
     cursor: pointer;
     user-select: none;
@@ -172,7 +154,7 @@
     box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.35);
 }
 
-/* 5. 自定义图标圆形头像预览 */
+/* 4. 自定义图标圆形头像预览 */
 .da-fab-custom-icon-wrapper {
     display: flex;
     align-items: center;

@@ -325,9 +325,8 @@
 
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-wrapper,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-container,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented {
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-number-input,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-group {
         width: 100% !important;
         max-width: 100% !important;
     }
@@ -384,7 +383,8 @@
     .da-modal-close-btn,
     .da-btn-var-inject,
     .da-icon-btn,
-    .da-icon-btn--ghost {
+    .da-icon-btn--ghost,
+    .da-number-btn {
         position: relative;
     }
 
@@ -392,7 +392,8 @@
     .da-modal-close-btn::after,
     .da-btn-var-inject::after,
     .da-icon-btn::after,
-    .da-icon-btn--ghost::after {
+    .da-icon-btn--ghost::after,
+    .da-number-btn::after {
         content: '';
         position: absolute;
         inset: -6px;
@@ -401,7 +402,8 @@
     /* 触控交互下按钮、下拉选择器与文本输入框最低高度保障（>= 32px） */
     .da-btn,
     .da-select,
-    .da-input {
+    .da-input,
+    .da-number-input {
         min-height: 32px;
     }
 }

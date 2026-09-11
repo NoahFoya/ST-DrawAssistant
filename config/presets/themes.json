@@ -5,16 +5,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#3b82f6",
+      "accentCyan": "#06b6d4",
       "bgPrimary": "#181b24",
       "bgSecondary": "#202430",
+      "bgSidebar": "#13151c",
+      "bgCard": "#1f2430",
+      "bgCardHover": "#262c3a",
+      "bgInput": "#12141a",
+      "bgInputHover": "#1c202a",
       "bgGradientEnd": "#252b3b",
       "bgGradientAngle": 140,
       "bgOpacity": 0.95,
       "textPrimary": "#f8fafc",
       "textSecondary": "#94a3b8",
       "borderColor": "rgba(255, 255, 255, 0.09)",
+      "borderHighlight": "rgba(59, 130, 246, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -23,16 +35,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#0284c7",
+      "accentCyan": "#0891b2",
       "bgPrimary": "#f8fafc",
       "bgSecondary": "#ffffff",
+      "bgSidebar": "#f1f5f9",
+      "bgCard": "rgba(255, 255, 255, 0.92)",
+      "bgCardHover": "#ffffff",
+      "bgInput": "#f1f5f9",
+      "bgInputHover": "#e2e8f0",
       "bgGradientEnd": "#e2e8f0",
       "bgGradientAngle": 140,
       "bgOpacity": 0.98,
       "textPrimary": "#0f172a",
       "textSecondary": "#475569",
       "borderColor": "rgba(15, 23, 42, 0.12)",
+      "borderHighlight": "rgba(2, 132, 199, 0.4)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -41,16 +65,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#38bdf8",
+      "accentCyan": "#06b6d4",
       "bgPrimary": "#181b24",
       "bgSecondary": "#202430",
+      "bgSidebar": "#12151d",
+      "bgCard": "#1d222e",
+      "bgCardHover": "#242a3a",
+      "bgInput": "#101319",
+      "bgInputHover": "#191e28",
       "bgGradientEnd": "#252b3b",
       "bgGradientAngle": 140,
       "bgOpacity": 0.95,
       "textPrimary": "#f8fafc",
       "textSecondary": "#94a3b8",
       "borderColor": "rgba(255, 255, 255, 0.09)",
+      "borderHighlight": "rgba(56, 189, 248, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -59,16 +95,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#0284c7",
+      "accentCyan": "#0891b2",
       "bgPrimary": "#f3f4f6",
       "bgSecondary": "#ffffff",
+      "bgSidebar": "#eaedf2",
+      "bgCard": "#ffffff",
+      "bgCardHover": "#f8fafc",
+      "bgInput": "#f0f2f5",
+      "bgInputHover": "#e4e7eb",
       "bgGradientEnd": "#e5e7eb",
       "bgGradientAngle": 135,
       "bgOpacity": 0.98,
       "textPrimary": "#1e293b",
       "textSecondary": "#64748b",
       "borderColor": "rgba(2, 132, 199, 0.16)",
+      "borderHighlight": "rgba(2, 132, 199, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 16
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 16,
+      "blurModal": 16,
+      "blurPanel": 18
     }
   },
   {
@@ -77,16 +125,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#818cf8",
+      "accentCyan": "#a78bfa",
       "bgPrimary": "#1a1d24",
       "bgSecondary": "#222630",
+      "bgSidebar": "#14161d",
+      "bgCard": "#20242f",
+      "bgCardHover": "#282d3b",
+      "bgInput": "#12141a",
+      "bgInputHover": "#1b1e27",
       "bgGradientEnd": "#282d3a",
       "bgGradientAngle": 180,
       "bgOpacity": 0.95,
       "textPrimary": "#fafafa",
       "textSecondary": "#a1a1aa",
       "borderColor": "rgba(129, 140, 248, 0.16)",
+      "borderHighlight": "rgba(129, 140, 248, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -95,16 +155,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#34d399",
+      "accentCyan": "#2dd4bf",
       "bgPrimary": "#131c19",
       "bgSecondary": "#1b2622",
+      "bgSidebar": "#0e1513",
+      "bgCard": "#18231f",
+      "bgCardHover": "#202d28",
+      "bgInput": "#0b110f",
+      "bgInputHover": "#141e1b",
       "bgGradientEnd": "#23322d",
       "bgGradientAngle": 150,
       "bgOpacity": 0.95,
       "textPrimary": "#f0fdf4",
       "textSecondary": "#a7f3d0",
       "borderColor": "rgba(52, 211, 153, 0.18)",
+      "borderHighlight": "rgba(52, 211, 153, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -113,16 +185,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#fbbf24",
+      "accentCyan": "#f59e0b",
       "bgPrimary": "#1e1b18",
       "bgSecondary": "#27231f",
+      "bgSidebar": "#171412",
+      "bgCard": "#24201c",
+      "bgCardHover": "#2e2924",
+      "bgInput": "#13110f",
+      "bgInputHover": "#1c1916",
       "bgGradientEnd": "#322d27",
       "bgGradientAngle": 140,
       "bgOpacity": 0.95,
       "textPrimary": "#fffbeb",
       "textSecondary": "#d6c7b2",
       "borderColor": "rgba(251, 191, 36, 0.18)",
+      "borderHighlight": "rgba(251, 191, 36, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   },
   {
@@ -131,16 +215,28 @@
     "isBuiltin": true,
     "data": {
       "accentColor": "#fb7185",
+      "accentCyan": "#f43f5e",
       "bgPrimary": "#1a1624",
       "bgSecondary": "#231e30",
+      "bgSidebar": "#14111c",
+      "bgCard": "#211c2e",
+      "bgCardHover": "#2b253b",
+      "bgInput": "#110e17",
+      "bgInputHover": "#191522",
       "bgGradientEnd": "#2d263d",
       "bgGradientAngle": 135,
       "bgOpacity": 0.94,
       "textPrimary": "#fdf4ff",
       "textSecondary": "#c084fc",
       "borderColor": "rgba(251, 113, 133, 0.2)",
+      "borderHighlight": "rgba(251, 113, 133, 0.45)",
       "borderRadius": 10,
-      "blurRadius": 18
+      "radiusModal": 12,
+      "radiusCard": 10,
+      "radiusInput": 6,
+      "blurRadius": 18,
+      "blurModal": 18,
+      "blurPanel": 20
     }
   }
 ]

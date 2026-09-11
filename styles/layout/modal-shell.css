@@ -1,23 +1,23 @@
 /**
  * @module styles/layout/modal-shell
  * @layer layout (Layer 2)
- * @description 主弹窗背景遮罩蒙层、主视窗骨架结构、主体左右分栏容器与未保存提示条
+ * @description 主弹窗背景遮罩蒙层、主视窗骨架结构与主体左右分栏容器
  *
  * 宿主隔离策略：所有弹窗容器选择器加 .st-da-root 前缀，利用组合特异性对抗 SillyTavern
  * 宿主全局规则（如 #sheld > div），无需在基础布局属性上使用 !important。
  */
 
 /* 1. 全屏遮罩层 (.da-modal-backdrop)
-   覆盖整个浏览器视口的固定定位半透明背景，使用 backdrop-filter 提供背景虚化，
+   覆盖整个浏览器视口的固定定位半透明背景，使用 backdrop-filter 提供毛玻璃半透明虚化，
    高 z-index 确保隔离 SillyTavern 宿主界面；内部使用 flex 居中承载弹窗主体。 */
 .da-modal-backdrop {
     position: fixed;
     inset: 0;
     width: 100vw;
     height: 100vh;
-    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.62));
-    backdrop-filter: blur(var(--da-blur-modal, 12px)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--da-blur-modal, 12px)) saturate(140%);
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -25,14 +25,13 @@
     cursor: default;
     box-sizing: border-box;
     padding: 14px;
-    animation: da-fadein 0.16s var(--da-ease);
+    animation: da-fadein 0.18s var(--da-ease);
 }
 
 /* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
-   桌面端最大尺寸 min(960px, 94vw) / min(740px, 88vh) 与视口边界；
+   桌面端严格保持 min(960px, 94vw) / min(740px, 88vh) 尺寸规范；
    内部采用 flex 纵向排列组织 Header、Body 与 Footer 三段；
-   position: relative 作为未保存浮动条等绝对定位元素的定位基准；
-   .st-da-root 前缀在 SillyTavern 宿主环境中提供足够特异性以对抗全局规则覆盖。 */
+   柔和环境光投影与主题半透明边框。 */
 .st-da-root.da-main-modal-inner,
 .st-da-root .da-main-modal-inner {
     width: min(960px, 94vw);
@@ -43,11 +42,11 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--da-bg-primary);
+    background: var(--da-bg-modal);
     border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-modal, 12px);
     box-shadow: var(--da-shadow-modal);
-    animation: da-modal-slide-in 0.18s var(--da-ease-spring);
+    animation: da-modal-slide-in 0.22s var(--da-ease);
     box-sizing: border-box;
     position: relative;
     transition: width 0.18s var(--da-ease), height 0.18s var(--da-ease), border-radius 0.18s var(--da-ease);
@@ -66,64 +65,5 @@
     width: 100%;
     overflow: hidden;
     box-sizing: border-box;
-}
-
-/* 4. 浮动未保存提示条 (.da-floating-unsaved-notice)
-   位于弹窗顶栏下方的浮动胶囊提示条，当选项卡存在未保存修改时通过 .is-visible 显现；
-   绝对定位且水平居中（left: 50%; transform: translateX(-50%)），悬浮于内容之上，
-   提供保存与重置快捷操作入口。 */
-.da-floating-unsaved-notice {
-    position: absolute;
-    top: 54px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-12px);
-    z-index: 100;
-    display: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 14px;
-    background: var(--da-surface-card, #252830);
-    border: 1px solid var(--da-warning, #f59e0b);
-    border-radius: var(--da-radius-pill, 9999px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s var(--da-ease), transform 0.2s var(--da-ease-spring);
-}
-
-.da-floating-unsaved-notice.is-visible {
-    display: flex;
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-    pointer-events: auto;
-}
-
-.da-floating-notice-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--da-text-primary, #fff);
-}
-
-.da-floating-notice-icon {
-    font-size: 14px;
-}
-
-.da-floating-notice-text {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--da-text-primary, #fff);
-}
-
-.da-floating-notice-sub {
-    font-size: 11px;
-    color: var(--da-text-secondary, #94a3b8);
-}
-
-.da-floating-notice-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    background: var(--da-bg-primary);
 }

@@ -5,7 +5,7 @@
  *
  * 职责与约束：
  * 1. 集中维护行内状态微标与紧凑版本药丸标签；
- * 2. 状态修饰类提供 success / accent / muted / warn / error 语义色彩契约；
+ * 2. 状态修饰类提供 success / accent / muted / warn / error 语义色彩定义；
  * 3. 字体采用等宽字体（--da-font-mono）保证数字与版本号字符宽度对齐，避免布局抖动。
  */
 
@@ -141,8 +141,8 @@
 /* 已修改状态 (琥珀金警告) */
 .da-control-state-badge--dirty {
     color: #000000;
-    background: var(--da-status-warning, #ff9f0a);
-    box-shadow: 0 0 5px rgba(255, 159, 10, 0.5);
+    background: var(--da-color-warn, #f59e0b);
+    box-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
 }
 
 /* 已失效状态 (警示红错误) */

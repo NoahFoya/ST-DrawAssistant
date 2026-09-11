@@ -40,7 +40,7 @@
 .da-workflow-status-badge.is-unmatched,
 .da-workflow-status-badge.unmatched {
     background: rgba(255, 159, 10, 0.15);
-    color: var(--da-status-warning);
+    color: var(--da-color-warn);
     border: 1px solid rgba(255, 159, 10, 0.35);
 }
 
@@ -68,7 +68,7 @@
     line-height: 1.5;
     padding: 10px 14px;
     background: var(--da-bg-card);
-    border-radius: var(--da-radius-small, 8px);
+    border-radius: var(--da-radius-sm, 4px);
     border: 1px solid var(--da-border-color);
 }
 
@@ -95,7 +95,7 @@
 .da-workflow-format-section-title--warning,
 .da-workflow-format-section-title.is-warning,
 .da-workflow-format-section-title.warning {
-    color: var(--da-status-warning, #ff9f0a);
+    color: var(--da-color-warn, #f59e0b);
 }
 
 /* 3. 宏变量列表与匹配项 (.da-workflow-var-item) */
@@ -145,7 +145,7 @@
 .da-macro-tag--warning,
 .da-macro-tag.is-warning,
 .da-macro-tag.warning {
-    color: var(--da-status-warning, #ff9f0a);
+    color: var(--da-color-warn, #f59e0b);
     background: rgba(255, 159, 10, 0.12);
     border-color: rgba(255, 159, 10, 0.3);
 }
