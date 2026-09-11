@@ -92,7 +92,8 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
         store,
         uiRegistry,
         modalService: ModalService.getInstance(),
-        drivers
+        drivers,
+        events
     });
     disposables.add(settingsModal);
 

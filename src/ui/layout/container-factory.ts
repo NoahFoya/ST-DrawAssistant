@@ -79,8 +79,6 @@ export interface FieldLabelOptions {
     title: string;
     /** 关联的目标输入控件 DOM ID，点击标签文本可直接激活或聚焦控件 */
     forId?: string;
-    /** 字段次要详细描述说明 @deprecated 仅卡片允许副标题，表单行设置项统一不渲染副标题，提示请使用 helpTooltip */
-    description?: string;
     /** 帮助释义气泡文本 */
     helpTooltip?: string;
     /** 标题行右侧自定义辅助操作节点 */

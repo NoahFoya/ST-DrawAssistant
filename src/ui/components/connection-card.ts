@@ -77,6 +77,12 @@ function updateFieldVisual(field: HTMLInputElement, state: FieldInternalState): 
     field.classList.toggle('is-invalid', state.hasError);
     field.classList.toggle('is-dirty', state.isDirty && !state.hasError);
 
+    const wrapper = field.parentElement?.classList.contains('da-input-suffix-wrapper') ? field.parentElement : null;
+    if (wrapper) {
+        wrapper.classList.toggle('is-invalid', state.hasError);
+        wrapper.classList.toggle('is-dirty', state.isDirty && !state.hasError);
+    }
+
     if (state.hasError) {
         field.title = state.errorTooltip;
     } else if (state.isDirty) {
@@ -90,7 +96,7 @@ function updateFieldVisual(field: HTMLInputElement, state: FieldInternalState): 
  * 创建标准后端连接配置卡片
  *
  * @param options 连接卡片配置项
- * @returns 强化卡片容器 DOM 节点 (包含 input, testBtn, 可选凭据栏, 状态反馈方法与 dispose 契约)
+ * @returns 强化卡片容器 DOM 节点 (包含 input, testBtn, 可选凭据栏, 状态反馈方法与 dispose 销毁方法)
  */
 export function createConnectionCard(options: ConnectionCardOptions): ConnectionCardElement {
     const card = createCard({ hoverable: true });
@@ -218,18 +224,17 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             createFieldLabel({
                 title: credExt.title,
                 forId: credId,
-                helpTooltip: credExt.helpTooltip,
-                description: credExt.description
+                helpTooltip: credExt.helpTooltip ?? credExt.description
             })
         );
 
         const credContainer = document.createElement('div');
-        credContainer.className = 'da-input-group';
+        credContainer.className = 'da-input-suffix-wrapper da-w-full';
 
         credentialInput = document.createElement('input');
         credentialInput.id = credId;
         credentialInput.type = 'password';
-        credentialInput.className = 'da-input da-input--text da-w-full';
+        credentialInput.className = 'da-input da-input--text';
         credentialInput.value = credExt.value || '';
         credentialInput.placeholder = credExt.placeholder || '输入访问凭据...';
 
@@ -251,7 +256,7 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
 
         toggleEyeBtn = document.createElement('button');
         toggleEyeBtn.type = 'button';
-        toggleEyeBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+        toggleEyeBtn.className = 'da-input-suffix-btn';
         toggleEyeBtn.innerHTML = EYE_SVG;
         toggleEyeBtn.title = '显示/隐藏凭据';
         toggleEyeBtn.setAttribute('aria-label', '显示/隐藏凭据');

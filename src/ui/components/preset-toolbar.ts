@@ -603,9 +603,6 @@ export interface PresetStoreAdapterOptions<T> {
     generateId?: (name: string) => string;
 }
 
-/** 兼容旧命名类型 */
-export type FilePresetAdapterOptions<T> = PresetStoreAdapterOptions<T>;
-
 /**
  * 创建面向统一预设存储 (PresetStore) 的通用方案适配器
  */

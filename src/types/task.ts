@@ -1,5 +1,6 @@
 /**
- * 生图任务状态与调度事件契约
+ * 生图任务状态与调度事件接口定义
+ * @author NoahFoya
  */
 
 import { DrawAssistantSettings, StoredImageRecord } from './settings';

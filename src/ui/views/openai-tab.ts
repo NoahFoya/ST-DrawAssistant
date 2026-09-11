@@ -445,7 +445,7 @@ export class OpenAITabView extends BaseTabView {
 
         this._customModelInputEl = document.createElement('input');
         this._customModelInputEl.type = 'text';
-        this._customModelInputEl.className = 'da-input da-w-full';
+        this._customModelInputEl.className = 'da-input da-input--center da-w-full';
         this._customModelInputEl.placeholder = '例如: gpt-image-2 或 flux-schnell';
         this._customModelInputEl.value = initialModel;
 

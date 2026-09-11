@@ -88,7 +88,7 @@ export class SDWebUITabView extends BaseTabView {
 
         const activePromptProfileId: string = String(storedConfig.activePromptProfileId || '');
 
-        // 初始化运行时表单配置：剥离历史残留的方案大对象数组
+        // 运行时表单仅维护当前生效项与标量配置，预设列表由 PresetStore 单独持久化
         const initialConfig: SDWebUIConfig = {
             ...DEFAULT_SDWEBUI_CONFIG,
             ...storedConfig,

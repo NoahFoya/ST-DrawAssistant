@@ -1,6 +1,6 @@
 /**
  * 悬浮球控制器 (FABContainer)
- * 渲染屏幕边缘可拖拽悬浮球，提供快速打开主面板与任务状态动画指示
+ * 渲染屏幕边缘可拖拽悬浮球，提供快速打开主面板的轻量常驻入口
  */
 
 import { IDisposable, toDisposable, DisposableStore, CoreEventMap, FabDockPosition } from '../../types';
@@ -58,16 +58,13 @@ export interface FABContainerOptions {
 export class FABContainer implements IDisposable {
     private readonly _store: SettingsStore;
     private readonly _settingsModal: SettingsModal;
-    private readonly _events?: TypedEventBus<CoreEventMap>;
     private _fabElement?: HTMLElement;
     private readonly _disposables = new DisposableStore();
     private _justDragged = false;
-    private _activeTaskCount = 0;
 
     constructor(options: FABContainerOptions) {
         this._store = options.store;
         this._settingsModal = options.settingsModal;
-        this._events = options.events;
         this.init();
     }
 
@@ -111,47 +108,6 @@ export class FABContainer implements IDisposable {
                 }
             })
         );
-
-        if (this._events) {
-            this._disposables.add(
-                this._events.on('task:queued', () => {
-                    this._activeTaskCount++;
-                    this.updateGeneratingState();
-                })
-            );
-            this._disposables.add(
-                this._events.on('task:started', () => {
-                    this.updateGeneratingState();
-                })
-            );
-            this._disposables.add(
-                this._events.on('task:completed', () => {
-                    this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
-                    this.updateGeneratingState();
-                })
-            );
-            this._disposables.add(
-                this._events.on('task:failed', () => {
-                    this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
-                    this.updateGeneratingState();
-                })
-            );
-            this._disposables.add(
-                this._events.on('task:cancelled', () => {
-                    this._activeTaskCount = Math.max(0, this._activeTaskCount - 1);
-                    this.updateGeneratingState();
-                })
-            );
-        }
-    }
-
-    private updateGeneratingState(): void {
-        if (!this._fabElement) return;
-        const isGenerating = this._activeTaskCount > 0;
-        this._fabElement.classList.toggle('is-generating', isGenerating);
-        this._fabElement.title = isGenerating
-            ? `正在生成图像中 (${this._activeTaskCount} 个任务)...`
-            : '绘画助手快捷面板 (点击展开)';
     }
 
     private renderFAB(): void {

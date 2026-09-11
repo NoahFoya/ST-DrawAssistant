@@ -204,22 +204,22 @@ export class GeneralTabView extends BaseTabView {
             title: '存储设置',
             rows: [
                 {
-                    key: 'saveToIndexedDB',
+                    key: 'saveToServer',
                     type: 'toggle',
-                    label: '保存至画廊',
-                    helpTooltip: '（推荐开启）保存在当前浏览器的本地数据库 (IndexedDB) 中，供画廊浏览，不增加聊天记录体积。'
+                    label: '保存至酒馆服务器',
+                    helpTooltip: '（可选叠加存储）将生成的图片上传并保存至 SillyTavern 服务端静态目录，便于在多设备或终端间共享访问。'
                 },
                 {
                     key: 'embedToBase64',
                     type: 'toggle',
                     label: '内嵌至聊天记录',
-                    helpTooltip: '将图片以 Base64 编码嵌入聊天记录。适合导出分享会话，但图片较多时会导致聊天记录文件体积明显变大。'
+                    helpTooltip: '（可选叠加存储）将图片以 Base64 编码直接嵌入聊天记录。适合导出分享会话，但图片较多时会导致聊天记录文件体积明显变大。'
                 },
                 {
                     key: 'maxStoredImages',
                     type: 'select',
                     label: '历史图片保留上限',
-                    helpTooltip: '画廊最多保存的图片数量。超出上限后自动清理较早且未收藏的图片；已收藏的图片不会被清理。',
+                    helpTooltip: '画廊基础存储 (IndexedDB) 最多保存的图片数量。超出上限后自动清理较早且未收藏的图片；已收藏的图片不会被清理。',
                     options: [
                         { label: '100 张', value: '100' },
                         { label: '300 张', value: '300' },

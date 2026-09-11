@@ -173,8 +173,7 @@ export class FormRenderer<TState extends object> implements IDisposable {
             const fieldLabel = createFieldLabel({
                 title: schema.label,
                 forId: controlId,
-                description: schema.description,
-                helpTooltip: schema.helpTooltip
+                helpTooltip: schema.helpTooltip || schema.description
             });
             col.slots[0].appendChild(fieldLabel);
 
@@ -239,8 +238,7 @@ export class FormRenderer<TState extends object> implements IDisposable {
         const fieldLabel = createFieldLabel({
             title: schema.label,
             forId: controlId,
-            description: schema.description,
-            helpTooltip: schema.helpTooltip
+            helpTooltip: schema.helpTooltip || schema.description
         });
         row.slots[0].appendChild(fieldLabel);
 

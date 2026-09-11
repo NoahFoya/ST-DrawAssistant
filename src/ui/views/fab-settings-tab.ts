@@ -180,11 +180,10 @@ export class FABSettingsTabView extends BaseTabView {
                         btn.className = 'da-btn da-btn--secondary';
                         btn.textContent = '重置为默认位置';
                         btn.onclick = () => {
-                            // 清理旧版本可能残留的 localStorage 项
+                            // 清理本地存储缓存并通知悬浮球组件平滑归位
                             if (typeof window !== 'undefined' && window.localStorage) {
                                 localStorage.removeItem('da_fab_position');
                             }
-                            // 统一通过 Store 变更触发自适应悬浮球平滑归位
                             store.set('fabPosition', undefined);
                             if (typeof window !== 'undefined') {
                                 window.dispatchEvent(new CustomEvent('da:reset_fab_position'));

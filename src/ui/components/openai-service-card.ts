@@ -69,6 +69,13 @@ interface FieldState {
 function updateFieldVisual(el: HTMLInputElement, state: FieldState): void {
     el.classList.toggle('is-invalid', state.hasError);
     el.classList.toggle('is-dirty', state.isDirty && !state.hasError);
+
+    const wrapper = el.parentElement?.classList.contains('da-input-suffix-wrapper') ? el.parentElement : null;
+    if (wrapper) {
+        wrapper.classList.toggle('is-invalid', state.hasError);
+        wrapper.classList.toggle('is-dirty', state.isDirty && !state.hasError);
+    }
+
     if (state.hasError) {
         el.title = state.errorTooltip;
     } else if (state.isDirty) {
@@ -193,7 +200,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         settings.serverUrl = normalized;
         options.onSettingsChange(currentProvider, settings);
 
-        // 自愈解除失效，并计算脏值
+        // 清除错误状态并比对未保存状态
         urlState.hasError = false;
         urlState.isDirty = normalized.trim() !== (baselines[currentProvider]?.serverUrl || '').trim();
         updateFieldVisual(urlInputEl, urlState);
@@ -220,11 +227,11 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
     }));
 
     const keyContainer = document.createElement('div');
-    keyContainer.className = 'da-input-group';
+    keyContainer.className = 'da-input-suffix-wrapper da-w-full';
 
     const keyInputEl = document.createElement('input');
     keyInputEl.type = 'password';
-    keyInputEl.className = 'da-input da-input--text da-flex-1';
+    keyInputEl.className = 'da-input da-input--text';
     keyInputEl.value = getSettings(currentProvider).apiKey;
     keyInputEl.placeholder = 'sk-...';
 
@@ -234,7 +241,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         settings.apiKey = val;
         options.onSettingsChange(currentProvider, settings);
 
-        // 自愈解除失效，并计算脏值
+        // 清除错误状态并比对未保存状态
         keyState.hasError = false;
         keyState.isDirty = val !== (baselines[currentProvider]?.apiKey || '').trim();
         updateFieldVisual(keyInputEl, keyState);
@@ -247,7 +254,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
 
     const toggleEyeBtn = document.createElement('button');
     toggleEyeBtn.type = 'button';
-    toggleEyeBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+    toggleEyeBtn.className = 'da-input-suffix-btn';
     toggleEyeBtn.innerHTML = EYE_SVG;
     toggleEyeBtn.title = '显示/隐藏密钥';
     toggleEyeBtn.setAttribute('aria-label', '显示/隐藏密钥');

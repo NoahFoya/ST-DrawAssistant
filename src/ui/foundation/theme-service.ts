@@ -6,43 +6,81 @@
 import { IDisposable } from '../../types';
 import { SettingsStore } from '../../state';
 
-/** 外观主题色彩与毛玻璃配置 */
+/** 外观主题色彩、材质与版式全要素配置 */
 export interface ThemeData {
+    // 1. 品牌与强调色族
     accentColor: string;
+    accentHover?: string;
+    accentCyan?: string;
+    accentGlow?: string;
+
+    // 2. 表面与层叠色阶
     bgPrimary: string;
     bgSecondary: string;
+    bgSidebar?: string;
+    bgCard?: string;
+    bgCardHover?: string;
+    bgInput?: string;
+    bgInputHover?: string;
     bgGradientEnd: string;
     bgGradientAngle: number;
     bgOpacity: number;
+
+    // 3. 文本与前景色阶
     textPrimary: string;
     textSecondary: string;
+    textMuted?: string;
+    textOnAccent?: string;
+
+    // 4. 边框、质感与环境光
     borderColor: string;
-    borderRadius: number;
+    borderHighlight?: string;
+    borderGlow?: string;
+    insetTopLight?: boolean | number | string;
     blurRadius: number;
+    blurModal?: number;
+    blurPanel?: number;
+
+    // 5. 几何、圆角与阴影
+    borderRadius: number;
+    radiusModal?: number;
+    radiusCard?: number;
+    radiusInput?: number;
+    radiusBtn?: number;
+    shadowIntensity?: number;
+
     [key: string]: unknown;
 }
 
 /**
- * 静态硬编码兜底安全主题数据
- * 仅用于系统安全启动兜底以及所有预设被删后的白屏防御；
- * 不进入主题列表，仅在无可用主题时被直接加载。
+ * 安全兜底主题数据
+ * 用于系统启动保底以及所有预设被删除时的防护；不进入主题列表，仅在无可用预设时加载。
  */
 export const FALLBACK_SAFE_THEME: ThemeData = Object.freeze({
     accentColor: '#38bdf8',
+    accentCyan: '#06b6d4',
     bgPrimary: '#181b24',
     bgSecondary: '#202430',
+    bgSidebar: '#13151c',
+    bgCard: '#1f2430',
+    bgCardHover: '#262c3a',
+    bgInput: '#12141a',
+    bgInputHover: '#1c202a',
     bgGradientEnd: '#252b3b',
     bgGradientAngle: 140,
     bgOpacity: 0.95,
     textPrimary: '#f8fafc',
     textSecondary: '#94a3b8',
     borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderHighlight: 'rgba(56, 189, 248, 0.45)',
     borderRadius: 10,
-    blurRadius: 18
+    radiusModal: 12,
+    radiusCard: 10,
+    radiusInput: 6,
+    blurRadius: 18,
+    blurModal: 18,
+    blurPanel: 20
 });
-
-/** 兼容引用：指向唯一的硬编码兜底安全主题 */
-export const DEFAULT_THEME_DATA: ThemeData = FALLBACK_SAFE_THEME;
 
 export interface IThemeService extends IDisposable {
     applyTheme(themeData?: Partial<ThemeData>, targetNode?: HTMLElement): void;
@@ -246,46 +284,68 @@ export class ThemeService implements IThemeService {
 
         const root = document.documentElement;
 
-        const accentHex = theme.accentColor || DEFAULT_THEME_DATA.accentColor;
+        const accentHex = theme.accentColor || FALLBACK_SAFE_THEME.accentColor;
         const accentRgb = hexToRgb(accentHex);
-        const accentHover = deriveAccentHover(accentHex);
+        const accentHover = theme.accentHover || deriveAccentHover(accentHex);
+        const accentCyan = theme.accentCyan || '#06b6d4';
+        const accentCyanRgb = hexToRgb(accentCyan);
+        const accentGlow = theme.accentGlow || `0 0 20px rgba(${accentRgb}, 0.45)`;
 
-        const bgPrimary = theme.bgPrimary || DEFAULT_THEME_DATA.bgPrimary;
-        const bgSecondary = theme.bgSecondary || DEFAULT_THEME_DATA.bgSecondary;
+        const bgPrimary = theme.bgPrimary || FALLBACK_SAFE_THEME.bgPrimary;
+        const bgPrimaryRgb = hexToRgb(bgPrimary);
+        const bgSecondary = theme.bgSecondary || FALLBACK_SAFE_THEME.bgSecondary;
+        const bgSecondaryRgb = hexToRgb(bgSecondary);
         const bgGradientEnd = theme.bgGradientEnd || bgPrimary;
-        const bgGradientAngle = theme.bgGradientAngle ?? DEFAULT_THEME_DATA.bgGradientAngle;
+        const bgGradientAngle = theme.bgGradientAngle ?? FALLBACK_SAFE_THEME.bgGradientAngle;
         const computedGradient = `linear-gradient(${bgGradientAngle}deg, ${bgPrimary} 0%, ${bgGradientEnd} 100%)`;
 
-        const opacity = theme.bgOpacity ?? DEFAULT_THEME_DATA.bgOpacity;
-        const bgSecondaryRgb = hexToRgb(bgSecondary);
+        const opacity = theme.bgOpacity ?? FALLBACK_SAFE_THEME.bgOpacity;
         const bgSecondaryRgba = `rgba(${bgSecondaryRgb}, ${opacity})`;
 
         const [pR, pG, pB] = hexToRgbArray(bgPrimary);
         const isLightMode = (pR * 299 + pG * 587 + pB * 114) / 1000 > 128;
 
-        const bgSidebar = isLightMode ? lerpHex(bgPrimary, '#0f172a', 0.03) : lerpHex(bgPrimary, '#000000', 0.28);
-        const bgCard = isLightMode ? 'rgba(255, 255, 255, 0.92)' : lerpHex(bgPrimary, bgSecondary, 0.75);
-        const bgCardHover = isLightMode ? '#ffffff' : lerpHex(bgPrimary, bgSecondary, 1.0);
+        const bgSidebar = theme.bgSidebar || (isLightMode ? lerpHex(bgPrimary, '#0f172a', 0.03) : lerpHex(bgPrimary, '#000000', 0.28));
+        const bgCard = theme.bgCard || (isLightMode ? 'rgba(255, 255, 255, 0.92)' : lerpHex(bgPrimary, bgSecondary, 0.75));
+        const bgCardHover = theme.bgCardHover || (isLightMode ? '#ffffff' : lerpHex(bgPrimary, bgSecondary, 1.0));
         const bgModal = isLightMode ? 'rgba(255, 255, 255, 0.98)' : 'rgba(24, 27, 36, 0.96)';
         const bgOverlayModal = isLightMode ? 'rgba(15, 23, 42, 0.4)' : 'rgba(0, 0, 0, 0.65)';
-        const bgInput = isLightMode ? '#f1f5f9' : lerpHex(bgPrimary, '#000000', 0.18);
-        const bgInputHover = isLightMode ? '#e2e8f0' : lerpHex(bgPrimary, bgSecondary, 0.5);
+        const bgInput = theme.bgInput || (isLightMode ? '#f1f5f9' : lerpHex(bgPrimary, '#000000', 0.18));
+        const bgInputHover = theme.bgInputHover || (isLightMode ? '#e2e8f0' : lerpHex(bgPrimary, bgSecondary, 0.5));
         const bgHover = isLightMode ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.04)';
         const bgSubtle = isLightMode ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.03)';
         const separator = isLightMode ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.05)';
+
+        const borderColor = theme.borderColor || (isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.09)');
+        const borderHighlight = theme.borderHighlight || `rgba(${accentRgb}, 0.45)`;
+        const borderGlow = theme.borderGlow || `0 0 16px rgba(${accentRgb}, 0.35)`;
+
+        let insetTopLight = `inset 0 1px 0 0 rgba(${accentRgb}, 0.15)`;
+        if (theme.insetTopLight === false) {
+            insetTopLight = 'none';
+        } else if (typeof theme.insetTopLight === 'string') {
+            insetTopLight = theme.insetTopLight;
+        }
 
         const statusWarning = isLightMode ? '#d97706' : '#ff9f0a';
         const statusWarningBg = isLightMode ? 'rgba(217, 119, 6, 0.12)' : 'rgba(255, 159, 10, 0.18)';
         const statusWarningBorder = isLightMode ? 'rgba(217, 119, 6, 0.35)' : 'rgba(255, 159, 10, 0.45)';
 
-        const borderRadius = theme.borderRadius ?? DEFAULT_THEME_DATA.borderRadius;
-        const blurRadius = theme.blurRadius ?? DEFAULT_THEME_DATA.blurRadius;
+        const borderRadius = theme.borderRadius ?? FALLBACK_SAFE_THEME.borderRadius ?? 10;
+        const radiusModal = theme.radiusModal ?? (borderRadius + 2);
+        const radiusCard = theme.radiusCard ?? borderRadius;
+        const radiusInput = theme.radiusInput ?? Math.max(4, borderRadius - 4);
+        const radiusBtn = theme.radiusBtn ?? radiusInput;
+
+        const blurRadius = theme.blurRadius ?? FALLBACK_SAFE_THEME.blurRadius ?? 18;
+        const blurModal = theme.blurModal ?? blurRadius;
+        const blurPanel = theme.blurPanel ?? (blurRadius + 2);
 
         const [aR, aG, aB] = hexToRgbArray(accentHex);
         const isAccentLight = (aR * 299 + aG * 587 + aB * 114) / 1000 > 165;
-        const textOnAccent = isAccentLight ? '#0f172a' : '#ffffff';
+        const textOnAccent = theme.textOnAccent || (isAccentLight ? '#0f172a' : '#ffffff');
 
-        const textMuted = isLightMode ? '#64748b' : '#686870';
+        const textMuted = theme.textMuted || (isLightMode ? '#64748b' : '#686870');
 
         const modalNodes = typeof document !== 'undefined' ? Array.from(document.querySelectorAll<HTMLElement>('.st-da-root')) : [];
         const allNodes = new Set<HTMLElement>([root, ...(targetNode ? [targetNode] : []), ...modalNodes]);
@@ -301,13 +361,15 @@ export class ThemeService implements IThemeService {
             node.style.setProperty('--da-surface-card', bgCard);
             node.style.setProperty('--da-text-base', theme.textPrimary || (isLightMode ? '#0f172a' : '#f8fafc'));
             node.style.setProperty('--da-text-muted', textMuted);
-            node.style.setProperty('--da-border', theme.borderColor || (isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.09)'));
+            node.style.setProperty('--da-border', borderColor);
             node.style.setProperty('--da-radius', `${borderRadius}px`);
 
-            // 衍生与细粒度 CSS 变量
+            // 表面与层叠色阶
             node.style.setProperty('--da-color-scheme', isLightMode ? 'light' : 'dark');
             node.style.setProperty('--da-bg-primary', bgPrimary);
+            node.style.setProperty('--da-bg-primary-rgb', bgPrimaryRgb);
             node.style.setProperty('--da-bg-secondary', bgSecondary);
+            node.style.setProperty('--da-bg-secondary-rgb', bgSecondaryRgb);
             node.style.setProperty('--da-bg-sidebar', bgSidebar);
             node.style.setProperty('--da-bg-secondary-rgba', bgSecondaryRgba);
             node.style.setProperty('--da-bg-gradient-end', bgGradientEnd);
@@ -325,24 +387,38 @@ export class ThemeService implements IThemeService {
             node.style.setProperty('--da-bg-opacity', String(opacity));
             node.style.setProperty('--da-separator', separator);
 
+            // 文本色阶
             node.style.setProperty('--da-text-primary', theme.textPrimary || (isLightMode ? '#0f172a' : '#f8fafc'));
             node.style.setProperty('--da-text-secondary', theme.textSecondary || (isLightMode ? '#475569' : '#94a3b8'));
             node.style.setProperty('--da-text-on-accent', textOnAccent);
-            node.style.setProperty('--da-border-color', theme.borderColor || (isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.09)'));
 
+            // 边框、顶光与光晕
+            node.style.setProperty('--da-border-color', borderColor);
+            node.style.setProperty('--da-border-highlight', borderHighlight);
+            node.style.setProperty('--da-border-glow', borderGlow);
+            node.style.setProperty('--da-inset-top-light', insetTopLight);
+
+            // 品牌强调色与 RGB 通道
             node.style.setProperty('--da-accent-color', accentHex);
             node.style.setProperty('--da-accent-hover', accentHover);
             node.style.setProperty('--da-accent-rgb', accentRgb);
+            node.style.setProperty('--da-accent-cyan', accentCyan);
+            node.style.setProperty('--da-accent-cyan-rgb', accentCyanRgb);
+            node.style.setProperty('--da-accent-glow', accentGlow);
 
+            // 状态反馈色
             node.style.setProperty('--da-status-warning', statusWarning);
             node.style.setProperty('--da-status-warning-bg', statusWarningBg);
             node.style.setProperty('--da-status-warning-border', statusWarningBorder);
 
+            // 模糊与圆角梯度
             node.style.setProperty('--da-blur-radius', `${blurRadius}px`);
-            node.style.setProperty('--da-radius-modal', `${borderRadius + 2}px`);
-            node.style.setProperty('--da-radius-card', `${borderRadius}px`);
-            node.style.setProperty('--da-radius-input', `${Math.max(4, borderRadius - 4)}px`);
-            node.style.setProperty('--da-radius-btn', `${Math.max(4, borderRadius - 4)}px`);
+            node.style.setProperty('--da-blur-modal', `${blurModal}px`);
+            node.style.setProperty('--da-blur-panel', `${blurPanel}px`);
+            node.style.setProperty('--da-radius-modal', `${radiusModal}px`);
+            node.style.setProperty('--da-radius-card', `${radiusCard}px`);
+            node.style.setProperty('--da-radius-input', `${radiusInput}px`);
+            node.style.setProperty('--da-radius-btn', `${radiusBtn}px`);
             node.style.setProperty('--da-radius-small', `${Math.max(3, borderRadius - 6)}px`);
             node.style.setProperty('--da-radius-sm', `${Math.max(3, borderRadius - 6)}px`);
             node.style.setProperty('--da-border-radius', `${borderRadius}px`);
@@ -355,7 +431,7 @@ export class ThemeService implements IThemeService {
     }
 
     public static applyCurrentThemeToNode(targetNode?: HTMLElement): void {
-        const currentTheme = ThemeService._instance ? ThemeService._instance.getCurrentTheme() : DEFAULT_THEME_DATA;
+        const currentTheme = ThemeService._instance ? ThemeService._instance.getCurrentTheme() : FALLBACK_SAFE_THEME;
         ThemeService.applyThemeVariables(currentTheme, targetNode);
     }
 

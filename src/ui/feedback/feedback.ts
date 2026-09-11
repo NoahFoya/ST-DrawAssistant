@@ -259,92 +259,6 @@ export function showTripleChoiceDialog(options: TripleChoiceDialogOptions): Prom
     });
 }
 
-/**
- * Tab 选项卡未保存状态提供者接口
- */
-export interface UnsavedProvider {
-    tabId: string;
-    tabName: string;
-    hasUnsavedChanges: () => boolean;
-    saveChanges: () => Promise<void> | void;
-    discardChanges: () => void;
-}
-
-/**
- * 全局未保存修改状态管理器
- */
-export class UnsavedStateManager {
-    private readonly _providers = new Map<string, UnsavedProvider>();
-    private readonly _listeners = new Set<() => void>();
-
-    public registerProvider(provider: UnsavedProvider): void {
-        this._providers.set(provider.tabId, provider);
-        this.notifyStateChange();
-    }
-
-    public unregisterProvider(tabId: string): void {
-        this._providers.delete(tabId);
-        this.notifyStateChange();
-    }
-
-    public subscribeStateChange(listener: () => void): () => void {
-        this._listeners.add(listener);
-        return () => this._listeners.delete(listener);
-    }
-
-    public notifyStateChange(): void {
-        this._listeners.forEach((l) => {
-            try {
-                l();
-            } catch {}
-        });
-    }
-
-    public getDirtyProviders(): UnsavedProvider[] {
-        const dirty: UnsavedProvider[] = [];
-        this._providers.forEach((p) => {
-            try {
-                if (p.hasUnsavedChanges()) dirty.push(p);
-            } catch {}
-        });
-        return dirty;
-    }
-
-    public async checkUnsavedBeforeAction(actionDesc = '切出界面'): Promise<'proceed' | 'cancel'> {
-        const dirtyList = this.getDirtyProviders();
-        if (dirtyList.length === 0) return 'proceed';
-
-        const names = dirtyList.map((p) => `【${p.tabName}】`).join('与');
-        const message = `检测到 ${names} 存在未保存的修改！直接${actionDesc}将丢弃所有未保存改动，请选择操作：`;
-
-        const choice = await showTripleChoiceDialog({
-            title: '⚠️ 未保存修改提示',
-            message,
-            saveText: '保存修改',
-            discardText: '放弃修改',
-            cancelText: '取消'
-        });
-
-        if (choice === 'save') {
-            for (const p of dirtyList) {
-                await p.saveChanges();
-            }
-            return 'proceed';
-        }
-
-        if (choice === 'discard') {
-            for (const p of dirtyList) {
-                p.discardChanges();
-            }
-            return 'proceed';
-        }
-
-        return 'cancel';
-    }
-}
-
-export const unsavedStateManager = new UnsavedStateManager();
-
 interface ToastrApi {
     success?: (msg: string, title?: string) => void;
     error?: (msg: string, title?: string) => void;
@@ -362,8 +276,6 @@ export function registerImagePreviewHandler(handler: (imageUrl: string, prompt?:
  * 统一交互反馈与提示通知服务 (FeedbackService)
  */
 export class FeedbackService {
-    public static readonly unsavedStateManager = unsavedStateManager;
-
     constructor(_modalService?: unknown) {}
 
     public static async confirm(options: ConfirmDialogOptions | string): Promise<boolean> {

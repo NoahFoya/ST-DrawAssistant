@@ -1,5 +1,5 @@
 /**
- * 预设方案数据契约
+ * 预设方案数据结构定义
  */
 
 export type PresetCategory = 'themes' | 'prompts' | 'workflows' | 'drawing';

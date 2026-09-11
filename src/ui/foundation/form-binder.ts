@@ -6,7 +6,7 @@
 import { IDisposable, DisposableStore } from '../../types';
 
 /**
- * 响应式配置存储必须满足的最小契约接口
+ * 响应式配置存储必须满足的基础状态接口
  */
 export interface IObservableStore<TState extends object> {
     get<K extends keyof TState>(key: K): TState[K];

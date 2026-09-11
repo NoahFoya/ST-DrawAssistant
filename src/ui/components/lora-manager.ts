@@ -162,7 +162,7 @@ export function createLoraManagerControl(options: LoraManagerOptions): LoraManag
                     input.step = '0.05';
                     input.min = '-2';
                     input.max = '2';
-                    input.className = 'da-input da-input-num-short da-lora-param__input';
+                    input.className = 'da-input da-input--num-short da-lora-param__input';
                     input.value = String(initialVal);
                     input.disabled = !isEnabled;
                     inputElements.push(input);

@@ -9,6 +9,5 @@ export * from './drawer-entry';
 export * from './fab-container';
 export * from './floor-button-manager';
 export * from './workflow-modal';
-export * from './unsaved-floating-notice';
 
 

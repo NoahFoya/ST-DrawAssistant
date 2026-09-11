@@ -4,14 +4,14 @@
  * 协调选项卡的渲染、切换与销毁清理，并监听配置变更同步界面提示。
  */
 
-import { IDisposable, DisposableStore, toDisposable } from '../../types';
+import { IDisposable, DisposableStore, toDisposable, CoreEventMap } from '../../types';
 import { SettingsStore } from '../../state';
 import { DriverRegistry } from '../../services/drivers';
 import { IModalService } from './modal-service';
 import { IUIRegistry, ThemeService, TelemetryService, OverlayHost } from '../foundation';
 import { createVersionBadge } from '../components';
-import { createUnsavedFloatingNotice } from './unsaved-floating-notice';
 import { FeedbackService } from '../feedback/feedback';
+import { TypedEventBus } from '../../utils';
 
 /** 侧边栏内置标准 SVG 矢量图标字典 (Feather 图标规范) */
 export const TAB_SVG_ICONS: Record<string, string> = {
@@ -47,6 +47,8 @@ export interface SettingsModalOptions {
     drivers?: DriverRegistry;
     /** 插件发布版本号 (可选) */
     version?: string;
+    /** 核心事件总线 (可选，用于监听方案导入与全局状态) */
+    events?: TypedEventBus<CoreEventMap>;
 }
 
 /**
@@ -57,6 +59,7 @@ export class SettingsModal implements IDisposable {
     private readonly _modalService: IModalService;
     private readonly _store: SettingsStore;
     private readonly _drivers?: DriverRegistry;
+    private readonly _events?: TypedEventBus<CoreEventMap>;
     private readonly _disposables = new DisposableStore();
 
     private _modalHandle?: IDisposable;
@@ -72,6 +75,7 @@ export class SettingsModal implements IDisposable {
         this._modalService = options.modalService;
         this._store = options.store;
         this._drivers = options.drivers;
+        this._events = options.events;
     }
 
     /**
@@ -101,11 +105,6 @@ export class SettingsModal implements IDisposable {
         // 组装顶栏 (将会话级订阅注入 sessionDisposables)
         const header = this.renderHeaderBar(sessionDisposables);
         dialog.appendChild(header);
-
-        // 挂载未保存修改提醒条
-        const floatingNotice = createUnsavedFloatingNotice();
-        sessionDisposables.add(floatingNotice);
-        dialog.appendChild(floatingNotice.element);
 
         // 主体双栏容器
         const bodyContainer = document.createElement('div');
@@ -137,12 +136,6 @@ export class SettingsModal implements IDisposable {
         // 初始化渲染侧边栏
         this.refreshSidebarTabs();
 
-        // 订阅未保存状态变更以实时刷新侧边栏红点
-        const unsavedUnsub = FeedbackService.unsavedStateManager.subscribeStateChange(() => {
-            this.refreshSidebarTabs();
-        });
-        sessionDisposables.add(toDisposable(unsavedUnsub));
-
         // 监听生图引擎切换：自动同步刷新侧边栏指示徽标
         const providerSub = this._store.subscribeKey('activeProvider', () => {
             this.refreshSidebarTabs();
@@ -167,18 +160,18 @@ export class SettingsModal implements IDisposable {
         // 启动后台遥测
         TelemetryService.start(footer, this._store, this._drivers);
 
-        // 遮罩点击关闭处理
+        // 遮罩点击关闭处理 (检查未保存修改)
         backdrop.addEventListener('click', (e) => {
             if (e.target === backdrop) {
-                void this.close();
+                void this.requestClose();
             }
         });
 
-        // Escape 快捷键监听：顶层无对话框时关闭主弹窗
+        // Escape 快捷键监听：顶层无对话框时请求关闭主弹窗
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && this._modalHandle) {
                 if (!document.querySelector('.da-dialog-panel') && !document.querySelector('.da-cropper-backdrop')) {
-                    void this.close();
+                    void this.requestClose();
                 }
             }
         };
@@ -285,6 +278,19 @@ export class SettingsModal implements IDisposable {
             })
         );
 
+        if (this._events) {
+            sessionDisposables.add(
+                this._events.on('presets:imported', () => {
+                    populateThemeOptions();
+                })
+            );
+            sessionDisposables.add(
+                this._events.on('presets:reset', () => {
+                    populateThemeOptions();
+                })
+            );
+        }
+
         quickThemeSelector.appendChild(quickThemeSelect);
 
         // 关闭按钮 (SVG 矢量图标)
@@ -294,7 +300,7 @@ export class SettingsModal implements IDisposable {
         closeBtn.setAttribute('aria-label', '关闭设置面板');
         closeBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
         closeBtn.onclick = () => {
-            void this.close();
+            void this.requestClose();
         };
 
         headerRight.appendChild(quickThemeSelector);
@@ -339,7 +345,6 @@ export class SettingsModal implements IDisposable {
         this._sidebarEl.innerHTML = '';
         const allTabs = this._uiRegistry.getTabs();
         const activeProvider = (this._store.get('activeProvider') || 'comfyui').toLowerCase();
-        const dirtyProviders = FeedbackService.unsavedStateManager.getDirtyProviders();
 
         // 确定收拢态下代表展示的引擎 Tab：
         // 若当前选中的 Tab 正是某个生图引擎，展示该当前引擎；否则展示全局默认引擎 activeProvider
@@ -351,7 +356,6 @@ export class SettingsModal implements IDisposable {
         allTabs.forEach((tab) => {
             const tabIdLower = tab.id.toLowerCase();
             const isEngineTab = BACKEND_TAB_IDS.has(tabIdLower);
-            const isTabDirty = dirtyProviders.some((p) => p.tabId === tab.id);
 
             // 当引擎列表处于收拢态时，只渲染代表当前视角的单个引擎 Tab
             if (isEngineTab && !this._isEnginesExpanded && tabIdLower !== representativeEngineId) {
@@ -386,14 +390,6 @@ export class SettingsModal implements IDisposable {
             label.className = 'da-sidebar-item__label';
             label.textContent = tab.title;
             itemBtn.appendChild(label);
-
-            // 未保存修改指示圆点
-            if (isTabDirty) {
-                const dirtyDot = document.createElement('span');
-                dirtyDot.className = 'da-sidebar-item__dirty-dot';
-                dirtyDot.title = '此面板有未保存的修改';
-                itemBtn.appendChild(dirtyDot);
-            }
 
             // 生图引擎选项卡的收拢/展开控制
             if (isEngineTab) {
@@ -440,14 +436,6 @@ export class SettingsModal implements IDisposable {
         const targetContainer = container || this._contentAreaEl || (typeof document !== 'undefined' ? (document.getElementById('da-modal-content-area') as HTMLElement) : null);
         if (!targetContainer) return false;
 
-        // 若切换至不同选项卡，先行校验未保存草稿与修改
-        if (tabId !== this._activeTabId) {
-            const decision = await FeedbackService.unsavedStateManager.checkUnsavedBeforeAction('切换选项卡');
-            if (decision === 'cancel') {
-                return false;
-            }
-        }
-
         // 释放旧选项卡实例并清理浮层
         this._currentTabDisposable?.dispose();
         this._currentTabDisposable = undefined;
@@ -479,13 +467,36 @@ export class SettingsModal implements IDisposable {
     }
 
     /**
+     * 请求关闭设置面板
+     * 若当前活动视图存在未保存的修改（包含 .is-dirty 标记），
+     * 弹出确认对话框进行二次确认，防止意外丢失配置修改。
+     *
+     * @returns 是否成功执行关闭
+     */
+    public async requestClose(): Promise<boolean> {
+        if (!this._modalHandle) return false;
+
+        const hasDirtyState = Boolean(this._contentAreaEl?.querySelector('.is-dirty'));
+        if (hasDirtyState) {
+            const confirmed = await FeedbackService.confirm({
+                title: '放弃未保存的修改？',
+                message: '检测到当前面板有尚未保存的配置更改，直接关闭将丢失这些修改。确定要放弃修改并退出吗？',
+                confirmText: '放弃修改并退出',
+                cancelText: '继续编辑',
+                isDangerous: true
+            });
+            if (!confirmed) {
+                return false;
+            }
+        }
+
+        return this.close();
+    }
+
+    /**
      * 关闭设置面板
      */
     public async close(): Promise<boolean> {
-        const decision = await FeedbackService.unsavedStateManager.checkUnsavedBeforeAction('关闭设置');
-        if (decision === 'cancel') {
-            return false;
-        }
         this._modalHandle?.dispose();
         return true;
     }

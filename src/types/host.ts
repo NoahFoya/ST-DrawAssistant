@@ -1,5 +1,5 @@
 /**
- * SillyTavern 宿主环境接口与消息契约
+ * SillyTavern 宿主环境接口与事件定义
  */
 
 export interface HostContextInfo {

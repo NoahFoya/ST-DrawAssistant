@@ -1,5 +1,5 @@
 /**
- * 选项卡视图基类与生命周期契约 (ITabView / ISection / BaseTabView)
+ * 选项卡视图基类与生命周期接口定义 (ITabView / ISection / BaseTabView)
  * 规范选项卡面板与子分区的生命周期管理，统一响应 dispose() 销毁事件。
  * 遵循状态驱动模式，视图通过 Store 与 FormRenderer 渲染，不私自保留持久化业务状态。
  * BaseTabView 封装了根容器 _root 与 DisposableStore，在视图销毁时自动释放事件监听与子组件。

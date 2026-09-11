@@ -5,7 +5,7 @@
  */
 
 import { IDisposable } from '../../types';
-import { DEFAULT_THEME_DATA, normalizeHex } from '../foundation';
+import { FALLBACK_SAFE_THEME, normalizeHex } from '../foundation';
 
 /**
  * 基础控件通用配置项
@@ -369,7 +369,7 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
     input.type = options.type || 'text';
 
     const alignClass = options.align === 'center' || options.variant === 'short' ? 'da-input--center' : 'da-input--text';
-    const variantClass = options.variant === 'short' ? 'da-input-short' : (options.variant === 'long' ? 'da-input-long' : '');
+    const variantClass = options.variant === 'short' ? 'da-input--short' : (options.variant === 'long' ? 'da-input-long' : '');
     input.className = `da-input ${alignClass} ${variantClass}`.trim();
 
     input.placeholder = options.placeholder || '';
@@ -388,20 +388,22 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
     const shouldAddToggle = options.allowToggleVisibility ?? isPasswordType;
     if (shouldAddToggle) {
         input.type = 'password';
-        const group = document.createElement('div');
-        group.className = 'da-input-group da-w-full';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'da-input-suffix-wrapper';
+        input.classList.add('da-input--has-suffix');
 
         const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
         const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
-        toggleBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+        toggleBtn.className = 'da-input-suffix-btn';
         toggleBtn.innerHTML = EYE_SVG;
         toggleBtn.title = '显示/隐藏内容';
         toggleBtn.setAttribute('aria-label', '显示/隐藏内容');
 
-        const onToggle = () => {
+        const onToggle = (e: MouseEvent) => {
+            e.preventDefault();
             if (input.type === 'password') {
                 input.type = 'text';
                 toggleBtn.innerHTML = EYE_OFF_SVG;
@@ -409,14 +411,15 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
                 input.type = 'password';
                 toggleBtn.innerHTML = EYE_SVG;
             }
+            input.focus();
         };
         toggleBtn.addEventListener('click', onToggle);
         cleanups.push(() => toggleBtn.removeEventListener('click', onToggle));
 
-        group.appendChild(input);
-        group.appendChild(toggleBtn);
-        container = group;
-        extraElements.push(group);
+        wrapper.appendChild(input);
+        wrapper.appendChild(toggleBtn);
+        container = wrapper;
+        extraElements.push(wrapper);
     }
 
     const stateHandlers = bindControlStateHandlers({
@@ -512,7 +515,7 @@ export function createColorPicker(options: ColorPickerOptions): ColorPickerHandl
     wrapper.className = 'da-color-picker-wrapper';
     if (options.className) wrapper.classList.add(options.className);
 
-    const defaultAccent = DEFAULT_THEME_DATA.accentColor;
+    const defaultAccent = FALLBACK_SAFE_THEME.accentColor;
     const initialVal = normalizeHex(options.value ?? options.defaultValue ?? defaultAccent) || defaultAccent;
 
     const colorInput = document.createElement('input');
@@ -576,7 +579,7 @@ export function createColorPicker(options: ColorPickerOptions): ColorPickerHandl
     return handle;
 }
 
-// --- 7. Slider 滑块数值联动输入控件 ---
+// --- 7. Slider 组合式数值微调控件 ---
 
 export interface SliderOptions extends BaseControlOptions {
     value?: number;
@@ -594,8 +597,8 @@ export interface SliderHandle extends IControlHandle<number> {
 }
 
 /**
- * 创建滑块数值联动控件
- * 组合拖拽范围滑条与精准数值输入框，支持双向同步。
+ * 创建组合式数值微调控件 Handle
+ * 组合原生拖动条与 NumberInput 数字微调框，支持步进微调与数值精准键入。
  */
 export function createSlider(options: SliderOptions): SliderHandle {
     const wrapper = document.createElement('div');
@@ -632,6 +635,7 @@ export function createSlider(options: SliderOptions): SliderHandle {
     };
 
     slider.addEventListener('input', onSliderChange);
+    slider.addEventListener('change', onSliderChange);
 
     wrapper.appendChild(slider);
     wrapper.appendChild(numberComp);
@@ -645,7 +649,10 @@ export function createSlider(options: SliderOptions): SliderHandle {
             numberComp.setDisabled(disabled);
         },
         cleanups: [
-            () => slider.removeEventListener('input', onSliderChange),
+            () => {
+                slider.removeEventListener('input', onSliderChange);
+                slider.removeEventListener('change', onSliderChange);
+            },
             () => numberComp.dispose()
         ]
     });
@@ -673,7 +680,7 @@ export function createSlider(options: SliderOptions): SliderHandle {
     return handle;
 }
 
-// --- 8. SegmentedControl 分段切换按钮组控件 ---
+// --- 8. SegmentedControl 单选下拉切换控件 ---
 
 export interface SegmentedItem {
     label: string;
@@ -692,81 +699,31 @@ export interface SegmentedControlHandle extends IControlHandle<string> {
 }
 
 /**
- * 创建分段切换按钮组控件
- * 适用于模式切换等场景，添加 role="radiogroup" 与 role="radio" 便于状态识别与键盘 Tab 导航。
+ * 创建单选下拉切换控件 Handle
+ * 基于标准 Select 组件包装，提供选项列表动态更新与事件绑定能力。
  */
 export function createSegmentedControl(options: SegmentedControlOptions): SegmentedControlHandle {
-    const container = document.createElement('div');
-    container.className = 'da-segmented';
-    container.setAttribute('role', 'radiogroup');
-    applyBaseAttributes(container, options);
+    const selectOptions: SelectOptionItem[] = options.items.map((item) => ({
+        label: item.label,
+        value: item.value
+    }));
 
-    let currentVal = options.value;
-    const buttonCleanups: Array<() => void> = [];
-
-    const renderButtons = (items: SegmentedItem[]) => {
-        buttonCleanups.forEach((c) => c());
-        buttonCleanups.length = 0;
-        container.innerHTML = '';
-
-        items.forEach((item) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.setAttribute('role', 'radio');
-            const isActive = item.value === currentVal;
-            btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
-            btn.className = `da-segmented-item ${isActive ? 'is-active' : ''}`;
-            btn.textContent = item.label;
-
-            const clickHandler = () => {
-                if (currentVal === item.value) return;
-                currentVal = item.value;
-                container.querySelectorAll<HTMLButtonElement>('.da-segmented-item').forEach((b, idx) => {
-                    const active = items[idx]?.value === currentVal;
-                    b.classList.toggle('is-active', active);
-                    b.setAttribute('aria-checked', active ? 'true' : 'false');
-                });
-                options.onChange?.(currentVal);
-            };
-
-            btn.addEventListener('click', clickHandler);
-            buttonCleanups.push(() => btn.removeEventListener('click', clickHandler));
-            container.appendChild(btn);
-        });
-    };
-
-    renderButtons(options.items);
-
-    const stateHandlers = bindControlStateHandlers({
-        container,
-        inputElement: container,
-        onDisabled: (disabled) => {
-            container.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.disabled = disabled));
-        },
-        cleanups: [
-            () => {
-                buttonCleanups.forEach((c) => c());
-                buttonCleanups.length = 0;
-            }
-        ]
+    const selectComp = createSelect({
+        id: options.id,
+        name: options.name,
+        ariaLabel: options.ariaLabel,
+        className: options.className,
+        value: options.value,
+        options: selectOptions,
+        onChange: (val) => {
+            options.onChange?.(val);
+        }
     });
 
-    const handle: SegmentedControlHandle = Object.assign(container, {
-        inputElement: container,
-        getValue: (): string => currentVal,
-        setValue: (val: string): void => {
-            currentVal = val;
-            container.querySelectorAll<HTMLButtonElement>('.da-segmented-item').forEach((b, idx) => {
-                const active = options.items[idx]?.value === currentVal;
-                b.classList.toggle('is-active', active);
-                b.setAttribute('aria-checked', active ? 'true' : 'false');
-            });
-        },
+    const handle: SegmentedControlHandle = Object.assign(selectComp, {
         setItems: (items: SegmentedItem[]): void => {
-            options.items = items;
-            renderButtons(items);
-        },
-        ...stateHandlers
+            selectComp.setOptions(items.map((item) => ({ label: item.label, value: item.value })));
+        }
     });
 
     return handle;

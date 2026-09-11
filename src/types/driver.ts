@@ -1,5 +1,5 @@
 /**
- * 生图引擎驱动契约与错误模型
+ * 生图引擎驱动接口与错误模型
  */
 
 import { IDisposable } from './common';
@@ -142,7 +142,7 @@ export class DriverError extends Error {
 }
 
 /**
- * 生图引擎驱动契约接口
+ * 生图引擎驱动接口规范
  * 各后端（ComfyUI, SD-WebUI, NovelAI, OpenAI）实现此接口，封装通信协议与数据格式转换
  */
 export interface ImageEngineDriver extends IDisposable {
