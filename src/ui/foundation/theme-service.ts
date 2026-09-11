@@ -6,7 +6,7 @@
 import { IDisposable } from '../../types';
 import { SettingsStore } from '../../state';
 
-/** 外观主题色彩、材质与版式全要素配置 */
+/** 外观主题色彩、材质与版式配置 */
 export interface ThemeData {
     // 1. 品牌与强调色族
     accentColor: string;
@@ -53,8 +53,8 @@ export interface ThemeData {
 }
 
 /**
- * 安全兜底主题数据
- * 用于系统启动保底以及所有预设被删除时的防护；不进入主题列表，仅在无可用预设时加载。
+ * 内置默认主题数据
+ * 用于系统初始化与无可用预设时的默认回退；不作为可选主题项展示。
  */
 export const FALLBACK_SAFE_THEME: ThemeData = Object.freeze({
     accentColor: '#38bdf8',
@@ -231,7 +231,7 @@ export class ThemeService implements IThemeService {
 
     /**
      * 获取当前已注册的主题方案列表（含展示名称）
-     * 仅返回注册表中的主题，硬编码兜底安全主题不进入主题列表
+     * 仅返回主题列表，内置回退主题不作为可选主题项展示
      */
     public static getRegisteredThemes(): Array<{ id: string; name: string }> {
         const list: Array<{ id: string; name: string }> = [];
@@ -252,7 +252,7 @@ export class ThemeService implements IThemeService {
     /**
      * 获取当前生效的主题数据
      * 优先从已注册的主题字典中检索；若当前 ID 未命中，尝试使用注册表中的第一个可用主题；
-     * 若注册表为空（如用户删除了所有主题），则以硬编码安全主题作为终极兜底直接加载。
+     * 若主题列表为空（如用户删除了全部主题），则直接加载内置回退主题。
      */
     public getCurrentTheme(): ThemeData {
         const presetId = this._store.getState().themePreset || '';
@@ -268,7 +268,7 @@ export class ThemeService implements IThemeService {
             return { ...firstEntry.value };
         }
 
-        // 终极安全兜底：无任何可用主题时加载硬编码安全主题（不进入主题列表）
+        // 默认回退：无可用主题时直接加载内置回退主题
         return { ...FALLBACK_SAFE_THEME };
     }
 

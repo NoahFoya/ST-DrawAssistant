@@ -487,7 +487,7 @@ export class AboutTabView extends BaseTabView {
                     return;
                 }
 
-                // 2. 加载主配置并固化持久化
+                // 2. 加载主配置并保存持久化
                 await this._store.loadSettings(archive.settings);
                 this._store.commit();
 

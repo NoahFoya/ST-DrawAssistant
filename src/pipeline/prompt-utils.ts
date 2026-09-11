@@ -15,8 +15,8 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
 
 /**
  * 规范化提示词标点与符号
- * 将中文全角标点（，；：（））统一转换为半角英文标点，并清理多余杂糅空白，
- * 彻底防止 SD/ComfyUI/NovelAI 等后端的 CLIP/T5 分词器因全角中文标点出现异常合并与画风劣化。
+ * 将中文全角标点（，；：（））统一转换为半角英文标点，并清理多余空白，
+ * 替换全角中文标点，避免分词器解析提示词时出现非预期合并。
  */
 export function normalizePromptPunctuation(text: string): string {
     if (!text || typeof text !== 'string') return '';

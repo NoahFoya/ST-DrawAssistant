@@ -370,12 +370,8 @@ export class SdWebUiDriver extends BaseDriver {
         if (typeof options.subseedStrength === 'number') {
             requestBody.subseed_strength = options.subseedStrength;
         }
-        if (typeof options.batchSize === 'number') {
-            requestBody.batch_size = options.batchSize;
-        }
-        if (typeof options.nIter === 'number') {
-            requestBody.n_iter = options.nIter;
-        }
+        requestBody.batch_size = 1;
+        requestBody.n_iter = 1;
 
         let targetEndpoint = '/sdapi/v1/txt2img';
         const initBlob = request.imageInputs?.initImageBlob;

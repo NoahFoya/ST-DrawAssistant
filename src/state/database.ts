@@ -57,8 +57,9 @@ export class IndexedDbStore implements IDisposable {
                 hash = Math.imul(hash, 0x01000193);
             }
             return `fnv_${(hash >>> 0).toString(16)}_${bytes.length}`;
-        } catch {
-            return `blob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        } catch (err) {
+            this._logger.error('计算图像哈希失败，数据可能已损坏或读取被终止', err);
+            throw err;
         }
     }
 
@@ -127,7 +128,11 @@ export class IndexedDbStore implements IDisposable {
 
         let finalHash = record.hash;
         if (!finalHash && shouldDeduplicate && record.originalBlob) {
-            finalHash = await this.calculateHash(record.originalBlob);
+            try {
+                finalHash = await this.calculateHash(record.originalBlob);
+            } catch (hashErr) {
+                this._logger.warn('图片哈希计算失败，本次跳过去重检索', hashErr);
+            }
         }
 
         if (finalHash && shouldDeduplicate) {

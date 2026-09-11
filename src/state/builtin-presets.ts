@@ -1,6 +1,6 @@
 /**
  * 出厂初始模板配置聚合管理 (Builtin Presets)
- * 从 config/presets/ 静态装配初始预设快照（编译期保底），
+ * 从 config/presets/ 静态导入初始预设快照，
  * 并提供 reloadPresetsFromDisk() 在用户重置时重新拉取本地磁盘修改后的初始模板。
  */
 
@@ -50,7 +50,7 @@ export const BUILTIN_PRESET_THEMES: PresetItem[] = builtinThemesJson as unknown 
 export const BUILTIN_PROMPTS: PresetItem[] = builtinPromptsJson as unknown as PresetItem[];
 export const BUILTIN_DRAWING: Record<string, PresetItem[]> = builtinDrawingJson as unknown as Record<string, PresetItem[]>;
 
-/** 完整的静态出厂初始模板聚合对象 (编译期保底) */
+/** 完整的静态内置预设模板对象 */
 export const BUILTIN_PRESETS: PresetsArchiveData = {
     themes: BUILTIN_PRESET_THEMES,
     prompts: BUILTIN_PROMPTS,
@@ -62,7 +62,7 @@ export const BUILTIN_PRESETS: PresetsArchiveData = {
  * 从本地磁盘重新载入初始模板配置
  * 在浏览器环境下优先通过 fetch 读取 /scripts/extensions/third-party/ST-DrawAssistant/config/presets/，
  * 保证用户/整合包作者在本地磁盘修改了模板 JSON 后，点击“重置出厂设置”能立即载入最新模板；
- * 若处于离线或单测等无宿主 HTTP 服务环境，则优雅回退至静态编译期快照。
+ * 若处于离线或单测等无宿主 HTTP 服务环境，则回退至静态内置快照。
  */
 export async function reloadPresetsFromDisk(): Promise<PresetsArchiveData> {
     if (
@@ -83,7 +83,7 @@ export async function reloadPresetsFromDisk(): Promise<PresetsArchiveData> {
                     return (await res.json()) as T;
                 }
             } catch {
-                // 忽略单个文件拉取失败，交由保底逻辑补齐
+                // 忽略单个文件拉取失败，回退使用静态预设补齐
             }
             return null;
         };
@@ -141,7 +141,7 @@ export async function reloadPresetsFromDisk(): Promise<PresetsArchiveData> {
             drawing: drawing || BUILTIN_DRAWING
         };
     } catch (err) {
-        logger.warn('从磁盘重载初始预设失败，使用编译期保底模板:', err);
+        logger.warn('从磁盘重载初始预设失败，使用内置静态模板:', err);
         return JSON.parse(JSON.stringify(BUILTIN_PRESETS));
     }
 }

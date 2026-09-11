@@ -57,7 +57,7 @@ interface ControlStateBindingOptions {
 }
 
 /**
- * 统一管理控件的脏值高亮、校验报错、禁用状态与资源释放逻辑。
+ * 统一管理控件的未保存高亮、校验报错、禁用状态与销毁清理。
  * 避免在各个控件内重复编写类名切换和事件解绑代码。
  */
 function bindControlStateHandlers(options: ControlStateBindingOptions) {

@@ -562,7 +562,7 @@ export class OpenAiDriver extends BaseDriver {
         const quality = engineOpts.quality || activeProfile?.quality || globalConfig.quality || 'standard';
         const style = engineOpts.style || activeProfile?.style || globalConfig.style || 'vivid';
         const responseFormat = engineOpts.responseFormat || activeProfile?.responseFormat || 'b64_json';
-        const n = engineOpts.n || activeProfile?.n || 1;
+        const n = 1;
 
         const baseUrl = normalizeOpenAiBaseUrl((engineOpts as any).serverUrl || settings.serverUrl || globalConfig.serverUrl || this.getBaseUrl());
         const endpoint = `${baseUrl}/images/generations`;

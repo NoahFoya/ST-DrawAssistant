@@ -153,7 +153,7 @@ export class ComfyUITabView extends BaseTabView {
 
         this._activeDrawingBaseline = this._extractCurrentDrawingData();
 
-        // 监听表单参数变动以实时比对方案基准快照并驱动工具栏脏状态
+        // 监听表单数据变动，实时比对快照并更新工具栏的未保存提示状态
         this._disposables.add(
             this._engineStore.subscribe(() => {
                 this._checkDrawingDirty();

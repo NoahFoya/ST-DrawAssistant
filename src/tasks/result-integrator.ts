@@ -18,6 +18,7 @@ import {
 import { Logger } from '../utils/logger';
 import { TypedEventBus } from '../utils/event-bus';
 import { blobToBase64 } from '../utils/binary';
+import { FeedbackService } from '../ui/feedback/feedback';
 import { StorageService } from '../state/storage-service';
 import { HostClient } from '../host/host-client';
 import { TaskManager } from './task-manager';
@@ -88,86 +89,99 @@ export class ResultIntegrator implements IDisposable {
         }
         const effectiveSwipeId = swipeId ?? 0;
 
-        for (let i = 0; i < result.images.length; i++) {
-            const img = result.images[i];
-            const assetId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            const metadata: ImageMetadata = {
-                assetId,
-                engine: result.engine,
-                createdAt: Date.now(),
-                prompt: task.request.prompt,
-                negativePrompt: task.request.negativePrompt,
-                contextInfo: task.request.contextInfo,
-                durationMs: result.durationMs,
-                engineParams: task.request.engineOptions,
-                rawResponse: img.metadata
-            };
+        const images = result.images;
+        if (!images || images.length === 0) {
+            this._logger.warn(`任务 [${taskId}] 未返回有效图片数据，跳过持久化集成`);
+            return [];
+        }
 
-            const record: StoredImageRecord = {
-                id: assetId,
-                prompt: task.request.prompt,
-                originalBlob: img.blob,
-                metadata
-            };
+        if (images.length > 1) {
+            this._logger.debug(`后端返回了 ${images.length} 张图片，采纳首张图片写入当前插槽`);
+        }
 
-            let finalAssetId = assetId;
-            // 基础底座：默认持久化至浏览器本地 IndexedDB
-            if (shouldSaveToIndexedDB) {
-                try {
-                    const returnedId = await this._storage.saveImage(record, {
-                        deduplicate: settings.deduplicateHash !== false,
-                        maxStoredImages: settings.maxStoredImages
-                    });
-                    if (returnedId) {
-                        finalAssetId = returnedId;
-                    }
-                    this._events.emit('asset:saved', { assetId: finalAssetId, record });
-                    savedRecords.push(record);
-                } catch (err) {
-                    this._logger.error(`保存图像资产到数据库异常 [${assetId}]`, err);
+        const img = images[0];
+        const assetId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const metadata: ImageMetadata = {
+            assetId,
+            engine: result.engine,
+            createdAt: Date.now(),
+            prompt: task.request.prompt,
+            negativePrompt: task.request.negativePrompt,
+            contextInfo: task.request.contextInfo,
+            durationMs: result.durationMs,
+            engineParams: task.request.engineOptions,
+            rawResponse: img.metadata
+        };
+
+        const record: StoredImageRecord = {
+            id: assetId,
+            prompt: task.request.prompt,
+            originalBlob: img.blob,
+            metadata
+        };
+
+        let finalAssetId = assetId;
+        // 默认持久化至浏览器本地 IndexedDB
+        if (shouldSaveToIndexedDB) {
+            try {
+                const returnedId = await this._storage.saveImage(record, {
+                    deduplicate: settings.deduplicateHash !== false,
+                    maxStoredImages: settings.maxStoredImages
+                });
+                if (returnedId) {
+                    finalAssetId = returnedId;
                 }
-            } else {
                 this._events.emit('asset:saved', { assetId: finalAssetId, record });
                 savedRecords.push(record);
+            } catch (err) {
+                this._logger.error(`保存图像资产到数据库异常 [${assetId}]`, err);
             }
+        } else {
+            this._events.emit('asset:saved', { assetId: finalAssetId, record });
+            savedRecords.push(record);
+        }
 
-            // 可选叠加项 1：写入酒馆服务端静态资产目录 (/api/images/upload)
-            let serverStaticUrl: string | undefined;
-            if (shouldSaveToServer) {
-                try {
-                    const charName = this._host.getCurrentCharacter()?.name || undefined;
-                    const filename = `${finalAssetId}.${img.format || 'png'}`;
-                    const uploadRes = await this._host.uploadImageToServer(img.blob, {
-                        filename,
-                        characterName: charName,
-                        format: img.format
-                    });
-                    if (uploadRes?.path) {
-                        serverStaticUrl = uploadRes.path;
-                        this._logger.info(`已上传图片至酒馆服务端静态目录: ${serverStaticUrl}`);
-                    }
-                } catch (uploadErr) {
-                    this._logger.warn(`上传图片至酒馆服务端失败 [${finalAssetId}]，安全降级至本地`, uploadErr);
+        // 可选叠加项 1：写入酒馆服务端静态资产目录 (/api/images/upload)
+        let serverStaticUrl: string | undefined;
+        if (shouldSaveToServer) {
+            try {
+                const charName = this._host.getCurrentCharacter()?.name || undefined;
+                const filename = `${finalAssetId}.${img.format || 'png'}`;
+                const uploadRes = await this._host.uploadImageToServer(img.blob, {
+                    filename,
+                    characterName: charName,
+                    format: img.format
+                });
+                if (uploadRes?.path) {
+                    serverStaticUrl = uploadRes.path;
+                    this._logger.info(`已上传图片至酒馆服务端静态目录: ${serverStaticUrl}`);
                 }
+            } catch (uploadErr) {
+                this._logger.warn(`上传图片至酒馆服务端失败 [${finalAssetId}]，安全降级至本地`, uploadErr);
+                FeedbackService.toastWarn('上传图片至酒馆服务端失败，已降级保存在浏览器本地');
             }
+        }
 
-            // 可选叠加项 2：写入聊天记录内嵌 Base64
-            let embeddedBase64: string | undefined;
-            if (shouldEmbedBase64) {
-                try {
-                    const rawB64 = await blobToBase64(img.blob);
-                    embeddedBase64 = `data:image/${img.format || 'png'};base64,${rawB64}`;
-                } catch (b64Err) {
-                    this._logger.warn(`生成 Base64 内嵌数据异常 [${finalAssetId}]`, b64Err);
-                }
+        // 可选叠加项 2：写入聊天记录内嵌 Base64
+        let embeddedBase64: string | undefined;
+        if (shouldEmbedBase64) {
+            try {
+                const rawB64 = await blobToBase64(img.blob);
+                embeddedBase64 = `data:image/${img.format || 'png'};base64,${rawB64}`;
+            } catch (b64Err) {
+                this._logger.warn(`生成 Base64 内嵌数据异常 [${finalAssetId}]`, b64Err);
             }
+        }
 
-            const strategy = serverStaticUrl ? 'server' : (shouldEmbedBase64 ? 'embedded' : 'split');
+        const strategy = serverStaticUrl ? 'server' : (shouldEmbedBase64 ? 'embedded' : 'split');
 
-            // 聊天消息插槽严格强隔离：仅当前任务所属的 buttonIndex 对应此插槽
-            // 若单次任务返回多张图 (Batch)，第 1 张作为当前插槽的主展示图，其余图已落盘至本地库与画廊，绝不跨插槽外溢覆盖
-            if (typeof messageId === 'number' && i === 0) {
-                try {
+        // 将生成的图片绑定至对应的楼层插槽元数据
+        if (typeof messageId === 'number') {
+            try {
+                const chat = typeof this._host.getChat === 'function' ? this._host.getChat() : null;
+                if (Array.isArray(chat) && chat.length > 0 && !chat[messageId]) {
+                    this._logger.warn(`楼层 #${messageId} 已不存在（可能已被删除），跳过元数据写入`);
+                } else {
                     const slotIndex = buttonIndex;
                     const chatEntry: ChatImageEntry = {
                         uuid: finalAssetId,
@@ -182,8 +196,7 @@ export class ResultIntegrator implements IDisposable {
                         base64: embeddedBase64,
                         metadata: {
                             durationMs: result.durationMs,
-                            params: task.request.engineOptions,
-                            batchCount: result.images.length
+                            params: task.request.engineOptions
                         }
                     };
 
@@ -198,9 +211,9 @@ export class ResultIntegrator implements IDisposable {
 
                     this._host.writeChatMessageExtra(messageId, 'da_images', updatedRoot);
                     this._logger.info(`已将生图资产写入楼层 #${messageId} (Swipe: ${effectiveSwipeId}, Slot: ${slotIndex})`);
-                } catch (err) {
-                    this._logger.error(`写入消息元数据异常 [楼层: ${messageId}]`, err);
                 }
+            } catch (err) {
+                this._logger.error(`写入消息元数据异常 [楼层: ${messageId}]`, err);
             }
         }
 

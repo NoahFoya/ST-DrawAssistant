@@ -70,7 +70,7 @@ interface FieldInternalState {
 }
 
 /**
- * 统一根据脏值与失效状态更新输入框的类名与悬浮提示。
+ * 根据修改状态与连接校验结果更新输入框类名与提示信息。
  * 规则：失效 (invalid) 优先级高于修改 (dirty)；无状态时自动清除 title 属性，避免互相覆盖冲突。
  */
 function updateFieldVisual(field: HTMLInputElement, state: FieldInternalState): void {
@@ -159,7 +159,7 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             testBtn.classList.add('da-btn--success');
             testBtn.disabled = false;
             testBtn.textContent = text || defaultBtnText;
-            // 连通成功清除错误，并将当前输入固化为基准值
+            // 连接成功后清除错误提示，并更新当前配置为基准快照
             urlState.hasError = false;
             urlState.baseline = input.value.trim();
             urlState.isDirty = false;

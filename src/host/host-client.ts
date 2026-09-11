@@ -247,11 +247,44 @@ export class HostClient implements IDisposable {
         );
     }
 
-    public onMessageDeleted(handler: (ev: { messageId: number }) => void): IDisposable {
+    public onMessageEdited(handler: (ev: { messageId: number }) => void): IDisposable {
         return this.subscribe(
-            (ctx) => ctx.event_types.MESSAGE_DELETED,
+            (ctx) => ctx.event_types.MESSAGE_EDITED,
             (_ctx, messageId: number) => {
                 handler({ messageId });
+            }
+        );
+    }
+
+    /**
+     * 监听消息删除事件
+     * 酒馆原生在删楼后重新重编剩余消息的 mesid，并触发 MESSAGE_DELETED(chat.length)。
+     * 传递的数值为删除后的新聊天记录长度（newChatLength）。
+     */
+    public onMessageDeleted(handler: (ev: { newChatLength: number; messageId?: number }) => void): IDisposable {
+        return this.subscribe(
+            (ctx) => ctx.event_types.MESSAGE_DELETED,
+            (_ctx, newChatLength: number) => {
+                const len = typeof newChatLength === 'number' ? newChatLength : 0;
+                handler({ newChatLength: len, messageId: len });
+            }
+        );
+    }
+
+    public onMoreMessagesLoaded(handler: () => void): IDisposable {
+        return this.subscribe(
+            (ctx) => ctx.event_types.MORE_MESSAGES_LOADED,
+            () => {
+                handler();
+            }
+        );
+    }
+
+    public onChatLoaded(handler: () => void): IDisposable {
+        return this.subscribe(
+            (ctx) => ctx.event_types.CHAT_LOADED,
+            () => {
+                handler();
             }
         );
     }
@@ -299,7 +332,7 @@ export class HostClient implements IDisposable {
     public getUserName(): string | null {
         const ctx = this.getST();
         if (!ctx) return null;
-        return ctx.name || ctx.name1 || (ctx as any).userName || null;
+        return ctx.name1 || ctx.name || null;
     }
 
     public getCurrentCharacter(): {
@@ -329,6 +362,10 @@ export class HostClient implements IDisposable {
         return document.querySelector(`.mes[mesid="${messageId}"]`) as HTMLElement | null;
     }
 
+    /**
+     * 写入楼层消息的 extra 元数据
+     * 统一写入顶级 extra 属性，保存会话并广播 MESSAGE_UPDATED 事件
+     */
     public writeChatMessageExtra(messageId: number, key: string, value: unknown): void {
         const ctx = this.getST();
         if (!ctx?.chat) return;
@@ -337,10 +374,12 @@ export class HostClient implements IDisposable {
         if (!message) return;
 
         message.extra = message.extra || {};
-        message.extra[HostClient.EXTENSION_KEY] = message.extra[HostClient.EXTENSION_KEY] || {};
-        message.extra[HostClient.EXTENSION_KEY][key] = value;
+        message.extra[key] = value;
 
         this.saveChat();
+        if (ctx.eventSource?.emit && ctx.event_types?.MESSAGE_UPDATED) {
+            void ctx.eventSource.emit(ctx.event_types.MESSAGE_UPDATED, messageId);
+        }
     }
 
     public readChatMessageExtra<T = unknown>(messageId: number, key?: string): T | undefined {
@@ -350,13 +389,11 @@ export class HostClient implements IDisposable {
         const message = ctx.chat[messageId];
         if (!message?.extra) return undefined;
 
-        const extData = message.extra[HostClient.EXTENSION_KEY];
-        if (!extData) return undefined;
-
         if (key) {
-            return extData[key] as T;
+            return message.extra[key] as T | undefined;
         }
-        return extData as T;
+
+        return message.extra as T;
     }
 
     public getChatMessage(messageId: number): SillyTavernMessage | null {
@@ -384,26 +421,12 @@ export class HostClient implements IDisposable {
 
     public saveChat(): void {
         const ctx = this.getST();
-        if (typeof ctx?.saveChat === 'function') {
-            void ctx.saveChat();
-            return;
-        }
         if (typeof ctx?.saveChatDebounced === 'function') {
             ctx.saveChatDebounced();
             return;
         }
-        const win = typeof window !== 'undefined' ? (window as any) : undefined;
-        if (typeof win?.saveChatConditional === 'function') {
-            win.saveChatConditional();
-            return;
-        }
-        if (typeof win?.saveChatDebounced === 'function') {
-            win.saveChatDebounced();
-            return;
-        }
-        if (typeof win?.saveChat === 'function') {
-            void win.saveChat();
-            return;
+        if (typeof ctx?.saveChat === 'function') {
+            void ctx.saveChat();
         }
     }
 
@@ -453,48 +476,47 @@ export class HostClient implements IDisposable {
     public async uploadImageToServer(
         blob: Blob,
         options?: { filename?: string; characterName?: string; format?: string }
-    ): Promise<{ path: string } | null> {
-        if (typeof fetch === 'undefined') return null;
-        try {
-            const base64Data = await blobToBase64(blob);
-            const format = options?.format || (blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png');
-            const uploadBody: Record<string, unknown> = {
-                image: base64Data,
-                format
-            };
-            if (options?.characterName) {
-                uploadBody.ch_name = options.characterName;
-            }
-            if (options?.filename) {
-                uploadBody.filename = options.filename;
-            }
-
-            const headers: Record<string, string> = {
-                ...this.getRequestHeaders(),
-                'Content-Type': 'application/json'
-            };
-
-            const response = await fetch('/api/images/upload', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(uploadBody)
-            });
-
-            if (!response.ok) {
-                console.warn('[ST-DrawAssistant][HostClient] 上传图片至酒馆服务端失败:', response.status, response.statusText);
-                return null;
-            }
-
-            const data = await response.json();
-            if (data?.path) {
-                const normalizedPath = String(data.path).startsWith('/') ? data.path : `/${data.path}`;
-                return { path: normalizedPath };
-            }
-            return null;
-        } catch (err) {
-            console.warn('[ST-DrawAssistant][HostClient] 上传图片至酒馆服务端异常:', err);
-            return null;
+    ): Promise<{ path: string }> {
+        if (typeof fetch === 'undefined') {
+            throw new Error('当前运行环境不支持 fetch 网络接口');
         }
+
+        const base64Data = await blobToBase64(blob);
+        const format = options?.format || (blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png');
+        const uploadBody: Record<string, unknown> = {
+            image: base64Data,
+            format
+        };
+        if (options?.characterName) {
+            uploadBody.ch_name = options.characterName;
+        }
+        if (options?.filename) {
+            uploadBody.filename = options.filename;
+        }
+
+        const headers: Record<string, string> = {
+            ...this.getRequestHeaders(),
+            'Content-Type': 'application/json'
+        };
+
+        const response = await fetch('/api/images/upload', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(uploadBody)
+        });
+
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            throw new Error(`上传图片至酒馆服务端失败 (HTTP ${response.status}): ${errText || response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (data?.path) {
+            const normalizedPath = String(data.path).startsWith('/') ? data.path : `/${data.path}`;
+            return { path: normalizedPath };
+        }
+
+        throw new Error('上传图片成功但未收到有效的图片相对路径响应');
     }
 
     /**
@@ -547,17 +569,14 @@ export class HostClient implements IDisposable {
             const extra = msg?.extra;
             if (!extra || typeof extra !== 'object') continue;
 
-            const daImages = extra['da_images'] || extra[HostClient.EXTENSION_KEY]?.['da_images'];
+            const daImages = extra['da_images'] as Record<string, Record<string, { uuid?: string }>> | undefined;
             if (!daImages || typeof daImages !== 'object') continue;
 
-            for (const item of Object.values(daImages)) {
-                if (item && typeof item === 'object') {
-                    const directUuid = (item as any).uuid || (item as any).imageId || (item as any).id;
-                    if (directUuid) ids.add(String(directUuid));
-                    for (const sub of Object.values(item as Record<string, any>)) {
-                        if (sub && typeof sub === 'object') {
-                            const uid = (sub as any).uuid || (sub as any).imageId || (sub as any).id;
-                            if (uid) ids.add(String(uid));
+            for (const swipeGroup of Object.values(daImages)) {
+                if (swipeGroup && typeof swipeGroup === 'object') {
+                    for (const entry of Object.values(swipeGroup)) {
+                        if (entry && typeof entry.uuid === 'string' && entry.uuid) {
+                            ids.add(entry.uuid);
                         }
                     }
                 }

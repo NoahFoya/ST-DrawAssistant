@@ -47,7 +47,7 @@ export interface OpenAIServiceCardElement extends HTMLElement, IDisposable {
     setError: (hasError: boolean, tooltip?: string, target?: OpenAIServiceFieldTarget) => void;
     /** 设置测试操作状态反馈 */
     setStatus: (status: 'idle' | 'testing' | 'success' | 'error', text?: string) => void;
-    /** 固化当前提供商的基准值 */
+    /** 保存当前提供商的基准快照 */
     resetBaseline: () => void;
 }
 
@@ -108,7 +108,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
         }
     }
 
-    // 各提供商独立基准快照 (用于脏值精准判定)
+    // 各提供商初始配置快照 (用于比对是否有未保存修改)
     const baselines: Record<OpenAIProviderType, { serverUrl: string; apiKey: string; customHeadersJson: string }> = {} as any;
     for (const key of Object.keys(defaults) as OpenAIProviderType[]) {
         baselines[key] = {
@@ -346,7 +346,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions): Open
             testBtn.disabled = false;
             testBtn.textContent = text || '连接成功';
 
-            // 连通成功固化当前输入为当前提供商的新基准值
+            // 连接成功后更新当前输入为基准快照
             baselines[currentProvider] = {
                 serverUrl: urlInputEl.value.trim(),
                 apiKey: keyInputEl.value.trim(),

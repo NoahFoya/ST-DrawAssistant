@@ -191,7 +191,7 @@ export class SettingsStore implements IDisposable {
         this.ready = Promise.resolve();
     }
 
-    /** 将当前内存状态固化为提交基准快照 */
+    /** 将当前内存配置保存为基准快照 */
     public commit(): void {
         this._committedState = deepClone(this._state);
     }

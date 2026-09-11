@@ -210,7 +210,7 @@ const THEME_FIELD_CONFIGS: readonly ThemeFieldConfig[] = [
 
 /**
  * 归一化主题数据
- * 以安全兜底主题为基准补齐必选字段，同时通过浅拷贝完整保留所有全要素及扩展属性
+ * 以默认主题为基准补齐必选字段，同时通过浅拷贝保留所有主题属性与扩展字段
  */
 function normalizeThemePresetData(input: unknown): ThemeData {
     const d = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
@@ -560,7 +560,7 @@ export class ThemeTabView extends BaseTabView {
         }
     }
 
-    /** 统一字段变更响应：更新内存、直通注入变量并执行精确脏态检测 */
+    /** 字段变更处理：更新内存配置、应用 CSS 变量并检测未保存修改状态 */
     private _onFieldValueChange(key: keyof ThemeData, val: unknown): void {
         (this._currentThemeData as Record<string, unknown>)[key] = val;
         ThemeService.applyThemeVariables(this._currentThemeData);
