@@ -49,7 +49,8 @@ interface SillyTavernContext {
     };
     event_types: Record<string, string>;
     extensionSettings: Record<string, unknown>;
-    saveChatDebounced: () => void;
+    saveChat?: () => Promise<void> | void;
+    saveChatDebounced?: () => void;
     saveSettingsDebounced: () => void;
     getRequestHeaders?: () => Record<string, string>;
 }
@@ -339,7 +340,7 @@ export class HostClient implements IDisposable {
         message.extra[HostClient.EXTENSION_KEY] = message.extra[HostClient.EXTENSION_KEY] || {};
         message.extra[HostClient.EXTENSION_KEY][key] = value;
 
-        ctx.saveChatDebounced();
+        this.saveChat();
     }
 
     public readChatMessageExtra<T = unknown>(messageId: number, key?: string): T | undefined {
@@ -378,11 +379,36 @@ export class HostClient implements IDisposable {
             ctx.chat[messageId] = message;
             ctx.eventSource?.emit?.(ctx.event_types?.MESSAGE_UPDATED || 'message_updated', messageId);
         }
-        this.saveChatDebounced();
+        this.saveChat();
+    }
+
+    public saveChat(): void {
+        const ctx = this.getST();
+        if (typeof ctx?.saveChat === 'function') {
+            void ctx.saveChat();
+            return;
+        }
+        if (typeof ctx?.saveChatDebounced === 'function') {
+            ctx.saveChatDebounced();
+            return;
+        }
+        const win = typeof window !== 'undefined' ? (window as any) : undefined;
+        if (typeof win?.saveChatConditional === 'function') {
+            win.saveChatConditional();
+            return;
+        }
+        if (typeof win?.saveChatDebounced === 'function') {
+            win.saveChatDebounced();
+            return;
+        }
+        if (typeof win?.saveChat === 'function') {
+            void win.saveChat();
+            return;
+        }
     }
 
     public saveChatDebounced(): void {
-        this.getST()?.saveChatDebounced?.();
+        this.saveChat();
     }
 
     public saveExtensionSettingsDebounced(): void {

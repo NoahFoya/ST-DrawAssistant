@@ -148,11 +148,16 @@ export async function bootstrap(options?: BootstrapOptions): Promise<DrawAssista
         }
 
         // 监听宿主配置外部更新（如多窗口修改、用户 Profile 切换或配置导入）并平滑同步
+        let lastSettingsSnapshot = JSON.stringify(store.getState());
         host.onSettingsUpdated(() => {
             const externalSettings = host.getExtensionSettings();
             if (externalSettings) {
-                void store.loadSettings(externalSettings);
-                logger.info('已同步宿主外部配置变更');
+                const currentSnapshot = JSON.stringify(externalSettings);
+                if (currentSnapshot !== lastSettingsSnapshot) {
+                    lastSettingsSnapshot = currentSnapshot;
+                    void store.loadSettings(externalSettings);
+                    logger.info('已同步宿主外部配置变更');
+                }
             }
         });
 
