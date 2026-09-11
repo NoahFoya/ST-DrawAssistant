@@ -208,8 +208,10 @@ export class ThemeTabView extends BaseTabView {
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = `${preset?.name || id}_主题预设.json`;
+                document.body.appendChild(a);
                 a.click();
-                URL.revokeObjectURL(url);
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
                 FeedbackService.toastSuccess(`已导出主题预设文件: ${a.download}`);
             },
             importProfile: async (content: string, fileName: string) => {

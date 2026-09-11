@@ -211,8 +211,9 @@ export function substituteWorkflowVariables(
         if (val === undefined) continue;
         const numStr = String(val);
         const escaped = escapeReg(key);
-        processed = processed.replace(new RegExp(`"${escaped}"`, 'g'), numStr);
-        processed = processed.replace(new RegExp(escaped, 'g'), numStr);
+        // 使用函数式回调避免 JavaScript 字符串替换中的特殊美元符模式 ($1, $& 等) 破坏 JSON 语法
+        processed = processed.replace(new RegExp(`"${escaped}"`, 'g'), () => numStr);
+        processed = processed.replace(new RegExp(escaped, 'g'), () => numStr);
     }
 
     const stringKeys = [
@@ -233,8 +234,9 @@ export function substituteWorkflowVariables(
         const val = String(baseValueMap[key] ?? '');
         const escaped = escapeReg(key);
         const jsonEncoded = JSON.stringify(val);
-        processed = processed.replace(new RegExp(`"${escaped}"`, 'g'), jsonEncoded);
-        processed = processed.replace(new RegExp(escaped, 'g'), jsonEncoded.slice(1, -1));
+        // 优先替换带双引号的 "%placeholder%"，若模板为局部嵌入裸占位符则替换内部转义字符
+        processed = processed.replace(new RegExp(`"${escaped}"`, 'g'), () => jsonEncoded);
+        processed = processed.replace(new RegExp(escaped, 'g'), () => jsonEncoded.slice(1, -1));
     }
 
     try {
@@ -733,7 +735,7 @@ export class ComfyUiDriver extends BaseDriver {
     private async waitForCompletion(
         promptId: string,
         signal?: AbortSignal,
-        onProgress?: ProgressCallback
+        _onProgress?: ProgressCallback
     ): Promise<void> {
         const intervalMs = 1000;
         const maxAttempts = 600;
@@ -742,11 +744,6 @@ export class ComfyUiDriver extends BaseDriver {
         for (let i = 0; i < maxAttempts; i++) {
             if (cancelSignal?.aborted || this._cancelled) {
                 throw new DriverError(DriverErrorType.CANCELLED, 'ComfyUI 任务已取消');
-            }
-
-            if (onProgress) {
-                const polledRatio = Math.min(0.25, 0.05 + (i * 0.01));
-                onProgress(polledRatio);
             }
 
             try {

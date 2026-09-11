@@ -269,15 +269,24 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposabl
     let brushSize = 30;
     let isEraser = false;
 
-    const stopDrawing = () => {
+    const endStroke = () => {
         isDrawing = false;
+        lastPos = null;
     };
 
     const cleanupResources = () => {
         if (typeof window !== 'undefined') {
-            window.removeEventListener('mouseup', stopDrawing);
-            window.removeEventListener('touchend', stopDrawing);
+            window.removeEventListener('mouseup', endStroke);
+            window.removeEventListener('touchend', endStroke);
         }
+        // 显式重置画布尺寸以释放显存与 GPU 上下文
+        bgCanvas.width = 0;
+        bgCanvas.height = 0;
+        overlayCanvas.width = 0;
+        overlayCanvas.height = 0;
+        maskCanvas.width = 0;
+        maskCanvas.height = 0;
+
         if (!isSettled) {
             isSettled = true;
             onCancel?.();
@@ -313,15 +322,30 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposabl
     header.appendChild(closeBtn);
     modal.appendChild(header);
 
+    // 绘制舞台容器：相对定位，容纳底层原图画布与顶层涂抹交互画布
     const canvasWrapper = document.createElement('div');
     canvasWrapper.className = 'da-inpaint-canvas-wrapper';
+    canvasWrapper.style.position = 'relative';
+    canvasWrapper.style.display = 'inline-block';
 
-    const canvas = document.createElement('canvas');
-    canvas.className = 'da-inpaint-canvas';
-    canvasWrapper.appendChild(canvas);
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.className = 'da-inpaint-canvas da-inpaint-canvas-bg';
+    canvasWrapper.appendChild(bgCanvas);
+
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.className = 'da-inpaint-canvas da-inpaint-canvas-overlay';
+    overlayCanvas.style.position = 'absolute';
+    overlayCanvas.style.top = '0';
+    overlayCanvas.style.left = '0';
+    overlayCanvas.style.width = '100%';
+    overlayCanvas.style.height = '100%';
+    overlayCanvas.style.touchAction = 'none';
+    canvasWrapper.appendChild(overlayCanvas);
+
     modal.appendChild(canvasWrapper);
 
-    const ctx = canvas.getContext('2d')!;
+    const bgCtx = bgCanvas.getContext('2d')!;
+    const overlayCtx = overlayCanvas.getContext('2d')!;
     const maskCanvas = document.createElement('canvas');
     const maskCtx = maskCanvas.getContext('2d')!;
 
@@ -330,96 +354,126 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposabl
     img.src = imageSrc;
 
     img.onload = () => {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        maskCanvas.width = img.naturalWidth;
-        maskCanvas.height = img.naturalHeight;
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        bgCanvas.width = w;
+        bgCanvas.height = h;
+        overlayCanvas.width = w;
+        overlayCanvas.height = h;
+        maskCanvas.width = w;
+        maskCanvas.height = h;
 
-        ctx.drawImage(img, 0, 0);
+        bgCtx.drawImage(img, 0, 0);
         maskCtx.fillStyle = '#000000';
-        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        maskCtx.fillRect(0, 0, w, h);
     };
 
+    let lastPos: { x: number; y: number } | null = null;
+
     const getPos = (e: MouseEvent | Touch): { x: number; y: number } => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / (rect.width || 1);
-        const scaleY = canvas.height / (rect.height || 1);
+        const rect = overlayCanvas.getBoundingClientRect();
+        const scaleX = overlayCanvas.width / (rect.width || 1);
+        const scaleY = overlayCanvas.height / (rect.height || 1);
         return {
             x: (e.clientX - rect.left) * scaleX,
             y: (e.clientY - rect.top) * scaleY
         };
     };
 
-    const draw = (pos: { x: number; y: number }) => {
-        if (!isDrawing) return;
-
+    const drawLine = (from: { x: number; y: number }, to: { x: number; y: number }) => {
         if (isEraser) {
+            // 橡皮擦：顶层交互画布擦除半透明红，底层遮罩画布涂黑
+            overlayCtx.save();
+            overlayCtx.globalCompositeOperation = 'destination-out';
+            overlayCtx.beginPath();
+            overlayCtx.arc(to.x, to.y, brushSize / 2, 0, Math.PI * 2);
+            overlayCtx.fill();
+            overlayCtx.restore();
+
+            maskCtx.save();
             maskCtx.globalCompositeOperation = 'source-over';
             maskCtx.fillStyle = '#000000';
+            maskCtx.strokeStyle = '#000000';
+            maskCtx.lineWidth = brushSize;
+            maskCtx.lineCap = 'round';
+            maskCtx.lineJoin = 'round';
             maskCtx.beginPath();
-            maskCtx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
+            maskCtx.moveTo(from.x, from.y);
+            maskCtx.lineTo(to.x, to.y);
+            maskCtx.stroke();
+            maskCtx.arc(to.x, to.y, brushSize / 2, 0, Math.PI * 2);
             maskCtx.fill();
+            maskCtx.restore();
         } else {
+            // 画笔：顶层绘制半透明红路径，底层遮罩画布涂白
+            overlayCtx.save();
+            overlayCtx.globalCompositeOperation = 'source-over';
+            overlayCtx.fillStyle = 'rgba(255, 60, 60, 0.45)';
+            overlayCtx.strokeStyle = 'rgba(255, 60, 60, 0.45)';
+            overlayCtx.lineWidth = brushSize;
+            overlayCtx.lineCap = 'round';
+            overlayCtx.lineJoin = 'round';
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(from.x, from.y);
+            overlayCtx.lineTo(to.x, to.y);
+            overlayCtx.stroke();
+            overlayCtx.arc(to.x, to.y, brushSize / 2, 0, Math.PI * 2);
+            overlayCtx.fill();
+            overlayCtx.restore();
+
+            maskCtx.save();
             maskCtx.globalCompositeOperation = 'source-over';
             maskCtx.fillStyle = '#ffffff';
+            maskCtx.strokeStyle = '#ffffff';
+            maskCtx.lineWidth = brushSize;
+            maskCtx.lineCap = 'round';
+            maskCtx.lineJoin = 'round';
             maskCtx.beginPath();
-            maskCtx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
+            maskCtx.moveTo(from.x, from.y);
+            maskCtx.lineTo(to.x, to.y);
+            maskCtx.stroke();
+            maskCtx.arc(to.x, to.y, brushSize / 2, 0, Math.PI * 2);
             maskCtx.fill();
+            maskCtx.restore();
         }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.45)';
-        ctx.globalCompositeOperation = 'source-over';
-
-        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = maskCanvas.width;
-        tempCanvas.height = maskCanvas.height;
-        const tempCtx = tempCanvas.getContext('2d')!;
-        const imgData = tempCtx.createImageData(maskCanvas.width, maskCanvas.height);
-
-        for (let i = 0; i < maskData.data.length; i += 4) {
-            if (maskData.data[i] > 128) {
-                imgData.data[i] = 255;
-                imgData.data[i + 1] = 0;
-                imgData.data[i + 2] = 0;
-                imgData.data[i + 3] = 120;
-            }
-        }
-        tempCtx.putImageData(imgData, 0, 0);
-        ctx.drawImage(tempCanvas, 0, 0);
-        ctx.restore();
     };
 
-    canvas.addEventListener('mousedown', (e) => {
+    const startStroke = (pos: { x: number; y: number }) => {
         isDrawing = true;
-        draw(getPos(e));
+        lastPos = pos;
+        drawLine(pos, pos);
+    };
+
+    const moveStroke = (pos: { x: number; y: number }) => {
+        if (!isDrawing || !lastPos) return;
+        drawLine(lastPos, pos);
+        lastPos = pos;
+    };
+
+    overlayCanvas.addEventListener('mousedown', (e) => {
+        startStroke(getPos(e));
     });
 
-    canvas.addEventListener('mousemove', (e) => {
-        draw(getPos(e));
+    overlayCanvas.addEventListener('mousemove', (e) => {
+        moveStroke(getPos(e));
     });
 
     if (typeof window !== 'undefined') {
-        window.addEventListener('mouseup', stopDrawing);
-        window.addEventListener('touchend', stopDrawing);
+        window.addEventListener('mouseup', endStroke);
+        window.addEventListener('touchend', endStroke);
     }
 
-    canvas.addEventListener('touchstart', (e) => {
+    overlayCanvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
             e.preventDefault();
-            isDrawing = true;
-            draw(getPos(e.touches[0]));
+            startStroke(getPos(e.touches[0]));
         }
     }, { passive: false });
 
-    canvas.addEventListener('touchmove', (e) => {
+    overlayCanvas.addEventListener('touchmove', (e) => {
         if (e.touches.length === 1) {
             e.preventDefault();
-            draw(getPos(e.touches[0]));
+            moveStroke(getPos(e.touches[0]));
         }
     }, { passive: false });
 
@@ -452,8 +506,7 @@ export function openInpaintCanvasModal(options: InpaintModalOptions): IDisposabl
     clearBtn.onclick = () => {
         maskCtx.fillStyle = '#000000';
         maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     };
 
     toolbar.appendChild(brushSizeInput);

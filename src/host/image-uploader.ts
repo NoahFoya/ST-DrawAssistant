@@ -4,6 +4,7 @@
  */
 
 import { HOST_API_IMAGES_UPLOAD } from '../constants';
+import { blobToBase64 } from '../utils/binary';
 
 export interface HostUploadResult {
     ok: boolean;
@@ -12,8 +13,8 @@ export interface HostUploadResult {
 }
 
 /**
- * 将 Blob 图片上传到 SillyTavern 宿主图库。
- * 必须携带宿主 CSRF 请求头，否则请求会被宿主服务端拒绝。
+ * 将 Blob 图片上传到 SillyTavern 宿主图库 (/api/images/upload)。
+ * 发送标准 JSON 载荷 { image, format, filename } 并携带 CSRF 标头。
  */
 export async function uploadImageToHost(
     blob: Blob,
@@ -21,14 +22,24 @@ export async function uploadImageToHost(
     headersProvider?: () => Record<string, string>
 ): Promise<HostUploadResult> {
     try {
-        const formData = new FormData();
-        formData.append('avatar', blob, fileName);
+        const base64Data = await blobToBase64(blob);
+        const format = blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png';
+        const uploadBody: Record<string, unknown> = {
+            image: base64Data,
+            format,
+            filename: fileName
+        };
 
-        const headers = headersProvider ? headersProvider() : {};
+        const customHeaders = headersProvider ? headersProvider() : {};
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...customHeaders
+        };
+
         const response = await fetch(HOST_API_IMAGES_UPLOAD, {
             method: 'POST',
             headers,
-            body: formData
+            body: JSON.stringify(uploadBody)
         });
 
         if (!response.ok) {
@@ -38,7 +49,7 @@ export async function uploadImageToHost(
             };
         }
 
-        const data = await response.json();
+        const data = await response.json().catch(() => null);
         const uploadedPath = data?.path || data?.url || data?.name;
         if (!uploadedPath) {
             return {
@@ -47,9 +58,10 @@ export async function uploadImageToHost(
             };
         }
 
+        const normalizedPath = String(uploadedPath).startsWith('/') ? String(uploadedPath) : `/${uploadedPath}`;
         return {
             ok: true,
-            path: uploadedPath
+            path: normalizedPath
         };
     } catch (err) {
         return {
@@ -58,3 +70,4 @@ export async function uploadImageToHost(
         };
     }
 }
+

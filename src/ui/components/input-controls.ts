@@ -350,6 +350,8 @@ export interface TextInputOptions extends BaseControlOptions {
     placeholder?: string;
     align?: 'left' | 'center';
     variant?: 'short' | 'long';
+    /** 是否提供明文/暗文眼睛显隐切换按钮（type 为 password 时默认开启） */
+    allowToggleVisibility?: boolean;
     onChange?: (val: string) => void;
 }
 
@@ -359,10 +361,11 @@ export interface TextInputHandle extends IControlHandle<string> {
 
 /**
  * 创建单行文本输入控件
- * 支持居中（短文本/标志符）与靠左（长文本/地址）对齐模式。
+ * 支持居中（短文本/标志符）与靠左（长文本/地址）对齐模式，并支持密码输入框显隐切换。
  */
 export function createTextInput(options: TextInputOptions): TextInputHandle {
     const input = document.createElement('input');
+    const isPasswordType = options.type === 'password';
     input.type = options.type || 'text';
 
     const alignClass = options.align === 'center' || options.variant === 'short' ? 'da-input--center' : 'da-input--text';
@@ -378,13 +381,52 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
     };
     input.addEventListener('change', changeListener);
 
+    let container: HTMLElement = input;
+    const extraElements: HTMLElement[] = [];
+    const cleanups: Array<() => void> = [() => input.removeEventListener('change', changeListener)];
+
+    const shouldAddToggle = options.allowToggleVisibility ?? isPasswordType;
+    if (shouldAddToggle) {
+        input.type = 'password';
+        const group = document.createElement('div');
+        group.className = 'da-input-group da-w-full';
+
+        const EYE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'da-btn da-btn--secondary da-icon-btn';
+        toggleBtn.innerHTML = EYE_SVG;
+        toggleBtn.title = '显示/隐藏内容';
+        toggleBtn.setAttribute('aria-label', '显示/隐藏内容');
+
+        const onToggle = () => {
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggleBtn.innerHTML = EYE_OFF_SVG;
+            } else {
+                input.type = 'password';
+                toggleBtn.innerHTML = EYE_SVG;
+            }
+        };
+        toggleBtn.addEventListener('click', onToggle);
+        cleanups.push(() => toggleBtn.removeEventListener('click', onToggle));
+
+        group.appendChild(input);
+        group.appendChild(toggleBtn);
+        container = group;
+        extraElements.push(group);
+    }
+
     const stateHandlers = bindControlStateHandlers({
-        container: input,
+        container,
         inputElement: input,
-        cleanups: [() => input.removeEventListener('change', changeListener)]
+        extraElements,
+        cleanups
     });
 
-    const handle: TextInputHandle = Object.assign(input, {
+    const handle: TextInputHandle = Object.assign(container, {
         inputElement: input,
         getValue: (): string => input.value.trim(),
         setValue: (val: string | number): void => {

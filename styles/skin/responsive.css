@@ -6,7 +6,9 @@
  * 职责与约束：
  * 1. 作为整个样式系统的响应式层，集中维护基于视口宽度与输入指针特性的覆盖规则；
  * 2. 基础组件样式仅声明桌面默认形态，避免碎片化 @media 导致优先级混乱；
- * 3. 覆盖规则采用显式 !important 确保在各类复合嵌套结构下稳定生效。
+ * 3. 媒体查询内的属性覆盖允许使用 !important，用于对抗 Layer 2-4 的静态声明；
+ * 4. CSS 自定义属性（--da-*）后的 !important 符合规范：影响该变量声明的级联优先级，
+ *    变量值本身不含 !important，var() 引用处得到纯净值。
  */
 
 /* 1. 平板与中等屏幕适配 (max-width: 900px)
@@ -130,13 +132,13 @@
 /* 3. 移动端与紧凑手机屏幕适配 (max-width: 680px)
    主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；全局字阶微调收缩。 */
 @media (max-width: 680px) {
-    /* 缩小移动端全局字阶基准，适配小屏阅读密度 */
+    /* 移动端全局字阶微调，保障触控屏舒适阅读密度 */
     :root, .st-da-root {
-        --da-font-size-xs: 10px !important;
-        --da-font-size-sm: 11px !important;
-        --da-font-size-base: 12px !important;
-        --da-font-size-md: 13px !important;
-        --da-font-size-lg: 15px !important;
+        --da-font-size-xs: 11px !important;
+        --da-font-size-sm: 12px !important;
+        --da-font-size-base: 13.5px !important;
+        --da-font-size-md: 14.5px !important;
+        --da-font-size-lg: 16px !important;
     }
 
     /* 移除背景遮罩内边距，弹窗全屏平铺无边距 */
@@ -289,35 +291,59 @@
    表单行由水平两端对齐转为垂直列布局，标签置顶，控件撑满整行。 */
 @media (max-width: 520px) {
     /*
-     * 普通表单行由左右对齐转为纵向单列流动：
-     * 1. 字段标签组置于上方并撑满整行；
-     * 2. 输入框、下拉框、滑块与分段选择器占满整行宽度；
-     * 3. 带 .da-row--keep-inline 标记的开关行显式维持水平单行，防止界面过长。
+     * 标准表单行自适应流式重排：
+     * 1. 容器转为纵向列排布，两端间距统一；
+     * 2. 标签插槽与控件插槽均占满 100% 宽度；
+     * 3. 控件插槽清除 margin-left: auto，改为靠左自然流动并撑满整行；
+     * 4. 内部输入框、下拉框、滑块与分段器统一满宽；
+     * 5. 带有 .da-form-row--inline 或 .da-row--keep-inline 的开关行显式维持单行两端对齐。
      */
-    .da-row:not(.da-row--keep-inline) {
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline),
+    .da-row:not(.da-form-row--inline):not(.da-row--keep-inline) {
         flex-direction: column !important;
         align-items: stretch !important;
-        gap: 6px !important;
+        gap: var(--da-space-xs, 4px) !important;
     }
 
-    .da-row:not(.da-row--keep-inline) > .da-field-label-group {
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__label-slot,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--left,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-field-label-group {
         width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
         min-width: 0 !important;
     }
 
-    .da-row:not(.da-row--keep-inline) > .da-input,
-    .da-row:not(.da-row--keep-inline) > .da-select,
-    .da-row:not(.da-row--keep-inline) > .da-slider-container,
-    .da-row:not(.da-row--keep-inline) > .da-segmented {
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control-slot,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 auto !important;
+        margin-left: 0 !important;
+        justify-content: flex-start !important;
+    }
+
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-wrapper,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-container,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented {
         width: 100% !important;
         max-width: 100% !important;
     }
 
-    /* 单独标记为保内联的紧凑开关行维持两端对齐 */
+    /* 紧凑内联行维持水平单行居中两端对齐 */
+    .da-form-row--inline,
     .da-row--keep-inline {
         flex-direction: row !important;
         align-items: center !important;
         justify-content: space-between !important;
+    }
+
+    .da-form-row--inline .da-form-row__control-slot,
+    .da-row--keep-inline .da-slot--right {
+        margin-left: auto !important;
+        flex: 0 0 auto !important;
     }
 
     /* 超窄屏幕下顶栏标题最大宽度进一步收敛至 110px */

@@ -550,20 +550,30 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
     const actionsCard = document.createElement('div');
     actionsCard.className = 'da-inspect-actions-card';
 
-    if (imgSrc) {
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        downloadBtn.innerHTML = `${SVG_ICONS.download} 原图下载`;
+    let downloadBtn: HTMLButtonElement | undefined;
+    const bindDownloadAction = (url: string) => {
+        if (!downloadBtn) {
+            downloadBtn = document.createElement('button');
+            downloadBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+            downloadBtn.innerHTML = `${SVG_ICONS.download} 原图下载`;
+            actionsCard.prepend(downloadBtn);
+            if (!actionsCard.parentElement) {
+                rightCol.appendChild(actionsCard);
+            }
+        }
         downloadBtn.onclick = () => {
             const a = document.createElement('a');
-            a.href = imgSrc;
+            a.href = url;
             a.download = `st-draw-${imageId}.png`;
             document.body.appendChild(a);
             a.click();
             a.remove();
             FeedbackService.toastSuccess('已开始下载原始图像');
         };
-        actionsCard.appendChild(downloadBtn);
+    };
+
+    if (imgSrc) {
+        bindDownloadAction(imgSrc);
     }
 
     // 标星收藏
@@ -678,6 +688,7 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
                     previewBox.appendChild(dynImg);
                     previewBox.appendChild(zoomBadge);
                     previewBox.onclick = () => openImagePreviewModal(dynamicSrc);
+                    bindDownloadAction(dynamicSrc);
                 }
             }
         }).catch((err: any) => {

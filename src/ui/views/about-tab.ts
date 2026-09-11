@@ -116,7 +116,7 @@ export class AboutTabView extends BaseTabView {
 
         // 底部作者与版权
         const footer = document.createElement('div');
-        footer.className = 'da-hero-card__info da-flex-row da-gap-md';
+        footer.className = 'da-hero-card__info';
 
         const author = document.createElement('div');
         author.className = 'da-hero-card__meta';

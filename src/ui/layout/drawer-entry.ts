@@ -26,7 +26,6 @@ export class DrawerEntryController implements IDisposable {
     private readonly _settingsModal: SettingsModal;
     private readonly _logger = new Logger('DrawerEntry');
     private _subFab?: IDisposable;
-    private _onDocClickBound?: (e: MouseEvent) => void;
     private _isDisposed = false;
 
     constructor(options: DrawerEntryOptions) {
@@ -63,14 +62,13 @@ export class DrawerEntryController implements IDisposable {
             });
         }
 
-        this._onDocClickBound = (e: MouseEvent) => {
-            const target = (e.target as HTMLElement | null)?.closest('#da-open-main-modal-btn');
-            if (target) {
+        const openBtn = wrapper.querySelector<HTMLButtonElement>('#da-open-main-modal-btn');
+        if (openBtn) {
+            openBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this._settingsModal.open();
-            }
-        };
-        document.addEventListener('click', this._onDocClickBound);
+            });
+        }
 
         this._subFab = this._store.subscribeKey('fabVisible', (val) => {
             const el = document.getElementById('da-drawer-toggle-fab') as HTMLInputElement | null;
@@ -84,9 +82,6 @@ export class DrawerEntryController implements IDisposable {
         if (this._isDisposed) return;
         this._isDisposed = true;
 
-        if (this._onDocClickBound && typeof document !== 'undefined') {
-            document.removeEventListener('click', this._onDocClickBound);
-        }
         this._subFab?.dispose();
 
         if (typeof document !== 'undefined') {

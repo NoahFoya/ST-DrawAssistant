@@ -4,16 +4,16 @@
  * @description 弹窗侧边导航选项卡、高亮指示线、未保存修改指示与分组折叠
  */
 
-/* --- 1. 侧边导航选项卡容器 --- */
+/* 1. 侧边导航选项卡容器 */
 .da-sidebar-tabs {
-    flex: 0 0 170px;
-    width: 170px;
+    flex: 0 0 190px;
+    width: 190px;
     background: transparent;
-    border-right: 1px dashed var(--da-border-color);
+    border-right: 1px solid var(--da-border-color);
     display: flex;
     flex-direction: column;
-    gap: var(--da-space-xs, 3px);
-    padding: var(--da-space-md, 10px) var(--da-space-sm, 6px);
+    gap: var(--da-space-xs, 4px);
+    padding: var(--da-space-md, 12px) var(--da-space-sm, 8px);
     overflow-y: auto;
     overflow-x: hidden;
     box-sizing: border-box;
@@ -21,22 +21,22 @@
     scrollbar-color: var(--da-border-color) transparent;
 }
 
-/* --- 2. 选项卡条目按钮与交互态 --- */
+/* 2. 选项卡条目按钮与交互态 */
 .da-sidebar-item {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: var(--da-space-sm, 8px);
-    height: 34px;
-    min-height: 34px;
+    height: 36px;
+    min-height: 36px;
     padding: 0 var(--da-space-md, 12px);
     border-radius: var(--da-radius-btn, 6px);
     border: none;
     background: transparent;
     color: var(--da-text-secondary);
     font-family: var(--da-font-family);
-    font-size: var(--da-font-size-base, 0.86rem);
+    font-size: var(--da-font-size-base, 14px);
     font-weight: 500;
     cursor: pointer;
     text-align: left;
@@ -68,28 +68,28 @@
    用于划分“绘图核心驱动区”（ComfyUI/SD/NovelAI）与“系统管理区”（通用/外观/悬浮球/画廊/关于） */
 .da-sidebar-divider {
     height: 1px;
-    margin: 4px 6px;
-    background: var(--da-border-color);
-    opacity: 0.6;
+    margin: 6px 4px;
+    background: var(--da-separator, var(--da-border-color));
+    opacity: 0.8;
     flex-shrink: 0;
 }
 
-/* 选项卡激活态：深色半透明背景搭配品牌色文字，左侧通过 ::before 呈现 3px 竖向指示条 */
+/* BEM 修饰符类后声明自然覆盖普通态，无需 !important */
 .da-sidebar-item--active {
-    background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.025)) !important;
-    color: var(--da-accent-color) !important;
-    font-weight: 600 !important;
-    border: 1px solid var(--da-border-color) !important;
+    background: var(--da-card-bg-stream, rgba(255, 255, 255, 0.035));
+    color: var(--da-accent-color);
+    font-weight: 600;
+    border: 1px solid var(--da-border-color);
 }
 
 .da-sidebar-item--active::before {
     content: '';
     position: absolute;
     left: 0;
-    top: 20%;
-    height: 60%;
+    top: 15%;
+    height: 70%;
     width: 3px;
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 3px 3px 0;
     background: var(--da-accent-color);
 }
 
@@ -119,7 +119,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    text-align: center;
+    text-align: left;
+    flex: 1;
+    min-width: 0;
 }
 
 /* 4. 未保存状态指示红点 (.da-sidebar-item__dirty-dot)

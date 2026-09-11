@@ -36,8 +36,9 @@
 
     /* 3. 边框与分割线 */
     --da-border-color: rgba(255, 255, 255, 0.08);
+    --da-border-subtle: rgba(255, 255, 255, 0.05);
     --da-border-focus: var(--da-accent-color);
-    --da-separator: rgba(255, 255, 255, 0.04);
+    --da-separator: rgba(255, 255, 255, 0.06);
     --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 
     /* 4. 品牌主色与 RGB 分量（用于透明度通道计算） */
@@ -69,23 +70,31 @@
     --da-node-output: #38bdf8;
     --da-node-lora: #f43f5e;
 
-    /* 7. 间距标度体系 */
-    --da-space-xs: 3px;
-    --da-space-sm: 6px;
-    --da-space-md: 10px;
-    --da-space-lg: 14px;
-    --da-space-xl: 18px;
-    --da-space-2xl: 22px;
-    --da-space-3xl: 28px;
+    /* 7. 现代 8px 基准律动间距体系 */
+    --da-space-2xs: 2px;
+    --da-space-xs: 4px;
+    --da-space-sm: 8px;
+    --da-space-md: 12px;
+    --da-space-lg: 16px;
+    --da-space-xl: 20px;
+    --da-space-2xl: 24px;
+    --da-space-3xl: 32px;
 
-    /* 8. 字体族与流式字阶 (clamp 保证视口缩放平滑) */
+    /* 8. 字体族与现代字阶体系 */
     --da-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --da-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    --da-font-size-xs: clamp(10px, 0.68rem, 11px);
-    --da-font-size-sm: clamp(11px, 0.73rem, 12px);
-    --da-font-size-base: clamp(12px, 0.78rem, 13px);
-    --da-font-size-md: clamp(12.5px, 0.84rem, 14px);
-    --da-font-size-lg: clamp(14px, 0.96rem, 16px);
+    --da-font-size-xs: 12px;
+    --da-font-size-sm: 13px;
+    --da-font-size-base: 14px;
+    --da-font-size-md: 15px;
+    --da-font-size-lg: 16px;
+    --da-font-size-xl: 18px;
+    --da-font-size-2xl: 22px;
+
+    /* 8.1 行高体系 */
+    --da-line-height-tight: 1.25;
+    --da-line-height-base: 1.5;
+    --da-line-height-loose: 1.65;
 
     /* 9. 圆角梯度标度 */
     --da-radius-modal: 14px;
@@ -95,7 +104,7 @@
     --da-radius-pill: 100px;
     --da-radius-sm: 4px;
     --da-radius-small: 4px;
-    --da-radius-xs: 3px;
+    --da-radius-xs: 2px;
 
     /* 10. 阴影深度阶梯 */
     --da-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);

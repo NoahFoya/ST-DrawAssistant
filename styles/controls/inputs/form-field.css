@@ -79,8 +79,9 @@
 
 /* --- 3. 控件对齐插槽 --- */
 /* 保持各控件垂直居中与右靠齐，消除行内元素基线错位 */
-.da-slot--right {
-    min-height: 32px;
+.da-slot--right,
+.da-form-row__control-slot {
+    min-height: 34px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -91,15 +92,31 @@
 .da-slot--right > .da-select,
 .da-slot--right > .da-btn,
 .da-slot--right > .da-input-unit-wrapper,
-.da-slot--right > .da-color-picker-wrapper {
+.da-slot--right > .da-color-picker-wrapper,
+.da-form-row__control-slot > .da-input,
+.da-form-row__control-slot > .da-select,
+.da-form-row__control-slot > .da-btn,
+.da-form-row__control-slot > .da-input-unit-wrapper,
+.da-form-row__control-slot > .da-color-picker-wrapper {
     flex-shrink: 0;
 }
 
+/* 统一右侧主流输入控件的标准宽度，实现垂直纵向贯通对齐 */
+.da-slot--right > .da-select,
+.da-slot--right > .da-input:not(.da-input-short):not(.da-input--text),
+.da-form-row__control-slot > .da-select,
+.da-form-row__control-slot > .da-input:not(.da-input-short):not(.da-input--text),
+.da-form-row__control-slot > .da-slider-wrapper {
+    width: 240px;
+    max-width: 240px;
+}
+
 /* 开关与滑块对齐到插槽垂直基线 */
-.da-slot--right > .da-toggle-wrapper {
+.da-slot--right > .da-toggle-wrapper,
+.da-form-row__control-slot > .da-toggle-wrapper {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 32px;
+    height: 34px;
 }
 

@@ -4,7 +4,7 @@
  * 协调选项卡的渲染、切换与销毁清理，并监听配置变更同步界面提示。
  */
 
-import { IDisposable, DisposableStore } from '../../types';
+import { IDisposable, DisposableStore, toDisposable } from '../../types';
 import { SettingsStore } from '../../state';
 import { DriverRegistry } from '../../services/drivers';
 import { IModalService } from './modal-service';
@@ -82,6 +82,9 @@ export class SettingsModal implements IDisposable {
     public open(initialTabId?: string): void {
         if (this._modalHandle || typeof document === 'undefined') return;
 
+        // 单次弹窗会话专属生命周期容器，弹窗关闭时集中彻底释放
+        const sessionDisposables = new DisposableStore();
+
         // 背景遮罩容器
         const backdrop = document.createElement('div');
         backdrop.className = 'da-modal-backdrop st-da-root';
@@ -95,12 +98,13 @@ export class SettingsModal implements IDisposable {
             e.stopPropagation();
         });
 
-        // 组装顶栏
-        const header = this.renderHeaderBar();
+        // 组装顶栏 (将会话级订阅注入 sessionDisposables)
+        const header = this.renderHeaderBar(sessionDisposables);
         dialog.appendChild(header);
 
         // 挂载未保存修改提醒条
         const floatingNotice = createUnsavedFloatingNotice();
+        sessionDisposables.add(floatingNotice);
         dialog.appendChild(floatingNotice.element);
 
         // 主体双栏容器
@@ -137,19 +141,24 @@ export class SettingsModal implements IDisposable {
         const unsavedUnsub = FeedbackService.unsavedStateManager.subscribeStateChange(() => {
             this.refreshSidebarTabs();
         });
+        sessionDisposables.add(toDisposable(unsavedUnsub));
 
         // 监听生图引擎切换：自动同步刷新侧边栏指示徽标
         const providerSub = this._store.subscribeKey('activeProvider', () => {
             this.refreshSidebarTabs();
         });
+        sessionDisposables.add(providerSub);
 
         // 监听主题与辅助提示显隐变更
         const themeSub = this._store.subscribeKey('themePreset', () => {
             ThemeService.applyCurrentThemeToNode(backdrop);
         });
+        sessionDisposables.add(themeSub);
+
         const helpSub = this._store.subscribeKey('showHelp', (val) => {
             backdrop.setAttribute('data-da-show-help', String(val !== false));
         });
+        sessionDisposables.add(helpSub);
 
         // 激活初始面板
         this._activeTabId = initialTabId || 'general';
@@ -174,20 +183,18 @@ export class SettingsModal implements IDisposable {
             }
         };
         window.addEventListener('keydown', onKeyDown);
+        sessionDisposables.add(toDisposable(() => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('keydown', onKeyDown);
+            }
+        }));
 
-        // 注册至弹窗服务，并在弹窗关闭时释放相关资源
+        // 注册至弹窗服务，并在弹窗关闭时释放相关会话资源
         this._modalHandle = this._modalService.open(backdrop, {
             closeOnBackdrop: false,
             closeOnEscape: false,
             onClose: () => {
-                if (typeof window !== 'undefined') {
-                    window.removeEventListener('keydown', onKeyDown);
-                }
-                unsavedUnsub();
-                floatingNotice.dispose();
-                providerSub.dispose();
-                themeSub.dispose();
-                helpSub.dispose();
+                sessionDisposables.dispose();
                 OverlayHost.getInstance().dispose();
                 TelemetryService.stop();
                 this._currentTabDisposable?.dispose();
@@ -200,8 +207,9 @@ export class SettingsModal implements IDisposable {
 
     /**
      * 构建弹窗顶栏组件 (Header Bar)
+     * @param sessionDisposables 当前弹窗会话专属生命周期池
      */
-    private renderHeaderBar(): HTMLElement {
+    private renderHeaderBar(sessionDisposables: DisposableStore): HTMLElement {
         const header = document.createElement('div');
         header.className = 'da-header-bar';
 
@@ -217,7 +225,7 @@ export class SettingsModal implements IDisposable {
                 void this.switchTab('about');
             }
         });
-        this._disposables.add(versionBadge);
+        sessionDisposables.add(versionBadge);
 
         headerLeft.appendChild(appName);
         headerLeft.appendChild(versionBadge);
@@ -268,7 +276,7 @@ export class SettingsModal implements IDisposable {
             }
         };
 
-        this._disposables.add(
+        sessionDisposables.add(
             this._store.subscribeKey('themePreset', (val) => {
                 const targetVal = val || 'dark';
                 if (quickThemeSelect.value !== targetVal) {

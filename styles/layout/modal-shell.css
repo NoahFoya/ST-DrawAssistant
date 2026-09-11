@@ -2,6 +2,9 @@
  * @module styles/layout/modal-shell
  * @layer layout (Layer 2)
  * @description 主弹窗背景遮罩蒙层、主视窗骨架结构、主体左右分栏容器与未保存提示条
+ *
+ * 宿主隔离策略：所有弹窗容器选择器加 .st-da-root 前缀，利用组合特异性对抗 SillyTavern
+ * 宿主全局规则（如 #sheld > div），无需在基础布局属性上使用 !important。
  */
 
 /* 1. 全屏遮罩层 (.da-modal-backdrop)
@@ -26,17 +29,19 @@
 }
 
 /* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
-   主弹窗视窗骨架，限制桌面端最大尺寸 880px / 720px 与视口边界；
+   桌面端最大尺寸 min(960px, 94vw) / min(740px, 88vh) 与视口边界；
    内部采用 flex 纵向排列组织 Header、Body 与 Footer 三段；
-   position: relative 作为未保存浮动条等绝对定位元素的定位参考系。 */
-.da-main-modal-inner {
-    width: min(880px, 94vw);
-    height: min(720px, 88vh);
+   position: relative 作为未保存浮动条等绝对定位元素的定位基准；
+   .st-da-root 前缀在 SillyTavern 宿主环境中提供足够特异性以对抗全局规则覆盖。 */
+.st-da-root.da-main-modal-inner,
+.st-da-root .da-main-modal-inner {
+    width: min(960px, 94vw);
+    height: min(740px, 88vh);
     max-height: calc(100vh - 28px);
     padding: 0;
     margin: 0 auto;
-    display: flex !important;
-    flex-direction: column !important;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     background: var(--da-bg-primary);
     border: 1px solid var(--da-border-color);
@@ -51,10 +56,10 @@
 /* 3. 弹窗主体水平分栏容器 (.da-modal-body)
    承载左侧导航侧边栏（.da-sidebar-tabs）与右侧内容滚动区（.da-modal-content）的水平弹性容器；
    overflow: hidden 与 min-height: 0 保证内部各子容器建立局部独立滚动上下文，避免撑爆外壳。 */
-.da-modal-body {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: stretch !important;
+.st-da-root .da-modal-body {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;

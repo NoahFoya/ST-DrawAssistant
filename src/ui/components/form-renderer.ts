@@ -27,7 +27,7 @@ import {
     SegmentedItem
 } from './input-controls';
 
-export type FormFieldType = 'toggle' | 'select' | 'input' | 'textarea' | 'number' | 'color' | 'slider' | 'segmented' | 'custom' | 'component';
+export type FormFieldType = 'toggle' | 'select' | 'input' | 'password' | 'textarea' | 'number' | 'color' | 'slider' | 'segmented' | 'custom' | 'component';
 
 export interface FormRowSchema<TState extends object> {
     /** 绑定的 Store 属性键（与 keyPath 互斥） */
@@ -166,7 +166,9 @@ export class FormRenderer<TState extends object> implements IDisposable {
         // 垂直堆叠全宽行：多行文本或块级自定义组件
         if (schema.type === 'textarea' || schema.isBlock) {
             const col = createCol(2, { gap: '6px' });
-            col.root.classList.add('da-row--divided');
+            col.root.classList.add('da-form-row', 'da-form-row--stacked', 'da-row--divided');
+            col.slots[0].classList.add('da-form-row__label-slot');
+            col.slots[1].classList.add('da-form-row__control-slot');
 
             const fieldLabel = createFieldLabel({
                 title: schema.label,
@@ -211,6 +213,9 @@ export class FormRenderer<TState extends object> implements IDisposable {
                 align: 'center',
                 divided: true
             });
+            row.root.classList.add('da-form-row', 'da-form-row--full');
+            row.slots[0].classList.add('da-form-row__control-slot');
+
             const controlSlot = row.slots[0];
             if (schema.renderCustom) {
                 const customEl = schema.renderCustom(controlSlot, this._binder);
@@ -227,6 +232,9 @@ export class FormRenderer<TState extends object> implements IDisposable {
             align: 'center',
             divided: true
         });
+        row.root.classList.add('da-form-row');
+        row.slots[0].classList.add('da-form-row__label-slot');
+        row.slots[1].classList.add('da-form-row__control-slot');
 
         const fieldLabel = createFieldLabel({
             title: schema.label,
@@ -241,7 +249,7 @@ export class FormRenderer<TState extends object> implements IDisposable {
 
         switch (schema.type) {
             case 'toggle': {
-                row.root.classList.add('da-row--keep-inline');
+                row.root.classList.add('da-form-row--inline', 'da-row--keep-inline');
                 const rawValue = this._readVal(schema, currentState);
                 const initialValue = Boolean(rawValue ?? false);
 
@@ -284,12 +292,20 @@ export class FormRenderer<TState extends object> implements IDisposable {
                 break;
             }
 
+            case 'password':
             case 'input': {
                 const rawValue = this._readVal(schema, currentState);
                 const initialValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
 
+                const isPassword = schema.type === 'password'
+                    || String(schema.key || '').toLowerCase().includes('apikey')
+                    || String(schema.key || '').toLowerCase().includes('password')
+                    || String(schema.placeholder || '').toLowerCase().startsWith('sk-')
+                    || String(schema.placeholder || '').toLowerCase().startsWith('pst-');
+
                 const input = createTextInput({
                     id: controlId,
+                    type: isPassword ? 'password' : 'text',
                     value: initialValue,
                     placeholder: schema.placeholder,
                     align: schema.align,

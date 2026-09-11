@@ -28,34 +28,36 @@
     font-family: var(--da-font-family);
 }
 
-/* 2. 状态胶囊项 (.da-status-item)
-   包裹状态圆点与说明文本的药丸形容器；
+/* 2. 状态指示项 (.da-status-item)
+   包裹状态圆点与说明文本的扁平状态条；
    后端服务状态容器具备指针手势，支持点击即时重新探测连通性。 */
 .da-status-item {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 8px;
-    border-radius: var(--da-radius-pill, 12px);
-    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.06));
+    padding: 0 4px;
+    background: transparent;
+    border: none;
     box-sizing: border-box;
     cursor: default;
-    transition: background 0.14s ease, border-color 0.14s ease;
+    transition: color 0.14s ease, opacity 0.14s ease;
 }
 
 .da-status-item#da-server-status-container {
     cursor: pointer;
+    border-radius: var(--da-radius-sm, 4px);
 }
 
 .da-status-item#da-server-status-container:hover {
-    background: var(--da-bg-hover, rgba(255, 255, 255, 0.06));
-    border-color: rgba(var(--da-accent-rgb), 0.3);
+    color: var(--da-text-primary);
+}
+
+.da-status-item#da-server-status-container:hover .da-status-info {
+    color: var(--da-text-primary);
 }
 
 .da-status-item#da-server-status-container:focus-visible {
     outline: none;
-    border-color: var(--da-accent);
     box-shadow: 0 0 0 2px var(--da-focus-ring);
 }
 

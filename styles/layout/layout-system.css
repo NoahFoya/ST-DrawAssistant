@@ -38,10 +38,10 @@
   align-items: flex-start;
 }
 
-/* 卡片内置分割线行 (支持悬停高亮与底部边框，标准 38px 紧凑行) */
+/* 卡片内置分割线行 (支持悬停高亮与底部边框，标准 42px 舒展流式行) */
 .da-row--divided {
-  padding: 3px 16px;
-  min-height: 38px;
+  padding: 6px 18px;
+  min-height: 42px;
   border-bottom: 1px solid var(--da-separator);
   transition: background 0.12s var(--da-ease);
 }
@@ -164,7 +164,7 @@
   text-align: center;
 }
 
-/* 兼容别名类 */
+/* 对齐语义修饰类 (start / end / half) */
 .da-slot--half {
   flex: 0 0 50%;
   max-width: 50%;

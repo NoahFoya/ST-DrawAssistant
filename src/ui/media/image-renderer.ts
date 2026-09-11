@@ -49,8 +49,10 @@ export function renderImageToMessage(
     }
 
     const oldImg = containerSlot.querySelector<HTMLImageElement>('.da-generated-img');
-    if (oldImg?.dataset?.ownsBlob === 'true' && oldImg.src?.startsWith('blob:')) {
-        URL.revokeObjectURL(oldImg.src);
+    if (oldImg?.src?.startsWith('blob:')) {
+        try {
+            URL.revokeObjectURL(oldImg.src);
+        } catch {}
     }
 
     let srcUrl: string;

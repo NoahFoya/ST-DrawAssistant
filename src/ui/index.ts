@@ -17,7 +17,6 @@ import { HostClient } from '../host/host-client';
 import { DriverRegistry } from '../services/drivers';
 import { PromptPipeline } from '../pipeline/prompt-pipeline';
 import { TaskManager } from '../tasks/task-manager';
-import { FloorTaskService } from '../tasks/floor-task-service';
 
 import { ThemeService } from './foundation/theme-service';
 import { UIRegistry } from './foundation/ui-registry';
@@ -26,7 +25,7 @@ import { ModalService } from './layout/modal-service';
 import { SettingsModal } from './layout/settings-modal';
 import { DrawerEntryController } from './layout/drawer-entry';
 import { FABContainer } from './layout/fab-container';
-import { FloorButtonContainer } from './layout/floor-button-container';
+import { FloorButtonManager } from './layout/floor-button-manager';
 
 /** UI 表现层上下文容器 */
 export interface UIContext extends IDisposable {
@@ -35,8 +34,7 @@ export interface UIContext extends IDisposable {
     readonly settingsModal: SettingsModal;
     readonly drawerEntry: DrawerEntryController;
     readonly fabContainer: FABContainer;
-    readonly floorTaskService: FloorTaskService;
-    readonly floorButtonContainer: FloorButtonContainer;
+    readonly floorButtonManager: FloorButtonManager;
 }
 
 /** 扁平服务依赖注入选项 */
@@ -114,25 +112,16 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
     });
     disposables.add(fabContainer);
 
-    // 实例化楼层生图业务服务
-    const floorTaskService = new FloorTaskService({
+    // 挂载消息楼层生图控制器与任务调度中枢 (合并高内聚)
+    const floorButtonManager = new FloorButtonManager({
         host,
+        events,
         store,
         taskManager: tasks,
         pipeline,
         storage
     });
-    disposables.add(floorTaskService);
-
-    // 挂载消息楼层生图按钮表现层容器
-    const floorButtonContainer = new FloorButtonContainer({
-        host,
-        events,
-        store,
-        floorTaskService,
-        storage
-    });
-    disposables.add(floorButtonContainer);
+    disposables.add(floorButtonManager);
 
     return {
         themeService,
@@ -140,8 +129,7 @@ export function createUIContext(options: CreateUIContextOptions): UIContext {
         settingsModal,
         drawerEntry,
         fabContainer,
-        floorTaskService,
-        floorButtonContainer,
+        floorButtonManager,
         dispose: () => {
             disposables.dispose();
         }

@@ -10,11 +10,12 @@
  */
 
 /* 1. 主内容滚动区域 (.da-modal-content)
-   min-width: 0 与 min-height: 0 是 flex 子项允许自身收缩并产生局部滚动的关键属性；
-   细窄半透明滚动条维持界面轻量无侵入感。 */
-.da-modal-content {
-    flex: 1 1 0% !important;
-    min-width: 0 !important;
+   .st-da-root 前缀确保不被宿主全局 flex 规则覆盖；
+   min-width: 0 与 min-height: 0 允许 flex 子项收缩以建立局部独立滚动上下文；
+   细窄半透明滚动条配合 scrollbar-gutter: stable 维持界面轻量无跳动感。 */
+.st-da-root .da-modal-content {
+    flex: 1 1 0%;
+    min-width: 0;
     width: 100%;
     min-height: 0;
     padding: 14px 18px 24px 18px;
@@ -22,7 +23,7 @@
     overflow-x: hidden;
     scrollbar-gutter: stable;
     background: transparent;
-    box-sizing: border-box !important;
+    box-sizing: border-box;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
@@ -43,15 +44,13 @@
 /* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
    纵向弹性容器，各功能卡片间距统一为 var(--da-space-lg, 16px)；
    加载时配合 da-fadein 产生平滑淡入动效。 */
-.da-tab-pane {
-    width: 100% !important;
-    min-width: 100% !important;
-    max-width: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: stretch !important;
+.st-da-root .da-tab-pane {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: var(--da-space-lg, 16px);
-    box-sizing: border-box !important;
+    box-sizing: border-box;
     padding: 2px 0 16px 0;
     animation: da-fadein 0.15s var(--da-ease);
 }

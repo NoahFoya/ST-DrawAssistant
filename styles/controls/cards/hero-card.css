@@ -13,14 +13,13 @@
 .da-hero-card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 20px 22px;
-    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.12) 0%, var(--da-bg-secondary) 60%);
-    border: 1px solid rgba(var(--da-accent-rgb), 0.3);
+    gap: var(--da-space-md, 12px);
+    padding: var(--da-space-xl, 20px) var(--da-space-2xl, 24px);
+    background: linear-gradient(135deg, rgba(var(--da-accent-rgb), 0.10) 0%, var(--da-bg-secondary) 70%);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
     border-radius: var(--da-radius-card, 12px);
     position: relative;
     overflow: hidden;
-    margin-bottom: 14px;
     box-sizing: border-box;
 }
 
@@ -40,7 +39,7 @@
 .da-hero-card__header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--da-space-md, 12px);
     flex-wrap: wrap;
 }
 
@@ -53,23 +52,26 @@
 }
 
 .da-hero-card__desc {
-    font-size: 0.88em;
+    font-size: var(--da-font-size-base, 14px);
     color: var(--da-text-secondary);
-    line-height: 1.5;
+    line-height: var(--da-line-height-base, 1.5);
+    margin: 0;
 }
 
 /* 3. 信息行与操作按钮区 */
 .da-hero-card__info {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 0.85em;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--da-space-lg, 16px);
+    flex-wrap: wrap;
+    font-size: var(--da-font-size-sm, 13px);
     color: var(--da-text-secondary);
 }
 
 .da-hero-card__meta {
     color: var(--da-text-muted);
-    font-size: 0.8em;
+    font-size: var(--da-font-size-xs, 12px);
 }
 
 .da-hero-card__actions {

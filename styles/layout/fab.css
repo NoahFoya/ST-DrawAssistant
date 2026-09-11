@@ -10,7 +10,7 @@
  * 4. 包含在悬浮球设置选项卡中使用的预设 SVG 图标网格与自定义圆形头像裁剪预览组件。
  */
 
-/* --- 1. 悬浮球基础外观与拖拽交互 --- */
+/* 1. 悬浮球基础结构与指针交互态 (ID 选择器提供高特异性对抗宿主干扰) */
 .da-fab-btn,
 .da-fab-button,
 #da-fab-button {
@@ -18,12 +18,12 @@
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--da-bg-secondary-rgba, rgba(32, 36, 48, 0.9)) !important;
+    background: var(--da-bg-secondary-rgba, rgba(32, 36, 48, 0.9));
     backdrop-filter: blur(var(--da-blur-panel, 16px));
     -webkit-backdrop-filter: blur(var(--da-blur-panel, 16px));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.15)) !important;
-    box-shadow: var(--da-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.45)), 0 0 0 1px rgba(var(--da-accent-rgb), 0.2) !important;
-    display: flex !important;
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.15));
+    box-shadow: var(--da-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.45)), 0 0 0 1px rgba(var(--da-accent-rgb), 0.2);
+    display: flex;
     align-items: center;
     justify-content: center;
     cursor: grab;
@@ -58,7 +58,7 @@
     cursor: grabbing !important;
 }
 
-/* --- 2. 生图运行中状态与脉冲动画 --- */
+/* 2. 生图运行中状态与脉冲动画 */
 .da-fab-btn.is-generating,
 .da-fab-btn.is-busy {
     border-color: var(--da-accent-color) !important;
@@ -70,7 +70,7 @@
     animation: da-fab-spin 3s linear infinite;
 }
 
-/* --- 3. 悬浮球内部图标与未读徽标 --- */
+/* 3. 悬浮球内部图标与未读徽标 */
 .da-fab-icon {
     display: flex;
     align-items: center;
@@ -117,7 +117,7 @@
     pointer-events: none;
 }
 
-/* --- 4. 悬浮球预设图标选择网格 --- */
+/* 4. 悬浮球预设图标选择网格 */
 .da-fab-icon-grid {
     display: flex;
     align-items: center;
@@ -172,7 +172,7 @@
     box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.35);
 }
 
-/* --- 5. 自定义图标圆形头像预览 --- */
+/* 5. 自定义图标圆形头像预览 */
 .da-fab-custom-icon-wrapper {
     display: flex;
     align-items: center;

@@ -136,8 +136,8 @@ export interface DrawAssistantSettings {
     fabPresetIcon?: string;
     /** 悬浮球自定义图标 Base64 或 URL */
     fabCustomIcon?: string;
-    /** 悬浮球记忆坐标 */
-    fabPosition?: { top: number; left: number };
+    /** 悬浮球记忆停靠位置（支持自适应侧边相对停靠模型与历史绝对像素坐标兼容） */
+    fabPosition?: FabDockPosition | { top: number; left: number };
     /** 是否启用大图全屏预览弹窗 */
     imagePreviewEnabled?: boolean;
 
@@ -179,4 +179,16 @@ export interface ClientExtension extends IDisposable {
     readonly id: string;
     readonly name: string;
     init(context: ExtensionContext): Promise<void> | void;
+}
+
+/**
+ * 悬浮球自适应侧边停靠模型
+ */
+export interface FabDockPosition {
+    /** 停靠侧边：靠左或靠右 */
+    dockSide: 'left' | 'right';
+    /** 垂直高度相对视口比例 (0.0 ~ 1.0)，如 0.38 代表视口 38% 高度处 */
+    topRatio: number;
+    /** 贴边安全边距 (默认 12px) */
+    edgeOffset?: number;
 }

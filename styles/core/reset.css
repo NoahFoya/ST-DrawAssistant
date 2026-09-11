@@ -9,7 +9,7 @@
  * 3. 继承归一化：重置原生表单控件默认边距并显式继承字体系列。
  */
 
-/* --- 1. 作用域容器文本渲染初始化 --- */
+/* 1. 作用域容器文本渲染初始化 */
 .st-da-root,
 .da-modal-backdrop,
 .da-main-modal-inner,
@@ -22,7 +22,7 @@
     color: var(--da-text-primary);
 }
 
-/* --- 2. 作用域盒模型统一定义 (border-box) --- */
+/* 2. 作用域盒模型统一定义 (border-box) */
 .st-da-root *,
 .da-modal-backdrop *,
 .da-main-modal-inner *,
@@ -30,7 +30,7 @@
     box-sizing: border-box;
 }
 
-/* --- 3. 表单原生控件边距归零与字体继承 --- */
+/* 3. 表单原生控件边距归零与字体继承 */
 .da-main-modal-inner button,
 .da-main-modal-inner input,
 .da-main-modal-inner select,
@@ -50,7 +50,7 @@
     color: inherit;
 }
 
-/* --- 4. 标题与段落边距归零 --- */
+/* 4. 标题与段落边距归零 */
 .da-main-modal-inner h1,
 .da-main-modal-inner h2,
 .da-main-modal-inner h3,
@@ -70,7 +70,7 @@
     padding: 0;
 }
 
-/* --- 5. 列表元素样式与间距重置 --- */
+/* 5. 列表元素样式与间距重置 */
 .da-main-modal-inner ul,
 .da-main-modal-inner ol,
 .st-da-root ul,

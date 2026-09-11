@@ -169,6 +169,7 @@ export class EngineFormStore<T extends Record<string, any>> implements IObservab
     public dispose(): void {
         this._isDisposed = true;
         this._listeners.clear();
+        this._stateListeners.clear();
     }
 }
 

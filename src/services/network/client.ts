@@ -11,6 +11,7 @@ import {
 } from '../../constants';
 import { NetworkError } from './error';
 import { composeTimeoutSignal } from './signal';
+import { blobToBase64 } from '../../utils/binary';
 
 export interface HttpRequestOptions extends RequestInit {
     timeoutMs?: number;
@@ -118,14 +119,20 @@ export class NetworkClient {
 
     /**
      * 上传图片至宿主服务 (POST /api/images/upload)。
+     * 发送标准 JSON 载荷 { image, format, filename } 并携带 CSRF 标头。
      */
     public async uploadHostImage(blob: Blob, filename: string): Promise<string> {
-        const formData = new FormData();
-        formData.append('avatar', blob, filename);
+        const base64Data = await blobToBase64(blob);
+        const format = blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png';
+        const uploadBody = {
+            image: base64Data,
+            format,
+            filename
+        };
 
         const resp = await this.fetchHost('/api/images/upload', {
             method: 'POST',
-            body: formData
+            body: JSON.stringify(uploadBody)
         });
 
         if (!resp.ok) {
@@ -140,11 +147,12 @@ export class NetworkClient {
         }
 
         const data = await resp.json().catch(() => null);
-        if (data && typeof data === 'object' && typeof data.path === 'string') {
-            return data.path;
-        }
-        if (typeof data === 'string') {
-            return data;
+        const uploadedPath = data && typeof data === 'object' && typeof data.path === 'string'
+            ? data.path
+            : (typeof data === 'string' ? data : (data?.url || data?.name));
+
+        if (uploadedPath) {
+            return String(uploadedPath).startsWith('/') ? String(uploadedPath) : `/${uploadedPath}`;
         }
 
         throw new NetworkError({

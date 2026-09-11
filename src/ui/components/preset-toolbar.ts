@@ -682,7 +682,9 @@ export function createPresetStoreAdapter<T>(options: PresetStoreAdapterOptions<T
             const a = document.createElement('a');
             a.href = url;
             a.download = `${exportName}.json`;
+            document.body.appendChild(a);
             a.click();
+            a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
         importProfile: async (content: string, fileName: string) => {
