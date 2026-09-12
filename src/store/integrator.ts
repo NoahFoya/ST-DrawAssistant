@@ -190,7 +190,7 @@ export class ResultIntegrator implements IDisposable {
                 this._host.emitMessageUpdated?.(messageId);
                 await this._host.saveChat?.();
             } catch {
-                // 忽略外部宿主保存抛错
+                // saveChat / emitMessageUpdated 为宿主可选接口，宿主抛错不应中断整合流程
             }
         }
 

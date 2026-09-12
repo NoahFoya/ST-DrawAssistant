@@ -153,7 +153,7 @@ export class ImageUrlPool implements IDisposable {
                 URL.revokeObjectURL(entry.url);
             }
         } catch {
-            // 忽略销毁异常
+            // Object URL 可能已被提前撤销或失效，revokeObjectURL 抛出不应中断清理流程
         }
 
         this._cache.delete(imageId);

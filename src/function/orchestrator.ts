@@ -65,7 +65,13 @@ export class GenerationOrchestrator implements IDisposable {
             return engineTransport;
         }
 
-        // 3. 处理 auto 或默认模式：若触发 Mixed Content 风险则自动回退至 relay
+        // 3. 读取全局通用参数配置中的 requestMode
+        const globalMode = (this._settingsStore?.get('requestMode') as TransportMode | undefined);
+        if (globalMode && globalMode !== 'auto') {
+            return globalMode;
+        }
+
+        // 4. 处理 auto 或默认模式：若触发 Mixed Content 风险则自动回退至 relay
         const backendUrl = this._resolveBackendUrl(task.engine);
         if (backendUrl && this._httpClient.isMixedContent(backendUrl)) {
             return 'relay';
