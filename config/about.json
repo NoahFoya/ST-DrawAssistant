@@ -1,0 +1,59 @@
+{
+  "name": "Starlight DrawAssistant",
+  "version": "0.2.0",
+  "description": "Starlight DrawAssistant 专为 SillyTavern 酒馆对话场景打造，深度融合角色上下文、LoRA 触发词与多后端生图能力。支持消息楼层生图、ComfyUI / SD-WebUI / NovelAI / OpenAI 多驱动直连、本地持久化与日志统计。",
+  "license": "GPL-3.0",
+  "highlights": [
+    "AI 消息楼层生图交互",
+    "ComfyUI / SD-WebUI / NovelAI / OpenAI 多后端支持",
+    "本地 IndexedDB 存储与图片管理",
+    "任务调度与进度提示",
+    "GPL-3.0 自由开源"
+  ],
+  "author": "NoahFoya with AICode",
+  "copyright": "Copyright © 2026 ST-DrawAssistant Team. Released under GPL-3.0 License.",
+  "communityLinks": [
+    {
+      "icon": "🐙",
+      "title": "GitHub 官方开源仓库",
+      "subtitle": "查阅开放源码、提交建议或参与共建",
+      "href": "https://github.com/NoahFoya/ST-DrawAssistant",
+      "themeClass": "da-rich-link-card--github"
+    },
+    {
+      "icon": "📜",
+      "title": "GPL-3.0 开源协议",
+      "subtitle": "GNU 通用公共许可证 v3.0 自由软件保障",
+      "href": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "themeClass": "da-rich-link-card--license"
+    },
+    {
+      "icon": "⚙️",
+      "title": "ComfyUI 官方项目与文档",
+      "subtitle": "查阅节点构造、API 服务与节点文档",
+      "href": "https://github.com/comfyanonymous/ComfyUI",
+      "themeClass": "da-rich-link-card--comfy"
+    },
+    {
+      "icon": "🎨",
+      "title": "SD WebUI (AUTOMATIC1111)",
+      "subtitle": "探索经典 WebUI 生图驱动与采样算法",
+      "href": "https://github.com/AUTOMATIC1111/stable-diffusion-webui",
+      "themeClass": "da-rich-link-card--sd"
+    },
+    {
+      "icon": "🌐",
+      "title": "Civitai 模型社区",
+      "subtitle": "发现精美底模、LoRA 与生图提示词灵感",
+      "href": "https://civitai.com",
+      "themeClass": "da-rich-link-card--civitai"
+    },
+    {
+      "icon": "🍷",
+      "title": "SillyTavern 宿主社区",
+      "subtitle": "探索酒馆扩展机制与角色卡互动交流",
+      "href": "https://github.com/SillyTavern/SillyTavern",
+      "themeClass": "da-rich-link-card--st"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 # ST-DrawAssistant 项目忽略规则
 docs/
 tests/
+vitest.config.mts
 
 # TypeScript 增量构建缓存
 *.tsbuildinfo

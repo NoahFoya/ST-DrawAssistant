@@ -1,0 +1,50 @@
+{
+  "comfyui": [
+    {
+      "id": "comfyui_drawing_wai_default",
+      "name": "WAI 默认绘图方案",
+      "isBuiltin": true,
+      "data": {
+        "model": "waiIllustriousSDXL_v170.safetensors",
+        "clipName": "",
+        "vaeName": "",
+        "samplerName": "euler_ancestral",
+        "scheduler": "normal",
+        "steps": 20,
+        "cfgScale": 6.0,
+        "width": 832,
+        "height": 1216,
+        "promptProfileId": "prompt_anime_general",
+        "txt2imgWorkflowId": "comfyui_checkpoint_standard",
+        "img2imgWorkflowId": "",
+        "inpaintWorkflowId": ""
+      }
+    }
+  ],
+  "sdwebui": [
+    {
+      "id": "default_sd15",
+      "name": "SD 1.5 默认方案",
+      "isBuiltin": true,
+      "data": {
+        "model": "",
+        "vae": "",
+        "clipSkip": 2,
+        "samplerName": "Euler a",
+        "scheduler": "Automatic",
+        "steps": 20,
+        "cfgScale": 7,
+        "width": 512,
+        "height": 768,
+        "enableHires": false,
+        "hiresUpscaler": "R-ESRGAN 4x+ Anime6B",
+        "hiresScale": 1.5,
+        "hiresSteps": 15,
+        "hiresDenoise": 0.45,
+        "promptProfileId": "prompt_anime_general"
+      }
+    }
+  ],
+  "novelai": [],
+  "openai": []
+}

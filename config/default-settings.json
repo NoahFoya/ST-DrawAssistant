@@ -1,0 +1,73 @@
+{
+  "enabled": true,
+  "showHelp": true,
+  "activeEngine": "comfyui",
+  "saveToIndexedDB": true,
+  "saveToServer": false,
+  "enableThumbnail": true,
+  "deduplicateHash": true,
+  "maxStoredImages": 500,
+  "taskTimeoutMs": 180000,
+  "maxConcurrentTasks": 1,
+  "autoGenerate": false,
+  "themePreset": "dark",
+  "presets": {
+    "themes": [],
+    "prompts": [],
+    "workflows": [],
+    "drawing": {
+      "comfyui": [],
+      "sdwebui": [],
+      "novelai": [],
+      "openai": []
+    }
+  },
+  "engines": {
+    "comfyui": {
+      "serverUrl": "http://127.0.0.1:8188",
+      "activeDrawingProfileId": "comfyui_drawing_wai_default",
+      "activePromptProfileId": "prompt_anime_general",
+      "activeWorkflowProfileId": "comfyui_checkpoint_standard"
+    },
+    "sdwebui": {
+      "serverUrl": "http://127.0.0.1:7860",
+      "activeDrawingProfileId": "default_sd15",
+      "activePromptProfileId": "prompt_anime_general"
+    },
+    "novelai": {
+      "serverUrl": "https://image.novelai.net",
+      "apiKey": "",
+      "activeDrawingProfileId": "",
+      "activePromptProfileId": ""
+    },
+    "openai": {
+      "activeProvider": "openai-official",
+      "serverUrl": "https://api.openai.com/v1",
+      "apiKey": "",
+      "activeDrawingProfileId": ""
+    }
+  },
+  "ui": {
+    "trigger": {
+      "visible": true,
+      "opacity": 0.95,
+      "icon": "palette",
+      "autoSnap": false
+    },
+    "lightbox": {
+      "enabled": true
+    },
+    "actionPanel": {
+      "enabled": true,
+      "hideButtonOnDone": false
+    },
+    "imageDisplay": {
+      "align": "center",
+      "objectFit": "contain",
+      "maxHeight": 0,
+      "maxWidthPct": 100,
+      "rounded": true,
+      "collapsed": false
+    }
+  }
+}
