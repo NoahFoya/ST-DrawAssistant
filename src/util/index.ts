@@ -12,3 +12,4 @@ export * from './async';
 export * from './object';
 export * from './version';
 export * from './prompt';
+export * from './color';
