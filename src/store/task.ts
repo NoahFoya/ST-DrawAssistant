@@ -297,6 +297,16 @@ export class TaskQueueManager implements IDisposable {
     }
 
     /**
+     * 取消全部活跃任务（用户切换会话或清理队列时使用）
+     */
+    public async cancelAllActiveTasks(reason = '会话已切换，全部活跃任务自动取消'): Promise<void> {
+        const active = this.getActiveTasks();
+        for (const task of active) {
+            await this.cancelTask(task.id, reason);
+        }
+    }
+
+    /**
      * 获取单个任务详情
      */
     public getTask(taskId: string): TaskItem | undefined {
