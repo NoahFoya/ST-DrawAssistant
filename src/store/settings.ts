@@ -4,6 +4,7 @@
  */
 
 import type { ExtensionSettings } from '@types';
+import type { IDisposable } from '../util/event-bus';
 import { deepMerge, deepClone, isPlainObject } from '../util/object';
 import { debounce, DebouncedFunction } from '../util/async';
 import { MODULE_NAME, DEFAULT_SAVE_DEBOUNCE_MS } from '../constants';
@@ -11,11 +12,6 @@ import defaultSettingsJson from '../../config/default-settings.json';
 
 /** 键变更监听回调函数类型 */
 export type KeyChangeListener<V> = (newValue: V, oldValue: V) => void;
-
-/** 注销监听句柄接口 */
-export interface IDisposable {
-    dispose(): void;
-}
 
 /**
  * 判断配置键名是否属于敏感 API 凭据字段
