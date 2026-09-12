@@ -14,6 +14,10 @@ export interface HealthCheckResult {
     message?: string;
     /** 探测获取到的可用模型列表 */
     availableModels?: string[];
+    /** 探测并同步获取到的资产对象 (模型、VAE、LoRA、采样器、账户状态等) */
+    assets?: Record<string, unknown>;
+    /** 资产拉取结果统计摘要说明 */
+    assetsSummary?: string;
 }
 
 /** 引擎适配器标准接口 */
@@ -28,8 +32,17 @@ export interface IEngineAdapter {
     /** 获取该引擎的默认配置项 */
     getDefaultConfig(): Record<string, unknown>;
 
+    /** 更新适配器基础服务地址 */
+    setBaseUrl?(url: string): void;
+
+    /** 获取当前服务基础地址 */
+    getBaseUrl?(): string;
+
     /** 服务可用性与连通性检查 */
     checkHealth(signal?: AbortSignal): Promise<HealthCheckResult>;
+
+    /** 服务可用性与远端资产同步拉取 (模型、VAE、LoRA、采样器、订阅状态等) */
+    fetchAssets?(signal?: AbortSignal, options?: Record<string, unknown>): Promise<HealthCheckResult>;
 
     /**
      * 执行生图任务

@@ -4,7 +4,7 @@
  * 支持 /v1/images/generations 调用与 b64_json 解码归一化。
  */
 
-import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
 import { BaseAdapter } from './base';
 import { base64ToBlob } from '../../util/image';
 import type { HttpClient } from '../../util/http';
@@ -32,6 +32,98 @@ export class OpenAIAdapter extends BaseAdapter {
 
     public setApiKey(key: string): void {
         this._apiKey = key;
+    }
+
+    /**
+     * OpenAI 兼容端点连通性探测与可用模型列表拉取 (/models)
+     */
+    public override async fetchAssets(
+        signal?: AbortSignal,
+        options?: { apiKey?: string; serverUrl?: string; customHeaders?: string }
+    ): Promise<HealthCheckResult> {
+        const apiKey = options?.apiKey ?? this._apiKey;
+        const targetBaseUrl = (options?.serverUrl || this.baseUrl).replace(/\/+$/, '');
+
+        if (!targetBaseUrl) {
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: 'OpenAI 服务端点未配置'
+            };
+        }
+
+        const start = performance.now();
+        try {
+            const headers: Record<string, string> = {};
+            if (apiKey) {
+                headers.Authorization = `Bearer ${apiKey.trim()}`;
+            }
+
+            if (options?.customHeaders) {
+                try {
+                    const parsed = JSON.parse(options.customHeaders);
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        Object.assign(headers, parsed);
+                    }
+                } catch (e: any) {
+                    this.logger.warn('自定义请求头 JSON 解析失败:', e);
+                }
+            }
+
+            // 支持服务端点以 /v1 结尾或直接根路径
+            const endpoint = targetBaseUrl.endsWith('/v1')
+                ? `${targetBaseUrl}/models`
+                : `${targetBaseUrl}/v1/models`;
+
+            const resp = await this.httpClient.fetchExternal(endpoint, {
+                method: 'GET',
+                headers,
+                timeoutMs: 8000,
+                signal
+            });
+
+            const latencyMs = Math.round(performance.now() - start);
+
+            if (resp.status === 401) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: 'API Key 鉴权失败 (HTTP 401)，请核对密钥有效性'
+                };
+            }
+
+            if (!resp.ok) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: `OpenAI 服务响应异常 (HTTP ${resp.status})`
+                };
+            }
+
+            const data = await resp.json().catch(() => ({}));
+            const list: string[] = Array.isArray(data?.data)
+                ? data.data.map((m: any) => String(m.id || m)).filter(Boolean)
+                : [];
+
+            const assetsSummary = list.length > 0
+                ? `服务正常，已同步 ${list.length} 款可用模型`
+                : '服务连接正常 (未拉取到模型列表)';
+
+            return {
+                ok: true,
+                latencyMs,
+                assetsSummary,
+                availableModels: list,
+                assets: { models: list }
+            };
+        } catch (err: any) {
+            this.logger.error('OpenAI 连通性探测异常:', err);
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: err?.message || '无法连接至目标端点，请检查网络或服务端点'
+            };
+        }
     }
 
     public async generate(

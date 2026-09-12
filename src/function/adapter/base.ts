@@ -59,6 +59,13 @@ export abstract class BaseAdapter implements IEngineAdapter {
     }
 
     /**
+     * 连通性探测与远端资产拉取默认实现 (子类可覆盖提供深度资产同步)
+     */
+    public async fetchAssets(signal?: AbortSignal, _options?: Record<string, unknown>): Promise<HealthCheckResult> {
+        return this.checkHealth(signal);
+    }
+
+    /**
      * 计算自 startTime 以来的毫秒耗时
      */
     protected measureDuration(startTime: number): number {

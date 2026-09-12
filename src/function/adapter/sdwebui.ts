@@ -4,7 +4,7 @@
  * 支持 txt2img、img2img、A1111 LoRA 语法拼装、进度轮询与作业中断。
  */
 
-import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
 import { BaseAdapter } from './base';
 import { base64ToBlob, blobToBase64 } from '../../util/image';
 import { formatLoraTag, type LoraFormatItem } from '../../util/prompt';
@@ -26,6 +26,108 @@ export class SdWebUIAdapter extends BaseAdapter {
 
     constructor(baseUrl = 'http://127.0.0.1:7860', httpClient?: HttpClient) {
         super(baseUrl, httpClient);
+    }
+
+    /**
+     * 连通性探测与 SD-WebUI / Forge 远端资产拉取 (Checkpoints, VAEs, LoRAs, Samplers, Upscalers)
+     */
+    public override async fetchAssets(signal?: AbortSignal): Promise<HealthCheckResult> {
+        if (!this.baseUrl) {
+            return { ok: false, message: 'SD-WebUI 服务地址未配置' };
+        }
+
+        const start = performance.now();
+        try {
+            // 1. 探活探测 /sdapi/v1/options
+            const probeResp = await this.httpClient.fetchExternal(`${this.baseUrl}/sdapi/v1/options?_t=${Date.now()}`, {
+                method: 'GET',
+                timeoutMs: 6000,
+                signal
+            });
+
+            const latencyMs = Math.round(performance.now() - start);
+
+            if (!probeResp.ok) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: `SD-WebUI 服务响应异常 (HTTP ${probeResp.status})`
+                };
+            }
+
+            // 2. 并发拉取远端资产 (使用 Promise.allSettled 替代静默吞没)
+            const models: string[] = [];
+            const vaes: string[] = [];
+            const loras: string[] = [];
+            const samplers: string[] = [];
+            const upscalers: string[] = [];
+            const failedEndpoints: string[] = [];
+
+            const endpoints = [
+                { key: 'models', url: `${this.baseUrl}/sdapi/v1/sd-models` },
+                { key: 'vaes', url: `${this.baseUrl}/sdapi/v1/sd-vae` },
+                { key: 'loras', url: `${this.baseUrl}/sdapi/v1/loras` },
+                { key: 'samplers', url: `${this.baseUrl}/sdapi/v1/samplers` },
+                { key: 'upscalers', url: `${this.baseUrl}/sdapi/v1/upscalers` }
+            ];
+
+            const results = await Promise.allSettled(
+                endpoints.map(ep =>
+                    this.httpClient.fetchExternal(ep.url, { method: 'GET', timeoutMs: 10000, signal })
+                        .then(async (res) => {
+                            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                            return { key: ep.key, data: await res.json() };
+                        })
+                )
+            );
+
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const ep = endpoints[i];
+                if (r.status === 'fulfilled') {
+                    const list = r.value.data;
+                    if (Array.isArray(list)) {
+                        if (ep.key === 'models') {
+                            models.push(...list.map((item: any) => item.model_name || item.title || String(item)));
+                        } else if (ep.key === 'vaes') {
+                            vaes.push(...list.map((item: any) => item.model_name || String(item)));
+                        } else if (ep.key === 'loras') {
+                            loras.push(...list.map((item: any) => item.name || String(item)));
+                        } else if (ep.key === 'samplers') {
+                            samplers.push(...list.map((item: any) => item.name || String(item)));
+                        } else if (ep.key === 'upscalers') {
+                            upscalers.push(...list.map((item: any) => item.name || String(item)));
+                        }
+                    }
+                } else {
+                    failedEndpoints.push(ep.key);
+                    this.logger.warn(`SD-WebUI 资产端点 [${ep.url}] 同步受阻:`, r.reason);
+                }
+            }
+
+            let assetsSummary = models.length > 0
+                ? `已同步 ${models.length} 款主模型、${vaes.length} 款 VAE、${loras.length} 款 LoRA、${upscalers.length} 款放大算法`
+                : '通信链路畅通';
+
+            if (failedEndpoints.length > 0) {
+                assetsSummary += ` (部分端点未就绪: ${failedEndpoints.join(', ')})`;
+            }
+
+            return {
+                ok: true,
+                latencyMs,
+                assetsSummary,
+                availableModels: models,
+                assets: { models, vaes, loras, samplers, upscalers }
+            };
+        } catch (err: any) {
+            this.logger.error('SD-WebUI 连通性探测异常:', err);
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: err?.message || '无法连接至 SD-WebUI 服务，请确认服务已启动并已添加 --api 参数'
+            };
+        }
     }
 
     /**
@@ -127,7 +229,7 @@ export class SdWebUIAdapter extends BaseAdapter {
                         resolvedSeed = parsedInfo.seed;
                     }
                 } catch {
-                    // 忽略 info 解析失败
+                    // info 字段为可选，解析失败时保留请求传入的 seed 就近返回
                 }
             }
 

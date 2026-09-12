@@ -4,7 +4,7 @@
  * 支持工作流变量注入、WeiLin 语法 LoRA 拼装、WebSocket 进度跟踪、输出拉取与作业中断。
  */
 
-import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
 import { BaseAdapter } from './base';
 import { formatLoraTag, type LoraFormatItem } from '../../util/prompt';
 import type { HttpClient } from '../../util/http';
@@ -85,6 +85,90 @@ export class ComfyUIAdapter extends BaseAdapter {
     }
 
     /**
+     * 连通性探测与 ComfyUI 远端节点资产拉取 (Checkpoints, VAEs, LoRAs)
+     */
+    public override async fetchAssets(signal?: AbortSignal): Promise<HealthCheckResult> {
+        if (!this.baseUrl) {
+            return { ok: false, message: 'ComfyUI 服务地址未配置' };
+        }
+
+        const start = performance.now();
+        try {
+            // 1. 探活探测 /system_stats
+            const probeResp = await this.httpClient.fetchExternal(`${this.baseUrl}/system_stats?_t=${Date.now()}`, {
+                method: 'GET',
+                timeoutMs: 6000,
+                signal
+            });
+
+            const latencyMs = Math.round(performance.now() - start);
+
+            if (!probeResp.ok) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: `ComfyUI 服务响应异常 (HTTP ${probeResp.status})`
+                };
+            }
+
+            // 2. 拉取远端节点元数据资产 /object_info
+            const models: string[] = [];
+            const vaes: string[] = [];
+            const loras: string[] = [];
+            let assetWarning: string | undefined;
+
+            try {
+                const objResp = await this.httpClient.fetchExternal(`${this.baseUrl}/object_info?_t=${Date.now()}`, {
+                    method: 'GET',
+                    timeoutMs: 15000,
+                    signal
+                });
+
+                if (objResp.ok) {
+                    const objData = await objResp.json();
+                    const ckptInputs = objData?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
+                    if (Array.isArray(ckptInputs)) {
+                        models.push(...ckptInputs);
+                    }
+                    const vaeInputs = objData?.VAELoader?.input?.required?.vae_name?.[0];
+                    if (Array.isArray(vaeInputs)) {
+                        vaes.push(...vaeInputs);
+                    }
+                    const loraInputs = objData?.LoraLoader?.input?.required?.lora_name?.[0];
+                    if (Array.isArray(loraInputs)) {
+                        loras.push(...loraInputs);
+                    }
+                } else {
+                    assetWarning = `节点信息获取失败 (HTTP ${objResp.status})`;
+                    this.logger.warn(`ComfyUI /object_info 响应失败: HTTP ${objResp.status}`);
+                }
+            } catch (err: any) {
+                assetWarning = `节点信息同步失败: ${err?.message || '网络异常'}`;
+                this.logger.warn('ComfyUI 节点资产 /object_info 拉取异常:', err);
+            }
+
+            const assetsSummary = models.length > 0
+                ? `已同步 ${models.length} 款主模型、${vaes.length} 款 VAE、${loras.length} 款 LoRA`
+                : (assetWarning ? `通信正常 (${latencyMs}ms)，但${assetWarning}` : '通信链路畅通');
+
+            return {
+                ok: true,
+                latencyMs,
+                assetsSummary,
+                availableModels: models,
+                assets: { models, vaes, loras }
+            };
+        } catch (err: any) {
+            this.logger.error('ComfyUI 连通性探测异常:', err);
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: err?.message || '无法连接至 ComfyUI 服务，请确认服务已启动且地址正确'
+            };
+        }
+    }
+
+    /**
      * 执行 ComfyUI 工作流生图任务
      */
     public async generate(
@@ -130,7 +214,7 @@ export class ComfyUIAdapter extends BaseAdapter {
                     }
                 }
             } catch {
-                // 忽略端点模型探测失败
+                // modelName 为可选辅助字段；探测失败时工作流占位符保持空白，由工作流模板自行处理
             }
         }
 
@@ -261,12 +345,13 @@ export class ComfyUIAdapter extends BaseAdapter {
                             }
                         }
                     } catch {
-                        // 忽略解析失败
+                        // ComfyUI WS 会推送二进制预览帧，非字符串帧的 JSON 解析失败为预期行为
                     }
                 };
             }
-        } catch {
-            // WS 初始化失败直接走轮询回退
+        } catch (err: any) {
+            // 部分 ComfyUI 反代部署不支持 WS 升级，回退至 HTTP 轮询
+            this.logger.debug('ComfyUI WebSocket 初始化失败，回退至 HTTP 轮询:', err?.message || err);
         }
 
         // 轮询检查 /history
@@ -302,7 +387,7 @@ export class ComfyUIAdapter extends BaseAdapter {
                 try {
                     ws.close();
                 } catch {
-                    // 忽略关闭异常
+                    // 已断开的 WebSocket 调用 close() 可能抛出，清理步骤不向上传播
                 }
             }
         }

@@ -4,7 +4,7 @@
  * 支持 v4_prompt 参数组装、Bearer 鉴权与 ZIP 二进制流解包归一化。
  */
 
-import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
 import { BaseAdapter } from './base';
 import type { HttpClient } from '../../util/http';
 
@@ -80,6 +80,85 @@ export class NovelAIAdapter extends BaseAdapter {
 
     public setApiKey(key: string): void {
         this._apiKey = key;
+    }
+
+    /**
+     * NovelAI 服务连通性与账户订阅资产 (Opus档位、Anlas余额) 探测
+     */
+    public override async fetchAssets(
+        signal?: AbortSignal,
+        options?: { apiKey?: string; token?: string }
+    ): Promise<HealthCheckResult> {
+        const token = (options?.apiKey || options?.token || this._apiKey || '').trim();
+        if (!token) {
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: '请先配置有效的 NovelAI API Token 凭据'
+            };
+        }
+
+        const start = performance.now();
+        try {
+            const resp = await this.httpClient.fetchExternal('https://api.novelai.net/user/subscription', {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                timeoutMs: 8000,
+                signal
+            });
+
+            const latencyMs = Math.round(performance.now() - start);
+
+            if (resp.status === 401) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: 'API Token 鉴权失败 (HTTP 401)，请核对凭据有效性'
+                };
+            }
+
+            if (!resp.ok) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    message: `NovelAI 订阅接口异常 (HTTP ${resp.status})`
+                };
+            }
+
+            const data = await resp.json().catch(() => ({}));
+            const tier = data.tier ?? 0;
+            const anlas = data.trainingStepsLeft?.fixedTrainingStepsLeft ?? data.anlasBalance ?? 0;
+
+            const tierNames: Record<number, string> = {
+                1: 'Tablet',
+                2: 'Scroll',
+                3: 'Opus (尊享会员)'
+            };
+            const tierName = tierNames[tier] || `档位 ${tier}`;
+
+            const assetsSummary = `订阅有效 [${tierName}] · Anlas 余额: ${anlas}`;
+
+            return {
+                ok: true,
+                latencyMs,
+                assetsSummary,
+                assets: {
+                    tier,
+                    tierName,
+                    anlas,
+                    active: data.active
+                }
+            };
+        } catch (err: any) {
+            this.logger.error('NovelAI 连通性探测异常:', err);
+            return {
+                ok: false,
+                latencyMs: 0,
+                message: err?.message || '无法连接至 NovelAI 官方订阅端点'
+            };
+        }
     }
 
     public async generate(
