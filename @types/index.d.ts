@@ -7,4 +7,7 @@ export * from './st/events';
 export * from './st/chat';
 export * from './generation';
 export * from './adapter';
+export * from './task';
+export * from './storage';
+export * from './preset';
 export * from './settings';
