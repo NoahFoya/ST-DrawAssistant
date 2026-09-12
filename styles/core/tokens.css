@@ -73,11 +73,17 @@
     --da-terminal-red: #fb7185;
 
     --da-node-prompt: #c084fc;
+    --da-node-prompt-rgb: 192, 132, 252;
     --da-node-sampler: #fb923c;
+    --da-node-sampler-rgb: 251, 146, 60;
     --da-node-model: #60a5fa;
+    --da-node-model-rgb: 96, 165, 250;
     --da-node-size: #34d399;
+    --da-node-size-rgb: 52, 211, 153;
     --da-node-output: #38bdf8;
+    --da-node-output-rgb: 56, 189, 248;
     --da-node-lora: #f43f5e;
+    --da-node-lora-rgb: 244, 63, 94;
 
     /* 7. 基础间距体系 */
     --da-space-2xs: 2px;

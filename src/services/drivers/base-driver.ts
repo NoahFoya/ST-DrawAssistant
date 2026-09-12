@@ -50,6 +50,9 @@ export abstract class BaseDriver implements ImageEngineDriver {
     public abstract readonly name: string;
     public abstract readonly capabilities: EngineCapabilities;
 
+    /** 获取当前生图引擎出厂默认配置 (用于系统初始化、配置重置保底及自描述) */
+    public abstract getDefaultConfig(): Record<string, unknown>;
+
     protected readonly network: NetworkClient;
     protected readonly logger: Logger;
     protected readonly getEndpointUrl: () => string;

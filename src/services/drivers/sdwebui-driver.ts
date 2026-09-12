@@ -154,6 +154,10 @@ export class SdWebUiDriver extends BaseDriver {
         syntaxType: 'tagBased'
     };
 
+    public getDefaultConfig(): Record<string, unknown> {
+        return { ...DEFAULT_SDWEBUI_CONFIG };
+    }
+
     constructor(options: SdWebUIDriverOptions) {
         super(options);
     }

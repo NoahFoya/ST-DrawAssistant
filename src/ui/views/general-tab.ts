@@ -5,7 +5,8 @@
 
 import { DrawAssistantSettings } from '../../types';
 import { SettingsStore } from '../../state';
-import { FormRenderer, SectionCardSchema, createToggle } from '../components';
+import { FormRenderer, SectionCardSchema } from '../components';
+
 import { BaseTabView } from '../foundation';
 
 /**
@@ -15,23 +16,17 @@ export class GeneralTabView extends BaseTabView {
     private readonly _renderer: FormRenderer<DrawAssistantSettings>;
 
     constructor(
-        private readonly _store: SettingsStore
+        store: SettingsStore
     ) {
         super();
 
-        this._renderer = new FormRenderer<DrawAssistantSettings>(_store);
+        this._renderer = new FormRenderer<DrawAssistantSettings>(store);
         this._disposables.add(this._renderer);
 
         this._root.appendChild(this._buildEngineCard());
         this._root.appendChild(this._buildInteractionCard());
         this._root.appendChild(this._buildDisplayCard());
         this._root.appendChild(this._buildStorageCard());
-
-        // 扩展功能卡片：仅当 store.extensions 存在已注册项时展示
-        const extensionsCard = this._buildExtensionsCard();
-        if (extensionsCard) {
-            this._root.appendChild(extensionsCard);
-        }
     }
 
     /** 卡片 1：基础设置 */
@@ -231,49 +226,6 @@ export class GeneralTabView extends BaseTabView {
                     toStore: (v) => Number(v)
                 }
             ]
-        };
-        return this._renderer.renderCard(schema);
-    }
-
-    /**
-     * 卡片 5：扩展功能。
-     * 仅当 store.extensions 存在已注册扩展项时渲染对应开关；
-     * 若当前无任何注册扩展则返回 null，避免在界面渲染空卡片。
-     */
-    private _buildExtensionsCard(): HTMLElement | null {
-        const extensions = this._store.get('extensions') || {};
-        const extEntries = Object.entries(extensions);
-
-        if (extEntries.length === 0) {
-            return null;
-        }
-
-        const schema: SectionCardSchema<DrawAssistantSettings> = {
-            title: '扩展功能',
-            rows: extEntries.map(([extId]) => ({
-                type: 'custom' as const,
-                label: extId,
-                renderCustom: () => {
-                    const extState = this._store.get('extensions')?.[extId];
-                    const toggle = createToggle({
-                        value: extState?.enabled !== false,
-                        onChange: (val: boolean) => {
-                            const current = this._store.get('extensions') || {};
-                            this._store.set('extensions', {
-                                ...current,
-                                [extId]: { ...current[extId], enabled: val }
-                            });
-                        }
-                    });
-                    this._disposables.add(
-                        this._store.subscribeKey('extensions', (exts) => {
-                            toggle.setValue(exts?.[extId]?.enabled !== false);
-                        })
-                    );
-                    this._disposables.add(toggle);
-                    return toggle;
-                }
-            }))
         };
         return this._renderer.renderCard(schema);
     }

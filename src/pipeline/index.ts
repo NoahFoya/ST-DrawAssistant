@@ -3,5 +3,6 @@
  */
 
 export * from './prompt-utils';
-export * from './pipeline-hooks';
 export * from './prompt-pipeline';
+export * from './transformers';
+

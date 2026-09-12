@@ -2,8 +2,8 @@
  * 插件设置与图像存储数据模型
  */
 
-import { IDisposable } from './common';
 import { PresetsArchiveData } from './preset';
+
 
 /**
  * 图像存储策略
@@ -155,32 +155,6 @@ export interface DrawAssistantSettings {
         rounded?: boolean;
         collapsed?: boolean;
     };
-
-    /** 界面交互偏好配置 */
-    uiPreferences?: Record<string, unknown>;
-
-    /** 外部扩展配置空间 */
-    extensions?: Record<string, Record<string, unknown>>;
-
-    /** 自定义扩展数据 */
-    customData?: Record<string, unknown>;
-}
-
-/**
- * 外部独立扩展上下文
- */
-export interface ExtensionContext {
-    getSettings: <T extends Record<string, unknown> = Record<string, unknown>>() => T;
-    updateSettings: (settings: Record<string, unknown>) => void;
-}
-
-/**
- * 外部可选扩展接口
- */
-export interface ClientExtension extends IDisposable {
-    readonly id: string;
-    readonly name: string;
-    init(context: ExtensionContext): Promise<void> | void;
 }
 
 /**

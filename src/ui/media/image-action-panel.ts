@@ -158,14 +158,22 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
         return { card, getText: () => textarea.value };
     };
 
-    const promptCard = createTagCard('正向提示词 (Prompt)', callbacks.promptText || '', '暂无正向提示词', '已复制正向提示词');
+    const meta = (callbacks.metadata || {}) as Record<string, any>;
+    const effectivePrompt = callbacks.promptText || meta.finalPrompt || meta.prompt || '';
+    const effectiveNegative = callbacks.negativePrompt !== undefined
+        ? callbacks.negativePrompt
+        : (meta.finalNegativePrompt !== undefined ? meta.finalNegativePrompt : (meta.negativePrompt || ''));
+
+    const promptCard = createTagCard('正向提示词 (Prompt)', effectivePrompt, '暂无正向提示词...', '已复制正向提示词');
     body.appendChild(promptCard.card);
 
-    let negativeCard: { card: HTMLElement; getText: () => string } | null = null;
-    if (callbacks.negativePrompt) {
-        negativeCard = createTagCard('负向提示词 (Negative)', callbacks.negativePrompt, '暂无负向提示词', '已复制负向提示词');
-        body.appendChild(negativeCard.card);
-    }
+    const negativeCard = createTagCard(
+        '负向提示词 (Negative)',
+        effectiveNegative,
+        '暂无负向提示词 (点击编辑添加)...',
+        '已复制负向提示词'
+    );
+    body.appendChild(negativeCard.card);
 
     panel.appendChild(body);
 
@@ -195,7 +203,8 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
             openImageInfoPanel({
                 imageSrc: callbacks.imageSrc,
                 prompt: promptCard.getText(),
-                negativePrompt: negativeCard?.getText(),
+                negativePrompt: negativeCard.getText(),
+                rawPrompt: callbacks.promptText,
                 uuid: callbacks.uuid,
                 metadata: callbacks.metadata,
                 storage: callbacks.storage,
@@ -212,7 +221,7 @@ export function openImageActionPanel(_e: MouseEvent | PointerEvent, callbacks: I
     if (regenFn) {
         footer.appendChild(createActionBtn('重新生成', true, () => {
             if (callbacks.onConfirm) {
-                callbacks.onConfirm(promptCard.getText(), negativeCard?.getText());
+                callbacks.onConfirm(promptCard.getText(), negativeCard.getText());
             }
             regenFn();
         }));

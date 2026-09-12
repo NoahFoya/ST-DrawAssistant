@@ -138,39 +138,39 @@
 }
 
 .da-workflow-badge--prompt {
-    background: rgba(192, 132, 252, 0.14);
-    color: var(--da-node-prompt);
-    border: 1px solid rgba(192, 132, 252, 0.3);
+    background: rgba(var(--da-node-prompt-rgb, 192, 132, 252), 0.14);
+    color: var(--da-node-prompt, #c084fc);
+    border: 1px solid rgba(var(--da-node-prompt-rgb, 192, 132, 252), 0.3);
 }
 
 .da-workflow-badge--sampler {
-    background: rgba(251, 146, 60, 0.14);
-    color: var(--da-node-sampler);
-    border: 1px solid rgba(251, 146, 60, 0.3);
+    background: rgba(var(--da-node-sampler-rgb, 251, 146, 60), 0.14);
+    color: var(--da-node-sampler, #fb923c);
+    border: 1px solid rgba(var(--da-node-sampler-rgb, 251, 146, 60), 0.3);
 }
 
 .da-workflow-badge--model {
-    background: rgba(96, 165, 250, 0.14);
-    color: var(--da-node-model);
-    border: 1px solid rgba(96, 165, 250, 0.3);
+    background: rgba(var(--da-node-model-rgb, 96, 165, 250), 0.14);
+    color: var(--da-node-model, #60a5fa);
+    border: 1px solid rgba(var(--da-node-model-rgb, 96, 165, 250), 0.3);
 }
 
 .da-workflow-badge--size {
-    background: rgba(74, 222, 128, 0.14);
-    color: var(--da-node-size);
-    border: 1px solid rgba(74, 222, 128, 0.3);
+    background: rgba(var(--da-node-size-rgb, 52, 211, 153), 0.14);
+    color: var(--da-node-size, #34d399);
+    border: 1px solid rgba(var(--da-node-size-rgb, 52, 211, 153), 0.3);
 }
 
 .da-workflow-badge--output {
-    background: rgba(56, 189, 248, 0.14);
-    color: var(--da-node-output);
-    border: 1px solid rgba(56, 189, 248, 0.3);
+    background: rgba(var(--da-node-output-rgb, 56, 189, 248), 0.14);
+    color: var(--da-node-output, #38bdf8);
+    border: 1px solid rgba(var(--da-node-output-rgb, 56, 189, 248), 0.3);
 }
 
 .da-workflow-badge--lora {
-    background: rgba(244, 63, 94, 0.14);
-    color: var(--da-node-lora);
-    border: 1px solid rgba(244, 63, 94, 0.3);
+    background: rgba(var(--da-node-lora-rgb, 244, 63, 94), 0.14);
+    color: var(--da-node-lora, #f43f5e);
+    border: 1px solid rgba(var(--da-node-lora-rgb, 244, 63, 94), 0.3);
 }
 
 .da-workflow-badge--general {
@@ -277,6 +277,36 @@
     width: 100%;
 }
 
+.da-btn-var-inject {
+    height: 32px;
+    padding: 0 10px;
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.82em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.14s var(--da-ease);
+    box-sizing: border-box;
+    user-select: none;
+}
+
+.da-btn-var-inject:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-accent-color);
+    border-color: rgba(var(--da-accent-rgb), 0.4);
+}
+
+.da-btn-var-inject:active {
+    transform: translateY(1px);
+}
+
 .da-workflow-textinput {
     flex: 1;
     min-width: 0;
@@ -320,6 +350,8 @@
 
 /* --- 8. 宏变量选择下拉浮层菜单 --- */
 .da-var-dropdown {
+    position: fixed;
+    z-index: calc(var(--da-z-modal, 10000) + 120);
     width: 320px;
     max-height: 380px;
     overflow-y: auto;
@@ -327,8 +359,8 @@
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-sm, 4px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    border-radius: var(--da-radius-sm, 6px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--da-border-highlight);
     padding: 8px;
     display: flex;
     flex-direction: column;
@@ -394,8 +426,8 @@
     font-size: 0.7em;
     font-weight: 700;
     color: var(--da-color-warn, #ff9f0a);
-    background: rgba(255, 159, 10, 0.12);
-    border: 1px solid rgba(255, 159, 10, 0.3);
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.12);
+    border: 1px solid rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.3);
     padding: 1px 5px;
     border-radius: 4px;
     margin-left: auto;

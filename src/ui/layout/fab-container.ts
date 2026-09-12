@@ -61,6 +61,7 @@ export class FABContainer implements IDisposable {
     private _fabElement?: HTMLElement;
     private readonly _disposables = new DisposableStore();
     private _hasDragged = false;
+    private _isInternalSetting = false;
 
     constructor(options: FABContainerOptions) {
         this._store = options.store;
@@ -84,7 +85,10 @@ export class FABContainer implements IDisposable {
             this._store.subscribeKey('fabCustomIcon', () => this.applyStyles())
         );
         this._disposables.add(
-            this._store.subscribeKey('fabPosition', (pos) => this.applyPosition(pos as FabDockPosition | undefined, true))
+            this._store.subscribeKey('fabPosition', (pos) => {
+                if (this._isInternalSetting) return;
+                this.applyPosition(pos as FabDockPosition | undefined, true);
+            })
         );
         this._disposables.add(
             this._store.subscribeKey('fabAutoSnap', () => {
@@ -300,8 +304,8 @@ export class FABContainer implements IDisposable {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
-            // 6px 阈值防手抖与微颤误触发
-            if (!isDragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+            // 10px 阈值防手抖与微颤误触发，确保单击时 100% 灵敏打开设置面板
+            if (!isDragging && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
                 isDragging = true;
                 this._hasDragged = true;
                 el.classList.add('is-dragging');
@@ -340,34 +344,39 @@ export class FABContainer implements IDisposable {
 
                 const autoSnap = this._store.get('fabAutoSnap') === true;
 
-                if (autoSnap) {
-                    // 吸附贴边模式
-                    const centerX = rect.left + fabW / 2;
-                    const dockSide: 'left' | 'right' = centerX < winW / 2 ? 'left' : 'right';
-                    const topRatio = Math.max(0.04, Math.min(0.92, rect.top / maxAvailableH));
-                    const dockPos: FabDockPosition = {
-                        dockSide,
-                        topRatio,
-                        edgeOffset: 12,
-                        xRatio: dockSide === 'left' ? 0 : 1,
-                        yRatio: topRatio
-                    };
-                    this.applyPosition(dockPos, true);
-                    this._store.set('fabPosition', dockPos);
-                } else {
-                    // 默认自由停靠模式：直接保存当前视口相对比例，下次缩放时按比例自适应
-                    const safeLeft = Math.max(8, Math.min(maxAvailableW - 8, rect.left));
-                    const safeTop = Math.max(8, Math.min(maxAvailableH - 8, rect.top));
-                    const xRatio = Math.max(0, Math.min(1, safeLeft / maxAvailableW));
-                    const yRatio = Math.max(0, Math.min(1, safeTop / maxAvailableH));
+                this._isInternalSetting = true;
+                try {
+                    if (autoSnap) {
+                        // 吸附贴边模式：在当前线程执行一次吸附过渡
+                        const centerX = rect.left + fabW / 2;
+                        const dockSide: 'left' | 'right' = centerX < winW / 2 ? 'left' : 'right';
+                        const topRatio = Math.max(0.04, Math.min(0.92, rect.top / maxAvailableH));
+                        const dockPos: FabDockPosition = {
+                            dockSide,
+                            topRatio,
+                            edgeOffset: 12,
+                            xRatio: dockSide === 'left' ? 0 : 1,
+                            yRatio: topRatio
+                        };
+                        this.applyPosition(dockPos, true);
+                        this._store.set('fabPosition', dockPos);
+                    } else {
+                        // 自由放置模式：松手即落位，坚决不执行任何过渡动画，杜绝弹动挤压感
+                        const safeLeft = Math.max(8, Math.min(maxAvailableW - 8, rect.left));
+                        const safeTop = Math.max(8, Math.min(maxAvailableH - 8, rect.top));
+                        const xRatio = Math.max(0, Math.min(1, safeLeft / maxAvailableW));
+                        const yRatio = Math.max(0, Math.min(1, safeTop / maxAvailableH));
 
-                    const freePos: FabDockPosition = {
-                        xRatio,
-                        yRatio,
-                        topRatio: yRatio
-                    };
-                    this.applyPosition(freePos, false);
-                    this._store.set('fabPosition', freePos);
+                        const freePos: FabDockPosition = {
+                            xRatio,
+                            yRatio,
+                            topRatio: yRatio
+                        };
+                        this.applyPosition(freePos, false);
+                        this._store.set('fabPosition', freePos);
+                    }
+                } finally {
+                    this._isInternalSetting = false;
                 }
             }
         };

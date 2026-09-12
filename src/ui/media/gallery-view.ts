@@ -675,7 +675,7 @@ export function createGalleryManager(
                     confirmText: '确认删除'
                 });
                 if (ok) {
-                    await storage.delete(record.id);
+                    await storage.deleteImage(record.id);
                     allRecords = allRecords.filter((r) => r.id !== record.id);
                     selectedIds.delete(record.id);
                     await onStorageChange?.();
@@ -741,7 +741,7 @@ export function createGalleryManager(
             },
             onDelete: async () => {
                 if (storage) {
-                    await storage.delete(record.id);
+                    await storage.deleteImage(record.id);
                 }
                 allRecords = allRecords.filter((r) => r.id !== record.id);
                 selectedIds.delete(record.id);
@@ -765,7 +765,7 @@ export function createGalleryManager(
         }
 
         try {
-            allRecords = await storage.getAll(10000, 0);
+            allRecords = await storage.listImages(10000, 0);
             renderToolbar();
             renderFloatingBatchBar();
             renderStream();
@@ -780,6 +780,8 @@ export function createGalleryManager(
     root.reload = reload;
     root.dispose = () => {
         clearObjectUrls();
+        selectedIds.clear();
+        allRecords = [];
         root.remove();
     };
 

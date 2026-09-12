@@ -8,3 +8,4 @@ export * from './driver';
 export * from './task';
 export * from './preset';
 export * from './host';
+export * from './extension';

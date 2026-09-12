@@ -247,6 +247,24 @@ export interface OpenAIEngineConfig {
     [key: string]: unknown;
 }
 
+export function createDefaultOpenAIConfig(): OpenAIEngineConfig {
+    return {
+        activeProvider: 'openai-official',
+        providers: createDefaultOpenAIProviders(),
+        activeDrawingProfileId: 'profile-gpt-image-2',
+        serverUrl: 'https://api.openai.com/v1',
+        apiKey: '',
+        model: 'gpt-image-2',
+        width: 1024,
+        height: 1024,
+        size: '1024x1024',
+        quality: 'standard',
+        style: 'vivid',
+        responseFormat: 'b64_json',
+        n: 1
+    };
+}
+
 export const DEFAULT_OPENAI_DRAWING_PROFILES: OpenAIPresetItem<OpenAIDrawingProfileData>[] = [
     {
         id: 'profile-gpt-image-2',
@@ -402,6 +420,10 @@ export class OpenAiDriver extends BaseDriver {
         interrupt: false,
         syntaxType: 'natural'
     };
+
+    public getDefaultConfig(): Record<string, unknown> {
+        return createDefaultOpenAIConfig() as unknown as Record<string, unknown>;
+    }
 
     constructor(options: OpenAIDriverOptions) {
         super(options);

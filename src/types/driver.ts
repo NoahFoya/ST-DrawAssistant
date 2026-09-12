@@ -162,4 +162,5 @@ export interface ImageEngineDriver extends IDisposable {
     getAssetCatalog?(): ProviderAssetCatalog | null;
     isConnected?(): boolean;
     getNetworkClient?(): any;
+    getDefaultConfig?(): Record<string, unknown>;
 }

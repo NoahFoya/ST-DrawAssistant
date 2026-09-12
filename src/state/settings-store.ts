@@ -56,6 +56,9 @@ export function cleanRawSettings(raw: Record<string, any>): Record<string, any> 
     if (!isPlainObject(cleaned.engineConfigs)) {
         cleaned.engineConfigs = {};
     }
+    delete cleaned.extensions;
+    delete cleaned.uiPreferences;
+    delete cleaned.customData;
     return cleaned;
 }
 
@@ -96,15 +99,6 @@ export function mergeSettingsWithDefaults(
 
     if (isPlainObject(raw.engineConfigs)) {
         merged.engineConfigs = deepClone(raw.engineConfigs);
-    }
-    if (isPlainObject(raw.uiPreferences)) {
-        merged.uiPreferences = deepClone(raw.uiPreferences);
-    }
-    if (isPlainObject(raw.extensions)) {
-        merged.extensions = deepClone(raw.extensions);
-    }
-    if (isPlainObject(raw.customData)) {
-        merged.customData = deepClone(raw.customData);
     }
 
     return merged;

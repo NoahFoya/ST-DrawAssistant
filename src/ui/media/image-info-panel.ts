@@ -31,6 +31,7 @@ export interface ImageInfoPanelOptions {
     id?: string;
     uuid?: string;
     prompt?: string;
+    rawPrompt?: string;
     negativePrompt?: string;
     metadata?: Record<string, any>;
     data?: Blob | string;
@@ -212,12 +213,46 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
         imgSrc = rawUrl;
     }
 
-    const promptVal = metaObj.fullPositivePrompt || metaObj.prompt || recordObj.prompt;
-    const negVal = metaObj.fullNegativePrompt || metaObj.negativePrompt || recordObj.negativePrompt || metaObj.uc;
+    const rawUserPrompt = recordObj.rawPrompt || metaObj.rawPrompt || (metaObj.finalPrompt && recordObj.prompt !== metaObj.finalPrompt ? recordObj.prompt : undefined) || metaObj.promptText;
+    const promptVal = metaObj.finalPrompt || metaObj.fullPositivePrompt || recordObj.prompt || metaObj.prompt;
+    const negVal = metaObj.finalNegativePrompt || metaObj.fullNegativePrompt || recordObj.negativePrompt || metaObj.negativePrompt || metaObj.uc;
 
     // 左栏：提示词、LoRA 列表与生成参数
     const leftCol = document.createElement('div');
     leftCol.className = 'da-inspect-col-meta';
+
+    // 原始用户输入提示词（当与终态不同时呈现对比）
+    if (rawUserPrompt && rawUserPrompt !== promptVal) {
+        const rawBox = document.createElement('div');
+        rawBox.className = 'da-inspect-prompt-box';
+
+        const rawHeader = document.createElement('div');
+        rawHeader.className = 'da-inspect-prompt-header';
+
+        const rawTitle = document.createElement('span');
+        rawTitle.className = 'da-inspect-prompt-title';
+        rawTitle.innerHTML = `用户原始意图提示词 (Raw Prompt)`;
+
+        const copyRawBtn = document.createElement('button');
+        copyRawBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        copyRawBtn.innerHTML = `${SVG_ICONS.copy} 复制`;
+        copyRawBtn.onclick = () => {
+            void navigator.clipboard.writeText(String(rawUserPrompt)).then(() => {
+                FeedbackService.toastSuccess('已复制原始意图提示词');
+            });
+        };
+
+        rawHeader.appendChild(rawTitle);
+        rawHeader.appendChild(copyRawBtn);
+        rawBox.appendChild(rawHeader);
+
+        const rawText = document.createElement('div');
+        rawText.className = 'da-inspect-prompt-text';
+        rawText.textContent = String(rawUserPrompt);
+        rawBox.appendChild(rawText);
+
+        leftCol.appendChild(rawBox);
+    }
 
     // 终态正向提示词卡片
     if (promptVal) {
@@ -323,10 +358,28 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
     const paramsCard = document.createElement('div');
     paramsCard.className = 'da-inspect-params-matrix';
 
-    const renderedKeys = new Set<string>();
+    const renderedKeys = new Set<string>(['engine', 'driver']);
 
     const addParamRow = (label: string, value: any, copyable = false) => {
-        if (value === undefined || value === null || value === '' || typeof value === 'object') return;
+        if (value === undefined || value === null || value === '') return;
+        let displayStr: string;
+        if (typeof value === 'object') {
+            try {
+                if (Array.isArray(value)) {
+                    if (value.length === 0) return;
+                    displayStr = value.map((v) => (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(', ');
+                } else {
+                    const keys = Object.keys(value);
+                    if (keys.length === 0) return;
+                    displayStr = JSON.stringify(value);
+                }
+            } catch {
+                return;
+            }
+        } else {
+            displayStr = String(value);
+        }
+
         const row = document.createElement('div');
         row.className = 'da-inspect-param-cell';
 
@@ -336,13 +389,13 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
 
         const valEl = document.createElement('span');
         valEl.className = `da-inspect-param-val ${copyable ? 'is-copyable' : ''}`;
-        valEl.textContent = String(value);
+        valEl.textContent = displayStr;
 
         if (copyable) {
             valEl.title = '点击复制此数值';
             valEl.onclick = () => {
-                void navigator.clipboard.writeText(String(value)).then(() => {
-                    FeedbackService.toastSuccess(`已复制 ${label}: ${value}`);
+                void navigator.clipboard.writeText(displayStr).then(() => {
+                    FeedbackService.toastSuccess(`已复制 ${label}: ${displayStr}`);
                 });
             };
         }
@@ -475,7 +528,8 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
 
     // 自适应扩展参数提取
     const ignoredKeys = new Set([
-        'prompt', 'positive', 'fullPositivePrompt', 'negativePrompt', 'negative', 'fullNegativePrompt', 'uc',
+        'prompt', 'positive', 'fullPositivePrompt', 'finalPrompt', 'negativePrompt', 'negative', 'fullNegativePrompt', 'finalNegativePrompt', 'uc',
+        'rawPrompt', 'promptText', 'rawNegativePrompt',
         'data', 'imageSrc', 'src', 'base64', 'url', 'mime', 'timestamp', 'params', 'images', 'info', 'loras',
         'uuid', 'id', 'imageId', 'isFavorite', 'storage', 'onDelete', 'onFavoriteChange', 'onRefresh'
     ]);
@@ -483,7 +537,7 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
     const allCombined = { ...metaObj, ...paramsSource };
     for (const [key, val] of Object.entries(allCombined)) {
         if (renderedKeys.has(key) || ignoredKeys.has(key)) continue;
-        if (val === undefined || val === null || val === '' || typeof val === 'object') continue;
+        if (val === undefined || val === null || val === '') continue;
 
         const friendlyLabel = key
             .replace(/([A-Z])/g, ' $1')
@@ -508,22 +562,6 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
     const previewImg = document.createElement('img');
     previewImg.className = 'da-inspect-preview-img';
 
-    if (imgSrc) {
-        previewImg.src = imgSrc;
-        const zoomBadge = document.createElement('div');
-        zoomBadge.className = 'da-inspect-zoom-badge';
-        zoomBadge.innerHTML = `${SVG_ICONS.zoom} 点击放大`;
-        previewBox.appendChild(previewImg);
-        previewBox.appendChild(zoomBadge);
-        previewBox.addEventListener('click', () => openImagePreviewModal(imgSrc));
-        rightCol.appendChild(previewBox);
-    } else {
-        const noImgCard = document.createElement('div');
-        noImgCard.className = 'da-empty-tip da-empty-tip--card';
-        noImgCard.innerHTML = `暂无图像文件预览<div class="da-empty-tip__sub">（图像数据已离线或待载入）</div>`;
-        rightCol.appendChild(noImgCard);
-    }
-
     // 技术指标卡片
     const specsCard = document.createElement('div');
     specsCard.className = 'da-inspect-tech-specs';
@@ -535,7 +573,44 @@ export function openImageInfoPanel(imageIdOrOptions: any, meta?: any): IDisposab
         specsCard.appendChild(item);
     };
 
-    if (width && height) addTechSpec('分辨率', `${width} × ${height}`);
+    if (imgSrc) {
+        previewImg.src = imgSrc;
+        const zoomBadge = document.createElement('div');
+        zoomBadge.className = 'da-inspect-zoom-badge';
+        zoomBadge.innerHTML = `${SVG_ICONS.zoom} 点击放大`;
+        previewBox.appendChild(previewImg);
+        previewBox.appendChild(zoomBadge);
+        previewBox.addEventListener('click', () => openImagePreviewModal(imgSrc));
+        rightCol.appendChild(previewBox);
+
+        previewImg.onload = () => {
+            if (!width && !height && previewImg.naturalWidth && previewImg.naturalHeight) {
+                addTechSpec('实际分辨率', `${previewImg.naturalWidth} × ${previewImg.naturalHeight}`);
+            }
+        };
+    } else {
+        const noImgCard = document.createElement('div');
+        noImgCard.className = 'da-empty-tip da-empty-tip--card';
+        noImgCard.innerHTML = `暂无图像文件预览<div class="da-empty-tip__sub">（图像数据已离线或待载入）</div>`;
+        rightCol.appendChild(noImgCard);
+    }
+
+    if (width && height) {
+        addTechSpec('分辨率', `${width} × ${height}`);
+    } else {
+        const size = getVal('size');
+        if (size) addTechSpec('分辨率', String(size));
+    }
+
+    const durationVal = getVal('durationMs', 'duration', 'costMs', 'timeMs');
+    if (durationVal !== undefined && durationVal !== null) {
+        const d = Number(durationVal);
+        if (!isNaN(d) && d > 0) {
+            const secStr = d >= 1000 ? `${(d / 1000).toFixed(1)}s` : `${Math.round(d)}ms`;
+            addTechSpec('生成耗时', secStr);
+        }
+    }
+
     if (rawData instanceof Blob) addTechSpec('文件体积', formatBytes(rawData.size));
     if (recordObj.mime || metaObj.mime) addTechSpec('图像格式', String(recordObj.mime || metaObj.mime).toUpperCase().replace('IMAGE/', ''));
     if (recordObj.timestamp || metaObj.timestamp) {

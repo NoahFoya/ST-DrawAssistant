@@ -280,6 +280,10 @@ export class ComfyUiDriver extends BaseDriver {
         syntaxType: 'nodeGraph'
     };
 
+    public getDefaultConfig(): Record<string, unknown> {
+        return { ...DEFAULT_COMFYUI_CONFIG };
+    }
+
     private readonly _defaultSessionClientId: string;
     private _currentPromptId: string | null = null;
     private _objectInfoCache: { data: Record<string, unknown>; fetchedAt: number } | null = null;

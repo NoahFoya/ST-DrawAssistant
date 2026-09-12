@@ -141,14 +141,22 @@
    胶囊药丸造型（border-radius: 100px），支持多种业务生命周期状态。 */
 .da-floor-btn-wrapper,
 .da-floor-slot {
-    display: flex;
+    display: inline-flex;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     width: 100%;
     gap: 6px;
-    margin: 8px 0;
-    clear: both;
+    margin: 4px 0;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+/* 宿主消息正文中专门承载插槽的段落紧凑样式，消除默认段落造成的巨大空行 */
+.mes_text p.da-floor-slot-p {
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+    line-height: normal !important;
 }
 
 .da-floor-btn {

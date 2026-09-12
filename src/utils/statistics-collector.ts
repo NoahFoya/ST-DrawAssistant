@@ -1,6 +1,6 @@
 /**
  * 生图任务统计聚合工具
- * 统计任务完成率、耗时、模型使用频次并缓存至本地 localStorage。
+ * 统计任务完成率、耗时、模型使用频次并持久化至本地 localStorage。
  */
 
 export interface EngineStatItem {
@@ -9,30 +9,6 @@ export interface EngineStatItem {
     error: number;
     cancelled: number;
     totalDurationMs: number;
-}
-
-export interface ParamRangeStat {
-    total: number;
-    count: number;
-    min: number;
-    max: number;
-}
-
-export interface ParamStats {
-    steps: ParamRangeStat;
-    cfgScale: ParamRangeStat;
-    width: ParamRangeStat;
-    height: ParamRangeStat;
-    models: Record<string, number>;
-    samplers: Record<string, number>;
-    resolutions: Record<string, number>;
-}
-
-export interface TimeStats {
-    daily: Record<string, number>;
-    hourly: Record<number, number>;
-    firstTaskAt: number;
-    lastTaskAt: number;
 }
 
 export interface StatisticsRecord {
@@ -45,8 +21,14 @@ export interface StatisticsRecord {
     minDurationMs: number;
     maxDurationMs: number;
     engineStats: Record<string, EngineStatItem>;
-    paramStats: ParamStats;
-    timeStats: TimeStats;
+    paramStats: {
+        models: Record<string, number>;
+    };
+    timeStats: {
+        daily: Record<string, number>;
+        firstTaskAt: number;
+        lastTaskAt: number;
+    };
 }
 
 export interface TopItem {
@@ -63,11 +45,6 @@ export interface DailyTrendItem {
 const STORAGE_KEY = 'st_drawassistant_statistics_data';
 
 export function createDefaultStatisticsRecord(): StatisticsRecord {
-    const hourlyDefault: Record<number, number> = {};
-    for (let i = 0; i < 24; i++) {
-        hourlyDefault[i] = 0;
-    }
-
     return {
         id: 'main_stats',
         version: 1,
@@ -79,17 +56,10 @@ export function createDefaultStatisticsRecord(): StatisticsRecord {
         maxDurationMs: 0,
         engineStats: {},
         paramStats: {
-            steps: { total: 0, count: 0, min: Infinity, max: -Infinity },
-            cfgScale: { total: 0, count: 0, min: Infinity, max: -Infinity },
-            width: { total: 0, count: 0, min: Infinity, max: -Infinity },
-            height: { total: 0, count: 0, min: Infinity, max: -Infinity },
-            models: {},
-            samplers: {},
-            resolutions: {}
+            models: {}
         },
         timeStats: {
             daily: {},
-            hourly: hourlyDefault,
             firstTaskAt: 0,
             lastTaskAt: 0
         }
@@ -102,7 +72,6 @@ export class StatisticsCollector {
     private readonly _pendingTasks = new Map<string, {
         startTime: number;
         model?: string;
-        sampler?: string;
         engine?: string;
     }>();
 
@@ -124,12 +93,24 @@ export class StatisticsCollector {
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     if (parsed && typeof parsed.totalTasks === 'number') {
-                        this._record = { ...createDefaultStatisticsRecord(), ...parsed };
+                        const defaultRecord = createDefaultStatisticsRecord();
+                        this._record = {
+                            ...defaultRecord,
+                            ...parsed,
+                            paramStats: {
+                                models: parsed.paramStats?.models || {}
+                            },
+                            timeStats: {
+                                daily: parsed.timeStats?.daily || {},
+                                firstTaskAt: parsed.timeStats?.firstTaskAt || 0,
+                                lastTaskAt: parsed.timeStats?.lastTaskAt || 0
+                            }
+                        };
                     }
                 }
             }
         } catch {
-            // 忽略本地存储解析失败，保持默认空统计
+            // 忽略本地存储读取异常，回退默认空统计
         }
     }
 
@@ -139,19 +120,18 @@ export class StatisticsCollector {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(this._record));
             }
         } catch {
-            // 存储写满或受限时静默跳过
+            // 存储受限或配额满时静默忽略
         }
     }
 
-    public recordTaskCreated(taskId: string, model?: string, sampler?: string, engine?: string): void {
-        this.recordTaskSubmit(taskId, { model, sampler, engine });
+    public recordTaskCreated(taskId: string, model?: string, _sampler?: string, engine?: string): void {
+        this.recordTaskSubmit(taskId, { model, engine });
     }
 
     public recordTaskSubmit(taskId: string, info: { model?: string; sampler?: string; engine?: string }): void {
         this._pendingTasks.set(taskId, {
             startTime: Date.now(),
             model: info.model,
-            sampler: info.sampler,
             engine: info.engine || 'comfyui'
         });
         this._record.totalTasks++;
@@ -189,14 +169,8 @@ export class StatisticsCollector {
         const today = new Date().toISOString().split('T')[0];
         this._record.timeStats.daily[today] = (this._record.timeStats.daily[today] || 0) + 1;
 
-        const hour = new Date().getHours();
-        this._record.timeStats.hourly[hour] = (this._record.timeStats.hourly[hour] || 0) + 1;
-
         if (pending?.model) {
             this._record.paramStats.models[pending.model] = (this._record.paramStats.models[pending.model] || 0) + 1;
-        }
-        if (pending?.sampler) {
-            this._record.paramStats.samplers[pending.sampler] = (this._record.paramStats.samplers[pending.sampler] || 0) + 1;
         }
 
         const engineKey = pending?.engine || 'default';
@@ -273,8 +247,6 @@ export class StatisticsCollector {
         let successCount = 0;
         for (const eng of Object.values(this._record.engineStats)) {
             totalMs += eng.totalDurationMs;
-        }
-        for (const eng of Object.values(this._record.engineStats)) {
             successCount += eng.success;
         }
         if (successCount === 0) return 0;

@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml } from '../foundation';
+import { ThemeService } from '../foundation/theme-service';
 import { FeedbackService } from '../feedback/feedback';
 import { ModalService } from './modal-service';
 import { COMFYUI_VARIABLE_DEFINITIONS } from '../components';
@@ -174,6 +175,16 @@ export function openWorkflowModal(
         }
     };
 
+    // 创建模态框 DOM 结构并全量接入主题管治
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'da-modal-backdrop st-da-root';
+    ThemeService.applyCurrentThemeToNode(modalBackdrop);
+
+    const modalInner = document.createElement('div');
+    modalInner.className = 'da-workflow-modal-inner st-da-root';
+    ThemeService.applyCurrentThemeToNode(modalInner);
+    modalInner.addEventListener('click', (e) => e.stopPropagation());
+
     /** 弹出智能宏变量选择浮层 */
     const openMacroDropdown = (
         anchorBtn: HTMLElement,
@@ -185,6 +196,7 @@ export function openWorkflowModal(
 
         const dropdown = document.createElement('div');
         dropdown.className = 'da-var-dropdown da-portal-dropdown st-da-root';
+        ThemeService.applyCurrentThemeToNode(dropdown);
 
         const macros = COMFYUI_VARIABLE_DEFINITIONS;
         const normalizedKey = (fieldKey || '').toLowerCase();
@@ -250,7 +262,10 @@ export function openWorkflowModal(
             };
         });
 
-        document.body.appendChild(dropdown);
+        // 挂载至模态遮罩容器内，动态继承父级 z-index 并杜绝遮挡与误关
+        const baseZ = parseInt(modalBackdrop.style.zIndex || '10010', 10);
+        dropdown.style.zIndex = String(baseZ + 50);
+        modalBackdrop.appendChild(dropdown);
         activeDropdownEl = dropdown;
 
         // 定位计算
@@ -282,14 +297,6 @@ export function openWorkflowModal(
             }
         }, 10);
     };
-
-    // 创建模态框 DOM 结构
-    const modalBackdrop = document.createElement('div');
-    modalBackdrop.className = 'da-modal-backdrop st-da-root';
-
-    const modalInner = document.createElement('div');
-    modalInner.className = 'da-workflow-modal-inner st-da-root';
-    modalInner.addEventListener('click', (e) => e.stopPropagation());
 
     // 顶栏工具条
     const header = document.createElement('div');

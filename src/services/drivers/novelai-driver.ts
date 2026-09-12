@@ -252,6 +252,10 @@ export class NovelAiDriver extends BaseDriver {
         syntaxType: 'tagBased'
     };
 
+    public getDefaultConfig(): Record<string, unknown> {
+        return { ...DEFAULT_NOVELAI_CONFIG };
+    }
+
     constructor(options: NovelAIDriverOptions) {
         super(options);
     }

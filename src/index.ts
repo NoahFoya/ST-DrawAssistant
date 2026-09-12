@@ -6,7 +6,8 @@
 import {
     IDisposable,
     CoreEventMap,
-    DrawAssistantSettings
+    DrawAssistantSettings,
+    DrawAssistantPlugin
 } from './types';
 import { EXTENSION_NAME, EXTENSION_VERSION } from './constants';
 import { Logger } from './utils/logger';
@@ -43,6 +44,8 @@ export interface DrawAssistantApp extends IDisposable {
     readonly tasks: TaskManager;
     readonly integrator: ResultIntegrator;
     readonly ui: UIContext;
+    readonly plugins: readonly DrawAssistantPlugin[];
+    registerPlugin(plugin: DrawAssistantPlugin): Promise<void>;
 }
 
 let _activeApp: DrawAssistantApp | null = null;
@@ -92,28 +95,10 @@ export async function bootstrap(options?: BootstrapOptions): Promise<DrawAssista
     const storage = new StorageService();
     const drivers = createDefaultDriverRegistry({ store });
 
-    // 补齐驱动的默认配置
+    // 自动通过驱动的自描述接口注册出厂默认配置，消除硬编码耦合
     for (const driver of drivers.getAll()) {
-        if (driver.id === 'comfyui') {
-            store.registerEngineDefaults('comfyui', {
-                serverUrl: 'http://127.0.0.1:8188',
-                model: '',
-                steps: 28,
-                cfgScale: 6.5,
-                width: 832,
-                height: 1216,
-                samplerName: 'euler_ancestral',
-                scheduler: 'normal'
-            });
-        } else if (driver.id === 'sdwebui') {
-            store.registerEngineDefaults('sdwebui', {
-                serverUrl: 'http://127.0.0.1:7860',
-                steps: 28,
-                cfgScale: 7.0,
-                width: 832,
-                height: 1216,
-                samplerName: 'Euler a'
-            });
+        if (typeof driver.getDefaultConfig === 'function') {
+            store.registerEngineDefaults(driver.id, driver.getDefaultConfig());
         }
     }
 
@@ -184,6 +169,28 @@ export async function bootstrap(options?: BootstrapOptions): Promise<DrawAssista
         FeedbackService.toastError(error);
     });
 
+    const registeredPlugins: DrawAssistantPlugin[] = [];
+
+    const registerPlugin = async (plugin: DrawAssistantPlugin): Promise<void> => {
+        if (registeredPlugins.some((p) => p.name === plugin.name)) {
+            logger.warn(`插件 [${plugin.name}] 已注册，跳过重复注册`);
+            return;
+        }
+        registeredPlugins.push(plugin);
+        try {
+            await plugin.init({
+                host,
+                events,
+                store,
+                drivers,
+                pipeline
+            });
+            logger.info(`扩展插件 [${plugin.name}] 初始化成功`);
+        } catch (err) {
+            logger.error(`扩展插件 [${plugin.name}] 初始化异常:`, err);
+        }
+    };
+
     const app: DrawAssistantApp = {
         events,
         store,
@@ -194,6 +201,10 @@ export async function bootstrap(options?: BootstrapOptions): Promise<DrawAssista
         tasks,
         integrator,
         ui,
+        get plugins() {
+            return registeredPlugins;
+        },
+        registerPlugin,
         dispose: () => {
             dispose();
         }
@@ -256,6 +267,18 @@ export async function autoCheckCurrentEngineConnection(app?: DrawAssistantApp): 
  */
 export function dispose(): void {
     if (!_activeApp) return;
+
+    try {
+        _activeApp.plugins.slice().reverse().forEach((p) => {
+            try {
+                p.dispose?.();
+            } catch (err) {
+                console.error(`[${EXTENSION_NAME}] 释放扩展插件 [${p.name}] 异常:`, err);
+            }
+        });
+    } catch (err) {
+        console.error(`[${EXTENSION_NAME}] 释放扩展插件列表异常:`, err);
+    }
 
     try {
         _activeApp.ui.dispose();

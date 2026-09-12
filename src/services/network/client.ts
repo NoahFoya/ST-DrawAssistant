@@ -11,7 +11,7 @@ import {
 } from '../../constants';
 import { NetworkError } from './error';
 import { composeTimeoutSignal } from './signal';
-import { blobToBase64 } from '../../utils/binary';
+
 
 export interface HttpRequestOptions extends RequestInit {
     timeoutMs?: number;
@@ -115,51 +115,6 @@ export class NetworkClient {
         } finally {
             cleanup();
         }
-    }
-
-    /**
-     * 上传图片至宿主服务 (POST /api/images/upload)。
-     * 发送标准 JSON 载荷 { image, format, filename } 并携带 CSRF 标头。
-     */
-    public async uploadHostImage(blob: Blob, filename: string): Promise<string> {
-        const base64Data = await blobToBase64(blob);
-        const format = blob.type.includes('jpeg') ? 'jpeg' : blob.type.includes('webp') ? 'webp' : 'png';
-        const uploadBody = {
-            image: base64Data,
-            format,
-            filename
-        };
-
-        const resp = await this.fetchHost('/api/images/upload', {
-            method: 'POST',
-            body: JSON.stringify(uploadBody)
-        });
-
-        if (!resp.ok) {
-            const errText = await resp.text().catch(() => '');
-            throw new NetworkError({
-                message: `上传图片至酒馆宿主失败 (HTTP ${resp.status}): ${errText || resp.statusText}`,
-                code: 'HTTP_ERROR',
-                targetUrl: '/api/images/upload',
-                status: resp.status,
-                userAdvice: '请检查酒馆服务端运行状态与写入权限。'
-            });
-        }
-
-        const data = await resp.json().catch(() => null);
-        const uploadedPath = data && typeof data === 'object' && typeof data.path === 'string'
-            ? data.path
-            : (typeof data === 'string' ? data : (data?.url || data?.name));
-
-        if (uploadedPath) {
-            return String(uploadedPath).startsWith('/') ? String(uploadedPath) : `/${uploadedPath}`;
-        }
-
-        throw new NetworkError({
-            message: '上传图片成功但未收到有效的图片相对路径响应',
-            code: 'HTTP_ERROR',
-            targetUrl: '/api/images/upload'
-        });
     }
 
     /**
