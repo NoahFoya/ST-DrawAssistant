@@ -3,10 +3,9 @@
  * 包含方案切换下拉框、新建、保存 (脏状态金色呼吸光)、另存为、导入、导出与删除等高频操作。
  */
 
-import { PresetActionType } from './types';
+import type { PresetActionType, SelectOptionItem } from '@types';
 import { createSelect, SelectHandle } from '../components/select';
 import { createIconButton, IconButtonHandle } from '../components/button';
-import { SelectOptionItem } from '../components/types';
 import { Toast } from '../components/feedback';
 
 export interface PresetToolbarItem {

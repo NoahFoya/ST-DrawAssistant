@@ -2,7 +2,6 @@
  * 基础原子组件库统一聚合导出入口
  */
 
-export * from './types';
 export * from './icons';
 export * from './form-field';
 export * from './input';

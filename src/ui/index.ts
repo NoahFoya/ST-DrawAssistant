@@ -20,10 +20,10 @@ export * from './media';
 import { ThemeService } from './theme';
 import { ModalShell } from './layout/modal-shell';
 import { FabContainer } from './layout/fab-container';
-import { createWorkflowModal, WorkflowModalHandle } from './layout/workflow-modal';
-import { createLightboxModal, LightboxModalHandle } from './media/lightbox-modal';
-import { createImageInfoModal, ImageInfoModalHandle } from './media/image-info';
-import { createInpaintModal, InpaintModalHandle } from './media/image-editor';
+import { createWorkflowModal } from './layout/workflow-modal';
+import { createLightboxModal } from './media/lightbox-modal';
+import { createImageInfoModal } from './media/image-info';
+import { createInpaintModal } from './media/image-editor';
 import { FloorManager } from './media/floor-manager';
 import { getIconSvg } from './components/icons';
 
@@ -38,38 +38,8 @@ import { renderGalleryTab } from './views/gallery-tab';
 import { renderLogsAndStatsTab, LogsAndStatsTabHandle } from './views/logs-and-stats-tab';
 import { renderAboutTab } from './views/about-tab';
 
-import type { SettingsStore } from '../store/settings';
-import type { PersistentStorage } from '../store/storage';
-import type { GenerationOrchestrator } from '../function/orchestrator';
-import type { TaskQueueManager } from '../store/task';
-import type { StoredImageRecord } from '@types';
-import type { MediaCardItemModel } from './composite/types';
-
-export interface UIServices {
-    settingsStore: SettingsStore;
-    storage?: PersistentStorage;
-    orchestrator?: GenerationOrchestrator;
-    taskQueue?: TaskQueueManager;
-    containerEl?: HTMLElement;
-    version?: string;
-}
-
-export interface UIHandle {
-    readonly modalShell: ModalShell;
-    readonly fabContainer: FabContainer;
-    readonly floorManager: FloorManager;
-    readonly lightbox: LightboxModalHandle;
-    readonly imageInfo: ImageInfoModalHandle;
-    readonly inpaintModal: InpaintModalHandle;
-    readonly workflowModal: WorkflowModalHandle;
-    openModal(tabId?: string): void;
-    closeModal(): void;
-    openWorkflowBlueprint(workflowId: string, json: string, onSave?: (newJson: string) => void): void;
-    openLightbox(items: MediaCardItemModel[], startIndex?: number): void;
-    openImageInfo(record: StoredImageRecord): void;
-    openInpaint(blob: Blob): void;
-    dispose(): void;
-}
+import type { StoredImageRecord, MediaCardItemModel, UIServices, UIHandle } from '@types';
+export type { UIServices, UIHandle };
 
 export function initUI(services: UIServices): UIHandle {
     const { settingsStore, storage, orchestrator, taskQueue, containerEl, version = 'v0.2.0' } = services;
@@ -89,7 +59,7 @@ export function initUI(services: UIServices): UIHandle {
         containerEl: modalContainer,
         onViewInfo: (item) => {
             if (storage) {
-                storage.getRecord(item.id).then((rec) => {
+                storage.getRecord(item.id).then((rec: StoredImageRecord | null) => {
                     if (rec) imageInfo.open(rec);
                 });
             }

@@ -4,11 +4,10 @@
  * 提供主流画幅一键切换、自定义宽高 64 像素对齐约束与一键横竖翻转。
  */
 
-import { DimensionValue } from './types';
+import type { DimensionValue, SelectOptionItem } from '@types';
 import { createSelect, SelectHandle } from '../components/select';
 import { createNumberInput, NumberInputHandle } from '../components/input';
 import { createIconButton, IconButtonHandle } from '../components/button';
-import { SelectOptionItem } from '../components/types';
 
 export interface DimensionPresetItem {
     id: string;

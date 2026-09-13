@@ -4,7 +4,7 @@
  * 展示后端服务地址、连通性状态指示灯、响应延迟与一键连通性探测及远端资产拉取更新。
  */
 
-import { HealthCheckFn, ConnectionCardStatus } from './types';
+import type { HealthCheckFn, ConnectionCardStatus } from '@types';
 import { createButton, ButtonHandle } from '../components/button';
 import { createBadge, BadgeHandle } from '../components/feedback';
 import { createTextInput, createPasswordInput, TextInputHandle, PasswordInputHandle } from '../components/input';

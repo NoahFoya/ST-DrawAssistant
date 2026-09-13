@@ -3,7 +3,7 @@
  * 展示累计生图数、成功率、平均耗时、存储空间占用等关键运行指标。
  */
 
-import { StatItemModel } from './types';
+import type { StatItemModel } from '@types';
 
 export interface StatCardHandle {
     readonly element: HTMLElement;

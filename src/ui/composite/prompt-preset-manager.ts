@@ -10,7 +10,7 @@
  */
 
 import { PresetItem } from '@types';
-import { LoraItemModel, PresetActionType } from './types';
+import type { LoraItemModel, PresetActionType } from '@types';
 import { createCard } from '../components/form-field';
 import { createTextarea, TextareaHandle } from '../components/input';
 import { createFormField, FormFieldHandle } from '../components/form-field';

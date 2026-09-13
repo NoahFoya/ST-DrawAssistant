@@ -47,3 +47,8 @@ export interface TaskItem {
     /** 任务结束时间戳 */
     completedAt?: number;
 }
+
+/**
+ * 任务底层执行器回调契约
+ */
+export type TaskExecutor = (task: TaskItem, signal: AbortSignal) => Promise<ImageGenerationResult>;

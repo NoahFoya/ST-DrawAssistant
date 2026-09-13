@@ -3,7 +3,7 @@
  * 原生圆形色盘与十六进制 Hex 文本框双向数据联动与合法性校验。
  */
 
-import { BaseControlOptions, IControlHandle } from './types';
+import type { BaseControlOptions, IControlHandle } from '@types';
 
 export interface ColorPickerOptions extends BaseControlOptions {
     value?: string;

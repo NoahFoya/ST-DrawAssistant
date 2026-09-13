@@ -12,3 +12,8 @@ export * from './storage';
 export * from './preset';
 export * from './settings';
 export * from './ui';
+
+/** 通用生命周期资源释放句柄契约 */
+export interface IDisposable {
+    dispose(): void;
+}

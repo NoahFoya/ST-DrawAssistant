@@ -4,7 +4,7 @@
  * 展示 IndexedDB 存储使用量占比进度条、3 列核心指标卡片，并提供一键清理与备份导出。
  */
 
-import { StorageQuotaInfo } from './types';
+import type { StorageQuotaInfo } from '@types';
 import { createStatCard, StatCardHandle } from './stat-card';
 import { createButton, ButtonHandle } from '../components/button';
 import { formatBytes } from '../../util/dom';

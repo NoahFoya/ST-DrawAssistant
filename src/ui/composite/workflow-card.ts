@@ -3,7 +3,7 @@
  * 展示工作流元数据、节点数与参数变量插桩完整性诊断标签，支持导入与导出。
  */
 
-import { WorkflowCardModel } from './types';
+import type { WorkflowCardModel } from '@types';
 import { createButton, createIconButton, ButtonHandle, IconButtonHandle } from '../components/button';
 import { createBadge, BadgeHandle } from '../components/feedback';
 import { Toast } from '../components/feedback';

@@ -2,7 +2,6 @@
  * 复合组件与卡片统一聚合导出入口
  */
 
-export * from './types';
 export * from './connection-card';
 export * from './preset-toolbar';
 export * from './lora-manager';

@@ -3,8 +3,8 @@
  * 包含全局非阻塞 Toast 提示、字段悬浮帮助气泡、状态徽标与标签胶囊。
  */
 
-import { FeedbackVariant } from './types';
-import { createIconElement, IconName } from './icons';
+import type { FeedbackVariant, IconName } from '@types';
+import { createIconElement } from './icons';
 
 // ==================== 1. 全局非阻塞 Toast 提示 ====================
 

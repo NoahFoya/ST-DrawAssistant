@@ -22,11 +22,8 @@ import { getIconSvg } from '../components/icons';
 // 1. 局部重绘蒙版画布模态窗 (InpaintModal)
 // ==========================================
 
-export interface InpaintResult {
-    baseBlob: Blob;
-    maskBlob: Blob;
-    maskBase64: string;
-}
+import type { InpaintResult } from '@types';
+export type { InpaintResult };
 
 export interface InpaintModalOptions {
     title?: string;

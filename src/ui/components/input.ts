@@ -3,7 +3,7 @@
  * 包含单行文本框 (带清空按钮)、密码/密钥框 (带显隐切换)、居中数字微调框 (带等宽与内嵌单位) 以及多行提示词文本域。
  */
 
-import { BaseControlOptions, IControlHandle } from './types';
+import type { BaseControlOptions, IControlHandle } from '@types';
 import { createIconElement } from './icons';
 
 // ==================== 1. 单行文本输入框 TextInput ====================

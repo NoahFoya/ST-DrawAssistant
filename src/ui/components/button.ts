@@ -3,8 +3,8 @@
  * 提供标准按钮 (带 Loading 状态与防重复点击)、28px 紧凑图标按钮与按钮组。
  */
 
-import { BaseControlOptions, ButtonSize, ButtonVariant } from './types';
-import { createIconElement, IconName } from './icons';
+import type { BaseControlOptions, ButtonSize, ButtonVariant, IconName } from '@types';
+import { createIconElement } from './icons';
 
 // ==================== 1. 标准通用按钮 Button ====================
 

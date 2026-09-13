@@ -4,12 +4,11 @@
  * 供 SD-WebUI 与 ComfyUI 生图引擎界面共用。
  */
 
-import { SamplerParamsModel } from './types';
+import type { SamplerParamsModel, SelectOptionItem } from '@types';
 import { createSelect, SelectHandle } from '../components/select';
 import { createNumberInput, NumberInputHandle } from '../components/input';
 import { createIconButton, IconButtonHandle } from '../components/button';
 import { createFormField } from '../components/form-field';
-import { SelectOptionItem } from '../components/types';
 
 export const DEFAULT_SAMPLERS = [
     'euler',

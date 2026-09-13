@@ -4,7 +4,7 @@
  * 提供语法高亮、时间戳格式化、环形缓冲区控制、划词复制与平滑自动滚屏。
  */
 
-import { TerminalLogEntry, TerminalLogLevel } from './types';
+import type { TerminalLogEntry, TerminalLogLevel } from '@types';
 import { createButton, ButtonHandle } from '../components/button';
 
 export interface LogTerminalOptions {

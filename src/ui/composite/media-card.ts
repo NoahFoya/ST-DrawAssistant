@@ -4,7 +4,7 @@
  * 提供严格 1:1 正方形等比缩略图、多选勾选框、收藏徽章与悬停快捷操作浮层。
  */
 
-import { MediaCardItemModel } from './types';
+import type { MediaCardItemModel } from '@types';
 import { createIconButton, IconButtonHandle } from '../components/button';
 
 export interface MediaCardOptions {

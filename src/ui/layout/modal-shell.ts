@@ -15,27 +15,8 @@ import { createElement } from '../../util/dom';
 import { getIconSvg } from '../components/icons';
 import { ThemeService, BUILTIN_THEMES } from '../theme';
 
-export interface TabDefinition {
-    id: string;
-    label: string;
-    iconSvg: string;
-    group: 'engine' | 'system';
-    render: () => HTMLElement | Promise<HTMLElement>;
-    onActivate?: () => void;
-    onDeactivate?: () => void;
-    dispose?: () => void;
-}
-
-export type StatusDotState = 'ok' | 'checking' | 'error' | 'warn' | 'idle';
-
-export interface ModalShellOptions {
-    title?: string;
-    version?: string;
-    initialTabId?: string;
-    onClose?: () => void;
-    onTabChange?: (tabId: string) => void;
-    tabs?: TabDefinition[];
-}
+import type { TabDefinition, StatusDotState, ModalShellOptions } from '@types';
+export type { TabDefinition, StatusDotState, ModalShellOptions };
 
 export class ModalShell {
     private _container: HTMLElement;

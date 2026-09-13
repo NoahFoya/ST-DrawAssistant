@@ -18,20 +18,8 @@ import { createBadge, BadgeHandle } from '../components/feedback';
 import { Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
 
-export type OpenAIProviderType =
-    | 'openai-official'
-    | 'siliconflow'
-    | 'xai-grok'
-    | 'openrouter'
-    | 'together'
-    | 'custom';
-
-export interface OpenAIProviderConfig {
-    provider: OpenAIProviderType;
-    serverUrl: string;
-    apiKey: string;
-    customHeaders?: string;
-}
+import type { OpenAIProviderType, OpenAIProviderConfig } from '@types';
+export type { OpenAIProviderType, OpenAIProviderConfig };
 
 export interface OpenAIServiceCardOptions {
     value?: Partial<OpenAIProviderConfig>;

@@ -3,7 +3,7 @@
  * 严格遵循 38px 标准表单行高规范，行内严禁混入冗长副标题，所有说明收敛至悬停提示气泡。
  */
 
-import { IControlHandle } from './types';
+import type { IControlHandle } from '@types';
 
 export interface FormFieldOptions {
     /** 字段左侧主标签文本 */

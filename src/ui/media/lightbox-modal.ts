@@ -13,7 +13,7 @@ import { createElement } from '../../util/dom';
 import { createButton, ButtonHandle } from '../components/button';
 import { getIconSvg } from '../components/icons';
 import { Toast } from '../components/feedback';
-import type { MediaCardItemModel } from '../composite/types';
+import type { MediaCardItemModel } from '@types';
 
 export interface LightboxModalOptions {
     items?: MediaCardItemModel[];

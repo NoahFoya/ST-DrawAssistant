@@ -3,7 +3,7 @@
  * 支持 LoRA 列表条目增删、启用开关、模型权重与 CLIP 权重等宽数字调节，并联动 WeiLin 语法。
  */
 
-import { LoraItemModel } from './types';
+import type { LoraItemModel } from '@types';
 import { createToggle, ToggleHandle } from '../components/toggle';
 import { createNumberInput, NumberInputHandle } from '../components/input';
 import { createIconButton, createButton, IconButtonHandle, ButtonHandle } from '../components/button';

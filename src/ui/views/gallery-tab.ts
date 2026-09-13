@@ -14,13 +14,12 @@
 import { createElement } from '../../util/dom';
 import { createStorageBar, StorageBarHandle } from '../composite/storage-bar';
 import { createMediaCard, MediaCardHandle } from '../composite/media-card';
-import { MediaCardItemModel } from '../composite/types';
 import { createTextInput, TextInputHandle } from '../components/input';
 import { createSelect, SelectHandle } from '../components/select';
 import { createButton, ButtonHandle } from '../components/button';
 import { Toast } from '../components/feedback';
 import type { PersistentStorage } from '../../store/storage';
-import type { StoredImageRecord } from '@types';
+import type { MediaCardItemModel, StoredImageRecord } from '@types';
 
 export interface GalleryTabOptions {
     storage?: PersistentStorage;

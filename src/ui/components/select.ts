@@ -3,7 +3,7 @@
  * 居中排版、内嵌箭头、支持动态选项组重载与脏状态联动。
  */
 
-import { BaseControlOptions, IControlHandle, SelectOptionItem } from './types';
+import type { BaseControlOptions, IControlHandle, SelectOptionItem } from '@types';
 
 export interface SelectOptions extends BaseControlOptions {
     value?: string;

@@ -16,7 +16,7 @@ import { createButton, ButtonHandle } from '../components/button';
 import { Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
 import type { SettingsStore } from '../../store/settings';
-import type { TerminalLogLevel } from '../composite/types';
+import type { TerminalLogLevel } from '@types';
 
 export interface LogsAndStatsTabOptions {
     settingsStore?: SettingsStore;

@@ -3,7 +3,7 @@
  * 基于原生 Checkbox 改造，保留完整无障碍支持与键盘 Space 键切换能力。
  */
 
-import { BaseControlOptions, IControlHandle } from './types';
+import type { BaseControlOptions, IControlHandle } from '@types';
 
 export interface ToggleOptions extends BaseControlOptions {
     checked?: boolean;
