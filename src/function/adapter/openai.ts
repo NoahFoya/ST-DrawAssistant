@@ -48,7 +48,7 @@ export class OpenAIAdapter extends BaseAdapter {
             return {
                 ok: false,
                 latencyMs: 0,
-                message: 'OpenAI 服务端点未配置'
+                message: 'OpenAI 服务地址未配置'
             };
         }
 
@@ -70,7 +70,7 @@ export class OpenAIAdapter extends BaseAdapter {
                 }
             }
 
-            // 支持服务端点以 /v1 结尾或直接根路径
+            // 支持服务地址以 /v1 结尾或直接根路径
             const endpoint = targetBaseUrl.endsWith('/v1')
                 ? `${targetBaseUrl}/models`
                 : `${targetBaseUrl}/v1/models`;

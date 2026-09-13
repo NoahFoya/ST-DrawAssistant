@@ -1,7 +1,7 @@
 /**
  * 本地持久化存储服务模块
  * 职责：基于 localforage (IndexedDB) 进行生图资产二进制 Blob 存取、
- * 双模内容哈希去重 (SHA-256 / 局域网 FNV-1a)、LRU 配额防爆淘汰与标星收藏保护。
+ * 双模内容哈希去重 (SHA-256 / 局域网 FNV-1a)、基于 LRU 的配额超限淘汰与标星收藏保护。
  */
 
 import localforage from 'localforage';
@@ -127,7 +127,7 @@ export class PersistentStorage implements IDisposable {
         record.lastAccessedAt = Date.now();
         await this._db.setItem(record.id, record);
 
-        // 配额防爆检查：仅在记录数量达到上限阈值时触发 LRU 淘汰扫描，避免每张图都进行全表扫描
+        // 配额上限检查：仅在记录数量达到上限阈值时触发 LRU 淘汰扫描，避免每张图都进行全表扫描
         const maxImages = options?.maxStoredImages;
         if (maxImages && maxImages > 0) {
             const total = await this._db.length();

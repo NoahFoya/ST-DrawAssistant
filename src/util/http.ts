@@ -282,7 +282,7 @@ export class HttpClient {
     }
 
     /**
-     * 直接请求外部生图服务端点（SD-WebUI / ComfyUI / NovelAI / 云端 API）。
+     * 直接请求外部生图服务（SD-WebUI / ComfyUI / NovelAI / 云端 API）。
      * 默认 credentials: 'omit'，避免凭据泄漏并规避多余跨域检查。
      */
     public async fetchExternal(targetUrl: string, options: HttpRequestOptions = {}): Promise<Response> {
