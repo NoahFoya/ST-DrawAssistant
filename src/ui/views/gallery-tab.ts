@@ -75,9 +75,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
         pageBlobUrls.length = 0;
     };
 
-    // ==========================================
     // 1. 顶部存储配额监控条 (StorageBar)
-    // ==========================================
     const storageBar: StorageBarHandle = createStorageBar({
         initialQuota: {
             usedBytes: 0,
@@ -135,9 +133,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     regDisposer(storageBar);
     root.appendChild(storageBar.element);
 
-    // ==========================================
     // 2. 检索与过滤工具栏 (.da-gallery-toolbar)
-    // ==========================================
     const toolbar = createElement('div', { className: 'da-gallery-toolbar' });
 
     // 搜索输入框 (检索变体、带清空按钮)
@@ -220,9 +216,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     toolbar.appendChild(filterRow);
     root.appendChild(toolbar);
 
-    // ==========================================
     // 3. 自适应媒体流式卡片网格 (.da-gallery-stream-container)
-    // ==========================================
     const streamContainer = createElement('div', { className: 'da-gallery-stream-container' });
     const grid = createElement('div', { className: 'da-media-grid' });
     streamContainer.appendChild(grid);
@@ -240,9 +234,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     `;
     streamContainer.appendChild(emptyState);
 
-    // ==========================================
     // 4. 粘性悬浮批处理控制台 (.da-gallery-batch-actions)
-    // ==========================================
     const batchBar = createElement('div', {
         className: 'da-gallery-batch-actions',
         attributes: { style: 'display: none; position: sticky; bottom: 12px; z-index: var(--da-z-fab, 100); background: var(--da-bg-card, rgba(30, 34, 45, 0.95)); backdrop-filter: blur(10px); border: 1px solid var(--da-separator); border-radius: var(--da-radius-md, 10px); padding: 10px 16px; align-items: center; justify-content: space-between; box-shadow: var(--da-shadow-lg); margin-top: 8px;' }
@@ -310,9 +302,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     batchBar.appendChild(batchButtonsWrapper);
     root.appendChild(batchBar);
 
-    // ==========================================
     // 5. 标准分页控制条 (.da-pagination)
-    // ==========================================
     const paginationBar = createElement('div', {
         className: 'da-pagination',
         attributes: { style: 'display: flex; align-items: center; justify-content: space-between; padding: 12px 4px; margin-top: 10px; border-top: 1px solid var(--da-separator);' }
@@ -363,9 +353,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     paginationBar.appendChild(paginationControls);
     root.appendChild(paginationBar);
 
-    // ==========================================
     // 6. 数据过滤与分页逻辑
-    // ==========================================
     function applyFilters() {
         filteredRecords = allRecords.filter((r) => {
             if (keyword) {

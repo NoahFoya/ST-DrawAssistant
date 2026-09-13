@@ -42,9 +42,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
 
     const currentVersion = options.version || 'v0.2.0';
 
-    // ==========================================
     // 1. Hero 展板卡片 (.da-hero-card)
-    // ==========================================
     const heroCard = createElement('div', { className: 'da-hero-card' });
 
     const heroHeader = createElement('div', { className: 'da-hero-card__header' });
@@ -118,9 +116,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     heroCard.appendChild(heroActions);
     root.appendChild(heroCard);
 
-    // ==========================================
     // 2. 版本更新日志展板 (Changelog)
-    // ==========================================
     const changelogCard = createCard({
         title: '版本更新日志 (Changelog)',
         iconSvg: getIconSvg('sparkles'),
@@ -132,15 +128,15 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     changelogEl.innerHTML = `
         <div class="da-changelog__entry">v0.2.0 (2026-09) · 架构演进与 UI 重构</div>
         <ul class="da-changelog__list">
-            <li class="da-changelog__item">重构原子控件库，全面剔除分段器，严格落实画幅居中 Select 与等宽 NumberInput；</li>
+            <li class="da-changelog__item">优化原子控件库，采用画幅下拉选择器与数值微调输入框；</li>
             <li class="da-changelog__item">全面接入四大生图后端（ComfyUI / SD-WebUI / NovelAI / OpenAI）专属设置视窗；</li>
-            <li class="da-changelog__item">全局通用参数设置直连 Direct / 宿主中继 Relay 传输通道；</li>
-            <li class="da-changelog__item">测试连接支持连通性探测 + 远端资产（Model / VAE / LoRA / 订阅）动态同步；</li>
-            <li class="da-changelog__item">提示词预设管理器内置 DirtyTracker 瞬时自愈闭环。</li>
+            <li class="da-changelog__item">全局通用参数设置支持直连 Direct / 宿主中继 Relay 传输通道；</li>
+            <li class="da-changelog__item">测试连接支持连通性探测与远端资产（Model / VAE / LoRA / 订阅）动态同步；</li>
+            <li class="da-changelog__item">提示词预设管理器内置脏状态跟踪器，修改时高亮提示并在保存或还原时自动重置。</li>
         </ul>
         <div class="da-changelog__entry da-changelog__entry--sep">v0.1.0 · 核心架构与功能管道</div>
         <ul class="da-changelog__list">
-            <li class="da-changelog__item">实现双层存储池（LocalForage + 内存快照）与 LRU 配额防爆；</li>
+            <li class="da-changelog__item">实现双层存储池（LocalForage 与内存快照）并提供基于 LRU 的存储配额管理；</li>
             <li class="da-changelog__item">实现多后端适配器注册中心与生成编排器（GenerationOrchestrator）；</li>
             <li class="da-changelog__item">支持 ComfyUI WebSocket 实时进度追踪与中断队列。</li>
         </ul>
@@ -148,9 +144,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     changelogCard.append(changelogEl);
     root.appendChild(changelogCard.element);
 
-    // ==========================================
     // 3. 富外链导航卡片网格 (.da-rich-link-grid)
-    // ==========================================
     const linksCard = createCard({
         title: '开源社区与技术文档',
         iconSvg: getIconSvg('external'),
@@ -211,9 +205,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     linksCard.append(linkGrid);
     root.appendChild(linksCard.element);
 
-    // ==========================================
     // 4. 全量配置备份、导入与重置卡片
-    // ==========================================
     const backupCard = createCard({
         title: '全局配置备份与系统重置',
         iconSvg: getIconSvg('settings'),

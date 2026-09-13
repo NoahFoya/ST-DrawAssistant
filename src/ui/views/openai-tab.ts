@@ -4,7 +4,7 @@
  *
  * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 4 条)：
  * 1. Card 1: OpenAIServiceCard (多供应商选择, Base URL, API Key 显隐密码框, 自定义 Headers JSON, 同步远端模型与测试连接)；
- * 2. Card 2: 绘图参数预设 (PresetToolbar, 模型选择与自定义 ID, DimensionPicker 画幅, 质量与风格, 扩散模型进阶负向词/步数/CFG/Seed, 自定义额外 Body JSON 透传)；
+ * 2. Card 2: 绘图参数预设 (PresetToolbar, 模型选择与自定义 ID, DimensionPicker 画幅, 质量与风格, 扩散模型进阶负向词/步数/CFG/Seed, 自定义额外 Body JSON 请求体参数)；
  * 3. 状态同步：全量居中、Select 画幅、等宽数字框、表单脏状态追踪与基准重置。
  */
 
@@ -418,10 +418,10 @@ export function renderOpenAITab(
     regDisposer(seedField);
     drawingCard.append(seedField.element);
 
-    // Section 5: 高级透传参数
+    // Section 5: 自定义请求体参数
     const advancedSectionTitle = createElement('div', {
         className: 'da-form-section-title',
-        textContent: '高级自定义 Body 透传'
+        textContent: '高级自定义请求体参数 (Body)'
     });
     advancedSectionTitle.style.padding = '8px 12px 4px 12px';
     advancedSectionTitle.style.fontSize = '12px';

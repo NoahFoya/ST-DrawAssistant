@@ -122,7 +122,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions = {}):
     disposers.push(() => providerField.dispose?.());
     card.append(providerField);
 
-    // 4. 服务端点 (Base URL)
+    // 4. 服务地址 (Base URL)
     const urlInput: TextInputHandle = createTextInput({
         value: providerConfigs[currentProvider]?.serverUrl || DEFAULT_PROVIDER_URLS[currentProvider],
         placeholder: 'https://api.openai.com/v1',
@@ -131,8 +131,8 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions = {}):
     });
     disposers.push(() => urlInput.dispose?.());
     const urlField: FormFieldHandle = createFormField({
-        label: '服务端点 (Base URL)',
-        helpText: 'OpenAI 兼容协议基础接口端点，通常以 /v1 结尾',
+        label: '服务地址 (Base URL)',
+        helpText: 'OpenAI 兼容协议基础接口地址，通常以 /v1 结尾',
         control: urlInput
     });
     disposers.push(() => urlField.dispose?.());
@@ -253,7 +253,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions = {}):
     const handleCheckConnection = async () => {
         const cfg = getCurrentConfig();
         if (!cfg.serverUrl) {
-            Toast.warn('请先输入服务端点 (Base URL)');
+            Toast.warn('请先输入服务地址 (Base URL)');
             return;
         }
 
@@ -304,7 +304,7 @@ export function createOpenAIServiceCard(options: OpenAIServiceCardOptions = {}):
     const handleSyncModels = async () => {
         const cfg = getCurrentConfig();
         if (!cfg.serverUrl) {
-            Toast.warn('请先输入服务端点 (Base URL)');
+            Toast.warn('请先输入服务地址 (Base URL)');
             return;
         }
 

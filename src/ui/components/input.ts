@@ -6,7 +6,7 @@
 import type { BaseControlOptions, IControlHandle } from '@types';
 import { createIconElement } from './icons';
 
-// ==================== 1. 单行文本输入框 TextInput ====================
+// 1. 单行文本输入框 TextInput
 
 export interface TextInputOptions extends BaseControlOptions {
     value?: string;
@@ -136,7 +136,7 @@ export function createTextInput(options: TextInputOptions): TextInputHandle {
     };
 }
 
-// ==================== 2. 密码/密钥输入框 PasswordInput ====================
+// 2. 密码/密钥输入框 PasswordInput
 
 export interface PasswordInputOptions extends BaseControlOptions {
     value?: string;
@@ -216,7 +216,7 @@ export function createPasswordInput(options: PasswordInputOptions): PasswordInpu
     };
 }
 
-// ==================== 3. 居中数字微调输入框 NumberInput ====================
+// 3. 居中数字微调输入框 NumberInput
 
 export interface NumberInputOptions extends BaseControlOptions {
     value?: number;
@@ -335,7 +335,7 @@ export function createNumberInput(options: NumberInputOptions): NumberInputHandl
     };
 }
 
-// ==================== 4. 多行文本输入域 Textarea ====================
+// 4. 多行文本输入域 Textarea
 
 export interface TextareaOptions extends BaseControlOptions {
     value?: string;

@@ -3,9 +3,9 @@
  * @description 酒馆聊天消息楼层交互管理器 (FloorManager)
  *
  * 遵循规范 (styles/features/image-collapse.css 与 .agents/skills/st-extension/SKILL.md)：
- * 1. 聊天楼层生成按钮注入与状态槽位管理 (.da-floor-btn-img-slot)；
+ * 1. 聊天楼层生成按钮注入与展示容器管理 (.da-floor-btn-img-slot)；
  * 2. 图像折叠/展开胶囊按钮 (.da-image-collapse-toggle)，支持对齐方式修饰符 (left / center / right)；
- * 3. 楼层嵌入已生成图像实体 (.da-generated-img)，支持悬停交互与点击呼出全屏灯箱大图；
+ * 3. 楼层嵌入已生成的图像 (.da-generated-img)，支持悬停交互与点击呼出全屏灯箱大图；
  * 4. 会话变更 (CHAT_CHANGED) 严格生命周期管理：中止未决任务、批量 URL.revokeObjectURL 释放内存，防止跨会话楼层串号与泄漏。
  */
 
@@ -63,7 +63,7 @@ export class FloorManager implements FloorManagerHandle {
     }
 
     /**
-     * 挂载生图按钮与图像槽位至指定消息楼层
+     * 挂载生图按钮与图像展示容器至指定消息楼层
      */
     public mountToMessage(messageElement: HTMLElement, messageId: number | string, _isUserMessage = false): void {
         if (this._isDisposed || !messageElement) return;
@@ -163,7 +163,7 @@ export class FloorManager implements FloorManagerHandle {
             textContent: isCollapsed ? '展开绘画图片 ▾' : '收起绘画图片 ▴'
         });
 
-        // 图片实体容器
+        // 图片展示容器
         const imgWrap = createElement('div', {
             attributes: {
                 style: `display: ${isCollapsed ? 'none' : 'block'}; position: relative; max-width: 320px; border-radius: var(--da-radius-md, 8px); overflow: hidden; margin-top: 4px; box-shadow: var(--da-shadow-md); border: 1px solid var(--da-separator);`

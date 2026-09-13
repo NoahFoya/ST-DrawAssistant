@@ -6,7 +6,7 @@
  * 1. 结构：全屏半透明模糊遮罩 (.da-modal-backdrop) + 视窗主体 (.da-inspect-modal)；
  * 2. 顶栏：标题、生图引擎徽标与耗时徽标；
  * 3. 双列工作区 (1fr 340px)：
- *    - 左栏 (.da-inspect-col-meta)：正反向提示词卡片（带复制）、LoRA 列表卡片、参数双列矩阵表格（点击单元格快速复制）；
+ *    - 左栏 (.da-inspect-col-meta)：正反向提示词卡片（带复制）、LoRA 列表卡片、参数双列表格（点击单元格快速复制）；
  *    - 右栏 (.da-inspect-col-visual)：1:1 正方形缩略图（点击可放大）、文件技术规格、快捷操作工具箱（复用提示词、一键复现、复制 JSON、下载）。
  */
 
@@ -309,7 +309,7 @@ export function createImageInfoModal(options: ImageInfoModalOptions = {}): Image
             loraBox.style.display = 'none';
         }
 
-        // 参数网格矩阵
+        // 参数属性表格
         paramsMatrix.innerHTML = '';
         const paramsList = [
             { label: '生图底模', val: ep.model || ep.checkpoint || ep.baseModel || '--' },

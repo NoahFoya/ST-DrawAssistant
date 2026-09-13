@@ -6,7 +6,7 @@
 import type { FeedbackVariant, IconName } from '@types';
 import { createIconElement } from './icons';
 
-// ==================== 1. 全局非阻塞 Toast 提示 ====================
+// 1. 全局非阻塞 Toast 提示
 
 export interface ToastOptions {
     message: string;
@@ -90,7 +90,7 @@ export class Toast {
     }
 }
 
-// ==================== 2. 字段悬浮释义帮助气泡 HelpBubble ====================
+// 2. 字段悬浮释义帮助气泡 HelpBubble
 
 export interface HelpBubbleHandle {
     readonly element: HTMLElement;
@@ -168,7 +168,7 @@ export function createHelpBubble(text: string): HelpBubbleHandle {
     };
 }
 
-// ==================== 3. 状态徽标与小圆点 Badge ====================
+// 3. 状态徽标与小圆点 Badge
 
 export interface BadgeOptions {
     text: string;
@@ -215,7 +215,7 @@ export function createBadge(options: BadgeOptions): BadgeHandle {
     };
 }
 
-// ==================== 4. 标签胶囊 Chip ====================
+// 4. 标签胶囊 Chip
 
 export interface ChipOptions {
     text: string;

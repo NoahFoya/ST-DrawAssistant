@@ -94,7 +94,7 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
     });
     const requestModeField = createFormField({
         label: '请求传输模式',
-        helpText: '控制与生图引擎的通信链路方式。直连 (Direct) 速度最快且支持实时流式进度；中继 (Relay) 由酒馆服务端代理转发，可规避浏览器跨域限制与 Mixed Content 阻断；自动 (Auto) 根据协议环境动态智能判定。',
+        helpText: '控制与生图引擎的网络传输模式。直连 (Direct) 速度最快且支持实时流式进度；中继 (Relay) 由酒馆服务端代理转发，可规避浏览器跨域限制与 Mixed Content 阻断；自动 (Auto) 根据协议环境动态智能判定。',
         control: requestModeSelect
     });
     basicCard.append(requestModeField);

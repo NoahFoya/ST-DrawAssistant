@@ -63,9 +63,7 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
         }
     };
 
-    // ==========================================
     // 1. 顶部 4 栏核心指标卡片 (StatGrid)
-    // ==========================================
     const successRate = stats.totalGenerations > 0
         ? Math.round((stats.successGenerations / stats.totalGenerations) * 100)
         : 100;
@@ -103,9 +101,7 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
     regDisposer(statGrid);
     root.appendChild(statGrid.element);
 
-    // ==========================================
     // 2. 生图分析与各引擎频次分布看板
-    // ==========================================
     const analyticsCard = createCard({
         title: '生图引擎分布与分析报表',
         iconSvg: getIconSvg('star'),
@@ -215,9 +211,7 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
     analyticsCard.append(breakdownContainer);
     root.appendChild(analyticsCard.element);
 
-    // ==========================================
     // 3. 实时系统日志终端 (LogTerminal)
-    // ==========================================
     const logCard = createCard({
         title: '实时运行日志与调试控制台',
         iconSvg: getIconSvg('settings'),

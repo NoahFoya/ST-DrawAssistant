@@ -6,7 +6,7 @@
 import type { BaseControlOptions, ButtonSize, ButtonVariant, IconName } from '@types';
 import { createIconElement } from './icons';
 
-// ==================== 1. 标准通用按钮 Button ====================
+// 1. 标准通用按钮 Button
 
 export interface ButtonOptions extends BaseControlOptions {
     text: string;
@@ -101,7 +101,7 @@ export function createButton(options: ButtonOptions): ButtonHandle {
     };
 }
 
-// ==================== 2. 紧凑图标按钮 IconButton ====================
+// 2. 紧凑图标按钮 IconButton
 
 export interface IconButtonOptions extends BaseControlOptions {
     icon: IconName;
@@ -167,7 +167,7 @@ export function createIconButton(options: IconButtonOptions): IconButtonHandle {
     };
 }
 
-// ==================== 3. 紧凑按钮组 ButtonGroup ====================
+// 3. 紧凑按钮组 ButtonGroup
 
 export function createButtonGroup(buttons: (HTMLElement | ButtonHandle | IconButtonHandle)[]): HTMLElement {
     const group = document.createElement('div');

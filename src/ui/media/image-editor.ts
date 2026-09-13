@@ -18,9 +18,7 @@ import { createNumberInput, NumberInputHandle } from '../components/input';
 import { Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
 
-// ==========================================
 // 1. 局部重绘蒙版画布模态窗 (InpaintModal)
-// ==========================================
 
 import type { InpaintResult } from '@types';
 export type { InpaintResult };
@@ -415,9 +413,7 @@ export function createInpaintModal(options: InpaintModalOptions = {}): InpaintMo
     };
 }
 
-// ==========================================
 // 2. 正圆形头像裁剪器 (CircularCropper)
-// ==========================================
 
 export interface CircularCropperOptions {
     containerEl?: HTMLElement;
