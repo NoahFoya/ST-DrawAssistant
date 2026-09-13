@@ -221,15 +221,22 @@ export async function initOnce(): Promise<void> {
     }
 
     cleanups.push(() => {
-        if (typeof (eventSource as any).removeListener === 'function') {
-            (eventSource as any).removeListener(eventTypes.APP_INITIALIZED, onAppInit);
-            (eventSource as any).removeListener(eventTypes.CHAT_CHANGED, onChatChange);
-            if (eventTypes.USER_MESSAGE_RENDERED) {
-                (eventSource as any).removeListener(eventTypes.USER_MESSAGE_RENDERED, onUserMsg);
+        const removeHostListener = (event: string, handler: (...args: any[]) => void) => {
+            const es = eventSource as any;
+            if (typeof es?.off === 'function') {
+                es.off(event, handler);
+            } else if (typeof es?.removeListener === 'function') {
+                es.removeListener(event, handler);
             }
-            if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
-                (eventSource as any).removeListener(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharMsg);
-            }
+        };
+
+        removeHostListener(eventTypes.APP_INITIALIZED, onAppInit);
+        removeHostListener(eventTypes.CHAT_CHANGED, onChatChange);
+        if (eventTypes.USER_MESSAGE_RENDERED) {
+            removeHostListener(eventTypes.USER_MESSAGE_RENDERED, onUserMsg);
+        }
+        if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
+            removeHostListener(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharMsg);
         }
     });
 
