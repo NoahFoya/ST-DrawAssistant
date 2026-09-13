@@ -1,51 +1,70 @@
-# ST-DrawAssistant 项目忽略规则
-docs/
-tests/
-vitest.config.mts
-
-# TypeScript 增量构建缓存
+# 编译产物与构建缓存
+# dist/ 作为扩展运行时载体纳入版本管理，不予忽略
+build/
+out/
+.cache/
 *.tsbuildinfo
+.parcel-cache/
+.eslintcache
 
-# Logs
-logs
+# 依赖包
+node_modules/
+jspm_packages/
+web_modules/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+
+# 日志与调试报告
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 lerna-debug.log*
-
-# Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# Runtime data & locks
-pids
+# 运行时数据与测试覆盖率
+pids/
 *.pid
 *.seed
 *.pid.lock
-coverage
+coverage/
 *.lcov
-.nyc_output
+.nyc_output/
+.vitest/
+test-results/
 
-# Build Outputs & Bundles
-build/
-out/
-.cache/
-
-# Dependencies
-node_modules/
-jspm_packages/
-web_modules/
-
-# Environment Variables & Secrets
+# 环境变量与密钥
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
-# OS & Editor Metadata
-.DS_Store
+# 操作系统生成文件
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*~
+*.tmp
+*.temp
+*.bak
+
+# 编辑器与 IDE
 .vscode/
 .idea/
-
-# Agent Skills (Local custom environment)
-.agents/
+.fleet/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
