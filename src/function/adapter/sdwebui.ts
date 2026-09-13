@@ -107,10 +107,10 @@ export class SdWebUIAdapter extends BaseAdapter {
 
             let assetsSummary = models.length > 0
                 ? `已同步 ${models.length} 款主模型、${vaes.length} 款 VAE、${loras.length} 款 LoRA、${upscalers.length} 款放大算法`
-                : '通信链路畅通';
+                : '网络连接正常';
 
             if (failedEndpoints.length > 0) {
-                assetsSummary += ` (部分端点未就绪: ${failedEndpoints.join(', ')})`;
+                assetsSummary += ` (部分接口未就绪: ${failedEndpoints.join(', ')})`;
             }
 
             return {

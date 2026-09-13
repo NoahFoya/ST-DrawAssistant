@@ -31,7 +31,7 @@ interface InternalTaskItem extends TaskItem {
     timeoutTimer?: ReturnType<typeof setTimeout>;
 }
 
-/** 任务执行函数接口 (与具体网络协议解耦) */
+/** 任务底层执行函数类型 */
 export type TaskExecutor = (task: TaskItem, signal: AbortSignal) => Promise<ImageGenerationResult>;
 
 /** 任务队列调度器构造参数 */
@@ -233,7 +233,7 @@ export class TaskQueueManager implements IDisposable {
     }
 
     /**
-     * 上报任务中间生成进度与预览图片
+     * 更新任务中间生成进度与预览图片
      */
     public reportProgress(taskId: string, progress: number, previewUrl?: string): void {
         const task = this._tasks.get(taskId);

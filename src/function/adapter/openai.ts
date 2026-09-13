@@ -121,7 +121,7 @@ export class OpenAIAdapter extends BaseAdapter {
             return {
                 ok: false,
                 latencyMs: 0,
-                message: err?.message || '无法连接至目标端点，请检查网络或服务端点'
+                message: err?.message || '无法连接至目标服务地址，请检查网络或服务地址'
             };
         }
     }

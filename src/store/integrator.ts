@@ -1,7 +1,7 @@
 /**
- * 生图结果整合与消息楼层事务协调器
+ * 生图结果整合与消息楼层协同
  * 职责：协调任务完成流转、本地分立存储持久化、构建轻量级元数据条目、
- * 写入聊天楼层插槽 [swipeId][buttonIndex]，并触发 MESSAGE_UPDATED 与 saveChat 事务闭环。
+ * 写入聊天楼层数据结构 [swipeId][buttonIndex]，并触发 MESSAGE_UPDATED 与 saveChat 会话持久化。
  */
 
 import type {
@@ -102,7 +102,7 @@ export class ResultIntegrator implements IDisposable {
 
     /**
      * 整合单次生图结果：持久化存储并写入聊天记录楼层
-     * @param task 已完成的任务实体
+     * @param task 已完成的生图任务对象
      * @param result 生图响应结果
      * @returns 持久化后的图片资产记录
      */
@@ -185,7 +185,7 @@ export class ResultIntegrator implements IDisposable {
 
             this._host.writeChatMessageExtra(messageId, 'da_images', updatedRoot);
 
-            // 3. 事务闭环：先通知视图更新，再持久化保存聊天
+            // 3. 数据保存：先触发视图更新通知，再持久化保存聊天
             try {
                 this._host.emitMessageUpdated?.(messageId);
                 await this._host.saveChat?.();

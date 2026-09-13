@@ -3,7 +3,7 @@
  * 职责：
  * 1. 纯函数式串联提示词清洗、管道符切分、世界书外观标签展开、插件正则规则与画风预设拼装；
  * 2. 宿主原生宏安全委托调用（不自造酒馆宏引擎）；
- * 3. 严格解耦 LoRA 语法与工作流变量，仅输出纯净标准的领域正负向提示词。
+ * 3. 分离 LoRA 语法与工作流变量，仅输出纯净标准的正负向提示词。
  */
 
 import {
@@ -104,7 +104,7 @@ function applyMacroRuleReplacements(
 
 /**
  * 执行提示词处理流水线
- * 依次执行：干扰过滤 -> 管道符切分 -> 插件正则 -> 世界书外观替换 -> 宿主宏委托 -> 画风预设拼装 -> 标点最终收敛
+ * 依次执行：干扰过滤 -> 管道符切分 -> 插件正则 -> 世界书外观替换 -> 宿主宏替换 -> 画风预设拼装 -> 标点符号清理与规范化
  */
 export function processPrompt(options: PromptPipelineOptions): ProcessedPromptResult {
     const rawInput = options.rawPrompt || '';
@@ -153,7 +153,7 @@ export function processPrompt(options: PromptPipelineOptions): ProcessedPromptRe
     positive = joinPromptParts(options.prefix, positive, options.suffix);
     negative = joinPromptParts(options.defaultNegative, negative);
 
-    // 8. 标点最终收敛
+    // 8. 标点符号清理与规范化
     positive = normalizePromptPunctuation(positive);
     negative = normalizePromptPunctuation(negative);
 

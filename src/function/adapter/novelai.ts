@@ -156,7 +156,7 @@ export class NovelAIAdapter extends BaseAdapter {
             return {
                 ok: false,
                 latencyMs: 0,
-                message: err?.message || '无法连接至 NovelAI 官方订阅端点'
+                message: err?.message || '无法连接至 NovelAI 官方服务'
             };
         }
     }

@@ -149,7 +149,7 @@ export class ComfyUIAdapter extends BaseAdapter {
 
             const assetsSummary = models.length > 0
                 ? `已同步 ${models.length} 款主模型、${vaes.length} 款 VAE、${loras.length} 款 LoRA`
-                : (assetWarning ? `通信正常 (${latencyMs}ms)，但${assetWarning}` : '通信链路畅通');
+                : (assetWarning ? `通信正常 (${latencyMs}ms)，但${assetWarning}` : '网络连接正常');
 
             return {
                 ok: true,
