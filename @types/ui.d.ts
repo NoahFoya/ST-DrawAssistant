@@ -1,14 +1,12 @@
 /**
  * UI 表现层通用接口、原子控件规范与跨子层数据模型
- * 集中管理 components/、composite/、layout/、media/、views/ 间的共享契约
+ * 集中管理 components/、composite/、layout/、media/、views/ 的共享类型与组件接口
  */
 
 import type { HealthCheckResult } from './adapter';
 import type { StoredImageRecord } from './storage';
 
-// ==========================================
-// 1. 图标与基础原子控件契约 (tool-ui 规范)
-// ==========================================
+// 1. 基础原子控件与图标类型
 
 /** 纯净内联矢量 SVG 图标标识名枚举 */
 export type IconName =
@@ -80,9 +78,7 @@ export type ButtonSize = 'normal' | 'sm';
 /** 反馈提示语义化类型 */
 export type FeedbackVariant = 'success' | 'warn' | 'error' | 'info' | 'muted';
 
-// ==========================================
 // 2. 复合卡片与业务数据模型
-// ==========================================
 
 /** 连接卡片当前状态 */
 export type ConnectionCardStatus = 'idle' | 'checking' | 'online' | 'offline';
@@ -199,14 +195,12 @@ export interface OpenAIProviderConfig {
     customHeaders?: string;
 }
 
-// ==========================================
 // 3. 弹窗骨架与交互状态模型
-// ==========================================
 
 /** 状态指示圆点显示状态 */
 export type StatusDotState = 'ok' | 'checking' | 'error' | 'warn' | 'idle';
 
-/** 模态主弹窗标签页定义契约 */
+/** 模态主弹窗标签页配置项 */
 export interface TabDefinition {
     id: string;
     label: string;
@@ -228,9 +222,7 @@ export interface ModalShellOptions {
     tabs?: TabDefinition[];
 }
 
-// ==========================================
-// 4. 图像重绘与媒体操作输出契约
-// ==========================================
+// 4. 图像局部重绘输出结果类型
 
 /** 局部涂抹重绘输出结果 */
 export interface InpaintResult {
@@ -239,9 +231,7 @@ export interface InpaintResult {
     maskBase64: string;
 }
 
-// ==========================================
-// 5. UI 顶层生命周期与子系统对外契约
-// ==========================================
+// 5. UI 模块对外操作接口与服务定义
 
 /** UI 子系统装配服务输入 */
 export interface UIServices {

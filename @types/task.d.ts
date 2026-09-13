@@ -1,14 +1,14 @@
 /**
- * 生图任务生命周期、上下文标识与实体模型
+ * 生图任务生命周期、上下文标识与数据模型
  */
 
 import type { EngineType, ImageGenerationParams, ImageGenerationResult } from './generation';
 
-/** 生图任务生命周期状态机枚举 */
+/** 生图任务状态 */
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 /**
- * 任务上下文标识（用于锁定楼层分支与槽位，防跨角色串写）
+ * 任务上下文标识（用于关联特定会话、消息楼层与滑动分页，避免跨会话或楼层错乱）
  */
 export interface TaskContextIdentity {
     readonly taskId: string;
@@ -19,7 +19,7 @@ export interface TaskContextIdentity {
 }
 
 /**
- * 统一生图任务实体模型
+ * 统一生图任务数据模型
  */
 export interface TaskItem {
     /** 任务唯一标识 (UUID) */
@@ -49,6 +49,6 @@ export interface TaskItem {
 }
 
 /**
- * 任务底层执行器回调契约
+ * 任务底层执行函数类型
  */
 export type TaskExecutor = (task: TaskItem, signal: AbortSignal) => Promise<ImageGenerationResult>;
