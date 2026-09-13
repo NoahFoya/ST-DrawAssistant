@@ -171,11 +171,8 @@ export function createImageInfoModal(options: ImageInfoModalOptions = {}): Image
     previewBox.appendChild(zoomBadge);
 
     previewBox.addEventListener('click', () => {
-        if (currentRecord) {
-            const url = currentRecord.originalBlob
-                ? URL.createObjectURL(currentRecord.originalBlob)
-                : '';
-            options.onPreviewImage?.(url);
+        if (currentRecord && currentObjectUrl) {
+            options.onPreviewImage?.(currentObjectUrl);
         }
     });
     colVisual.appendChild(previewBox);

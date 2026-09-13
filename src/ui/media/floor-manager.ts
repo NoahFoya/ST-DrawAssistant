@@ -42,6 +42,7 @@ export class FloorManager implements FloorManagerHandle {
     private readonly _options: FloorManagerOptions;
 
     private _activeSlots = new Map<string | number, HTMLElement>();
+    private _slotUrls = new Map<string | number, string>();
     private _allocatedUrls = new Set<string>();
     private _disposers: IDisposable[] = [];
     private _isDisposed = false;
@@ -140,6 +141,15 @@ export class FloorManager implements FloorManagerHandle {
         if (this._isDisposed) return;
         const slot = this._activeSlots.get(messageId);
         if (!slot) return;
+
+        const oldUrl = this._slotUrls.get(messageId);
+        if (oldUrl && oldUrl !== imageUrl) {
+            if (oldUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(oldUrl);
+            }
+            this._allocatedUrls.delete(oldUrl);
+        }
+        this._slotUrls.set(messageId, imageUrl);
 
         slot.innerHTML = '';
         this._allocatedUrls.add(imageUrl);
@@ -325,6 +335,7 @@ export class FloorManager implements FloorManagerHandle {
             }
         }
         this._allocatedUrls.clear();
+        this._slotUrls.clear();
         this._activeSlots.clear();
     }
 

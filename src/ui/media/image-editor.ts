@@ -364,6 +364,10 @@ export function createInpaintModal(options: InpaintModalOptions = {}): InpaintMo
             clearMask();
             URL.revokeObjectURL(url);
         };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            Toast.error('底图加载失败，请重试');
+        };
         img.src = url;
     }
 
@@ -582,6 +586,19 @@ export function createCircularCropper(options: CircularCropperOptions = {}): Cir
 
     disposers.push(() => backdrop.remove());
 
+    let currentCropperUrl: string | null = null;
+
+    const revokeCropperUrl = () => {
+        if (currentCropperUrl) {
+            try {
+                URL.revokeObjectURL(currentCropperUrl);
+            } catch {
+                // 忽略注销异常
+            }
+            currentCropperUrl = null;
+        }
+    };
+
     function open(blob: Blob) {
         isOpen = true;
         const targetParent = options.containerEl || (typeof document !== 'undefined' ? document.body : null);
@@ -593,7 +610,10 @@ export function createCircularCropper(options: CircularCropperOptions = {}): Cir
         posX = 0;
         posY = 0;
 
-        const url = URL.createObjectURL(blob);
+        revokeCropperUrl();
+        currentCropperUrl = URL.createObjectURL(blob);
+        const url = currentCropperUrl;
+
         const img = new Image();
         img.onload = () => {
             currentImage = img;
@@ -604,12 +624,17 @@ export function createCircularCropper(options: CircularCropperOptions = {}): Cir
             posY = 40;
             updateTransform();
         };
+        img.onerror = () => {
+            revokeCropperUrl();
+            Toast.error('裁剪原图加载失败');
+        };
         img.src = url;
     }
 
     function close() {
         isOpen = false;
         backdrop.style.display = 'none';
+        revokeCropperUrl();
         options.onClose?.();
     }
 
@@ -621,6 +646,7 @@ export function createCircularCropper(options: CircularCropperOptions = {}): Cir
             return isOpen;
         },
         dispose(): void {
+            revokeCropperUrl();
             for (const d of disposers) {
                 d();
             }

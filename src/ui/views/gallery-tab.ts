@@ -58,8 +58,22 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     let engineFilter = 'all';
     let favFilter = 'all';
 
-    // 缓存卡片句柄
+    // 缓存卡片句柄与当前页分配的临时展示 Object URL
     let cardHandles: MediaCardHandle[] = [];
+    const pageBlobUrls: string[] = [];
+
+    const revokePageBlobUrls = () => {
+        for (const url of pageBlobUrls) {
+            if (url.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch {
+                    // 忽略销毁异常
+                }
+            }
+        }
+        pageBlobUrls.length = 0;
+    };
 
     // ==========================================
     // 1. 顶部存储配额监控条 (StorageBar)
@@ -401,6 +415,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
             card.dispose();
         }
         cardHandles = [];
+        revokePageBlobUrls();
         grid.innerHTML = '';
 
         const pageRecords = getPageRecords();
@@ -414,7 +429,11 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
             grid.style.display = 'grid';
 
             for (const r of pageRecords) {
-                const url = r.originalBlob ? URL.createObjectURL(r.originalBlob) : '';
+                let url = '';
+                if (r.originalBlob) {
+                    url = URL.createObjectURL(r.originalBlob);
+                    pageBlobUrls.push(url);
+                }
 
                 const itemModel: MediaCardItemModel = {
                     id: r.id,
@@ -529,6 +548,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
                 c.dispose();
             }
             cardHandles = [];
+            revokePageBlobUrls();
             for (const d of disposers) {
                 d();
             }
