@@ -1,7 +1,7 @@
 {
   "name": "ST-DrawAssistant",
   "display_name": "Starlight DrawAssistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "NoahFoya",
   "description": "SillyTavern context-aware AI image generation extension with multi-backend support",
   "js": "dist/index.js",

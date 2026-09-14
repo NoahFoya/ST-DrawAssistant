@@ -5,12 +5,16 @@
   "requestMode": "direct",
   "saveToIndexedDB": true,
   "saveToServer": false,
+  "embedToBase64": false,
   "enableThumbnail": true,
   "deduplicateHash": true,
   "maxStoredImages": 500,
   "taskTimeoutMs": 180000,
   "maxConcurrentTasks": 1,
   "autoGenerate": false,
+  "cleanPrompt": true,
+  "enabledExtensions": {},
+  "extensionCustomSettings": {},
   "themePreset": "dark",
   "presets": {
     "themes": [],
@@ -65,7 +69,7 @@
     "imageDisplay": {
       "align": "center",
       "objectFit": "contain",
-      "maxHeight": 0,
+      "maxHeight": 480,
       "maxWidthPct": 100,
       "rounded": true,
       "collapsed": false
