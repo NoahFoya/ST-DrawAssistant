@@ -11,3 +11,4 @@ export * from './color-picker';
 export * from './button';
 export * from './feedback';
 export * from './dirty-tracker';
+export * from './slider';

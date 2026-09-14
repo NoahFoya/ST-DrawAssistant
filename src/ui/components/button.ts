@@ -13,6 +13,7 @@ export interface ButtonOptions extends BaseControlOptions {
     variant?: ButtonVariant;
     size?: ButtonSize;
     icon?: IconName;
+    title?: string;
     loading?: boolean;
     onClick?: (e: MouseEvent) => void;
 }
@@ -45,6 +46,7 @@ export function createButton(options: ButtonOptions): ButtonHandle {
     }
     if (options.className) btn.classList.add(options.className);
     if (options.id) btn.id = options.id;
+    if (options.title) btn.title = options.title;
     if (options.ariaLabel) btn.setAttribute('aria-label', options.ariaLabel);
     if (options.disabled) btn.disabled = true;
 

@@ -14,6 +14,7 @@ export interface ColorPickerOptions extends BaseControlOptions {
 export interface ColorPickerHandle extends IControlHandle<string> {
     readonly colorInputElement: HTMLInputElement;
     readonly hexInputElement: HTMLInputElement;
+    focus(): void;
 }
 
 /** 规范化 3位或6位 Hex 颜色为 #RRGGBB 大写格式 */
@@ -112,7 +113,14 @@ export function createColorPicker(options: ColorPickerOptions): ColorPickerHandl
         setError(hasError: boolean, message?: string): void {
             wrapper.classList.toggle('is-invalid', hasError);
             hexInput.classList.toggle('is-invalid', hasError);
-            if (message) hexInput.title = message;
+            if (message) {
+                hexInput.title = message;
+            } else if (!hasError) {
+                hexInput.title = '';
+            }
+        },
+        focus(): void {
+            hexInput.focus();
         },
         dispose(): void {
             colorInput.removeEventListener('input', onColorInput);

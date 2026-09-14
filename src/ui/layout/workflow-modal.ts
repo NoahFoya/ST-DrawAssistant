@@ -1,14 +1,16 @@
 /**
  * @module src/ui/layout/workflow-modal
- * @description ComfyUI 工作流蓝图可视化编辑器模态窗 (WorkflowModal)
+ * @description ComfyUI 工作流蓝图与 JSON 检查弹窗 (WorkflowModal)
  *
- * 遵循规范 (styles/features/workflow-modal.css)：
- * 1. 结构：全屏模糊遮罩 (.da-modal-backdrop) + 视窗主体 (.da-workflow-modal-inner)；
- * 2. 顶部工具栏：工作流名称、节点计数徽标、格式化变量、复制 JSON、导出文件、关闭按键；
- * 3. 工作区双列布局：
- *    - 左侧画布/网格：节点流程卡片 (.da-workflow-mini-card) 与分类色彩徽标 (Prompt, Sampler, Model, Size, Output, LoRA)；
- *    - 右侧检查器 (390px)：属性检查器面板 (.da-workflow-inspector-panel)，展示选中节点的 inputs 参数与宏变量插桩；
- * 4. 支持快捷按键：Esc 退出、切换 Raw JSON 视图与可视化视图。
+ * 核心功能：
+ * 1. 提供 ComfyUI API 工作流节点的可视化流程结构与原生 JSON 预览；
+ * 2. 支持节点属性检查、占位变量高亮与参数联动；
+ * 3. 提供工作流 JSON 本地导入、导出下载与剪贴板一键复制；
+ * 4. 支持可视化与 Raw 源码视图无缝切换，并提供键盘快捷键退出。
+ *
+ * 注意事项：
+ * 1. 复杂工作流可能包含上百个节点，渲染迷你卡片时需控制 DOM 数量并做局部滚动隔离；
+ * 2. 外部 JSON 文本导入时需执行语法校验与防呆拦截，防止非法数据污染当前预设。
  */
 
 import { createElement } from '../../util/dom';

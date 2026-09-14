@@ -51,8 +51,18 @@
 }
 
 .da-preset-select-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
     flex: 1;
     min-width: 140px;
+}
+
+/* 未保存状态下下拉框呈现琥珀色轻量高亮，悬浮时由 title 呈现提示，无需实体角标 */
+.da-preset-select-wrapper.is-dirty .da-select,
+.da-preset-select.is-dirty {
+    border-color: var(--da-color-warn, #f59e0b) !important;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3) !important;
 }
 
 .da-preset-select {
@@ -123,7 +133,9 @@
 }
 
 /* 未保存修改状态高亮：当方案配置有变动且未持久化时，保存按钮切换为警示色高亮，提醒用户保存 */
-.da-preset-btn--save.is-dirty {
+.da-preset-btn--save.is-dirty,
+.da-preset-toolbar-right .da-icon-btn.is-dirty,
+.da-preset-toolbar-right .da-icon-btn.da-preset-btn--save.is-dirty {
     background: var(--da-color-warn, #f59e0b) !important;
     border-color: var(--da-color-warn, #f59e0b) !important;
     color: #000000 !important;

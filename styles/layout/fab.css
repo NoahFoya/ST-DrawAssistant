@@ -1,7 +1,7 @@
 /**
  * @module styles/layout/fab
  * @layer layout (Layer 2)
- * @description 全局悬浮球控件 (FAB)、未读徽标及设置面板图标选择器
+ * @description 常驻悬浮球控件 (FAB)、未读徽标及设置面板图标选择器
  *
  * 职责与约束：
  * 1. 作为常驻浏览器的悬浮快速入口，支持在屏幕四周边沿任意拖拽定位；

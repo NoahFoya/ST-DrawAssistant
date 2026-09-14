@@ -1,14 +1,16 @@
 /**
  * @module src/ui/layout/modal-shell
- * @description 主设置模态外壳 (SettingsModal / ModalShell)
+ * @description 插件主设置模态窗外壳 (ModalShell)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第五节第 1 条)：
- * 1. 结构：全屏毛玻璃遮罩 (.da-modal-backdrop) + 视窗主体 (.da-main-modal-inner)；
- * 2. 顶栏 (46px)：渐变标题、版本徽标、快捷主题切换下拉胶囊、关闭按钮；
- * 3. 侧栏 (190px)：双分组导航 (生图驱动与系统管理)、语义分割线、激活指示条；
- * 4. 内容区：局部独立垂直滚动上下文 (.da-modal-content)，保持 scrollbar-gutter: stable；
- * 5. 底栏 (34px)：通信健康状态小圆点与延迟指示；
- * 6. 交互：支持 Escape 快捷键退出、遮罩点击退出、Tab 切换生命周期。
+ * 核心功能：
+ * 1. 提供插件主模态窗口的整体框架，包含头部导航、分组侧边栏、主内容视窗与状态底栏；
+ * 2. 管理多选项卡 (Tabs) 的切换路由、视图挂载与生命周期管理；
+ * 3. 支持遮罩层点击、关闭按钮与键盘快捷键退出；
+ * 4. 底部实时指示当前生图后端的连通性状态与网络响应延迟。
+ *
+ * 注意事项：
+ * 1. 模态窗弹出与隐藏需维护焦点状态并锁定背景滚动，避免影响宿主正常交互；
+ * 2. 切换 Tab 时需妥善管理原视图的清理与新视图的渲染，防止事件监听遗留。
  */
 
 import { createElement } from '../../util/dom';

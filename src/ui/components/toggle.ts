@@ -14,6 +14,7 @@ export interface ToggleOptions extends BaseControlOptions {
 
 export interface ToggleHandle extends IControlHandle<boolean> {
     readonly inputElement: HTMLInputElement;
+    focus(): void;
 }
 
 export function createToggle(options: ToggleOptions): ToggleHandle {
@@ -59,7 +60,14 @@ export function createToggle(options: ToggleOptions): ToggleHandle {
         },
         setError(hasError: boolean, message?: string): void {
             label.classList.toggle('is-invalid', hasError);
-            if (message) label.title = message;
+            if (message) {
+                label.title = message;
+            } else if (!hasError) {
+                label.title = '';
+            }
+        },
+        focus(): void {
+            input.focus();
         },
         dispose(): void {
             input.removeEventListener('change', onChange);

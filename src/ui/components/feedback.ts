@@ -1,12 +1,12 @@
 /**
  * 反馈与指示基元组件
- * 包含全局非阻塞 Toast 提示、字段悬浮帮助气泡、状态徽标与标签胶囊。
+ * 包含非阻塞 Toast 提示、字段悬浮帮助气泡、状态徽标与标签胶囊。
  */
 
 import type { FeedbackVariant, IconName } from '@types';
 import { createIconElement } from './icons';
 
-// 1. 全局非阻塞 Toast 提示
+// 1. 非阻塞 Toast 提示
 
 export interface ToastOptions {
     message: string;
@@ -23,20 +23,12 @@ export class Toast {
         const type = typeof options === 'string' ? 'info' : (options.type ?? 'info');
         const durationMs = typeof options === 'string' ? 2500 : (options.durationMs ?? 2500);
 
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-
-        if (this.activeElement) {
-            this.activeElement.remove();
-            this.activeElement = null;
-        }
+        this.clear();
 
         if (typeof document === 'undefined') return;
 
         const toast = document.createElement('div');
-        toast.className = 'da-toast';
+        toast.className = `da-toast da-toast--${type}`;
         toast.setAttribute('role', 'status');
         toast.setAttribute('aria-live', 'polite');
 
@@ -73,6 +65,17 @@ export class Toast {
         }, durationMs);
     }
 
+    public static clear(): void {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        if (this.activeElement) {
+            this.activeElement.remove();
+            this.activeElement = null;
+        }
+    }
+
     public static success(message: string, durationMs?: number): void {
         this.show({ message, type: 'success', durationMs });
     }
@@ -92,30 +95,75 @@ export class Toast {
 
 // 2. 字段悬浮释义帮助气泡 HelpBubble
 
+export interface HelpBubbleOptions {
+    title?: string;
+    text: string;
+}
+
 export interface HelpBubbleHandle {
     readonly element: HTMLElement;
-    setText(text: string): void;
+    readonly bubbleElement: HTMLElement | null;
+    setText(text: string, title?: string): void;
+    show(): void;
+    hide(): void;
     dispose(): void;
 }
 
-export function createHelpBubble(text: string): HelpBubbleHandle {
+export function createHelpBubble(options: string | HelpBubbleOptions): HelpBubbleHandle {
+    const initialTitle = typeof options === 'string' ? undefined : options.title;
+    const initialText = typeof options === 'string' ? options : options.text;
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'da-help-btn';
-    btn.setAttribute('aria-label', text);
+    btn.setAttribute('aria-label', initialTitle ? `${initialTitle}: ${initialText}` : initialText);
     btn.textContent = '?';
 
-    let currentText = text;
+    let currentTitle = initialTitle;
+    let currentText = initialText;
     let bubble: HTMLElement | null = null;
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const renderBubbleContent = (target: HTMLElement) => {
+        target.innerHTML = '';
+        if (currentTitle) {
+            const header = document.createElement('div');
+            header.className = 'da-help-bubble-header';
+            header.textContent = currentTitle;
+            target.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'da-help-bubble-body';
+            body.textContent = currentText;
+            target.appendChild(body);
+        } else {
+            target.textContent = currentText;
+        }
+    };
 
     const showBubble = () => {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
         if (!currentText || typeof document === 'undefined') return;
-        if (bubble) bubble.remove();
+        if (bubble) return;
 
         bubble = document.createElement('div');
         bubble.className = 'da-help-bubble';
-        bubble.textContent = currentText;
+        renderBubbleContent(bubble);
         document.body.appendChild(bubble);
+
+        // 鼠标移入气泡本体时防抖保活，方便复制或细读
+        bubble.addEventListener('mouseenter', () => {
+            if (hideTimer) {
+                clearTimeout(hideTimer);
+                hideTimer = null;
+            }
+        });
+        bubble.addEventListener('mouseleave', () => {
+            scheduleHide();
+        });
 
         const rect = btn.getBoundingClientRect();
         const bubbleRect = bubble.getBoundingClientRect();
@@ -123,7 +171,7 @@ export function createHelpBubble(text: string): HelpBubbleHandle {
         let left = rect.left + rect.width / 2;
         let top = rect.top - 8;
 
-        // 视口边界碰撞检测，防止左右超出屏幕
+        // 视口边界碰撞检测，防止左右超出屏幕 (左右安全预留 10px)
         const halfWidth = bubbleRect.width / 2;
         if (left - halfWidth < 10) {
             left = halfWidth + 10;
@@ -131,19 +179,36 @@ export function createHelpBubble(text: string): HelpBubbleHandle {
             left = window.innerWidth - halfWidth - 10;
         }
 
-        // 顶部空间不足时翻转到下方展示
+        // 顶部空间不足时自动翻转至下方展示
         if (top - bubbleRect.height < 10) {
             top = rect.bottom + 8;
             bubble.style.transform = 'translate(-50%, 0)';
+            bubble.classList.add('da-help-bubble--bottom');
         } else {
             bubble.style.transform = 'translate(-50%, -100%)';
+            bubble.classList.add('da-help-bubble--top');
         }
 
         bubble.style.left = `${left}px`;
         bubble.style.top = `${top}px`;
     };
 
-    const hideBubble = () => {
+    const scheduleHide = () => {
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+            if (bubble) {
+                bubble.remove();
+                bubble = null;
+            }
+            hideTimer = null;
+        }, 100);
+    };
+
+    const immediateHide = () => {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
         if (bubble) {
             bubble.remove();
             bubble = null;
@@ -151,18 +216,35 @@ export function createHelpBubble(text: string): HelpBubbleHandle {
     };
 
     btn.addEventListener('mouseenter', showBubble);
-    btn.addEventListener('mouseleave', hideBubble);
+    btn.addEventListener('mouseleave', scheduleHide);
+    btn.addEventListener('focus', showBubble);
+    btn.addEventListener('blur', immediateHide);
 
     return {
         element: btn,
-        setText(newText: string): void {
+        get bubbleElement() {
+            return bubble;
+        },
+        setText(newText: string, newTitle?: string): void {
             currentText = newText;
-            btn.setAttribute('aria-label', newText);
+            currentTitle = newTitle;
+            btn.setAttribute('aria-label', currentTitle ? `${currentTitle}: ${currentText}` : currentText);
+            if (bubble) {
+                renderBubbleContent(bubble);
+            }
+        },
+        show(): void {
+            showBubble();
+        },
+        hide(): void {
+            immediateHide();
         },
         dispose(): void {
-            hideBubble();
+            immediateHide();
             btn.removeEventListener('mouseenter', showBubble);
-            btn.removeEventListener('mouseleave', hideBubble);
+            btn.removeEventListener('mouseleave', scheduleHide);
+            btn.removeEventListener('focus', showBubble);
+            btn.removeEventListener('blur', immediateHide);
             btn.remove();
         }
     };

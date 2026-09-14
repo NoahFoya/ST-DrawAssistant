@@ -5,8 +5,8 @@
  *
  * 职责与约束：
  * 1. 负责管理多条目动态列表容器（如挂载的 LoRA 模型列表）；
- * 2. 单个 LoRA 卡片集成名称、缺失检测、模型权重/CLIP 权重双数字调节输入框与启用开关；
- * 3. 当后端目录中对应 LoRA 文件缺失时通过 .da-lora-item--missing 警示用户；
+ * 2. 单个 LoRA 卡片集成名称、失效检测、模型权重/CLIP 权重双数字调节输入框与启用开关；
+ * 3. 当后端目录中对应 LoRA 文件失效或未找到时通过 .da-lora-item.is-invalid 警示用户；
  * 4. 底部包含跨设备自适应的添加选择行（.da-lora-add-row）。
  */
 
@@ -127,14 +127,8 @@
     opacity: 0.75;
 }
 
-/* 缺失态：当后端模型列表不存在此模型时，边框与背景变红警示 */
-.da-lora-item--missing {
-    border-color: rgba(255, 69, 58, 0.4) !important;
-    background: rgba(255, 69, 58, 0.04) !important;
-}
-
 /* 4. LoRA 卡片头部 (.da-lora-item__header)
-   水平排列模型图标、模型文件名、缺失标签与删除按钮 */
+   水平排列模型图标、模型文件名、启用开关与删除按钮 */
 .da-lora-item__header {
     display: flex;
     align-items: center;
@@ -168,10 +162,6 @@
     user-select: text;
 }
 
-.da-lora-item__title-box .da-control-state-badge {
-    margin-right: 2px;
-}
-
 .da-lora-item__actions {
     display: flex;
     align-items: center;
@@ -179,29 +169,36 @@
     flex-shrink: 0;
 }
 
-.da-lora-item__del {
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.da-lora-item__weight {
-    font-family: var(--da-font-mono, monospace);
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--da-accent-color);
-    background: rgba(var(--da-accent-rgb), 0.1);
-    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
-    padding: 1px 6px;
+/* 右上角 [ × ] 紧凑删除按钮 (提高优先级消除 !important 堆砌) */
+.da-lora-item .da-lora-item__close-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    padding: 0;
     border-radius: var(--da-radius-sm, 4px);
-}
-
-.da-lora-item__delete {
     color: var(--da-text-muted);
-    transition: color 0.15s ease;
+    background: transparent;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.da-lora-item__delete:hover {
+.da-lora-item .da-lora-item__close-btn:hover {
+    background: rgba(255, 69, 58, 0.15);
     color: var(--da-color-error, #ff453a);
+}
+
+/* 失效状态：当模型文件未在生图服务中检测到时，呈现琥珀/警告边框，鼠标悬停显示原因说明 */
+.da-lora-item.is-invalid {
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.45);
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.04);
+}
+
+.da-lora-item.is-invalid .da-lora-item__name {
+    color: var(--da-color-warn, #f59e0b);
 }
 
 /* 5. LoRA 参数调节细微布局 (.da-lora-item__body)
@@ -307,4 +304,174 @@
         align-self: flex-end;
     }
 }
+
+/* 4. 后端服务连接卡片 (.da-connection-card) */
+.da-connection-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+    gap: var(--da-space-xs, 6px);
+    transition: border-color 0.2s var(--da-ease);
+}
+
+.da-connection-card.is-online {
+    border-color: rgba(var(--da-success-rgb, 16, 185, 129), 0.35);
+}
+
+.da-connection-card.is-offline {
+    border-color: rgba(var(--da-danger-rgb, 239, 68, 68), 0.35);
+}
+
+.da-connection-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-connection-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-connection-card__title {
+    font-size: var(--da-font-size-base, 0.88rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-connection-card__url {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-muted);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-connection-card__badge-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-connection-card__latency {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-family: var(--da-font-mono, monospace);
+    color: var(--da-success, #10b981);
+    background: rgba(var(--da-success-rgb, 16, 185, 129), 0.1);
+    padding: 2px 6px;
+    border-radius: var(--da-radius-pill, 20px);
+}
+
+.da-connection-card__input-row {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-connection-card__input-row .da-input-wrapper,
+.da-connection-card__input-row > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-connection-card__token-row {
+    padding: 0 var(--da-space-md, 12px) var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-connection-card__feedback {
+    margin: 0 var(--da-space-md, 12px) var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    padding: 6px 10px;
+    border-radius: var(--da-radius-sm, 6px);
+    font-size: var(--da-font-size-xs, 0.78rem);
+    line-height: 1.4;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color);
+    box-sizing: border-box;
+}
+
+/* 10. 画幅尺寸与分辨率选择器 (.da-dimension-picker) 方案 B 布局 */
+.da-dimension-picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__preset-row {
+    width: 100%;
+}
+
+.da-dimension-picker__preset-row .da-select-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.da-dimension-picker__inputs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-dimension-picker__side-label {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.da-dimension-picker__side .da-number-stepper {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+}
+
+.da-dimension-picker__swap-btn {
+    flex-shrink: 0;
+}
+
+/* 11. 采样超参卡片与种子微调容器 (.da-sampler-card & .da-seed-wrapper) */
+.da-sampler-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-seed-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 240px;
+}
+
+.da-seed-wrapper .da-input,
+.da-seed-wrapper .da-number-stepper {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-seed-wrapper .da-icon-btn {
+    flex-shrink: 0;
+}
+
 

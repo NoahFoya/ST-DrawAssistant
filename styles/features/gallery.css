@@ -21,10 +21,26 @@
 
 .da-gallery-toolbar {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
     width: 100%;
 }
+
+.da-gallery-toolbar .da-input-group {
+    flex: 2;
+    min-width: 180px;
+}
+
+.da-gallery-toolbar .da-gallery-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 3;
+    flex-wrap: wrap;
+}
+
 
 /* 2. 自适应媒体流式卡片网格 (.da-media-grid)
    利用 CSS Grid repeat(auto-fill, minmax(130px, 1fr)) 实现响应式卡片排布，

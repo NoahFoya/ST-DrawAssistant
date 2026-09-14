@@ -4,7 +4,7 @@
  * @description ST-DrawAssistant 样式系统单一总入口 (ITCSS 5-Layer Style Registry)
  *
  * 架构规范：
- * Layer 1 (Core):     令牌变量、局部重置、全局动画 (tokens, reset, animations)
+ * Layer 1 (Core):     令牌变量、局部重置、基础动画 (tokens, reset, animations)
  * Layer 2 (Layout):   弹窗骨架、侧边栏、栅格插槽、顶栏、底栏、悬浮球 (layout-system, modal-shell, header-bar, sidebar-tabs, content-area, footer-bar, fab)
  * Layer 3 (Controls): 基础输入、按钮、卡片、工具栏、反馈气泡 (inputs, buttons, cards, toolbars, feedback)
  * Layer 4 (Features): 独立业务特性领域样式 (gallery, workflow-modal, workflow, inpaint, image-info, image-collapse, changelog, terminal)
@@ -16,7 +16,7 @@
 @import url('./core/reset.css');
 @import url('./core/animations.css');
 
-/* 2. Layout 全局骨架与容器布局 (Layer 2) */
+/* 2. Layout 骨架与容器布局 (Layer 2) */
 @import url('./layout/layout-system.css');
 @import url('./layout/modal-shell.css');
 @import url('./layout/header-bar.css');
@@ -33,6 +33,7 @@
 @import url('./controls/inputs/select.css');
 @import url('./controls/inputs/toggle.css');
 @import url('./controls/inputs/color-picker.css');
+@import url('./controls/inputs/slider.css');
 
 /* (2) 按钮控件族 (Buttons) */
 @import url('./controls/buttons/buttons.css');

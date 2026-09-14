@@ -7,7 +7,7 @@
  * 2. 实例化 ModalShell，全量注册 10 大设置选项卡（4 大引擎 + 6 大通用/扩展视图）；
  * 3. 挂载常驻 FabContainer（48px 正圆形毛玻璃悬浮球），绑定单击呼出主设置面板；
  * 4. 实例化 FloorManager，提供聊天楼层生图挂载与会话切换防泄漏控制；
- * 5. 绑定全局热键 (Ctrl+Shift+D)，提供洁净的 dispose() 生命周期回收。
+ * 5. 绑定快捷键 (Ctrl+Shift+D)，提供洁净的 dispose() 生命周期回收。
  */
 
 export * from './theme';
@@ -24,8 +24,12 @@ import { createWorkflowModal } from './layout/workflow-modal';
 import { createLightboxModal } from './media/lightbox-modal';
 import { createImageInfoModal } from './media/image-info';
 import { createInpaintModal } from './media/image-editor';
+import { createImageActionPanel, type ImageActionData } from './media/image-action-panel';
 import { FloorManager } from './media/floor-manager';
+import { Toast } from './components/feedback';
 import { getIconSvg } from './components/icons';
+import { blobToBase64 } from '../util/image';
+import { buildEngineParams } from '../function/params-builder';
 
 import { renderGeneralTab } from './views/general-tab';
 import { renderThemeTab } from './views/theme-tab';
@@ -53,7 +57,7 @@ export function initUI(services: UIServices): UIHandle {
         disposers.push(() => ThemeService.getInstance().dispose());
     }
 
-    // 2. 实例化全局独立模态弹窗
+    // 2. 实例化独立模态弹窗
     const modalContainer = rootEl || undefined;
     const lightbox = createLightboxModal({
         containerEl: modalContainer,
@@ -76,9 +80,129 @@ export function initUI(services: UIServices): UIHandle {
     disposers.push(() => imageInfo.dispose());
 
     const inpaintModal = createInpaintModal({
-        containerEl: modalContainer
+        containerEl: modalContainer,
+        onConfirm: async (result) => {
+            const activeEngine = (settingsStore.get('activeEngine') as any) || 'sdwebui';
+            if (activeEngine !== 'sdwebui' && activeEngine !== 'comfyui') {
+                Toast.warn(`当前生图引擎 [${activeEngine}] 暂未适配局部重绘，建议切换至 SD-WebUI`);
+                return;
+            }
+
+            if (!taskQueue) {
+                Toast.warn('生图任务队列未就绪');
+                return;
+            }
+
+            try {
+                const baseBase64 = await blobToBase64(result.baseBlob, false);
+                const cleanMask = result.maskBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+
+                const inpaintParams = buildEngineParams({
+                    engine: activeEngine,
+                    prompt: 'inpaint restoration',
+                    settingsStore
+                });
+
+                if (inpaintParams.engine === 'sdwebui') {
+                    (inpaintParams as any).init_images = [baseBase64];
+                    (inpaintParams as any).mask = cleanMask;
+                    (inpaintParams as any).denoising_strength = 0.75;
+                }
+
+                let chatId = 'default';
+                if (typeof window !== 'undefined' && window.SillyTavern?.getContext) {
+                    chatId = window.SillyTavern.getContext().chatId || 'default';
+                }
+
+                taskQueue.submit(
+                    inpaintParams,
+                    { chatId },
+                    inpaintParams.engine
+                );
+                Toast.success('局部重绘任务已加入队列');
+            } catch (err: any) {
+                Toast.error(`提交重绘任务失败: ${err?.message || err}`);
+            }
+        }
     });
     disposers.push(() => inpaintModal.dispose());
+
+    // 图像快捷操作独立弹窗 (ImageActionPanel)
+    const actionPanel = createImageActionPanel({
+        containerEl: modalContainer,
+        onInpaint: (data) => {
+            if (data.imageBlob) {
+                inpaintModal.open(data.imageBlob);
+            } else {
+                Toast.warn('无法获取原始图像资源用于重绘');
+            }
+        },
+        onViewMetadata: (data) => {
+            if (data.record) {
+                imageInfo.open(data.record);
+            } else {
+                const meta = data.metadata;
+                const recId = String(data.messageId ?? Date.now());
+                const eng = (meta?.engine as any) || settingsStore.get('activeEngine') || 'sdwebui';
+                const p = data.prompt || (meta?.prompt as string) || '';
+                const np = data.negativePrompt || (meta?.negativePrompt as string) || '';
+                const blob = data.imageBlob || new Blob([''], { type: 'image/png' });
+                const fakeRec: StoredImageRecord = {
+                    id: recId,
+                    prompt: p,
+                    originalBlob: blob,
+                    metadata: {
+                        id: recId,
+                        engine: eng,
+                        createdAt: Date.now(),
+                        prompt: p,
+                        negativePrompt: np,
+                        rawResponse: meta
+                    }
+                };
+                imageInfo.open(fakeRec);
+            }
+        },
+        onDelete: async (data) => {
+            if (storage && data.record?.id) {
+                await storage.deleteRecord(data.record.id);
+            }
+            // 同步擦除宿主聊天记录中的 da_images 引用
+            if (data.messageId !== undefined && typeof window !== 'undefined' && window.SillyTavern?.getContext) {
+                try {
+                    const ctx = window.SillyTavern.getContext();
+                    const chat = ctx.chat;
+                    const numId = typeof data.messageId === 'number' ? data.messageId : parseInt(String(data.messageId), 10);
+                    const extra = chat[numId]?.extra as Record<string, any> | undefined;
+                    if (Array.isArray(chat) && extra?.da_images) {
+                        const rawSwipe = chat[numId].swipe_id ?? extra.swipe_id ?? 0;
+                        const swipeId = (typeof rawSwipe === 'number' || typeof rawSwipe === 'string') ? rawSwipe : 0;
+                        const btnIdx = data.buttonIndex ?? 0;
+                        const daImages = extra.da_images as Record<string | number, any>;
+                        if (daImages[swipeId]) {
+                            delete daImages[swipeId][btnIdx];
+                        }
+                        ctx.eventSource?.emit?.(ctx.eventTypes?.MESSAGE_UPDATED, numId);
+                        await ctx.saveChat?.();
+                    }
+                } catch (e) {
+                    console.warn('[ImageActionPanel] 清理聊天记录图片引用异常:', e);
+                }
+            }
+            return true;
+        },
+        onRegenerate: (newPrompt, newNegativePrompt, data) => {
+            if (typeof document !== 'undefined' && data.messageId !== undefined) {
+                const selector = `#chat .mes[mesid="${data.messageId}"], .mes[mesid="${data.messageId}"]`;
+                const messageEl = document.querySelector<HTMLElement>(selector);
+                if (messageEl) {
+                    const btnIdx = data.buttonIndex ?? 0;
+                    floorManager.triggerFloorGenerate(messageEl, data.messageId, newPrompt, newNegativePrompt, btnIdx);
+                }
+            }
+        }
+    });
+    disposers.push(() => actionPanel.dispose());
 
     let activeWfCallback: ((newJson: string) => void) | undefined;
     const workflowModal = createWorkflowModal({
@@ -288,6 +412,7 @@ export function initUI(services: UIServices): UIHandle {
     // 6. 实例化楼层交互管理器 (FloorManager)
     const floorManager = new FloorManager({
         settingsStore,
+        storage,
         orchestrator,
         taskQueue,
         onPreviewImage: (url) => {
@@ -295,11 +420,14 @@ export function initUI(services: UIServices): UIHandle {
         },
         onInpaintImage: (blob) => {
             inpaintModal.open(blob);
+        },
+        onOpenActionPanel: (data) => {
+            actionPanel.open(data);
         }
     });
     disposers.push(() => floorManager.dispose());
 
-    // 7. 注册全局快捷键 (Ctrl + Shift + D)
+    // 7. 注册快捷键 (Ctrl + Shift + D)
     const onKeyDown = (e: KeyboardEvent) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
             e.preventDefault();
@@ -322,6 +450,7 @@ export function initUI(services: UIServices): UIHandle {
         lightbox,
         imageInfo,
         inpaintModal,
+        actionPanel,
         workflowModal,
         openModal(tabId?: string): void {
             if (tabId) {
@@ -345,6 +474,9 @@ export function initUI(services: UIServices): UIHandle {
         },
         openInpaint(blob: Blob): void {
             inpaintModal.open(blob);
+        },
+        openActionPanel(data: ImageActionData): void {
+            actionPanel.open(data);
         },
         dispose(): void {
             if (logsTabHandle) {

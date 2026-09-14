@@ -14,6 +14,8 @@ export type IconName =
     | 'help'
     | 'trash'
     | 'copy'
+    | 'edit'
+    | 'chevron-up'
     | 'chevron-down'
     | 'close'
     | 'external'
@@ -39,6 +41,8 @@ const ICON_PATHS: Record<IconName, string> = {
     help: `<circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line>`,
     trash: `<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>`,
     copy: `<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>`,
+    edit: `<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>`,
+    'chevron-up': `<polyline points="18 15 12 9 6 15"></polyline>`,
     'chevron-down': `<polyline points="6 9 12 15 18 9"></polyline>`,
     close: `<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>`,
     external: `<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>`,
@@ -55,19 +59,28 @@ const ICON_PATHS: Record<IconName, string> = {
 };
 
 /**
- * 获取标准内联 SVG 图标 HTML 字符串
+ * 判断指定字符串是否属于系统内置标准矢量图标名称
  */
-export function getIconSvg(name: IconName, size = 14, className?: string): string {
-    const content = ICON_PATHS[name] || '';
+export function isIconName(name: string): name is IconName {
+    return Object.prototype.hasOwnProperty.call(ICON_PATHS, name);
+}
+
+/**
+ * 获取标准内联 SVG 图标 HTML 字符串
+ * 若传入非内置图标标识，自动优雅回退为 'image' 图标，避免调用方进行 as any 强转。
+ */
+export function getIconSvg(name: IconName | string, size = 14, className?: string): string {
+    const validName: IconName = isIconName(name) ? name : 'image';
+    const content = ICON_PATHS[validName] || '';
     const extraClass = className ? ` ${className}` : '';
-    const spinClass = name === 'spinner' ? ' da-spin' : '';
-    return `<svg class="da-icon da-icon--${name}${spinClass}${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${content}</svg>`;
+    const spinClass = validName === 'spinner' ? ' da-spin' : '';
+    return `<svg class="da-icon da-icon--${validName}${spinClass}${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${content}</svg>`;
 }
 
 /**
  * 创建标准 SVG 图标 DOM 节点
  */
-export function createIconElement(name: IconName, size = 14, className?: string): SVGElement {
+export function createIconElement(name: IconName | string, size = 14, className?: string): SVGElement {
     const template = document.createElement('template');
     template.innerHTML = getIconSvg(name, size, className).trim();
     return template.content.firstChild as SVGElement;

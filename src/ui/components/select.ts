@@ -16,11 +16,13 @@ export interface SelectHandle extends IControlHandle<string> {
     readonly selectElement: HTMLSelectElement;
     setOptions(options: SelectOptionItem[], selectValue?: string): void;
     getSelectedIndex(): number;
+    focus(): void;
 }
 
 export function createSelect(options: SelectOptions): SelectHandle {
     const select = document.createElement('select');
     select.className = 'da-select';
+    if (options.className) select.classList.add(options.className);
 
     if (options.id) select.id = options.id;
     if (options.name) select.name = options.name;
@@ -86,7 +88,14 @@ export function createSelect(options: SelectOptions): SelectHandle {
         },
         setError(hasError: boolean, message?: string): void {
             select.classList.toggle('is-invalid', hasError);
-            if (message) select.title = message;
+            if (message) {
+                select.title = message;
+            } else if (!hasError) {
+                select.title = '';
+            }
+        },
+        focus(): void {
+            select.focus();
         },
         dispose(): void {
             select.removeEventListener('change', onChange);

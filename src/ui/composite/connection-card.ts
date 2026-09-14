@@ -1,7 +1,14 @@
 /**
- * 后端健康检查与连接卡片组件 (ConnectionCard)
- * 遵循 UI_LAYOUT_PREVIEW.md 第四节第 2 条：
- * 展示后端服务地址、连通性状态指示灯、响应延迟与一键连通性探测及远端资产拉取更新。
+ * 服务连接与健康探测复合卡片 (ConnectionCard)
+ *
+ * 核心功能：
+ * 1. 统一呈现各生图引擎的基础服务地址输入、Token/凭据配置；
+ * 2. 提供连通性探测、健康状态指示灯与网络延迟显示；
+ * 3. 触发远端模型与采样器资产拉取及更新同步。
+ *
+ * 注意事项：
+ * 1. 密码与 Token 框需支持显隐切换，防止凭据意外泄漏；
+ * 2. 连通性探测应配置超时机制与取消信号，避免接口挂起阻塞界面交互。
  */
 
 import type { HealthCheckFn, ConnectionCardStatus } from '@types';
@@ -82,7 +89,7 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
     latencyEl.style.display = 'none';
 
     const badge: BadgeHandle = createBadge({
-        text: '未检测',
+        text: '未连接',
         variant: 'muted',
         pulseDot: false
     });
@@ -112,10 +119,6 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
     if (options.editableUrl || options.onChangeBaseUrl) {
         const urlRow = document.createElement('div');
         urlRow.className = 'da-connection-card__input-row';
-        urlRow.style.display = 'flex';
-        urlRow.style.alignItems = 'center';
-        urlRow.style.gap = '8px';
-        urlRow.style.padding = '8px 12px';
 
         urlInputHandle = createTextInput({
             value: currentUrl,
@@ -124,6 +127,7 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             onChange: (val) => {
                 currentUrl = val.trim();
                 urlEl.textContent = currentUrl || '未配置服务地址';
+                urlInputHandle?.setError?.(false);
                 options.onChangeBaseUrl?.(currentUrl);
             }
         });
@@ -138,12 +142,11 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
         card.appendChild(urlRow);
     }
 
-    // 3. 可选凭据扩展行 (如 NovelAI API Token)
+    // 3. 可选凭据扩展行 (如 NovelAI API Token，内嵌小眼睛明密文切换)
     let tokenHandle: PasswordInputHandle | null = null;
     if (options.tokenField) {
         const tokenWrap = document.createElement('div');
         tokenWrap.className = 'da-connection-card__token-row';
-        tokenWrap.style.padding = '0 12px 8px 12px';
 
         tokenHandle = createPasswordInput({
             value: options.tokenField.value,
@@ -194,6 +197,7 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             badge.setText('连接正常');
             badge.setVariant('success');
             testBtn.setLoading(false);
+            urlInputHandle?.setError?.(false);
 
             if (typeof latencyMs === 'number') {
                 latencyEl.textContent = `${latencyMs} ms`;
@@ -213,6 +217,9 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
             badge.setVariant('error');
             testBtn.setLoading(false);
             latencyEl.style.display = 'none';
+            if (message && urlInputHandle) {
+                urlInputHandle.setError?.(true, message);
+            }
 
             if (message) {
                 feedbackEl.textContent = `✗ ${message}`;
@@ -220,11 +227,12 @@ export function createConnectionCard(options: ConnectionCardOptions): Connection
                 feedbackEl.style.display = '';
             }
         } else {
-            badge.setText('未检测');
+            badge.setText('未连接');
             badge.setVariant('muted');
             testBtn.setLoading(false);
             latencyEl.style.display = 'none';
             feedbackEl.style.display = 'none';
+            urlInputHandle?.setError?.(false);
         }
     };
 

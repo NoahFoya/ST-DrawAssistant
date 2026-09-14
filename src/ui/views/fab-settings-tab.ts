@@ -2,18 +2,19 @@
  * @module src/ui/views/fab-settings-tab
  * @description 悬浮球设置面板 (FABSettingsTab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 7 条)：
+ * 核心架构划分：
  * 1. Card: 悬浮球设置；
- * 2. 启用悬浮球开关、悬浮球透明度、自动靠边吸附；
- * 3. 预设图标网格 (6 款单选芯片: 画板, 闪电, 星芒, 魔法, 星系, 机器人)；
+ * 2. 启用悬浮球开关、悬浮球透明度复合滑块、自动靠边吸附；
+ * 3. 预设图标网格 (6 款单选芯片: 调色盘, 画框, 星芒, 画笔, 闪电, 灵感)；
  * 4. 自定义图标 (圆形头像预览, 本地图片文件选择, 网络图片URL, 还原预设)；
- * 5. 重置位置按钮 (一键恢复至右下角安全区)。
+ * 5. 重置位置按钮 (一键恢复至默认位置)。
  */
 
 import { createElement } from '../../util/dom';
 import { createFormField, createCard } from '../components/form-field';
 import { createToggle } from '../components/toggle';
-import { createNumberInput, createTextInput } from '../components/input';
+import { createSlider } from '../components/slider';
+import { createTextInput } from '../components/input';
 import { createButton } from '../components/button';
 import { getIconSvg } from '../components/icons';
 import type { SettingsStore } from '../../store/settings';
@@ -32,12 +33,12 @@ export interface FABSettingsTabHandle {
 }
 
 const PRESET_FAB_ICONS = [
-    { id: 'palette', name: '画板', icon: 'palette' },
-    { id: 'zap', name: '闪电', icon: 'zap' },
+    { id: 'palette', name: '调色盘', icon: 'palette' },
+    { id: 'image', name: '画框', icon: 'image' },
+    { id: 'edit', name: '画笔', icon: 'edit' },
     { id: 'sparkles', name: '星芒', icon: 'sparkles' },
-    { id: 'wand', name: '魔法', icon: 'settings' },
-    { id: 'star', name: '星系', icon: 'star' },
-    { id: 'download', name: '下载', icon: 'download' }
+    { id: 'star', name: '星标', icon: 'star' },
+    { id: 'eye', name: '视界', icon: 'eye' }
 ];
 
 export function renderFABSettingsTab(
@@ -47,8 +48,10 @@ export function renderFABSettingsTab(
     const root = createElement('div', { className: 'da-tab-pane' });
     const disposers: (() => void)[] = [];
 
-    const regDisposer = (item: { dispose(): void }) => {
-        disposers.push(() => item.dispose());
+    const regDisposer = (item: { dispose?(): void } | undefined | null) => {
+        if (item && typeof item.dispose === 'function') {
+            disposers.push(() => item.dispose!());
+        }
     };
 
     const card = createCard({
@@ -80,15 +83,16 @@ export function renderFABSettingsTab(
             options.onVisibilityChange?.(val);
         }
     });
+    regDisposer(enableToggle);
     const enableField = createFormField({
         label: '启用悬浮球',
-        helpText: '常驻屏幕边缘的微型生图快捷入口球，支持全屏自由拖拽',
+        helpText: '常驻屏幕边缘的生图快捷入口球，支持全屏自由拖拽',
         control: enableToggle
     });
     card.append(enableField);
 
-    // 2. 悬浮球透明度
-    const opacityInput = createNumberInput({
+    // 2. 悬浮球透明度 (升级复合滑块)
+    const opacitySlider = createSlider({
         value: Math.round((trigger.opacity ?? 0.95) * 100),
         min: 20,
         max: 100,
@@ -104,10 +108,11 @@ export function renderFABSettingsTab(
             options.onOpacityChange?.(opacityDecimal);
         }
     });
+    regDisposer(opacitySlider);
     const opacityField = createFormField({
         label: '悬浮球透明度',
         helpText: '调整悬浮球的半透明度，避免遮挡聊天核心内容',
-        control: opacityInput
+        control: opacitySlider
     });
     card.append(opacityField);
 
@@ -123,18 +128,19 @@ export function renderFABSettingsTab(
             options.onAutoSnapChange?.(val);
         }
     });
+    regDisposer(autoSnapToggle);
     const autoSnapField = createFormField({
-        label: '边缘自动吸附 (Snap to Edge)',
+        label: '边缘自动吸附',
         helpText: '松开指针时自动平滑吸附贴靠屏幕左侧或右侧边缘',
         control: autoSnapToggle
     });
     card.append(autoSnapField);
 
-    // 4. 预设图标网格 (6 款单选芯片)
+    // 4. 预设图标网格
     const iconGridWrap = createElement('div', { className: 'da-form-row da-form-row--stacked' });
     const iconGridLabel = createElement('div', {
         className: 'da-form-label',
-        textContent: '预设图标 (6 款单选芯片)'
+        textContent: '预设图标'
     });
     iconGridWrap.appendChild(iconGridLabel);
 
@@ -158,7 +164,7 @@ export function renderFABSettingsTab(
             dataset: { iconId: item.id }
         }) as HTMLButtonElement;
         chip.title = item.name;
-        chip.innerHTML = getIconSvg(item.icon as any);
+        chip.innerHTML = getIconSvg(item.icon);
 
         if (item.id === activeIcon) {
             chip.classList.add('is-active');
@@ -204,7 +210,7 @@ export function renderFABSettingsTab(
             img.alt = 'Avatar';
             avatarPreview.appendChild(img);
         } else {
-            avatarPreview.innerHTML = getIconSvg((iconOrUrl as any) || 'palette');
+            avatarPreview.innerHTML = getIconSvg(iconOrUrl || 'palette');
         }
     }
     updateAvatarPreview(activeIcon);
@@ -245,6 +251,7 @@ export function renderFABSettingsTab(
         size: 'sm',
         onClick: () => fileInput.click()
     });
+    regDisposer(chooseFileBtn);
     customWrapper.appendChild(chooseFileBtn.element);
 
     // 还原预设按钮
@@ -263,6 +270,7 @@ export function renderFABSettingsTab(
             options.onIconChange?.('palette');
         }
     });
+    regDisposer(resetIconBtn);
     customWrapper.appendChild(resetIconBtn.element);
 
     customIconRow.appendChild(customWrapper);
@@ -287,6 +295,7 @@ export function renderFABSettingsTab(
             }
         }
     });
+    regDisposer(urlInput);
     customIconRow.appendChild(urlInput.element);
     card.append(customIconRow);
 
@@ -299,9 +308,10 @@ export function renderFABSettingsTab(
             options.onResetPosition?.();
         }
     });
+    regDisposer(resetPosBtn);
     const resetPosField = createFormField({
         label: '重置悬浮球位置',
-        helpText: '当悬浮球被拖拽出屏幕边缘或不可见时，一键将其重置恢复到右下角安全区',
+        helpText: '当悬浮球被拖拽出屏幕边缘或不可见时，一键将其重置恢复到默认位置（右下角）',
         control: resetPosBtn.element
     });
     card.append(resetPosField);

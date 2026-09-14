@@ -14,6 +14,7 @@ export interface StorageBarOptions {
     onExportBackup?: () => void | Promise<void>;
     onClearStorage?: () => void | Promise<void>;
     className?: string;
+    compact?: boolean;
 }
 
 export interface StorageBarHandle {
@@ -27,7 +28,132 @@ export function createStorageBar(options: StorageBarOptions): StorageBarHandle {
     root.className = 'da-storage-bar';
     if (options.className) root.classList.add(options.className);
 
-    // 1. 顶部标签与百分比行
+    if (options.compact) {
+        root.classList.add('da-storage-bar--compact');
+
+        const infoRow = document.createElement('div');
+        infoRow.className = 'da-storage-compact-info';
+
+        const iconEl = document.createElement('span');
+        iconEl.className = 'da-storage-icon';
+        iconEl.textContent = '💾';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'da-storage-label';
+        labelEl.textContent = '本地存储:';
+
+        const track = document.createElement('div');
+        track.className = 'da-storage-track';
+
+        const fill = document.createElement('div');
+        fill.className = 'da-storage-fill';
+        fill.style.width = '0%';
+        track.appendChild(fill);
+
+        const pctBadge = document.createElement('span');
+        pctBadge.className = 'da-storage-pct-badge';
+        pctBadge.textContent = '0.0 %';
+
+        const summaryText = document.createElement('span');
+        summaryText.className = 'da-storage-summary-text';
+        summaryText.textContent = '0 B / 1.0 GB · 0 张图片';
+
+        infoRow.appendChild(iconEl);
+        infoRow.appendChild(labelEl);
+        infoRow.appendChild(track);
+        infoRow.appendChild(pctBadge);
+        infoRow.appendChild(summaryText);
+        root.appendChild(infoRow);
+
+        const actionsToolbar = document.createElement('div');
+        actionsToolbar.className = 'da-storage-actions-toolbar';
+
+        let exportBtn: ButtonHandle | null = null;
+        if (options.onExportBackup) {
+            exportBtn = createButton({
+                text: '导出备份',
+                variant: 'secondary',
+                size: 'sm',
+                icon: 'download',
+                onClick: async () => {
+                    try {
+                        exportBtn?.setLoading(true);
+                        await options.onExportBackup?.();
+                    } finally {
+                        exportBtn?.setLoading(false);
+                    }
+                }
+            });
+            actionsToolbar.appendChild(exportBtn.element);
+        }
+
+        let clearBtn: ButtonHandle | null = null;
+        if (options.onClearStorage) {
+            clearBtn = createButton({
+                text: '清理未收藏',
+                variant: 'danger',
+                size: 'sm',
+                icon: 'trash',
+                onClick: async () => {
+                    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                        const ok = window.confirm('确定要清理未标星收藏的图片缓存吗？未收藏的图片将被删除。');
+                        if (!ok) return;
+                    }
+                    try {
+                        clearBtn?.setLoading(true);
+                        await options.onClearStorage?.();
+                    } finally {
+                        clearBtn?.setLoading(false);
+                    }
+                }
+            });
+            actionsToolbar.appendChild(clearBtn.element);
+        }
+
+        if (actionsToolbar.hasChildNodes()) {
+            root.appendChild(actionsToolbar);
+        }
+
+        const applyCompactQuota = (quota: StorageQuotaInfo) => {
+            const total = Math.max(1, quota.totalBytes);
+            const used = Math.max(0, quota.usedBytes);
+            const pct = Math.min(100, Math.max(0, (used / total) * 100));
+
+            pctBadge.textContent = `${pct.toFixed(1)} %`;
+            fill.style.width = `${pct.toFixed(1)}%`;
+
+            pctBadge.classList.remove('is-warning', 'is-danger');
+            fill.classList.remove('is-warning', 'is-danger');
+
+            if (pct >= 90) {
+                pctBadge.classList.add('is-danger');
+                fill.classList.add('is-danger');
+            } else if (pct >= 75) {
+                pctBadge.classList.add('is-warning');
+                fill.classList.add('is-warning');
+            }
+
+            summaryText.textContent = `${formatBytes(used)} / ${formatBytes(total)} · ${quota.imageCount} 张图片`;
+        };
+
+        if (options.initialQuota) {
+            applyCompactQuota(options.initialQuota);
+        }
+
+        return {
+            element: root,
+            update(quota: StorageQuotaInfo): void {
+                applyCompactQuota(quota);
+            },
+            dispose(): void {
+                exportBtn?.dispose();
+                clearBtn?.dispose();
+                root.remove();
+            }
+        };
+    }
+
+    // 1. 顶部标签与百分比行 (标准仪表盘模式)
     const progressWrapper = document.createElement('div');
     progressWrapper.className = 'da-storage-progress-wrapper';
 

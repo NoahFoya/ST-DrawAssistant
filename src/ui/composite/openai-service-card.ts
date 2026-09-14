@@ -1,12 +1,16 @@
 /**
  * @module src/ui/composite/openai-service-card
- * @description 大模型生图服务连接与多供应商卡片 (OpenAIServiceCard)
+ * @description OpenAI 兼容服务连接与服务商凭据管理卡片 (OpenAIServiceCard)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第四节第 3 条)：
- * 1. 结构：通用卡片 (.da-card) + 供应商下拉选择 + Base URL 居中输入框 + API Key 显隐密码框；
- * 2. 自定义请求头 (JSON) 折叠区域；
- * 3. 底栏状态与操作条：延迟响应状态小徽标 + [ 同步远端模型 ] 按钮 + [ 测试连接 ] 按钮；
- * 4. 多供应商配置隔离记忆 (OpenAI官方, 硅基流动, xAI Grok, OpenRouter, Together AI, 自定义)。
+ * 核心功能：
+ * 1. 提供主流 OpenAI 兼容服务商快速切换与自定义服务地址配置；
+ * 2. 支持服务地址、API Key 密码框以及自定义请求头 (Headers JSON) 填报；
+ * 3. 支持接口连通性探测、延迟状态反馈与远端可用模型列表拉取；
+ * 4. 隔离存储各服务商的独立配置，切换时互不干扰。
+ *
+ * 注意事项：
+ * 1. 自定义请求头输入需进行严格的 JSON 格式校验，防止语法错误导致请求中断；
+ * 2. 远端模型列表拉取失败时应提供明确的错误原因与降级处理，避免清空用户既有输入。
  */
 
 import { createCard } from '../components/form-field';

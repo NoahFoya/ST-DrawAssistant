@@ -1,6 +1,8 @@
 /**
  * LoRA 模型管理复合组件 (LoraManager)
- * 支持 LoRA 列表条目增删、启用开关、模型权重与 CLIP 权重等宽数字调节，并联动 WeiLin 语法。
+ * 支持 LoRA 列表条目增删、启用开关、卡片右上角 [ × ] 删除。
+ * 依据后端模式 (ComfyUI 3 项 / SD-WebUI 2 项) 渲染上下箭头数字微调输入框。
+ * 元素失效时通过悬浮提示 (title) 说明原因，不使用角标元素。
  */
 
 import type { LoraItemModel } from '@types';
@@ -12,6 +14,7 @@ import { Toast } from '../components/feedback';
 
 export interface LoraManagerOptions {
     loras: LoraItemModel[];
+    backendMode?: 'comfyui' | 'sdwebui';
     availableLoras?: string[];
     onChange?: (loras: LoraItemModel[]) => void;
     className?: string;
@@ -21,6 +24,8 @@ export interface LoraManagerHandle {
     readonly element: HTMLElement;
     getLoras(): LoraItemModel[];
     setLoras(loras: LoraItemModel[]): void;
+    setBackendMode(mode: 'comfyui' | 'sdwebui'): void;
+    setAvailableLoras(loras: string[]): void;
     dispose(): void;
 }
 
@@ -29,7 +34,9 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
     container.className = 'da-lora-manager da-lora-container';
     if (options.className) container.classList.add(options.className);
 
+    let currentBackendMode: 'comfyui' | 'sdwebui' = options.backendMode || 'sdwebui';
     let loraItems: LoraItemModel[] = options.loras.map((l) => ({ ...l }));
+    let availableList: string[] = options.availableLoras ? [...options.availableLoras] : [];
     const childCleanups: (() => void)[] = [];
 
     // 1. 标题与计数栏
@@ -83,7 +90,9 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
     container.appendChild(addRow);
 
     const updateCount = () => {
-        countBadge.textContent = String(loraItems.length);
+        const enabledCount = loraItems.filter((i) => i.enabled).length;
+        const totalCount = loraItems.length;
+        countBadge.textContent = totalCount > 0 ? `(${enabledCount} / ${totalCount} 已启用)` : '';
     };
 
     const triggerChange = () => {
@@ -92,13 +101,15 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
     };
 
     const handleAdd = (name: string) => {
+        const isKnown = availableList.length === 0 || availableList.some((a) => a.toLowerCase() === name.toLowerCase());
         const newItem: LoraItemModel = {
             id: `lora_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             name: name.trim(),
             enabled: true,
             modelWeight: 0.8,
             clipWeight: 0.8,
-            triggerWeight: 1.0
+            triggerWeight: 1.0,
+            isInvalid: !isKnown
         };
         loraItems.push(newItem);
         renderList();
@@ -112,7 +123,6 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
     };
 
     const renderList = () => {
-        // 清理子组件监听
         childCleanups.forEach((cleanup) => cleanup());
         childCleanups.length = 0;
         listContainer.innerHTML = '';
@@ -132,9 +142,15 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
         for (const item of loraItems) {
             const row = document.createElement('div');
             row.className = 'da-lora-item';
-            if (item.isMissing) row.classList.add('da-lora-item--missing');
+            const isItemInvalid = Boolean(item.isInvalid);
+            if (isItemInvalid) {
+                row.classList.add('is-invalid');
+            }
+            if (!item.enabled) {
+                row.classList.add('is-disabled');
+            }
 
-            // 1. 卡片头部：图标、名称与移除按钮
+            // 1. 卡片首行：左侧 LoRA 名称，右侧启用开关与右上角 [ × ] 关闭按钮
             const itemHeader = document.createElement('div');
             itemHeader.className = 'da-lora-item__header';
 
@@ -148,7 +164,14 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
             const nameEl = document.createElement('div');
             nameEl.className = 'da-lora-item__name';
             nameEl.textContent = item.name;
-            nameEl.title = item.name;
+
+            if (isItemInvalid) {
+                const invalidTip = `${item.name}（模型文件已失效，未在当前生图服务中发现）`;
+                nameEl.title = invalidTip;
+                row.title = invalidTip;
+            } else {
+                nameEl.title = item.name;
+            }
 
             titleBox.appendChild(iconSpan);
             titleBox.appendChild(nameEl);
@@ -156,10 +179,29 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
             const actionsBox = document.createElement('div');
             actionsBox.className = 'da-lora-item__actions';
 
+            // 启用开关 (位于首行右侧)
+            const toggleBox = document.createElement('div');
+            toggleBox.className = 'da-lora-item__toggle-box';
+
+            const toggle: ToggleHandle = createToggle({
+                checked: item.enabled,
+                ariaLabel: `启用 ${item.name}`,
+                onChange: (checked) => {
+                    item.enabled = checked;
+                    row.classList.toggle('is-disabled', !checked);
+                    triggerChange();
+                }
+            });
+            childCleanups.push(() => toggle.dispose?.());
+            toggleBox.appendChild(toggle.element);
+            actionsBox.appendChild(toggleBox);
+
+            // 右上角 [ × ] 删除按钮
             const delBtn: IconButtonHandle = createIconButton({
-                icon: 'trash',
+                icon: 'close',
                 variant: 'danger',
-                title: '移除此 LoRA',
+                className: 'da-lora-item__close-btn',
+                title: '删除此 LoRA',
                 onClick: () => handleDelete(item.id)
             });
             childCleanups.push(() => delBtn.dispose());
@@ -169,7 +211,7 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
             itemHeader.appendChild(actionsBox);
             row.appendChild(itemHeader);
 
-            // 2. 卡片次级调节行：权重微调与开关
+            // 2. 卡片次行：参数调节行 (ComfyUI 3 项 / SD-WebUI 2 项上下箭头步进器)
             const itemBody = document.createElement('div');
             itemBody.className = 'da-lora-item__body';
 
@@ -182,15 +224,16 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
 
             const modelLabel = document.createElement('span');
             modelLabel.className = 'da-lora-param__label';
-            modelLabel.textContent = '模型';
+            modelLabel.textContent = '模型:';
 
             const modelWeightInput: NumberInputHandle = createNumberInput({
-                value: item.modelWeight,
-                min: 0,
+                value: item.modelWeight ?? 0.8,
+                min: -2.0,
                 max: 2.0,
                 step: 0.05,
-                unit: 'M',
-                variant: 'small',
+                showStepper: true,
+                variant: 'short',
+                ariaLabel: `${item.name} 模型权重`,
                 onChange: (val) => {
                     item.modelWeight = val;
                     triggerChange();
@@ -208,15 +251,16 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
 
             const clipLabel = document.createElement('span');
             clipLabel.className = 'da-lora-param__label';
-            clipLabel.textContent = 'CLIP';
+            clipLabel.textContent = 'CLIP:';
 
             const clipWeightInput: NumberInputHandle = createNumberInput({
-                value: item.clipWeight,
-                min: 0,
+                value: item.clipWeight ?? 0.8,
+                min: -2.0,
                 max: 2.0,
                 step: 0.05,
-                unit: 'C',
-                variant: 'small',
+                showStepper: true,
+                variant: 'short',
+                ariaLabel: `${item.name} CLIP 权重`,
                 onChange: (val) => {
                     item.clipWeight = val;
                     triggerChange();
@@ -228,23 +272,36 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
             clipParam.appendChild(clipWeightInput.element);
             paramsBox.appendChild(clipParam);
 
-            // 单项开关
-            const toggleBox = document.createElement('div');
-            toggleBox.className = 'da-lora-item__toggle-box';
+            // 触发词权重 (仅在 ComfyUI 驱动模式下渲染)
+            if (currentBackendMode === 'comfyui') {
+                const triggerParam = document.createElement('div');
+                triggerParam.className = 'da-lora-param';
 
-            const toggle: ToggleHandle = createToggle({
-                checked: item.enabled,
-                onChange: (checked) => {
-                    item.enabled = checked;
-                    row.classList.toggle('is-disabled', !checked);
-                    triggerChange();
-                }
-            });
-            childCleanups.push(() => toggle.dispose?.());
-            toggleBox.appendChild(toggle.element);
+                const triggerLabel = document.createElement('span');
+                triggerLabel.className = 'da-lora-param__label';
+                triggerLabel.textContent = '触发词:';
+
+                const triggerWeightInput: NumberInputHandle = createNumberInput({
+                    value: item.triggerWeight ?? 1.0,
+                    min: -2.0,
+                    max: 2.0,
+                    step: 0.05,
+                    showStepper: true,
+                    variant: 'short',
+                    ariaLabel: `${item.name} 触发词权重`,
+                    onChange: (val) => {
+                        item.triggerWeight = val;
+                        triggerChange();
+                    }
+                });
+                childCleanups.push(() => triggerWeightInput.dispose?.());
+
+                triggerParam.appendChild(triggerLabel);
+                triggerParam.appendChild(triggerWeightInput.element);
+                paramsBox.appendChild(triggerParam);
+            }
 
             itemBody.appendChild(paramsBox);
-            itemBody.appendChild(toggleBox);
             row.appendChild(itemBody);
 
             listContainer.appendChild(row);
@@ -262,6 +319,20 @@ export function createLoraManager(options: LoraManagerOptions): LoraManagerHandl
         },
         setLoras(loras: LoraItemModel[]): void {
             loraItems = loras.map((l) => ({ ...l }));
+            renderList();
+        },
+        setBackendMode(mode: 'comfyui' | 'sdwebui'): void {
+            if (currentBackendMode !== mode) {
+                currentBackendMode = mode;
+                renderList();
+            }
+        },
+        setAvailableLoras(loras: string[]): void {
+            availableList = [...loras];
+            for (const item of loraItems) {
+                const isInvalid = !availableList.some((a) => a.toLowerCase() === item.name.toLowerCase());
+                item.isInvalid = isInvalid;
+            }
             renderList();
         },
         dispose(): void {

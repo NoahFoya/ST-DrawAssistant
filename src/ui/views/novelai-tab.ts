@@ -1,18 +1,24 @@
 /**
  * @module src/ui/views/novelai-tab
- * @description NovelAI 驱动专属配置面板 (NovelAITab)
+ * @description NovelAI 官方绘图服务配置面板 (NovelAITab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 5 条)：
- * 1. Card 1: ConnectionCard (端点, API Token 密码框带眼睛显隐, 连通探测与订阅资产状态)；
- * 2. Card 2: 绘图参数预设 (PresetToolbar, 模型选择, 画幅Select+Opus免点指示, 采样超参数, 画质控制 UC Preset / 画质标签 / SMEA / Decrisper / Variety, 关联提示词)；
- * 3. Card 3: PromptPresetManager (正反向提示词, showLora: false 自动隐藏 LoRA)；
- * 4. 状态同步：全量居中、Select 画幅、等宽数字框、表单脏状态追踪与基准重置。
+ * 核心功能：
+ * 1. 管理 NovelAI 官方服务连接、API Token 凭据与账户订阅状态探测；
+ * 2. 提供绘图方案预设切换，配置官方模型、画幅尺寸、采样算法与专属画质控制选项；
+ * 3. 集成负向提示词预设 (UC Preset) 与正反向提示词模板管理；
+ * 4. 追踪表单脏状态变更，支持配置一键复原与持久化存储。
+ *
+ * 注意事项：
+ * 1. NovelAI 官方接口要求生成图片宽度与高度必须为 64 的整数倍；
+ * 2. 需妥善保护用户的 API Token 凭据，防止在非安全环境明文外泄。
  */
 
 import { createElement } from '../../util/dom';
 import { createFormField, createCard, FormFieldHandle } from '../components/form-field';
 import { createSelect } from '../components/select';
 import { createNumberInput, NumberInputHandle } from '../components/input';
+import { createSlider, SliderHandle } from '../components/slider';
+import { createIconButton, IconButtonHandle } from '../components/button';
 import { createToggle, ToggleHandle } from '../components/toggle';
 import { createConnectionCard, ConnectionCardHandle } from '../composite/connection-card';
 import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
@@ -311,7 +317,7 @@ export function renderNovelAITab(
     regDisposer(schedulerField);
     drawingCard.append(schedulerField.element);
 
-    const stepsInput: NumberInputHandle = createNumberInput({
+    const stepsSlider: SliderHandle = createSlider({
         value: currentDrawingParams.steps,
         min: 1,
         max: 50,
@@ -322,16 +328,16 @@ export function renderNovelAITab(
             drawingDirtyTracker.notifyFieldChange('steps', val);
         }
     });
-    regDisposer(stepsInput);
+    regDisposer(stepsSlider);
     const stepsField: FormFieldHandle = createFormField({
         label: '采样步数 (Steps)',
         helpText: '生成迭代步数，Opus 免费额度最高支持 28 步',
-        control: stepsInput
+        control: stepsSlider
     });
     regDisposer(stepsField);
     drawingCard.append(stepsField.element);
 
-    const cfgInput: NumberInputHandle = createNumberInput({
+    const cfgSlider: SliderHandle = createSlider({
         value: currentDrawingParams.cfgScale,
         min: 1,
         max: 20,
@@ -341,16 +347,16 @@ export function renderNovelAITab(
             drawingDirtyTracker.notifyFieldChange('cfgScale', val);
         }
     });
-    regDisposer(cfgInput);
+    regDisposer(cfgSlider);
     const cfgField: FormFieldHandle = createFormField({
         label: '提示词引导系数 (CFG Scale)',
         helpText: '控制图像与提示词贴合度，NovelAI 推荐 4.0 ~ 6.0',
-        control: cfgInput
+        control: cfgSlider
     });
     regDisposer(cfgField);
     drawingCard.append(cfgField.element);
 
-    const cfgRescaleInput: NumberInputHandle = createNumberInput({
+    const cfgRescaleSlider: SliderHandle = createSlider({
         value: currentDrawingParams.cfgRescale,
         min: 0,
         max: 1,
@@ -360,30 +366,57 @@ export function renderNovelAITab(
             drawingDirtyTracker.notifyFieldChange('cfgRescale', val);
         }
     });
-    regDisposer(cfgRescaleInput);
+    regDisposer(cfgRescaleSlider);
     const cfgRescaleField: FormFieldHandle = createFormField({
         label: '色彩过饱和抑制 (CFG Rescale)',
         helpText: '降低高 CFG 下画面过度对比度与烧焦失真，推荐 0.0 ~ 0.4',
-        control: cfgRescaleInput
+        control: cfgRescaleSlider
     });
     regDisposer(cfgRescaleField);
     drawingCard.append(cfgRescaleField.element);
+
+    const seedWrap = document.createElement('div');
+    seedWrap.className = 'da-seed-wrapper';
 
     const seedInput: NumberInputHandle = createNumberInput({
         value: currentDrawingParams.seed,
         min: -1,
         max: 4294967295,
         step: 1,
+        ariaLabel: '随机种子',
+        variant: 'short',
         onChange: (val) => {
             currentDrawingParams.seed = val;
             drawingDirtyTracker.notifyFieldChange('seed', val);
         }
     });
     regDisposer(seedInput);
+
+    const diceBtn: IconButtonHandle = createIconButton({
+        icon: 'dice',
+        title: '生成随机种子 (点击随机，若已设置则点一次重置为 -1)',
+        ariaLabel: '随机种子快捷键',
+        onClick: () => {
+            if (currentDrawingParams.seed === -1) {
+                const randomSeed = Math.floor(Math.random() * 2147483647);
+                currentDrawingParams.seed = randomSeed;
+                seedInput.setValue(randomSeed);
+            } else {
+                currentDrawingParams.seed = -1;
+                seedInput.setValue(-1);
+            }
+            drawingDirtyTracker.notifyFieldChange('seed', currentDrawingParams.seed);
+        }
+    });
+    regDisposer(diceBtn);
+
+    seedWrap.appendChild(seedInput.element);
+    seedWrap.appendChild(diceBtn.element);
+
     const seedField: FormFieldHandle = createFormField({
         label: '随机种子 (Seed)',
         helpText: '生成随机数起点，填 -1 表示每次随机出图',
-        control: seedInput
+        control: seedWrap
     });
     regDisposer(seedField);
     drawingCard.append(seedField.element);
@@ -532,9 +565,9 @@ export function renderNovelAITab(
         dimensionPicker.setValue({ width: params.width, height: params.height });
         samplerSelect.setValue(params.sampler);
         schedulerSelect.setValue(params.scheduler);
-        stepsInput.setValue(params.steps);
-        cfgInput.setValue(params.cfgScale);
-        cfgRescaleInput.setValue(params.cfgRescale);
+        stepsSlider.setValue(params.steps);
+        cfgSlider.setValue(params.cfgScale);
+        cfgRescaleSlider.setValue(params.cfgRescale);
         seedInput.setValue(params.seed);
         ucPresetSelect.setValue(params.ucPreset);
         qualityTagsToggle.setValue(params.qualityTags);

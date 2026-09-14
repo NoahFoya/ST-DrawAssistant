@@ -5,12 +5,11 @@
  *
  * 职责与约束：
  * 1. 提供紧凑的圆形问号图标按钮（.da-help-btn），嵌入表单行标题侧边；
- * 2. 支持通过全局属性 [data-da-show-help="false"] 一键隐藏所有帮助按钮，保持界面清爽；
- * 3. 释义浮层气泡（.da-help-bubble）采用高 z-index（100090）浮于主弹窗之上，支持模糊背景与自适应宽度。
+ * 2. 支持通过配置属性 [data-da-show-help="false"] 一键隐藏所有帮助按钮，保持界面清爽；
+ * 3. 气泡内容超出宽度自动换行，最高容纳 320px。
  */
 
-/* 1. 全局显隐开关控制
-   根据用户在通用设置中的偏好，通过宿主根节点属性快速隐藏所有问号按钮 */
+/* 1. 显隐控制：当容器设置关闭帮助说明时，优雅隐藏所有问号按钮 */
 [data-da-show-help="false"] .da-help-btn,
 .st-da-root[data-da-show-help="false"] .da-help-btn {
     display: none !important;

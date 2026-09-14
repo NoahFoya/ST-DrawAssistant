@@ -95,4 +95,92 @@
     position: relative;
     display: inline-block;
     max-width: 100%;
+    overflow: hidden;
+    box-shadow: var(--da-shadow-md);
+    border: 1px solid var(--da-separator);
 }
+
+.da-image-wrapper--rounded {
+    border-radius: var(--da-radius-md, 8px);
+}
+
+.da-image-wrapper--center {
+    margin: 4px auto 0 auto;
+}
+
+.da-image-wrapper--left {
+    margin: 4px auto 0 0;
+}
+
+.da-image-wrapper--right {
+    margin: 4px 0 0 auto;
+}
+
+/* 5. 图像右上角悬浮操作胶囊 (.da-image-action-trigger) */
+.da-image-action-trigger {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--da-radius-pill, 100px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: var(--da-accent-color);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s var(--da-ease);
+}
+
+.da-image-action-trigger:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.08);
+}
+
+/* 6. 楼层生图进度展示条 (.da-floor-progress-bar) */
+.da-floor-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-accent-color);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+/* 7. 楼层生图异常反馈 (.da-floor-error-bar) */
+.da-floor-error-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-color-error, #ff453a);
+    padding: 4px 8px;
+    background: rgba(255, 69, 58, 0.1);
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+/* 8. 楼层生图取消反馈 (.da-floor-cancel-bar) */
+.da-floor-cancel-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-muted, #888);
+    padding: 4px 8px;
+}
+
+/* 9. 多指令包装项 (.da-floor-instruction-item) */
+.da-floor-instruction-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: 4px;
+}
+

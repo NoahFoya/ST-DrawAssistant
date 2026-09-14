@@ -35,7 +35,7 @@ export interface ThemeConfig {
     opacity?: number;
     /** 背景毛玻璃虚化 (px, 如 18) */
     blur?: number;
-    /** 全局圆角半径 (px, 如 10) */
+    /** 界面圆角半径 (px, 如 10) */
     borderRadius?: number;
     /** 主题模式 (dark / light) */
     mode?: 'dark' | 'light';

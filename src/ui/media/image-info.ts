@@ -1,13 +1,16 @@
 /**
  * @module src/ui/media/image-info
- * @description 图像技术元数据检查器与参数抽屉模态窗 (ImageInfoModal)
+ * @description 图像技术元数据检查器抽屉组件 (ImageInfoModal)
  *
- * 遵循规范 (styles/features/image-info.css)：
- * 1. 结构：全屏半透明模糊遮罩 (.da-modal-backdrop) + 视窗主体 (.da-inspect-modal)；
- * 2. 顶栏：标题、生图引擎徽标与耗时徽标；
- * 3. 双列工作区 (1fr 340px)：
- *    - 左栏 (.da-inspect-col-meta)：正反向提示词卡片（带复制）、LoRA 列表卡片、参数双列表格（点击单元格快速复制）；
- *    - 右栏 (.da-inspect-col-visual)：1:1 正方形缩略图（点击可放大）、文件技术规格、快捷操作工具箱（复用提示词、一键复现、复制 JSON、下载）。
+ * 核心功能：
+ * 1. 结构化解析并呈现历史生图的完整技术元数据（生图引擎、生成耗时、精确超参数与随机种子）；
+ * 2. 呈现正反向提示词与 LoRA 模型列表，支持文本一键复制与快捷复用；
+ * 3. 呈现图像缩略图、文件尺寸与存储类型规格；
+ * 4. 提供原始响应 JSON 预览与复制能力，辅助高级调优与复现。
+ *
+ * 注意事项：
+ * 1. 历史或外部生成的图像记录可能缺失部分元数据字段，渲染时需提供默认占位防崩保护；
+ * 2. 复制文本到剪贴板需做权限异常捕获与友好反馈。
  */
 
 import { createElement, formatBytes } from '../../util/dom';
@@ -277,31 +280,121 @@ export function createImageInfoModal(options: ImageInfoModalOptions = {}): Image
 
     disposers.push(() => backdrop.remove());
 
+    interface ExtractedDisplayParams {
+        model: string;
+        sampler: string;
+        scheduler: string;
+        steps: string;
+        cfg: string;
+        seed: string;
+        loras: Array<{ name: string; weight: number }>;
+    }
+
+    function extractImageDisplayParams(record: StoredImageRecord): ExtractedDisplayParams {
+        const meta = record.metadata;
+        const ep = meta?.engineParams as Record<string, unknown> | undefined;
+        const engine = (meta?.engine || (ep?.engine as string) || '').toLowerCase();
+        const raw = meta?.rawResponse as Record<string, unknown> | undefined;
+
+        let model = '--';
+        let sampler = '--';
+        let scheduler = '--';
+        let steps = '--';
+        let cfg = '--';
+        let seed = '--';
+        const loras: Array<{ name: string; weight: number }> = [];
+
+        if (raw && typeof raw.seed === 'number') {
+            seed = String(raw.seed);
+        }
+
+        if (engine === 'comfyui' && ep) {
+            const vars = (ep.variables || {}) as Record<string, unknown>;
+            model = String(vars.model_name || vars.ckpt_name || ep.model || '--');
+            sampler = vars.sampler_name ? String(vars.sampler_name) : (ep.sampler ? String(ep.sampler) : (ep.sampler_name ? String(ep.sampler_name) : '--'));
+            scheduler = vars.scheduler ? String(vars.scheduler) : (ep.scheduler ? String(ep.scheduler) : '--');
+            const stepVal = vars.steps ?? ep.steps;
+            steps = stepVal !== undefined ? `${stepVal} 步` : '--';
+            const cfgVal = vars.cfg ?? ep.cfg ?? ep.cfgScale;
+            cfg = cfgVal !== undefined ? String(cfgVal) : '--';
+            const seedVal = vars.seed ?? ep.seed;
+            if (seed === '--' && seedVal !== undefined) seed = String(seedVal);
+
+            if (Array.isArray(ep.loras)) {
+                for (const item of ep.loras) {
+                    if (!item) continue;
+                    const name = typeof item === 'string' ? item : item.name || item.id || 'LoRA';
+                    const weight = typeof item === 'object' ? item.modelWeight ?? item.weight ?? 1.0 : 1.0;
+                    loras.push({ name, weight });
+                }
+            }
+        } else if (engine === 'sdwebui' && ep) {
+            const overrides = (ep.override_settings || {}) as Record<string, unknown>;
+            model = String(overrides.sd_model_checkpoint || ep.model || '--');
+            sampler = String(ep.sampler_name || '--');
+            scheduler = String(ep.scheduler || '默认');
+            steps = ep.steps ? `${ep.steps} 步` : '--';
+            cfg = ep.cfg_scale !== undefined ? String(ep.cfg_scale) : '--';
+            if (seed === '--' && ep.seed !== undefined) seed = String(ep.seed);
+
+            // 从正向提示词中提取已嵌入的 <lora:name:weight> 标签
+            const promptText = meta?.prompt || record.prompt || '';
+            const loraRegex = /<lora:([^:>]+):?([^>]*)>/g;
+            let match: RegExpExecArray | null;
+            while ((match = loraRegex.exec(promptText)) !== null) {
+                const name = match[1];
+                const weight = parseFloat(match[2]) || 1.0;
+                loras.push({ name, weight });
+            }
+        } else if (engine === 'novelai' && ep) {
+            model = String(ep.model || '--');
+            const params = (ep.parameters || {}) as Record<string, unknown>;
+            sampler = String(params.sampler || '--');
+            scheduler = '--';
+            steps = params.steps ? `${params.steps} 步` : '--';
+            cfg = params.scale !== undefined ? String(params.scale) : '--';
+            if (seed === '--' && params.seed !== undefined) seed = String(params.seed);
+        } else if (engine === 'openai' && ep) {
+            model = String(ep.model || '--');
+            sampler = 'API内置';
+            scheduler = '--';
+            steps = 'API内置';
+            cfg = 'API内置';
+            if (seed === '--' && ep.seed !== undefined) seed = String(ep.seed);
+        } else if (ep) {
+            model = String(ep.model || ep.checkpoint || ep.baseModel || '--');
+            sampler = String(ep.sampler || ep.sampler_name || '--');
+            scheduler = String(ep.scheduler || '--');
+            steps = ep.steps ? `${ep.steps} 步` : '--';
+            cfg = String(ep.cfg || ep.cfgScale || '--');
+            if (seed === '--' && ep.seed !== undefined) seed = String(ep.seed);
+        }
+
+        return { model, sampler, scheduler, steps, cfg, seed, loras };
+    }
+
     function renderModal(record: StoredImageRecord) {
         currentRecord = record;
-        const meta = record.metadata || ({} as any);
-        const ep = meta.engineParams || {};
+        const meta = record.metadata;
+        const displayParams = extractImageDisplayParams(record);
 
         // 顶栏徽标
-        engineBadge.textContent = (meta.engine || '未知引擎').toUpperCase();
-        timeBadge.textContent = meta.durationMs ? `${(meta.durationMs / 1000).toFixed(2)}s` : '--';
+        engineBadge.textContent = (meta?.engine || '未知引擎').toUpperCase();
+        timeBadge.textContent = meta?.durationMs ? `${(meta.durationMs / 1000).toFixed(2)}s` : '--';
 
         // 提示词
-        posTextEl.textContent = meta.prompt || record.prompt || '(无正向词)';
-        negTextEl.textContent = meta.negativePrompt || '(无负向词)';
+        posTextEl.textContent = meta?.prompt || record.prompt || '(无正向词)';
+        negTextEl.textContent = meta?.negativePrompt || '(无负向词)';
 
         // LoRA
         loraChipsContainer.innerHTML = '';
-        const loras = ep.loras || (meta as any).loras;
-        if (Array.isArray(loras) && loras.length > 0) {
+        if (displayParams.loras.length > 0) {
             loraBox.style.display = 'flex';
-            for (const lora of loras) {
+            for (const lora of displayParams.loras) {
                 const chip = createElement('div', { className: 'da-inspect-lora-chip' });
-                const name = typeof lora === 'string' ? lora : lora.name || lora.id;
-                const weight = typeof lora === 'object' ? lora.modelWeight ?? lora.weight ?? 1.0 : 1.0;
                 chip.innerHTML = `
-                    <span>${name}</span>
-                    <span class="da-chip-val">${weight}</span>
+                    <span>${lora.name}</span>
+                    <span class="da-chip-val">${lora.weight}</span>
                 `;
                 loraChipsContainer.appendChild(chip);
             }
@@ -312,14 +405,14 @@ export function createImageInfoModal(options: ImageInfoModalOptions = {}): Image
         // 参数属性表格
         paramsMatrix.innerHTML = '';
         const paramsList = [
-            { label: '生图底模', val: ep.model || ep.checkpoint || ep.baseModel || '--' },
-            { label: '采样算法', val: ep.sampler || ep.sampler_name || '--' },
-            { label: '调度类型', val: ep.scheduler || '--' },
-            { label: '迭代步数', val: ep.steps ? `${ep.steps} 步` : '--' },
-            { label: 'CFG 相关性', val: ep.cfg || ep.cfgScale || '--' },
-            { label: '随机种子', val: ep.seed !== undefined ? String(ep.seed) : '--' },
-            { label: '画幅规格', val: meta.dimensions ? `${meta.dimensions.width} × ${meta.dimensions.height}` : '--' },
-            { label: '生成时间', val: meta.createdAt ? new Date(meta.createdAt).toLocaleString() : '--' }
+            { label: '生图底模', val: displayParams.model },
+            { label: '采样算法', val: displayParams.sampler },
+            { label: '调度类型', val: displayParams.scheduler },
+            { label: '迭代步数', val: displayParams.steps },
+            { label: 'CFG 相关性', val: displayParams.cfg },
+            { label: '随机种子', val: displayParams.seed },
+            { label: '画幅规格', val: meta?.dimensions ? `${meta.dimensions.width} × ${meta.dimensions.height}` : '--' },
+            { label: '生成时间', val: meta?.createdAt ? new Date(meta.createdAt).toLocaleString() : '--' }
         ];
 
         for (const p of paramsList) {

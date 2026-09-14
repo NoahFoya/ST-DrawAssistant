@@ -231,9 +231,10 @@
     gap: 8px;
 }
 
-/* 4. 楼层生成图像右上角快捷触发栏 (.da-image-corner-trigger)
+/* 4. 楼层生成图像右上角快捷触发栏 (.da-image-action-trigger, .da-image-corner-trigger)
    在生成的楼层图片右上角绝对定位圆形半透明按钮；
-   在精确鼠标设备下默认隐藏，悬停图片时平滑显现。 */
+   在精确鼠标设备下默认低透明度，悬停图片时平滑显现。 */
+.da-image-wrapper,
 .da-generated-img-wrapper {
     position: relative;
     display: inline-block;
@@ -241,6 +242,7 @@
     line-height: 0;
 }
 
+.da-image-action-trigger,
 .da-image-corner-trigger {
     position: absolute;
     top: 8px;
@@ -263,6 +265,7 @@
     z-index: 5;
 }
 
+.da-image-action-trigger:hover,
 .da-image-corner-trigger:hover {
     opacity: 1;
     transform: scale(1.08);
@@ -270,14 +273,17 @@
     border-color: rgba(255, 255, 255, 0.4);
 }
 
+.da-image-action-trigger:active,
 .da-image-corner-trigger:active {
     transform: scale(0.95);
 }
 
 @media (hover: hover) and (pointer: fine) {
+    .da-image-action-trigger,
     .da-image-corner-trigger {
         opacity: 0;
     }
+    .da-image-wrapper:hover .da-image-action-trigger,
     .da-generated-img-wrapper:hover .da-image-corner-trigger {
         opacity: 0.95;
     }

@@ -1,6 +1,14 @@
 /**
- * 表单行容器与分块布局组件
- * 遵循 38px 标准表单行高规范，行内不添加冗长副标题，通过悬停提示气泡展示字段说明。
+ * 表单字段容器与卡片布局组件 (FormField & Card)
+ *
+ * 核心功能：
+ * 1. 统一表单字段标签、交互控件与帮助提示气泡的排版结构；
+ * 2. 提供单行、多行堆叠与全宽等灵活的表单行排布方式；
+ * 3. 提供统一的卡片外壳容器 (Card)，支持标题、操作工具栏与内容折叠扩展。
+ *
+ * 注意事项：
+ * 1. 控件挂载容器应自适应内容宽度，防止长标签或大号输入框引起界面水平溢出；
+ * 2. 帮助提示气泡需统一采用无侵入悬浮浮层，避免破坏表单垂直节奏。
  */
 
 import type { IControlHandle } from '@types';
@@ -14,6 +22,8 @@ export interface FormFieldOptions {
     control: HTMLElement | IControlHandle<any>;
     /** 表单行布局排布：标准行 (row) / 垂直多行堆叠 (stacked) / 全宽行 (full) */
     layout?: 'row' | 'stacked' | 'full';
+    /** 控件插槽宽度阶梯规格：'full' (240px) / 'half' (120px) / 'compact' (80px) / 'toggle' (38px) / 'auto' */
+    widthVariant?: 'full' | 'half' | 'compact' | 'toggle' | 'auto' | 'w-240' | 'w-120' | 'w-80';
     /** 自定义补充 CSS 类名 */
     className?: string;
     /** 标签关联的输入控件 ID */
@@ -23,6 +33,7 @@ export interface FormFieldOptions {
 export interface FormFieldHandle {
     readonly element: HTMLElement;
     readonly labelElement: HTMLLabelElement;
+    readonly labelBoxElement: HTMLElement;
     readonly slotElement: HTMLElement;
     readonly control: HTMLElement | IControlHandle<any>;
     setLabel(text: string): void;
@@ -47,9 +58,9 @@ export function createFormField(options: FormFieldOptions): FormFieldHandle {
         row.classList.add(options.className);
     }
 
-    // 1. 左侧标题区
-    const labelWrap = document.createElement('div');
-    labelWrap.className = 'da-form-label-wrap';
+    // 1. 左侧标题区 (.da-label-box)
+    const labelBox = document.createElement('div');
+    labelBox.className = 'da-label-box';
 
     const label = document.createElement('label');
     label.className = 'da-form-label';
@@ -57,7 +68,7 @@ export function createFormField(options: FormFieldOptions): FormFieldHandle {
     if (options.forId) {
         label.htmlFor = options.forId;
     }
-    labelWrap.appendChild(label);
+    labelBox.appendChild(label);
 
     // 悬停提示图标挂载
     let helpBtn: HTMLButtonElement | null = null;
@@ -74,22 +85,33 @@ export function createFormField(options: FormFieldOptions): FormFieldHandle {
         helpBtn.type = 'button';
         helpBtn.className = 'da-help-btn';
         helpBtn.setAttribute('aria-label', text);
+        helpBtn.tabIndex = -1;
         helpBtn.textContent = '?';
 
         helpBtn.addEventListener('mouseenter', () => {
             if (!text) return;
+            if (helpTooltip) {
+                helpTooltip.remove();
+            }
             helpTooltip = document.createElement('div');
             helpTooltip.className = 'da-help-bubble';
             helpTooltip.textContent = text;
             document.body.appendChild(helpTooltip);
 
             const rect = helpBtn!.getBoundingClientRect();
-            let left = rect.left + rect.width / 2;
-            let top = rect.top - 8;
+            const left = Math.max(12, Math.min(window.innerWidth - 272, rect.left + rect.width / 2 - 130));
+            const showAbove = rect.top > 70;
+            const top = showAbove ? (rect.top - 8) : (rect.bottom + 8);
 
+            helpTooltip.style.position = 'fixed';
             helpTooltip.style.left = `${left}px`;
             helpTooltip.style.top = `${top}px`;
-            helpTooltip.style.transform = 'translate(-50%, -100%)';
+            if (showAbove) {
+                helpTooltip.classList.add('da-help-bubble--top');
+                helpTooltip.style.transform = 'translateY(-100%)';
+            } else {
+                helpTooltip.style.transform = 'translateY(0)';
+            }
         });
 
         helpBtn.addEventListener('mouseleave', () => {
@@ -99,17 +121,37 @@ export function createFormField(options: FormFieldOptions): FormFieldHandle {
             }
         });
 
-        labelWrap.appendChild(helpBtn);
+        labelBox.appendChild(helpBtn);
     };
 
     if (options.helpText) {
         setupHelp(options.helpText);
     }
-    row.appendChild(labelWrap);
+    row.appendChild(labelBox);
 
-    // 2. 右侧操作插槽
+    // 2. 右侧操作插槽 (.da-slot--right)
     const slot = document.createElement('div');
     slot.className = 'da-slot--right';
+
+    if (options.widthVariant) {
+        switch (options.widthVariant) {
+            case 'full':
+            case 'w-240':
+                slot.classList.add('da-slot--w-240');
+                break;
+            case 'half':
+            case 'w-120':
+                slot.classList.add('da-slot--w-120');
+                break;
+            case 'compact':
+            case 'w-80':
+                slot.classList.add('da-slot--w-80');
+                break;
+            case 'toggle':
+                slot.classList.add('da-slot--w-toggle');
+                break;
+        }
+    }
 
     const controlEl = 'element' in options.control ? options.control.element : options.control;
     slot.appendChild(controlEl);
@@ -118,6 +160,7 @@ export function createFormField(options: FormFieldOptions): FormFieldHandle {
     return {
         element: row,
         labelElement: label,
+        labelBoxElement: labelBox,
         slotElement: slot,
         control: options.control,
         setLabel(text: string): void {
@@ -198,6 +241,138 @@ export function createFormSection(options: FormSectionOptions): FormSectionHandl
     };
 }
 
+export interface SectionGroupOptions {
+    title: string;
+    description?: string;
+    badgeText?: string;
+    collapsible?: boolean;
+    initiallyCollapsed?: boolean;
+    headerActions?: HTMLElement;
+    className?: string;
+    onChange?: (isOpen: boolean) => void;
+}
+
+export interface SectionGroupHandle {
+    readonly element: HTMLElement;
+    readonly headerElement: HTMLElement;
+    readonly titleElement: HTMLElement;
+    readonly contentElement: HTMLElement;
+    readonly arrowElement: HTMLElement;
+    addFormField(field: HTMLElement | FormFieldHandle): void;
+    setOpen(isOpen: boolean): void;
+    isOpen(): boolean;
+    toggle(): void;
+    setBadge(badgeText?: string): void;
+    dispose(): void;
+}
+
+/**
+ * 创建次级折叠分组容器 (SectionGroup)
+ * 32px 紧凑标题栏、左侧旋转指示箭头与受控展开收起状态机
+ */
+export function createSectionGroup(options: SectionGroupOptions): SectionGroupHandle {
+    const group = document.createElement('div');
+    group.className = 'da-section-group';
+    if (options.className) group.classList.add(options.className);
+
+    let isExpanded = !options.initiallyCollapsed;
+    group.classList.toggle('is-collapsed', !isExpanded);
+    group.classList.toggle('is-open', isExpanded);
+
+    const header = document.createElement('div');
+    header.className = 'da-section-group__header';
+
+    // 旋转指示箭头
+    const arrow = document.createElement('span');
+    arrow.className = 'da-section-group__arrow';
+    arrow.textContent = '▾';
+    header.appendChild(arrow);
+
+    // 标题文本
+    const title = document.createElement('span');
+    title.className = 'da-section-group__title';
+    title.textContent = options.title;
+    header.appendChild(title);
+
+    // 可选状态徽标
+    let badgeSpan: HTMLSpanElement | null = null;
+    if (options.badgeText) {
+        badgeSpan = document.createElement('span');
+        badgeSpan.className = 'da-section-group__badge';
+        badgeSpan.textContent = options.badgeText;
+        header.appendChild(badgeSpan);
+    }
+
+    // 可选操作按钮槽
+    if (options.headerActions) {
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'da-section-group__actions';
+        actionsWrap.appendChild(options.headerActions);
+        header.appendChild(actionsWrap);
+    }
+
+    group.appendChild(header);
+
+    // 子表单行承载内容区
+    const content = document.createElement('div');
+    content.className = 'da-section-group__content';
+    group.appendChild(content);
+
+    const applyOpenState = (open: boolean) => {
+        isExpanded = open;
+        group.classList.toggle('is-collapsed', !open);
+        group.classList.toggle('is-open', open);
+        options.onChange?.(open);
+    };
+
+    const isCollapsible = options.collapsible !== false;
+    if (isCollapsible) {
+        header.addEventListener('click', (e) => {
+            if (options.headerActions && options.headerActions.contains(e.target as Node)) {
+                return;
+            }
+            applyOpenState(!isExpanded);
+        });
+    }
+
+    return {
+        element: group,
+        headerElement: header,
+        titleElement: title,
+        contentElement: content,
+        arrowElement: arrow,
+        addFormField(field: HTMLElement | FormFieldHandle): void {
+            const el = 'element' in field ? field.element : field;
+            content.appendChild(el);
+        },
+        setOpen(isOpen: boolean): void {
+            applyOpenState(isOpen);
+        },
+        isOpen(): boolean {
+            return isExpanded;
+        },
+        toggle(): void {
+            applyOpenState(!isExpanded);
+        },
+        setBadge(badgeText?: string): void {
+            if (badgeText) {
+                if (!badgeSpan) {
+                    badgeSpan = document.createElement('span');
+                    badgeSpan.className = 'da-section-group__badge';
+                    header.insertBefore(badgeSpan, options.headerActions ? header.lastChild : null);
+                }
+                badgeSpan.textContent = badgeText;
+            } else if (badgeSpan) {
+                badgeSpan.remove();
+                badgeSpan = null;
+            }
+        },
+        dispose(): void {
+            group.remove();
+        }
+    };
+}
+
 export interface CardOptions {
     title: string;
     iconSvg?: string;
@@ -211,7 +386,7 @@ export interface CardHandle {
     readonly element: HTMLElement;
     readonly headerElement: HTMLElement;
     readonly bodyElement: HTMLElement;
-    append(child: HTMLElement | FormFieldHandle): void;
+    append(child: HTMLElement | FormFieldHandle | SectionGroupHandle | FormSectionHandle): void;
     setCollapsed(collapsed: boolean): void;
     isCollapsed(): boolean;
     dispose(): void;

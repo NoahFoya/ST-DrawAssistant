@@ -2,11 +2,15 @@
  * @module src/ui/composite/prompt-preset-manager
  * @description 提示词预设方案管理器卡片 (PromptPresetManager)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第四节第 4 条)：
- * 1. 结构：通用卡片外壳 (.da-card) + 提示词预设方案管理工具栏 (PresetToolbar)；
- * 2. 正向前缀、正向后缀、通用负向词 3 个等宽多行文本框 (.da-textarea)；
- * 3. 内嵌 LoRA 模型管理控件 (LoraManagerControl)，支持 showLora 配置 (NovelAI 驱动下自动隐藏)；
- * 4. 脏状态变更追踪：内置 createDirtyTracker 追踪正反向提示词与 LoRA 变动，实时同步工具栏保存按钮可用状态与高亮提示。
+ * 核心功能：
+ * 1. 统一管理正向修饰词前缀、后缀与通用负向词模板；
+ * 2. 集成 LoRA 模型管理控件，支持权重调节与按引擎按需显隐；
+ * 3. 联动预设工具栏，支持提示词方案的切换、重命名、另存为与出厂重置；
+ * 4. 内置表单脏状态追踪，编辑内容变更时自动同步保存状态。
+ *
+ * 注意事项：
+ * 1. 不同引擎（如 NovelAI vs SD-WebUI）对 LoRA 的支持机制不同，需根据引擎特性动态适配展示；
+ * 2. 预设切换或重置时应先比对当前表单是否存在未保存的脏状态，防止意外丢弃用户修改。
  */
 
 import { PresetItem } from '@types';
@@ -31,6 +35,7 @@ export interface PromptPresetManagerOptions {
     activePresetId: string;
     value?: Partial<PromptPresetData>;
     showLora?: boolean;
+    backendMode?: 'comfyui' | 'sdwebui';
     availableLoras?: string[];
     onAction?: (action: PresetActionType, presetId: string, data?: PromptPresetData) => void;
     onChange?: (data: PromptPresetData) => void;
@@ -39,9 +44,12 @@ export interface PromptPresetManagerOptions {
 
 export interface PromptPresetManagerHandle {
     readonly element: HTMLElement;
+    readonly toolbar: PresetToolbarHandle;
+    readonly loraManager: LoraManagerHandle | null;
     getValue(): PromptPresetData;
     setValue(val: Partial<PromptPresetData>): void;
     setPresets(presets: PresetItem<PromptPresetData>[], activeId?: string): void;
+    setBackendMode(mode: 'comfyui' | 'sdwebui'): void;
     setAvailableLoras(loras: string[]): void;
     setBaseline(data: PromptPresetData): void;
     isDirty(): boolean;
@@ -178,8 +186,8 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
     });
     disposers.push(() => negInput.dispose?.());
     const negField: FormFieldHandle = createFormField({
-        label: '通用负向提示词',
-        helpText: '生成时自动注入的全局过滤词，抑制畸变、水印及低画质特征',
+        label: '负向提示词',
+        helpText: '生成时自动注入的基础过滤词，抑制畸变、水印及低画质特征',
         control: negInput
     });
     disposers.push(() => negField.dispose?.());
@@ -190,6 +198,7 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
     if (showLora) {
         loraManager = createLoraManager({
             loras: currentData.loras || [],
+            backendMode: options.backendMode,
             availableLoras: options.availableLoras,
             onChange: (loras) => {
                 currentData.loras = loras.map((l) => ({ ...l }));
@@ -212,6 +221,8 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
 
     return {
         element: card.element,
+        toolbar,
+        loraManager,
         getValue(): PromptPresetData {
             return {
                 ...currentData,
@@ -234,9 +245,14 @@ export function createPromptPresetManager(options: PromptPresetManagerOptions): 
                 toolbar.setActivePreset(activeId);
             }
         },
+        setBackendMode(mode: 'comfyui' | 'sdwebui'): void {
+            if (loraManager) {
+                loraManager.setBackendMode(mode);
+            }
+        },
         setAvailableLoras(loras: string[]): void {
             if (loraManager) {
-                (loraManager as any).setAvailableLoras?.(loras);
+                loraManager.setAvailableLoras(loras);
             }
         },
         setBaseline(data: PromptPresetData): void {

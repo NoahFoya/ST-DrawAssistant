@@ -2,13 +2,14 @@
  * @module src/ui/views/gallery-tab
  * @description 历史生图画廊选项卡 (GalleryTab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第四节第 6 条 与 styles/features/gallery.css)：
- * 1. 顶部：IndexedDB 存储配额监控条 (StorageBar)，展示容量占比、条数及清空/备份导出；
- * 2. 检索工具栏：关键词搜索（居中）、排序下拉框、引擎筛选下拉框、收藏过滤下拉框；
- * 3. 媒体流式卡片网格 (.da-media-grid)：严格 1:1 正方形等比视窗，自适应 repeat(auto-fill, minmax(130px, 1fr))；
- * 4. 悬停浮层操作：大图预览、参数详情抽屉、标星收藏切换、单项删除；
- * 5. 粘性悬浮批处理条 (.da-gallery-batch-actions)：多选时平滑浮起，支持批量导出 Zip 与批量删除；
- * 6. 分页控制条 (.da-pagination)：每页 24 / 48 / 96 条切换与翻页。
+ * 核心功能：
+ * 1. 提供历史生图资产的网格化浏览、关键词检索、排序与多引擎/收藏状态过滤；
+ * 2. 集成存储配额监控、数据备份导出与未收藏记录清理；
+ * 3. 支持单张图片的详情查看、大图预览、提示词复用，以及多选状态下的批量导出与删除。
+ *
+ * 注意事项：
+ * 1. 采用分页机制控制单次渲染节点规模，保障大量图片记录下的 DOM 渲染性能；
+ * 2. 批量删除与清空缓存操作需提供确认提示，已标星收藏的资产应受保护避免误删。
  */
 
 import { createElement } from '../../util/dom';
@@ -75,8 +76,9 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
         pageBlobUrls.length = 0;
     };
 
-    // 1. 顶部存储配额监控条 (StorageBar)
+    // 1. 顶部存储配额监控条 (StorageBar 紧凑模式)
     const storageBar: StorageBarHandle = createStorageBar({
+        compact: true,
         initialQuota: {
             usedBytes: 0,
             totalBytes: 1024 * 1024 * 1024,
@@ -133,7 +135,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     regDisposer(storageBar);
     root.appendChild(storageBar.element);
 
-    // 2. 检索与过滤工具栏 (.da-gallery-toolbar)
+    // 2. 检索与过滤工具栏 (.da-gallery-toolbar) - 单行弹性自适应排布
     const toolbar = createElement('div', { className: 'da-gallery-toolbar' });
 
     // 搜索输入框 (检索变体、带清空按钮)
@@ -148,12 +150,14 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
         }
     });
     regDisposer(searchInput);
+    searchInput.element.style.flex = '2';
+    searchInput.element.style.minWidth = '180px';
     toolbar.appendChild(searchInput.element);
 
     // 筛选选择框行
     const filterRow = createElement('div', {
         className: 'da-gallery-filter-row',
-        attributes: { style: 'display: flex; gap: 8px; flex-wrap: wrap; width: 100%;' }
+        attributes: { style: 'display: flex; gap: 8px; flex-wrap: wrap; flex: 3; align-items: center;' }
     });
 
     // 排序下拉
@@ -171,7 +175,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     });
     regDisposer(sortSelect);
     sortSelect.element.style.flex = '1';
-    sortSelect.element.style.minWidth = '140px';
+    sortSelect.element.style.minWidth = '130px';
     filterRow.appendChild(sortSelect.element);
 
     // 引擎下拉
@@ -210,7 +214,7 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
     });
     regDisposer(favSelect);
     favSelect.element.style.flex = '1';
-    favSelect.element.style.minWidth = '110px';
+    favSelect.element.style.minWidth = '100px';
     filterRow.appendChild(favSelect.element);
 
     toolbar.appendChild(filterRow);
@@ -358,8 +362,23 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
         filteredRecords = allRecords.filter((r) => {
             if (keyword) {
                 const prompt = (r.metadata?.prompt || r.prompt || '').toLowerCase();
-                const model = String(r.metadata?.engineParams?.model || r.metadata?.engineParams?.checkpoint || '').toLowerCase();
-                const seed = String(r.metadata?.engineParams?.seed || '');
+                const ep = r.metadata?.engineParams as Record<string, unknown> | undefined;
+                const overrides = (ep?.override_settings || {}) as Record<string, unknown>;
+                const vars = (ep?.variables || {}) as Record<string, unknown>;
+                const params = (ep?.parameters || {}) as Record<string, unknown>;
+                const model = String(
+                    ep?.model ||
+                    ep?.checkpoint ||
+                    overrides.sd_model_checkpoint ||
+                    vars.model_name ||
+                    ''
+                ).toLowerCase();
+                const seed = String(
+                    ep?.seed ||
+                    vars.seed ||
+                    params.seed ||
+                    ''
+                );
                 if (!prompt.includes(keyword) && !model.includes(keyword) && !seed.includes(keyword)) {
                     return false;
                 }

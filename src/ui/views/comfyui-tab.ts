@@ -1,13 +1,17 @@
 /**
  * @module src/ui/views/comfyui-tab
- * @description ComfyUI 驱动专属配置面板 (ComfyUITab)
+ * @description ComfyUI 引擎专属配置面板 (ComfyUITab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 2 条)：
- * 1. Card 1: ConnectionCard (服务地址, 测试连接与资产拉取更新)；
- * 2. Card 2: 绘图参数预设 (PresetToolbar, 底模/CLIP/VAE, DimensionPicker画幅, SamplerCard超参, 关联提示词, 3项工作流绑定)；
- * 3. Card 3: PromptPresetManager (提示词方案管理, 正向前缀/后缀, 负向词, WeiLin 4段式多权重 LoRA 管理)；
- * 4. Card 4: WorkflowPresetCard (工作流预设管理, JSON 定义, 宏变量格式化诊断与打开蓝图)；
- * 5. 状态同步：Select 画幅控件、等宽数字输入框、表单脏状态追踪与基准重置。
+ * 核心功能：
+ * 1. 管理 ComfyUI 服务连接配置、HTTP 接口探测与 WebSocket 信道状态展示；
+ * 2. 提供绘图方案预设切换、模型与采样器超参数配置、画面尺寸选择与工作流方案绑定；
+ * 3. 集成工作流预设管理器，支持 API 节点图预览、导入导出与变量填报诊断；
+ * 4. 集成提示词预设管理器，支持 WeiLin 语法模板与 LoRA 权重项配置；
+ * 5. 追踪表单脏状态变更，提供一键复原与持久化同步。
+ *
+ * 注意事项：
+ * 1. ComfyUI 依赖完整的 API 节点图格式，需防止前端占位变量注入时破坏 JSON 结构；
+ * 2. 实时进度展示需要与后端 WebSocket 保持连接稳定，网络断开时应具备重连容错能力。
  */
 
 import { createElement } from '../../util/dom';
@@ -17,7 +21,7 @@ import { createConnectionCard, ConnectionCardHandle } from '../composite/connect
 import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
 import { createSamplerCard, SamplerCardHandle } from '../composite/sampler-card';
 import { createPromptPresetManager, PromptPresetManagerHandle, PromptPresetData } from '../composite/prompt-preset-manager';
-import { createWorkflowCard, WorkflowCardHandle } from '../composite/workflow-card';
+import { createWorkflowPresetManager, WorkflowPresetManagerHandle } from '../composite/workflow-card';
 import { createPresetToolbar, PresetToolbarHandle } from '../composite/preset-toolbar';
 import { createDirtyTracker, IDirtyTracker } from '../components/dirty-tracker';
 import { getIconSvg } from '../components/icons';
@@ -337,6 +341,7 @@ export function renderComfyUITab(
     regDisposer(promptProfileField);
     drawingCard.append(promptProfileField.element);
 
+    let onTxt2imgWorkflowSelect: ((val: string) => void) | null = null;
     const workflowPresets: PresetItem<{ json: string }>[] = presetManager.list('workflows') || BUILTIN_WORKFLOWS;
     const wfOptions = workflowPresets.map((w: PresetItem<{ json: string }>) => ({ label: w.name, value: w.id }));
 
@@ -346,32 +351,7 @@ export function renderComfyUITab(
         onChange: (val) => {
             currentDrawingParams.txt2imgWorkflowId = val;
             drawingDirtyTracker.notifyFieldChange('txt2imgWorkflowId', val);
-            const found = workflowPresets.find((w) => w.id === val);
-            if (found) {
-                currentWf = found;
-                wfJsonStr = typeof found.data === 'string' ? found.data : (found.data?.json || '{}');
-                try {
-                    workflowCard.setWorkflow({
-                        id: found.id,
-                        title: found.name,
-                        rawJson: typeof wfJsonStr === 'string' ? JSON.parse(wfJsonStr || '{}') : wfJsonStr,
-                        variables: {
-                            prompt: true,
-                            negativePrompt: true,
-                            seed: true,
-                            width: true,
-                            height: true,
-                            steps: true,
-                            cfg: true,
-                            sampler: true,
-                            scheduler: true,
-                            modelName: true
-                        }
-                    });
-                } catch (err) {
-                    console.error('[ComfyUITab] 工作流切换解析异常:', err);
-                }
-            }
+            onTxt2imgWorkflowSelect?.(val);
         }
     });
     regDisposer(txt2imgWfSelect);
@@ -428,7 +408,8 @@ export function renderComfyUITab(
             sampler: params.sampler,
             scheduler: params.scheduler,
             steps: params.steps,
-            cfgScale: params.cfgScale
+            cfgScale: params.cfgScale,
+            seed: currentDrawingParams.seed ?? -1
         });
         promptProfileSelect.setValue(params.promptProfileId);
         txt2imgWfSelect.setValue(params.txt2imgWorkflowId);
@@ -463,64 +444,75 @@ export function renderComfyUITab(
     regDisposer(promptPresetManager);
     root.appendChild(promptPresetManager.element);
 
-    // 4. WorkflowCard (工作流预设管理与蓝图入口)
+    // 4. WorkflowPresetManager (工作流预设方案管理与代码编辑)
+    const syncWorkflowPresets = () => {
+        const updated = presetManager.list('workflows') || BUILTIN_WORKFLOWS;
+        const optionsList = updated.map((w: PresetItem) => ({ label: w.name, value: w.id }));
+        txt2imgWfSelect.setOptions(optionsList);
+        img2imgWfSelect.setOptions(optionsList);
+        inpaintWfSelect.setOptions(optionsList);
+    };
+
     let currentWf = workflowPresets.find((w: PresetItem<{ json: string }>) => w.id === currentDrawingParams.txt2imgWorkflowId) || workflowPresets[0];
     let wfJsonStr = typeof currentWf?.data === 'string' ? currentWf.data : (currentWf?.data?.json || '{}');
 
-    const workflowCard: WorkflowCardHandle = createWorkflowCard({
-        workflow: {
-            id: currentWf?.id || 'default',
-            title: currentWf?.name || 'ComfyUI 默认工作流',
-            rawJson: typeof wfJsonStr === 'string' ? JSON.parse(wfJsonStr || '{}') : wfJsonStr,
-            variables: {
-                prompt: true,
-                negativePrompt: true,
-                seed: true,
-                width: true,
-                height: true,
-                steps: true,
-                cfg: true,
-                sampler: true,
-                scheduler: true,
-                modelName: true
+    const workflowPresetManager: WorkflowPresetManagerHandle = createWorkflowPresetManager({
+        presets: workflowPresets as PresetItem<{ json: string }>[],
+        activePresetId: currentDrawingParams.txt2imgWorkflowId || workflowPresets[0]?.id || 'default',
+        value: { json: typeof wfJsonStr === 'string' ? wfJsonStr : JSON.stringify(wfJsonStr, null, 2) },
+        onAction: (action, presetId, data) => {
+            if (action === 'select') {
+                const found = workflowPresets.find((w: PresetItem<{ json: string }>) => w.id === presetId);
+                if (found) {
+                    currentDrawingParams.txt2imgWorkflowId = presetId;
+                    txt2imgWfSelect.setValue(presetId);
+                    drawingDirtyTracker.notifyFieldChange('txt2imgWorkflowId', presetId);
+                }
+            } else if (action === 'save' && data) {
+                const target = workflowPresets.find((w: PresetItem<{ json: string }>) => w.id === presetId);
+                if (target) {
+                    presetManager.save('workflows', {
+                        ...target,
+                        data: { json: data.json }
+                    });
+                    syncWorkflowPresets();
+                }
             }
         },
-        onViewDetail: () => {
-            options.onOpenWorkflowBlueprint?.(currentWf?.id || 'default', wfJsonStr, (newJson: string) => {
-                wfJsonStr = newJson;
-                try {
-                    const parsed = typeof newJson === 'string' ? JSON.parse(newJson) : newJson;
-                    if (currentWf) {
+        onChange: (data) => {
+            wfJsonStr = data.json;
+        },
+        onOpenBlueprint: (currentJson) => {
+            options.onOpenWorkflowBlueprint?.(
+                currentDrawingParams.txt2imgWorkflowId || currentWf?.id || 'default',
+                currentJson,
+                (newJson: string) => {
+                    wfJsonStr = newJson;
+                    workflowPresetManager.setValue({ json: newJson });
+                    const target = workflowPresets.find((w: PresetItem<{ json: string }>) => w.id === currentDrawingParams.txt2imgWorkflowId);
+                    if (target) {
                         presetManager.save('workflows', {
-                            ...currentWf,
-                            data: { json: typeof newJson === 'string' ? newJson : JSON.stringify(newJson, null, 2) }
+                            ...target,
+                            data: { json: newJson }
                         });
+                        syncWorkflowPresets();
                     }
-                    workflowCard.setWorkflow({
-                        id: currentWf?.id || 'default',
-                        title: currentWf?.name || 'ComfyUI 工作流',
-                        rawJson: parsed,
-                        variables: {
-                            prompt: true,
-                            negativePrompt: true,
-                            seed: true,
-                            width: true,
-                            height: true,
-                            steps: true,
-                            cfg: true,
-                            sampler: true,
-                            scheduler: true,
-                            modelName: true
-                        }
-                    });
-                } catch (err) {
-                    console.error('[ComfyUITab] 工作流配置保存同步失败:', err);
                 }
-            });
+            );
         }
     });
-    regDisposer(workflowCard);
-    root.appendChild(workflowCard.element);
+    regDisposer(workflowPresetManager);
+    root.appendChild(workflowPresetManager.element);
+
+    onTxt2imgWorkflowSelect = (val: string) => {
+        const found = workflowPresets.find((w: PresetItem<{ json: string }>) => w.id === val);
+        if (found) {
+            currentWf = found;
+            wfJsonStr = typeof found.data === 'string' ? found.data : (found.data?.json || '{}');
+            const jsonContent = typeof wfJsonStr === 'string' ? wfJsonStr : JSON.stringify(wfJsonStr, null, 2);
+            workflowPresetManager.setValue({ json: jsonContent });
+        }
+    };
 
     return {
         element: root,

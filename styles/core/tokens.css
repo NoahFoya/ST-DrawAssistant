@@ -1,11 +1,10 @@
 /**
  * @module styles/core/tokens
  * @file tokens.css
- * @description 全局 CSS Design Tokens 变量定义 (通用设计令牌抽象层与默认基准值)
- * @author NoahFoya
+ * @description CSS Design Tokens 变量定义 (通用设计令牌抽象层与默认基准值)
  *
- * 职责与约束：
- * 1. 建立全局统一的设计令牌（Tokens），包括颜色、字阶、间距、圆角、阴影、层级与缓动曲线；
+ * 规范原则：
+ * 1. 建立统一的设计令牌（Tokens），包括颜色、字阶、间距、圆角、阴影、层级与缓动曲线；
  * 2. 严禁在业务组件中硬编码绝对色彩数值，均应统一引用 var(--da-*) 变量；
  * 3. 动态主题切换通过 ThemeService 运行时修改 :root 或根容器上的这些变量实现。
  */

@@ -1,18 +1,22 @@
 /**
  * @module src/ui/views/sdwebui-tab
- * @description SD-WebUI / Forge 驱动专属配置面板 (SDWebUITab)
+ * @description SD-WebUI / Forge 引擎专属配置面板 (SDWebUITab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 3 条)：
- * 1. Card 1: ConnectionCard (服务地址, 测试连接与资产拉取更新)；
- * 2. Card 2: 绘图参数预设 (PresetToolbar, 模型/VAE/ClipSkip, DimensionPicker, SamplerCard超参+种子骰子+面修+去噪, Hires.fix 高清修复, 关联提示词)；
- * 3. Card 3: PromptPresetManager (正向前缀/后缀, 负向词, 单权重 LoRA 管理)；
- * 4. 状态同步：全量居中、Select 画幅、等宽数字微调框、表单脏状态追踪与基准重置。
+ * 核心功能：
+ * 1. 管理 SD-WebUI / Forge 服务连接配置、可用性探测与服务端模型/采样器资产同步；
+ * 2. 提供绘图方案预设切换、采样超参数配置、画面尺寸选择与高清修复 (Hires.fix) 选项；
+ * 3. 集成提示词预设管理器，支持正负向模板组装与 LoRA 列表维护；
+ * 4. 追踪表单脏状态变更，支持配置一键复原与持久化同步。
+ *
+ * 注意事项：
+ * 1. 资产同步依赖服务端 CORS 跨域配置及接口可访问性，拉取受阻时需提供非阻塞告警；
+ * 2. 高清修复开启时需配合重绘幅度与放大倍数，避免显存不足导致生成失败。
  */
 
 import { createElement } from '../../util/dom';
 import { createFormField, createCard, FormFieldHandle } from '../components/form-field';
 import { createSelect } from '../components/select';
-import { createNumberInput, NumberInputHandle } from '../components/input';
+import { createSlider, SliderHandle } from '../components/slider';
 import { createToggle, ToggleHandle } from '../components/toggle';
 import { createConnectionCard, ConnectionCardHandle } from '../composite/connection-card';
 import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
@@ -127,7 +131,7 @@ export function renderSDWebUITab(
             }
             if (Array.isArray(assets.vaes) && assets.vaes.length > 0) {
                 vaeSelect.setOptions([
-                    { label: 'automatic (自动探测)', value: 'automatic' },
+                    { label: '自动探测', value: 'automatic' },
                     ...assets.vaes.map((v: string) => ({ label: v, value: v }))
                 ]);
             }
@@ -229,7 +233,7 @@ export function renderSDWebUITab(
     });
     regDisposer(baseModelSelect);
     const baseModelField: FormFieldHandle = createFormField({
-        label: '生图主模型 (Base Model)',
+        label: '生图主模型',
         helpText: 'SD-WebUI 服务端加载的 Checkpoint 大模型文件',
         control: baseModelSelect
     });
@@ -239,7 +243,7 @@ export function renderSDWebUITab(
     const vaeSelect = createSelect({
         value: currentDrawingParams.vae,
         options: [
-            { label: 'automatic (自动探测)', value: 'automatic' },
+            { label: '自动探测', value: 'automatic' },
             { label: 'vae-ft-mse-840000.safetensors', value: 'vae-ft-mse-840000.safetensors' },
             { label: 'kl-f8-anime2.vae.safetensors', value: 'kl-f8-anime2.vae.safetensors' }
         ],
@@ -250,14 +254,14 @@ export function renderSDWebUITab(
     });
     regDisposer(vaeSelect);
     const vaeField: FormFieldHandle = createFormField({
-        label: 'VAE 模型 (VAE)',
+        label: 'VAE 模型',
         helpText: '图像颜色解码增强模型，选 automatic 将使用模型自带或系统默认配置',
         control: vaeSelect
     });
     regDisposer(vaeField);
     drawingCard.append(vaeField.element);
 
-    const clipSkipInput: NumberInputHandle = createNumberInput({
+    const clipSkipSlider: SliderHandle = createSlider({
         value: currentDrawingParams.clipSkip,
         min: 1,
         max: 12,
@@ -268,11 +272,11 @@ export function renderSDWebUITab(
             drawingDirtyTracker.notifyFieldChange('clipSkip', val);
         }
     });
-    regDisposer(clipSkipInput);
+    regDisposer(clipSkipSlider);
     const clipSkipField: FormFieldHandle = createFormField({
-        label: 'CLIP 跳过层数 (Clip Skip)',
+        label: 'CLIP 跳过层数',
         helpText: '二次元动漫模型通常推荐 2 层，真实摄影模型通常推荐 1 层',
-        control: clipSkipInput
+        control: clipSkipSlider
     });
     regDisposer(clipSkipField);
     drawingCard.append(clipSkipField.element);
@@ -333,14 +337,14 @@ export function renderSDWebUITab(
     });
     regDisposer(restoreFacesToggle);
     const restoreFacesField: FormFieldHandle = createFormField({
-        label: '面部修复 (Restore Faces)',
+        label: '面部修复',
         helpText: '使用 CodeFormer / GFPGAN 对生成图像中的人物面部细节进行修复',
         control: restoreFacesToggle
     });
     regDisposer(restoreFacesField);
     drawingCard.append(restoreFacesField.element);
 
-    const denoiseInput: NumberInputHandle = createNumberInput({
+    const denoiseSlider: SliderHandle = createSlider({
         value: currentDrawingParams.denoisingStrength,
         min: 0,
         max: 1,
@@ -350,19 +354,19 @@ export function renderSDWebUITab(
             drawingDirtyTracker.notifyFieldChange('denoisingStrength', val);
         }
     });
-    regDisposer(denoiseInput);
+    regDisposer(denoiseSlider);
     const denoiseField: FormFieldHandle = createFormField({
-        label: '重绘幅度 (Denoising strength)',
+        label: '重绘幅度',
         helpText: '图生图与重绘时的去噪变化强度，值越大画面变化越显著',
-        control: denoiseInput
+        control: denoiseSlider
     });
     regDisposer(denoiseField);
     drawingCard.append(denoiseField.element);
 
-    // Section 3: 高清修复 (Hires.fix)
+    // Section 3: 高清修复
     const hiresSectionTitle = createElement('div', {
         className: 'da-form-section-title',
-        textContent: '高清修复 (Hires.fix)'
+        textContent: '高清修复'
     });
     hiresSectionTitle.style.padding = '8px 12px 4px 12px';
     hiresSectionTitle.style.fontSize = '12px';
@@ -400,34 +404,34 @@ export function renderSDWebUITab(
     });
     regDisposer(hiresUpscalerSelect);
     const hiresUpscalerField: FormFieldHandle = createFormField({
-        label: '放大算法 (Upscaler)',
+        label: '放大算法',
         helpText: '超分辨率重绘采用的潜空间或像素级插值放大算法',
         control: hiresUpscalerSelect
     });
     regDisposer(hiresUpscalerField);
     drawingCard.append(hiresUpscalerField.element);
 
-    const hiresScaleInput: NumberInputHandle = createNumberInput({
+    const hiresScaleSlider: SliderHandle = createSlider({
         value: currentDrawingParams.hiresUpscaleBy,
         min: 1,
         max: 4,
-        step: 0.1,
+        step: 0.05,
         unit: 'x',
         onChange: (val) => {
             currentDrawingParams.hiresUpscaleBy = val;
             drawingDirtyTracker.notifyFieldChange('hiresUpscaleBy', val);
         }
     });
-    regDisposer(hiresScaleInput);
+    regDisposer(hiresScaleSlider);
     const hiresScaleField: FormFieldHandle = createFormField({
-        label: '放大倍率 (Upscale by)',
+        label: '放大倍率',
         helpText: '基于初始分辨率的等比放大倍率，推荐 1.5x ~ 2.0x',
-        control: hiresScaleInput
+        control: hiresScaleSlider
     });
     regDisposer(hiresScaleField);
     drawingCard.append(hiresScaleField.element);
 
-    const hiresStepsInput: NumberInputHandle = createNumberInput({
+    const hiresStepsSlider: SliderHandle = createSlider({
         value: currentDrawingParams.hiresSteps,
         min: 0,
         max: 100,
@@ -438,16 +442,16 @@ export function renderSDWebUITab(
             drawingDirtyTracker.notifyFieldChange('hiresSteps', val);
         }
     });
-    regDisposer(hiresStepsInput);
+    regDisposer(hiresStepsSlider);
     const hiresStepsField: FormFieldHandle = createFormField({
-        label: '高分重绘步数 (Hires steps)',
+        label: '高分重绘步数',
         helpText: '第二次超分辨率采样的迭代步数，填 0 则沿用基础步数',
-        control: hiresStepsInput
+        control: hiresStepsSlider
     });
     regDisposer(hiresStepsField);
     drawingCard.append(hiresStepsField.element);
 
-    const hiresDenoiseInput: NumberInputHandle = createNumberInput({
+    const hiresDenoiseSlider: SliderHandle = createSlider({
         value: currentDrawingParams.hiresDenoising,
         min: 0,
         max: 1,
@@ -457,11 +461,11 @@ export function renderSDWebUITab(
             drawingDirtyTracker.notifyFieldChange('hiresDenoising', val);
         }
     });
-    regDisposer(hiresDenoiseInput);
+    regDisposer(hiresDenoiseSlider);
     const hiresDenoiseField: FormFieldHandle = createFormField({
-        label: '高分重绘幅度 (Hires denoise)',
+        label: '高分重绘幅度',
         helpText: '超分阶段的去噪强度，推荐 0.35 ~ 0.55，太高会导致画面完全偏离',
-        control: hiresDenoiseInput
+        control: hiresDenoiseSlider
     });
     regDisposer(hiresDenoiseField);
     drawingCard.append(hiresDenoiseField.element);
@@ -490,7 +494,7 @@ export function renderSDWebUITab(
     const syncDrawingControls = (params: SDWebUIDrawingParams) => {
         baseModelSelect.setValue(params.model);
         vaeSelect.setValue(params.vae);
-        clipSkipInput.setValue(params.clipSkip);
+        clipSkipSlider.setValue(params.clipSkip);
         dimensionPicker.setValue({ width: params.width, height: params.height });
         samplerCard.setValue({
             sampler: params.sampler,
@@ -500,16 +504,16 @@ export function renderSDWebUITab(
             seed: params.seed
         });
         restoreFacesToggle.setValue(params.restoreFaces);
-        denoiseInput.setValue(params.denoisingStrength);
+        denoiseSlider.setValue(params.denoisingStrength);
         hiresToggle.setValue(params.hiresEnabled);
         hiresUpscalerSelect.setValue(params.hiresUpscaler);
-        hiresScaleInput.setValue(params.hiresUpscaleBy);
-        hiresStepsInput.setValue(params.hiresSteps);
-        hiresDenoiseInput.setValue(params.hiresDenoising);
+        hiresScaleSlider.setValue(params.hiresUpscaleBy);
+        hiresStepsSlider.setValue(params.hiresSteps);
+        hiresDenoiseSlider.setValue(params.hiresDenoising);
         promptProfileSelect.setValue(params.promptProfileId);
     };
 
-    // 3. PromptPresetManager (提示词预设方案与单权重 LoRA)
+    // 3. PromptPresetManager (提示词预设方案与双权重 LoRA)
     const syncPromptPresets = () => {
         const updated = presetManager.list('prompts') || BUILTIN_PROMPTS;
         promptProfileSelect.setOptions(updated.map((p: PresetItem) => ({ label: p.name, value: p.id })));
@@ -519,6 +523,7 @@ export function renderSDWebUITab(
         presets: promptPresets as PresetItem<PromptPresetData>[],
         activePresetId: currentDrawingParams.promptProfileId || promptPresets[0]?.id || 'default',
         showLora: true,
+        backendMode: 'sdwebui',
         onAction: (action, presetId, data) => {
             if (action === 'save' && data) {
                 presetManager.save('prompts', {

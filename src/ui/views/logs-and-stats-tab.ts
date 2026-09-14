@@ -1,11 +1,16 @@
 /**
  * @module src/ui/views/logs-and-stats-tab
- * @description 日志与生图统计选项卡 (LogsAndStatsTab)
+ * @description 运行日志与生图统计面板 (LogsAndStatsTab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第四节第 7 条 与 styles/controls/cards/stat-card.css / styles/features/terminal.css)：
- * 1. 顶部：4 栏核心指标卡片网格 (StatGrid)，展示总生图次数、成功率 %、平均生成耗时、已用存储；
- * 2. 中部：引擎生图频次分布与近期生图走势看板，附带导出报表与重置统计操作；
- * 3. 底部：实时日志终端 (LogTerminal)，支持实时滚屏、日志级别过滤 (DEBUG/INFO/WARN/ERROR)、一键复制与清空。
+ * 核心功能：
+ * 1. 汇总展示核心生图指标（累计次数、成功率、平均耗时与存储占用情况）；
+ * 2. 提供插件运行时日志控制台，支持按日志级别过滤、关键词搜索与日志导出；
+ * 3. 动态捕获并滚动呈现各模块运行记录，辅助用户与开发者排查网络或配置异常；
+ * 4. 提供日志快速清理与重置功能，释放长时间运行占用的内存资源。
+ *
+ * 注意事项：
+ * 1. 控制台日志条数应受最大行数上限限制，防止长时间挂机导致浏览器内存泄漏；
+ * 2. 统计重置与日志清空需具备防误触保护。
  */
 
 import { createElement, formatBytes } from '../../util/dom';
@@ -99,72 +104,16 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
         4
     );
     regDisposer(statGrid);
-    root.appendChild(statGrid.element);
 
-    // 2. 生图分析与各引擎频次分布看板
-    const analyticsCard = createCard({
-        title: '生图引擎分布与分析报表',
-        iconSvg: getIconSvg('star'),
-        collapsible: true
-    });
-    regDisposer(analyticsCard);
-
-    const breakdownContainer = createElement('div', {
-        className: 'da-engine-breakdown',
-        attributes: { style: 'display: flex; flex-direction: column; gap: 10px; padding: 4px 0;' }
-    });
-
-    const breakdownBarsWrapper = createElement('div', {
-        attributes: { style: 'display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;' }
-    });
-
-    function renderBreakdownBars() {
-        breakdownBarsWrapper.innerHTML = '';
-        const engines = [
-            { id: 'comfyui', name: 'ComfyUI', color: '#10b981' },
-            { id: 'sdwebui', name: 'SD-WebUI / Forge', color: '#3b82f4' },
-            { id: 'novelai', name: 'NovelAI', color: '#8b5cf6' },
-            { id: 'openai', name: 'OpenAI 兼容模型', color: '#f59e0b' }
-        ];
-
-        const total = Math.max(1, stats.totalGenerations);
-
-        for (const eng of engines) {
-            const count = stats.engineBreakdown[eng.id] || 0;
-            const pct = Math.round((count / total) * 100);
-
-            const row = createElement('div', {
-                attributes: {
-                    style: 'background: var(--da-bg-primary); border: 1px solid var(--da-separator); border-radius: var(--da-radius-sm, 8px); padding: 10px 14px;'
-                }
-            });
-
-            row.innerHTML = `
-                <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 500; margin-bottom: 6px;">
-                    <span>${eng.name}</span>
-                    <span style="color: var(--da-text-secondary);">${count} 次 (${pct}%)</span>
-                </div>
-                <div style="height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden;">
-                    <div style="width: ${pct}%; height: 100%; background: ${eng.color}; border-radius: 999px; transition: width 0.3s ease;"></div>
-                </div>
-            `;
-
-            breakdownBarsWrapper.appendChild(row);
-        }
-    }
-    renderBreakdownBars();
-    breakdownContainer.appendChild(breakdownBarsWrapper);
-
-    // 操作工具栏
-    const actionsRow = createElement('div', {
-        attributes: {
-            style: 'display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; flex-wrap: wrap;'
-        }
+    // 2. 卡片头部快捷操作按钮 (报表导出与计数清零)
+    const headerActions = createElement('div', {
+        attributes: { style: 'display: flex; gap: 8px; align-items: center;' }
     });
 
     const exportStatsBtn: ButtonHandle = createButton({
         text: '导出统计报表 (JSON)',
         variant: 'secondary',
+        size: 'sm',
         icon: 'download',
         onClick: () => {
             const dataStr = JSON.stringify(
@@ -186,11 +135,12 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
         }
     });
     regDisposer(exportStatsBtn);
-    actionsRow.appendChild(exportStatsBtn.element);
+    headerActions.appendChild(exportStatsBtn.element);
 
     const resetStatsBtn: ButtonHandle = createButton({
         text: '重置统计计数',
         variant: 'danger',
+        size: 'sm',
         icon: 'trash',
         onClick: () => {
             if (!confirm('确定要清零所有生图统计计数吗？该操作不可恢复！')) return;
@@ -205,11 +155,111 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
         }
     });
     regDisposer(resetStatsBtn);
-    actionsRow.appendChild(resetStatsBtn.element);
+    headerActions.appendChild(resetStatsBtn.element);
 
-    breakdownContainer.appendChild(actionsRow);
-    analyticsCard.append(breakdownContainer);
-    root.appendChild(analyticsCard.element);
+    // Card 1: 生图数据总览看板 (高内聚整合核心指标与各引擎分段分布)
+    const dashboardCard = createCard({
+        title: '生图数据统计看板',
+        iconSvg: getIconSvg('star'),
+        collapsible: true,
+        headerActions
+    });
+    regDisposer(dashboardCard);
+
+    // 看板内容区容器
+    const dashboardBody = createElement('div', {
+        attributes: { style: 'display: flex; flex-direction: column; gap: 14px; width: 100%;' }
+    });
+
+    dashboardBody.appendChild(statGrid.element);
+
+    // 分隔线
+    const divider = createElement('div', {
+        attributes: { style: 'height: 1px; background: var(--da-separator); width: 100%; margin: 2px 0;' }
+    });
+    dashboardBody.appendChild(divider);
+
+    // 各引擎分段比例条与图例
+    const breakdownSection = createElement('div', {
+        className: 'da-engine-breakdown',
+        attributes: { style: 'display: flex; flex-direction: column; gap: 8px;' }
+    });
+
+    const breakdownTitle = createElement('div', {
+        attributes: { style: 'font-size: 13px; font-weight: 600; color: var(--da-text-secondary);' },
+        textContent: '各引擎生成分布:'
+    });
+    breakdownSection.appendChild(breakdownTitle);
+
+    const segmentedTrack = createElement('div', {
+        className: 'da-segmented-track',
+        attributes: {
+            style: 'display: flex; width: 100%; height: 8px; border-radius: 999px; overflow: hidden; background: var(--da-bg-input, rgba(255, 255, 255, 0.08)); border: 1px solid var(--da-separator);'
+        }
+    });
+    breakdownSection.appendChild(segmentedTrack);
+
+    const legendContainer = createElement('div', {
+        className: 'da-engine-legend-row',
+        attributes: {
+            style: 'display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px;'
+        }
+    });
+    breakdownSection.appendChild(legendContainer);
+
+    function renderBreakdown() {
+        const engines = [
+            { id: 'comfyui', name: 'ComfyUI', color: '#10b981' },
+            { id: 'sdwebui', name: 'SD-WebUI / Forge', color: '#3b82f4' },
+            { id: 'novelai', name: 'NovelAI', color: '#8b5cf6' },
+            { id: 'openai', name: 'OpenAI 兼容模型', color: '#f59e0b' }
+        ];
+
+        const total = Math.max(1, stats.totalGenerations);
+        segmentedTrack.innerHTML = '';
+        legendContainer.innerHTML = '';
+
+        for (const eng of engines) {
+            const count = stats.engineBreakdown[eng.id] || 0;
+            const pct = Math.round((count / total) * 100);
+
+            if (count > 0) {
+                const seg = createElement('div', {
+                    attributes: {
+                        style: `width: ${pct}%; height: 100%; background: ${eng.color}; transition: width 0.3s ease;`,
+                        title: `${eng.name}: ${count} 次 (${pct}%)`
+                    }
+                });
+                segmentedTrack.appendChild(seg);
+            }
+
+            const legendItem = createElement('div', {
+                attributes: {
+                    style: 'display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--da-text-secondary);'
+                }
+            });
+            legendItem.innerHTML = `
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${eng.color}; flex-shrink: 0;"></span>
+                <span style="color: var(--da-text-primary); font-weight: 500;">${eng.name}</span>
+                <span>${count} 次 (${pct}%)</span>
+            `;
+            legendContainer.appendChild(legendItem);
+        }
+
+        if (stats.totalGenerations === 0) {
+            const emptySeg = createElement('div', {
+                attributes: {
+                    style: 'width: 100%; height: 100%; background: var(--da-bg-input, rgba(255, 255, 255, 0.08)); opacity: 0.4;'
+                }
+            });
+            segmentedTrack.appendChild(emptySeg);
+        }
+    }
+    renderBreakdown();
+
+    dashboardBody.appendChild(breakdownSection);
+    dashboardCard.append(dashboardBody);
+    root.appendChild(dashboardCard.element);
 
     // 3. 实时系统日志终端 (LogTerminal)
     const logCard = createCard({
@@ -254,7 +304,7 @@ export function renderLogsAndStatsTab(options: LogsAndStatsTabOptions = {}): Log
         statGrid.updateItem(2, avg);
 
         statGrid.updateItem(3, formatBytes(stats.storageBytes));
-        renderBreakdownBars();
+        renderBreakdown();
     }
 
     return {

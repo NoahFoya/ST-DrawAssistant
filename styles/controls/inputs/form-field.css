@@ -5,7 +5,7 @@
  *
  * 规范约束与技术原因：
  * 1. 38px 标准表单行：统一采用 38px 高度，防止表单项纵向膨胀导致弹窗滚动条过长；
- * 2. 行内严禁副标题：表单行内只保留简洁标题，所有解释性说明收敛至悬停提示气泡（.da-help-icon），维持界面清爽；
+ * 2. 行内严禁副标题：表单行内只保留简洁标题，所有解释性说明统一置于悬停提示气泡（.da-help-icon），维持界面清爽；
  * 3. 控件对齐插槽：右侧操作槽（.da-slot--right）统一垂直居中与右靠齐，消除混用不同控件时的基线跳动；
  * 4. 彻底移除滑块残留：不再包含任何 slider 容器样式。
  */
@@ -149,6 +149,35 @@
     height: 20px;
 }
 
+/* 宽度阶梯排布与右对齐约束 (1 : 1.5 : 3 比例规范) */
+.da-slot--w-240 {
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px !important;
+}
+
+.da-slot--w-120 {
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
+    flex: 0 0 120px !important;
+}
+
+.da-slot--w-80 {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+    flex: 0 0 80px !important;
+}
+
+.da-slot--w-toggle {
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    flex: 0 0 38px !important;
+}
+
 /* 5. 字段标签组排布 (.da-field-label-group) */
 .da-field-label-group {
     display: flex;
@@ -181,4 +210,96 @@
     line-height: 1.35;
     white-space: normal;
     overflow-wrap: break-word;
+}
+
+/* 6. 次级折叠分组容器 (.da-section-group) */
+.da-section-group {
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--da-separator);
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.15s var(--da-ease);
+}
+
+.da-section-group:last-child {
+    border-bottom: none;
+}
+
+.da-section-group__header {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.025));
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+    border-left: 2px solid transparent;
+    transition: background-color 0.12s var(--da-ease), border-color 0.12s var(--da-ease);
+}
+
+.da-section-group__header:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.05));
+    border-left-color: var(--da-accent-color);
+}
+
+.da-section-group__arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--da-text-secondary);
+    font-size: 11px;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.da-section-group.is-collapsed .da-section-group__arrow {
+    transform: rotate(-90deg);
+}
+
+.da-section-group__title {
+    font-size: var(--da-font-size-sm, 0.82rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.da-section-group__badge {
+    font-size: var(--da-font-size-xs, 0.72rem);
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: var(--da-radius-pill, 20px);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.06));
+    color: var(--da-text-secondary);
+    border: 1px solid var(--da-border-color);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.da-section-group__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.da-section-group__content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.15s var(--da-ease);
+}
+
+.da-section-group.is-collapsed .da-section-group__content {
+    display: none;
 }

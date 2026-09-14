@@ -1,14 +1,15 @@
 /**
  * 采样超参数卡片组件 (SamplerCard)
- * 封装采样器、调度器、迭代步数、CFG Scale 与随机种子控制器。
+ * 封装采样器、调度器、现代双向联动复合滑块（步数、CFG）与随机种子控制器。
  * 供 SD-WebUI 与 ComfyUI 生图引擎界面共用。
  */
 
-import type { SamplerParamsModel, SelectOptionItem } from '@types';
+import type { IControlHandle, SamplerParamsModel, SelectOptionItem } from '@types';
 import { createSelect, SelectHandle } from '../components/select';
+import { createSlider, SliderHandle } from '../components/slider';
 import { createNumberInput, NumberInputHandle } from '../components/input';
 import { createIconButton, IconButtonHandle } from '../components/button';
-import { createFormField } from '../components/form-field';
+import { createFormField, FormFieldHandle } from '../components/form-field';
 
 export const DEFAULT_SAMPLERS = [
     'euler',
@@ -40,14 +41,15 @@ export interface SamplerCardOptions {
     className?: string;
 }
 
-export interface SamplerCardHandle {
-    readonly element: HTMLElement;
-    getValue(): SamplerParamsModel;
-    setValue(val: Partial<SamplerParamsModel>): void;
+export interface SamplerCardHandle extends IControlHandle<SamplerParamsModel> {
+    readonly samplerSelectHandle: SelectHandle;
+    readonly schedulerSelectHandle: SelectHandle;
+    readonly stepsSliderHandle: SliderHandle;
+    readonly cfgSliderHandle: SliderHandle;
+    readonly seedInputHandle: NumberInputHandle;
+    readonly diceButtonHandle: IconButtonHandle;
     setSamplers(samplers: string[]): void;
     setSchedulers(schedulers: string[]): void;
-    setDisabled(disabled: boolean): void;
-    dispose(): void;
 }
 
 export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCardHandle {
@@ -76,12 +78,13 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
     const samplerSelect: SelectHandle = createSelect({
         options: toOptions(availableSamplers),
         value: currentParams.sampler,
+        ariaLabel: '采样算法',
         onChange: (val) => {
             currentParams.sampler = val;
             triggerChange();
         }
     });
-    const samplerRow = createFormField({
+    const samplerRow: FormFieldHandle = createFormField({
         label: '采样算法 (Sampler)',
         helpText: '降噪扩散算法模型，推荐 euler 或 dpmpp_2m',
         control: samplerSelect
@@ -92,70 +95,70 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
     const schedulerSelect: SelectHandle = createSelect({
         options: toOptions(availableSchedulers),
         value: currentParams.scheduler,
+        ariaLabel: '调度器',
         onChange: (val) => {
             currentParams.scheduler = val;
             triggerChange();
         }
     });
-    const schedulerRow = createFormField({
+    const schedulerRow: FormFieldHandle = createFormField({
         label: '调度器 (Scheduler)',
         helpText: '采样噪声时间步衰减曲线，推荐 karras 或 normal',
         control: schedulerSelect
     });
     body.appendChild(schedulerRow.element);
 
-    // 3. 采样步数
-    const stepsInput: NumberInputHandle = createNumberInput({
+    // 3. 采样步数 (现代双向联动复合滑块: 1~150 步，步长 1)
+    const stepsSlider: SliderHandle = createSlider({
         value: currentParams.steps,
         min: 1,
         max: 150,
         step: 1,
         unit: '步',
-        variant: 'short',
+        ariaLabel: '迭代步数',
         onChange: (val) => {
             currentParams.steps = val;
             triggerChange();
         }
     });
-    const stepsRow = createFormField({
+    const stepsRow: FormFieldHandle = createFormField({
         label: '迭代步数 (Steps)',
         helpText: '生成计算迭代轮数，一般推荐 20 ~ 30 步',
-        control: stepsInput
+        control: stepsSlider
     });
     body.appendChild(stepsRow.element);
 
-    // 4. CFG Scale (提示词引导系数)
-    const cfgInput: NumberInputHandle = createNumberInput({
+    // 4. CFG Scale (提示词引导系数，现代双向联动复合滑块: 1.0~30.0，步长 0.5)
+    const cfgSlider: SliderHandle = createSlider({
         value: currentParams.cfgScale,
         min: 1.0,
         max: 30.0,
         step: 0.5,
         unit: 'CFG',
-        variant: 'short',
+        precision: 1,
+        ariaLabel: '提示词相关性',
         onChange: (val) => {
             currentParams.cfgScale = val;
             triggerChange();
         }
     });
-    const cfgRow = createFormField({
+    const cfgRow: FormFieldHandle = createFormField({
         label: '提示词相关性 (CFG)',
         helpText: '画面对提示词的服从强度，过高易导致画面过饱和或崩坏',
-        control: cfgInput
+        control: cfgSlider
     });
     body.appendChild(cfgRow.element);
 
-    // 5. 随机种子 (带随机骰子按钮)
+    // 5. 随机种子 (离散大整数，带随机骰子按钮)
     const seedWrap = document.createElement('div');
     seedWrap.className = 'da-seed-wrapper';
-    seedWrap.style.display = 'flex';
-    seedWrap.style.alignItems = 'center';
-    seedWrap.style.gap = '6px';
 
     const seedInput: NumberInputHandle = createNumberInput({
         value: currentParams.seed,
         min: -1,
         max: 99999999999999,
         step: 1,
+        ariaLabel: '随机种子',
         variant: 'short',
         onChange: (val) => {
             currentParams.seed = val;
@@ -165,10 +168,18 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
 
     const diceBtn: IconButtonHandle = createIconButton({
         icon: 'dice',
-        title: '设为随机种子 (-1)',
+        title: '生成真随机种子 (点击随机，长按设为 -1)',
+        ariaLabel: '随机种子快捷键',
         onClick: () => {
-            currentParams.seed = -1;
-            seedInput.setValue(-1);
+            // 若当前为 -1 则生成大随机数；若已有特定种子则可点击随机或设为 -1
+            if (currentParams.seed === -1) {
+                const randomSeed = Math.floor(Math.random() * 2147483647);
+                currentParams.seed = randomSeed;
+                seedInput.setValue(randomSeed);
+            } else {
+                currentParams.seed = -1;
+                seedInput.setValue(-1);
+            }
             triggerChange();
         }
     });
@@ -176,7 +187,7 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
     seedWrap.appendChild(seedInput.element);
     seedWrap.appendChild(diceBtn.element);
 
-    const seedRow = createFormField({
+    const seedRow: FormFieldHandle = createFormField({
         label: '随机种子 (Seed)',
         helpText: '固定数值可重现画面细节，设为 -1 代表每次出图生成随机种子',
         control: seedWrap
@@ -191,6 +202,12 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
 
     return {
         element: root,
+        samplerSelectHandle: samplerSelect,
+        schedulerSelectHandle: schedulerSelect,
+        stepsSliderHandle: stepsSlider,
+        cfgSliderHandle: cfgSlider,
+        seedInputHandle: seedInput,
+        diceButtonHandle: diceBtn,
         getValue(): SamplerParamsModel {
             return { ...currentParams };
         },
@@ -205,11 +222,11 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
             }
             if (val.steps !== undefined) {
                 currentParams.steps = val.steps;
-                stepsInput.setValue(val.steps);
+                stepsSlider.setValue(val.steps);
             }
             if (val.cfgScale !== undefined) {
                 currentParams.cfgScale = val.cfgScale;
-                cfgInput.setValue(val.cfgScale);
+                cfgSlider.setValue(val.cfgScale);
             }
             if (val.seed !== undefined) {
                 currentParams.seed = val.seed;
@@ -227,16 +244,30 @@ export function createSamplerCard(options: SamplerCardOptions = {}): SamplerCard
         setDisabled(disabled: boolean): void {
             samplerSelect.setDisabled(disabled);
             schedulerSelect.setDisabled(disabled);
-            stepsInput.setDisabled(disabled);
-            cfgInput.setDisabled(disabled);
+            stepsSlider.setDisabled(disabled);
+            cfgSlider.setDisabled(disabled);
             seedInput.setDisabled(disabled);
             diceBtn.setDisabled(disabled);
+        },
+        setDirty(isDirty: boolean): void {
+            samplerSelect.setDirty?.(isDirty);
+            schedulerSelect.setDirty?.(isDirty);
+            stepsSlider.setDirty?.(isDirty);
+            cfgSlider.setDirty?.(isDirty);
+            seedInput.setDirty?.(isDirty);
+        },
+        setError(hasError: boolean, message?: string): void {
+            samplerSelect.setError?.(hasError, message);
+            schedulerSelect.setError?.(hasError, message);
+            stepsSlider.setError?.(hasError, message);
+            cfgSlider.setError?.(hasError, message);
+            seedInput.setError?.(hasError, message);
         },
         dispose(): void {
             samplerSelect.dispose?.();
             schedulerSelect.dispose?.();
-            stepsInput.dispose?.();
-            cfgInput.dispose?.();
+            stepsSlider.dispose?.();
+            cfgSlider.dispose?.();
             seedInput.dispose?.();
             diceBtn.dispose();
             samplerRow.dispose?.();

@@ -47,7 +47,7 @@
     color: var(--da-text-muted, #64748b);
 }
 
-/* 5. 浅色模式全局基础文字颜色强化 */
+/* 5. 浅色模式基础文字颜色强化 */
 [data-da-mode="light"],
 .st-da-root[data-da-mode="light"],
 [data-da-mode="light"] .da-settings-modal {

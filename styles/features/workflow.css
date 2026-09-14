@@ -46,7 +46,7 @@
 
 /* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
    用于呈现 ComfyUI 工作流中的宏变量替换诊断报告，
-   展示变量匹配率、缺失占位符警示以及格式化前后的 JSON 结构比对。 */
+   展示变量匹配率、未匹配占位符警示以及格式化前后的 JSON 结构比对。 */
 .da-workflow-format-modal {
     max-height: 85vh;
     display: flex;
@@ -140,6 +140,17 @@
     border-radius: 4px;
     border: 1px solid rgba(var(--da-accent-rgb), 0.25);
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.14s ease;
+}
+
+.da-macro-tag.is-valid,
+.da-macro-tag--valid {
+    color: var(--da-color-success, #30d158);
+    background: rgba(48, 209, 88, 0.12);
+    border-color: rgba(48, 209, 88, 0.3);
 }
 
 .da-macro-tag--warning,
@@ -168,4 +179,60 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* 4. 工作流预设管理器整体布局 (.da-workflow-preset-manager) */
+.da-workflow-preset-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-workflow-card__actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0 2px 0;
+    border-top: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.06));
+}
+
+.da-workflow-card__actions-title {
+    font-size: var(--da-font-size-sm, 0.82rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-workflow-card__actions-btns {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-workflow-card__editor-row {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-workflow-json-editor {
+    width: 100% !important;
+    min-height: 120px !important;
+    font-family: var(--da-font-mono, monospace) !important;
+    font-size: var(--da-font-size-xs, 0.76rem) !important;
+    line-height: 1.45 !important;
+    tab-size: 2 !important;
+    white-space: pre !important;
+    word-break: normal !important;
+    overflow-x: auto !important;
+}
+
+.da-workflow-json-editor.is-invalid {
+    border-color: var(--da-color-error, #ff453a) !important;
+    background-color: rgba(var(--da-color-error-rgb, 255, 69, 58), 0.05) !important;
+    box-shadow: 0 0 0 1px var(--da-color-error, #ff453a) !important;
 }

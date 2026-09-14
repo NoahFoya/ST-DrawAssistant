@@ -107,7 +107,7 @@
     border: 1px solid rgba(255, 159, 10, 0.35) !important;
 }
 
-/* 异常 / 错误 / 依赖模型缺失告警 */
+/* 异常 / 错误 / 依赖模型失效告警 */
 .da-badge--danger,
 .da-badge--error,
 .da-badge--invalid,
@@ -117,61 +117,5 @@
     border: 1px solid rgba(255, 69, 58, 0.35) !important;
 }
 
-/* --- 3. 统一内嵌状态指示徽标 (.da-control-state-badge) ---
-   已修改 (Dirty) 与已失效 (Invalid) 统一使用感叹号 ! 作为内嵌微型徽标；
-   徽标置于控件内部文字前，默认常态无外显文字，仅在鼠标悬浮在对应控件上时显示提示。 */
-.da-control-state-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    min-width: 14px;
-    font-size: 10px;
-    font-weight: 800;
-    font-family: var(--da-font-mono, sans-serif);
-    line-height: 1;
-    border-radius: 50%;
-    flex-shrink: 0;
-    user-select: none;
-    box-sizing: border-box;
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
 
-/* 已修改状态 (琥珀金警告) */
-.da-control-state-badge--dirty {
-    color: #000000;
-    background: var(--da-color-warn, #f59e0b);
-    box-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
-}
-
-/* 已失效状态 (警示红错误) */
-.da-control-state-badge--invalid {
-    color: #ffffff;
-    background: var(--da-color-error, #ff453a);
-    box-shadow: 0 0 5px rgba(255, 69, 58, 0.5);
-}
-
-/* 带有内嵌前缀状态徽标的输入框与下拉选择框容器 */
-.da-control-with-state-badge {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-}
-
-.da-control-with-state-badge > .da-control-state-badge {
-    position: absolute;
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 2;
-    pointer-events: none;
-}
-
-/* 激活状态徽标时，输入框或下拉框文字向右缩进，保证文字排布在 ! 之后 */
-.da-control-with-state-badge.has-state-badge > .da-input,
-.da-control-with-state-badge.has-state-badge > .da-select {
-    padding-left: 28px !important;
-}
 

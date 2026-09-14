@@ -2,17 +2,17 @@
  * @module src/ui/views/theme-tab
  * @description 外观与主题设置面板 (ThemeTab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 6 条)：
+ * 核心架构划分：
  * 1. Card: 主题预设方案 (挂载 PresetToolbar 8键图标管理方案)；
  * 2. Card: 界面配色方案 (主题强调色, 主背景色, 渐变结束色, 卡片背景色, 主/次文本色, 边框色，ColorPicker 色盘双向强校验)；
- * 3. Card: 视觉质感与圆角 (背景渐变角度, 不透明度, 毛玻璃虚化, 全局圆角半径)；
- * 4. 脏状态变更追踪：结合 createDirtyTracker 实时联动预设保存按钮状态。
+ * 3. Card: 视觉质感与圆角 (背景渐变角度, 不透明度, 毛玻璃虚化, 圆角半径，全量接入现代复合滑块)；
+ * 4. 状态变更追踪：结合 createDirtyTracker 实时联动预设保存按钮状态，消除主观修饰词。
  */
 
 import { createElement } from '../../util/dom';
 import { createFormField, createCard } from '../components/form-field';
 import { createColorPicker } from '../components/color-picker';
-import { createNumberInput } from '../components/input';
+import { createSlider } from '../components/slider';
 import { createPresetToolbar } from '../composite/preset-toolbar';
 import { createDirtyTracker } from '../components/dirty-tracker';
 import { getIconSvg } from '../components/icons';
@@ -29,14 +29,16 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
     const disposers: (() => void)[] = [];
     const themeService = ThemeService.getInstance();
 
-    const regDisposer = (item: { dispose(): void }) => {
-        disposers.push(() => item.dispose());
+    const regDisposer = (item: { dispose?(): void } | undefined | null) => {
+        if (item && typeof item.dispose === 'function') {
+            disposers.push(() => item.dispose!());
+        }
     };
 
     // 当前主题配置初始内存基准
     const initialTheme: ThemeConfig = { ...themeService.getCurrentTheme() };
 
-    // 实例化表单脏状态追踪器
+    // 实例化表单状态追踪器
     const dirtyTracker = createDirtyTracker(initialTheme, (isDirty) => {
         toolbar.setDirty(isDirty);
     });
@@ -105,6 +107,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('accentColor', val);
         }
     });
+    regDisposer(accentPicker);
     const accentField = createFormField({
         label: '主题强调色',
         helpText: '界面主品牌色，应用于按钮高亮、聚焦光环与激活指示条',
@@ -121,6 +124,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('bgPrimary', val);
         }
     });
+    regDisposer(bgPrimaryPicker);
     const bgPrimaryField = createFormField({
         label: '主背景色',
         helpText: '设置弹窗与主要内容展示区的底色基调',
@@ -137,6 +141,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('bgSecondary', val);
         }
     });
+    regDisposer(bgSecondaryPicker);
     const bgSecondaryField = createFormField({
         label: '渐变结束色',
         helpText: '顶部标题栏与侧边栏的融合过渡色',
@@ -153,6 +158,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('bgCard', val);
         }
     });
+    regDisposer(bgCardPicker);
     const bgCardField = createFormField({
         label: '卡片背景色',
         helpText: '各功能配置卡片容器的表面填充色',
@@ -169,6 +175,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('textPrimary', val);
         }
     });
+    regDisposer(textPrimaryPicker);
     const textPrimaryField = createFormField({
         label: '主文本颜色',
         helpText: '标题与高权重文字的主要前景色',
@@ -185,6 +192,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('textSecondary', val);
         }
     });
+    regDisposer(textSecondaryPicker);
     const textSecondaryField = createFormField({
         label: '次要文本颜色',
         helpText: '说明提示与次要文字的柔和前景色',
@@ -201,6 +209,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('borderColor', val);
         }
     });
+    regDisposer(borderPicker);
     const borderField = createFormField({
         label: '边框线条颜色',
         helpText: '分割线与卡片边框的高对比轮廓色',
@@ -210,7 +219,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
 
     root.appendChild(colorCard.element);
 
-    // 3. 视觉质感与圆角规格卡片
+    // 3. 视觉质感与圆角卡片
     const visualCard = createCard({
         title: '视觉质感与圆角',
         iconSvg: getIconSvg('image'),
@@ -218,8 +227,8 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
     });
     regDisposer(visualCard);
 
-    // 背景渐变角度
-    const angleInput = createNumberInput({
+    // 背景渐变角度 (升级复合滑块)
+    const angleSlider = createSlider({
         value: currentThemeConfig.gradientAngle ?? 160,
         min: 0,
         max: 360,
@@ -231,15 +240,16 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('gradientAngle', val);
         }
     });
+    regDisposer(angleSlider);
     const angleField = createFormField({
         label: '背景渐变角度',
         helpText: '主视窗背景渐变流光的倾斜旋转角度',
-        control: angleInput
+        control: angleSlider
     });
     visualCard.append(angleField);
 
-    // 背景不透明度
-    const opacityInput = createNumberInput({
+    // 背景不透明度 (升级复合滑块)
+    const opacitySlider = createSlider({
         value: currentThemeConfig.opacity ?? 95,
         min: 50,
         max: 100,
@@ -251,15 +261,16 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('opacity', val);
         }
     });
+    regDisposer(opacitySlider);
     const opacityField = createFormField({
         label: '背景不透明度',
         helpText: '弹窗主视窗的背景遮光不透明度',
-        control: opacityInput
+        control: opacitySlider
     });
     visualCard.append(opacityField);
 
-    // 背景毛玻璃虚化
-    const blurInput = createNumberInput({
+    // 背景毛玻璃虚化 (升级复合滑块)
+    const blurSlider = createSlider({
         value: currentThemeConfig.blur ?? 16,
         min: 0,
         max: 48,
@@ -271,15 +282,16 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('blur', val);
         }
     });
+    regDisposer(blurSlider);
     const blurField = createFormField({
         label: '背景毛玻璃虚化',
         helpText: 'backdrop-filter 高斯虚化像素半径，0 为完全关闭毛玻璃',
-        control: blurInput
+        control: blurSlider
     });
     visualCard.append(blurField);
 
-    // 全局圆角半径
-    const radiusInput = createNumberInput({
+    // 圆角半径
+    const radiusSlider = createSlider({
         value: currentThemeConfig.borderRadius ?? 10,
         min: 0,
         max: 24,
@@ -291,10 +303,11 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
             dirtyTracker.notifyFieldChange('borderRadius', val);
         }
     });
+    regDisposer(radiusSlider);
     const radiusField = createFormField({
-        label: '全局圆角半径',
+        label: '圆角半径',
         helpText: '弹窗外壳与卡片容器的平滑倒角曲率半径',
-        control: radiusInput
+        control: radiusSlider
     });
     visualCard.append(radiusField);
 
@@ -310,10 +323,10 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
         textSecondaryPicker.setValue(theme.textSecondary);
         borderPicker.setValue(theme.borderColor);
 
-        angleInput.setValue(theme.gradientAngle ?? 160);
-        opacityInput.setValue(theme.opacity ?? 95);
-        blurInput.setValue(theme.blur ?? 16);
-        radiusInput.setValue(theme.borderRadius ?? 10);
+        angleSlider.setValue(theme.gradientAngle ?? 160);
+        opacitySlider.setValue(theme.opacity ?? 95);
+        blurSlider.setValue(theme.blur ?? 16);
+        radiusSlider.setValue(theme.borderRadius ?? 10);
     }
 
     return {

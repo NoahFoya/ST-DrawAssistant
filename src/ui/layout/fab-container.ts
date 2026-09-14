@@ -1,13 +1,16 @@
 /**
  * @module src/ui/layout/fab-container
- * @description 全局悬浮球控件容器 (FABContainer)
+ * @description 悬浮球快捷入口组件 (FABContainer)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第五节第 2 条)：
- * 1. 48px 正圆形毛玻璃悬浮球 (.da-fab-btn)，支持全屏自由拖拽定位；
- * 2. 拖拽防误触判断：位移 <= 4px 视为点击 (唤起设置弹窗)，> 4px 视为拖拽；
- * 3. 边缘智能吸附 (Snap to Edge)：松手后弹性平滑贴靠左右屏幕边缘；
- * 4. 运行时状态：生图任务进行中呈现呼吸发光与动画反馈；右上角任务角标；
- * 5. 坐标记忆与持久化到 SettingsStore。
+ * 核心功能：
+ * 1. 提供常驻宿主界面的快捷操作悬浮球，支持全屏自由拖拽定位与边缘自动吸附；
+ * 2. 结合位移阈值区分点击打开设置面板与拖拽移动位置操作，防止误触；
+ * 3. 响应生图队列运行时状态，提供动画反馈与任务计数角标提示；
+ * 4. 负责悬浮球屏幕坐标的记忆与持久化保存。
+ *
+ * 注意事项：
+ * 1. 拖拽边界需做视口溢出保护，防止悬浮球被拖出屏幕可见区域；
+ * 2. 宿主窗口尺寸变化 (resize) 时需自动校正悬浮球坐标，确保其停留在有效视口内。
  */
 
 import { createElement } from '../../util/dom';
@@ -254,7 +257,7 @@ export class FabContainer {
             img.alt = 'FAB Avatar';
             this._iconWrapper.appendChild(img);
         } else {
-            this._iconWrapper.innerHTML = getIconSvg((iconOrUrl as any) || 'palette');
+            this._iconWrapper.innerHTML = getIconSvg(iconOrUrl || 'palette');
         }
     }
 

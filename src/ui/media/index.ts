@@ -6,4 +6,5 @@
 export * from './lightbox-modal';
 export * from './image-info';
 export * from './image-editor';
+export * from './image-action-panel';
 export * from './floor-manager';

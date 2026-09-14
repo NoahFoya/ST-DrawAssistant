@@ -1,12 +1,16 @@
 /**
  * @module src/ui/views/about-tab
- * @description 关于与帮助支持选项卡 (AboutTab)
+ * @description 插件信息与版本维护面板 (AboutTab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第四节第 8 条 与 styles/controls/cards/hero-card.css / rich-link-card.css / changelog.css)：
- * 1. 顶部：Hero 展板卡片 (.da-hero-card)，呈现品牌渐变、版本号、作者信息、项目标语与更新检查；
- * 2. 中部：版本更新日志展板 (.da-changelog)，支持局部滚动，结构化呈现近期迭代特性；
- * 3. 底部：开源社区与技术文档富外链网格 (.da-rich-link-grid)，包含 GitHub、SillyTavern 官方文档、Discord、Issue 反馈；
- * 4. 全量配置备份、导入与出厂重置卡片：支持全量配置 JSON 文件导出与验证导入。
+ * 核心功能：
+ * 1. 展示插件品牌标识、当前安装版本与更新检查状态；
+ * 2. 呈现结构化版本更新日志 (Changelog)，方便追踪各版本特性演进与缺陷修复；
+ * 3. 提供项目主页、开发文档与问题反馈等社区外部导航入口；
+ * 4. 提供插件全量配置备份导出、导入恢复与出厂重置能力。
+ *
+ * 注意事项：
+ * 1. 外部链接跳转应使用安全属性 (rel="noopener noreferrer")，防止潜在跨域安全风险；
+ * 2. 导入外部配置文件时需执行结构与键名清洗，阻断非法脏属性注入。
  */
 
 import { createElement } from '../../util/dom';
@@ -42,41 +46,43 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
 
     const currentVersion = options.version || 'v0.2.0';
 
-    // 1. Hero 展板卡片 (.da-hero-card)
+    // 1. 软件信息与社区生态卡片 (.da-hero-card 高内聚整合)
     const heroCard = createElement('div', { className: 'da-hero-card' });
 
-    const heroHeader = createElement('div', { className: 'da-hero-card__header' });
+    // Hero 头部：产品标题、版本徽标与快捷动作
+    const heroHeader = createElement('div', {
+        className: 'da-hero-card__header',
+        attributes: { style: 'display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px;' }
+    });
+
+    const titleGroup = createElement('div', {
+        attributes: { style: 'display: flex; align-items: center; gap: 10px;' }
+    });
 
     const heroTitle = createElement('h2', {
         className: 'da-hero-card__title',
         textContent: 'ST-DrawAssistant'
     });
-    heroHeader.appendChild(heroTitle);
+    titleGroup.appendChild(heroTitle);
 
     const versionBadge = createBadge({
         text: currentVersion,
         variant: 'info'
     });
-    heroHeader.appendChild(versionBadge.element);
-
-    heroCard.appendChild(heroHeader);
-
-    const heroDesc = createElement('p', {
-        className: 'da-hero-card__desc',
-        textContent: '轻量、可靠、易维护的 SillyTavern Web 端全能生图扩展插件。支持 ComfyUI、SD-WebUI / Forge、NovelAI 与 OpenAI 兼容多模态大模型生图，全方位集成聊天楼层交互、工作流蓝图与历史画廊。'
-    });
-    heroCard.appendChild(heroDesc);
+    titleGroup.appendChild(versionBadge.element);
+    heroHeader.appendChild(titleGroup);
 
     // Hero 动作按钮行
     const heroActions = createElement('div', {
         attributes: {
-            style: 'display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; align-items: center;'
+            style: 'display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'
         }
     });
 
     const checkUpdateBtn: ButtonHandle = createButton({
         text: '检查更新',
         variant: 'primary',
+        size: 'sm',
         icon: 'refresh',
         onClick: async () => {
             checkUpdateBtn.setLoading(true, '检查中...');
@@ -105,6 +111,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     const ghButton: ButtonHandle = createButton({
         text: 'GitHub 源码主页',
         variant: 'secondary',
+        size: 'sm',
         icon: 'external',
         onClick: () => {
             window.open('https://github.com/NoahFoya/ST-DrawAssistant', '_blank');
@@ -113,47 +120,29 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     regDisposer(ghButton);
     heroActions.appendChild(ghButton.element);
 
-    heroCard.appendChild(heroActions);
-    root.appendChild(heroCard);
+    heroHeader.appendChild(heroActions);
+    heroCard.appendChild(heroHeader);
 
-    // 2. 版本更新日志展板 (Changelog)
-    const changelogCard = createCard({
-        title: '版本更新日志 (Changelog)',
-        iconSvg: getIconSvg('sparkles'),
-        collapsible: true
+    const heroDesc = createElement('p', {
+        className: 'da-hero-card__desc',
+        textContent: '轻量、可靠、易维护的 SillyTavern Web 端全能生图扩展插件。支持 ComfyUI、SD-WebUI / Forge、NovelAI 与 OpenAI 兼容多模态大模型生图，全方位集成聊天楼层交互、工作流蓝图与历史画廊。'
     });
-    regDisposer(changelogCard);
+    heroCard.appendChild(heroDesc);
 
-    const changelogEl = createElement('div', { className: 'da-changelog' });
-    changelogEl.innerHTML = `
-        <div class="da-changelog__entry">v0.2.0 (2026-09) · 架构演进与 UI 重构</div>
-        <ul class="da-changelog__list">
-            <li class="da-changelog__item">优化原子控件库，采用画幅下拉选择器与数值微调输入框；</li>
-            <li class="da-changelog__item">全面接入四大生图后端（ComfyUI / SD-WebUI / NovelAI / OpenAI）专属设置视窗；</li>
-            <li class="da-changelog__item">全局通用参数设置支持直连 Direct / 宿主中继 Relay 传输通道；</li>
-            <li class="da-changelog__item">测试连接支持连通性探测与远端资产（Model / VAE / LoRA / 订阅）动态同步；</li>
-            <li class="da-changelog__item">提示词预设管理器内置脏状态跟踪器，修改时高亮提示并在保存或还原时自动重置。</li>
-        </ul>
-        <div class="da-changelog__entry da-changelog__entry--sep">v0.1.0 · 核心架构与功能管道</div>
-        <ul class="da-changelog__list">
-            <li class="da-changelog__item">实现双层存储池（LocalForage 与内存快照）并提供基于 LRU 的存储配额管理；</li>
-            <li class="da-changelog__item">实现多后端适配器注册中心与生成编排器（GenerationOrchestrator）；</li>
-            <li class="da-changelog__item">支持 ComfyUI WebSocket 实时进度追踪与中断队列。</li>
-        </ul>
-    `;
-    changelogCard.append(changelogEl);
-    root.appendChild(changelogCard.element);
-
-    // 3. 富外链导航卡片网格 (.da-rich-link-grid)
-    const linksCard = createCard({
-        title: '开源社区与技术文档',
-        iconSvg: getIconSvg('external'),
-        collapsible: true
+    // 分隔线 1
+    const divider1 = createElement('div', {
+        attributes: { style: 'height: 1px; background: var(--da-separator); opacity: 0.6; margin: 4px 0;' }
     });
-    regDisposer(linksCard);
+    heroCard.appendChild(divider1);
+
+    // 开源社区与技术文档微卡网格
+    const linksTitle = createElement('div', {
+        attributes: { style: 'font-size: 13px; font-weight: 600; color: var(--da-text-secondary);' },
+        textContent: '开源社区与技术文档:'
+    });
+    heroCard.appendChild(linksTitle);
 
     const linkGrid = createElement('div', { className: 'da-rich-link-grid' });
-
     const communityLinks = [
         {
             title: 'GitHub 仓库',
@@ -202,12 +191,44 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
         `;
         linkGrid.appendChild(a);
     }
-    linksCard.append(linkGrid);
-    root.appendChild(linksCard.element);
+    heroCard.appendChild(linkGrid);
 
-    // 4. 全量配置备份、导入与重置卡片
+    // 分隔线 2
+    const divider2 = createElement('div', {
+        attributes: { style: 'height: 1px; background: var(--da-separator); opacity: 0.6; margin: 4px 0;' }
+    });
+    heroCard.appendChild(divider2);
+
+    // 版本更新日志展板 (Changelog)
+    const changelogHeader = createElement('div', {
+        attributes: { style: 'font-size: 13px; font-weight: 600; color: var(--da-text-secondary);' },
+        textContent: '版本更新日志 (Changelog):'
+    });
+    heroCard.appendChild(changelogHeader);
+
+    const changelogEl = createElement('div', { className: 'da-changelog' });
+    changelogEl.innerHTML = `
+        <div class="da-changelog__entry">v0.2.0 (2026-09) · 架构演进与 UI 重构</div>
+        <ul class="da-changelog__list">
+            <li class="da-changelog__item">优化原子控件库，采用画幅下拉选择器与数值微调输入框；</li>
+            <li class="da-changelog__item">全面接入四大生图后端（ComfyUI / SD-WebUI / NovelAI / OpenAI）专属设置视窗；</li>
+            <li class="da-changelog__item">通用参数设置支持直连 Direct / 宿主中继 Relay 传输通道；</li>
+            <li class="da-changelog__item">测试连接支持连通性探测与远端资产（Model / VAE / LoRA / 订阅）动态同步；</li>
+            <li class="da-changelog__item">提示词预设管理器内置脏状态跟踪器，修改时高亮提示并在保存或还原时自动重置。</li>
+        </ul>
+        <div class="da-changelog__entry da-changelog__entry--sep">v0.1.0 · 核心架构与功能管道</div>
+        <ul class="da-changelog__list">
+            <li class="da-changelog__item">实现双层存储池（LocalForage 与内存快照）并提供基于 LRU 的存储配额管理；</li>
+            <li class="da-changelog__item">实现多后端适配器注册中心与生成编排器（GenerationOrchestrator）；</li>
+            <li class="da-changelog__item">支持 ComfyUI WebSocket 实时进度追踪与中断队列。</li>
+        </ul>
+    `;
+    heroCard.appendChild(changelogEl);
+    root.appendChild(heroCard);
+
+    // 2. 配置管理与系统维护卡片 (.da-card)
     const backupCard = createCard({
-        title: '全局配置备份与系统重置',
+        title: '配置备份与系统重置',
         iconSvg: getIconSvg('settings'),
         collapsible: true
     });
@@ -215,7 +236,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
 
     const backupDesc = createElement('p', {
         attributes: {
-            style: 'font-size: var(--da-font-size-sm, 13px); color: var(--da-text-secondary); line-height: 1.6; margin-bottom: 12px;'
+            style: 'font-size: var(--da-font-size-sm, 13px); color: var(--da-text-secondary); line-height: 1.6; margin: 0 0 12px 0;'
         },
         textContent: '可将当前全部插件参数（包括主题配色、各引擎设置、工作流映射及提示词方案）打包导出为 JSON 备份文件，或在其他设备上一键恢复。'
     });
@@ -223,13 +244,17 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
 
     const backupActionsRow = createElement('div', {
         attributes: {
-            style: 'display: flex; gap: 10px; flex-wrap: wrap; align-items: center;'
+            style: 'display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between;'
         }
+    });
+
+    const leftActionsGroup = createElement('div', {
+        attributes: { style: 'display: flex; gap: 8px; flex-wrap: wrap; align-items: center;' }
     });
 
     // 导出配置
     const exportConfigBtn: ButtonHandle = createButton({
-        text: '导出全量配置 (JSON)',
+        text: '导出配置备份 (JSON)',
         variant: 'secondary',
         icon: 'download',
         onClick: () => {
@@ -246,14 +271,14 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
                 a.download = `st_draw_config_${Date.now()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-                Toast.success('全量配置已成功导出');
+                Toast.success('配置备份已成功导出');
             } catch (err: any) {
                 Toast.error(`导出配置失败: ${err?.message || '未知错误'}`);
             }
         }
     });
     regDisposer(exportConfigBtn);
-    backupActionsRow.appendChild(exportConfigBtn.element);
+    leftActionsGroup.appendChild(exportConfigBtn.element);
 
     // 导入配置 (隐式 input file)
     const fileInput = document.createElement('input');
@@ -283,7 +308,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     });
 
     const importConfigBtn: ButtonHandle = createButton({
-        text: '导入配置备份',
+        text: '导入配置恢复',
         variant: 'secondary',
         icon: 'refresh',
         onClick: () => {
@@ -291,9 +316,10 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
         }
     });
     regDisposer(importConfigBtn);
-    backupActionsRow.appendChild(importConfigBtn.element);
+    leftActionsGroup.appendChild(importConfigBtn.element);
+    backupActionsRow.appendChild(leftActionsGroup);
 
-    // 恢复出厂默认设置
+    // 恢复出厂默认设置 (危险操作隔离至右侧)
     const resetDefaultsBtn: ButtonHandle = createButton({
         text: '恢复出厂设置',
         variant: 'danger',

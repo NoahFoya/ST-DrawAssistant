@@ -1,17 +1,24 @@
 /**
  * @module src/ui/views/openai-tab
- * @description OpenAI 兼容驱动专属配置面板 (OpenAITab)
+ * @description OpenAI 兼容接口配置面板 (OpenAITab)
  *
- * 遵循规范 (UI_LAYOUT_PREVIEW.md 第六节第 4 条)：
- * 1. Card 1: OpenAIServiceCard (多供应商选择, Base URL, API Key 显隐密码框, 自定义 Headers JSON, 同步远端模型与测试连接)；
- * 2. Card 2: 绘图参数预设 (PresetToolbar, 模型选择与自定义 ID, DimensionPicker 画幅, 质量与风格, 扩散模型进阶负向词/步数/CFG/Seed, 自定义额外 Body JSON 请求体参数)；
- * 3. 状态同步：全量居中、Select 画幅、等宽数字框、表单脏状态追踪与基准重置。
+ * 核心功能：
+ * 1. 管理 OpenAI 官方及兼容第三方服务商凭据、服务地址与模型列表同步；
+ * 2. 提供绘图方案预设切换，配置标准生图参数（模型、画幅尺寸、画质档位、艺术风格）；
+ * 3. 支持厂商特有自定义请求体 (Body JSON) 扩展参数填报；
+ * 4. 追踪表单脏状态变更，支持配置一键复原与持久化同步。
+ *
+ * 注意事项：
+ * 1. 各服务商凭据（API Key）需相互隔离存储，切换服务商时不应相互覆盖；
+ * 2. 第三方中转服务对画幅尺寸的支持规格存在差异，非常规尺寸可能被服务端拒绝。
  */
 
 import { createElement } from '../../util/dom';
 import { createFormField, createCard, FormFieldHandle } from '../components/form-field';
 import { createSelect, SelectHandle } from '../components/select';
 import { createTextInput, createNumberInput, createTextarea, TextInputHandle, NumberInputHandle, TextareaHandle } from '../components/input';
+import { createSlider, SliderHandle } from '../components/slider';
+import { createIconButton, IconButtonHandle } from '../components/button';
 import { createOpenAIServiceCard, OpenAIServiceCardHandle, OpenAIProviderConfig } from '../composite/openai-service-card';
 import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
 import { createPresetToolbar, PresetToolbarHandle } from '../composite/preset-toolbar';
@@ -80,10 +87,12 @@ export function renderOpenAITab(
         activeDrawingProfileId: 'default_openai'
     };
 
+    let onRemoteModelsSynced: ((models: string[]) => void) | null = null;
+
     // 1. OpenAIServiceCard (服务连接与多供应商管理)
     const serviceCard: OpenAIServiceCardHandle = createOpenAIServiceCard({
         value: {
-            provider: (openaiConfig.activeProvider as any) || 'openai-official',
+            provider: (openaiConfig.activeProvider as OpenAIProviderConfig['provider']) || 'openai-official',
             serverUrl: openaiConfig.serverUrl || 'https://api.openai.com/v1',
             apiKey: openaiConfig.apiKey || '',
             customHeaders: ''
@@ -112,7 +121,7 @@ export function renderOpenAITab(
                     customHeaders: cfg.customHeaders
                 });
                 if (res.ok && Array.isArray(res.availableModels) && res.availableModels.length > 0) {
-                    modelSelect.setOptions(res.availableModels.map((id: string) => ({ label: id, value: id })));
+                    onRemoteModelsSynced?.(res.availableModels);
                 }
                 return res;
             }
@@ -128,7 +137,7 @@ export function renderOpenAITab(
                 });
                 if (res.ok && Array.isArray(res.availableModels)) {
                     if (res.availableModels.length > 0) {
-                        modelSelect.setOptions(res.availableModels.map((id) => ({ label: id, value: id })));
+                        onRemoteModelsSynced?.(res.availableModels);
                     }
                     return res.availableModels;
                 }
@@ -213,8 +222,8 @@ export function renderOpenAITab(
     const modelSelect: SelectHandle = createSelect({
         value: currentDrawingParams.model,
         options: [
-            { label: 'dall-e-3 (OpenAI 官方旗舰)', value: 'dall-e-3' },
-            { label: 'dall-e-2 (经典轻量)', value: 'dall-e-2' },
+            { label: 'dall-e-3', value: 'dall-e-3' },
+            { label: 'dall-e-2', value: 'dall-e-2' },
             { label: 'black-forest-labs/FLUX.1-schnell', value: 'black-forest-labs/FLUX.1-schnell' },
             { label: 'black-forest-labs/FLUX.1-dev', value: 'black-forest-labs/FLUX.1-dev' },
             { label: 'stabilityai/stable-diffusion-3-medium', value: 'stabilityai/stable-diffusion-3-medium' }
@@ -225,8 +234,11 @@ export function renderOpenAITab(
         }
     });
     regDisposer(modelSelect);
+    onRemoteModelsSynced = (models: string[]) => {
+        modelSelect.setOptions(models.map((id) => ({ label: id, value: id })));
+    };
     const modelField: FormFieldHandle = createFormField({
-        label: '生图模型 (Model)',
+        label: '生图模型',
         helpText: '目标供应商部署的生图模型标识',
         control: modelSelect
     });
@@ -294,8 +306,8 @@ export function renderOpenAITab(
     const qualitySelect = createSelect({
         value: currentDrawingParams.quality,
         options: [
-            { label: 'standard (标准画质 · 经济)', value: 'standard' },
-            { label: 'hd (高清画质 · 丰富细节)', value: 'hd' }
+            { label: '标准画质', value: 'standard' },
+            { label: '高清画质', value: 'hd' }
         ],
         onChange: (val) => {
             currentDrawingParams.quality = val;
@@ -304,7 +316,7 @@ export function renderOpenAITab(
     });
     regDisposer(qualitySelect);
     const qualityField: FormFieldHandle = createFormField({
-        label: '画面质量 (Quality)',
+        label: '画面质量',
         helpText: 'DALL·E 3 的画质模式，hd 模式呈现更精细的纹理细节',
         control: qualitySelect
     });
@@ -314,8 +326,8 @@ export function renderOpenAITab(
     const styleSelect = createSelect({
         value: currentDrawingParams.style,
         options: [
-            { label: 'vivid (鲜艳戏剧化 · 视觉冲击)', value: 'vivid' },
-            { label: 'natural (自然写实风格)', value: 'natural' }
+            { label: '鲜艳戏剧化', value: 'vivid' },
+            { label: '自然写实', value: 'natural' }
         ],
         onChange: (val) => {
             currentDrawingParams.style = val;
@@ -324,7 +336,7 @@ export function renderOpenAITab(
     });
     regDisposer(styleSelect);
     const styleField: FormFieldHandle = createFormField({
-        label: '画面风格 (Style)',
+        label: '画面风格',
         helpText: 'vivid 会强化光影与超现实色彩，natural 偏向真实胶片摄影感',
         control: styleSelect
     });
@@ -334,7 +346,7 @@ export function renderOpenAITab(
     // Section 4: 扩散模型进阶控制 (针对 Flux / SD 开源模型提供商)
     const diffSectionTitle = createElement('div', {
         className: 'da-form-section-title',
-        textContent: '进阶扩散参数 (针对开源多模态供应商)'
+        textContent: '进阶扩散参数'
     });
     diffSectionTitle.style.padding = '8px 12px 4px 12px';
     diffSectionTitle.style.fontSize = '12px';
@@ -353,14 +365,14 @@ export function renderOpenAITab(
     });
     regDisposer(negPromptInput);
     const negPromptField: FormFieldHandle = createFormField({
-        label: '负向提示词 (Negative Prompt)',
+        label: '负向提示词',
         helpText: '部分支持负向词的开源大模型供应商（如硅基流动 SDXL）可用',
         control: negPromptInput
     });
     regDisposer(negPromptField);
     drawingCard.append(negPromptField.element);
 
-    const stepsInput: NumberInputHandle = createNumberInput({
+    const stepsSlider: SliderHandle = createSlider({
         value: currentDrawingParams.steps,
         min: 1,
         max: 100,
@@ -371,16 +383,16 @@ export function renderOpenAITab(
             drawingDirtyTracker.notifyFieldChange('steps', val);
         }
     });
-    regDisposer(stepsInput);
+    regDisposer(stepsSlider);
     const stepsField: FormFieldHandle = createFormField({
-        label: '采样步数 (Steps)',
+        label: '采样步数',
         helpText: '扩散步数，DALL·E 官方模型会自动忽略此参数',
-        control: stepsInput
+        control: stepsSlider
     });
     regDisposer(stepsField);
     drawingCard.append(stepsField.element);
 
-    const cfgInput: NumberInputHandle = createNumberInput({
+    const cfgSlider: SliderHandle = createSlider({
         value: currentDrawingParams.cfgScale,
         min: 1,
         max: 20,
@@ -390,30 +402,57 @@ export function renderOpenAITab(
             drawingDirtyTracker.notifyFieldChange('cfgScale', val);
         }
     });
-    regDisposer(cfgInput);
+    regDisposer(cfgSlider);
     const cfgField: FormFieldHandle = createFormField({
-        label: '提示词引导系数 (CFG Scale)',
+        label: '提示词引导系数',
         helpText: '提示词贴合权重',
-        control: cfgInput
+        control: cfgSlider
     });
     regDisposer(cfgField);
     drawingCard.append(cfgField.element);
+
+    const seedWrap = document.createElement('div');
+    seedWrap.className = 'da-seed-wrapper';
 
     const seedInput: NumberInputHandle = createNumberInput({
         value: currentDrawingParams.seed,
         min: -1,
         max: 4294967295,
         step: 1,
+        ariaLabel: '随机种子',
+        variant: 'short',
         onChange: (val) => {
             currentDrawingParams.seed = val;
             drawingDirtyTracker.notifyFieldChange('seed', val);
         }
     });
     regDisposer(seedInput);
+
+    const diceBtn: IconButtonHandle = createIconButton({
+        icon: 'dice',
+        title: '生成随机种子 (点击随机，若已设置则点一次重置为 -1)',
+        ariaLabel: '随机种子快捷键',
+        onClick: () => {
+            if (currentDrawingParams.seed === -1) {
+                const randomSeed = Math.floor(Math.random() * 2147483647);
+                currentDrawingParams.seed = randomSeed;
+                seedInput.setValue(randomSeed);
+            } else {
+                currentDrawingParams.seed = -1;
+                seedInput.setValue(-1);
+            }
+            drawingDirtyTracker.notifyFieldChange('seed', currentDrawingParams.seed);
+        }
+    });
+    regDisposer(diceBtn);
+
+    seedWrap.appendChild(seedInput.element);
+    seedWrap.appendChild(diceBtn.element);
+
     const seedField: FormFieldHandle = createFormField({
-        label: '随机种子 (Seed)',
+        label: '随机种子',
         helpText: '填 -1 表示随机出图',
-        control: seedInput
+        control: seedWrap
     });
     regDisposer(seedField);
     drawingCard.append(seedField.element);
@@ -421,7 +460,7 @@ export function renderOpenAITab(
     // Section 5: 自定义请求体参数
     const advancedSectionTitle = createElement('div', {
         className: 'da-form-section-title',
-        textContent: '高级自定义请求体参数 (Body)'
+        textContent: '高级自定义请求体参数'
     });
     advancedSectionTitle.style.padding = '8px 12px 4px 12px';
     advancedSectionTitle.style.fontSize = '12px';
@@ -429,19 +468,39 @@ export function renderOpenAITab(
     advancedSectionTitle.style.fontWeight = '600';
     drawingCard.append(advancedSectionTitle);
 
+    const validateBodyJson = (val: string) => {
+        const trimmed = val.trim();
+        if (!trimmed) {
+            bodyJsonInput.element.classList.remove('is-invalid');
+            bodyJsonInput.element.title = '';
+            return;
+        }
+        try {
+            JSON.parse(trimmed);
+            bodyJsonInput.element.classList.remove('is-invalid');
+            bodyJsonInput.element.title = '';
+        } catch (err: any) {
+            bodyJsonInput.element.classList.add('is-invalid');
+            bodyJsonInput.element.title = `已失效：JSON 语法错误 (${err.message || '格式无效'})`;
+        }
+    };
+
     const bodyJsonInput: TextareaHandle = createTextarea({
         value: currentDrawingParams.customBodyJson,
         placeholder: '{\n  "response_format": "b64_json"\n}',
         rows: 3,
         onChange: (val) => {
             currentDrawingParams.customBodyJson = val;
+            validateBodyJson(val);
             drawingDirtyTracker.notifyFieldChange('customBodyJson', val);
         }
     });
     regDisposer(bodyJsonInput);
+    validateBodyJson(currentDrawingParams.customBodyJson);
+
     const bodyJsonField: FormFieldHandle = createFormField({
         label: '自定义额外 Body (JSON)',
-        helpText: '直接注入 POST /images/generations 载荷的私有扩展参数',
+        helpText: '直接注入 POST /images/generations 请求体的私有扩展参数',
         control: bodyJsonInput
     });
     regDisposer(bodyJsonField);
@@ -456,10 +515,11 @@ export function renderOpenAITab(
         qualitySelect.setValue(params.quality);
         styleSelect.setValue(params.style);
         negPromptInput.setValue(params.negativePrompt);
-        stepsInput.setValue(params.steps);
-        cfgInput.setValue(params.cfgScale);
+        stepsSlider.setValue(params.steps);
+        cfgSlider.setValue(params.cfgScale);
         seedInput.setValue(params.seed);
         bodyJsonInput.setValue(params.customBodyJson);
+        validateBodyJson(params.customBodyJson);
     };
 
     return {

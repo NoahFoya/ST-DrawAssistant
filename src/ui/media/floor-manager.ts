@@ -1,54 +1,87 @@
 /**
  * @module src/ui/media/floor-manager
- * @description 酒馆聊天消息楼层交互管理器 (FloorManager)
+ * @description 消息楼层生图控制器 (FloorManager)
  *
- * 遵循规范 (styles/features/image-collapse.css 与 .agents/skills/st-extension/SKILL.md)：
- * 1. 聊天楼层生成按钮注入与展示容器管理 (.da-floor-btn-img-slot)；
- * 2. 图像折叠/展开胶囊按钮 (.da-image-collapse-toggle)，支持对齐方式修饰符 (left / center / right)；
- * 3. 楼层嵌入已生成的图像 (.da-generated-img)，支持悬停交互与点击呼出全屏灯箱大图；
- * 4. 会话变更 (CHAT_CHANGED) 严格生命周期管理：中止未决任务、批量 URL.revokeObjectURL 释放内存，防止跨会话楼层串号与泄漏。
+ * 核心职责：
+ * 1. 扫描消息楼层文本中的绘图占位符指令，按需挂载生图按钮与展示插槽；
+ * 2. 维护各绘图指令的上下文模型 (FloorButtonContext)，隔离多指令任务状态与插槽；
+ * 3. 异步读取会话持久化元数据并从本地存储还原历史已生成的图片 (restoreSavedImage)；
+ * 4. 响应会话切换 (CHAT_CHANGED) 与分支切换 (MESSAGE_SWIPED) 的插槽刷新与资源清理；
+ * 5. 统一提供手动与自动生图触发入口，协同任务队列调度执行。
  */
 
 import { createElement } from '../../util/dom';
 import { Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
+import { extractPlaceholders, sanitizeMessageText, normalizePromptPunctuation } from '../../util/prompt';
+import { DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END } from '../../constants';
+import { buildEngineParams } from '../../function/params-builder';
+import type { ImageActionData } from './image-action-panel';
 import type { SettingsStore } from '../../store/settings';
+import type { PersistentStorage } from '../../store/storage';
 import type { GenerationOrchestrator } from '../../function/orchestrator';
 import type { TaskQueueManager } from '../../store/task';
 import type { IDisposable } from '../../util/event-bus';
 import type { EngineType } from '@types';
 
+export type FloorButtonState = 'default' | 'loading' | 'progress' | 'done' | 'error';
+
+export interface FloorButtonContext {
+    contextKey: string;
+    messageId: number | string;
+    swipeId: number;
+    buttonIndex: number;
+    prompt: string;
+    negativePrompt?: string;
+    state: FloorButtonState;
+    btnElement: HTMLButtonElement;
+    slotElement: HTMLElement;
+    containerElement: HTMLElement;
+    currentTaskId: string | null;
+}
+
 export interface FloorManagerOptions {
     settingsStore: SettingsStore;
+    storage?: PersistentStorage;
     orchestrator?: GenerationOrchestrator;
     taskQueue?: TaskQueueManager;
     onPreviewImage?: (url: string) => void;
     onInpaintImage?: (blob: Blob) => void;
     onViewImageInfo?: (metadata: Record<string, unknown>) => void;
+    onOpenActionPanel?: (data: ImageActionData) => void;
 }
 
 export interface FloorManagerHandle {
     mountToMessage(messageElement: HTMLElement, messageId: number | string, isUserMessage?: boolean): void;
-    updateFloorProgress(messageId: number | string, progress: number): void;
-    attachFloorImage(messageId: number | string, imageUrl: string, metadata?: Record<string, unknown>): void;
+    updateFloorProgress(messageId: number | string, progress: number, buttonIndex?: number): void;
+    attachFloorImage(messageId: number | string, imageUrl: string, metadata?: Record<string, unknown>, imageBlob?: Blob, buttonIndex?: number): void;
+    triggerFloorGenerate(messageElement: HTMLElement, messageId: number | string, explicitPrompt?: string, explicitNegativePrompt?: string, buttonIndex?: number): void;
+    triggerAutoGenerate(messageId: number | string): void;
+    handleMessageSwiped(messageId: number | string): void;
+    restoreSavedImage(ctx: FloorButtonContext): Promise<boolean>;
     clearSessionState(): void;
     dispose(): void;
 }
 
 export class FloorManager implements FloorManagerHandle {
     private readonly _settingsStore: SettingsStore;
+    private readonly _storage?: PersistentStorage;
     private readonly _orchestrator?: GenerationOrchestrator;
     private readonly _taskQueue?: TaskQueueManager;
     private readonly _options: FloorManagerOptions;
 
-    private _activeSlots = new Map<string | number, HTMLElement>();
-    private _slotUrls = new Map<string | number, string>();
+    /** 指令级上下文索引表：键为 `${messageId}_${buttonIndex}` */
+    private _contexts = new Map<string, FloorButtonContext>();
+    /** 每个插槽对应的图片 Object URL 索引，用于更新时释放旧资源 */
+    private _slotUrls = new Map<string, string>();
+    /** 会话生命周期内分配的临时 Object URL 集合，用于会话切换时统一撤销 */
     private _allocatedUrls = new Set<string>();
     private _disposers: IDisposable[] = [];
     private _isDisposed = false;
 
     constructor(options: FloorManagerOptions) {
         this._settingsStore = options.settingsStore;
+        this._storage = options.storage;
         this._orchestrator = options.orchestrator;
         this._taskQueue = options.taskQueue;
         this._options = options;
@@ -62,65 +95,241 @@ export class FloorManager implements FloorManagerHandle {
         return this._orchestrator;
     }
 
+    private _getContextKey(messageId: number | string, buttonIndex: number): string {
+        return `${messageId}_${buttonIndex}`;
+    }
+
+    private _getHostChatMessage(messageId: number | string): any {
+        if (typeof window !== 'undefined' && window.SillyTavern?.getContext) {
+            const chat = window.SillyTavern.getContext().chat;
+            const numId = typeof messageId === 'number' ? messageId : parseInt(String(messageId), 10);
+            if (Array.isArray(chat) && !Number.isNaN(numId) && chat[numId]) {
+                return chat[numId];
+            }
+        }
+        return undefined;
+    }
+
+    private _getCurrentSwipeId(messageId: number | string): number {
+        const msg = this._getHostChatMessage(messageId);
+        const rawSwipe = msg?.swipe_id ?? (msg?.extra?.swipe_id as number | undefined);
+        return typeof rawSwipe === 'number' ? rawSwipe : 0;
+    }
+
     /**
-     * 挂载生图按钮与图像展示容器至指定消息楼层
+     * 清理指定楼层的上下文记录与关联的 Object URL
+     */
+    private _removeMessageContexts(messageId: number | string, cancelRunning = false): void {
+        const prefix = `${messageId}_`;
+        for (const [key, ctx] of this._contexts.entries()) {
+            if (key.startsWith(prefix)) {
+                if (cancelRunning && ctx.currentTaskId && this._taskQueue) {
+                    void this._taskQueue.cancelTask(ctx.currentTaskId, '楼层上下文重置');
+                }
+                const oldUrl = this._slotUrls.get(key);
+                if (oldUrl && oldUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldUrl);
+                    this._allocatedUrls.delete(oldUrl);
+                }
+                this._slotUrls.delete(key);
+                this._contexts.delete(key);
+            }
+        }
+    }
+
+    /**
+     * 挂载生图控制按钮与展示插槽至指定消息楼层
+     * 当文本中未包含有效绘图占位符指令时直接退出，不向楼层注入任何节点。
      */
     public mountToMessage(messageElement: HTMLElement, messageId: number | string, _isUserMessage = false): void {
         if (this._isDisposed || !messageElement) return;
 
-        // 避免重复挂载
-        if (messageElement.querySelector('.da-image-collapse-wrapper')) {
+        const textElement = messageElement.querySelector('.mes_text');
+        const textContent = (textElement?.textContent || messageElement.textContent || '').trim();
+        if (!textContent) return;
+
+        const placeholders = extractPlaceholders(textContent, DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END);
+        const existingWrapper = messageElement.querySelector('.da-image-collapse-wrapper');
+
+        // 无指令时清理既有节点并退出
+        if (placeholders.length === 0) {
+            if (existingWrapper) {
+                this._removeMessageContexts(messageId, false);
+                existingWrapper.remove();
+            }
             return;
         }
 
-        const align = this._settingsStore.get('ui')?.imageDisplay?.align || 'left';
+        // 指令内容未变动时复用既有 DOM 结构
+        if (existingWrapper) {
+            let isExactMatch = true;
+            for (let idx = 0; idx < placeholders.length; idx++) {
+                const key = this._getContextKey(messageId, idx);
+                const ctx = this._contexts.get(key);
+                if (!ctx || ctx.prompt !== placeholders[idx].prompt) {
+                    isExactMatch = false;
+                    break;
+                }
+            }
+            if (isExactMatch) {
+                return;
+            }
+            this._removeMessageContexts(messageId, false);
+            existingWrapper.remove();
+        }
+
+        const align = this._settingsStore.get('ui')?.imageDisplay?.align || 'center';
         const wrapper = createElement('div', {
             className: `da-image-collapse-wrapper da-image-collapse-wrapper--${align}`
         });
 
-        // 1. 楼层右上角角标生成按钮 (若是助手消息或启用用户生图)
-        const triggerBtn = createElement('button', {
-            className: 'da-image-corner-trigger',
-            attributes: {
-                type: 'button',
-                title: '依据此楼层文本直接生成绘画',
-                style: 'display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11px; border-radius: 4px; background: rgba(var(--da-accent-rgb, 74, 136, 247), 0.12); color: var(--da-accent-color); border: 1px solid rgba(var(--da-accent-rgb, 74, 136, 247), 0.3); cursor: pointer; margin-bottom: 4px; transition: all 0.15s ease;'
+        const swipeId = this._getCurrentSwipeId(messageId);
+        const actionPanelConfig = this._settingsStore.get('ui')?.actionPanel;
+        const showTriggerBtn = actionPanelConfig?.enabled ?? true;
+
+        placeholders.forEach((ph, idx) => {
+            const itemWrapper = createElement('div', { className: 'da-floor-instruction-item' });
+
+            const btn = createElement('button', {
+                className: 'da-floor-btn da-floor-btn--default',
+                attributes: {
+                    type: 'button',
+                    title: `依据绘图指令生成: ${ph.prompt}`
+                }
+            });
+            const label = placeholders.length > 1 ? `绘画 #${idx + 1}` : '绘画';
+            btn.innerHTML = `${getIconSvg('palette')} <span>${label}</span>`;
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.triggerFloorGenerate(messageElement, messageId, ph.prompt, ph.negativePrompt, idx);
+            });
+
+            const slot = createElement('div', { className: 'da-floor-btn-img-slot' });
+
+            if (showTriggerBtn) {
+                itemWrapper.appendChild(btn);
             }
+            itemWrapper.appendChild(slot);
+            wrapper.appendChild(itemWrapper);
+
+            const contextKey = this._getContextKey(messageId, idx);
+            const ctx: FloorButtonContext = {
+                contextKey,
+                messageId,
+                swipeId,
+                buttonIndex: idx,
+                prompt: ph.prompt,
+                negativePrompt: ph.negativePrompt,
+                state: 'default',
+                btnElement: btn,
+                slotElement: slot,
+                containerElement: itemWrapper,
+                currentTaskId: null
+            };
+
+            this._contexts.set(contextKey, ctx);
+
+            // 异步恢复当前分支的历史持久化图像
+            void this.restoreSavedImage(ctx);
         });
-        triggerBtn.innerHTML = `${getIconSvg('palette')} <span>绘画</span>`;
 
-        triggerBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this._handleFloorGenerate(messageElement, messageId);
-        });
-
-        wrapper.appendChild(triggerBtn);
-
-        // 2. 图像展示与折叠插槽容器 (.da-floor-btn-img-slot)
-        const slot = createElement('div', { className: 'da-floor-btn-img-slot' });
-        wrapper.appendChild(slot);
-
-        this._activeSlots.set(messageId, slot);
         messageElement.appendChild(wrapper);
     }
 
     /**
-     * 更新指定楼层的生图进度展示
+     * 异步读取会话持久化元数据，恢复已生成的历史图片
      */
-    public updateFloorProgress(messageId: number | string, progress: number): void {
-        if (this._isDisposed) return;
-        const slot = this._activeSlots.get(messageId);
-        if (!slot) return;
+    public async restoreSavedImage(ctx: FloorButtonContext): Promise<boolean> {
+        if (this._isDisposed) return false;
 
+        const msg = this._getHostChatMessage(ctx.messageId);
+        if (!msg) return false;
+
+        const swipeId = this._getCurrentSwipeId(ctx.messageId);
+        ctx.swipeId = swipeId;
+
+        const daImagesRoot = msg.extra?.da_images as Record<string | number, unknown> | undefined;
+        if (!daImagesRoot) return false;
+
+        const swipeObj = (daImagesRoot[swipeId] ?? daImagesRoot[String(swipeId)]) as Record<string | number, any> | undefined;
+        const savedMeta = swipeObj?.[ctx.buttonIndex] ?? swipeObj?.[String(ctx.buttonIndex)];
+        if (!savedMeta) return false;
+
+        try {
+            // 优先使用静态 URL
+            if (savedMeta.url && typeof savedMeta.url === 'string') {
+                this.attachFloorImage(ctx.messageId, savedMeta.url, savedMeta.metadata, undefined, ctx.buttonIndex);
+                this.setButtonState(ctx, 'done');
+                return true;
+            }
+
+            // 从本地持久化存储加载二进制 Blob 原图
+            const recordId = savedMeta.id || savedMeta.uuid;
+            if (recordId && this._storage) {
+                const record = await this._storage.getImage(recordId);
+                const rawBlob = record?.originalBlob;
+                if (rawBlob instanceof Blob) {
+                    const blobUrl = URL.createObjectURL(rawBlob);
+                    this.attachFloorImage(ctx.messageId, blobUrl, record?.metadata || savedMeta.metadata, rawBlob, ctx.buttonIndex);
+                    this.setButtonState(ctx, 'done');
+                    return true;
+                }
+            }
+        } catch (err) {
+            console.warn(`[FloorManager] 恢复楼层 #${ctx.messageId} 历史图像失败:`, err);
+        }
+
+        return false;
+    }
+
+    /**
+     * 更新生图按钮的生命周期状态与呈现样式
+     */
+    public setButtonState(ctx: FloorButtonContext, state: FloorButtonState): void {
+        ctx.state = state;
+        ctx.btnElement.className = `da-floor-btn da-floor-btn--${state}`;
+        ctx.btnElement.disabled = state === 'loading';
+
+        const label = ctx.buttonIndex > 0 ? `绘画 #${ctx.buttonIndex + 1}` : '绘画';
+        if (state === 'default') {
+            ctx.btnElement.innerHTML = `${getIconSvg('palette')} <span>${label}</span>`;
+            ctx.btnElement.title = `提示词: ${ctx.prompt}`;
+        } else if (state === 'loading') {
+            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>提交中...</span>`;
+        } else if (state === 'progress') {
+            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>绘制中 (点击取消)</span>`;
+            ctx.btnElement.title = '点击取消当前生图任务';
+        } else if (state === 'done') {
+            ctx.btnElement.innerHTML = `${getIconSvg('sparkles')} <span>重新生成</span>`;
+            ctx.btnElement.title = '点击重新生成图像';
+        } else if (state === 'error') {
+            ctx.btnElement.innerHTML = `${getIconSvg('palette')} <span>重试</span>`;
+            ctx.btnElement.title = '生成失败，点击重试';
+        }
+
+        const hideButtonOnDone = !!this._settingsStore.get('ui')?.actionPanel?.hideButtonOnDone;
+        if (state === 'done' && hideButtonOnDone) {
+            ctx.btnElement.style.display = 'none';
+        } else {
+            ctx.btnElement.style.display = '';
+        }
+    }
+
+    /**
+     * 更新指定楼层与插槽的生图进度展示
+     */
+    public updateFloorProgress(messageId: number | string, progress: number, buttonIndex = 0): void {
+        if (this._isDisposed) return;
+        const key = this._getContextKey(messageId, buttonIndex);
+        const ctx = this._contexts.get(key);
+        if (!ctx) return;
+
+        const slot = ctx.slotElement;
         let progressEl = slot.querySelector('.da-floor-progress-bar') as HTMLElement;
         if (!progressEl) {
             slot.innerHTML = '';
-            progressEl = createElement('div', {
-                className: 'da-floor-progress-bar',
-                attributes: {
-                    style: 'display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--da-accent-color); padding: 4px 8px; background: rgba(0,0,0,0.25); border-radius: 4px;'
-                }
-            });
+            progressEl = createElement('div', { className: 'da-floor-progress-bar' });
             progressEl.innerHTML = `
                 <div class="da-icon-spin" style="display: inline-flex;">${getIconSvg('spinner')}</div>
                 <span class="da-progress-text">正在绘制中... 0%</span>
@@ -135,27 +344,37 @@ export class FloorManager implements FloorManagerHandle {
     }
 
     /**
-     * 将生成的图像注入挂载到聊天楼层
+     * 挂载生成的图像元素并绑定交互手势与操作面板
      */
-    public attachFloorImage(messageId: number | string, imageUrl: string, _metadata?: Record<string, unknown>): void {
+    public attachFloorImage(
+        messageId: number | string,
+        imageUrl: string,
+        metadata?: Record<string, unknown>,
+        imageBlob?: Blob,
+        buttonIndex = 0
+    ): void {
         if (this._isDisposed) return;
-        const slot = this._activeSlots.get(messageId);
-        if (!slot) return;
+        const contextKey = this._getContextKey(messageId, buttonIndex);
+        const ctx = this._contexts.get(contextKey);
+        if (!ctx) return;
 
-        const oldUrl = this._slotUrls.get(messageId);
+        const slot = ctx.slotElement;
+
+        // 释放先前占用的 Object URL
+        const oldUrl = this._slotUrls.get(contextKey);
         if (oldUrl && oldUrl !== imageUrl) {
             if (oldUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(oldUrl);
             }
             this._allocatedUrls.delete(oldUrl);
         }
-        this._slotUrls.set(messageId, imageUrl);
-
-        slot.innerHTML = '';
+        this._slotUrls.set(contextKey, imageUrl);
         this._allocatedUrls.add(imageUrl);
 
-        // 折叠/展开胶囊按钮
-        const defaultCollapsed = !!this._settingsStore.get('ui')?.imageDisplay?.collapsed;
+        slot.innerHTML = '';
+
+        const displayConfig = this._settingsStore.get('ui')?.imageDisplay;
+        const defaultCollapsed = !!displayConfig?.collapsed;
         let isCollapsed = defaultCollapsed;
 
         const toggleBtn = createElement('div', {
@@ -163,29 +382,117 @@ export class FloorManager implements FloorManagerHandle {
             textContent: isCollapsed ? '展开绘画图片 ▾' : '收起绘画图片 ▴'
         });
 
-        // 图片展示容器
+        const maxWidthPct = typeof displayConfig?.maxWidthPct === 'number' ? displayConfig.maxWidthPct : 100;
+        const maxHeight = typeof displayConfig?.maxHeight === 'number' ? displayConfig.maxHeight : 480;
+        const objectFit = displayConfig?.objectFit || 'contain';
+        const rounded = displayConfig?.rounded ?? true;
+        const align = displayConfig?.align || 'center';
+
         const imgWrap = createElement('div', {
+            className: `da-image-wrapper ${rounded ? 'da-image-wrapper--rounded' : ''} da-image-wrapper--${align}`,
             attributes: {
-                style: `display: ${isCollapsed ? 'none' : 'block'}; position: relative; max-width: 320px; border-radius: var(--da-radius-md, 8px); overflow: hidden; margin-top: 4px; box-shadow: var(--da-shadow-md); border: 1px solid var(--da-separator);`
+                style: `display: ${isCollapsed ? 'none' : 'block'}; max-height: ${maxHeight}px; max-width: ${maxWidthPct}%;`
             }
         });
 
         const img = createElement('img', {
-            className: 'da-generated-img',
+            className: `da-generated-img ${rounded ? 'da-generated-img--rounded' : ''}`,
             attributes: {
                 src: imageUrl,
                 alt: '生成的图片',
-                style: 'width: 100%; height: auto; display: block; cursor: pointer; transition: transform 0.2s ease;'
+                style: `max-height: ${maxHeight}px; object-fit: ${objectFit};`
             }
         });
 
-        img.addEventListener('click', () => {
+        const triggerActionPanel = () => {
+            this._options.onOpenActionPanel?.({
+                messageId,
+                swipeId: ctx.swipeId,
+                buttonIndex: ctx.buttonIndex,
+                imageUrl,
+                imageBlob,
+                metadata,
+                prompt: typeof metadata?.prompt === 'string' ? metadata.prompt : ctx.prompt,
+                negativePrompt: typeof metadata?.negativePrompt === 'string' ? metadata.negativePrompt : ctx.negativePrompt
+            });
+        };
+
+        // 移动端 380ms 长按检测
+        let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+        let isLongPress = false;
+        let startX = 0;
+        let startY = 0;
+
+        const cancelLongPress = () => {
+            if (longPressTimer !== null) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        };
+
+        img.addEventListener('pointerdown', (e) => {
+            isLongPress = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            cancelLongPress();
+            longPressTimer = setTimeout(() => {
+                longPressTimer = null;
+                isLongPress = true;
+                try {
+                    navigator.vibrate?.(35);
+                } catch {}
+                triggerActionPanel();
+            }, 380);
+        });
+
+        img.addEventListener('pointermove', (e) => {
+            if (longPressTimer !== null) {
+                const dx = Math.abs(e.clientX - startX);
+                const dy = Math.abs(e.clientY - startY);
+                if (dx > 8 || dy > 8) {
+                    cancelLongPress();
+                }
+            }
+        });
+
+        img.addEventListener('pointerup', cancelLongPress);
+        img.addEventListener('pointercancel', cancelLongPress);
+        img.addEventListener('pointerleave', cancelLongPress);
+
+        // 桌面端右键菜单
+        img.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelLongPress();
+            triggerActionPanel();
+        });
+
+        // 单击大图预览
+        img.addEventListener('click', (e) => {
+            if (isLongPress) {
+                e.stopPropagation();
+                return;
+            }
             this._options.onPreviewImage?.(imageUrl);
         });
 
         imgWrap.appendChild(img);
 
-        // 切换折叠
+        // 右上角操作胶囊
+        const actionTrigger = createElement('button', {
+            className: 'da-image-action-trigger',
+            attributes: {
+                type: 'button',
+                title: '图像操作 (重绘 / 元数据 / 重新生成)'
+            }
+        });
+        actionTrigger.innerHTML = getIconSvg('sparkles');
+        actionTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerActionPanel();
+        });
+        imgWrap.appendChild(actionTrigger);
+
         toggleBtn.addEventListener('click', () => {
             isCollapsed = !isCollapsed;
             toggleBtn.textContent = isCollapsed ? '展开绘画图片 ▾' : '收起绘画图片 ▴';
@@ -194,17 +501,20 @@ export class FloorManager implements FloorManagerHandle {
 
         slot.appendChild(toggleBtn);
         slot.appendChild(imgWrap);
+
+        this.setButtonState(ctx, 'done');
     }
 
     /**
-     * 注册任务调度器事件监听
+     * 注册任务调度器事件监听，按 task.identity 将进度与结果分发至目标插槽
      */
     private _setupTaskListeners(taskQueue: TaskQueueManager): void {
         const unsubProgress = taskQueue.events.on('task:progress', ({ taskId, progress }) => {
             if (this._isDisposed) return;
             const task = taskQueue.getTask(taskId);
             if (task?.identity?.messageId !== undefined) {
-                this.updateFloorProgress(task.identity.messageId, progress);
+                const btnIdx = task.identity.buttonIndex ?? 0;
+                this.updateFloorProgress(task.identity.messageId, progress, btnIdx);
             }
         });
         this._disposers.push(unsubProgress);
@@ -213,8 +523,9 @@ export class FloorManager implements FloorManagerHandle {
             if (this._isDisposed) return;
             const task = taskQueue.getTask(taskId);
             if (task?.identity?.messageId !== undefined && result.blob) {
+                const btnIdx = task.identity.buttonIndex ?? 0;
                 const blobUrl = URL.createObjectURL(result.blob);
-                this.attachFloorImage(task.identity.messageId, blobUrl, result.metadata);
+                this.attachFloorImage(task.identity.messageId, blobUrl, result.metadata, result.blob, btnIdx);
             }
         });
         this._disposers.push(unsubCompleted);
@@ -223,7 +534,8 @@ export class FloorManager implements FloorManagerHandle {
             if (this._isDisposed) return;
             const task = taskQueue.getTask(taskId);
             if (task?.identity?.messageId !== undefined) {
-                this._showFloorError(task.identity.messageId, error);
+                const btnIdx = task.identity.buttonIndex ?? 0;
+                this._showFloorError(task.identity.messageId, error, btnIdx);
             }
         });
         this._disposers.push(unsubFailed);
@@ -232,57 +544,91 @@ export class FloorManager implements FloorManagerHandle {
             if (this._isDisposed) return;
             const task = taskQueue.getTask(taskId);
             if (task?.identity?.messageId !== undefined) {
-                this._showFloorCancelled(task.identity.messageId, reason);
+                const btnIdx = task.identity.buttonIndex ?? 0;
+                this._showFloorCancelled(task.identity.messageId, reason, btnIdx);
             }
         });
         this._disposers.push(unsubCancelled);
     }
 
-    /**
-     * 展示楼层生图失败反馈
-     */
-    private _showFloorError(messageId: number | string, error: string): void {
+    private _showFloorError(messageId: number | string, error: string, buttonIndex = 0): void {
         if (this._isDisposed) return;
-        const slot = this._activeSlots.get(messageId);
-        if (!slot) return;
+        const ctx = this._contexts.get(this._getContextKey(messageId, buttonIndex));
+        if (!ctx) return;
 
-        slot.innerHTML = '';
-        const errorEl = createElement('div', {
-            className: 'da-floor-error-bar',
-            attributes: {
-                style: 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--da-color-danger, #e55353); padding: 4px 8px; background: rgba(229, 83, 83, 0.1); border-radius: 4px;'
-            }
-        });
+        ctx.slotElement.innerHTML = '';
+        const errorEl = createElement('div', { className: 'da-floor-error-bar' });
         errorEl.textContent = `生图失败: ${error}`;
-        slot.appendChild(errorEl);
+        ctx.slotElement.appendChild(errorEl);
+        this.setButtonState(ctx, 'error');
     }
 
-    /**
-     * 展示楼层任务已取消反馈
-     */
-    private _showFloorCancelled(messageId: number | string, reason?: string): void {
+    private _showFloorCancelled(messageId: number | string, reason?: string, buttonIndex = 0): void {
         if (this._isDisposed) return;
-        const slot = this._activeSlots.get(messageId);
-        if (!slot) return;
+        const ctx = this._contexts.get(this._getContextKey(messageId, buttonIndex));
+        if (!ctx) return;
 
-        slot.innerHTML = '';
-        const cancelEl = createElement('div', {
-            className: 'da-floor-cancel-bar',
-            attributes: {
-                style: 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--da-text-secondary, #888); padding: 4px 8px;'
-            }
-        });
+        ctx.slotElement.innerHTML = '';
+        const cancelEl = createElement('div', { className: 'da-floor-cancel-bar' });
         cancelEl.textContent = `生图已取消${reason ? ` (${reason})` : ''}`;
-        slot.appendChild(cancelEl);
+        ctx.slotElement.appendChild(cancelEl);
+        this.setButtonState(ctx, 'default');
     }
 
     /**
-     * 触发楼层生图执行
+     * 响应候选回复分支切换 (MESSAGE_SWIPED) 并重构当前楼层视图
      */
-    private _handleFloorGenerate(messageElement: HTMLElement, messageId: number | string): void {
+    public handleMessageSwiped(messageId: number | string): void {
+        if (this._isDisposed) return;
+        const selector = `#chat .mes[mesid="${messageId}"], .mes[mesid="${messageId}"]`;
+        const messageEl = document.querySelector<HTMLElement>(selector);
+        if (messageEl) {
+            this._removeMessageContexts(messageId, false);
+            const wrapper = messageEl.querySelector('.da-image-collapse-wrapper');
+            if (wrapper) wrapper.remove();
+            this.mountToMessage(messageEl, messageId);
+        }
+    }
+
+    /**
+     * 自动触发指定楼层中状态为 default 的生图按钮
+     */
+    public triggerAutoGenerate(messageId: number | string): void {
+        if (this._isDisposed) return;
+        const prefix = `${messageId}_`;
+        for (const [key, ctx] of this._contexts.entries()) {
+            if (key.startsWith(prefix) && ctx.state === 'default') {
+                ctx.btnElement.click();
+            }
+        }
+    }
+
+    /**
+     * 提交楼层生图任务至调度队列
+     */
+    public triggerFloorGenerate(
+        messageElement: HTMLElement,
+        messageId: number | string,
+        explicitPrompt?: string,
+        explicitNegativePrompt?: string,
+        buttonIndex = 0
+    ): void {
+        const contextKey = this._getContextKey(messageId, buttonIndex);
+        const ctx = this._contexts.get(contextKey);
+
+        if (ctx) {
+            if (ctx.state === 'loading') return;
+            if (ctx.state === 'progress' && ctx.currentTaskId && this._taskQueue) {
+                void this._taskQueue.cancelTask(ctx.currentTaskId, '用户取消');
+                this.setButtonState(ctx, 'default');
+                ctx.currentTaskId = null;
+                return;
+            }
+        }
+
         const textElement = messageElement.querySelector('.mes_text');
         const textContent = (textElement?.textContent || messageElement.textContent || '').trim();
-        if (!textContent) {
+        if (!textContent && !explicitPrompt) {
             Toast.warn('该楼层内容为空，无法提取提示词');
             return;
         }
@@ -298,35 +644,67 @@ export class FloorManager implements FloorManagerHandle {
             chatId = window.SillyTavern.getContext().chatId || 'default';
         }
 
+        let promptText = explicitPrompt || ctx?.prompt;
+        let negativePromptText = explicitNegativePrompt || ctx?.negativePrompt;
+
+        if (!promptText) {
+            const placeholders = extractPlaceholders(textContent, DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END);
+            if (placeholders.length > 0) {
+                promptText = placeholders[0].prompt;
+                negativePromptText = placeholders[0].negativePrompt;
+            } else {
+                promptText = sanitizeMessageText(textContent);
+            }
+        }
+
+        if (this._settingsStore.get('cleanPrompt') !== false) {
+            promptText = normalizePromptPunctuation(promptText);
+            if (negativePromptText) {
+                negativePromptText = normalizePromptPunctuation(negativePromptText);
+            }
+        }
+
+        const taskParams = buildEngineParams({
+            engine: activeEngine,
+            prompt: promptText,
+            negativePrompt: negativePromptText,
+            settingsStore: this._settingsStore
+        });
+
         const numMessageId = typeof messageId === 'number' ? messageId : parseInt(String(messageId), 10);
         const parsedMessageId = Number.isNaN(numMessageId) ? undefined : numMessageId;
+        const swipeId = this._getCurrentSwipeId(messageId);
 
-        this.updateFloorProgress(messageId, 0.05);
+        if (ctx) {
+            this.setButtonState(ctx, 'loading');
+        }
+        this.updateFloorProgress(messageId, 0.05, buttonIndex);
 
         try {
-            this._taskQueue.submit(
-                {
-                    prompt: textContent,
-                    width: 512,
-                    height: 768,
-                    seed: -1
-                },
+            const taskId = this._taskQueue.submit(
+                taskParams,
                 {
                     chatId,
-                    messageId: parsedMessageId
+                    messageId: parsedMessageId,
+                    swipeId,
+                    buttonIndex
                 },
-                activeEngine
+                taskParams.engine
             );
-            Toast.info(`已提取第 #${messageId} 楼层内容，加入生图队列`);
+            if (ctx) {
+                ctx.currentTaskId = taskId;
+                this.setButtonState(ctx, 'progress');
+            }
+            Toast.info(`已提取第 #${messageId} 楼层指令，加入生图队列`);
         } catch (err: any) {
             const errorMsg = err?.message || String(err) || '未知提交异常';
             Toast.error(`提交生图任务失败: ${errorMsg}`);
-            this._showFloorError(messageId, errorMsg);
+            this._showFloorError(messageId, errorMsg, buttonIndex);
         }
     }
 
     /**
-     * 会话切换 (CHAT_CHANGED) 清理：中止未决任务、释放所有由楼层分配的 Object URL
+     * 会话切换时清理所有临时 Object URL 与楼层上下文映射
      */
     public clearSessionState(): void {
         for (const url of this._allocatedUrls) {
@@ -336,11 +714,11 @@ export class FloorManager implements FloorManagerHandle {
         }
         this._allocatedUrls.clear();
         this._slotUrls.clear();
-        this._activeSlots.clear();
+        this._contexts.clear();
     }
 
     /**
-     * 销毁实例
+     * 释放管理器监听器与全部持有的临时资源
      */
     public dispose(): void {
         this.clearSessionState();

@@ -102,6 +102,45 @@
     margin-top: 6px;
 }
 
+/* 5. 紧凑模式 (.da-storage-bar--compact) */
+.da-storage-bar--compact {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-md, 12px);
+    padding: 8px 12px;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    flex-wrap: wrap;
+}
+
+.da-storage-bar--compact .da-storage-compact-info {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    flex: 1;
+    min-width: 240px;
+}
+
+.da-storage-bar--compact .da-storage-track {
+    width: 90px;
+    height: 6px;
+    flex-shrink: 0;
+}
+
+.da-storage-bar--compact .da-storage-summary-text {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+}
+
+.da-storage-bar--compact .da-storage-actions-toolbar {
+    margin-top: 0;
+    gap: 6px;
+}
+
 /* 存储配额异常或超限错误提示条 */
 .da-storage-error-hint {
     color: var(--da-color-error, #ff453a);
@@ -112,3 +151,4 @@
     border-radius: var(--da-radius-sm, 6px);
     text-align: center;
 }
+

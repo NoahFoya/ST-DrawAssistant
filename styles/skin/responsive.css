@@ -130,9 +130,9 @@
 }
 
 /* 3. 移动端与紧凑手机屏幕适配 (max-width: 680px)
-   主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；全局字阶微调收缩。 */
+   主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；基础字阶微调收缩。 */
 @media (max-width: 680px) {
-    /* 移动端全局字阶微调，保障触控屏舒适阅读密度 */
+    /* 移动端基础字阶微调，保障触控屏舒适阅读密度 */
     :root, .st-da-root {
         --da-font-size-xs: 11px !important;
         --da-font-size-sm: 12px !important;
@@ -345,7 +345,7 @@
         flex: 0 0 auto !important;
     }
 
-    /* 超窄屏幕下顶栏标题最大宽度进一步收敛至 110px */
+    /* 超窄屏幕下顶栏标题最大宽度进一步限制为 110px */
     .da-header-title {
         max-width: 110px !important;
     }
