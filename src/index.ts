@@ -1,7 +1,15 @@
 /**
- * ST-DrawAssistant 插件核心入口
- * 职责：SillyTavern 插件生命周期管理、单例防重初始化、宿主事件监听装配与跨会话状态回收。
- * 遵循 st-extension 与 st-image-gen 规范。
+ * ST-DrawAssistant 插件核心主入口 (Plugin Entrypoint)
+ *
+ * 核心功能：
+ * 1. 负责 SillyTavern 插件环境的就绪探测与生命周期编排；
+ * 2. 初始化核心服务单例（设置存储、任务队列、持久化与生图编排器）；
+ * 3. 注册宿主事件监听（消息接收、会话变更等）并驱动自动生图与楼层注入；
+ * 4. 挂载悬浮球与主设置弹窗等 UI 交互组件。
+ *
+ * 注意事项：
+ * 1. 必须具备严格的防重入与单例初始化防护，避免重复加载导致重复监听；
+ * 2. 会话切换 (CHAT_CHANGED) 时需妥善回收既有会话的任务与临时内存资源。
  */
 
 import type { SillyTavernContext } from '@types';
@@ -10,13 +18,14 @@ import { PersistentStorage } from './store/storage';
 import { TaskQueueManager } from './store/task';
 import { ResultIntegrator } from './store/integrator';
 import { GenerationOrchestrator } from './function/orchestrator';
+import { ExtensionRegistry } from './extension/registry';
 import { initUI, type UIHandle } from './ui';
 
 /** 插件初始化状态标志 */
 let initialized = false;
 let isAppReady = false;
 
-/** 全局核心服务单例引用 */
+/** 核心服务单例引用 */
 let settingsStore: SettingsStore | null = null;
 let storage: PersistentStorage | null = null;
 let taskQueue: TaskQueueManager | null = null;
@@ -50,6 +59,11 @@ export function getStorage(): PersistentStorage | null {
     return storage;
 }
 
+/** 获取当前扩展注册中心单例引用 */
+export function getExtensionRegistry(): ExtensionRegistry {
+    return ExtensionRegistry.getInstance();
+}
+
 /**
  * 扫描当前聊天容器中的所有历史消息楼层并挂载生图插槽
  */
@@ -68,6 +82,7 @@ export function scanAndMountExistingMessages(): void {
 
 /**
  * 响应单个消息楼层渲染事件
+ * 负责楼层 DOM 挂载与历史图片恢复；自动生图由 GENERATION_ENDED 事件驱动。
  */
 export function handleMessageRendered(messageId: number | string, isUser = false): void {
     if (!uiHandle || typeof document === 'undefined') return;
@@ -80,9 +95,57 @@ export function handleMessageRendered(messageId: number | string, isUser = false
 }
 
 /**
+ * 获取当前聊天中最新一条角色（非用户）消息楼层 ID
+ */
+export function getLatestCharacterMessageId(): number | string | null {
+    if (typeof window !== 'undefined' && window.SillyTavern?.getContext) {
+        const chat = window.SillyTavern.getContext().chat;
+        if (Array.isArray(chat) && chat.length > 0) {
+            for (let i = chat.length - 1; i >= 0; i--) {
+                if (!chat[i].is_user) {
+                    return i;
+                }
+            }
+        }
+    }
+    // DOM 降级探测
+    if (typeof document !== 'undefined') {
+        const charMessages = document.querySelectorAll<HTMLElement>('#chat .mes:not(.is_user)[mesid], .mes:not(.is_user)[mesid]');
+        if (charMessages.length > 0) {
+            const lastEl = charMessages[charMessages.length - 1];
+            const mesId = lastEl.getAttribute('mesid');
+            return mesId !== null ? (parseInt(mesId, 10) || mesId) : null;
+        }
+    }
+    return null;
+}
+
+/**
+ * 响应宿主 AI 文本生成完成生命周期事件 (GENERATION_ENDED)
+ * 仅在 AI 完成回复时触发最新角色楼层的自动生图，避免在切换会话、滚动加载历史或重绘时误触发。
+ */
+export function handleGenerationEnded(): void {
+    if (!uiHandle || typeof window === 'undefined') return;
+    if (settingsStore?.get('enabled') === false || !settingsStore?.get('autoGenerate')) {
+        return;
+    }
+    const latestId = getLatestCharacterMessageId();
+    if (latestId !== null) {
+        uiHandle.floorManager.triggerAutoGenerate(latestId);
+    }
+}
+
+/**
+ * 响应宿主滑动切换分支事件 (MESSAGE_SWIPED)
+ */
+export function handleMessageSwiped(messageId: number | string): void {
+    if (!uiHandle || typeof document === 'undefined') return;
+    uiHandle.floorManager.handleMessageSwiped(messageId);
+}
+
+/**
  * 宿主应用初始化完成回调 (APP_INITIALIZED)
- * 关键技术原因：SillyTavern 完成 DOM 骨架与基础设置加载后触发 APP_INITIALIZED，
- * 这是安全挂载悬浮球、楼层按钮与设置面板的最佳时机。
+ * SillyTavern 完成 DOM 骨架与基础设置加载后触发 APP_INITIALIZED，此时挂载悬浮球、楼层按钮与设置面板。
  */
 export async function handleAppInitialized(): Promise<void> {
     if (isAppReady) return;
@@ -91,13 +154,14 @@ export async function handleAppInitialized(): Promise<void> {
     // 确保底层服务单例就绪
     if (!settingsStore) {
         settingsStore = new SettingsStore();
+        ExtensionRegistry.getInstance().bindSettingsStore(settingsStore);
     }
     if (!storage) {
         storage = new PersistentStorage();
         await storage.init();
     }
     if (!integrator) {
-        integrator = new ResultIntegrator({ storage });
+        integrator = new ResultIntegrator({ storage, settingsStore });
     }
     if (!taskQueue) {
         taskQueue = new TaskQueueManager({
@@ -127,8 +191,7 @@ export async function handleAppInitialized(): Promise<void> {
 
 /**
  * 宿主会话切换事件回调 (CHAT_CHANGED)
- * 关键技术原因：当用户切换聊天会话时，必须中止当前会话正在执行中的生图任务，
- * 并释放已创建的临时 Object URL 内存，防止跨会话串楼与内存泄漏。
+ * 当用户切换聊天会话时，取消当前会话未决的生图任务，并释放已分配的临时资源。
  */
 export async function handleChatChanged(): Promise<void> {
     // 1. 中止未决的生图任务
@@ -172,10 +235,11 @@ export async function initOnce(): Promise<void> {
 
     // 1. 初始化核心状态与持久化服务
     settingsStore = new SettingsStore();
+    ExtensionRegistry.getInstance().bindSettingsStore(settingsStore);
     storage = new PersistentStorage();
     await storage.init();
 
-    integrator = new ResultIntegrator({ storage });
+    integrator = new ResultIntegrator({ storage, settingsStore });
     taskQueue = new TaskQueueManager({
         taskTimeoutMs: settingsStore.get('taskTimeoutMs'),
         maxConcurrent: settingsStore.get('maxConcurrentTasks')
@@ -209,6 +273,8 @@ export async function initOnce(): Promise<void> {
     const onChatChange = () => void handleChatChanged();
     const onUserMsg = (id: any) => handleMessageRendered(id, true);
     const onCharMsg = (id: any) => handleMessageRendered(id, false);
+    const onGenEnded = () => handleGenerationEnded();
+    const onMsgSwiped = (id: any) => handleMessageSwiped(id);
 
     eventSource.on(eventTypes.APP_INITIALIZED, onAppInit);
     eventSource.on(eventTypes.CHAT_CHANGED, onChatChange);
@@ -218,6 +284,12 @@ export async function initOnce(): Promise<void> {
     }
     if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
         eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharMsg);
+    }
+    if (eventTypes.GENERATION_ENDED) {
+        eventSource.on(eventTypes.GENERATION_ENDED, onGenEnded);
+    }
+    if (eventTypes.MESSAGE_SWIPED) {
+        eventSource.on(eventTypes.MESSAGE_SWIPED, onMsgSwiped);
     }
 
     cleanups.push(() => {
@@ -238,6 +310,12 @@ export async function initOnce(): Promise<void> {
         if (eventTypes.CHARACTER_MESSAGE_RENDERED) {
             removeHostListener(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharMsg);
         }
+        if (eventTypes.GENERATION_ENDED) {
+            removeHostListener(eventTypes.GENERATION_ENDED, onGenEnded);
+        }
+        if (eventTypes.MESSAGE_SWIPED) {
+            removeHostListener(eventTypes.MESSAGE_SWIPED, onMsgSwiped);
+        }
     });
 
     // 5. 若宿主已完成初始化或已有聊天容器，直接装配 UI
@@ -245,6 +323,9 @@ export async function initOnce(): Promise<void> {
     if (chatContainer || (context as any).isInitialized) {
         await handleAppInitialized();
     }
+
+    // 6. 初始化已启用的扩展功能
+    await ExtensionRegistry.getInstance().initAll(context);
 }
 
 /**
@@ -256,6 +337,7 @@ export async function disposeExtension(): Promise<void> {
         await taskQueue.cancelAllActiveTasks('插件已卸载');
         taskQueue.dispose();
     }
+    ExtensionRegistry.getInstance().clear();
     if (orchestrator) {
         orchestrator.dispose();
     }
