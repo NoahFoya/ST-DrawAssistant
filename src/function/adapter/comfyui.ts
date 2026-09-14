@@ -1,12 +1,30 @@
 /**
- * ComfyUI 生图引擎适配器
- * 遵循 comfyui-api-reference 与 st-image-gen 规范。
- * 支持工作流变量注入、WeiLin 语法 LoRA 拼装、WebSocket 进度跟踪、输出拉取与作业中断。
+ * ComfyUI 生图引擎适配器 (ComfyUIAdapter)
+ *
+ * 核心功能：
+ * 1. 提交 ComfyUI 原生 API 格式工作流 (POST /prompt) 并管理 prompt_id 任务生命周期；
+ * 2. 支持工作流节点变量精准替换与 WeiLin 4 段式 LoRA 语法嵌入；
+ * 3. 建立 WebSocket 实时进度追踪，推送采样步数进度与预览图像；
+ * 4. 任务取消时同步清理 ComfyUI 队列并中断当前计算节点；
+ * 5. 拉取最终生成图像二进制数据并规范化输出。
+ *
+ * 注意事项：
+ * 1. 节点连线 (Link) 数组结构极为严格，变量注入严禁破坏节点关联依赖与非目标字段；
+ * 2. 长连接异常断开时应具备退避重试能力，且需处理节点执行报错抛出的异常状态。
  */
 
-import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type {
+    EngineCapabilities,
+    EngineType,
+    HealthCheckResult,
+    ImageGenerationResult,
+    ComfyUITaskData,
+    ComfyUIRequestData,
+    ComfyUIHistoryResponseData,
+    ComfyUIWsMessageData
+} from '@types';
 import { BaseAdapter } from './base';
-import { formatLoraTag, type LoraFormatItem } from '../../util/prompt';
+import { formatLoraTag } from '../../util/prompt';
 import type { HttpClient } from '../../util/http';
 
 /**
@@ -14,25 +32,35 @@ import type { HttpClient } from '../../util/http';
  */
 export function injectWorkflowVariables(
     workflow: Record<string, any>,
-    params: ImageGenerationParams,
     finalPrompt: string,
+    params: ComfyUITaskData,
     resolvedSeed: number
 ): Record<string, any> {
+    const vars = params.variables || ({} as ComfyUITaskData['variables']);
     const stringVars: Record<string, string> = {
         '%prompt%': finalPrompt,
         '%negative_prompt%': params.negativePrompt || '',
-        '%sampler_name%': params.sampler || 'euler',
-        '%scheduler%': params.scheduler || 'normal',
-        '%model_name%': (params.extraParams?.modelName as string) || ''
+        '%sampler_name%': vars.sampler_name || 'euler',
+        '%scheduler%': vars.scheduler || 'normal',
+        '%model_name%': vars.model_name || ''
     };
 
     const numberVars: Record<string, number> = {
         '%seed%': resolvedSeed,
-        '%width%': params.width,
-        '%height%': params.height,
-        '%steps%': params.steps ?? 20,
-        '%cfg%': params.cfgScale ?? 8.0
+        '%width%': vars.width,
+        '%height%': vars.height,
+        '%steps%': vars.steps ?? 20,
+        '%cfg%': vars.cfg ?? 8.0
     };
+
+    // 注入附加自定义变量
+    for (const [key, value] of Object.entries(vars)) {
+        if (typeof value === 'number') {
+            numberVars[`%${key}%`] = value;
+        } else if (typeof value === 'string') {
+            stringVars[`%${key}%`] = value;
+        }
+    }
 
     function processValue(val: any): any {
         if (typeof val === 'string') {
@@ -66,7 +94,7 @@ export function injectWorkflowVariables(
     return processValue(workflow);
 }
 
-export class ComfyUIAdapter extends BaseAdapter {
+export class ComfyUIAdapter extends BaseAdapter<ComfyUITaskData> {
     public readonly id: EngineType = 'comfyui';
     public readonly name = 'ComfyUI';
 
@@ -172,7 +200,7 @@ export class ComfyUIAdapter extends BaseAdapter {
      * 执行 ComfyUI 工作流生图任务
      */
     public async generate(
-        params: ImageGenerationParams,
+        params: ComfyUITaskData,
         onProgress?: (progress: number) => void,
         signal?: AbortSignal
     ): Promise<ImageGenerationResult> {
@@ -180,7 +208,7 @@ export class ComfyUIAdapter extends BaseAdapter {
 
         // 1. 组装正向提示词（依据用户配置拼入 WeiLin 4段式 LoRA 标签）
         let finalPrompt = params.prompt || '';
-        const loras = params.extraParams?.loras as LoraFormatItem[] | undefined;
+        const loras = params.loras;
         if (Array.isArray(loras) && loras.length > 0) {
             const loraTags = loras.map(l => formatLoraTag(l, 'weilin')).filter(Boolean);
             if (loraTags.length > 0) {
@@ -189,7 +217,7 @@ export class ComfyUIAdapter extends BaseAdapter {
         }
 
         // 2. 准备工作流模板
-        let rawWorkflow = params.extraParams?.workflow;
+        let rawWorkflow = params.workflow;
         if (typeof rawWorkflow === 'string') {
             try {
                 rawWorkflow = JSON.parse(rawWorkflow);
@@ -202,7 +230,8 @@ export class ComfyUIAdapter extends BaseAdapter {
         }
 
         // 3. 计算并注入工作流变量
-        let modelName = (params.extraParams?.modelName as string) || '';
+        const vars = params.variables || ({} as ComfyUITaskData['variables']);
+        let modelName = vars.model_name || '';
         if (!modelName) {
             try {
                 const infoResp = await this.httpClient.fetchExternal(`${this.baseUrl}/object_info/CheckpointLoaderSimple`, { signal });
@@ -218,27 +247,33 @@ export class ComfyUIAdapter extends BaseAdapter {
             }
         }
 
-        const resolvedSeed = params.seed > 0 ? params.seed : Math.floor(Math.random() * 100000000000000);
-        const resolvedParams: ImageGenerationParams = {
+        const resolvedSeed = (typeof vars.seed === 'number' && vars.seed > 0)
+            ? vars.seed
+            : Math.floor(Math.random() * 100000000000000);
+
+        const resolvedParams: ComfyUITaskData = {
             ...params,
-            extraParams: {
-                ...params.extraParams,
-                modelName: modelName || (params.extraParams?.modelName as string) || ''
+            variables: {
+                ...vars,
+                seed: resolvedSeed,
+                model_name: modelName
             }
         };
-        const injectedGraph = injectWorkflowVariables(rawWorkflow, resolvedParams, finalPrompt, resolvedSeed);
+        const injectedGraph = injectWorkflowVariables(rawWorkflow, finalPrompt, resolvedParams, resolvedSeed);
 
-        // 4. 生成客户端标识并提交 /prompt
+        // 4. 生成客户端标识并提交发往后端的请求数据
         const clientId = `st-da-${Math.random().toString(36).substring(2, 10)}`;
-        const submitResp = await this.httpClient.fetchExternal(`${this.baseUrl}/prompt`, {
+        const requestData: ComfyUIRequestData = {
+            client_id: clientId,
+            prompt: injectedGraph
+        };
+
+        const submitResp = await this.fetchWithTransport(`${this.baseUrl}/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: injectedGraph,
-                client_id: clientId
-            }),
+            body: JSON.stringify(requestData),
             signal
-        });
+        }, params.transport);
 
         const submitResult = await submitResp.json();
         const promptId = submitResult.prompt_id as string;
@@ -250,11 +285,11 @@ export class ComfyUIAdapter extends BaseAdapter {
         await this.waitForCompletion(clientId, promptId, onProgress, signal);
 
         // 6. 从 /history 拉取输出图像元数据
-        const historyResp = await this.httpClient.fetchExternal(`${this.baseUrl}/history/${promptId}`, {
+        const historyResp = await this.fetchWithTransport(`${this.baseUrl}/history/${promptId}`, {
             method: 'GET',
             signal
-        });
-        const historyData = await historyResp.json();
+        }, params.transport);
+        const historyData: ComfyUIHistoryResponseData = await historyResp.json();
         const promptHistory = historyData[promptId];
         if (!promptHistory || !promptHistory.outputs) {
             throw new Error(`ComfyUI 历史记录未包含 promptId: ${promptId} 的输出`);
@@ -264,7 +299,7 @@ export class ComfyUIAdapter extends BaseAdapter {
         let targetImage: { filename: string; subfolder: string; type: string } | null = null;
         let fallbackImage: { filename: string; subfolder: string; type: string } | null = null;
 
-        for (const nodeOutput of Object.values(promptHistory.outputs) as any[]) {
+        for (const nodeOutput of Object.values(promptHistory.outputs)) {
             if (Array.isArray(nodeOutput.images) && nodeOutput.images.length > 0) {
                 for (const img of nodeOutput.images) {
                     if (img && img.type === 'output') {
@@ -286,10 +321,10 @@ export class ComfyUIAdapter extends BaseAdapter {
 
         // 7. 拉取实际图像二进制 Blob
         const viewUrl = `${this.baseUrl}/view?filename=${encodeURIComponent(finalImage.filename)}&subfolder=${encodeURIComponent(finalImage.subfolder || '')}&type=${encodeURIComponent(finalImage.type || 'output')}`;
-        const imageResp = await this.httpClient.fetchExternal(viewUrl, {
+        const imageResp = await this.fetchWithTransport(viewUrl, {
             method: 'GET',
             signal
-        });
+        }, params.transport);
 
         const blob = await imageResp.blob();
 
@@ -300,8 +335,8 @@ export class ComfyUIAdapter extends BaseAdapter {
         return {
             blob,
             mimeType: blob.type || 'image/png',
-            width: params.width,
-            height: params.height,
+            width: vars.width || 832,
+            height: vars.height || 1216,
             seed: resolvedSeed,
             durationMs: this.measureDuration(startTime),
             metadata: {
@@ -332,7 +367,7 @@ export class ComfyUIAdapter extends BaseAdapter {
                 ws.onmessage = (event: MessageEvent) => {
                     try {
                         if (typeof event.data === 'string') {
-                            const msg = JSON.parse(event.data);
+                            const msg = JSON.parse(event.data) as ComfyUIWsMessageData;
                             if (msg.type === 'progress' && msg.data) {
                                 const { value, max } = msg.data;
                                 if (typeof value === 'number' && typeof max === 'number' && max > 0 && onProgress) {
@@ -399,7 +434,7 @@ export class ComfyUIAdapter extends BaseAdapter {
     public override async interrupt(jobId?: string): Promise<void> {
         if (jobId) {
             try {
-                await this.httpClient.fetchExternal(`${this.baseUrl}/queue`, {
+                await this.fetchWithTransport(`${this.baseUrl}/queue`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ delete: [jobId] })
@@ -411,7 +446,7 @@ export class ComfyUIAdapter extends BaseAdapter {
         }
 
         try {
-            await this.httpClient.fetchExternal(`${this.baseUrl}/interrupt`, {
+            await this.fetchWithTransport(`${this.baseUrl}/interrupt`, {
                 method: 'POST'
             });
             this.logger.info('已向 ComfyUI 发送中断执行请求');

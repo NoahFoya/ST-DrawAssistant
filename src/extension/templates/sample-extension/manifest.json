@@ -1,0 +1,7 @@
+{
+  "id": "sample-prompt-enhancer",
+  "name": "提示词增强扩展样例",
+  "version": "1.0.0",
+  "description": "演示自包含扩展开发：独立配置隔离、生命周期调度与提示词流程钩子",
+  "defaultEnabled": true
+}

@@ -1,6 +1,15 @@
 /**
- * 插件设置状态管理模块
- * 职责：插件全局配置的内存管理、自描述深合并、键值变更监听、导出脱敏与防抖持久化。
+ * 插件全局配置状态管理 (src/store/settings.ts)
+ *
+ * 核心功能：
+ * 1. 维护 ExtensionSettings 运行时状态树与内存缓存；
+ * 2. 处理默认配置自描述深合并与脏字段清洗过滤；
+ * 3. 提供精准的深层配置键监听与防抖自动持久化；
+ * 4. 导出配置时的敏感凭据字段脱敏保护。
+ *
+ * 注意事项：
+ * 1. 持久化通过防抖写入宿主环境存储，避免高频变更引发 I/O 阻塞；
+ * 2. 导出配置时默认剔除包含 key、token、secret 等敏感字段。
  */
 
 import type { ExtensionSettings } from '@types';
@@ -47,7 +56,6 @@ export function cleanRawSettings(raw: Record<string, any>): Record<string, any> 
     delete cleaned.extensions;
     delete cleaned.uiPreferences;
     delete cleaned.customData;
-    delete cleaned.embedToBase64;
     delete cleaned.placeholderStart;
     delete cleaned.placeholderEnd;
     return cleaned;

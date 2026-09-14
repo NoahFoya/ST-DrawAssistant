@@ -1,12 +1,21 @@
 /**
- * 预设模板方案管理模块
- * 职责：管理 workflows, prompts, themes, drawing 四大分类预设，
- * 提供内置模板保护、自定义预设增删改查、方案包独立导入导出与出厂重置。
+ * 预设模板方案管理 (src/store/preset.ts)
+ *
+ * 核心功能：
+ * 1. 管理 workflows, prompts, themes, drawing 四大类预设方案；
+ * 2. 保护出厂内置预设（只读保护，禁止非法覆盖或删除）；
+ * 3. 支持用户自定义预设的增删改查、排序与持久化；
+ * 4. 提供预设归档包的独立导入、导出、版本合并与出厂重置。
+ *
+ * 注意事项：
+ * 1. 导入归档包时校验数据结构合法性，阻断异常脏数据；
+ * 2. 涉及内置项时以标记 `isBuiltin: true` 进行边界隔离。
  */
 
-import type { PresetItem, PresetsArchiveData } from '@types';
+import type { PresetItem, PresetsArchiveData, PresetCategory, PromptPresetData } from '@types';
 import { deepClone, isPlainObject } from '../util/object';
 import { SettingsStore } from './settings';
+import { normalizePromptPresetData } from './normalizer';
 
 import workflowCheckpointStandard from '../../config/presets/workflows/comfyui_checkpoint_standard.json';
 import workflowSplitStandard from '../../config/presets/workflows/comfyui_split_standard.json';
@@ -46,7 +55,10 @@ export const BUILTIN_WORKFLOWS: PresetItem<{ json: string }>[] = [
 ];
 
 export const BUILTIN_THEMES: PresetItem[] = builtinThemesJson as unknown as PresetItem[];
-export const BUILTIN_PROMPTS: PresetItem[] = builtinPromptsJson as unknown as PresetItem[];
+export const BUILTIN_PROMPTS: PresetItem<PromptPresetData>[] = (builtinPromptsJson as unknown as PresetItem<PromptPresetData>[]).map(item => ({
+    ...item,
+    data: item.data ? normalizePromptPresetData(item.data) : undefined
+}));
 export const BUILTIN_DRAWING: Record<string, PresetItem[]> = builtinDrawingJson as unknown as Record<string, PresetItem[]>;
 
 /** 完整的出厂内置预设模板快照 */
@@ -87,7 +99,7 @@ export async function reloadPresetsFromDisk(): Promise<PresetsArchiveData> {
 
         const [themes, prompts, drawing, wfCkptStd, wfSplitStd, wfCkptWl, wfSplitWl] = await Promise.all([
             fetchJson<PresetItem[]>(`${basePath}/themes.json`),
-            fetchJson<PresetItem[]>(`${basePath}/prompts.json`),
+            fetchJson<PresetItem<PromptPresetData>[]>(`${basePath}/prompts.json`),
             fetchJson<Record<string, PresetItem[]>>(`${basePath}/drawing.json`),
             fetchJson<Record<string, unknown>>(`${basePath}/workflows/comfyui_checkpoint_standard.json`),
             fetchJson<Record<string, unknown>>(`${basePath}/workflows/comfyui_split_standard.json`),
@@ -109,9 +121,13 @@ export async function reloadPresetsFromDisk(): Promise<PresetsArchiveData> {
         pushWf('comfyui_checkpoint_weilin', 'WeiLin 大模型工作流', wfCkptWl, BUILTIN_WORKFLOWS[2]);
         pushWf('comfyui_split_weilin', 'WeiLin 分立模型工作流', wfSplitWl, BUILTIN_WORKFLOWS[3]);
 
+        const normalizedPrompts = prompts
+            ? prompts.map(item => ({ ...item, data: item.data ? normalizePromptPresetData(item.data) : undefined }))
+            : undefined;
+
         return {
             themes: themes || deepClone(BUILTIN_THEMES),
-            prompts: prompts || deepClone(BUILTIN_PROMPTS),
+            prompts: normalizedPrompts || deepClone(BUILTIN_PROMPTS),
             workflows: diskWorkflows,
             drawing: drawing || deepClone(BUILTIN_DRAWING)
         };
@@ -140,15 +156,21 @@ export class PresetManager {
      * 获取指定分类下的预设方案列表
      * 合并出厂内置模板与用户自定义预设。
      */
-    public list<T = any>(category: string, subCategory?: string): PresetItem<T>[] {
-        const presets = this._store.get('presets') as any;
+    public list<T = any>(category: PresetCategory | string, subCategory?: string): PresetItem<T>[] {
+        const presets = (this._store.get('presets') || {}) as PresetsArchiveData;
         const builtinList = this._getBuiltinList(category, subCategory);
 
         let customList: PresetItem<T>[] = [];
         if (category === 'drawing' && subCategory) {
-            customList = (presets?.drawing?.[subCategory] || []) as PresetItem<T>[];
+            customList = (presets.drawing?.[subCategory] || []) as PresetItem<T>[];
+        } else if (category === 'themes') {
+            customList = (presets.themes || []) as PresetItem<T>[];
+        } else if (category === 'prompts') {
+            customList = (presets.prompts || []) as PresetItem<T>[];
+        } else if (category === 'workflows') {
+            customList = (presets.workflows || []) as PresetItem<T>[];
         } else {
-            customList = (presets?.[category] || []) as PresetItem<T>[];
+            customList = ((presets as Record<string, unknown>)[category] as PresetItem<T>[]) || [];
         }
 
         const result: PresetItem<T>[] = [];
@@ -184,7 +206,7 @@ export class PresetManager {
      * 出厂内置预设受 isBuiltin 标识保护，写操作仅对自定义预设生效，避免内置模板被破坏。
      */
     public save<T = any>(
-        category: string,
+        category: PresetCategory | string,
         item: PresetItem<T>,
         subCategory?: string
     ): boolean {
@@ -197,7 +219,7 @@ export class PresetManager {
             return false;
         }
 
-        const presets = deepClone(this._store.get('presets') || {}) as any;
+        const presets: PresetsArchiveData = deepClone(this._store.get('presets') || {});
         let targetList: PresetItem<T>[];
 
         if (category === 'drawing' && subCategory) {
@@ -205,19 +227,37 @@ export class PresetManager {
             if (!Array.isArray(presets.drawing[subCategory])) {
                 presets.drawing[subCategory] = [];
             }
-            targetList = presets.drawing[subCategory];
+            targetList = presets.drawing[subCategory] as PresetItem<T>[];
+        } else if (category === 'themes') {
+            if (!Array.isArray(presets.themes)) presets.themes = [];
+            targetList = presets.themes as PresetItem<T>[];
+        } else if (category === 'prompts') {
+            if (!Array.isArray(presets.prompts)) presets.prompts = [];
+            targetList = presets.prompts as PresetItem<T>[];
+        } else if (category === 'workflows') {
+            if (!Array.isArray(presets.workflows)) presets.workflows = [];
+            targetList = presets.workflows as PresetItem<T>[];
         } else {
-            if (!Array.isArray(presets[category])) {
-                presets[category] = [];
+            const extPresets = presets as Record<string, unknown>;
+            if (!Array.isArray(extPresets[category])) {
+                extPresets[category] = [];
             }
-            targetList = presets[category];
+            targetList = extPresets[category] as PresetItem<T>[];
+        }
+
+        let processedItem = item;
+        if (category === 'prompts' && item.data) {
+            processedItem = {
+                ...item,
+                data: normalizePromptPresetData(item.data) as unknown as T
+            };
         }
 
         const existingIndex = targetList.findIndex(i => i.id === item.id);
         if (existingIndex >= 0) {
-            targetList[existingIndex] = deepClone(item);
+            targetList[existingIndex] = deepClone(processedItem);
         } else {
-            targetList.push(deepClone(item));
+            targetList.push(deepClone(processedItem));
         }
 
         this._store.set('presets', presets);
@@ -228,7 +268,7 @@ export class PresetManager {
      * 删除指定预设方案
      * 出厂内置预设由系统维护，不支持删除操作，仅允许重置或克隆自定义项。
      */
-    public delete(category: string, id: string, subCategory?: string): boolean {
+    public delete(category: PresetCategory | string, id: string, subCategory?: string): boolean {
         if (!id) return false;
 
         // 内置预设受保护，不支持删除
@@ -237,29 +277,36 @@ export class PresetManager {
             return false;
         }
 
-        const presets = deepClone(this._store.get('presets') || {}) as any;
-        let targetList: PresetItem[];
+        const presets: PresetsArchiveData = deepClone(this._store.get('presets') || {});
+        let targetList: PresetItem[] | undefined;
 
         if (category === 'drawing' && subCategory) {
-            if (!presets.drawing || !Array.isArray(presets.drawing[subCategory])) {
-                return false;
-            }
-            targetList = presets.drawing[subCategory];
+            targetList = presets.drawing?.[subCategory];
+        } else if (category === 'themes') {
+            targetList = presets.themes;
+        } else if (category === 'prompts') {
+            targetList = presets.prompts;
+        } else if (category === 'workflows') {
+            targetList = presets.workflows;
         } else {
-            if (!Array.isArray(presets[category])) {
-                return false;
-            }
-            targetList = presets[category];
+            targetList = (presets as Record<string, unknown>)[category] as PresetItem[] | undefined;
         }
 
+        if (!Array.isArray(targetList)) return false;
         const existing = targetList.find(i => i.id === id);
         if (!existing) return false;
 
         const filtered = targetList.filter(i => i.id !== id);
         if (category === 'drawing' && subCategory) {
-            presets.drawing[subCategory] = filtered;
+            if (presets.drawing) presets.drawing[subCategory] = filtered;
+        } else if (category === 'themes') {
+            presets.themes = filtered;
+        } else if (category === 'prompts') {
+            presets.prompts = filtered as PresetItem<PromptPresetData>[];
+        } else if (category === 'workflows') {
+            presets.workflows = filtered as PresetItem<{ json: string }>[];
         } else {
-            presets[category] = filtered;
+            (presets as Record<string, unknown>)[category] = filtered;
         }
 
         this._store.set('presets', presets);
@@ -269,8 +316,8 @@ export class PresetManager {
     /**
      * 重置指定分类为出厂快照状态
      */
-    public resetCategory(category: string, subCategory?: string): void {
-        const presets = deepClone(this._store.get('presets') || {}) as any;
+    public resetCategory(category: PresetCategory | string, subCategory?: string): void {
+        const presets: PresetsArchiveData = deepClone(this._store.get('presets') || {});
 
         if (category === 'drawing' && subCategory) {
             if (!presets.drawing) presets.drawing = {};
@@ -291,7 +338,7 @@ export class PresetManager {
      */
     public resetDefaults(sourceData?: PresetsArchiveData): void {
         const source = sourceData ? deepClone(sourceData) : deepClone(BUILTIN_PRESETS);
-        this._store.set('presets', source as any);
+        this._store.set('presets', source);
     }
 
     /**
@@ -336,7 +383,7 @@ export class PresetManager {
 
         if (Array.isArray(archive.themes)) mergeList('themes', archive.themes);
         if (Array.isArray(archive.prompts)) mergeList('prompts', archive.prompts);
-        if (Array.isArray(archive.workflows)) mergeList('workflows', archive.workflows as any);
+        if (Array.isArray(archive.workflows)) mergeList('workflows', archive.workflows);
         if (isPlainObject(archive.drawing)) {
             for (const [engine, list] of Object.entries(archive.drawing)) {
                 if (Array.isArray(list)) {

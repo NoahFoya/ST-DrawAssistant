@@ -1,6 +1,13 @@
 /**
- * 图像二进制格式转换工具
- * 提供 Blob、Base64 与 ArrayBuffer 纯函数互转。
+ * 图像二进制格式转换工具 (ImageUtils)
+ *
+ * 核心功能：
+ * 1. 提供 Blob、Base64 与 ArrayBuffer 之间的高效互转纯函数；
+ * 2. 处理 Base64 Data URL 前缀剥离与补齐。
+ *
+ * 注意事项：
+ * 1. 在浏览器环境优先基于 FileReader 读取，环境不支持时降级至 Buffer 转换；
+ * 2. 大图转换时需注意异步避免主线程卡顿。
  */
 
 /**

@@ -6,12 +6,14 @@ export * from './st/context';
 export * from './st/events';
 export * from './st/chat';
 export * from './generation';
+export * from './engine-data';
 export * from './adapter';
 export * from './task';
 export * from './storage';
 export * from './preset';
 export * from './settings';
 export * from './ui';
+export * from './extension';
 
 /** 通用资源释放接口 */
 export interface IDisposable {

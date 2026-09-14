@@ -1,5 +1,14 @@
 /**
- * 引擎适配器接口定义
+ * 引擎适配器接口定义 (@types/adapter)
+ *
+ * 核心功能：
+ * 1. 声明生图引擎适配器的标准接口规范 (IEngineAdapter)；
+ * 2. 声明健康检查与连通性探测结果结构 (HealthCheckResult)；
+ * 3. 约束生图执行、任务中断与远端资产同步方法。
+ *
+ * 注意事项：
+ * 1. 接口输入参数泛型必须继承自 ImageGenerationParams；
+ * 2. 异步方法需支持通过 AbortSignal 响应外部取消操作。
  */
 
 import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult } from './generation';
@@ -21,7 +30,7 @@ export interface HealthCheckResult {
 }
 
 /** 引擎适配器标准接口 */
-export interface IEngineAdapter {
+export interface IEngineAdapter<TParams extends ImageGenerationParams = ImageGenerationParams> {
     /** 适配器唯一类型标识 */
     readonly id: EngineType;
     /** 显示名称 */
@@ -46,16 +55,16 @@ export interface IEngineAdapter {
 
     /**
      * 执行生图任务
-     * @param params 统一生图参数对象
+     * @param params 专属引擎原生生图参数对象
      * @param onProgress 进度更新回调函数（0.0 ~ 1.0）
      * @param signal 用于中止网络请求或长连接的 AbortSignal
      */
     generate(
-        params: ImageGenerationParams,
+        params: TParams,
         onProgress?: (progress: number) => void,
         signal?: AbortSignal
     ): Promise<ImageGenerationResult>;
 
-    /** 主动中止作业（若引擎支持） */
+    /** 主动中断生图任务（若引擎支持） */
     interrupt?(jobId?: string): Promise<void>;
 }

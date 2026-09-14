@@ -1,12 +1,26 @@
 /**
- * NovelAI 生图引擎适配器
- * 遵循 novelai-api-reference 与 st-image-gen 规范。
- * 支持 v4_prompt 参数组装、Bearer 鉴权与 ZIP 二进制流解包归一化。
+ * NovelAI 生图引擎适配器 (NovelAIAdapter)
+ *
+ * 核心功能：
+ * 1. 组装 NovelAI 官方格式生图请求，注入 Bearer 鉴权凭据；
+ * 2. 处理官方接口返回的 ZIP 压缩二进制流，提取并封装 PNG 图像 Blob；
+ * 3. 探测官方服务连通性与用户订阅点数 (Anlas) 资产余额；
+ * 4. 规范化生图响应元数据。
+ *
+ * 注意事项：
+ * 1. NovelAI 严格要求图像宽高为 64 的整倍数，超限或非法尺寸会导致服务端 400 校验拒绝；
+ * 2. 官方接口采用 ZIP 封包返回，需容错提取二进制中的 PNG 文件头 (Magic Number)。
  */
 
-import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type {
+    EngineCapabilities,
+    EngineType,
+    HealthCheckResult,
+    ImageGenerationResult,
+    NovelAIRequestData
+} from '@types';
 import { BaseAdapter } from './base';
-import type { HttpClient } from '../../util/http';
+import { NetworkError, type HttpClient } from '../../util/http';
 
 /**
  * 从 ZIP 流或二进制 Buffer 中提取 PNG 图像
@@ -57,7 +71,7 @@ export function extractPngBlob(buffer: ArrayBuffer): Blob {
     return new Blob([pngBytes], { type: 'image/png' });
 }
 
-export class NovelAIAdapter extends BaseAdapter {
+export class NovelAIAdapter extends BaseAdapter<NovelAIRequestData> {
     public readonly id: EngineType = 'novelai';
     public readonly name = 'NovelAI';
 
@@ -162,46 +176,61 @@ export class NovelAIAdapter extends BaseAdapter {
     }
 
     public async generate(
-        params: ImageGenerationParams,
+        params: NovelAIRequestData,
         onProgress?: (progress: number) => void,
         signal?: AbortSignal
     ): Promise<ImageGenerationResult> {
         const startTime = performance.now();
-        const apiKey = (params.extraParams?.apiKey as string) || this._apiKey;
+        const apiKey = this._apiKey;
         if (!apiKey) {
             throw new Error('NovelAI 生图请求缺少有效的 API Key');
         }
 
-        const resolvedSeed = params.seed > 0 ? params.seed : Math.floor(Math.random() * 1000000000);
         const endpoint = `${this.baseUrl}/ai/generate-image`;
 
-        const payload = {
-            input: params.prompt || '',
-            model: (params.extraParams?.model as string) || 'nai-diffusion-4-curated-preview',
-            action: 'generate',
+        const resolvedWidth = Math.max(64, Math.round((params.parameters.width || 832) / 64) * 64);
+        const resolvedHeight = Math.max(64, Math.round((params.parameters.height || 1216) / 64) * 64);
+
+        const requestBody = {
+            input: params.input || params.prompt || '',
+            model: params.model || 'nai-diffusion-4-5-full',
+            action: params.action || 'generate',
             parameters: {
-                width: params.width,
-                height: params.height,
-                scale: params.cfgScale ?? 6.0,
-                sampler: params.sampler ?? 'k_euler',
-                steps: params.steps ?? 28,
-                seed: resolvedSeed,
-                n_samples: 1,
-                ucPreset: 0,
-                qualityToggle: true,
-                negative_prompt: params.negativePrompt || ''
+                ...params.parameters,
+                width: resolvedWidth,
+                height: resolvedHeight
             }
         };
 
-        const resp = await this.httpClient.fetchExternal(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(payload),
-            signal
-        });
+        let resp: Response;
+        try {
+            resp = await this.fetchWithTransport(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody),
+                signal
+            }, params.transport);
+        } catch (err: any) {
+            if (err instanceof NetworkError || err?.status) {
+                const status = err.status;
+                let errMsg = `NovelAI 生图请求失败 (HTTP ${status})`;
+                if (status === 401) {
+                    errMsg = 'NovelAI 鉴权失败 (HTTP 401)，请核对 API Token 有效性';
+                } else if (status === 402) {
+                    errMsg = 'NovelAI 账户 Anlas 点数不足或订阅已失效 (HTTP 402)';
+                } else if (status === 429) {
+                    errMsg = 'NovelAI 触发并发限制或频率超限 (HTTP 429)';
+                } else if (err.details) {
+                    const detail = typeof err.details === 'object' ? (err.details.message || JSON.stringify(err.details)) : String(err.details);
+                    errMsg += `: ${detail}`;
+                }
+                throw new Error(errMsg);
+            }
+            throw err;
+        }
 
         const arrayBuffer = await resp.arrayBuffer();
         const blob = extractPngBlob(arrayBuffer);
@@ -213,12 +242,12 @@ export class NovelAIAdapter extends BaseAdapter {
         return {
             blob,
             mimeType: 'image/png',
-            width: params.width,
-            height: params.height,
-            seed: resolvedSeed,
+            width: resolvedWidth,
+            height: resolvedHeight,
+            seed: params.parameters.seed,
             durationMs: this.measureDuration(startTime),
             metadata: {
-                model: payload.model
+                model: requestBody.model
             }
         };
     }

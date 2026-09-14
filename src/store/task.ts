@@ -1,6 +1,15 @@
 /**
- * 生图任务状态机与并发队列调度管理器
- * 职责：管理任务生命周期流转、并发数限制调度、超时强断保护与跨会话切换隔离。
+ * 生图任务状态机与并发队列调度管理器 (src/store/task.ts)
+ *
+ * 核心功能：
+ * 1. 管理任务生命周期流转 (QUEUED -> RUNNING -> COMPLETED / CANCELLED / FAILED)；
+ * 2. 控制全局并发数调度与超时中断机制；
+ * 3. 维护任务执行队列、上下文身份识别与历史记录容量上限；
+ * 4. 分发细粒度生命周期事件并支持统一取消与资源释放。
+ *
+ * 注意事项：
+ * 1. 任务取消时通过关联的 AbortController 向下游执行器与网络层发出中断信号；
+ * 2. 超时计时器需在任务结束（完成/失败/取消）时确保清理，避免内存泄漏。
  */
 
 import type {
@@ -87,20 +96,25 @@ export class TaskQueueManager implements IDisposable {
 
     /**
      * 提交生图任务到调度队列
-     * @param params 统一生图请求参数
+     * @param params 统一生图请求参数（自带强类型 engine 标识）
      * @param context 上下文绑定信息 (锁定 chatId，可选绑定 messageId/swipeId/buttonIndex)
-     * @param engine 目标生图引擎标识
+     * @param engine 可选目标生图引擎标识（兼容调用，若提供将校验与 params.engine 一致性）
      */
     public submit(
         params: ImageGenerationParams,
         context: { chatId: string; messageId?: number; swipeId?: number; buttonIndex?: number },
-        engine: EngineType | string
+        engine?: EngineType | string
     ): string {
         if (this._isDisposed) {
             throw new Error('TaskQueueManager 已注销，无法接收新任务');
         }
 
         this._trimHistory();
+
+        const targetEngine: EngineType = (params.engine || engine || 'comfyui') as EngineType;
+        if (engine && params.engine && engine !== params.engine) {
+            console.warn(`[ST-DrawAssistant][TaskQueueManager] 提交任务指定的 engine (${engine}) 与 params.engine (${params.engine}) 不一致，已自动以 params.engine 为准`);
+        }
 
         const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const identity: TaskContextIdentity = {
@@ -114,7 +128,7 @@ export class TaskQueueManager implements IDisposable {
         const task: InternalTaskItem = {
             id: taskId,
             identity,
-            engine,
+            engine: targetEngine,
             params,
             status: 'PENDING',
             progress: 0,

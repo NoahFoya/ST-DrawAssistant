@@ -1,9 +1,17 @@
 /**
- * 引擎适配器注册中心与工厂
- * 提供生图引擎单例字典检索与统一访问。
+ * 引擎适配器注册表 (src/function/adapter/registry.ts)
+ *
+ * 核心功能：
+ * 1. 注册与单例缓存各绘图引擎适配器实例 (sdwebui, comfyui, novelai, openai)；
+ * 2. 提供强类型重载的适配器获取方法 `getAdapter(type)`；
+ * 3. 允许动态注入或替换适配器（用于扩展或单元测试 Mock）。
+ *
+ * 注意事项：
+ * 1. 适配器实例在模块加载时即注册默认单例；
+ * 2. 检索未注册引擎类型时显式抛出 Error。
  */
 
-import type { EngineType, IEngineAdapter } from '@types';
+import type { EngineType, IEngineAdapter, ImageGenerationParams } from '@types';
 import { SdWebUIAdapter } from './sdwebui';
 import { ComfyUIAdapter } from './comfyui';
 import { NovelAIAdapter } from './novelai';
@@ -18,8 +26,13 @@ adapterRegistry.set('novelai', new NovelAIAdapter());
 adapterRegistry.set('openai', new OpenAIAdapter());
 
 /**
- * 根据引擎类型获取对应的适配器实例
+ * 根据引擎类型获取对应的适配器实例（支持具体引擎类型的强类型推导）
  */
+export function getAdapter(type: 'sdwebui'): SdWebUIAdapter;
+export function getAdapter(type: 'comfyui'): ComfyUIAdapter;
+export function getAdapter(type: 'novelai'): NovelAIAdapter;
+export function getAdapter(type: 'openai'): OpenAIAdapter;
+export function getAdapter<TParams extends ImageGenerationParams = ImageGenerationParams>(type: EngineType): IEngineAdapter<TParams>;
 export function getAdapter(type: EngineType): IEngineAdapter {
     const adapter = adapterRegistry.get(type);
     if (!adapter) {

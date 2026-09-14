@@ -1,6 +1,14 @@
 /**
- * 强类型事件总线与资源释放管理
- * 提供模块间事件发布与订阅机制，具备单订阅者异常隔离保护与注销能力，防止事件闭包内存泄漏。
+ * 强类型事件总线与资源释放管理 (src/util/event-bus.ts)
+ *
+ * 核心功能：
+ * 1. 提供模块间强类型事件的发布与订阅机制 (on, once, emit)；
+ * 2. 具备单订阅者异常隔离保护，单个回调报错不会阻断其他订阅者；
+ * 3. 规范返回 IDisposable 注销句柄，支持组件销毁时彻底解绑防止闭包内存泄漏。
+ *
+ * 注意事项：
+ * 1. 业务组件卸载时必须调用返回的 dispose() 或集中注销监听；
+ * 2. 广播处理中禁止执行耗时过长的同步阻塞代码。
  */
 
 import { Logger } from './logger';
@@ -24,7 +32,7 @@ export function toDisposable(fn: () => void): IDisposable {
     };
 }
 
-export type EventHandler<T> = (payload: T) => void;
+export type EventHandler<T> = (data: T) => void;
 
 export class TypedEventBus<TEventMap extends Record<string, any>> implements IDisposable {
     private readonly _listeners = new Map<keyof TEventMap, Set<EventHandler<any>>>();
@@ -67,10 +75,10 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
         }
 
         let subscription: IDisposable | null = null;
-        const wrappedHandler: EventHandler<TEventMap[K]> = (payload) => {
+        const wrappedHandler: EventHandler<TEventMap[K]> = (data) => {
             subscription?.dispose();
             subscription = null;
-            handler(payload);
+            handler(data);
         };
 
         subscription = this.on(event, wrappedHandler);
@@ -81,7 +89,7 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
      * 广播事件。
      * 单个处理函数内部异常会被捕获并记录日志，防止阻断其余订阅者的正常执行。
      */
-    public emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]): void {
+    public emit<K extends keyof TEventMap>(event: K, data: TEventMap[K]): void {
         if (this._isDisposed) return;
 
         const handlers = this._listeners.get(event);
@@ -89,7 +97,7 @@ export class TypedEventBus<TEventMap extends Record<string, any>> implements IDi
 
         for (const handler of Array.from(handlers)) {
             try {
-                handler(payload);
+                handler(data);
             } catch (err) {
                 this._logger.error(`事件处理器执行异常 [${String(event)}]`, err);
             }

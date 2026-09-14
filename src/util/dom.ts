@@ -1,6 +1,14 @@
 /**
- * DOM 辅助与文本安全工具
- * 提供原生 DOM 构造、HTML 实体转义与基础显示格式化函数。
+ * DOM 辅助与文本安全工具 (src/util/dom.ts)
+ *
+ * 核心功能：
+ * 1. 提供原生 DOM 节点的声明式创建与属性/事件装配 (createElement)；
+ * 2. 提供 HTML 实体安全转义 (escapeHtml)，防止拼接文本引起 XSS 注入；
+ * 3. 提供数值闭区间限制 (clamp)、存储字节友好格式化 (formatBytes) 与十六进制颜色规范化 (normalizeHex)。
+ *
+ * 注意事项：
+ * 1. createElement 依赖浏览器宿主 DOM API，在非 DOM 运行时环境中不可调用；
+ * 2. 拼接 HTML 字符串时必须使用 escapeHtml 转义外部不可信输入。
  */
 
 export interface ElementOptions {

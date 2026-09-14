@@ -1,9 +1,14 @@
 /**
- * 提示词业务装配流水线 (Prompt Pipeline)
- * 职责：
- * 1. 纯函数式串联提示词清洗、管道符切分、世界书外观标签展开、插件正则规则与画风预设拼装；
- * 2. 宿主原生宏安全委托调用（不自造酒馆宏引擎）；
- * 3. 分离 LoRA 语法与工作流变量，仅输出纯净标准的正负向提示词。
+ * 提示词装配流水线 (src/function/pipeline/pipeline.ts)
+ *
+ * 核心功能：
+ * 1. 串联提示词清洗、管道符切分、世界书外观标签展开、正则规则与画风预设拼装；
+ * 2. 宿主原生宏安全委托调用（委托给 SillyTavern.getContext().substituteParams）；
+ * 3. 标签去重与格式规范化，输出正负向提示词字符串。
+ *
+ * 注意事项：
+ * 1. 纯函数设计，不直接读取或污染全局状态；
+ * 2. 宏展开失败时不应中断整个流水线，保留原样文本并告警。
  */
 
 import {
@@ -11,6 +16,7 @@ import {
     separatePromptByPipe,
     joinPromptParts,
     sanitizeMessageText,
+    deduplicatePromptTags,
     applyTextReplacements,
     applyRegexRules,
     RegexReplacementRule
@@ -56,6 +62,8 @@ export interface PromptPipelineOptions {
     substituteParamsProvider?: (text: string) => string;
     /** 上下文元数据 */
     context?: MacroMatchContext;
+    /** 是否执行标签排重与清理（默认 true） */
+    cleanPrompt?: boolean;
 }
 
 export interface ProcessedPromptResult {
@@ -104,7 +112,7 @@ function applyMacroRuleReplacements(
 
 /**
  * 执行提示词处理流水线
- * 依次执行：干扰过滤 -> 管道符切分 -> 插件正则 -> 世界书外观替换 -> 宿主宏替换 -> 画风预设拼装 -> 标点符号清理与规范化
+ * 依次执行：干扰过滤 -> 管道符切分 -> 插件正则 -> 世界书外观替换 -> 宿主宏替换 -> 画风预设拼装 -> 标签排重 -> 标点符号清理与规范化
  */
 export function processPrompt(options: PromptPipelineOptions): ProcessedPromptResult {
     const rawInput = options.rawPrompt || '';
@@ -143,7 +151,7 @@ export function processPrompt(options: PromptPipelineOptions): ProcessedPromptRe
         negative = applyMacroRuleReplacements(negative, options.macroRules, matchContext);
     }
 
-    // 6. 宿主原生宏安全委托展开
+    // 6. 宿主原生宏委托展开
     if (typeof options.substituteParamsProvider === 'function') {
         positive = options.substituteParamsProvider(positive);
         negative = options.substituteParamsProvider(negative);
@@ -153,7 +161,13 @@ export function processPrompt(options: PromptPipelineOptions): ProcessedPromptRe
     positive = joinPromptParts(options.prefix, positive, options.suffix);
     negative = joinPromptParts(options.defaultNegative, negative);
 
-    // 8. 标点符号清理与规范化
+    // 8. 提示词标签排重与清理 (cleanPrompt: 默认开启)
+    if (options.cleanPrompt !== false) {
+        positive = deduplicatePromptTags(positive);
+        negative = deduplicatePromptTags(negative);
+    }
+
+    // 9. 标点符号清理与规范化
     positive = normalizePromptPunctuation(positive);
     negative = normalizePromptPunctuation(negative);
 

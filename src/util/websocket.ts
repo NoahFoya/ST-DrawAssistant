@@ -1,7 +1,15 @@
 /**
- * WebSocket 长连接客户端与事件订阅器
- * 提供心跳保活、半开连接强断、断线指数退避自动重连与发送状态守卫。
- * 遵循 browser-network-api 规范。
+ * WebSocket 长连接客户端 (WebSocketClient)
+ *
+ * 核心功能：
+ * 1. 建立与远端长连接信道（如 ComfyUI 进度推送），支持文本与二进制帧数据解析；
+ * 2. 提供可配置的心跳检测与半开连接主动断开与资源清理机制；
+ * 3. 实现带有随机抖动 (Jitter) 的指数退避断线自动重连；
+ * 4. 维护连接就绪状态，阻断非法连接态下的消息发送。
+ *
+ * 注意事项：
+ * 1. 主动关闭连接或组件销毁时必须彻底清理所有心跳计时器与内部回调，防止内存泄漏；
+ * 2. 避免在不可恢复的握手失败场景中持续死循环重连。
  */
 
 import { Logger } from './logger';
@@ -12,7 +20,7 @@ export interface WebSocketClientOptions {
     heartbeatIntervalMs?: number;
     /** 心跳响应等待超时毫秒数，超出后判定半开并强制断开，默认 5000ms */
     pongTimeoutMs?: number;
-    /** 心跳载荷内容，若为空则不发送载荷仅做静默保活检测 */
+    /** 心跳消息内容，若为空则不发送数据仅做静默连接检测 */
     pingPayload?: string;
     /** 最大自动重连次数，默认 10 */
     reconnectMaxAttempts?: number;
@@ -76,7 +84,7 @@ export class ResilientWebSocket {
                 }
             };
 
-            const handleFirstError = (_ev: Event) => {
+            const handleFirstError = (_ev: unknown) => {
                 if (!settled) {
                     settled = true;
                     reject(new Error(`WebSocket 连接失败 [${this._options.url}]`));
@@ -87,14 +95,14 @@ export class ResilientWebSocket {
         });
     }
 
-    private internalConnect(onFirstOpen?: () => void, onFirstError?: (ev: Event) => void): void {
+    private internalConnect(onFirstOpen?: () => void, onFirstError?: (ev: unknown) => void): void {
         this.clearTimers();
 
         try {
             this._ws = new WebSocket(this._options.url);
         } catch (err) {
             this._logger.error(`创建底层 WebSocket 实例失败 [${this._options.url}]`, err);
-            onFirstError?.(err as any);
+            onFirstError?.(err);
             this.scheduleReconnect();
             return;
         }
@@ -175,7 +183,7 @@ export class ResilientWebSocket {
     }
 
     /**
-     * 启动应用层心跳保活检测。
+     * 启动应用层心跳检测。
      */
     private startHeartbeat(): void {
         if (this._options.heartbeatIntervalMs <= 0) return;

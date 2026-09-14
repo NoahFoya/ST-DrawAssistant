@@ -20,6 +20,8 @@ export type IconName =
     | 'help'
     | 'trash'
     | 'copy'
+    | 'edit'
+    | 'chevron-up'
     | 'chevron-down'
     | 'close'
     | 'external'
@@ -41,7 +43,7 @@ export interface IControlHandle<T> {
     /** 获取当前组件的值 */
     getValue(): T;
     /** 设置组件的值 */
-    setValue(val: T): void;
+    setValue(val: T extends object ? Partial<T> : T): void;
     /** 设置控件启用/禁用状态 */
     setDisabled(disabled: boolean): void;
     /** 设置控件未保存修改状态 (呈现琥珀色微光 .is-dirty) */
@@ -87,7 +89,7 @@ export type ConnectionCardStatus = 'idle' | 'checking' | 'online' | 'offline';
 export type HealthCheckFn = (signal?: AbortSignal) => Promise<HealthCheckResult>;
 
 /** 预设工具栏操作类型 */
-export type PresetActionType = 'select' | 'new' | 'save' | 'saveAs' | 'import' | 'export' | 'reset' | 'delete';
+export type PresetActionType = 'select' | 'new' | 'save' | 'saveAs' | 'rename' | 'import' | 'export' | 'reset' | 'delete';
 
 /** 单个 LoRA 项展示与编辑模型 */
 export interface LoraItemModel {
@@ -97,30 +99,46 @@ export interface LoraItemModel {
     modelWeight: number;
     clipWeight: number;
     triggerWeight?: number;
-    isMissing?: boolean;
+    /** 模型是否已失效（未在当前生图服务中发现） */
+    isInvalid?: boolean;
 }
 
-/** 工作流模板展示与诊断数据模型 */
-export interface WorkflowCardModel {
-    id: string;
-    title: string;
-    description?: string;
-    version?: string;
-    author?: string;
-    nodesCount?: number;
-    variables: {
-        prompt: boolean;
-        negativePrompt: boolean;
-        seed: boolean;
-        width: boolean;
-        height: boolean;
-        steps: boolean;
-        cfg: boolean;
-        sampler: boolean;
-        scheduler: boolean;
-        modelName: boolean;
-    };
-    rawJson?: Record<string, any>;
+/** ComfyUI 工作流变量占位符定义 */
+export interface ComfyWorkflowVariableDefinition {
+    variable: string;
+    label: string;
+    matchKeys: readonly string[];
+    tip: string;
+}
+
+/** 工作流变量替换映射详情 */
+export interface VariableReplacementInfo {
+    variable: string;
+    nodeId: string;
+    classType: string;
+    field: string;
+    prevValue: unknown;
+}
+
+/** 未匹配的工作流变量信息 */
+export interface UnmatchedVariableInfo {
+    variable: string;
+    label: string;
+    tip: string;
+}
+
+/** 工作流变量深度扫描与替换分析结果 */
+export interface WorkflowAnalysisResult {
+    success: boolean;
+    error?: string;
+    formattedJson: string;
+    replaced: VariableReplacementInfo[];
+    unmatched: UnmatchedVariableInfo[];
+}
+
+/** 工作流预设方案数据模型 */
+export interface WorkflowPresetData extends Record<string, any> {
+    json: string;
 }
 
 /** 统计卡片条目数据模型 */
@@ -252,11 +270,13 @@ export interface UIHandle {
     readonly imageInfo: any;
     readonly inpaintModal: any;
     readonly workflowModal: any;
+    readonly actionPanel?: any;
     openModal(tabId?: string): void;
     closeModal(): void;
     openWorkflowBlueprint(workflowId: string, json: string, onSave?: (newJson: string) => void): void;
     openLightbox(items: MediaCardItemModel[], startIndex?: number): void;
     openImageInfo(record: StoredImageRecord): void;
     openInpaint(blob: Blob): void;
+    openActionPanel?(data: any): void;
     dispose(): void;
 }

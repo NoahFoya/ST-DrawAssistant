@@ -1,16 +1,31 @@
 /**
- * SD-WebUI / Forge 生图引擎适配器
- * 遵循 sd-webui-api-reference 与 st-image-gen 规范。
- * 支持 txt2img、img2img、A1111 LoRA 语法拼装、进度轮询与作业中断。
+ * SD-WebUI / Forge 生图引擎适配器 (SdWebUIAdapter)
+ *
+ * 核心功能：
+ * 1. 对接 SD-WebUI 与 Forge 的 txt2img 及 img2img REST 接口；
+ * 2. 负责将 LoRA 列表转换为 A1111 格式的 `<lora:name:weight>` 提示词标签；
+ * 3. 支持服务端生成作业的实时中断 (POST /sdapi/v1/interrupt)；
+ * 4. 同步远端 Checkpoint 模型与采样器列表，执行连通性探测。
+ *
+ * 注意事项：
+ * 1. 针对 A1111 与 Forge 等变种，采样器名称与参数字段可能存在微小差异，需做兼容解析；
+ * 2. 接口返回的 Base64 图片数据需转换为二进制 Blob，并提取 PNG Info 元数据。
  */
 
-import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type {
+    EngineCapabilities,
+    EngineType,
+    HealthCheckResult,
+    ImageGenerationResult,
+    SdWebUIRequestData,
+    SdWebUIResponseData
+} from '@types';
 import { BaseAdapter } from './base';
-import { base64ToBlob, blobToBase64 } from '../../util/image';
-import { formatLoraTag, type LoraFormatItem } from '../../util/prompt';
+import { base64ToBlob } from '../../util/image';
+import { formatLoraTag } from '../../util/prompt';
 import type { HttpClient } from '../../util/http';
 
-export class SdWebUIAdapter extends BaseAdapter {
+export class SdWebUIAdapter extends BaseAdapter<SdWebUIRequestData> {
     public readonly id: EngineType = 'sdwebui';
     public readonly name = 'SD-WebUI / Forge';
 
@@ -38,7 +53,7 @@ export class SdWebUIAdapter extends BaseAdapter {
 
         const start = performance.now();
         try {
-            // 1. 探活探测 /sdapi/v1/options
+            // 1. 连通性探测 /sdapi/v1/options
             const probeResp = await this.httpClient.fetchExternal(`${this.baseUrl}/sdapi/v1/options?_t=${Date.now()}`, {
                 method: 'GET',
                 timeoutMs: 6000,
@@ -134,7 +149,7 @@ export class SdWebUIAdapter extends BaseAdapter {
      * 执行 SD-WebUI 生图请求
      */
     public async generate(
-        params: ImageGenerationParams,
+        params: SdWebUIRequestData,
         onProgress?: (progress: number) => void,
         signal?: AbortSignal
     ): Promise<ImageGenerationResult> {
@@ -142,7 +157,7 @@ export class SdWebUIAdapter extends BaseAdapter {
 
         // 1. 组装正向提示词（包含 A1111 语法 LoRA 标签）
         let finalPrompt = params.prompt || '';
-        const loras = params.extraParams?.loras as LoraFormatItem[] | undefined;
+        const loras = params.loras;
         if (Array.isArray(loras) && loras.length > 0) {
             const loraTags = loras.map(l => formatLoraTag(l, 'webui')).filter(Boolean);
             if (loraTags.length > 0) {
@@ -151,35 +166,47 @@ export class SdWebUIAdapter extends BaseAdapter {
         }
 
         // 2. 检查图生图输入源
-        let sourceBase64: string | undefined;
-        if (params.sourceImage) {
-            if (typeof params.sourceImage === 'string') {
-                sourceBase64 = params.sourceImage;
-            } else if (params.sourceImage instanceof Blob) {
-                sourceBase64 = await blobToBase64(params.sourceImage);
-            }
-        }
-
-        const isImg2Img = Boolean(sourceBase64);
+        const initImages = Array.isArray(params.init_images) && params.init_images.length > 0
+            ? params.init_images
+            : undefined;
+        const isImg2Img = Boolean(initImages);
         const endpoint = `${this.baseUrl}/sdapi/v1/${isImg2Img ? 'img2img' : 'txt2img'}`;
 
-        // 3. 构建请求体载荷
-        const payload: Record<string, unknown> = {
+        // 3. 构建发往后端的请求数据
+        const requestBody: Record<string, unknown> = {
             prompt: finalPrompt,
-            negative_prompt: params.negativePrompt || '',
+            negative_prompt: params.negative_prompt ?? params.negativePrompt ?? '',
             steps: params.steps ?? 20,
-            cfg_scale: params.cfgScale ?? 7.0,
+            cfg_scale: params.cfg_scale ?? 7.0,
             width: params.width,
             height: params.height,
             seed: params.seed ?? -1,
-            sampler_name: params.sampler || 'Euler a',
-            ...(params.scheduler ? { scheduler: params.scheduler } : {}),
-            ...(params.extraParams?.override_settings ? { override_settings: params.extraParams.override_settings } : {})
+            sampler_name: params.sampler_name ?? 'Euler a'
         };
 
-        if (isImg2Img && sourceBase64) {
-            payload.init_images = [sourceBase64];
-            payload.denoising_strength = params.denoisingStrength ?? 0.75;
+        if (params.scheduler) {
+            requestBody.scheduler = params.scheduler;
+        }
+        if (params.override_settings) {
+            requestBody.override_settings = params.override_settings;
+            requestBody.override_settings_restore_afterwards = params.override_settings_restore_afterwards ?? true;
+        }
+        if (params.restore_faces !== undefined) requestBody.restore_faces = params.restore_faces;
+        if (params.tiling !== undefined) requestBody.tiling = params.tiling;
+        if (params.enable_hr !== undefined) requestBody.enable_hr = params.enable_hr;
+        if (params.hr_scale !== undefined) requestBody.hr_scale = params.hr_scale;
+        if (params.hr_upscaler !== undefined) requestBody.hr_upscaler = params.hr_upscaler;
+        if (params.hr_second_pass_steps !== undefined) requestBody.hr_second_pass_steps = params.hr_second_pass_steps;
+
+        if (isImg2Img && initImages) {
+            requestBody.init_images = initImages;
+            requestBody.denoising_strength = params.denoising_strength ?? 0.75;
+            if (params.mask) requestBody.mask = params.mask;
+            if (params.mask_blur !== undefined) requestBody.mask_blur = params.mask_blur;
+            if (params.inpainting_fill !== undefined) requestBody.inpainting_fill = params.inpainting_fill;
+            if (params.inpaint_full_res !== undefined) requestBody.inpaint_full_res = params.inpaint_full_res;
+            if (params.inpaint_full_res_padding !== undefined) requestBody.inpaint_full_res_padding = params.inpaint_full_res_padding;
+            if (params.inpainting_mask_invert !== undefined) requestBody.inpainting_mask_invert = params.inpainting_mask_invert;
         }
 
         // 4. 进度轮询器（若传入进度回调）
@@ -187,9 +214,10 @@ export class SdWebUIAdapter extends BaseAdapter {
         if (onProgress) {
             progressTimer = setInterval(async () => {
                 try {
-                    const progResp = await this.httpClient.fetchExternal(
+                    const progResp = await this.fetchWithTransport(
                         `${this.baseUrl}/sdapi/v1/progress?skip_current_image=true`,
-                        { method: 'GET', signal }
+                        { method: 'GET', signal },
+                        params.transport
                     );
                     if (progResp.ok) {
                         const data = await progResp.json();
@@ -205,19 +233,19 @@ export class SdWebUIAdapter extends BaseAdapter {
 
         try {
             // 5. 发送生图请求
-            const resp = await this.httpClient.fetchExternal(endpoint, {
+            const resp = await this.fetchWithTransport(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(requestBody),
                 signal
-            });
+            }, params.transport);
 
-            const resultData = await resp.json();
+            const resultData: SdWebUIResponseData = await resp.json();
             if (!resultData.images || !Array.isArray(resultData.images) || resultData.images.length === 0) {
                 throw new Error('SD-WebUI 服务未返回图像数据');
             }
 
-            const rawImageStr = resultData.images[0] as string;
+            const rawImageStr = resultData.images[0];
             const blob = base64ToBlob(rawImageStr, 'image/png');
 
             // 解析实际种子
@@ -260,7 +288,7 @@ export class SdWebUIAdapter extends BaseAdapter {
      */
     public override async interrupt(): Promise<void> {
         try {
-            await this.httpClient.fetchExternal(`${this.baseUrl}/sdapi/v1/interrupt`, {
+            await this.fetchWithTransport(`${this.baseUrl}/sdapi/v1/interrupt`, {
                 method: 'POST'
             });
             this.logger.info('已向 SD-WebUI 发送中断请求');

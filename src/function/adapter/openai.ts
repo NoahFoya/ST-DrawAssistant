@@ -1,15 +1,30 @@
 /**
- * OpenAI-Compatible 生图引擎适配器
- * 遵循 openai-compatible-image-api 与 st-image-gen 规范。
- * 支持 /v1/images/generations 调用与 b64_json 解码归一化。
+ * OpenAI 兼容生图引擎适配器 (OpenAIAdapter)
+ *
+ * 核心功能：
+ * 1. 调用各厂商标准 `/v1/images/generations` 接口发起图像生成；
+ * 2. 处理返回的 Base64 编码图像数据 (b64_json) 并转换为二进制图片 Blob；
+ * 3. 支持厂商特有自定义请求头与 Body 扩展参数注入；
+ * 4. 执行连通性探测与模型列表同步。
+ *
+ * 注意事项：
+ * 1. 优先请求 `b64_json` 响应格式，避免部分云厂商返回带有效期的临时外链导致失效；
+ * 2. 需捕获各中转厂商特异的错误信息体，提取清晰明了的失败原因给用户。
  */
 
-import type { EngineCapabilities, EngineType, HealthCheckResult, ImageGenerationParams, ImageGenerationResult } from '@types';
+import type {
+    EngineCapabilities,
+    EngineType,
+    HealthCheckResult,
+    ImageGenerationResult,
+    OpenAIRequestData,
+    OpenAIResponseData
+} from '@types';
 import { BaseAdapter } from './base';
 import { base64ToBlob } from '../../util/image';
-import type { HttpClient } from '../../util/http';
+import { NetworkError, type HttpClient } from '../../util/http';
 
-export class OpenAIAdapter extends BaseAdapter {
+export class OpenAIAdapter extends BaseAdapter<OpenAIRequestData> {
     public readonly id: EngineType = 'openai';
     public readonly name = 'OpenAI-Compatible';
 
@@ -35,7 +50,7 @@ export class OpenAIAdapter extends BaseAdapter {
     }
 
     /**
-     * OpenAI 兼容端点连通性探测与可用模型列表拉取 (/models)
+     * OpenAI 兼容服务地址连通性探测与可用模型列表拉取 (/models)
      */
     public override async fetchAssets(
         signal?: AbortSignal,
@@ -127,21 +142,32 @@ export class OpenAIAdapter extends BaseAdapter {
     }
 
     public async generate(
-        params: ImageGenerationParams,
+        params: OpenAIRequestData,
         onProgress?: (progress: number) => void,
         signal?: AbortSignal
     ): Promise<ImageGenerationResult> {
         const startTime = performance.now();
-        const apiKey = (params.extraParams?.apiKey as string) || this._apiKey;
+        const apiKey = this._apiKey;
         const endpoint = `${this.baseUrl}/v1/images/generations`;
 
-        const payload: Record<string, unknown> = {
+        const [widthStr, heightStr] = (params.size || '1024x1024').split('x');
+        const width = parseInt(widthStr, 10) || 1024;
+        const height = parseInt(heightStr, 10) || 1024;
+
+        const requestBody: Record<string, unknown> = {
             prompt: params.prompt || '',
-            model: (params.extraParams?.model as string) || 'dall-e-3',
-            size: `${params.width}x${params.height}`,
-            response_format: 'b64_json',
+            model: params.model || 'dall-e-3',
+            size: params.size || `${width}x${height}`,
+            response_format: params.response_format || 'b64_json',
             n: 1
         };
+
+        if (params.quality) {
+            requestBody.quality = params.quality;
+        }
+        if (params.style) {
+            requestBody.style = params.style;
+        }
 
         const headers: Record<string, string> = {
             'Content-Type': 'application/json'
@@ -150,14 +176,41 @@ export class OpenAIAdapter extends BaseAdapter {
             headers.Authorization = `Bearer ${apiKey}`;
         }
 
-        const resp = await this.httpClient.fetchExternal(endpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload),
-            signal
-        });
+        let resp: Response;
+        try {
+            resp = await this.fetchWithTransport(endpoint, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(requestBody),
+                signal
+            }, params.transport);
+        } catch (err: any) {
+            if (err instanceof NetworkError || err?.status) {
+                const status = err.status;
+                const errData = err.details;
+                const detail = errData?.error?.message || errData?.message || (typeof errData === 'string' ? errData : '');
+                let errMsg = `OpenAI 生图请求失败 (HTTP ${status})`;
+                if (detail) {
+                    if (status === 401) {
+                        errMsg = `OpenAI 鉴权失败 (HTTP 401): ${detail}`;
+                    } else if (status === 429) {
+                        errMsg = `OpenAI 触发频率限制或配额耗尽 (HTTP 429): ${detail}`;
+                    } else if (status === 400) {
+                        errMsg = `OpenAI 请求参数不合法或被安全策略拦截 (HTTP 400): ${detail}`;
+                    } else {
+                        errMsg = `OpenAI 服务返回错误 (HTTP ${status}): ${detail}`;
+                    }
+                } else if (status === 401) {
+                    errMsg = 'OpenAI 鉴权失败 (HTTP 401)，请核对 API Key 有效性';
+                } else if (status === 429) {
+                    errMsg = 'OpenAI 触发频率限制或配额耗尽 (HTTP 429)';
+                }
+                throw new Error(errMsg);
+            }
+            throw err;
+        }
 
-        const data = await resp.json();
+        const data: OpenAIResponseData = await resp.json();
         if (!data || !Array.isArray(data.data) || data.data.length === 0) {
             throw new Error(`OpenAI 响应未包含有效图像数据: ${JSON.stringify(data)}`);
         }
@@ -182,12 +235,12 @@ export class OpenAIAdapter extends BaseAdapter {
         return {
             blob,
             mimeType: blob.type || 'image/png',
-            width: params.width,
-            height: params.height,
-            seed: params.seed > 0 ? params.seed : 0,
+            width,
+            height,
+            seed: 0,
             durationMs: this.measureDuration(startTime),
             metadata: {
-                model: payload.model,
+                model: params.model,
                 revisedPrompt: item.revised_prompt
             }
         };

@@ -1,7 +1,15 @@
 /**
- * 提示词纯文本与正则基础算法工具集
- * 提供标点归一化、管道符切分、安全拼接、思考链过滤、占位符提取、文本替换与 LoRA 语法生成
- * 纯函数设计，不依赖外部环境、DOM 或持久化状态
+ * 提示词处理与文本算法工具集 (PromptUtils)
+ *
+ * 核心功能：
+ * 1. 提供中文全角转半角标点符号清洗、前后缀拼接与标签去重；
+ * 2. 过滤模型思考链与无关叙述文本，提取标准生图占位符与负向提示词；
+ * 3. 针对不同生图后端，将 LoRA 模型列表格式化为对应的特定语法（如 A1111 与 WeiLin 格式）；
+ * 4. 提供宏规则与正则替换算法。
+ *
+ * 注意事项：
+ * 1. 所有函数均为无状态纯函数设计，不依赖外部 DOM、全局变量或网络环境；
+ * 2. 需处理特殊标点嵌套与括号平衡，避免提示词语法截断。
  */
 
 export interface ExtractedPlaceholder {
@@ -226,4 +234,61 @@ export function formatLoraTag(lora: LoraFormatItem, syntax: 'webui' | 'weilin' =
     }
 
     return `<lora:${cleanName}:${modelWeight}>`;
+}
+
+/**
+ * 提示词标签排重与清理算法
+ * 职责：
+ * 1. 按英文半角逗号分词，规整各标签首尾空白；
+ * 2. 识别并保护 LoRA 标签 (<lora:...> 与 <wlr:...>)，避免语法被误伤；
+ * 3. 提取括号权重标签 (如 `(masterpiece:1.2)`, `{masterpiece}`) 的基础核心词，进行大小写不敏感排重；
+ * 4. 自动剔除重复词项与空项，规整标点符号连接。
+ */
+export function deduplicatePromptTags(text: string): string {
+    if (!text || typeof text !== 'string') {
+        return '';
+    }
+
+    const normalized = normalizePromptPunctuation(text);
+    if (!normalized) {
+        return '';
+    }
+
+    const rawTags = normalized.split(',');
+    const seen = new Set<string>();
+    const resultTags: string[] = [];
+
+    for (const raw of rawTags) {
+        const tag = raw.trim();
+        if (!tag) continue;
+
+        // LoRA 与特殊语法保护
+        if (/^<(?:lora|wlr):[^>]+>$/i.test(tag)) {
+            const match = tag.match(/^<(?:lora|wlr):([^:>]+)/i);
+            const loraKey = match ? `lora:${match[1].toLowerCase()}` : tag.toLowerCase();
+            if (!seen.has(loraKey)) {
+                seen.add(loraKey);
+                resultTags.push(tag);
+            }
+            continue;
+        }
+
+        // 普通标签或括号权重标签处理
+        const coreKey = tag
+            .toLowerCase()
+            .replace(/^[([{<]+|[)\]}>]+$/g, '')
+            .replace(/:[\d.]+\s*$/, '')
+            .trim();
+
+        if (!coreKey) {
+            continue;
+        }
+
+        if (!seen.has(coreKey)) {
+            seen.add(coreKey);
+            resultTags.push(tag);
+        }
+    }
+
+    return resultTags.join(', ');
 }

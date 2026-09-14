@@ -26,6 +26,16 @@ export interface SillyTavernEventTypes {
     readonly SETTINGS_UPDATED: 'settings_updated';
     /** 生图提示词预处理事件（允许其他扩展协作调整） */
     readonly SD_PROMPT_PROCESSING: 'sd_prompt_processing';
+    /** 宿主 AI 文本生成结束（单次完整轮次定稿），用于触发自动生图 */
+    readonly GENERATION_ENDED: 'generation_ended';
+    /** 左右滑动切换消息候选分支 */
+    readonly MESSAGE_SWIPED: 'message_swiped';
+    /** 消息已编辑 */
+    readonly MESSAGE_EDITED?: 'message_edited';
+    /** 消息已删除 */
+    readonly MESSAGE_DELETED?: 'message_deleted';
+    /** 支持动态扩展事件名访问 */
+    readonly [key: string]: string | undefined;
 }
 
 export interface SillyTavernEventSource {

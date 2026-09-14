@@ -1,6 +1,14 @@
 /**
- * 统一生图参数、响应结果与传输模式类型定义
- * 来源规范：st-image-gen 规范（意图与后端载荷分离、双通道请求、结果归一化）
+ * 统一生图参数、响应结果与传输模式类型定义 (@types/generation)
+ *
+ * 核心功能：
+ * 1. 定义生图引擎类型标识 (EngineType) 与网络传输模式 (TransportMode)；
+ * 2. 声明统一强类型生图任务输入参数 (ImageGenerationParams) 与标准化生图结果模型 (ImageGenerationResult)；
+ * 3. 声明各生图引擎的能力特性矩阵 (EngineCapabilities)。
+ *
+ * 注意事项：
+ * 1. 业务逻辑层与具体引擎实现解耦，统一通过该模块声明的类型进行交互；
+ * 2. 传输模式支持 SillyTavern 宿主中继与浏览器直接通信，根据服务地址协议与跨域策略自动判定。
  */
 
 /** 生图引擎类型标识 */
@@ -14,35 +22,10 @@ export type EngineType = 'sdwebui' | 'comfyui' | 'novelai' | 'openai';
  */
 export type TransportMode = 'relay' | 'direct' | 'auto';
 
-/** 统一生图请求参数对象（领域意图，独立于各后端私有请求结构） */
-export interface ImageGenerationParams {
-    /** 正向提示词 */
-    prompt: string;
-    /** 负向提示词 */
-    negativePrompt?: string;
-    /** 图像宽度（像素） */
-    width: number;
-    /** 图像高度（像素） */
-    height: number;
-    /** 随机种子（-1 表示由后端随机生成） */
-    seed: number;
-    /** 采样迭代步数 */
-    steps?: number;
-    /** 提示词引导系数 (CFG Scale) */
-    cfgScale?: number;
-    /** 采样算法名称 */
-    sampler?: string;
-    /** 调度器算法名称 */
-    scheduler?: string;
-    /** 传输通道偏好 */
-    transport?: TransportMode;
-    /** 图生图或重绘输入图片（Base64 或 Blob 引用） */
-    sourceImage?: Blob | string;
-    /** 重绘去噪强度 (0.0 ~ 1.0) */
-    denoisingStrength?: number;
-    /** 引擎私有专属参数容器（如 ComfyUI 工作流片段或 NovelAI 特殊配置） */
-    extraParams?: Record<string, unknown>;
-}
+import type { EngineGenerationTaskParams } from './engine-data';
+
+/** 统一生图请求参数对象（基于各后端原生结构的强类型判别联合体） */
+export type ImageGenerationParams = EngineGenerationTaskParams;
 
 /** 统一格式化生图响应结果 */
 export interface ImageGenerationResult {
@@ -74,7 +57,7 @@ export interface EngineCapabilities {
     readonly lora: boolean;
     /** 是否支持生成进度回调轮询或流式推送 */
     readonly progress: boolean;
-    /** 是否支持主动中止正在执行的生图作业 */
+    /** 是否支持中断正在执行的生图任务 */
     readonly interrupt: boolean;
     /** 是否支持自定义工作流模板注入（如 ComfyUI JSON 蓝图） */
     readonly customWorkflow: boolean;

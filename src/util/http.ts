@@ -1,7 +1,15 @@
 /**
- * HTTP 客户端与网络诊断工具
- * 提供统一 Fetch 封装、CSRF 请求头注入、超时与多源取消编排、Mixed Content 检测及网络异常归类。
- * 遵循 browser-network-api 规范。
+ * HTTP 客户端与网络诊断工具 (HttpClient)
+ *
+ * 核心功能：
+ * 1. 封装原生 fetch 请求，提供超时自动中止、可配置指数退避重试与多源取消信号合成；
+ * 2. 自动注入宿主环境 CSRF 请求头，保障与 SillyTavern 服务端通信合法性；
+ * 3. 区分浏览器直连 (Direct) 与宿主代理中转 (Relay) 传输通道，跨域受阻时提供透明调度；
+ * 4. 统一网络异常分类与排障指引生成，提供网络连通性探测能力。
+ *
+ * 注意事项：
+ * 1. 在 HTTPS 网页环境下禁止直接请求 HTTP 外部地址，需提前做混合内容 (Mixed Content) 拦截并引导代理；
+ * 2. 重试机制仅针对网络抖动或服务端临时过载等瞬态故障，业务参数错误等 4xx 状态严禁无脑重试。
  */
 
 import { Logger } from './logger';
@@ -288,10 +296,10 @@ export class HttpClient {
     public async fetchExternal(targetUrl: string, options: HttpRequestOptions = {}): Promise<Response> {
         if (this.isMixedContent(targetUrl)) {
             const mixedError = new NetworkError({
-                message: `Mixed Content 拦截: 当前页面为 HTTPS，浏览器禁止直接访问不安全 HTTP 端点 [${targetUrl}]`,
+                message: `Mixed Content 拦截: 当前页面为 HTTPS，浏览器禁止直接访问不安全 HTTP 服务地址 [${targetUrl}]`,
                 code: 'MIXED_CONTENT',
                 targetUrl,
-                userAdvice: '请为生图后端配置 HTTPS 反向代理，或使用 HTTP 协议访问酒馆。'
+                userAdvice: '请为生图后端配置 HTTPS 反向代理，或使用 HTTP 协议访问 SillyTavern。'
             });
             this._logger.error(mixedError.message);
             throw mixedError;
@@ -324,14 +332,14 @@ export class HttpClient {
                     if (isTransient && attempt < maxRetries) {
                         attempt++;
                         const delay = Math.min(8000, baseRetryDelay * 2 ** (attempt - 1)) + Math.random() * 200;
-                        this._logger.warn(`端点返回临时状态 HTTP ${resp.status}，正在进行第 ${attempt}/${maxRetries} 次重试... [${targetUrl}]`);
+                        this._logger.warn(`生图服务返回临时状态 HTTP ${resp.status}，正在进行第 ${attempt}/${maxRetries} 次重试... [${targetUrl}]`);
                         cleanup();
                         await sleepWithSignal(delay, options.signal);
                         continue;
                     }
 
                     throw new NetworkError({
-                        message: `生图端点返回错误 [HTTP ${resp.status}]`,
+                        message: `生图服务返回错误 [HTTP ${resp.status}]`,
                         code: 'HTTP_ERROR',
                         targetUrl,
                         status: resp.status,
@@ -351,7 +359,7 @@ export class HttpClient {
 
                 if (isTimeout()) {
                     throw new NetworkError({
-                        message: `直连生图端点超时 (${timeoutMs}ms) [${targetUrl}]`,
+                        message: `直连生图服务超时 (${timeoutMs}ms) [${targetUrl}]`,
                         code: 'TIMEOUT',
                         targetUrl,
                         cause: err,
@@ -379,7 +387,7 @@ export class HttpClient {
                     : '无法连接到远程生图服务。请检查：1. 网络与代理设置；2. 目标 API 地址是否正确；3. 目标服务是否允许跨域请求。';
 
                 throw new NetworkError({
-                    message: `直连生图端点失败 [${targetUrl}]: ${err?.message || '网络连接失败或跨域受限'}`,
+                    message: `直连生图服务失败 [${targetUrl}]: ${err?.message || '网络连接失败或跨域受限'}`,
                     code: 'CORS_OR_NETWORK',
                     targetUrl,
                     cause: err,
@@ -390,7 +398,7 @@ export class HttpClient {
     }
 
     /**
-     * 探测端点可用性与连通性。
+     * 探测服务地址可用性与连通性。
      */
     public async probeEndpoint(
         targetUrl: string,

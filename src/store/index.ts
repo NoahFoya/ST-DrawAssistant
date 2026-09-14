@@ -8,3 +8,4 @@ export * from './task';
 export * from './storage';
 export * from './url-pool';
 export * from './integrator';
+export * from './normalizer';
