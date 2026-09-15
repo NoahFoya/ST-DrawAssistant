@@ -1,11 +1,11 @@
 /**
  * Webpack 构建打包配置文件 (webpack.config.js)
  *
- * 核心功能：
+ * 功能：
  * 1. 将插件 TypeScript 源码转译并打包输出为符合 ES 模块规范的浏览器脚本 (dist/index.js)；
  * 2. 配置路径别名与 source-map 调试映射。
  *
- * 注意事项：
+ * Tips：
  * 1. 输出模式需配置为 experiments.outputModule，匹配 SillyTavern 原生扩展加载机制；
  * 2. 外部依赖由宿主环境或打包内联处理，构建产物需控制体积。
  */
@@ -33,11 +33,12 @@ const clientConfig = {
         extensions: ['.ts', '.tsx', '.js', '.json'],
         alias: {
             '@types': path.resolve(__dirname, '@types'),
-            '@function': path.resolve(__dirname, 'src/function'),
-            '@panel': path.resolve(__dirname, 'src/panel'),
-            '@store': path.resolve(__dirname, 'src/store'),
             '@util': path.resolve(__dirname, 'src/util'),
-            '@slash': path.resolve(__dirname, 'src/slash_command'),
+            '@store': path.resolve(__dirname, 'src/store'),
+            '@function': path.resolve(__dirname, 'src/function'),
+            '@extension': path.resolve(__dirname, 'src/extension'),
+            '@ui': path.resolve(__dirname, 'src/ui'),
+            '@config': path.resolve(__dirname, 'config'),
         },
     },
     module: {

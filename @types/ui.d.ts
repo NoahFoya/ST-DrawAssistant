@@ -235,6 +235,7 @@ export interface ModalShellOptions {
     title?: string;
     version?: string;
     initialTabId?: string;
+    settingsStore?: any;
     onClose?: () => void;
     onTabChange?: (tabId: string) => void;
     tabs?: TabDefinition[];

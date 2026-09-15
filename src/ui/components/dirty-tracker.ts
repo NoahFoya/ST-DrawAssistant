@@ -1,12 +1,15 @@
 /**
- * @module src/ui/components/dirty-tracker
- * @description 表单脏状态变更追踪器 (DirtyTracker)
+ * 表单脏状态变更追踪器 (DirtyTracker)
  *
- * 核心逻辑与状态流转：
+ * 功能：
  * 1. 基于表单加载或保存时的初始基准快照 (baseline)，实时比对当前字段值；
  * 2. 字段值发生变动时标记脏状态 (.is-dirty)，触发对应保存按钮的高亮提示；
  * 3. 当用户将字段值改回基准值时，自动清除脏标记并熄灭保存按钮高亮；
- * 4. 保存成功后更新基准快照，重置所有字段状态。
+ * 4. 保存成功后更新基准快照，支持一键回滚全部修改并同步已绑定控件。
+ *
+ * Tips：
+ * 1. 深度比对内置颜色大小写不敏感、数值与数值字符串等价等语义比对规则；
+ * 2. 表单面板销毁时调用 dispose 解绑所有控件与监听回调，避免引用残留。
  */
 
 export type DirtyChangeListener = (isDirty: boolean, dirtyKeys: Set<string>) => void;

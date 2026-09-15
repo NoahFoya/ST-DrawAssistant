@@ -1,7 +1,14 @@
 /**
  * 生图结果整合与消息楼层协同
- * 职责：协调任务完成流转、本地分立存储持久化、构建轻量级元数据条目、
- * 写入聊天楼层数据结构 [swipeId][buttonIndex]，并触发 MESSAGE_UPDATED 与 saveChat 会话持久化。
+ *
+ * 功能：
+ * 1. 协调任务完成流转、本地分立存储持久化与轻量级元数据条目构建；
+ * 2. 将生成结果写入聊天楼层数据结构 [swipeId][buttonIndex]；
+ * 3. 触发 MESSAGE_UPDATED 事件与 saveChat 会话持久化。
+ *
+ * Tips：
+ * 1. 楼层隔离：严格按 swipeId 与 buttonIndex 双重索引挂载图片，避免滑动重掷时图片错位；
+ * 2. 存储容错：服务端上传失败时自动降级保留本地 IndexedDB 存储，不阻断主流程。
  */
 
 import type {
@@ -14,9 +21,10 @@ import type {
 } from '@types';
 import { PersistentStorage } from './storage';
 import { SettingsStore } from './settings';
-import { TypedEventBus, IDisposable } from '../util/event-bus';
-import { blobToBase64 } from '../util/image';
-import { TaskEventMap } from './task';
+import type { IDisposable } from '@util/event-bus';
+import { TypedEventBus } from '@util/event-bus';
+import { blobToBase64 } from '@util/image';
+import type { TaskEventMap } from './task';
 
 /** 宿主聊天楼层与持久化接口提供者声明 (支持依赖注入) */
 export interface ResultIntegratorHostProvider {

@@ -1,7 +1,15 @@
 /**
  * 采样超参数卡片组件 (SamplerCard)
- * 封装采样器、调度器、现代双向联动复合滑块（步数、CFG）与随机种子控制器。
- * 供 SD-WebUI 与 ComfyUI 生图引擎界面共用。
+ *
+ * 功能：
+ * 1. 组合采样算法 (Sampler) 与调度策略 (Scheduler) 下拉选择器；
+ * 2. 提供生成步数 (Steps) 与提示词引导系数 (CFG Scale) 复合滑块；
+ * 3. 集成随机种子 (Seed) 输入框与骰子随机生成按钮；
+ * 4. 供 SD-WebUI 与 ComfyUI 生图引擎面板复用。
+ *
+ * Tips：
+ * 1. 种子输入框设为 -1 时代表动态随机，点击骰子按钮时生成正整数种子；
+ * 2. 采样器和调度器支持从后端服务动态重载更新可用列表。
  */
 
 import type { IControlHandle, SamplerParamsModel, SelectOptionItem } from '@types';

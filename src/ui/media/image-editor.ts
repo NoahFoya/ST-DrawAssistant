@@ -1,16 +1,15 @@
 /**
- * @module src/ui/media/image-editor
- * @description 局部重绘蒙版编辑器 (InpaintModal) 与圆形头像裁剪器 (CircularCropper)
+ * 图像蒙版编辑与裁剪控件 (InpaintModal & CircularCropper)
  *
- * 核心功能：
- * 1. 提供基于双层 Canvas 的局部重绘涂鸦能力，支持底图展示与上层蒙版实时绘制；
- * 2. 支持画笔尺寸调节、橡皮擦擦除、蒙版反转与一键清空；
- * 3. 负责将绘制蒙版导出为标准的黑白二值化遮罩 Blob，配合原图提交重绘运算；
- * 4. 提供头像专用圆形视口裁剪工具，支持拖拽平移、缩放与裁剪导出。
+ * 功能：
+ * 1. 提供基于双层 Canvas 的局部重绘涂鸦能力，支持底图展示与半透明蒙版实时绘制；
+ * 2. 支持画笔粗细微调、橡皮擦擦除、黑白反转与一键清空；
+ * 3. 负责将蒙版图层导出为标准黑白二值化遮罩 Blob；
+ * 4. 提供头像专用圆形视口裁剪工具 (createCircularCropper)。
  *
- * 注意事项：
- * 1. Canvas 坐标计算需精准映射 CSS 缩放尺寸与位图实际分辨率，防止画笔轨迹偏移；
- * 2. 编辑器注销时需及时释放图像 Image 对象与临时 Object URL，防止内存泄漏。
+ * Tips：
+ * 1. 画笔绘制坐标需精准映射 CSS 缩放比例与位图物理分辨率，防止笔触偏移；
+ * 2. 模态窗关闭或注销时及时释放 Image 对象与临时 Object URL，防止内存泄漏。
  */
 
 import { createElement } from '../../util/dom';

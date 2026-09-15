@@ -1,14 +1,14 @@
 /**
- * 引擎适配器注册表 (src/function/adapter/registry.ts)
+ * 引擎适配器注册表
  *
- * 核心功能：
+ * 功能：
  * 1. 注册与单例缓存各绘图引擎适配器实例 (sdwebui, comfyui, novelai, openai)；
- * 2. 提供强类型重载的适配器获取方法 `getAdapter(type)`；
- * 3. 允许动态注入或替换适配器（用于扩展或单元测试 Mock）。
+ * 2. 提供强类型重载的适配器获取方法 getAdapter(type)；
+ * 3. 支持动态注入或替换适配器（用于单元测试 Mock 或外部扩展）。
  *
- * 注意事项：
- * 1. 适配器实例在模块加载时即注册默认单例；
- * 2. 检索未注册引擎类型时显式抛出 Error。
+ * Tips：
+ * 1. 默认单例在模块初次加载时预置；
+ * 2. 查找不存在的引擎标识时显式抛出 Error 阻止静默失败。
  */
 
 import type { EngineType, IEngineAdapter, ImageGenerationParams } from '@types';

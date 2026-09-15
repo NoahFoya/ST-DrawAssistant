@@ -1,16 +1,15 @@
 /**
- * @module src/ui/composite/openai-service-card
- * @description OpenAI 兼容服务连接与服务商凭据管理卡片 (OpenAIServiceCard)
+ * OpenAI 兼容服务连接卡片 (OpenAIServiceCard)
  *
- * 核心功能：
+ * 功能：
  * 1. 提供主流 OpenAI 兼容服务商快速切换与自定义服务地址配置；
  * 2. 支持服务地址、API Key 密码框以及自定义请求头 (Headers JSON) 填报；
  * 3. 支持接口连通性探测、延迟状态反馈与远端可用模型列表拉取；
- * 4. 隔离存储各服务商的独立配置，切换时互不干扰。
+ * 4. 独立存储各服务商参数配置，切换时互不干扰。
  *
- * 注意事项：
+ * Tips：
  * 1. 自定义请求头输入需进行严格的 JSON 格式校验，防止语法错误导致请求中断；
- * 2. 远端模型列表拉取失败时应提供明确的错误原因与降级处理，避免清空用户既有输入。
+ * 2. 远端模型列表拉取失败时提供明确的错误原因与回退处理，避免覆盖已有输入。
  */
 
 import { createCard } from '../components/form-field';

@@ -1,9 +1,17 @@
 /**
  * 图像临时访问链接 (Object URL) 内存生命周期池
- * 职责：管理由 Blob 生成的临时展示链接，提供并发请求合并、5 秒延时防抖回收与会话批量释放。
+ *
+ * 功能：
+ * 1. 管理由 Blob 生成的临时展示链接，提供并发请求合并；
+ * 2. 提供引用计数跟踪与延时防抖释放回收机制；
+ * 3. 支持会话切换时的批量释放与显式资源注销。
+ *
+ * Tips：
+ * 1. 防抖回收：避免频繁重新生成 Object URL 引发页面闪烁或提前释放导致破图；
+ * 2. 内存泄露防范：dispose 时必须注销所有挂起的定时器并调用 revokeObjectURL。
  */
 
-import { IDisposable } from '../util/event-bus';
+import type { IDisposable } from '@util/event-bus';
 import { DEFAULT_URL_RELEASE_DELAY_MS } from '../constants';
 
 /** 单个临时 URL 内存池缓存条目 */

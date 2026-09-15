@@ -9,29 +9,33 @@
  * 3. 规范嵌入消息气泡中的生成图片实体（.da-generated-img）的圆角、阴影与悬停放大。
  */
 
-/* 1. 图像折叠容器 (.da-image-collapse-wrapper)
-   提供左对齐、居中对齐与右对齐三种排版修饰符，契合不同角色气泡排布 */
+/* 1. 楼层正文内嵌生图插槽容器 (.da-floor-slot, .da-image-collapse-wrapper)
+   原位替换正文中的占位指令，承载按钮、进度与生成的图片 */
+.da-floor-slot,
 .da-image-collapse-wrapper {
     display: flex;
     flex-direction: column;
     width: 100%;
+    margin: 8px 0;
     box-sizing: border-box;
 }
 
+.da-floor-slot--left,
 .da-image-collapse-wrapper--left {
     align-items: flex-start;
 }
 
+.da-floor-slot--center,
 .da-image-collapse-wrapper--center {
     align-items: center;
 }
 
+.da-floor-slot--right,
 .da-image-collapse-wrapper--right {
     align-items: flex-end;
 }
 
-/* 2. 折叠/展开控制按钮 (.da-image-collapse-toggle)
-   提供类似胶囊的折叠切换按钮，指示当前收起或展开状态 */
+/* 2. 折叠/展开控制按钮兼容类 (.da-image-collapse-toggle) */
 .da-image-collapse-toggle {
     display: inline-flex;
     align-items: center;
@@ -116,7 +120,49 @@
     margin: 4px 0 0 auto;
 }
 
-/* 5. 图像右上角悬浮操作胶囊 (.da-image-action-trigger) */
+/* 5. 自动高斯模糊遮罩与交互 (.da-image-wrapper--masked) */
+.da-image-wrapper--masked .da-generated-img {
+    filter: blur(28px);
+    transform: scale(1.08);
+    transition: filter 0.35s var(--da-ease), transform 0.35s var(--da-ease);
+    will-change: filter, transform;
+}
+
+.da-image-mask-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffffff;
+    font-size: var(--da-font-size-xs, 0.76rem);
+    font-weight: 500;
+    pointer-events: none;
+    z-index: 4;
+    transition: opacity 0.3s var(--da-ease);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+.da-image-mask-badge svg {
+    width: 22px;
+    height: 22px;
+    opacity: 0.9;
+}
+
+.da-image-wrapper--masked:hover .da-generated-img {
+    filter: blur(0);
+    transform: scale(1);
+}
+
+.da-image-wrapper--masked:hover .da-image-mask-badge {
+    opacity: 0;
+}
+
+/* 6. 图像右上角悬浮操作胶囊 (.da-image-action-trigger) */
 .da-image-action-trigger {
     position: absolute;
     top: 8px;

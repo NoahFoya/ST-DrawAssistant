@@ -1,34 +1,33 @@
 /**
- * @module src/ui/views/novelai-tab
- * @description NovelAI 官方绘图服务配置面板 (NovelAITab)
+ * NovelAI 官方绘图服务配置面板 (NovelAITab)
  *
- * 核心功能：
+ * 功能：
  * 1. 管理 NovelAI 官方服务连接、API Token 凭据与账户订阅状态探测；
- * 2. 提供绘图方案预设切换，配置官方模型、画幅尺寸、采样算法与专属画质控制选项；
- * 3. 集成负向提示词预设 (UC Preset) 与正反向提示词模板管理；
- * 4. 追踪表单脏状态变更，支持配置一键复原与持久化存储。
+ * 2. 提供绘图方案预设切换，配置官方模型、画幅尺寸、采样算法与画质控制选项；
+ * 3. 集成通用负向词预设 (UC Preset) 与正反向提示词模板管理；
+ * 4. 追踪表单脏状态变更，支持配置一键复原与保存状态提示。
  *
- * 注意事项：
- * 1. NovelAI 官方接口要求生成图片宽度与高度必须为 64 的整数倍；
- * 2. 需妥善保护用户的 API Token 凭据，防止在非安全环境明文外泄。
+ * Tips：
+ * 1. NovelAI 生成图片宽高必须满足 64 像素整倍数潜空间约束；
+ * 2. API Token 凭据脱敏保护，切勿在公开日志或导出文件中暴露明文。
  */
 
-import { createElement } from '../../util/dom';
-import { createFormField, createCard, FormFieldHandle } from '../components/form-field';
+import { createElement } from '@util/dom';
+import { createFormField, createCard, type FormFieldHandle } from '../components/form-field';
 import { createSelect } from '../components/select';
-import { createNumberInput, NumberInputHandle } from '../components/input';
-import { createSlider, SliderHandle } from '../components/slider';
-import { createIconButton, IconButtonHandle } from '../components/button';
-import { createToggle, ToggleHandle } from '../components/toggle';
-import { createConnectionCard, ConnectionCardHandle } from '../composite/connection-card';
-import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
-import { createPromptPresetManager, PromptPresetManagerHandle, PromptPresetData } from '../composite/prompt-preset-manager';
-import { createPresetToolbar, PresetToolbarHandle } from '../composite/preset-toolbar';
-import { createDirtyTracker, IDirtyTracker } from '../components/dirty-tracker';
+import { createNumberInput, type NumberInputHandle } from '../components/input';
+import { createSlider, type SliderHandle } from '../components/slider';
+import { createIconButton, type IconButtonHandle } from '../components/button';
+import { createToggle, type ToggleHandle } from '../components/toggle';
+import { createConnectionCard, type ConnectionCardHandle } from '../composite/connection-card';
+import { createDimensionPicker, type DimensionPickerHandle } from '../composite/dimension-picker';
+import { createPromptPresetManager, type PromptPresetManagerHandle, type PromptPresetData } from '../composite/prompt-preset-manager';
+import { createPresetToolbar, type PresetToolbarHandle } from '../composite/preset-toolbar';
+import { createDirtyTracker, type IDirtyTracker } from '../components/dirty-tracker';
 import { getIconSvg } from '../components/icons';
-import { PresetManager, BUILTIN_PROMPTS } from '../../store/preset';
-import { getAdapter } from '../../function/adapter/registry';
-import type { SettingsStore } from '../../store/settings';
+import { PresetManager, BUILTIN_PROMPTS } from '@store/preset';
+import { getAdapter } from '@function/adapter';
+import type { SettingsStore } from '@store/settings';
 import type { PresetItem } from '@types';
 
 export interface NovelAITabOptions {

@@ -1,12 +1,15 @@
 /**
- * @module src/ui/views/theme-tab
- * @description 外观与主题设置面板 (ThemeTab)
+ * 外观与主题设置面板 (ThemeTab)
  *
- * 核心架构划分：
- * 1. Card: 主题预设方案 (挂载 PresetToolbar 8键图标管理方案)；
- * 2. Card: 界面配色方案 (主题强调色, 主背景色, 渐变结束色, 卡片背景色, 主/次文本色, 边框色，ColorPicker 色盘双向强校验)；
- * 3. Card: 视觉质感与圆角 (背景渐变角度, 不透明度, 毛玻璃虚化, 圆角半径，全量接入现代复合滑块)；
- * 4. 状态变更追踪：结合 createDirtyTracker 实时联动预设保存按钮状态，消除主观修饰词。
+ * 功能：
+ * 1. 主题预设方案：集成 PresetToolbar 8 键图标操作族，管理主题配色方案；
+ * 2. 界面配色方案：强调色、背景色、渐变色、卡片背景、文本色与边框色选择；
+ * 3. 视觉质感与圆角：背景渐变角度、不透明度、毛玻璃虚化与圆角半径微调；
+ * 4. 实时生效：颜色与质感参数调节时即时通过 ThemeService 应用至全局 CSS 变量。
+ *
+ * Tips：
+ * 1. 结合 DirtyTracker 追踪颜色与样式修改，高亮工具栏保存按钮；
+ * 2. 切换或重置方案时同步刷新所有拾色器与滑块句柄的界面展示。
  */
 
 import { createElement } from '../../util/dom';
@@ -16,7 +19,8 @@ import { createSlider } from '../components/slider';
 import { createPresetToolbar } from '../composite/preset-toolbar';
 import { createDirtyTracker } from '../components/dirty-tracker';
 import { getIconSvg } from '../components/icons';
-import { ThemeService, ThemeConfig, BUILTIN_THEMES } from '../theme';
+import { ThemeService, ThemeConfig } from '../theme';
+import { PresetManager } from '../../store/preset';
 import type { SettingsStore } from '../../store/settings';
 
 export interface ThemeTabHandle {
@@ -28,6 +32,7 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
     const root = createElement('div', { className: 'da-tab-pane' });
     const disposers: (() => void)[] = [];
     const themeService = ThemeService.getInstance();
+    const presetManager = new PresetManager(settingsStore);
 
     const regDisposer = (item: { dispose?(): void } | undefined | null) => {
         if (item && typeof item.dispose === 'function') {
@@ -35,8 +40,31 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
         }
     };
 
+    const getThemePresetItems = () => {
+        return presetManager
+            .list<ThemeConfig>('themes')
+            .filter((p) => p.id !== 'safe-fallback')
+            .map((p) => ({
+                id: p.id,
+                name: p.name,
+                isBuiltin: p.isBuiltin
+            }));
+    };
+
+    let themePresets = getThemePresetItems();
+    if (themePresets.length === 0) {
+        themePresets = [{ id: 'dark', name: '深色夜间', isBuiltin: true }];
+    }
+
+    const activePresetId = settingsStore.get('themePreset') || 'dark';
+    const activePresetItem = presetManager.get<ThemeConfig>('themes', activePresetId);
+
     // 当前主题配置初始内存基准
-    const initialTheme: ThemeConfig = { ...themeService.getCurrentTheme() };
+    const initialTheme: ThemeConfig = activePresetItem?.data
+        ? { id: activePresetItem.id, name: activePresetItem.name, ...activePresetItem.data }
+        : { ...themeService.getCurrentTheme() };
+
+    let currentThemeConfig: ThemeConfig = { ...initialTheme };
 
     // 实例化表单状态追踪器
     const dirtyTracker = createDirtyTracker(initialTheme, (isDirty) => {
@@ -52,29 +80,26 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
     });
     regDisposer(presetCard);
 
-    // 构造预设列表选项
-    const themePresets = Object.keys(BUILTIN_THEMES).map((key) => ({
-        id: key,
-        name: BUILTIN_THEMES[key].name || key,
-        isBuiltin: true
-    }));
-
-    let currentThemeConfig = { ...initialTheme };
-
     const toolbar = createPresetToolbar({
         presets: themePresets,
-        activePresetId: settingsStore.get('themePreset') || 'cyberpunk',
+        activePresetId,
         onAction: (action, presetId) => {
             if (action === 'select') {
-                const found = BUILTIN_THEMES[presetId];
-                if (found) {
-                    currentThemeConfig = { ...found };
+                const found = presetManager.get<ThemeConfig>('themes', presetId);
+                if (found && found.data) {
+                    currentThemeConfig = { id: found.id, name: found.name, ...found.data };
                     themeService.applyTheme(currentThemeConfig);
                     settingsStore.set('themePreset', presetId);
                     dirtyTracker.setBaseline(currentThemeConfig);
                     syncControlValues(currentThemeConfig);
                 }
             } else if (action === 'save') {
+                const found = presetManager.get<ThemeConfig>('themes', presetId);
+                presetManager.save('themes', {
+                    id: presetId,
+                    name: found?.name || presetId,
+                    data: { ...currentThemeConfig }
+                });
                 dirtyTracker.setBaseline(currentThemeConfig);
                 settingsStore.set('themePreset', presetId);
             } else if (action === 'reset') {
@@ -86,6 +111,17 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
         }
     });
     regDisposer(toolbar);
+
+    // 监听外部预设变更与主题切换
+    const unsubPreset = settingsStore.onKeyChange('themePreset', (newId) => {
+        if (toolbar.getActivePresetId() !== newId) {
+            toolbar.setActivePreset(newId);
+        }
+    });
+    const unsubPresets = settingsStore.onKeyChange('presets', () => {
+        toolbar.setPresets(getThemePresetItems());
+    });
+    disposers.push(() => unsubPreset.dispose(), () => unsubPresets.dispose());
 
     presetCard.append(toolbar.element);
     root.appendChild(presetCard.element);
@@ -323,9 +359,12 @@ export function renderThemeTab(settingsStore: SettingsStore): ThemeTabHandle {
         textSecondaryPicker.setValue(theme.textSecondary);
         borderPicker.setValue(theme.borderColor);
 
-        angleSlider.setValue(theme.gradientAngle ?? 160);
-        opacitySlider.setValue(theme.opacity ?? 95);
-        blurSlider.setValue(theme.blur ?? 16);
+        let op = theme.opacity ?? theme.bgOpacity ?? 95;
+        if (op <= 1) op = Math.round(op * 100);
+
+        angleSlider.setValue(theme.gradientAngle ?? theme.bgGradientAngle ?? 140);
+        opacitySlider.setValue(op);
+        blurSlider.setValue(theme.blur ?? theme.blurRadius ?? 16);
         radiusSlider.setValue(theme.borderRadius ?? 10);
     }
 

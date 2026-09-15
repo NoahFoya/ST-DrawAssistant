@@ -1,12 +1,14 @@
 /**
- * @module src/ui/media/image-action-panel
- * @description 聊天楼层图片独立操作弹窗组件 (ImageActionPanel)
+ * 消息楼层图片独立操作弹窗 (ImageActionPanel)
  *
- * 核心功能：
- * 1. 对应旧版 image-action-panel.ts 功能，面向用户在聊天楼层生成图片后的快捷操作；
- * 2. 提供正向/反向提示词卡片展示，支持一键复制、解锁编辑与取消修改；
- * 3. 提供局部重绘入口 (InpaintModal)、元数据详情入口 (ImageInfoModal)、原图下载、删除确认与基于编辑后提示词的重新生成；
- * 4. 严格遵循 tool-ui 设计规范，支持 Esc 与遮罩点击退出，使用 var(--da-*) 样式变量。
+ * 功能：
+ * 1. 提供聊天楼层生成图片后的快捷管理面板；
+ * 2. 正向/反向提示词卡片展示，支持一键复制、解锁编辑与取消修改；
+ * 3. 集成局部重绘、元数据详情查看、原图下载、删除确认与基于修改后提示词的重新生成。
+ *
+ * Tips：
+ * 1. 严格遵循 tool-ui 设计规范，支持 Esc 键与遮罩点击退出；
+ * 2. 编辑提示词时支持取消恢复原值，重新生成时将新提示词回传给调用方。
  */
 
 import { createElement } from '../../util/dom';

@@ -1,6 +1,14 @@
 /**
- * 纯净内联矢量 SVG 图标库
- * 统一使用 currentColor 自适应当前主题色，杜绝外部静态资源网络请求与闪烁。
+ * 矢量图标库 (Icons)
+ *
+ * 功能：
+ * 1. 提供 25+ 种内置常用矢量 SVG 图标定义；
+ * 2. 统一基于 currentColor 自适应当前主题配色；
+ * 3. 提供 HTML 字符串 (getIconSvg) 与 DOM 节点 (createIconElement) 两种渲染方式。
+ *
+ * Tips：
+ * 1. 传入未知图标名时自动回退为 'image' 图标，避免渲染空白或类型报错；
+ * 2. spinner 旋转图标自动附带 da-spin 动画样式类。
  */
 
 export type IconName =

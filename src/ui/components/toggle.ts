@@ -1,6 +1,14 @@
 /**
- * 拟物滑动开关组件 (Toggle Switch)
- * 基于原生 Checkbox 改造，保留完整无障碍支持与键盘 Space 键切换能力。
+ * 滑动开关控件 (Toggle)
+ *
+ * 功能：
+ * 1. 基于原生 Checkbox 封装 38px 拟物滑动开关；
+ * 2. 保留原生无障碍属性与键盘空格键切换交互能力；
+ * 3. 实现 IControlHandle<boolean> 接口，支持脏状态与禁用态样式联动。
+ *
+ * Tips：
+ * 1. 根节点使用 label 标签包裹，点击轨道任意区域均可触发原生状态切换；
+ * 2. 状态变更时触发 onChange 回调并传递布尔值。
  */
 
 import type { BaseControlOptions, IControlHandle } from '@types';

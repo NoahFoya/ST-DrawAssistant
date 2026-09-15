@@ -1,6 +1,14 @@
 /**
- * 现代化按钮控件族
- * 提供标准按钮 (带 Loading 状态与防重复点击)、28px 紧凑图标按钮与按钮组。
+ * 按钮与图标按钮控件族 (Button & IconButton)
+ *
+ * 功能：
+ * 1. 提供标准通用按钮 (createButton)，支持主要、危险、次要、幽灵变体与加载中旋转状态；
+ * 2. 提供紧凑 28px 图标按钮 (createIconButton)，支持脏标记圆点与危险态；
+ * 3. 提供行内聚合按钮组容器 (createButtonGroup)。
+ *
+ * Tips：
+ * 1. 处于加载中或禁用状态时自动拦截点击事件，防止重复触发异步操作；
+ * 2. 图标按钮若未显式传入 ariaLabel，自动继承 title 属性保证无障碍辅助访问。
  */
 
 import type { BaseControlOptions, ButtonSize, ButtonVariant, IconName } from '@types';

@@ -1,15 +1,15 @@
 /**
  * 提示词处理与文本算法工具集 (PromptUtils)
  *
- * 核心功能：
+ * 功能：
  * 1. 提供中文全角转半角标点符号清洗、前后缀拼接与标签去重；
  * 2. 过滤模型思考链与无关叙述文本，提取标准生图占位符与负向提示词；
- * 3. 针对不同生图后端，将 LoRA 模型列表格式化为对应的特定语法（如 A1111 与 WeiLin 格式）；
+ * 3. 针对不同生图后端，将 LoRA 列表格式化为特定语法（A1111 与 WeiLin 格式）；
  * 4. 提供宏规则与正则替换算法。
  *
- * 注意事项：
- * 1. 所有函数均为无状态纯函数设计，不依赖外部 DOM、全局变量或网络环境；
- * 2. 需处理特殊标点嵌套与括号平衡，避免提示词语法截断。
+ * Tips：
+ * 1. 纯函数设计：所有文本处理函数均为纯函数，不依赖外部 DOM 或网络状态；
+ * 2. 标点容错：处理嵌套逗号与括号平衡，避免提示词语法异常截断。
  */
 
 export interface ExtractedPlaceholder {
@@ -92,7 +92,7 @@ export function separatePromptByPipe(input: string): { positive: string; negativ
 
 /**
  * 安全拼接多个提示词片段，过滤空值并使用逗号连接
- * 自动剥离各片段首尾既有的逗号与空白，杜绝连续逗号产生
+ * 自动剥离各片段首尾既有的逗号与空白，避免产生连续冗余逗号
  */
 export function joinPromptParts(...parts: Array<string | undefined | null>): string {
     return parts

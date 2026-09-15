@@ -1,24 +1,24 @@
 /**
  * ST-DrawAssistant 插件核心主入口 (Plugin Entrypoint)
  *
- * 核心功能：
+ * 功能：
  * 1. 负责 SillyTavern 插件环境的就绪探测与生命周期编排；
  * 2. 初始化核心服务单例（设置存储、任务队列、持久化与生图编排器）；
  * 3. 注册宿主事件监听（消息接收、会话变更等）并驱动自动生图与楼层注入；
  * 4. 挂载悬浮球与主设置弹窗等 UI 交互组件。
  *
- * 注意事项：
- * 1. 必须具备严格的防重入与单例初始化防护，避免重复加载导致重复监听；
- * 2. 会话切换 (CHAT_CHANGED) 时需妥善回收既有会话的任务与临时内存资源。
+ * Tips：
+ * 1. 防重入保护：具备严格的单例初始化防护，避免重复加载导致事件重复绑定；
+ * 2. 会话清理：CHAT_CHANGED 触发时需主动废弃未完成任务并回收临时内存。
  */
 
 import type { SillyTavernContext } from '@types';
-import { SettingsStore } from './store/settings';
-import { PersistentStorage } from './store/storage';
-import { TaskQueueManager } from './store/task';
-import { ResultIntegrator } from './store/integrator';
-import { GenerationOrchestrator } from './function/orchestrator';
-import { ExtensionRegistry } from './extension/registry';
+import { SettingsStore } from '@store/settings';
+import { PersistentStorage } from '@store/storage';
+import { TaskQueueManager } from '@store/task';
+import { ResultIntegrator } from '@store/integrator';
+import { GenerationOrchestrator } from '@function/orchestrator';
+import { ExtensionRegistry } from '@extension/registry';
 import { initUI, type UIHandle } from './ui';
 
 /** 插件初始化状态标志 */

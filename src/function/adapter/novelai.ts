@@ -1,15 +1,15 @@
 /**
  * NovelAI 生图引擎适配器 (NovelAIAdapter)
  *
- * 核心功能：
+ * 功能：
  * 1. 组装 NovelAI 官方格式生图请求，注入 Bearer 鉴权凭据；
- * 2. 处理官方接口返回的 ZIP 压缩二进制流，提取并封装 PNG 图像 Blob；
- * 3. 探测官方服务连通性与用户订阅点数 (Anlas) 资产余额；
+ * 2. 处理官方接口返回的 ZIP 压缩二进制流，容错提取并封装 PNG 图像 Blob；
+ * 3. 探测服务连通性与用户订阅点数 (Anlas) 资产余额；
  * 4. 规范化生图响应元数据。
  *
- * 注意事项：
- * 1. NovelAI 严格要求图像宽高为 64 的整倍数，超限或非法尺寸会导致服务端 400 校验拒绝；
- * 2. 官方接口采用 ZIP 封包返回，需容错提取二进制中的 PNG 文件头 (Magic Number)。
+ * Tips：
+ * 1. 尺寸硬性限制：NovelAI 严格要求生成图像宽高为 64 的整倍数，非法尺寸会触发服务端 400 校验拒绝；
+ * 2. ZIP 流容错提取：服务端返回多文件 ZIP 封包，需基于 PNG 魔数 (Magic Number) 准确定位图像文件头。
  */
 
 import type {
@@ -19,8 +19,9 @@ import type {
     ImageGenerationResult,
     NovelAIRequestData
 } from '@types';
+import type { HttpClient } from '@util/http';
 import { BaseAdapter } from './base';
-import { NetworkError, type HttpClient } from '../../util/http';
+import { NetworkError } from '@util/http';
 
 /**
  * 从 ZIP 流或二进制 Buffer 中提取 PNG 图像

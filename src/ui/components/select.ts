@@ -1,6 +1,14 @@
 /**
- * 现代化下拉选择器组件
- * 居中排版、内嵌箭头、支持动态选项组重载与脏状态联动。
+ * 下拉选择器控件 (Select)
+ *
+ * 功能：
+ * 1. 提供标准下拉选项渲染，支持扁平选项列表与 optgroup 分组渲染；
+ * 2. 支持动态选项重载 (setOptions) 与选中值恢复；
+ * 3. 继承 IControlHandle 规范，支持脏状态标记与错误状态高亮。
+ *
+ * Tips：
+ * 1. 选项条目提供 disabled 属性可单独禁用特定选项；
+ * 2. 动态重载选项列表时若未指定 selectValue，自动保留或回退至当前激活值。
  */
 
 import type { BaseControlOptions, IControlHandle, SelectOptionItem } from '@types';

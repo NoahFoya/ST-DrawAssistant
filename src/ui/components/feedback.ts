@@ -1,6 +1,15 @@
 /**
- * 反馈与指示基元组件
- * 包含非阻塞 Toast 提示、字段悬浮帮助气泡、状态徽标与标签胶囊。
+ * 反馈与指示基元控件族 (Feedback, Toast, HelpBubble, Badge, Chip)
+ *
+ * 功能：
+ * 1. 提供全局非阻塞 Toast 提示框，支持成功、错误、告警与常规通知；
+ * 2. 提供悬浮释义气泡 (createHelpBubble)，具备视口边缘碰撞检测与自适应上下翻转；
+ * 3. 提供状态徽标 (createBadge)，支持呼吸灯脉冲圆点；
+ * 4. 提供可选中、可移除的标签胶囊控件 (createChip)。
+ *
+ * Tips：
+ * 1. Toast 连续触发时自动清除前序定时器并平滑淡出旧节点；
+ * 2. HelpBubble 移入气泡本体时防抖保活，鼠标移出后延迟 100ms 自动销毁。
  */
 
 import type { FeedbackVariant, IconName } from '@types';

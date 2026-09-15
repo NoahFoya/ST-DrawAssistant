@@ -1,23 +1,23 @@
 /**
- * 插件全局配置状态管理 (src/store/settings.ts)
+ * 插件全局配置状态管理
  *
- * 核心功能：
+ * 功能：
  * 1. 维护 ExtensionSettings 运行时状态树与内存缓存；
  * 2. 处理默认配置自描述深合并与脏字段清洗过滤；
- * 3. 提供精准的深层配置键监听与防抖自动持久化；
- * 4. 导出配置时的敏感凭据字段脱敏保护。
+ * 3. 提供深层配置键精确监听与防抖自动持久化。
  *
- * 注意事项：
- * 1. 持久化通过防抖写入宿主环境存储，避免高频变更引发 I/O 阻塞；
- * 2. 导出配置时默认剔除包含 key、token、secret 等敏感字段。
+ * Tips：
+ * 1. I/O 缓冲：配置变更默认经过防抖异步写入宿主存储，避免高频修改导致 I/O 拥塞；
+ * 2. 敏感凭据脱敏：在导出配置时自动过滤 apiKey、token、secret 等敏感字段。
  */
 
 import type { ExtensionSettings } from '@types';
-import type { IDisposable } from '../util/event-bus';
-import { deepMerge, deepClone, isPlainObject } from '../util/object';
-import { debounce, DebouncedFunction } from '../util/async';
+import type { IDisposable } from '@util/event-bus';
+import type { DebouncedFunction } from '@util/async';
+import { deepMerge, deepClone, isPlainObject } from '@util/object';
+import { debounce } from '@util/async';
 import { MODULE_NAME, DEFAULT_SAVE_DEBOUNCE_MS } from '../constants';
-import defaultSettingsJson from '../../config/default-settings.json';
+import defaultSettingsJson from '@config/default-settings.json';
 
 /** 键变更监听回调函数类型 */
 export type KeyChangeListener<V> = (newValue: V, oldValue: V) => void;
@@ -56,8 +56,6 @@ export function cleanRawSettings(raw: Record<string, any>): Record<string, any> 
     delete cleaned.extensions;
     delete cleaned.uiPreferences;
     delete cleaned.customData;
-    delete cleaned.placeholderStart;
-    delete cleaned.placeholderEnd;
     return cleaned;
 }
 
@@ -268,7 +266,7 @@ export class SettingsStore implements IDisposable {
 
     /**
      * 立即将未持久化的配置同步并强制持久化
-     * 模态框关闭或插件注销前调用，保证内存状态即时落盘。
+     * 模态框关闭或插件注销前调用，保证内存状态即时持久化到磁盘。
      */
     public flush(): void {
         if (this._isDisposed) return;
@@ -317,7 +315,7 @@ export class SettingsStore implements IDisposable {
     }
 
     /**
-     * 销毁实例，清空全部监听并取消待落盘任务
+     * 销毁实例，清空全部监听并取消待保存任务
      */
     public dispose(): void {
         if (this._isDisposed) return;

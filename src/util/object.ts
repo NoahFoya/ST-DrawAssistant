@@ -1,14 +1,14 @@
 /**
- * 对象操作工具 (src/util/object.ts)
+ * 对象操作工具集
  *
- * 核心功能：
+ * 功能：
  * 1. 严格判定字面量纯对象 (isPlainObject)，排除数组、null 与类实例；
  * 2. 深度克隆复合对象 (deepClone)，解除引用关系；
  * 3. 深度递归合并配置对象 (deepMerge)，阻断原型链污染。
  *
- * 注意事项：
- * 1. deepMerge 针对原型属性（__proto__、constructor、prototype）执行跳过，防范注入；
- * 2. 数组类型由源对象整块覆盖，不做索引级递归合并。
+ * Tips：
+ * 1. 原型防污染：deepMerge 严格跳过 __proto__、constructor 等危险属性；
+ * 2. 数组合并策略：数组在 deepMerge 时采用整块覆盖策略，不做稀疏索引递归合并。
  */
 
 /**

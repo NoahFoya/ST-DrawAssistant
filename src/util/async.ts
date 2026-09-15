@@ -1,13 +1,13 @@
 /**
- * 异步调度与防抖工具 (src/util/async.ts)
+ * 异步调度与防抖工具集
  *
- * 核心功能：
+ * 功能：
  * 1. 提供支持 AbortSignal 取消信号的可中断延时等待 (sleep)；
  * 2. 提供具备显式取消 (cancel) 与立即刷新 (flush) 能力的防抖控制器 (debounce)。
  *
- * 注意事项：
- * 1. 业务组件销毁时应主动调用 debounced.cancel() 清除挂起计时器，防止泄漏；
- * 2. sleep 监听 AbortSignal 事件时已使用 once: true 自动解绑。
+ * Tips：
+ * 1. 定时器解绑：组件卸载或注销时应主动调用 debounced.cancel() 清除挂起计时器，防止泄漏；
+ * 2. 自动释放：sleep 监听 AbortSignal 事件时已使用 once: true 自动解绑。
  */
 
 /**

@@ -1,7 +1,14 @@
 /**
- * 现代化复合数值滑块组件 (Slider)
- * 组合原生 range 轨道与等宽上下箭头微调输入框 (NumberInput)。
- * 支持宏观平滑拖动与微观精准定点，双向毫秒级无缝联动，动态更新 --slider-percent 进度高亮。
+ * 复合数值滑块控件 (Slider)
+ *
+ * 功能：
+ * 1. 组合原生 range 轨道与等宽数字微调输入框 (NumberInput)；
+ * 2. 支持宏观平滑拖动与微观精准定点，双向无缝联动；
+ * 3. 动态更新 --slider-percent CSS 变量，驱动进度高亮条实时着色。
+ *
+ * Tips：
+ * 1. 滑动与输入联动时采用 isInternalUpdating 锁防重入，避免事件死循环；
+ * 2. 支持 setRange 动态调整极值区间与步长，并自动重新钳制当前值。
  */
 
 import type { BaseControlOptions, IControlHandle } from '@types';

@@ -1,16 +1,16 @@
 /**
  * ComfyUI 生图引擎适配器 (ComfyUIAdapter)
  *
- * 核心功能：
+ * 功能：
  * 1. 提交 ComfyUI 原生 API 格式工作流 (POST /prompt) 并管理 prompt_id 任务生命周期；
  * 2. 支持工作流节点变量精准替换与 WeiLin 4 段式 LoRA 语法嵌入；
  * 3. 建立 WebSocket 实时进度追踪，推送采样步数进度与预览图像；
- * 4. 任务取消时同步清理 ComfyUI 队列并中断当前计算节点；
- * 5. 拉取最终生成图像二进制数据并规范化输出。
+ * 4. 任务取消时同步清理 ComfyUI 队列并中断当前计算节点。
  *
- * 注意事项：
- * 1. 节点连线 (Link) 数组结构极为严格，变量注入严禁破坏节点关联依赖与非目标字段；
- * 2. 长连接异常断开时应具备退避重试能力，且需处理节点执行报错抛出的异常状态。
+ * Tips：
+ * 1. 节点依赖结构：变量注入严禁破坏节点连线数组与非目标字段；
+ * 2. 长连接断线重试：WebSocket 异常中断时具备退避重连容错能力；
+ * 3. 二进制提取：正确从服务端获取输出图像 Blob 并封装元数据。
  */
 
 import type {
@@ -24,8 +24,8 @@ import type {
     ComfyUIWsMessageData
 } from '@types';
 import { BaseAdapter } from './base';
-import { formatLoraTag } from '../../util/prompt';
-import type { HttpClient } from '../../util/http';
+import { formatLoraTag } from '@util/prompt';
+import type { HttpClient } from '@util/http';
 
 /**
  * 工作流模板变量直接替换纯函数

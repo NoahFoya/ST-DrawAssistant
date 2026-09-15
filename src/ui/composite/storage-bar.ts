@@ -1,7 +1,14 @@
 /**
  * 本地持久化存储监控条与操作栏组件 (StorageBar)
- * 对齐 styles/controls/toolbars/storage-bar.css 规范。
- * 展示 IndexedDB 存储使用量占比进度条、3 列核心指标卡片，并提供一键清理与备份导出。
+ *
+ * 功能：
+ * 1. 展示 IndexedDB 存储使用量占比与进度高亮条；
+ * 2. 呈现已用空间、总可用配额与历史生图总数 3 列核心统计卡片；
+ * 3. 提供一键导出全量数据备份与清理历史记录操作入口。
+ *
+ * Tips：
+ * 1. 提供标准展开与紧凑 (compact) 两种渲染形态；
+ * 2. 存储容量超过 80% 或 90% 警戒线时自动切换高亮警示色。
  */
 
 import type { StorageQuotaInfo } from '@types';

@@ -1,15 +1,15 @@
 /**
- * 生图任务状态机与并发队列调度管理器 (src/store/task.ts)
+ * 生图任务状态机与并发队列调度管理器
  *
- * 核心功能：
- * 1. 管理任务生命周期流转 (QUEUED -> RUNNING -> COMPLETED / CANCELLED / FAILED)；
+ * 功能：
+ * 1. 管理任务生命周期状态机流转 (QUEUED -> RUNNING -> COMPLETED / CANCELLED / FAILED)；
  * 2. 控制全局并发数调度与超时中断机制；
- * 3. 维护任务执行队列、上下文身份识别与历史记录容量上限；
- * 4. 分发细粒度生命周期事件并支持统一取消与资源释放。
+ * 3. 维护任务队列排队、上下文身份识别与历史记录容量上限；
+ * 4. 派发生命周期事件并支持按 ID 或批量取消任务。
  *
- * 注意事项：
- * 1. 任务取消时通过关联的 AbortController 向下游执行器与网络层发出中断信号；
- * 2. 超时计时器需在任务结束（完成/失败/取消）时确保清理，避免内存泄漏。
+ * Tips：
+ * 1. 信号联动：任务取消时必须触发绑定的 AbortController 向下游网络请求发出中断信号；
+ * 2. 定时器清理：每个任务关联的超时定时器在状态终结时必须清除，避免悬挂计时与内存泄露。
  */
 
 import type {
@@ -20,7 +20,8 @@ import type {
     ImageGenerationResult,
     EngineType
 } from '@types';
-import { TypedEventBus, IDisposable } from '../util/event-bus';
+import type { IDisposable } from '@util/event-bus';
+import { TypedEventBus } from '@util/event-bus';
 import { DEFAULT_TASK_TIMEOUT_MS } from '../constants';
 
 /** 插件任务生命周期事件映射 */

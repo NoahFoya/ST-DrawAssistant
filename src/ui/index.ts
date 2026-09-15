@@ -1,13 +1,16 @@
 /**
- * @module src/ui
- * @description ST-DrawAssistant UI 层统一初始化与顶层装配总入口
+ * UI 层统一初始化与顶层装配总入口 (src/ui/index.ts)
  *
- * 职责：
- * 1. 组装 ThemeService，向根 DOM 动态注入 CSS Design Tokens；
- * 2. 实例化 ModalShell，全量注册 10 大设置选项卡（4 大引擎 + 6 大通用/扩展视图）；
- * 3. 挂载常驻 FabContainer（48px 正圆形毛玻璃悬浮球），绑定单击呼出主设置面板；
- * 4. 实例化 FloorManager，提供聊天楼层生图挂载与会话切换防泄漏控制；
+ * 功能：
+ * 1. 组装 ThemeService，向根 DOM 动态注入 CSS 设计变量；
+ * 2. 实例化 ModalShell，全量注册 10 大设置选项卡 (4 大引擎 + 6 大通用/扩展视图)；
+ * 3. 挂载常驻 FabContainer 快捷悬浮球，绑定单击呼出主设置面板；
+ * 4. 实例化 FloorManager，提供聊天楼层生图挂载与会话生命周期管理；
  * 5. 绑定快捷键 (Ctrl+Shift+D)，提供洁净的 dispose() 生命周期回收。
+ *
+ * Tips：
+ * 1. 作为前端视图层唯一的门面装配工厂 (initUI)，向上层入口提供开箱即用的 UI 句柄；
+ * 2. 插件禁用或重载时调用 dispose()，集中释放所有浮层、定时器与全局快捷键监听。
  */
 
 export * from './theme';
@@ -221,6 +224,7 @@ export function initUI(services: UIServices): UIHandle {
         title: 'ST-DrawAssistant 绘画助手设置',
         version,
         initialTabId: 'general',
+        settingsStore,
         onClose: () => {
             settingsStore.flush();
         }

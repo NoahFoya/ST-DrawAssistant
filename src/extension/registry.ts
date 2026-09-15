@@ -1,14 +1,14 @@
 /**
  * 插件扩展注册中心 (ExtensionRegistry)
  *
- * 核心功能：
+ * 功能：
  * 1. 提供插件内部功能扩展的注册、发现与生命周期管理机制；
- * 2. 分配沙箱隔离的扩展受控上下文、专用存储空间与生命周期钩子；
+ * 2. 分配受控上下文、沙箱存储空间与生命周期钩子；
  * 3. 编排提示词增强与图像后处理链式钩子。
  *
- * 注意事项：
- * 1. 扩展注册与注销必须安全幂等，确保扩展禁用时能彻底解绑钩子与清理内存；
- * 2. 外部扩展代码执行必须增加异常捕获与隔离保护，防止第三方错误导致插件主流程崩溃。
+ * Tips：
+ * 1. 幂等与解绑：扩展注册与注销必须保持幂等，禁用时彻底解绑钩子与清理内存；
+ * 2. 异常隔离：执行第三方扩展钩子时进行异常捕获与隔离保护，防止阻断插件核心流程。
  */
 
 import type {
@@ -17,7 +17,7 @@ import type {
     ExtensionStorageAccessor,
     ExtensionHooksRegistry
 } from '@types';
-import type { SettingsStore } from '../store/settings';
+import type { SettingsStore } from '@store/settings';
 
 export class ExtensionRegistry {
     private static _instance: ExtensionRegistry | null = null;

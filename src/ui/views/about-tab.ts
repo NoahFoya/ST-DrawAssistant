@@ -1,26 +1,26 @@
 /**
- * @module src/ui/views/about-tab
- * @description 插件信息与版本维护面板 (AboutTab)
+ * 插件信息与版本维护面板 (AboutTab)
  *
- * 核心功能：
+ * 功能：
  * 1. 展示插件品牌标识、当前安装版本与更新检查状态；
- * 2. 呈现结构化版本更新日志 (Changelog)，方便追踪各版本特性演进与缺陷修复；
- * 3. 提供项目主页、开发文档与问题反馈等社区外部导航入口；
+ * 2. 呈现结构化版本更新日志 (Changelog)，展示版本特性演进；
+ * 3. 提供项目主页、开发文档与问题反馈等外部安全链接；
  * 4. 提供插件全量配置备份导出、导入恢复与出厂重置能力。
  *
- * 注意事项：
- * 1. 外部链接跳转应使用安全属性 (rel="noopener noreferrer")，防止潜在跨域安全风险；
- * 2. 导入外部配置文件时需执行结构与键名清洗，阻断非法脏属性注入。
+ * Tips：
+ * 1. 外部链接统一附带 target="_blank" 与 rel="noopener noreferrer" 安全属性；
+ * 2. 配置导入时执行防御性数据清洗，避免非法字段破坏运行时设置。
  */
 
-import { createElement } from '../../util/dom';
+import { createElement } from '@util/dom';
 import { createCard } from '../components/form-field';
-import { createButton, ButtonHandle } from '../components/button';
-import { createBadge } from '../components/feedback';
-import { Toast } from '../components/feedback';
+import { createButton, type ButtonHandle } from '../components/button';
+import { createBadge, Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
-import { DEFAULT_SETTINGS } from '../../store/settings';
-import type { SettingsStore } from '../../store/settings';
+import { DEFAULT_SETTINGS, type SettingsStore } from '@store/settings';
+
+import aboutJson from '@config/about.json';
+import changelogJson from '@config/changelog.json';
 
 export interface AboutTabOptions {
     settingsStore?: SettingsStore;
@@ -44,7 +44,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
         }
     };
 
-    const currentVersion = options.version || 'v0.2.0';
+    const currentVersion = options.version || aboutJson.version || 'v0.2.0';
 
     // 1. 软件信息与社区生态卡片 (.da-hero-card 高内聚整合)
     const heroCard = createElement('div', { className: 'da-hero-card' });
@@ -56,20 +56,29 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     });
 
     const titleGroup = createElement('div', {
-        attributes: { style: 'display: flex; align-items: center; gap: 10px;' }
+        attributes: { style: 'display: flex; align-items: center; gap: 10px; flex-wrap: wrap;' }
     });
 
     const heroTitle = createElement('h2', {
         className: 'da-hero-card__title',
-        textContent: 'ST-DrawAssistant'
+        textContent: aboutJson.name || 'Starlight DrawAssistant'
     });
     titleGroup.appendChild(heroTitle);
 
     const versionBadge = createBadge({
-        text: currentVersion,
+        text: currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`,
         variant: 'info'
     });
     titleGroup.appendChild(versionBadge.element);
+
+    if (aboutJson.license) {
+        const licenseBadge = createBadge({
+            text: aboutJson.license,
+            variant: 'success'
+        });
+        titleGroup.appendChild(licenseBadge.element);
+    }
+
     heroHeader.appendChild(titleGroup);
 
     // Hero 动作按钮行
@@ -96,7 +105,7 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
                     }
                 } else {
                     await new Promise((r) => setTimeout(r, 600));
-                    Toast.success('当前已是最新稳定版本 (v0.2.0)');
+                    Toast.success(`当前已是最新稳定版本 (${currentVersion})`);
                 }
             } catch (err: any) {
                 Toast.warn('检查更新失败，请检查网络连接');
@@ -125,9 +134,33 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
 
     const heroDesc = createElement('p', {
         className: 'da-hero-card__desc',
-        textContent: '轻量、可靠、易维护的 SillyTavern Web 端全能生图扩展插件。支持 ComfyUI、SD-WebUI / Forge、NovelAI 与 OpenAI 兼容多模态大模型生图，全方位集成聊天楼层交互、工作流蓝图与历史画廊。'
+        textContent: aboutJson.description
     });
     heroCard.appendChild(heroDesc);
+
+    // 特色亮点微标 (Highlights)
+    if (Array.isArray(aboutJson.highlights) && aboutJson.highlights.length > 0) {
+        const highlightsContainer = createElement('div', {
+            className: 'da-about-highlights',
+            attributes: { style: 'display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0;' }
+        });
+        for (const h of aboutJson.highlights) {
+            const chip = createBadge({ text: h, variant: 'info' });
+            highlightsContainer.appendChild(chip.element);
+        }
+        heroCard.appendChild(highlightsContainer);
+    }
+
+    // 作者与版权
+    const metaFooter = createElement('div', {
+        className: 'da-about-footer',
+        attributes: { style: 'display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--da-text-muted); flex-wrap: wrap; gap: 8px; margin-top: 4px;' }
+    });
+    metaFooter.innerHTML = `
+        <div>作者：<strong>${aboutJson.author || 'NoahFoya with AICode'}</strong></div>
+        <div>${aboutJson.copyright || 'Released under GPL-3.0 License.'}</div>
+    `;
+    heroCard.appendChild(metaFooter);
 
     // 分隔线 1
     const divider1 = createElement('div', {
@@ -143,38 +176,13 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     heroCard.appendChild(linksTitle);
 
     const linkGrid = createElement('div', { className: 'da-rich-link-grid' });
-    const communityLinks = [
-        {
-            title: 'GitHub 仓库',
-            desc: '源码浏览、Star 支持与 Releases 发布包',
-            icon: '★',
-            url: 'https://github.com/NoahFoya/ST-DrawAssistant'
-        },
-        {
-            title: 'SillyTavern 官方文档',
-            desc: '酒馆扩展生态与客户端 API 开发规范',
-            icon: '📖',
-            url: 'https://docs.sillytavern.app/'
-        },
-        {
-            title: '问题反馈 / Issue',
-            desc: '提交缺陷报告、功能建议与体验优化',
-            icon: '💬',
-            url: 'https://github.com/NoahFoya/ST-DrawAssistant/issues'
-        },
-        {
-            title: '技术架构说明',
-            desc: '查看本项目的领域原则与分层设计文档',
-            icon: '📄',
-            url: 'https://github.com/NoahFoya/ST-DrawAssistant#readme'
-        }
-    ];
+    const links = Array.isArray(aboutJson.communityLinks) ? aboutJson.communityLinks : [];
 
-    for (const item of communityLinks) {
+    for (const item of links) {
         const a = createElement('a', {
-            className: 'da-rich-link-card',
+            className: `da-rich-link-card ${item.themeClass || ''}`.trim(),
             attributes: {
-                href: item.url,
+                href: item.href,
                 target: '_blank',
                 rel: 'noopener noreferrer'
             }
@@ -184,9 +192,9 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
             <div class="da-rich-link-card__icon-box">
                 <span class="da-rich-link-card__icon">${item.icon}</span>
             </div>
-            <div style="flex: 1; min-width: 0;">
-                <div style="font-weight: 600; font-size: 13px; color: var(--da-text-primary); margin-bottom: 2px;">${item.title}</div>
-                <div style="font-size: 11px; color: var(--da-text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.desc}</div>
+            <div class="da-rich-link-card__content">
+                <div class="da-rich-link-card__title">${item.title}</div>
+                <div class="da-rich-link-card__sub">${item.subtitle}</div>
             </div>
         `;
         linkGrid.appendChild(a);
@@ -207,22 +215,19 @@ export function renderAboutTab(options: AboutTabOptions = {}): AboutTabHandle {
     heroCard.appendChild(changelogHeader);
 
     const changelogEl = createElement('div', { className: 'da-changelog' });
-    changelogEl.innerHTML = `
-        <div class="da-changelog__entry">v0.2.0 (2026-09) · 架构演进与 UI 重构</div>
-        <ul class="da-changelog__list">
-            <li class="da-changelog__item">优化原子控件库，采用画幅下拉选择器与数值微调输入框；</li>
-            <li class="da-changelog__item">全面接入四大生图后端（ComfyUI / SD-WebUI / NovelAI / OpenAI）专属设置视窗；</li>
-            <li class="da-changelog__item">通用参数设置支持直连 Direct / 宿主中继 Relay 传输通道；</li>
-            <li class="da-changelog__item">测试连接支持连通性探测与远端资产（Model / VAE / LoRA / 订阅）动态同步；</li>
-            <li class="da-changelog__item">提示词预设管理器内置脏状态跟踪器，修改时高亮提示并在保存或还原时自动重置。</li>
-        </ul>
-        <div class="da-changelog__entry da-changelog__entry--sep">v0.1.0 · 核心架构与功能管道</div>
-        <ul class="da-changelog__list">
-            <li class="da-changelog__item">实现双层存储池（LocalForage 与内存快照）并提供基于 LRU 的存储配额管理；</li>
-            <li class="da-changelog__item">实现多后端适配器注册中心与生成编排器（GenerationOrchestrator）；</li>
-            <li class="da-changelog__item">支持 ComfyUI WebSocket 实时进度追踪与中断队列。</li>
-        </ul>
-    `;
+    let clHtml = '';
+    const changelogEntries = Array.isArray(changelogJson) ? changelogJson : [];
+    for (let i = 0; i < changelogEntries.length; i++) {
+        const entry = changelogEntries[i];
+        const sepClass = i > 0 ? ' da-changelog__entry--sep' : '';
+        clHtml += `<div class="da-changelog__entry${sepClass}">${entry.title || entry.version}</div>`;
+        clHtml += '<ul class="da-changelog__list">';
+        for (const item of entry.items || []) {
+            clHtml += `<li class="da-changelog__item">${item}</li>`;
+        }
+        clHtml += '</ul>';
+    }
+    changelogEl.innerHTML = clHtml;
     heroCard.appendChild(changelogEl);
     root.appendChild(heroCard);
 

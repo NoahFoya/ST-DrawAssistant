@@ -1,13 +1,14 @@
 /**
- * 引擎生图请求参数构建器 (src/function/params-builder.ts)
+ * 引擎生图请求参数构建器
  *
- * 核心功能：
- * 1. 统一处理从 SettingsStore 当前活跃绘图预设到各引擎原生强类型请求数据的转换；
+ * 功能：
+ * 1. 统一处理从当前活跃绘图预设到各引擎原生强类型请求数据的转换；
  * 2. 为四大引擎 (ComfyUI, SD-WebUI, NovelAI, OpenAI) 分别构建专属原生请求对象；
- * 3. 杜绝运行时弱类型字典与参数丢失断层。
+ * 3. 保证各引擎请求数据强类型约束与参数完整性。
  *
- * 注意事项：
- * 1. 严格按照各后端引擎的协议字段构建，未配置字段自动回退至缺省超参数。
+ * Tips：
+ * 1. 协议边界：严格按照各后端引擎的协议字段构建，未配置字段自动回退至缺省超参数；
+ * 2. 尺寸整除：对于 NovelAI 等特殊后端，尺寸需在构建阶段由外部或缺省值保证 64 像素对齐。
  */
 
 import type {
@@ -20,8 +21,8 @@ import type {
     TransportMode,
     PresetItem
 } from '@types';
-import type { SettingsStore } from '../store/settings';
-import { BUILTIN_WORKFLOWS } from '../store/preset';
+import type { SettingsStore } from '@store/settings';
+import { BUILTIN_WORKFLOWS } from '@store/preset';
 
 export interface BuildEngineParamsOptions {
     engine: EngineType;

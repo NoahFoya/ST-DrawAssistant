@@ -1,16 +1,15 @@
 /**
- * @module src/ui/composite/prompt-preset-manager
- * @description 提示词预设方案管理器卡片 (PromptPresetManager)
+ * 提示词预设方案管理器卡片 (PromptPresetManager)
  *
- * 核心功能：
+ * 功能：
  * 1. 统一管理正向修饰词前缀、后缀与通用负向词模板；
  * 2. 集成 LoRA 模型管理控件，支持权重调节与按引擎按需显隐；
  * 3. 联动预设工具栏，支持提示词方案的切换、重命名、另存为与出厂重置；
  * 4. 内置表单脏状态追踪，编辑内容变更时自动同步保存状态。
  *
- * 注意事项：
- * 1. 不同引擎（如 NovelAI vs SD-WebUI）对 LoRA 的支持机制不同，需根据引擎特性动态适配展示；
- * 2. 预设切换或重置时应先比对当前表单是否存在未保存的脏状态，防止意外丢弃用户修改。
+ * Tips：
+ * 1. 不同引擎（如 NovelAI vs SD-WebUI）对 LoRA 支持机制不同，需根据引擎特性动态适配展示；
+ * 2. 预设切换或重置时先比对当前表单是否存在未保存的脏状态，防止意外丢弃修改。
  */
 
 import { PresetItem } from '@types';

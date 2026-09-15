@@ -1,6 +1,11 @@
 /**
  * 插件内部常量定义
- * 职责：收纳内部协议定义、默认超时、模块标识与存储对象名称，不污染用户可配置项。
+ *
+ * 功能：
+ * 1. 收纳模块名称、发行版本号、IndexedDB 数据库名及核心时间阈值常量。
+ *
+ * Tips：
+ * 1. 本文件仅维护插件底层静态常量，用户可定制的动态配置项统一在 default-settings.json 中维护。
  */
 
 /** 扩展插件在 SillyTavern 宿主 extensionSettings 中的唯一标识键 */
@@ -24,8 +29,3 @@ export const DEFAULT_URL_RELEASE_DELAY_MS = 5000;
 /** 设置项防抖持久化存储延时 (毫秒) */
 export const DEFAULT_SAVE_DEBOUNCE_MS = 500;
 
-/** 消息正文占位符前缀内部解析标记 */
-export const DEFAULT_PLACEHOLDER_START = 'image###';
-
-/** 消息正文占位符后缀内部解析标记 */
-export const DEFAULT_PLACEHOLDER_END = '###';

@@ -1,15 +1,15 @@
 /**
  * SD-WebUI / Forge 生图引擎适配器 (SdWebUIAdapter)
  *
- * 核心功能：
+ * 功能：
  * 1. 对接 SD-WebUI 与 Forge 的 txt2img 及 img2img REST 接口；
- * 2. 负责将 LoRA 列表转换为 A1111 格式的 `<lora:name:weight>` 提示词标签；
+ * 2. 将 LoRA 列表转换为标准 A1111 格式的 <lora:name:weight> 提示词标签；
  * 3. 支持服务端生成作业的实时中断 (POST /sdapi/v1/interrupt)；
  * 4. 同步远端 Checkpoint 模型与采样器列表，执行连通性探测。
  *
- * 注意事项：
- * 1. 针对 A1111 与 Forge 等变种，采样器名称与参数字段可能存在微小差异，需做兼容解析；
- * 2. 接口返回的 Base64 图片数据需转换为二进制 Blob，并提取 PNG Info 元数据。
+ * Tips：
+ * 1. 变种兼容：针对 A1111 与 Forge 等衍生分支，采样器名称与参数字段可能存在微小差异，需容错解析；
+ * 2. 图像解析：接口返回的 Base64 图片数据需转换为二进制 Blob，并提取 PNG Info 生成参数。
  */
 
 import type {
@@ -21,9 +21,9 @@ import type {
     SdWebUIResponseData
 } from '@types';
 import { BaseAdapter } from './base';
-import { base64ToBlob } from '../../util/image';
-import { formatLoraTag } from '../../util/prompt';
-import type { HttpClient } from '../../util/http';
+import { base64ToBlob } from '@util/image';
+import { formatLoraTag } from '@util/prompt';
+import type { HttpClient } from '@util/http';
 
 export class SdWebUIAdapter extends BaseAdapter<SdWebUIRequestData> {
     public readonly id: EngineType = 'sdwebui';

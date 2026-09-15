@@ -1,21 +1,23 @@
 /**
- * @module src/ui/layout/modal-shell
- * @description 插件主设置模态窗外壳 (ModalShell)
+ * 插件主设置模态窗外壳 (ModalShell)
  *
- * 核心功能：
- * 1. 提供插件主模态窗口的整体框架，包含头部导航、分组侧边栏、主内容视窗与状态底栏；
- * 2. 管理多选项卡 (Tabs) 的切换路由、视图挂载与生命周期管理；
- * 3. 支持遮罩层点击、关闭按钮与键盘快捷键退出；
- * 4. 底部实时指示当前生图后端的连通性状态与网络响应延迟。
+ * 功能：
+ * 1. 提供插件主模态窗口整体框架，包含头部导航、分组侧边栏、主内容视窗与状态底栏；
+ * 2. 顶栏提供应用标题、版本关于徽标、主题下拉切换与关闭按钮；
+ * 3. 底栏左侧提供支持点击重测的生图引擎连通性检测，右侧展示 JS 堆内存实时监控；
+ * 4. 管理多选项卡的切换路由、视图挂载与生命周期管理。
  *
- * 注意事项：
- * 1. 模态窗弹出与隐藏需维护焦点状态并锁定背景滚动，避免影响宿主正常交互；
- * 2. 切换 Tab 时需妥善管理原视图的清理与新视图的渲染，防止事件监听遗留。
+ * Tips：
+ * 1. 模态窗显隐时严格管理连通性检测定时器与取消控制器，防止后台无效请求；
+ * 2. 切换视图面板时触发停用与卸载回调，销毁时解绑全局事件监听与 DOM 节点，避免内存泄露。
  */
 
-import { createElement } from '../../util/dom';
+import { createElement } from '@util/dom';
 import { getIconSvg } from '../components/icons';
-import { ThemeService, BUILTIN_THEMES } from '../theme';
+import { ThemeService, type ThemeConfig } from '../theme';
+import { PresetManager } from '@store/preset';
+import { getAdapter } from '@function/adapter';
+import type { SettingsStore } from '@store/settings';
 
 import type { TabDefinition, StatusDotState, ModalShellOptions } from '@types';
 export type { TabDefinition, StatusDotState, ModalShellOptions };
@@ -30,6 +32,7 @@ export class ModalShell {
 
     private _statusDotEl: HTMLElement;
     private _statusTextEl: HTMLElement;
+    private _memoryTextEl: HTMLElement;
 
     private _tabs = new Map<string, TabDefinition>();
     private _tabButtons = new Map<string, HTMLButtonElement>();
@@ -39,6 +42,11 @@ export class ModalShell {
     private _isOpen = false;
     private _options: ModalShellOptions;
     private _keyHandler: (e: KeyboardEvent) => void;
+
+    private _probeTimer: number | null = null;
+    private _memoryTimer: number | null = null;
+    private _probeAbort: AbortController | null = null;
+    private _unsubs: (() => void)[] = [];
 
     constructor(options: ModalShellOptions = {}) {
         this._options = {
@@ -72,11 +80,12 @@ export class ModalShell {
         modalBody.appendChild(this._contentEl);
         this._innerWindow.appendChild(modalBody);
 
-        // 5. 构建底部 34px 状态栏
-        const { footer, dot, text } = this._buildFooter();
+        // 5. 构建底部 34px 状态栏 (对齐原版：左侧连通探测，右侧内存监控)
+        const { footer, dot, text, memText } = this._buildFooter();
         this._footerEl = footer;
         this._statusDotEl = dot;
         this._statusTextEl = text;
+        this._memoryTextEl = memText;
         this._innerWindow.appendChild(this._footerEl);
 
         // 6. 注册外部初始传入的 Tab 列表
@@ -102,13 +111,25 @@ export class ModalShell {
         if (typeof window !== 'undefined') {
             window.addEventListener('keydown', this._keyHandler);
         }
+
+        // 9. 监听生图引擎配置与激活变更
+        if (this._options.settingsStore) {
+            const store = this._options.settingsStore as SettingsStore;
+            const unsubEngine = store.onKeyChange('activeEngine', () => {
+                if (this._isOpen) void this._probeServer();
+            });
+            const unsubEngines = store.onKeyChange('engines', () => {
+                if (this._isOpen) void this._probeServer();
+            });
+            this._unsubs.push(() => unsubEngine.dispose(), () => unsubEngines.dispose());
+        }
     }
 
     /** 构建 46px 顶部标题栏 */
     private _buildHeader(): HTMLElement {
         const header = createElement('header', { className: 'da-header-bar' });
 
-        // 左侧：图标 + 渐变标题 + 版本徽标
+        // 左侧：图标 + 渐变标题 + 可点击跳转关于面板的版本徽标
         const headerLeft = createElement('div', { className: 'da-header-left' });
         const iconSpan = createElement('span', { className: 'da-header-icon' });
         iconSpan.innerHTML = getIconSvg('palette');
@@ -118,44 +139,103 @@ export class ModalShell {
             textContent: this._options.title || 'ST-DrawAssistant'
         });
 
-        const badgeSpan = createElement('span', {
-            className: 'da-badge da-badge--info',
-            textContent: this._options.version || 'v0.2.0'
+        // 版本胶囊徽标：点击快速跳转至关于选项卡 (About)
+        const badgeBtn = createElement('button', {
+            className: 'da-version-badge',
+            textContent: this._options.version || 'v0.2.0',
+            attributes: {
+                type: 'button',
+                title: '点击查看版本与关于信息'
+            }
+        }) as HTMLButtonElement;
+        badgeBtn.style.cursor = 'pointer';
+        badgeBtn.style.border = '1px solid rgba(var(--da-accent-rgb), 0.25)';
+        badgeBtn.addEventListener('click', () => {
+            void this.switchTab('about');
         });
 
         headerLeft.appendChild(iconSpan);
         headerLeft.appendChild(titleH3);
-        headerLeft.appendChild(badgeSpan);
+        headerLeft.appendChild(badgeBtn);
 
         // 右侧：快捷主题切换胶囊 + 关闭按钮
         const headerRight = createElement('div', { className: 'da-header-right' });
 
-        // 快捷主题切换胶囊
+        // 快捷主题切换胶囊 (动态读取 themes.json 与自定义主题预设)
         const quickThemeWrapper = createElement('div', { className: 'da-quick-theme-selector' });
         const quickThemeSelect = createElement('select', { className: 'da-quick-theme-select' }) as HTMLSelectElement;
+        quickThemeSelect.id = 'da-quick-theme-select';
+        quickThemeSelect.title = '快速切换界面主题配色';
 
-        for (const [key, theme] of Object.entries(BUILTIN_THEMES)) {
-            const opt = createElement('option', {
-                textContent: theme.name || key
-            }) as HTMLOptionElement;
-            opt.value = key;
-            quickThemeSelect.appendChild(opt);
-        }
+        const populateThemeOptions = () => {
+            quickThemeSelect.innerHTML = '';
+            let themes: Array<{ id: string; name: string }> = [];
+
+            if (this._options.settingsStore) {
+                const store = this._options.settingsStore as SettingsStore;
+                const pm = new PresetManager(store);
+                themes = pm
+                    .list<ThemeConfig>('themes')
+                    .filter((t) => t.id !== 'safe-fallback')
+                    .map((t) => ({ id: t.id, name: t.name }));
+            }
+
+            if (themes.length === 0) {
+                const opt = createElement('option', {
+                    textContent: '深色夜间'
+                }) as HTMLOptionElement;
+                opt.value = 'dark';
+                quickThemeSelect.appendChild(opt);
+            } else {
+                for (const t of themes) {
+                    const opt = createElement('option', {
+                        textContent: t.name
+                    }) as HTMLOptionElement;
+                    opt.value = t.id;
+                    quickThemeSelect.appendChild(opt);
+                }
+            }
+
+            const curId = this._options.settingsStore
+                ? (this._options.settingsStore as SettingsStore).get('themePreset')
+                : 'dark';
+            quickThemeSelect.value = curId || themes[0]?.id || 'dark';
+        };
+
+        populateThemeOptions();
 
         quickThemeSelect.addEventListener('change', () => {
             const selectedKey = quickThemeSelect.value;
-            const theme = BUILTIN_THEMES[selectedKey];
-            if (theme) {
-                ThemeService.getInstance().applyTheme(theme);
+            if (this._options.settingsStore) {
+                (this._options.settingsStore as SettingsStore).set('themePreset', selectedKey);
             }
+            ThemeService.getInstance().applyPresetById(selectedKey);
         });
+
+        if (this._options.settingsStore) {
+            const store = this._options.settingsStore as SettingsStore;
+            const unsubPreset = store.onKeyChange('themePreset', (val) => {
+                if (quickThemeSelect.value !== val) {
+                    quickThemeSelect.value = val;
+                }
+            });
+            const unsubPresets = store.onKeyChange('presets', () => {
+                populateThemeOptions();
+            });
+            this._unsubs.push(() => unsubPreset.dispose(), () => unsubPresets.dispose());
+        }
+
         quickThemeWrapper.appendChild(quickThemeSelect);
 
         // 关闭按钮
         const closeBtn = createElement('button', {
-            className: 'da-modal-close-btn'
+            className: 'da-modal-close-btn',
+            attributes: {
+                type: 'button',
+                'aria-label': '关闭设置面板 (Esc)',
+                title: '关闭设置面板 (Esc)'
+            }
         }) as HTMLButtonElement;
-        closeBtn.setAttribute('aria-label', '关闭弹窗');
         closeBtn.innerHTML = getIconSvg('close');
         closeBtn.addEventListener('click', () => this.close());
 
@@ -167,37 +247,198 @@ export class ModalShell {
         return header;
     }
 
-    /** 构建 34px 底部状态栏 */
-    private _buildFooter(): { footer: HTMLElement; dot: HTMLElement; text: HTMLElement } {
+    /** 构建 34px 底部状态栏 (完全对齐原版布局与功能) */
+    private _buildFooter(): {
+        footer: HTMLElement;
+        dot: HTMLElement;
+        text: HTMLElement;
+        memText: HTMLElement;
+    } {
         const footer = createElement('footer', { className: 'da-footer-bar' });
 
-        // 左侧后端连接状态
+        // 左侧后端连接状态 (点击可重新触发探测)
         const leftStatus = createElement('div', {
-            className: 'da-status-item'
+            className: 'da-status-item',
+            attributes: {
+                id: 'da-server-status-container',
+                title: '点击重新检测连接'
+            }
         });
-        leftStatus.id = 'da-server-status-container';
-        const dot = createElement('span', { className: 'da-status-dot da-status-ok' });
+
+        const dot = createElement('span', {
+            className: 'da-status-dot da-status-checking',
+            attributes: { id: 'da-server-status-dot' }
+        });
+
         const text = createElement('span', {
-            className: 'da-server-status-text',
-            textContent: '绘画服务连接就绪 · 延迟 --ms'
+            className: 'da-status-info da-server-status-text',
+            attributes: { id: 'da-server-status-text' },
+            textContent: '检测服务器连接中...'
         });
+
         leftStatus.appendChild(dot);
         leftStatus.appendChild(text);
 
-        // 右侧版权与版本
+        leftStatus.addEventListener('click', () => {
+            void this._probeServer();
+        });
+
+        // 右侧系统内存监控
         const rightInfo = createElement('div', {
-            className: 'da-status-item'
+            className: 'da-status-item da-memory-info',
+            attributes: { id: 'da-memory-status-container' }
         });
-        const verText = createElement('span', {
-            className: 'da-memory-status-text',
-            textContent: `${this._options.version || 'v0.2.0'} · ST-DrawAssistant`
+
+        const memText = createElement('span', {
+            className: 'da-status-info da-memory-status-text',
+            attributes: { id: 'da-memory-status-text' },
+            textContent: 'JS Heap: 0.0 MB'
         });
-        rightInfo.appendChild(verText);
+        rightInfo.appendChild(memText);
 
         footer.appendChild(leftStatus);
         footer.appendChild(rightInfo);
 
-        return { footer, dot, text };
+        return { footer, dot, text, memText };
+    }
+
+    /**
+     * 探测当前激活生图后端的连通性与往返网络延迟
+     */
+    private async _probeServer(): Promise<void> {
+        if (!this._statusTextEl || !this._statusDotEl) return;
+        const store = this._options.settingsStore as SettingsStore | undefined;
+
+        if (!store) {
+            this._statusDotEl.className = 'da-status-dot da-status-idle';
+            this._statusTextEl.textContent = '未配置设置存储';
+            return;
+        }
+
+        const activeEngine = store.get('activeEngine') || 'comfyui';
+        const engines = (store.get('engines') || {}) as Record<string, any>;
+        const engineConfig = engines[activeEngine] || {};
+
+        let adapter: any;
+        try {
+            adapter = getAdapter(activeEngine as any);
+        } catch {
+            this._statusDotEl.className = 'da-status-dot da-status-error';
+            this._statusTextEl.textContent = `未挂载适配器 [${activeEngine}]`;
+            return;
+        }
+
+        const engineNames: Record<string, string> = {
+            comfyui: 'ComfyUI',
+            sdwebui: 'SD-WebUI',
+            novelai: 'NovelAI',
+            openai: 'OpenAI 兼容'
+        };
+        const engineName = engineNames[activeEngine] || adapter.name || activeEngine;
+
+        const serverUrl =
+            engineConfig.serverUrl ||
+            (activeEngine === 'novelai'
+                ? 'https://image.novelai.net'
+                : activeEngine === 'openai'
+                  ? 'https://api.openai.com/v1'
+                  : activeEngine === 'sdwebui'
+                    ? 'http://127.0.0.1:7860'
+                    : 'http://127.0.0.1:8188');
+
+        if (adapter.setBaseUrl && serverUrl) {
+            adapter.setBaseUrl(serverUrl);
+        }
+        if (adapter.setApiKey && engineConfig.apiKey) {
+            adapter.setApiKey(engineConfig.apiKey);
+        }
+
+        if (this._probeAbort) {
+            this._probeAbort.abort();
+        }
+        this._probeAbort = new AbortController();
+        const signal = this._probeAbort.signal;
+
+        this._statusDotEl.className = 'da-status-dot da-status-checking';
+        this._statusTextEl.textContent = `检测 ${engineName} 连接中...`;
+
+        const startTime = performance.now();
+        try {
+            let res: any;
+            if (activeEngine === 'novelai' && adapter.fetchAssets) {
+                res = await adapter.fetchAssets(signal, { apiKey: engineConfig.apiKey });
+            } else {
+                res = await adapter.checkHealth(signal);
+            }
+            const latencyMs = res?.latencyMs ?? Math.round(performance.now() - startTime);
+
+            if (res && res.ok) {
+                this._statusDotEl.className = 'da-status-dot da-status-ok';
+                this._statusTextEl.textContent = `${engineName} 运行正常 (${latencyMs}ms)`;
+            } else {
+                this._statusDotEl.className = 'da-status-dot da-status-error';
+                this._statusTextEl.textContent = `${engineName} (离线或无响应)`;
+            }
+        } catch (err: any) {
+            if (err?.name === 'AbortError') return;
+            this._statusDotEl.className = 'da-status-dot da-status-error';
+            this._statusTextEl.textContent = `${engineName} (通信异常)`;
+        }
+    }
+
+    /**
+     * 刷新 JS Heap 内存占用指标 (基于浏览器 performance.memory 接口)
+     */
+    private _updateMemory(): void {
+        if (!this._memoryTextEl) return;
+        const perf = (typeof performance !== 'undefined' ? performance : null) as unknown as {
+            memory?: { usedJSHeapSize: number; totalJSHeapSize: number };
+        } | null;
+
+        if (perf && perf.memory) {
+            const usedMB = (perf.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
+            const totalMB = (perf.memory.totalJSHeapSize / (1024 * 1024)).toFixed(1);
+            this._memoryTextEl.textContent = `JS Heap: ${usedMB} / ${totalMB} MB`;
+        } else {
+            this._memoryTextEl.textContent = 'JS Heap: 正常';
+        }
+    }
+
+    /**
+     * 启动底部状态栏遥测监控
+     */
+    private _startTelemetry(): void {
+        this._stopTelemetry();
+        void this._probeServer();
+        this._updateMemory();
+
+        if (typeof window !== 'undefined') {
+            this._probeTimer = window.setInterval(() => {
+                void this._probeServer();
+            }, 15000);
+
+            this._memoryTimer = window.setInterval(() => {
+                this._updateMemory();
+            }, 3000);
+        }
+    }
+
+    /**
+     * 停止遥测监控并中止未决的连通探测
+     */
+    private _stopTelemetry(): void {
+        if (this._probeTimer !== null) {
+            clearInterval(this._probeTimer);
+            this._probeTimer = null;
+        }
+        if (this._memoryTimer !== null) {
+            clearInterval(this._memoryTimer);
+            this._memoryTimer = null;
+        }
+        if (this._probeAbort) {
+            this._probeAbort.abort();
+            this._probeAbort = null;
+        }
     }
 
     /**
@@ -269,7 +510,7 @@ export class ModalShell {
         btn.appendChild(labelSpan);
 
         btn.addEventListener('click', () => {
-            this.switchTab(tab.id);
+            void this.switchTab(tab.id);
         });
 
         return btn;
@@ -324,6 +565,9 @@ export class ModalShell {
             document.body.appendChild(this._container);
         }
 
+        // 启动底部遥测监控
+        this._startTelemetry();
+
         const targetTab = tabId || this._activeTabId || this._options.initialTabId || this._tabs.keys().next().value;
         if (targetTab) {
             await this.switchTab(targetTab);
@@ -337,6 +581,9 @@ export class ModalShell {
         if (!this._isOpen) return;
         this._isOpen = false;
         this._container.style.display = 'none';
+
+        // 停止遥测监控
+        this._stopTelemetry();
 
         if (this._activeTabId && this._tabs.has(this._activeTabId)) {
             this._tabs.get(this._activeTabId)!.onDeactivate?.();
@@ -390,9 +637,16 @@ export class ModalShell {
      * 彻底销毁模态框，释放监听与 DOM 节点
      */
     public dispose(): void {
+        this._stopTelemetry();
+
         if (typeof window !== 'undefined') {
             window.removeEventListener('keydown', this._keyHandler);
         }
+
+        for (const unsub of this._unsubs) {
+            unsub();
+        }
+        this._unsubs = [];
 
         for (const tab of this._tabs.values()) {
             tab.dispose?.();

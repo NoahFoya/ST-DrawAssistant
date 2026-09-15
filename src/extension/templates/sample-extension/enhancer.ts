@@ -1,6 +1,11 @@
 /**
  * 样例扩展业务逻辑处理模块
- * 遵循自包含原则，仅依赖标准受控存储访问器与通用工具
+ *
+ * 功能：
+ * 1. 提供提示词画质标签读取、更新与追加增强能力。
+ *
+ * Tips：
+ * 1. 仅通过标准受控存储访问器 (ExtensionStorageAccessor) 存取数据，不依赖插件外部未授权变量。
  */
 
 import type { ExtensionStorageAccessor } from '@types';

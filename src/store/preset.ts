@@ -1,30 +1,30 @@
 /**
- * 预设模板方案管理 (src/store/preset.ts)
+ * 预设模板方案管理
  *
- * 核心功能：
+ * 功能：
  * 1. 管理 workflows, prompts, themes, drawing 四大类预设方案；
  * 2. 保护出厂内置预设（只读保护，禁止非法覆盖或删除）；
- * 3. 支持用户自定义预设的增删改查、排序与持久化；
+ * 3. 支持自定义预设的增删改查、排序与持久化；
  * 4. 提供预设归档包的独立导入、导出、版本合并与出厂重置。
  *
- * 注意事项：
- * 1. 导入归档包时校验数据结构合法性，阻断异常脏数据；
- * 2. 涉及内置项时以标记 `isBuiltin: true` 进行边界隔离。
+ * Tips：
+ * 1. 内置项隔离：出厂内置预设打上 isBuiltin: true 标记，UI 层面禁用删除与重命名；
+ * 2. 导入校验：导入预设归档包时校验数据结构合法性，阻断异常脏数据。
  */
 
 import type { PresetItem, PresetsArchiveData, PresetCategory, PromptPresetData } from '@types';
-import { deepClone, isPlainObject } from '../util/object';
+import { deepClone, isPlainObject } from '@util/object';
 import { SettingsStore } from './settings';
 import { normalizePromptPresetData } from './normalizer';
 
-import workflowCheckpointStandard from '../../config/presets/workflows/comfyui_checkpoint_standard.json';
-import workflowSplitStandard from '../../config/presets/workflows/comfyui_split_standard.json';
-import workflowCheckpointWeilin from '../../config/presets/workflows/comfyui_checkpoint_weilin.json';
-import workflowSplitWeilin from '../../config/presets/workflows/comfyui_split_weilin.json';
+import workflowCheckpointStandard from '@config/presets/workflows/comfyui_checkpoint_standard.json';
+import workflowSplitStandard from '@config/presets/workflows/comfyui_split_standard.json';
+import workflowCheckpointWeilin from '@config/presets/workflows/comfyui_checkpoint_weilin.json';
+import workflowSplitWeilin from '@config/presets/workflows/comfyui_split_weilin.json';
 
-import builtinThemesJson from '../../config/presets/themes.json';
-import builtinPromptsJson from '../../config/presets/prompts.json';
-import builtinDrawingJson from '../../config/presets/drawing.json';
+import builtinThemesJson from '@config/presets/themes.json';
+import builtinPromptsJson from '@config/presets/prompts.json';
+import builtinDrawingJson from '@config/presets/drawing.json';
 
 /** 4 套原生 ComfyUI API 出厂内置工作流方案 */
 export const BUILTIN_WORKFLOWS: PresetItem<{ json: string }>[] = [

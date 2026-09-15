@@ -1,6 +1,14 @@
 /**
- * 现代化颜色选择器组件
- * 原生圆形色盘与十六进制 Hex 文本框双向数据联动与合法性校验。
+ * 颜色选择器控件 (ColorPicker)
+ *
+ * 功能：
+ * 1. 原生圆形色盘与十六进制 Hex 文本框双向数据联动；
+ * 2. 规范化 3 位与 6 位 Hex 颜色代码为标准大写 #RRGGBB 格式；
+ * 3. 输入非法颜色代码时提供实时校验与错误状态高亮。
+ *
+ * Tips：
+ * 1. 原生色盘触发 input 事件时自动格式化同步到文本框并触发 onChange；
+ * 2. 文本框失去焦点或回车 (change 事件) 时执行正则校验与大写修正。
  */
 
 import type { BaseControlOptions, IControlHandle } from '@types';

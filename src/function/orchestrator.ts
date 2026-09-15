@@ -1,14 +1,15 @@
 /**
- * 生图任务编排执行器 (src/function/orchestrator.ts)
+ * 生图任务编排执行器
  *
- * 核心功能：
- * 1. 作为连接任务调度队列、提示词装配流水线、后端引擎适配器与持久化整合器的核心执行中枢；
- * 2. 判定任务传输通道 (direct 浏览器直连 vs relay 宿主中继)；
- * 3. 协调生图执行生命周期、错误重试与结果入库回填。
+ * 功能：
+ * 1. 作为连接任务调度队列、提示词流水线、后端引擎适配器与持久化整合器的执行中枢；
+ * 2. 判定任务传输通道 (direct 浏览器直连 vs relay 宿主代理中转)；
+ * 3. 协调生图执行生命周期、失败重试、会话一致性判定与楼层持久化回写。
  *
- * 注意事项：
- * 1. 遵循 st-image-gen 与 st-extension 规范；
- * 2. 编排器销毁时应释放对任务队列执行器的绑定。
+ * Tips：
+ * 1. 编排器销毁时需主动注销队列执行监听，防止悬挂引用与内存泄露；
+ * 2. 会话一致性：若生成完毕后当前活动会话与任务归属会话不一致，必须废弃楼层写入，防止跨会话串图；
+ * 3. 混合内容拦截：在 HTTPS 宿主环境下，若目标服务地址为 HTTP，需自动改走宿主中继通道。
  */
 
 import type {
@@ -21,15 +22,16 @@ import type {
     NovelAIRequestData,
     OpenAIRequestData
 } from '@types';
-import { TaskQueueManager } from '../store/task';
-import { ResultIntegrator } from '../store/integrator';
-import { SettingsStore } from '../store/settings';
-import { HttpClient } from '../util/http';
-import { Logger } from '../util/logger';
-import { IDisposable } from '../util/event-bus';
-import { processPrompt, type PromptPipelineOptions } from './pipeline/pipeline';
-import { getAdapter } from './adapter/registry';
-import { ExtensionRegistry } from '../extension/registry';
+import type { IDisposable } from '@util/event-bus';
+import type { PromptPipelineOptions } from './pipeline';
+import { TaskQueueManager } from '@store/task';
+import { ResultIntegrator } from '@store/integrator';
+import { SettingsStore } from '@store/settings';
+import { HttpClient } from '@util/http';
+import { Logger } from '@util/logger';
+import { processPrompt } from './pipeline';
+import { getAdapter } from './adapter';
+import { ExtensionRegistry } from '@extension/registry';
 
 export interface GenerationOrchestratorOptions {
     taskQueue: TaskQueueManager;
@@ -64,7 +66,6 @@ export class GenerationOrchestrator implements IDisposable {
      */
     public resolveTransport(task: TaskItem): TransportMode {
         // 1. 任务显式指定的传输通道优先级最高
-        // 1. 任务显式指定的传输通道
         const taskTransport = task.params.transport;
         if (taskTransport && taskTransport !== 'auto') {
             return taskTransport;

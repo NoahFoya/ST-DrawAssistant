@@ -45,6 +45,7 @@ export interface ExtensionUiSettings {
         maxHeight?: number;
         maxWidthPct?: number;
         rounded?: boolean;
+        autoBlur?: boolean;
         collapsed?: boolean;
     };
 }
@@ -81,6 +82,10 @@ export interface ExtensionSettings {
     autoGenerate: boolean;
     /** 是否在生图前自动执行提示词清洗与去重过滤 */
     cleanPrompt?: boolean;
+    /** 消息正文中识别生图指令的前导标记 (默认 image###) */
+    placeholderStart?: string;
+    /** 消息正文中识别生图指令的结束闭合标记 (默认 ###) */
+    placeholderEnd?: string;
     /** 已注册扩展功能的启用状态映射 */
     enabledExtensions?: Record<string, boolean>;
     /** 扩展独立配置隔离字典 (extensionId -> 配置键值对) */

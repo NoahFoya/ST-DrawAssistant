@@ -1,15 +1,15 @@
 /**
  * OpenAI 兼容生图引擎适配器 (OpenAIAdapter)
  *
- * 核心功能：
- * 1. 调用各厂商标准 `/v1/images/generations` 接口发起图像生成；
+ * 功能：
+ * 1. 调用各服务商标准 /v1/images/generations 接口发起生图；
  * 2. 处理返回的 Base64 编码图像数据 (b64_json) 并转换为二进制图片 Blob；
- * 3. 支持厂商特有自定义请求头与 Body 扩展参数注入；
- * 4. 执行连通性探测与模型列表同步。
+ * 3. 支持自定义请求头与 Body 扩展参数合并注入；
+ * 4. 执行连通性探测与模型列表拉取。
  *
- * 注意事项：
- * 1. 优先请求 `b64_json` 响应格式，避免部分云厂商返回带有效期的临时外链导致失效；
- * 2. 需捕获各中转厂商特异的错误信息体，提取清晰明了的失败原因给用户。
+ * Tips：
+ * 1. 响应格式偏好：优先请求 b64_json 格式，避免临时图片外链过期失效；
+ * 2. 厂商错误解析：各中转厂商错误结构各异，需兼容提取真实报错原因并友好呈现。
  */
 
 import type {
@@ -20,9 +20,10 @@ import type {
     OpenAIRequestData,
     OpenAIResponseData
 } from '@types';
+import type { HttpClient } from '@util/http';
 import { BaseAdapter } from './base';
-import { base64ToBlob } from '../../util/image';
-import { NetworkError, type HttpClient } from '../../util/http';
+import { base64ToBlob } from '@util/image';
+import { NetworkError } from '@util/http';
 
 export class OpenAIAdapter extends BaseAdapter<OpenAIRequestData> {
     public readonly id: EngineType = 'openai';

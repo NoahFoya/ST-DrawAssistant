@@ -1,16 +1,17 @@
 /**
- * 提示词装配流水线 (src/function/pipeline/pipeline.ts)
+ * 提示词装配流水线
  *
- * 核心功能：
+ * 功能：
  * 1. 串联提示词清洗、管道符切分、世界书外观标签展开、正则规则与画风预设拼装；
  * 2. 宿主原生宏安全委托调用（委托给 SillyTavern.getContext().substituteParams）；
- * 3. 标签去重与格式规范化，输出正负向提示词字符串。
+ * 3. 标签去重与标点规范化，输出规整的正负向提示词字符串。
  *
- * 注意事项：
+ * Tips：
  * 1. 纯函数设计，不直接读取或污染全局状态；
- * 2. 宏展开失败时不应中断整个流水线，保留原样文本并告警。
+ * 2. 宏展开容错：宏展开失败时不应阻断流水线，需保留原样文本并记录告警。
  */
 
+import type { RegexReplacementRule } from '@util/prompt';
 import {
     normalizePromptPunctuation,
     separatePromptByPipe,
@@ -18,9 +19,8 @@ import {
     sanitizeMessageText,
     deduplicatePromptTags,
     applyTextReplacements,
-    applyRegexRules,
-    RegexReplacementRule
-} from '../../util/prompt';
+    applyRegexRules
+} from '@util/prompt';
 
 export interface MacroMatchContext {
     /** 宏作用的上下文源：楼层消息、世界书词条或用户提示词 */

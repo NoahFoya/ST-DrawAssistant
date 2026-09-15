@@ -1,20 +1,20 @@
 /**
  * 本地持久化存储服务 (PersistentStorage)
  *
- * 核心功能：
+ * 功能：
  * 1. 基于 localforage (IndexedDB) 提供生图历史记录与二进制 Blob 本地持久化；
  * 2. 支持图片内容哈希去重计算，防止相同图片重复占用存储空间；
  * 3. 实现基于 LRU 访问热度与容量配额的超限清理淘汰机制；
  * 4. 提供标星收藏保护，确保重要图片免受自动清理。
  *
- * 注意事项：
- * 1. 存取大尺寸 Blob 时需注意浏览器配额限制与事务生命周期，避免长时间占用写事务；
- * 2. 批量读取记录列表时需按需生成 Object URL，并在使用完毕后及时释放。
+ * Tips：
+ * 1. 存储配额限制：存取大尺寸 Blob 时需注意浏览器配额与事务生命周期，避免长事务阻塞；
+ * 2. 内存释放：批量读取记录列表时需按需生成 Object URL，组件卸载时及时调用 revokeObjectURL 释放。
  */
 
 import localforage from 'localforage';
 import type { StoredImageRecord } from '@types';
-import { IDisposable } from '../util/event-bus';
+import type { IDisposable } from '@util/event-bus';
 import { DB_NAME, DB_STORE_NAME } from '../constants';
 
 export interface PersistentStorageOptions {

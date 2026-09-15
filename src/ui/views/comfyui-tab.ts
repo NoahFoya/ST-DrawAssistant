@@ -1,33 +1,32 @@
 /**
- * @module src/ui/views/comfyui-tab
- * @description ComfyUI 引擎专属配置面板 (ComfyUITab)
+ * ComfyUI 引擎专属配置面板 (ComfyUITab)
  *
- * 核心功能：
- * 1. 管理 ComfyUI 服务连接配置、HTTP 接口探测与 WebSocket 信道状态展示；
- * 2. 提供绘图方案预设切换、模型与采样器超参数配置、画面尺寸选择与工作流方案绑定；
+ * 功能：
+ * 1. 管理 ComfyUI 服务连接配置、HTTP 接口连通探测与远端资产同步；
+ * 2. 提供绘图方案预设切换、模型与采样器超参数配置与画幅尺寸选择；
  * 3. 集成工作流预设管理器，支持 API 节点图预览、导入导出与变量填报诊断；
- * 4. 集成提示词预设管理器，支持 WeiLin 语法模板与 LoRA 权重项配置；
- * 5. 追踪表单脏状态变更，提供一键复原与持久化同步。
+ * 4. 集成提示词预设管理器，支持正反向词模板与 LoRA 权重项配置；
+ * 5. 追踪表单脏状态变更，提供一键复原与保存状态提示。
  *
- * 注意事项：
- * 1. ComfyUI 依赖完整的 API 节点图格式，需防止前端占位变量注入时破坏 JSON 结构；
- * 2. 实时进度展示需要与后端 WebSocket 保持连接稳定，网络断开时应具备重连容错能力。
+ * Tips：
+ * 1. 资产同步时自动更新 Checkpoint、VAE、CLIP 与 LoRA 可用列表；
+ * 2. 方案切换时比对当前工作区脏状态，避免意外覆盖未保存配置。
  */
 
-import { createElement } from '../../util/dom';
-import { createFormField, createCard, FormFieldHandle } from '../components/form-field';
+import { createElement } from '@util/dom';
+import { createFormField, createCard, type FormFieldHandle } from '../components/form-field';
 import { createSelect } from '../components/select';
-import { createConnectionCard, ConnectionCardHandle } from '../composite/connection-card';
-import { createDimensionPicker, DimensionPickerHandle } from '../composite/dimension-picker';
-import { createSamplerCard, SamplerCardHandle } from '../composite/sampler-card';
-import { createPromptPresetManager, PromptPresetManagerHandle, PromptPresetData } from '../composite/prompt-preset-manager';
-import { createWorkflowPresetManager, WorkflowPresetManagerHandle } from '../composite/workflow-card';
-import { createPresetToolbar, PresetToolbarHandle } from '../composite/preset-toolbar';
-import { createDirtyTracker, IDirtyTracker } from '../components/dirty-tracker';
+import { createConnectionCard, type ConnectionCardHandle } from '../composite/connection-card';
+import { createDimensionPicker, type DimensionPickerHandle } from '../composite/dimension-picker';
+import { createSamplerCard, type SamplerCardHandle } from '../composite/sampler-card';
+import { createPromptPresetManager, type PromptPresetManagerHandle, type PromptPresetData } from '../composite/prompt-preset-manager';
+import { createWorkflowPresetManager, type WorkflowPresetManagerHandle } from '../composite/workflow-card';
+import { createPresetToolbar, type PresetToolbarHandle } from '../composite/preset-toolbar';
+import { createDirtyTracker, type IDirtyTracker } from '../components/dirty-tracker';
 import { getIconSvg } from '../components/icons';
-import { PresetManager, BUILTIN_WORKFLOWS, BUILTIN_PROMPTS } from '../../store/preset';
-import { getAdapter } from '../../function/adapter/registry';
-import type { SettingsStore } from '../../store/settings';
+import { PresetManager, BUILTIN_WORKFLOWS, BUILTIN_PROMPTS } from '@store/preset';
+import { getAdapter } from '@function/adapter';
+import type { SettingsStore } from '@store/settings';
 import type { PresetItem } from '@types';
 
 export interface ComfyUITabOptions {

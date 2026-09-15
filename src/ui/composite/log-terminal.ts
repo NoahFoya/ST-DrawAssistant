@@ -1,7 +1,15 @@
 /**
  * 实时日志终端控制台组件 (LogTerminal)
- * 对齐 styles/features/terminal.css 规范。
- * 提供语法高亮、时间戳格式化、环形缓冲区控制、划词复制与平滑自动滚屏。
+ *
+ * 功能：
+ * 1. 提供日志终端窗口，支持日志等级语法高亮与时间戳格式化；
+ * 2. 支持固定容量环形缓冲区淘汰控制，超出 maxLines 时自动清除旧条目；
+ * 3. 提供等级过滤筛选 (INFO, WARN, ERROR, DEBUG) 与一键清空日志；
+ * 4. 支持日志实时自适应吸底滚动，用户手动上滚浏览时暂停吸底。
+ *
+ * Tips：
+ * 1. 终端卡片样式对齐 terminal.css 规范，代码块等宽字体排版；
+ * 2. 终端容器销毁时清空内部 DOM 元素引用与监听器。
  */
 
 import type { TerminalLogEntry, TerminalLogLevel } from '@types';

@@ -1,6 +1,15 @@
 /**
- * 现代化输入控件基元
- * 包含单行文本框 (带清空按钮)、密码/密钥框 (带显隐切换)、居中数字微调框 (带等宽与内嵌单位) 以及多行提示词文本域。
+ * 文本与数值输入控件族 (TextInput, PasswordInput, NumberInput, Textarea)
+ *
+ * 功能：
+ * 1. 提供单行文本输入框 (createTextInput)，支持一键清空与回车确认；
+ * 2. 提供密码/密钥输入框 (createPasswordInput)，支持眼睛图标显隐明文切换；
+ * 3. 提供数值步进微调框 (createNumberInput)，集成增减箭头、滚轮调节与长按连续加速；
+ * 4. 提供多行文本域 (createTextarea)，用于提示词与脚本配置。
+ *
+ * Tips：
+ * 1. NumberInput 支持浮点精度消除与 min/max 范围钳制，聚焦时滚轮微调，失焦时允许页面原生滚动；
+ * 2. 所有控件统一实现 IControlHandle 接口，支持 setDirty 与 setError 状态联动。
  */
 
 import type { BaseControlOptions, IControlHandle } from '@types';

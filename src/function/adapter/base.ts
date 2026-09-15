@@ -1,19 +1,20 @@
 /**
- * 引擎适配器轻量抽象基类 (BaseAdapter)
+ * 引擎适配器抽象基类 (BaseAdapter)
  *
- * 核心功能：
- * 1. 声明各绘图后端适配器的标准接口定义（生图执行、任务中断、健康探测与远端资产同步）；
- * 2. 统一管理后端服务地址 (baseUrl)、HTTP 通信客户端与模块日志记录器；
- * 3. 封装请求传输通道（直连与代理中转）的参数装配逻辑。
+ * 功能：
+ * 1. 声明各绘图后端适配器的标准接口规范（生图执行、任务中断、健康探测与远端资产同步）；
+ * 2. 统一管理后端服务地址 (baseUrl)、HTTP 客户端与模块日志记录器；
+ * 3. 封装传输通道（直连与代理中转）的参数组装。
  *
- * 注意事项：
- * 1. 子类在实现具体生图逻辑时，必须正确传递并监听 AbortSignal 取消信号；
- * 2. 各适配器产出的图像数据均需清洗规范为统一直观的 ImageGenerationResult 结构。
+ * Tips：
+ * 1. 取消信号传递：子类必须正确传递并监听 AbortSignal 取消信号；
+ * 2. 结果标准化：各适配器产出的图像数据均需清洗规范为统一直观的 ImageGenerationResult。
  */
 
 import type { EngineCapabilities, EngineType, ImageGenerationParams, ImageGenerationResult, HealthCheckResult, IEngineAdapter, TransportMode } from '@types';
-import { HttpClient, type HttpRequestOptions } from '../../util/http';
-import { Logger } from '../../util/logger';
+import type { HttpRequestOptions } from '@util/http';
+import { HttpClient } from '@util/http';
+import { Logger } from '@util/logger';
 
 export abstract class BaseAdapter<TParams extends ImageGenerationParams = ImageGenerationParams> implements IEngineAdapter<TParams> {
     public abstract readonly id: EngineType;

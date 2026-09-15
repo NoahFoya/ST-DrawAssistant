@@ -1,14 +1,13 @@
 /**
- * @module src/ui/layout/workflow-modal
- * @description ComfyUI 工作流蓝图与 JSON 检查弹窗 (WorkflowModal)
+ * ComfyUI 工作流蓝图与 JSON 检查弹窗 (WorkflowModal)
  *
- * 核心功能：
+ * 功能：
  * 1. 提供 ComfyUI API 工作流节点的可视化流程结构与原生 JSON 预览；
  * 2. 支持节点属性检查、占位变量高亮与参数联动；
  * 3. 提供工作流 JSON 本地导入、导出下载与剪贴板一键复制；
  * 4. 支持可视化与 Raw 源码视图无缝切换，并提供键盘快捷键退出。
  *
- * 注意事项：
+ * Tips：
  * 1. 复杂工作流可能包含上百个节点，渲染迷你卡片时需控制 DOM 数量并做局部滚动隔离；
  * 2. 外部 JSON 文本导入时需执行语法校验与防呆拦截，防止非法数据污染当前预设。
  */

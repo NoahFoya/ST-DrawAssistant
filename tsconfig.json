@@ -27,11 +27,17 @@
     "paths": {
       "@types": ["@types/index.d.ts"],
       "@types/*": ["@types/*"],
-      "@function/*": ["src/function/*"],
-      "@panel/*": ["src/panel/*"],
-      "@store/*": ["src/store/*"],
+      "@util": ["src/util/index.ts"],
       "@util/*": ["src/util/*"],
-      "@slash/*": ["src/slash_command/*"]
+      "@store": ["src/store/index.ts"],
+      "@store/*": ["src/store/*"],
+      "@function": ["src/function/index.ts"],
+      "@function/*": ["src/function/*"],
+      "@extension": ["src/extension/index.ts"],
+      "@extension/*": ["src/extension/*"],
+      "@ui": ["src/ui/index.ts"],
+      "@ui/*": ["src/ui/*"],
+      "@config/*": ["config/*"]
     }
   },
   "include": ["src/**/*", "@types/**/*"],

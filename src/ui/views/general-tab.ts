@@ -1,13 +1,16 @@
 /**
- * @module src/ui/views/general-tab
- * @description 基础与通用设置面板 (GeneralTab)
+ * 基础与通用设置面板 (GeneralTab)
  *
- * 核心架构划分：
- * 1. Card: 基础设置 (启用插件, 气泡帮助提示, 默认生图引擎, 请求传输模式, 请求超时时间, 最大并发任务数)；
- * 2. Card: 交互设置 (生图提取起始/结束标记, AI回复后自动生图, 提示词清洗与排重, 成功后隐藏按钮, 快捷操作栏, 点击看全图)；
- * 3. Card: 图片显示 (图片对齐方式, 图片填充模式, 最大显示宽度, 最大显示高度, 开启图片圆角, 默认折叠图片)；
- * 4. Card: 存储设置 (保存至酒馆服务器, 内嵌至聊天记录, 历史图片保留上限)；
- * 5. Card: 扩展功能 (动态呈现：仅当存在已注册扩展时渲染，支持独立开关控制；无注册扩展时完全隐去)。
+ * 功能：
+ * 1. 基础设置：插件总开关、生图引擎切换、请求传输模式、超时与并发数；
+ * 2. 交互设置：占位符标记提取、AI 回复自动生图、提示词清洗排重与点击看大图；
+ * 3. 图片显示：对齐方式、填充模式、尺寸限制、圆角与默认折叠；
+ * 4. 存储设置：宿主存储保存、聊天记录内嵌与历史图片上限；
+ * 5. 扩展功能：动态呈现已注册扩展插件并提供独立启用开关。
+ *
+ * Tips：
+ * 1. 变更项即时同步写入 SettingsStore；
+ * 2. 扩展卡片在无注册扩展时完全隐去，保持界面整洁。
  */
 
 import { createElement } from '../../util/dom';
@@ -153,9 +156,10 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
 
     // 生图提取起始标记
     const startTagInput = createTextInput({
-        value: 'image###',
+        value: settingsStore.get('placeholderStart') || 'image###',
         placeholder: 'image###',
-        variant: 'short'
+        variant: 'short',
+        onChange: (val) => settingsStore.set('placeholderStart', val.trim() || 'image###')
     });
     regDisposer(startTagInput);
     const startTagField = createFormField({
@@ -167,9 +171,10 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
 
     // 生图提取结束标记
     const endTagInput = createTextInput({
-        value: '###',
+        value: settingsStore.get('placeholderEnd') || '###',
         placeholder: '###',
-        variant: 'short'
+        variant: 'short',
+        onChange: (val) => settingsStore.set('placeholderEnd', val.trim() || '###')
     });
     regDisposer(endTagInput);
     const endTagField = createFormField({
@@ -398,24 +403,24 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
     });
     displayCard.append(roundedField);
 
-    // 默认折叠图片
-    const collapsedToggle = createToggle({
-        value: currentUi.imageDisplay?.collapsed ?? false,
+    // 自动遮罩图片
+    const autoBlurToggle = createToggle({
+        value: currentUi.imageDisplay?.autoBlur ?? currentUi.imageDisplay?.collapsed ?? false,
         onChange: (val) => {
             const ui = settingsStore.get('ui') || {};
             const imgDisp = ui.imageDisplay || {};
             settingsStore.update({
-                ui: { ...ui, imageDisplay: { ...imgDisp, collapsed: val } }
+                ui: { ...ui, imageDisplay: { ...imgDisp, autoBlur: val, collapsed: val } }
             });
         }
     });
-    regDisposer(collapsedToggle);
-    const collapsedField = createFormField({
-        label: '默认折叠图片',
-        helpText: '生成完成后默认以折叠胶囊呈现，点击后才展开展示图片，节省聊天篇幅',
-        control: collapsedToggle
+    regDisposer(autoBlurToggle);
+    const autoBlurField = createFormField({
+        label: '自动遮罩图片',
+        helpText: '生成完成后对图片进行高斯模糊遮罩处理，鼠标悬停时自动清晰显现，防止旁人窥视敏感画面',
+        control: autoBlurToggle
     });
-    displayCard.append(collapsedField);
+    displayCard.append(autoBlurField);
 
     root.appendChild(displayCard.element);
 
@@ -473,6 +478,32 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
         control: maxStoredSelect
     });
     storageCard.append(maxStoredField);
+
+    // 生成缩略图缓存
+    const thumbToggle = createToggle({
+        value: settingsStore.get('enableThumbnail') ?? true,
+        onChange: (val) => settingsStore.set('enableThumbnail', val)
+    });
+    regDisposer(thumbToggle);
+    const thumbField = createFormField({
+        label: '生成缩略图缓存',
+        helpText: '在本地数据库为已生成图像创建轻量缩略图，大幅加速画廊多图列表与历史加载性能',
+        control: thumbToggle
+    });
+    storageCard.append(thumbField);
+
+    // 内容哈希去重存储
+    const dedupToggle = createToggle({
+        value: settingsStore.get('deduplicateHash') ?? true,
+        onChange: (val) => settingsStore.set('deduplicateHash', val)
+    });
+    regDisposer(dedupToggle);
+    const dedupField = createFormField({
+        label: '内容哈希去重存储',
+        helpText: '对生成图片内容计算哈希指纹，相同图片在本地持久化时不重复占据存储配额',
+        control: dedupToggle
+    });
+    storageCard.append(dedupField);
 
     root.appendChild(storageCard.element);
 

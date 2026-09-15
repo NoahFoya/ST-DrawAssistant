@@ -1,20 +1,22 @@
 /**
- * @module src/ui/media/floor-manager
- * @description 消息楼层生图控制器 (FloorManager)
+ * 消息楼层生图控制器 (FloorManager)
  *
- * 核心职责：
- * 1. 扫描消息楼层文本中的绘图占位符指令，按需挂载生图按钮与展示插槽；
+ * 功能：
+ * 1. 扫描消息楼层正文中的绘图占位符指令，原位挂载生图按钮与展示插槽；
  * 2. 维护各绘图指令的上下文模型 (FloorButtonContext)，隔离多指令任务状态与插槽；
  * 3. 异步读取会话持久化元数据并从本地存储还原历史已生成的图片 (restoreSavedImage)；
  * 4. 响应会话切换 (CHAT_CHANGED) 与分支切换 (MESSAGE_SWIPED) 的插槽刷新与资源清理；
  * 5. 统一提供手动与自动生图触发入口，协同任务队列调度执行。
+ *
+ * Tips：
+ * 1. 临时生成的图片 Object URL 在插槽更新或会话重置时严格执行 revokeObjectURL，防止内存泄露；
+ * 2. 楼层分支切换时若存在未完成任务，支持自动取消未决任务并重置上下文。
  */
 
 import { createElement } from '../../util/dom';
 import { Toast } from '../components/feedback';
 import { getIconSvg } from '../components/icons';
-import { extractPlaceholders, sanitizeMessageText, normalizePromptPunctuation } from '../../util/prompt';
-import { DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END } from '../../constants';
+import { extractPlaceholders, sanitizeMessageText, normalizePromptPunctuation, separatePromptByPipe } from '../../util/prompt';
 import { buildEngineParams } from '../../function/params-builder';
 import type { ImageActionData } from './image-action-panel';
 import type { SettingsStore } from '../../store/settings';
@@ -139,34 +141,60 @@ export class FloorManager implements FloorManagerHandle {
 
     /**
      * 挂载生图控制按钮与展示插槽至指定消息楼层
-     * 当文本中未包含有效绘图占位符指令时直接退出，不向楼层注入任何节点。
+     * 在消息正文 (.mes_text) 中检索绘图指令，并就地将其原位替换为独立插槽，防止裸露原始代码字符并保证图文排版对应。
      */
     public mountToMessage(messageElement: HTMLElement, messageId: number | string, _isUserMessage = false): void {
         if (this._isDisposed || !messageElement) return;
 
-        const textElement = messageElement.querySelector('.mes_text');
-        const textContent = (textElement?.textContent || messageElement.textContent || '').trim();
-        if (!textContent) return;
+        const mesEl = messageElement.classList?.contains('mes') ? messageElement : ((messageElement.closest?.('.mes') as HTMLElement) || messageElement);
+        const textElement = mesEl.querySelector<HTMLElement>('.mes_text') || mesEl;
+        const rawHtml = textElement.innerHTML || '';
+        if (!rawHtml.trim()) return;
 
-        const placeholders = extractPlaceholders(textContent, DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END);
-        const existingWrapper = messageElement.querySelector('.da-image-collapse-wrapper');
+        const startTag = this._settingsStore.get('placeholderStart') || 'image###';
+        const endTag = this._settingsStore.get('placeholderEnd') || '###';
 
-        // 无指令时清理既有节点并退出
-        if (placeholders.length === 0) {
-            if (existingWrapper) {
-                this._removeMessageContexts(messageId, false);
-                existingWrapper.remove();
+        const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const startPat = escapeRegex(startTag).replace(/#/g, '(?:#|&#35;|&num;)');
+        const endPat = escapeRegex(endTag).replace(/#/g, '(?:#|&#35;|&num;)');
+        const regex = new RegExp(`${startPat}([\\s\\S]*?)${endPat}`, 'gi');
+
+        // 提取所有绘图指令匹配
+        const matches: Array<{ prompt: string; negativePrompt?: string; rawMatch: string }> = [];
+        let m: RegExpExecArray | null;
+        while ((m = regex.exec(rawHtml)) !== null) {
+            const rawContent = m[1].replace(/<[^>]+>/g, ' ').trim();
+            if (rawContent) {
+                const { positive, negative } = separatePromptByPipe(rawContent);
+                matches.push({
+                    prompt: positive,
+                    negativePrompt: negative ? negative : undefined,
+                    rawMatch: m[0]
+                });
             }
+        }
+        regex.lastIndex = 0;
+
+        // 清理末尾追加的旧结构（若存在）
+        const legacyWrapper = messageElement.querySelector(':scope > .da-image-collapse-wrapper');
+        if (legacyWrapper) {
+            legacyWrapper.remove();
+        }
+
+        // 无指令时清理既有上下文并退出
+        if (matches.length === 0) {
+            this._removeMessageContexts(messageId, true);
             return;
         }
 
-        // 指令内容未变动时复用既有 DOM 结构
-        if (existingWrapper) {
+        // 指令内容未变动且 DOM 插槽完好时复用既有 DOM 结构
+        const existingSlots = textElement.querySelectorAll<HTMLElement>(`.da-floor-slot[data-message-id="${messageId}"]`);
+        if (existingSlots.length === matches.length && matches.length > 0) {
             let isExactMatch = true;
-            for (let idx = 0; idx < placeholders.length; idx++) {
+            for (let idx = 0; idx < matches.length; idx++) {
                 const key = this._getContextKey(messageId, idx);
                 const ctx = this._contexts.get(key);
-                if (!ctx || ctx.prompt !== placeholders[idx].prompt) {
+                if (!ctx || ctx.prompt !== matches[idx].prompt) {
                     isExactMatch = false;
                     break;
                 }
@@ -174,44 +202,70 @@ export class FloorManager implements FloorManagerHandle {
             if (isExactMatch) {
                 return;
             }
-            this._removeMessageContexts(messageId, false);
-            existingWrapper.remove();
         }
 
-        const align = this._settingsStore.get('ui')?.imageDisplay?.align || 'center';
-        const wrapper = createElement('div', {
-            className: `da-image-collapse-wrapper da-image-collapse-wrapper--${align}`
-        });
+        this._removeMessageContexts(messageId, true);
 
-        const swipeId = this._getCurrentSwipeId(messageId);
+        // 正文原位替换：将 image###...### 占位符替换为临时锚点 span
+        let matchCount = 0;
+        const newHtml = rawHtml.replace(regex, () => {
+            const btnIdx = matchCount++;
+            return `<span class="da-floor-slot-placeholder" data-btn-idx="${btnIdx}"></span>`;
+        });
+        textElement.innerHTML = newHtml;
+
+        const placeholders = textElement.querySelectorAll<HTMLElement>('.da-floor-slot-placeholder');
+        const align = this._settingsStore.get('ui')?.imageDisplay?.align || 'center';
         const actionPanelConfig = this._settingsStore.get('ui')?.actionPanel;
         const showTriggerBtn = actionPanelConfig?.enabled ?? true;
+        const swipeId = this._getCurrentSwipeId(messageId);
+        const totalButtons = placeholders.length;
 
-        placeholders.forEach((ph, idx) => {
-            const itemWrapper = createElement('div', { className: 'da-floor-instruction-item' });
+        placeholders.forEach((ph) => {
+            const idx = parseInt(ph.getAttribute('data-btn-idx') || '0', 10);
+            const phInfo = matches[idx];
+            if (!phInfo) return;
+
+            const slotContainer = createElement('div', {
+                className: `da-floor-slot da-image-collapse-wrapper da-floor-slot--${align} da-image-collapse-wrapper--${align}`,
+                attributes: {
+                    'data-message-id': String(messageId),
+                    'data-button-index': String(idx),
+                    'data-original-placeholder': phInfo.rawMatch
+                }
+            });
 
             const btn = createElement('button', {
                 className: 'da-floor-btn da-floor-btn--default',
                 attributes: {
                     type: 'button',
-                    title: `依据绘图指令生成: ${ph.prompt}`
+                    title: `依据绘图指令生成: ${phInfo.prompt}`
                 }
             });
-            const label = placeholders.length > 1 ? `绘画 #${idx + 1}` : '绘画';
+            const label = this._getButtonLabel('default', idx, totalButtons);
             btn.innerHTML = `${getIconSvg('palette')} <span>${label}</span>`;
 
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.triggerFloorGenerate(messageElement, messageId, ph.prompt, ph.negativePrompt, idx);
+                this.triggerFloorGenerate(mesEl, messageId, phInfo.prompt, phInfo.negativePrompt, idx);
             });
 
-            const slot = createElement('div', { className: 'da-floor-btn-img-slot' });
+            const imgSlot = createElement('div', {
+                className: `da-floor-btn-img-slot da-floor-btn-img-slot--${align}`
+            });
 
             if (showTriggerBtn) {
-                itemWrapper.appendChild(btn);
+                slotContainer.appendChild(btn);
             }
-            itemWrapper.appendChild(slot);
-            wrapper.appendChild(itemWrapper);
+            slotContainer.appendChild(imgSlot);
+
+            // 若父元素为段落标签且主要包裹该插槽，应用紧凑样式类
+            const parentP = ph.parentElement;
+            if (parentP && parentP.tagName === 'P') {
+                parentP.classList.add('da-floor-slot-p');
+            }
+
+            ph.replaceWith(slotContainer);
 
             const contextKey = this._getContextKey(messageId, idx);
             const ctx: FloorButtonContext = {
@@ -219,12 +273,12 @@ export class FloorManager implements FloorManagerHandle {
                 messageId,
                 swipeId,
                 buttonIndex: idx,
-                prompt: ph.prompt,
-                negativePrompt: ph.negativePrompt,
+                prompt: phInfo.prompt,
+                negativePrompt: phInfo.negativePrompt,
                 state: 'default',
                 btnElement: btn,
-                slotElement: slot,
-                containerElement: itemWrapper,
+                slotElement: imgSlot,
+                containerElement: slotContainer,
                 currentTaskId: null
             };
 
@@ -233,8 +287,6 @@ export class FloorManager implements FloorManagerHandle {
             // 异步恢复当前分支的历史持久化图像
             void this.restoreSavedImage(ctx);
         });
-
-        messageElement.appendChild(wrapper);
     }
 
     /**
@@ -284,6 +336,39 @@ export class FloorManager implements FloorManagerHandle {
     }
 
     /**
+     * 生成规范的生图按钮文案与编号后缀
+     */
+    private _getButtonLabel(state: FloorButtonState, buttonIndex: number, totalButtons: number): string {
+        const suffix = totalButtons > 1 ? ` #${buttonIndex + 1}` : '';
+        switch (state) {
+            case 'default':
+                return `生成图片${suffix}`;
+            case 'loading':
+                return `提交中${suffix}...`;
+            case 'progress':
+                return `正在绘制${suffix} (点击取消)`;
+            case 'done':
+                return `重新生成${suffix}`;
+            case 'error':
+                return `重试生图${suffix}`;
+            default:
+                return `生成图片${suffix}`;
+        }
+    }
+
+    /**
+     * 计算指定楼层的总绘图指令按钮数
+     */
+    private _getTotalButtons(messageId: number | string): number {
+        const prefix = `${messageId}_`;
+        let count = 0;
+        for (const key of this._contexts.keys()) {
+            if (key.startsWith(prefix)) count++;
+        }
+        return count > 0 ? count : 1;
+    }
+
+    /**
      * 更新生图按钮的生命周期状态与呈现样式
      */
     public setButtonState(ctx: FloorButtonContext, state: FloorButtonState): void {
@@ -291,20 +376,23 @@ export class FloorManager implements FloorManagerHandle {
         ctx.btnElement.className = `da-floor-btn da-floor-btn--${state}`;
         ctx.btnElement.disabled = state === 'loading';
 
-        const label = ctx.buttonIndex > 0 ? `绘画 #${ctx.buttonIndex + 1}` : '绘画';
+        const totalButtons = this._getTotalButtons(ctx.messageId);
+        const label = this._getButtonLabel(state, ctx.buttonIndex, totalButtons);
+
         if (state === 'default') {
             ctx.btnElement.innerHTML = `${getIconSvg('palette')} <span>${label}</span>`;
             ctx.btnElement.title = `提示词: ${ctx.prompt}`;
         } else if (state === 'loading') {
-            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>提交中...</span>`;
+            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>${label}</span>`;
+            ctx.btnElement.title = '任务正在提交至调度队列';
         } else if (state === 'progress') {
-            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>绘制中 (点击取消)</span>`;
+            ctx.btnElement.innerHTML = `${getIconSvg('spinner')} <span>${label}</span>`;
             ctx.btnElement.title = '点击取消当前生图任务';
         } else if (state === 'done') {
-            ctx.btnElement.innerHTML = `${getIconSvg('sparkles')} <span>重新生成</span>`;
+            ctx.btnElement.innerHTML = `${getIconSvg('sparkles')} <span>${label}</span>`;
             ctx.btnElement.title = '点击重新生成图像';
         } else if (state === 'error') {
-            ctx.btnElement.innerHTML = `${getIconSvg('palette')} <span>重试</span>`;
+            ctx.btnElement.innerHTML = `${getIconSvg('palette')} <span>${label}</span>`;
             ctx.btnElement.title = '生成失败，点击重试';
         }
 
@@ -374,13 +462,8 @@ export class FloorManager implements FloorManagerHandle {
         slot.innerHTML = '';
 
         const displayConfig = this._settingsStore.get('ui')?.imageDisplay;
-        const defaultCollapsed = !!displayConfig?.collapsed;
-        let isCollapsed = defaultCollapsed;
-
-        const toggleBtn = createElement('div', {
-            className: 'da-image-collapse-toggle',
-            textContent: isCollapsed ? '展开绘画图片 ▾' : '收起绘画图片 ▴'
-        });
+        const autoBlur = !!(displayConfig?.autoBlur ?? displayConfig?.collapsed);
+        let isMasked = autoBlur;
 
         const maxWidthPct = typeof displayConfig?.maxWidthPct === 'number' ? displayConfig.maxWidthPct : 100;
         const maxHeight = typeof displayConfig?.maxHeight === 'number' ? displayConfig.maxHeight : 480;
@@ -389,9 +472,38 @@ export class FloorManager implements FloorManagerHandle {
         const align = displayConfig?.align || 'center';
 
         const imgWrap = createElement('div', {
-            className: `da-image-wrapper ${rounded ? 'da-image-wrapper--rounded' : ''} da-image-wrapper--${align}`,
+            className: `da-image-wrapper ${rounded ? 'da-image-wrapper--rounded' : ''} da-image-wrapper--${align} ${isMasked ? 'da-image-wrapper--masked' : ''}`,
             attributes: {
-                style: `display: ${isCollapsed ? 'none' : 'block'}; max-height: ${maxHeight}px; max-width: ${maxWidthPct}%;`
+                style: `max-height: ${maxHeight}px; max-width: ${maxWidthPct}%;`
+            }
+        });
+
+        let maskBadge: HTMLElement | null = null;
+        const unmask = () => {
+            if (!isMasked) return;
+            isMasked = false;
+            imgWrap.classList.remove('da-image-wrapper--masked');
+            if (maskBadge) {
+                maskBadge.remove();
+                maskBadge = null;
+            }
+        };
+
+        if (isMasked) {
+            maskBadge = createElement('div', {
+                className: 'da-image-mask-badge',
+                innerHTML: `${getIconSvg('eye')}<span>轻触或悬停显现</span>`
+            });
+            maskBadge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                unmask();
+            });
+            imgWrap.appendChild(maskBadge);
+        }
+
+        imgWrap.addEventListener('click', () => {
+            if (isMasked) {
+                unmask();
             }
         });
 
@@ -468,10 +580,17 @@ export class FloorManager implements FloorManagerHandle {
         });
 
         // 单击大图预览
-        img.addEventListener('click', (e) => {
+        img.addEventListener('click', (e: MouseEvent) => {
             if (isLongPress) {
                 e.stopPropagation();
                 return;
+            }
+            if (isMasked) {
+                unmask();
+                if ((e as PointerEvent).pointerType === 'touch') {
+                    e.stopPropagation();
+                    return;
+                }
             }
             this._options.onPreviewImage?.(imageUrl);
         });
@@ -493,13 +612,6 @@ export class FloorManager implements FloorManagerHandle {
         });
         imgWrap.appendChild(actionTrigger);
 
-        toggleBtn.addEventListener('click', () => {
-            isCollapsed = !isCollapsed;
-            toggleBtn.textContent = isCollapsed ? '展开绘画图片 ▾' : '收起绘画图片 ▴';
-            imgWrap.style.display = isCollapsed ? 'none' : 'block';
-        });
-
-        slot.appendChild(toggleBtn);
         slot.appendChild(imgWrap);
 
         this.setButtonState(ctx, 'done');
@@ -584,8 +696,15 @@ export class FloorManager implements FloorManagerHandle {
         const messageEl = document.querySelector<HTMLElement>(selector);
         if (messageEl) {
             this._removeMessageContexts(messageId, false);
-            const wrapper = messageEl.querySelector('.da-image-collapse-wrapper');
-            if (wrapper) wrapper.remove();
+            const wrappers = messageEl.querySelectorAll<HTMLElement>('.da-floor-slot, .da-image-collapse-wrapper');
+            for (const wrapper of wrappers) {
+                const orig = wrapper.getAttribute('data-original-placeholder');
+                if (orig) {
+                    wrapper.replaceWith(document.createTextNode(orig));
+                } else {
+                    wrapper.remove();
+                }
+            }
             this.mountToMessage(messageEl, messageId);
         }
     }
@@ -648,7 +767,9 @@ export class FloorManager implements FloorManagerHandle {
         let negativePromptText = explicitNegativePrompt || ctx?.negativePrompt;
 
         if (!promptText) {
-            const placeholders = extractPlaceholders(textContent, DEFAULT_PLACEHOLDER_START, DEFAULT_PLACEHOLDER_END);
+            const startTag = this._settingsStore.get('placeholderStart') || 'image###';
+            const endTag = this._settingsStore.get('placeholderEnd') || '###';
+            const placeholders = extractPlaceholders(textContent, startTag, endTag);
             if (placeholders.length > 0) {
                 promptText = placeholders[0].prompt;
                 negativePromptText = placeholders[0].negativePrompt;
