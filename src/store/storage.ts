@@ -133,7 +133,26 @@ export class PersistentStorage implements IDisposable {
         }
 
         record.lastAccessedAt = Date.now();
-        await this._db.setItem(record.id, record);
+
+        try {
+            await this._db.setItem(record.id, record);
+        } catch (err: any) {
+            const isQuotaError =
+                err?.name === 'QuotaExceededError' ||
+                err?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+                (typeof err?.message === 'string' && /quota/i.test(err.message));
+
+            if (isQuotaError) {
+                // 遵循 browser-storage 规范：遇到配额超限淘汰最老非收藏历史图片，并单次重试
+                const currentTotal = await this._db.length();
+                const targetLimit = Math.max(1, Math.floor(currentTotal * 0.8));
+                await this.ensureStorageQuota(targetLimit);
+                // 单次重试写入
+                await this._db.setItem(record.id, record);
+            } else {
+                throw err;
+            }
+        }
 
         // 配额上限检查：仅在记录数量达到上限阈值时触发 LRU 淘汰扫描，避免每张图都进行全表扫描
         const maxImages = options?.maxStoredImages;

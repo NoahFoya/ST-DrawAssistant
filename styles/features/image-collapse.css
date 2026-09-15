@@ -10,29 +10,16 @@
  */
 
 /* 1. 楼层正文内嵌生图插槽容器 (.da-floor-slot, .da-image-collapse-wrapper)
-   原位替换正文中的占位指令，承载按钮、进度与生成的图片 */
+   原位替换正文中的占位指令，承载按钮、进度与生成的图片；
+   控制按钮与进度反馈始终与正文自然靠左排版，与生成图片实体的对齐设置解耦。 */
 .da-floor-slot,
 .da-image-collapse-wrapper {
     display: flex;
     flex-direction: column;
     width: 100%;
-    margin: 8px 0;
+    margin: 6px 0;
     box-sizing: border-box;
-}
-
-.da-floor-slot--left,
-.da-image-collapse-wrapper--left {
     align-items: flex-start;
-}
-
-.da-floor-slot--center,
-.da-image-collapse-wrapper--center {
-    align-items: center;
-}
-
-.da-floor-slot--right,
-.da-image-collapse-wrapper--right {
-    align-items: flex-end;
 }
 
 /* 2. 折叠/展开控制按钮兼容类 (.da-image-collapse-toggle) */

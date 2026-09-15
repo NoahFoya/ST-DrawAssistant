@@ -282,9 +282,15 @@ export function createImageActionPanel(options: ImageActionPanelOptions = {}): I
     btnInpaint.innerHTML = `${getIconSvg('palette')} <span>局部重绘</span>`;
     btnInpaint.addEventListener('click', () => {
         if (!currentData) return;
+        // 取当前面板中（可能已由用户编辑过的）提示词，在 close() 前读出
+        const dataWithPrompt: ImageActionData = {
+            ...currentData,
+            prompt: posCard.getValue() || currentData.prompt,
+            negativePrompt: negCard.getValue() || currentData.negativePrompt
+        };
         close();
         if (options.onInpaint) {
-            options.onInpaint(currentData);
+            options.onInpaint(dataWithPrompt);
         } else {
             Toast.warn('当前状态不支持局部重绘');
         }

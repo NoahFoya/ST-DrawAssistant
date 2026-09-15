@@ -134,8 +134,6 @@ export class GenerationOrchestrator implements IDisposable {
         const effectiveTransport = this.resolveTransport(task);
 
         // 阶段 3：引擎适配器分发与执行调度
-        const adapter = getAdapter(task.params.engine);
-
         const onProgress = (progress: number) => {
             if (!signal.aborted) {
                 this._taskQueue.reportProgress(task.id, progress);
@@ -144,8 +142,9 @@ export class GenerationOrchestrator implements IDisposable {
 
         // 挂载取消监听，释放底层算力
         const onAbort = () => {
-            if (typeof adapter.interrupt === 'function') {
-                adapter.interrupt().catch((err: unknown) => {
+            const engineAdapter = getAdapter(task.params.engine);
+            if (typeof engineAdapter.interrupt === 'function') {
+                engineAdapter.interrupt().catch((err: unknown) => {
                     const errMsg = err instanceof Error ? err.message : String(err);
                     this._logger.warn(`中止适配器作业异常: ${errMsg}`);
                 });

@@ -54,6 +54,10 @@ export function initUI(services: UIServices): UIHandle {
 
     const disposers: (() => void)[] = [];
 
+    // 本次局部重绘任务的提示词暂存变量（onInpaint 触发时写入，onConfirm 执行时读取）
+    let pendingInpaintPrompt = '';
+    let pendingInpaintNegativePrompt = '';
+
     // 1. 初始化主题系统 (ThemeService)
     if (rootEl) {
         ThemeService.getInstance().init(rootEl, settingsStore);
@@ -102,7 +106,8 @@ export function initUI(services: UIServices): UIHandle {
 
                 const inpaintParams = buildEngineParams({
                     engine: activeEngine,
-                    prompt: 'inpaint restoration',
+                    prompt: pendingInpaintPrompt || '',
+                    negativePrompt: pendingInpaintNegativePrompt,
                     settingsStore
                 });
 
@@ -135,6 +140,9 @@ export function initUI(services: UIServices): UIHandle {
         containerEl: modalContainer,
         onInpaint: (data) => {
             if (data.imageBlob) {
+                // 暂存 ActionPanel 传入的（可能已编辑）提示词，供 onConfirm 使用
+                pendingInpaintPrompt = data.prompt || '';
+                pendingInpaintNegativePrompt = data.negativePrompt || '';
                 inpaintModal.open(data.imageBlob);
             } else {
                 Toast.warn('无法获取原始图像资源用于重绘');
@@ -168,7 +176,7 @@ export function initUI(services: UIServices): UIHandle {
         },
         onDelete: async (data) => {
             if (storage && data.record?.id) {
-                await storage.deleteRecord(data.record.id);
+                await storage.deleteImage(data.record.id);
             }
             // 同步擦除宿主聊天记录中的 da_images 引用
             if (data.messageId !== undefined && typeof window !== 'undefined' && window.SillyTavern?.getContext) {

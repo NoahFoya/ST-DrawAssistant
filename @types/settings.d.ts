@@ -74,10 +74,7 @@ export interface ExtensionSettings {
     deduplicateHash: boolean;
     /** 本地 IndexedDB 允许存储的最大图片数量 */
     maxStoredImages: number;
-    /** 单个任务执行超时时间 (毫秒) */
-    taskTimeoutMs: number;
-    /** 最大并发生图任务数 */
-    maxConcurrentTasks: number;
+
     /** 是否在接收到 AI 回复后自动触发生成 */
     autoGenerate: boolean;
     /** 是否在生图前自动执行提示词清洗与去重过滤 */

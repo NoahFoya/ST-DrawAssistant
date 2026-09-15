@@ -9,8 +9,7 @@
   "enableThumbnail": true,
   "deduplicateHash": true,
   "maxStoredImages": 500,
-  "taskTimeoutMs": 180000,
-  "maxConcurrentTasks": 1,
+
   "autoGenerate": false,
   "cleanPrompt": true,
   "placeholderStart": "image###",

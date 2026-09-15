@@ -53,10 +53,22 @@ export interface FloorManagerOptions {
     onOpenActionPanel?: (data: ImageActionData) => void;
 }
 
+export interface FloorImageFallbackOptions {
+    fallbackId?: string;
+    fallbackBase64?: string;
+}
+
 export interface FloorManagerHandle {
     mountToMessage(messageElement: HTMLElement, messageId: number | string, isUserMessage?: boolean): void;
     updateFloorProgress(messageId: number | string, progress: number, buttonIndex?: number): void;
-    attachFloorImage(messageId: number | string, imageUrl: string, metadata?: Record<string, unknown>, imageBlob?: Blob, buttonIndex?: number): void;
+    attachFloorImage(
+        messageId: number | string,
+        imageUrl: string,
+        metadata?: Record<string, unknown>,
+        imageBlob?: Blob,
+        buttonIndex?: number,
+        fallbacks?: FloorImageFallbackOptions
+    ): void;
     triggerFloorGenerate(messageElement: HTMLElement, messageId: number | string, explicitPrompt?: string, explicitNegativePrompt?: string, buttonIndex?: number): void;
     triggerAutoGenerate(messageId: number | string): void;
     handleMessageSwiped(messageId: number | string): void;
@@ -148,6 +160,41 @@ export class FloorManager implements FloorManagerHandle {
 
         const mesEl = messageElement.classList?.contains('mes') ? messageElement : ((messageElement.closest?.('.mes') as HTMLElement) || messageElement);
         const textElement = mesEl.querySelector<HTMLElement>('.mes_text') || mesEl;
+
+        // 清理末尾追加的旧废弃结构（若存在）
+        const legacyWrapper = messageElement.querySelector(':scope > .da-image-collapse-wrapper');
+        if (legacyWrapper) {
+            legacyWrapper.remove();
+        }
+
+        // 检测是否存在已挂载的插槽
+        const existingSlots = textElement.querySelectorAll<HTMLElement>('.da-floor-slot, .da-image-collapse-wrapper');
+        if (existingSlots.length > 0) {
+            let isExactMatch = true;
+            for (let idx = 0; idx < existingSlots.length; idx++) {
+                const key = this._getContextKey(messageId, idx);
+                const ctx = this._contexts.get(key);
+                if (!ctx) {
+                    isExactMatch = false;
+                    break;
+                }
+            }
+            if (isExactMatch && existingSlots.length === this._getTotalButtons(messageId)) {
+                return;
+            }
+
+            // 未能直接复用，先将现有插槽还原为原始文本占位符，防止正则在 data-original-placeholder 属性中发生嵌套自噬
+            for (const slot of existingSlots) {
+                const orig = slot.getAttribute('data-original-placeholder');
+                if (orig) {
+                    slot.replaceWith(document.createTextNode(orig));
+                } else {
+                    slot.remove();
+                }
+            }
+            this._removeMessageContexts(messageId, true);
+        }
+
         const rawHtml = textElement.innerHTML || '';
         if (!rawHtml.trim()) return;
 
@@ -175,33 +222,10 @@ export class FloorManager implements FloorManagerHandle {
         }
         regex.lastIndex = 0;
 
-        // 清理末尾追加的旧结构（若存在）
-        const legacyWrapper = messageElement.querySelector(':scope > .da-image-collapse-wrapper');
-        if (legacyWrapper) {
-            legacyWrapper.remove();
-        }
-
         // 无指令时清理既有上下文并退出
         if (matches.length === 0) {
             this._removeMessageContexts(messageId, true);
             return;
-        }
-
-        // 指令内容未变动且 DOM 插槽完好时复用既有 DOM 结构
-        const existingSlots = textElement.querySelectorAll<HTMLElement>(`.da-floor-slot[data-message-id="${messageId}"]`);
-        if (existingSlots.length === matches.length && matches.length > 0) {
-            let isExactMatch = true;
-            for (let idx = 0; idx < matches.length; idx++) {
-                const key = this._getContextKey(messageId, idx);
-                const ctx = this._contexts.get(key);
-                if (!ctx || ctx.prompt !== matches[idx].prompt) {
-                    isExactMatch = false;
-                    break;
-                }
-            }
-            if (isExactMatch) {
-                return;
-            }
         }
 
         this._removeMessageContexts(messageId, true);
@@ -226,8 +250,9 @@ export class FloorManager implements FloorManagerHandle {
             const phInfo = matches[idx];
             if (!phInfo) return;
 
+            // 插槽外层容器始终保持靠左排版，使按钮与正文左边缘自然对齐
             const slotContainer = createElement('div', {
-                className: `da-floor-slot da-image-collapse-wrapper da-floor-slot--${align} da-image-collapse-wrapper--${align}`,
+                className: 'da-floor-slot da-image-collapse-wrapper',
                 attributes: {
                     'data-message-id': String(messageId),
                     'data-button-index': String(idx),
@@ -250,6 +275,7 @@ export class FloorManager implements FloorManagerHandle {
                 this.triggerFloorGenerate(mesEl, messageId, phInfo.prompt, phInfo.negativePrompt, idx);
             });
 
+            // 图片承载槽支持根据用户设置进行居左/居中/居右排版
             const imgSlot = createElement('div', {
                 className: `da-floor-btn-img-slot da-floor-btn-img-slot--${align}`
             });
@@ -295,6 +321,11 @@ export class FloorManager implements FloorManagerHandle {
     public async restoreSavedImage(ctx: FloorButtonContext): Promise<boolean> {
         if (this._isDisposed) return false;
 
+        // 幂等防护：若当前插槽已有正在展示的生成图片，或当前按钮正处于任务进行态，禁止异步重复覆写
+        if (ctx.slotElement.querySelector('.da-generated-img') || ctx.state === 'loading' || ctx.state === 'progress') {
+            return true;
+        }
+
         const msg = this._getHostChatMessage(ctx.messageId);
         if (!msg) return false;
 
@@ -309,24 +340,47 @@ export class FloorManager implements FloorManagerHandle {
         if (!savedMeta) return false;
 
         try {
-            // 优先使用静态 URL
+            const recordId = (savedMeta.id || savedMeta.uuid) as string | undefined;
+            const base64Data = (savedMeta.base64 && typeof savedMeta.base64 === 'string') ? savedMeta.base64 : undefined;
+
+            // 1. 优先使用静态 URL，并绑定本地 IDB 与 Base64 级联容灾回退候选
             if (savedMeta.url && typeof savedMeta.url === 'string') {
-                this.attachFloorImage(ctx.messageId, savedMeta.url, savedMeta.metadata, undefined, ctx.buttonIndex);
+                this.attachFloorImage(
+                    ctx.messageId,
+                    savedMeta.url,
+                    savedMeta.metadata,
+                    undefined,
+                    ctx.buttonIndex,
+                    { fallbackId: recordId, fallbackBase64: base64Data }
+                );
                 this.setButtonState(ctx, 'done');
                 return true;
             }
 
-            // 从本地持久化存储加载二进制 Blob 原图
-            const recordId = savedMeta.id || savedMeta.uuid;
+            // 2. 从本地持久化存储加载二进制 Blob 原图
             if (recordId && this._storage) {
                 const record = await this._storage.getImage(recordId);
                 const rawBlob = record?.originalBlob;
                 if (rawBlob instanceof Blob) {
                     const blobUrl = URL.createObjectURL(rawBlob);
-                    this.attachFloorImage(ctx.messageId, blobUrl, record?.metadata || savedMeta.metadata, rawBlob, ctx.buttonIndex);
+                    this.attachFloorImage(
+                        ctx.messageId,
+                        blobUrl,
+                        record?.metadata || savedMeta.metadata,
+                        rawBlob,
+                        ctx.buttonIndex,
+                        { fallbackBase64: base64Data }
+                    );
                     this.setButtonState(ctx, 'done');
                     return true;
                 }
+            }
+
+            // 3. 回退使用内嵌 Base64 格式
+            if (base64Data) {
+                this.attachFloorImage(ctx.messageId, base64Data, savedMeta.metadata, undefined, ctx.buttonIndex);
+                this.setButtonState(ctx, 'done');
+                return true;
             }
         } catch (err) {
             console.warn(`[FloorManager] 恢复楼层 #${ctx.messageId} 历史图像失败:`, err);
@@ -439,11 +493,28 @@ export class FloorManager implements FloorManagerHandle {
         imageUrl: string,
         metadata?: Record<string, unknown>,
         imageBlob?: Blob,
-        buttonIndex = 0
+        buttonIndex = 0,
+        fallbacks?: FloorImageFallbackOptions
     ): void {
         if (this._isDisposed) return;
         const contextKey = this._getContextKey(messageId, buttonIndex);
-        const ctx = this._contexts.get(contextKey);
+        let ctx = this._contexts.get(contextKey);
+
+        // 关键加固：检查 slot 是否从 DOM 树中脱轨（例如宿主在 MESSAGE_UPDATED 时重绘了 .mes_text）
+        if (!ctx || !ctx.slotElement || !ctx.slotElement.isConnected) {
+            if (typeof document !== 'undefined') {
+                const selector = `#chat .mes[mesid="${messageId}"], .mes[mesid="${messageId}"]`;
+                const messageEl = document.querySelector<HTMLElement>(selector);
+                if (messageEl) {
+                    this.mountToMessage(messageEl, messageId);
+                    const refreshedCtx = this._contexts.get(contextKey);
+                    if (refreshedCtx && refreshedCtx.slotElement && refreshedCtx.slotElement.isConnected) {
+                        ctx = refreshedCtx;
+                    }
+                }
+            }
+        }
+
         if (!ctx) return;
 
         const slot = ctx.slotElement;
@@ -513,6 +584,45 @@ export class FloorManager implements FloorManagerHandle {
                 src: imageUrl,
                 alt: '生成的图片',
                 style: `max-height: ${maxHeight}px; object-fit: ${objectFit};`
+            }
+        });
+
+        img.addEventListener('error', async () => {
+            console.warn(`[FloorManager] 楼层 #${messageId} 图像资源加载异常:`, img.src);
+
+            // 级联容灾回退 1：若静态 URL 404/失效，尝试从本地 IndexedDB 加载原图 Blob
+            if (fallbacks?.fallbackId && this._storage) {
+                const targetId = fallbacks.fallbackId;
+                fallbacks.fallbackId = undefined; // 避免重复回退
+                try {
+                    const record = await this._storage.getImage(targetId);
+                    if (record?.originalBlob instanceof Blob) {
+                        const fallbackBlobUrl = URL.createObjectURL(record.originalBlob);
+                        this._allocatedUrls.add(fallbackBlobUrl);
+                        this._slotUrls.set(contextKey, fallbackBlobUrl);
+                        img.src = fallbackBlobUrl;
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('[FloorManager] 级联回退至本地 IndexedDB 失败:', err);
+                }
+            }
+
+            // 级联容灾回退 2：若本地不存在，尝试使用聊天记录内嵌 Base64
+            if (fallbacks?.fallbackBase64) {
+                const b64 = fallbacks.fallbackBase64;
+                fallbacks.fallbackBase64 = undefined; // 避免重复回退
+                img.src = b64;
+                return;
+            }
+
+            // 全部候选路径均加载失败，展示图片损坏占位条，并允许用户重试
+            slot.innerHTML = '';
+            const brokenEl = createElement('div', { className: 'da-floor-error-bar' });
+            brokenEl.textContent = '图像资源已丢失或无法加载，请点击重试';
+            slot.appendChild(brokenEl);
+            if (ctx) {
+                this.setButtonState(ctx, 'error');
             }
         });
 

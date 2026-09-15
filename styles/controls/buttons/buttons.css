@@ -139,8 +139,7 @@
 /* 4. 楼层生图触发按钮组件与生命周期状态机 (.da-floor-btn)
    嵌入 SillyTavern 聊天消息楼层下方，作为触发单图生成的核心入口；
    胶囊药丸造型（border-radius: 100px），支持多种业务生命周期状态。 */
-.da-floor-btn-wrapper,
-.da-floor-slot {
+.da-floor-btn-wrapper {
     display: inline-flex;
     flex-direction: row;
     flex-wrap: wrap;

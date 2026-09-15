@@ -117,9 +117,6 @@ export function renderGalleryTab(options: GalleryTabOptions = {}): GalleryTabHan
                 Toast.info('存储已为空');
                 return;
             }
-            if (!confirm(`确定要清空画廊吗？该操作将删除所有未标星收藏的 ${allRecords.filter((r) => !r.isFavorite).length} 张图片！`)) {
-                return;
-            }
             if (options.storage) {
                 for (const r of allRecords) {
                     if (!r.isFavorite) {

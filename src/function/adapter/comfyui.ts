@@ -25,7 +25,7 @@ import type {
 } from '@types';
 import { BaseAdapter } from './base';
 import { formatLoraTag } from '@util/prompt';
-import type { HttpClient } from '@util/http';
+import { type HttpClient, sleepWithSignal } from '@util/http';
 
 /**
  * 工作流模板变量直接替换纯函数
@@ -391,19 +391,15 @@ export class ComfyUIAdapter extends BaseAdapter<ComfyUITaskData> {
 
         // 轮询检查 /history
         const pollIntervalMs = 1000;
-        const maxWaitMs = 600000; // 最长等待 10 分钟
-        const startWait = Date.now();
+        // 超时控制由 TaskQueueManager 负责（默认 120s），这里仅需监听 AbortSignal
 
         try {
             while (!isDone) {
                 if (signal?.aborted) {
                     throw new Error('ComfyUI 任务已被取消');
                 }
-                if (Date.now() - startWait > maxWaitMs) {
-                    throw new Error('ComfyUI 等待生图结果超时');
-                }
 
-                await new Promise(res => setTimeout(res, pollIntervalMs));
+                await sleepWithSignal(pollIntervalMs, signal);
 
                 const checkResp = await this.httpClient.fetchExternal(`${this.baseUrl}/history/${promptId}`, {
                     method: 'GET',

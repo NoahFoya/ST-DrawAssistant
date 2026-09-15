@@ -154,7 +154,7 @@ export function composeTimeoutSignal(
 /**
  * 可中断的延迟等待函数，与主请求共享同一个 AbortSignal。
  */
-function sleepWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
+export function sleepWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) {
             reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));

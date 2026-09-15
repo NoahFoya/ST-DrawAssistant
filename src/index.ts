@@ -20,6 +20,7 @@ import { ResultIntegrator } from '@store/integrator';
 import { GenerationOrchestrator } from '@function/orchestrator';
 import { ExtensionRegistry } from '@extension/registry';
 import { initUI, type UIHandle } from './ui';
+import { DEFAULT_TASK_TIMEOUT_MS, DEFAULT_MAX_CONCURRENT_TASKS } from './constants';
 
 /** 插件初始化状态标志 */
 let initialized = false;
@@ -126,13 +127,25 @@ export function getLatestCharacterMessageId(): number | string | null {
  */
 export function handleGenerationEnded(): void {
     if (!uiHandle || typeof window === 'undefined') return;
-    if (settingsStore?.get('enabled') === false || !settingsStore?.get('autoGenerate')) {
-        return;
-    }
     const latestId = getLatestCharacterMessageId();
     if (latestId !== null) {
-        uiHandle.floorManager.triggerAutoGenerate(latestId);
+        // 先确保最新楼层已完成 DOM 扫描与按钮插槽挂载（特别是在流式打字结束后）
+        handleMessageRendered(latestId, false);
+
+        // 若启用了自动生图，再触发该楼层生图
+        if (settingsStore?.get('enabled') !== false && settingsStore?.get('autoGenerate')) {
+            uiHandle.floorManager.triggerAutoGenerate(latestId);
+        }
     }
+}
+
+/**
+ * 响应宿主会话加载完毕生命周期事件 (CHAT_LOADED)
+ * 当聊天数据完成异步拉取并在 DOM 中渲染完毕后触发，扫描所有历史楼层并还原历史图片。
+ */
+export function handleChatLoaded(): void {
+    if (!uiHandle || typeof document === 'undefined') return;
+    scanAndMountExistingMessages();
 }
 
 /**
@@ -165,8 +178,8 @@ export async function handleAppInitialized(): Promise<void> {
     }
     if (!taskQueue) {
         taskQueue = new TaskQueueManager({
-            taskTimeoutMs: settingsStore.get('taskTimeoutMs'),
-            maxConcurrent: settingsStore.get('maxConcurrentTasks')
+            taskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
+            maxConcurrent: DEFAULT_MAX_CONCURRENT_TASKS
         });
     }
     if (!orchestrator) {
@@ -204,11 +217,14 @@ export async function handleChatChanged(): Promise<void> {
         uiHandle.floorManager.clearSessionState();
     }
 
-    // 3. 延时等待 DOM 重渲染后重新扫描当前新会话的聊天楼层
+    // 3. 延时等待 DOM 重渲染后重新扫描当前新会话的聊天楼层（兼顾部分不触发 CHAT_LOADED 的宿主环境）
     if (typeof window !== 'undefined') {
         window.requestAnimationFrame(() => {
             scanAndMountExistingMessages();
         });
+        setTimeout(() => {
+            scanAndMountExistingMessages();
+        }, 250);
     }
 }
 
@@ -241,27 +257,11 @@ export async function initOnce(): Promise<void> {
 
     integrator = new ResultIntegrator({ storage, settingsStore });
     taskQueue = new TaskQueueManager({
-        taskTimeoutMs: settingsStore.get('taskTimeoutMs'),
-        maxConcurrent: settingsStore.get('maxConcurrentTasks')
+        taskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
+        maxConcurrent: DEFAULT_MAX_CONCURRENT_TASKS
     });
 
-    // 2. 响应配置中超时与并发数的动态变更
-    const unsubTimeout = settingsStore.onKeyChange('taskTimeoutMs', (val) => {
-        if (taskQueue && typeof val === 'number') {
-            taskQueue.setTaskTimeoutMs(val);
-        }
-    });
-    const unsubConcurrent = settingsStore.onKeyChange('maxConcurrentTasks', (val) => {
-        if (taskQueue && typeof val === 'number') {
-            taskQueue.setMaxConcurrent(val);
-        }
-    });
-    cleanups.push(() => {
-        unsubTimeout.dispose();
-        unsubConcurrent.dispose();
-    });
-
-    // 3. 实例化任务编排器
+    // 2. 实例化任务编排器
     orchestrator = new GenerationOrchestrator({
         taskQueue,
         integrator,
@@ -271,14 +271,28 @@ export async function initOnce(): Promise<void> {
     // 4. 注册核心宿主生命周期事件
     const onAppInit = () => void handleAppInitialized();
     const onChatChange = () => void handleChatChanged();
+    const onChatLoaded = () => handleChatLoaded();
     const onUserMsg = (id: any) => handleMessageRendered(id, true);
     const onCharMsg = (id: any) => handleMessageRendered(id, false);
     const onGenEnded = () => handleGenerationEnded();
     const onMsgSwiped = (id: any) => handleMessageSwiped(id);
+    const onMsgUpdated = (id: any) => {
+        if (id !== undefined && id !== null) {
+            handleMessageRendered(id, false);
+        }
+    };
+    const onMsgEdited = (id: any) => {
+        if (id !== undefined && id !== null) {
+            handleMessageRendered(id, false);
+        }
+    };
 
     eventSource.on(eventTypes.APP_INITIALIZED, onAppInit);
     eventSource.on(eventTypes.CHAT_CHANGED, onChatChange);
 
+    if (eventTypes.CHAT_LOADED) {
+        eventSource.on(eventTypes.CHAT_LOADED, onChatLoaded);
+    }
     if (eventTypes.USER_MESSAGE_RENDERED) {
         eventSource.on(eventTypes.USER_MESSAGE_RENDERED, onUserMsg);
     }
@@ -290,6 +304,15 @@ export async function initOnce(): Promise<void> {
     }
     if (eventTypes.MESSAGE_SWIPED) {
         eventSource.on(eventTypes.MESSAGE_SWIPED, onMsgSwiped);
+    }
+    if (eventTypes.MESSAGE_UPDATED) {
+        eventSource.on(eventTypes.MESSAGE_UPDATED, onMsgUpdated);
+    }
+    if (eventTypes.MESSAGE_EDITED) {
+        eventSource.on(eventTypes.MESSAGE_EDITED, onMsgEdited);
+    }
+    if ((eventTypes as any).MORE_CHAT_MESSAGES_LOADED) {
+        eventSource.on((eventTypes as any).MORE_CHAT_MESSAGES_LOADED, onChatLoaded);
     }
 
     cleanups.push(() => {
@@ -304,6 +327,9 @@ export async function initOnce(): Promise<void> {
 
         removeHostListener(eventTypes.APP_INITIALIZED, onAppInit);
         removeHostListener(eventTypes.CHAT_CHANGED, onChatChange);
+        if (eventTypes.CHAT_LOADED) {
+            removeHostListener(eventTypes.CHAT_LOADED, onChatLoaded);
+        }
         if (eventTypes.USER_MESSAGE_RENDERED) {
             removeHostListener(eventTypes.USER_MESSAGE_RENDERED, onUserMsg);
         }
@@ -315,6 +341,15 @@ export async function initOnce(): Promise<void> {
         }
         if (eventTypes.MESSAGE_SWIPED) {
             removeHostListener(eventTypes.MESSAGE_SWIPED, onMsgSwiped);
+        }
+        if (eventTypes.MESSAGE_UPDATED) {
+            removeHostListener(eventTypes.MESSAGE_UPDATED, onMsgUpdated);
+        }
+        if (eventTypes.MESSAGE_EDITED) {
+            removeHostListener(eventTypes.MESSAGE_EDITED, onMsgEdited);
+        }
+        if ((eventTypes as any).MORE_CHAT_MESSAGES_LOADED) {
+            removeHostListener((eventTypes as any).MORE_CHAT_MESSAGES_LOADED, onChatLoaded);
         }
     });
 

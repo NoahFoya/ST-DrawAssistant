@@ -77,6 +77,9 @@ export function base64ToBlob(base64: string, defaultMime: string = 'image/png'):
         cleanBase64 = commaIdx >= 0 ? cleanBase64.slice(commaIdx + 1) : cleanBase64;
     }
 
+    // 过滤可能混入的换行符与空白符，防止 atob 抛出 InvalidCharacterError
+    cleanBase64 = cleanBase64.replace(/[\r\n\s]/g, '');
+
     if (typeof atob !== 'undefined') {
         const binStr = atob(cleanBase64);
         const bytes = new Uint8Array(binStr.length);

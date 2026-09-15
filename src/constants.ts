@@ -20,8 +20,11 @@ export const DB_NAME = 'ST-DrawAssistant';
 /** 本地 IndexedDB 图像资产对象仓库名称 */
 export const DB_STORE_NAME = 'generated_images';
 
-/** 默认任务执行超时强断阈值 (毫秒) */
-export const DEFAULT_TASK_TIMEOUT_MS = 180000;
+/** 任务执行超时强断阈值 (毫秒)，固定为 120 秒 */
+export const DEFAULT_TASK_TIMEOUT_MS = 120000;
+
+/** 最大并发生图任务数，固定为 3 */
+export const DEFAULT_MAX_CONCURRENT_TASKS = 3;
 
 /** 临时 Object URL 引用计数归零后的延时销毁缓冲时间 (毫秒) */
 export const DEFAULT_URL_RELEASE_DELAY_MS = 5000;

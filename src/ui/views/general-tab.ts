@@ -18,7 +18,7 @@ import { createFormField, createCard } from '../components/form-field';
 import { createToggle } from '../components/toggle';
 import { createSelect } from '../components/select';
 import { createSlider } from '../components/slider';
-import { createNumberInput, createTextInput } from '../components/input';
+import { createTextInput } from '../components/input';
 import { getIconSvg } from '../components/icons';
 import { ExtensionRegistry } from '../../extension';
 import type { SettingsStore } from '../../store/settings';
@@ -110,39 +110,6 @@ export function renderGeneralTab(settingsStore: SettingsStore): GeneralTabHandle
     });
     basicCard.append(requestModeField);
 
-    // 请求超时时间 (升级为复合滑块)
-    const timeoutSlider = createSlider({
-        value: Math.round((settingsStore.get('taskTimeoutMs') || 180000) / 1000),
-        min: 10,
-        max: 1800,
-        step: 10,
-        unit: '秒',
-        onChange: (val) => settingsStore.set('taskTimeoutMs', val * 1000)
-    });
-    regDisposer(timeoutSlider);
-    const timeoutField = createFormField({
-        label: '请求超时时间',
-        helpText: '单个生图任务最长允许耗时，超过后自动中断取消并释放队列',
-        control: timeoutSlider
-    });
-    basicCard.append(timeoutField);
-
-    // 最大并发任务数
-    const concurrentInput = createNumberInput({
-        value: settingsStore.get('maxConcurrentTasks') || 1,
-        min: 1,
-        max: 10,
-        step: 1,
-        unit: '个',
-        onChange: (val) => settingsStore.set('maxConcurrentTasks', val)
-    });
-    regDisposer(concurrentInput);
-    const concurrentField = createFormField({
-        label: '最大并发任务数',
-        helpText: '同时允许排队执行的生图最大数量，建议保持为 1 防止本地显卡显存溢出',
-        control: concurrentInput
-    });
-    basicCard.append(concurrentField);
 
     root.appendChild(basicCard.element);
 

@@ -24,6 +24,7 @@ import { SettingsStore } from './settings';
 import type { IDisposable } from '@util/event-bus';
 import { TypedEventBus } from '@util/event-bus';
 import { blobToBase64 } from '@util/image';
+import { Toast } from '../ui/components/feedback';
 import type { TaskEventMap } from './task';
 
 /** 宿主聊天楼层与持久化接口提供者声明 (支持依赖注入) */
@@ -212,17 +213,26 @@ export class ResultIntegrator implements IDisposable {
             }
         };
 
+        // 1. 本地持久化：检查是否启用 saveToIndexedDB（默认开启）
+        const shouldSaveToIDB = this._settingsStore?.get('saveToIndexedDB') ?? true;
         const deduplicate = this._settingsStore?.get('deduplicateHash') ?? true;
         const maxStoredImages = this._settingsStore?.get('maxStoredImages') ?? 500;
 
         let finalImageId = imageId;
-        try {
-            finalImageId = await this._storage.saveImage(storedRecord, {
-                deduplicate,
-                maxStoredImages
-            });
-        } catch {
-            // 保存失败降级继续
+        let idbSavedSuccess = false;
+
+        if (shouldSaveToIDB) {
+            try {
+                finalImageId = await this._storage.saveImage(storedRecord, {
+                    deduplicate,
+                    maxStoredImages
+                });
+                idbSavedSuccess = true;
+            } catch (storageErr: any) {
+                console.error('[ST-DrawAssistant][ResultIntegrator] 本地持久化保存失败:', storageErr);
+                const isQuota = storageErr?.name === 'QuotaExceededError' || /quota/i.test(storageErr?.message || '');
+                Toast.warn(isQuota ? '本地存储空间已满，图片未能存入本地画廊' : '本地存储失败，图片未能存入本地画廊');
+            }
         }
 
         // 2. 检查叠加存储选项：上传服务端与内嵌 Base64
@@ -241,9 +251,13 @@ export class ResultIntegrator implements IDisposable {
                 });
                 if (uploadRes?.path) {
                     serverStaticUrl = uploadRes.path;
+                } else {
+                    console.warn('[ST-DrawAssistant][ResultIntegrator] 上传图片至服务端未返回有效路径，降级本地存储');
+                    Toast.warn('图片上传至酒馆服务端未成功，已保留本地版本');
                 }
             } catch (uploadErr) {
                 console.warn('[ST-DrawAssistant][ResultIntegrator] 上传图片至服务端失败，降级本地存储:', uploadErr);
+                Toast.warn('图片同步至酒馆服务端异常，已保留本地版本');
             }
         }
 
@@ -256,9 +270,22 @@ export class ResultIntegrator implements IDisposable {
             }
         }
 
-        const strategy: StorageStrategy = serverStaticUrl
-            ? 'server'
-            : (shouldEmbedBase64 && embeddedBase64 ? 'embedded' : 'split');
+        // 策略判定：仅在存在真实有效持久化产物时赋予对应策略
+        let strategy: StorageStrategy | null = null;
+        if (serverStaticUrl) {
+            strategy = 'server';
+        } else if (shouldEmbedBase64 && embeddedBase64) {
+            strategy = 'embedded';
+        } else if (idbSavedSuccess) {
+            strategy = 'split';
+        }
+
+        // 若全部持久化途径均失败，向用户明确提示，严禁向聊天记录写入无效条目
+        if (!strategy) {
+            console.error('[ST-DrawAssistant][ResultIntegrator] 全部持久化存储渠道均未成功，跳过写入消息楼层');
+            Toast.error('图片持久化存储失败（本地与服务端均未成功保存），仅供当前窗口临时预览');
+            return storedRecord;
+        }
 
         // 3. 楼层插槽绑定：按 [swipeId][buttonIndex] 写入目标消息 extra
         const messageId = task.identity.messageId;
