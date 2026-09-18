@@ -1,0 +1,474 @@
+/**
+ * 动态条目卡片样式（包含 LoRA 模型卡片、服务连接卡片与参数调节行）。
+ *
+ * @remarks
+ * 1. 列表管理：管理多条目动态列表容器（如挂载的 LoRA 模型列表）。
+ * 2. 状态反馈：单个 LoRA 卡片集成名称、权重调节输入框与启用开关；模型失效时通过 .is-invalid 警示。
+ * 3. 布局自适应：底部包含自适应的添加选择行（.da-lora-add-row）。
+ */
+
+/* 1. LoRA 模型卡片列表容器 (.da-lora-container)
+   管理多个挂载的 LoRA 卡片列表，包含标题、计数指示、折叠控制与滚动区。 */
+.da-lora-manager,
+.da-lora-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-lora-container__header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--da-space-sm, 8px);
+    padding: 0 2px;
+}
+
+.da-lora-container__title {
+    font-size: var(--da-font-size-base, 0.88rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-lora-container__title i {
+    color: var(--da-accent-color);
+}
+
+/* 列表计数徽标：展示已挂载的 LoRA 数量 */
+.da-lora-container__badge,
+.da-lora-count-badge {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: var(--da-radius-pill, 20px);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.05));
+    color: var(--da-text-secondary);
+    border: 1px solid var(--da-border-color);
+}
+
+/* LoRA 卡片集合包裹容器 */
+.da-lora-list-set,
+.da-lora-manager__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 6px);
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--da-space-sm, 6px);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 8px);
+}
+
+/* 2. 空状态引导 (.da-lora-empty)
+   在未添加任何 LoRA 时居中展示占位图标与提示信息 */
+.da-lora-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 12px;
+    background: transparent;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    text-align: center;
+    gap: 4px;
+    user-select: none;
+}
+
+.da-lora-empty__icon {
+    font-size: 18px;
+    opacity: 0.7;
+    color: var(--da-accent-color);
+}
+
+.da-lora-empty__text {
+    font-size: var(--da-font-size-xs, 0.78rem);
+}
+
+.da-lora-empty__btn {
+    margin-top: 8px;
+}
+
+/* 3. 单个 LoRA 模型条目卡片 (.da-lora-item)
+   微型卡片，支持悬停高亮、禁用划线与模型文件缺失警示 */
+.da-lora-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-sm, 6px);
+    box-sizing: border-box;
+    box-shadow: var(--da-inset-top-light);
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.da-lora-item:hover {
+    background: var(--da-bg-card-hover, rgba(255, 255, 255, 0.05));
+    border-color: rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* 禁用态：降低透明度并在名称上添加删除线 */
+.da-lora-item.is-disabled {
+    opacity: 0.5;
+}
+
+.da-lora-item.is-disabled .da-lora-item__name {
+    text-decoration: line-through;
+    opacity: 0.75;
+}
+
+/* 4. LoRA 卡片头部 (.da-lora-item__header)
+   水平排列模型图标、模型文件名、启用开关与删除按钮 */
+.da-lora-item__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-lora-item__title-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-lora-item__icon {
+    font-size: 13px;
+    color: var(--da-accent-color);
+    flex-shrink: 0;
+}
+
+.da-lora-item__name {
+    font-family: var(--da-font-mono, monospace);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: text;
+}
+
+.da-lora-item__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* 右上角 [ × ] 紧凑删除按钮 (提高优先级消除 !important 堆砌) */
+.da-lora-item .da-lora-item__close-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 4px);
+    color: var(--da-text-muted);
+    background: transparent;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.da-lora-item .da-lora-item__close-btn:hover {
+    background: rgba(255, 69, 58, 0.15);
+    color: var(--da-color-error, #ff453a);
+}
+
+/* 失效状态：当模型文件未在生图服务中检测到时，呈现琥珀/警告边框，鼠标悬停显示原因说明 */
+.da-lora-item.is-invalid {
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.45);
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.04);
+}
+
+.da-lora-item.is-invalid .da-lora-item__name {
+    color: var(--da-color-warn, #f59e0b);
+}
+
+/* 5. LoRA 参数调节细微布局 (.da-lora-item__body)
+   卡片内部的次级参数控制行，水平排列模型权重、CLIP 权重微调输入框与单项启用/禁用开关；
+   窄屏下支持自动换行堆叠。 */
+.da-lora-item__body {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.05));
+}
+
+.da-lora-item__params {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.da-lora-param {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-lora-param__label {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+.da-lora-param__input {
+    height: 26px;
+}
+
+.da-lora-item__toggle-box {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* 6. LoRA 底部追加栏 (.da-lora-add-row)
+   包含可用 LoRA 模型下拉选择器与“添加”按钮，水平铺开撑满卡片底部。 */
+.da-lora-container__footer,
+.da-lora-add-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+    padding-top: 2px;
+}
+
+.da-lora-add-select {
+    flex: 1 1 auto;
+    min-width: 140px;
+    height: 30px;
+}
+
+.da-lora-add-btn {
+    white-space: nowrap;
+    height: 30px;
+    padding: 0 12px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+    .da-lora-container__footer,
+    .da-lora-add-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .da-lora-add-select {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .da-lora-add-btn {
+        width: 100%;
+        height: 34px;
+        justify-content: center;
+    }
+
+    .da-lora-item__body {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .da-lora-item__toggle-box {
+        margin-left: auto;
+        align-self: flex-end;
+    }
+}
+
+/* 7. 生图提供者连接卡片 (.da-connection-card) */
+.da-connection-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+    gap: var(--da-space-xs, 6px);
+    transition: border-color 0.2s var(--da-ease);
+}
+
+.da-connection-card.is-online {
+    border-color: rgba(var(--da-success-rgb, 16, 185, 129), 0.35);
+}
+
+.da-connection-card.is-offline {
+    border-color: rgba(var(--da-danger-rgb, 239, 68, 68), 0.35);
+}
+
+.da-connection-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-connection-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-connection-card__title {
+    font-size: var(--da-font-size-base, 0.88rem);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-connection-card__url {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-muted);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-connection-card__badge-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-connection-card__latency {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    font-family: var(--da-font-mono, monospace);
+    color: var(--da-success, #10b981);
+    background: rgba(var(--da-success-rgb, 16, 185, 129), 0.1);
+    padding: 2px 6px;
+    border-radius: var(--da-radius-pill, 20px);
+}
+
+.da-connection-card__input-row {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-connection-card__input-row .da-input-wrapper,
+.da-connection-card__input-row > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-connection-card__token-row {
+    padding: 0 var(--da-space-md, 12px) var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-connection-card__feedback {
+    margin: 0 var(--da-space-md, 12px) var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    padding: 6px 10px;
+    border-radius: var(--da-radius-sm, 6px);
+    font-size: var(--da-font-size-xs, 0.78rem);
+    line-height: 1.4;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color);
+    box-sizing: border-box;
+}
+
+/* 8. 画幅尺寸与分辨率选择器 (.da-dimension-picker) */
+.da-dimension-picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__preset-row {
+    width: 100%;
+}
+
+.da-dimension-picker__preset-row .da-select-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.da-dimension-picker__inputs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-sm, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-dimension-picker__side-label {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.da-dimension-picker__side .da-number-stepper {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+}
+
+.da-dimension-picker__swap-btn {
+    flex-shrink: 0;
+}
+
+/* 9. 采样超参卡片与种子微调容器 (.da-sampler-card & .da-seed-wrapper) */
+.da-sampler-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-seed-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 240px;
+}
+
+.da-seed-wrapper .da-input,
+.da-seed-wrapper .da-number-stepper {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-seed-wrapper .da-icon-btn {
+    flex-shrink: 0;
+}
+
+

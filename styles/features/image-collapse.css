@@ -1,0 +1,217 @@
+/**
+ * 消息正文绘图指令原位插槽容器、折叠展开组件与生成图像样式。
+ *
+ * @remarks
+ * 1. 指令原位替换：扫描正文中占位指令并在原位置替换为生图插槽容器（.da-floor-slot）。
+ * 2. 排版解耦：生图按钮与进度反馈始终与正文自然靠左排版，生成图片的对齐（居左/居中/居右）独立设置。
+ * 3. 原位呈现：出图完成后在当前指令原位插槽内展开，支持点击折叠与悬停交互。
+ */
+
+/* 1. 楼层正文内嵌生图插槽容器 (.da-floor-slot, .da-image-collapse-wrapper)
+   原位替换正文中的占位指令，承载按钮、进度与生成的图片；
+   控制按钮与进度反馈始终与正文自然靠左排版，与生成图片的对齐设置解耦。 */
+.da-floor-slot,
+.da-image-collapse-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 6px 0;
+    box-sizing: border-box;
+    align-items: flex-start;
+}
+
+/* 2. 折叠/展开控制按钮兼容类 (.da-image-collapse-toggle) */
+.da-image-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 14px;
+    font-size: var(--da-font-size-xs, 0.76rem);
+    font-weight: 500;
+    margin-bottom: 6px;
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.14s var(--da-ease), transform 0.1s var(--da-ease);
+}
+
+.da-image-collapse-toggle:hover {
+    transform: translateY(-1px);
+}
+
+.da-image-collapse-toggle:active {
+    transform: translateY(0);
+}
+
+/* 3. 楼层生图插槽容器 (.da-floor-btn-img-slot)
+   承载生图完成后的图片元素，支持左、中、右对齐排版 */
+.da-floor-btn-img-slot {
+    display: flex;
+    width: 100%;
+    flex-basis: 100%;
+    margin-top: 6px;
+}
+
+.da-floor-btn-img-slot--center {
+    justify-content: center;
+}
+
+.da-floor-btn-img-slot--right {
+    justify-content: flex-end;
+}
+
+.da-floor-btn-img-slot--left {
+    justify-content: flex-start;
+}
+
+/* 4. 楼层生成最终图像元素 (.da-generated-img)
+   嵌入楼层消息中的生成图像，包含轻量阴影、圆角变体与鼠标悬停微放大交互。 */
+.da-generated-img {
+    box-shadow: var(--da-shadow-sm);
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease-spring), box-shadow 0.18s var(--da-ease);
+}
+
+.da-generated-img:hover {
+    box-shadow: var(--da-shadow-md);
+}
+
+.da-generated-img--rounded {
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+.da-image-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    box-shadow: var(--da-shadow-md);
+    border: 1px solid var(--da-separator);
+}
+
+.da-image-wrapper--rounded {
+    border-radius: var(--da-radius-md, 8px);
+}
+
+.da-image-wrapper--center {
+    margin: 4px auto 0 auto;
+}
+
+.da-image-wrapper--left {
+    margin: 4px auto 0 0;
+}
+
+.da-image-wrapper--right {
+    margin: 4px 0 0 auto;
+}
+
+/* 5. 自动高斯模糊遮罩与交互 (.da-image-wrapper--masked) */
+.da-image-wrapper--masked .da-generated-img {
+    filter: blur(28px);
+    transform: scale(1.08);
+    transition: filter 0.35s var(--da-ease), transform 0.35s var(--da-ease);
+    will-change: filter, transform;
+}
+
+.da-image-mask-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffffff;
+    font-size: var(--da-font-size-xs, 0.76rem);
+    font-weight: 500;
+    pointer-events: none;
+    z-index: 4;
+    transition: opacity 0.3s var(--da-ease);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+.da-image-mask-badge svg {
+    width: 22px;
+    height: 22px;
+    opacity: 0.9;
+}
+
+.da-image-wrapper--masked:hover .da-generated-img {
+    filter: blur(0);
+    transform: scale(1);
+}
+
+.da-image-wrapper--masked:hover .da-image-mask-badge {
+    opacity: 0;
+}
+
+/* 6. 图像右上角悬浮操作胶囊 (.da-image-action-trigger) */
+.da-image-action-trigger {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--da-radius-pill, 100px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: var(--da-accent-color);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s var(--da-ease);
+}
+
+.da-image-action-trigger:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.08);
+}
+
+/* 7. 楼层生图进度展示条 (.da-floor-progress-bar) */
+.da-floor-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-accent-color);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+/* 8. 楼层生图异常反馈 (.da-floor-error-bar) */
+.da-floor-error-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-color-error, #ff453a);
+    padding: 4px 8px;
+    background: rgba(255, 69, 58, 0.1);
+    border-radius: var(--da-radius-sm, 4px);
+}
+
+/* 9. 楼层生图取消反馈 (.da-floor-cancel-bar) */
+.da-floor-cancel-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-muted, #888);
+    padding: 4px 8px;
+}
+
+/* 10. 多指令包装项 (.da-floor-instruction-item) */
+.da-floor-instruction-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: 4px;
+}
+
