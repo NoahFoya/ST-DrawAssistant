@@ -7,6 +7,7 @@
 
 import { CardBase } from './card-base';
 import { createFormField, createButton } from '../components';
+import { ConfirmDialog } from '../feedback';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 
@@ -99,12 +100,20 @@ export class BackupCard extends CardBase {
                 text: '恢复推荐预设',
                 variant: 'secondary',
                 size: 'sm',
-                onClick: () => {
-                    settingsStore.restoreDefaultPresets();
-                    eventBus.emit('toast:show', {
-                        type: 'info',
-                        message: '已重新写入出厂推荐预设方案',
+                onClick: async () => {
+                    const confirmed = await ConfirmDialog.show({
+                        title: '恢复推荐预设',
+                        message: '确定要将提示词模板、绘图参数与主题恢复为官方推荐方案吗？未保存至其他方案的改动将被覆盖。',
+                        confirmText: '确认恢复',
+                        cancelText: '取消',
                     });
+                    if (confirmed) {
+                        settingsStore.restoreDefaultPresets();
+                        eventBus.emit('toast:show', {
+                            type: 'info',
+                            message: '已重新写入出厂推荐预设方案',
+                        });
+                    }
                 },
             })
         );
@@ -123,10 +132,14 @@ export class BackupCard extends CardBase {
                 text: '重置所有设置',
                 variant: 'danger',
                 size: 'sm',
-                onClick: () => {
-                    const confirmed = typeof window !== 'undefined'
-                        ? window.confirm('确定要将所有设置恢复至初始出厂状态吗？该操作不可逆！')
-                        : true;
+                onClick: async () => {
+                    const confirmed = await ConfirmDialog.show({
+                        title: '恢复出厂状态',
+                        message: '确定要将所有设置恢复至初始出厂状态吗？清除所有自定义改动与提供方配置，该操作不可逆！',
+                        confirmText: '确认完全重置',
+                        cancelText: '取消',
+                        danger: true,
+                    });
                     if (confirmed) {
                         settingsStore.resetToDefaults();
                         eventBus.emit('toast:show', {

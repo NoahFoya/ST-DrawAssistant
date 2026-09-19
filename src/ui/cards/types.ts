@@ -6,7 +6,7 @@
  * 及子控件生命周期的聚合管理。
  */
 
-import type { BaseComponent } from '../components/types';
+import type { UIComponent } from '../components/types';
 
 /** 卡片创建配置选项 */
 export interface CardOptions {
@@ -27,11 +27,13 @@ export interface CardOptions {
 }
 
 /** 卡片组件通用接口 */
-export interface CardComponent extends BaseComponent<void> {
+export interface CardComponent extends UIComponent {
     /** 卡片主体容器元素 */
     readonly bodyElement: HTMLElement;
     /** 展开或折叠卡片 */
     setCollapsed(collapsed: boolean): void;
     /** 获取当前折叠状态 */
     isCollapsed(): boolean;
+    /** 设置卡片及子控件的禁用状态 */
+    setDisabled(disabled: boolean): void;
 }

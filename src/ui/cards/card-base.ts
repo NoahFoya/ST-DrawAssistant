@@ -90,14 +90,6 @@ export class CardBase implements CardComponent {
         return child;
     }
 
-    public getValue(): void {
-        // 卡片容器无单一数据值
-    }
-
-    public setValue(): void {
-        // 卡片容器无单一数据值
-    }
-
     public setDisabled(disabled: boolean): void {
         this.element.classList.toggle('is-disabled', disabled);
         for (const child of this.children) {

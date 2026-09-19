@@ -6,11 +6,11 @@
  * 支持按需挂载与级联注销。
  */
 
-import type { BaseComponent } from '../components/types';
+import type { UIComponent } from '../components/types';
 import type { TabItemConfig } from './types';
 
-function isBaseComponent(item: BaseComponent | HTMLElement): item is BaseComponent {
-    return 'element' in item && typeof (item as BaseComponent).dispose === 'function';
+function isUIComponent(item: UIComponent | HTMLElement): item is UIComponent {
+    return 'element' in item && typeof (item as UIComponent).dispose === 'function';
 }
 
 export class TabManager {
@@ -24,7 +24,7 @@ export class TabManager {
             button: HTMLButtonElement;
             pane: HTMLDivElement;
             clickHandler: () => void;
-            instance?: BaseComponent | HTMLElement;
+            instance?: UIComponent | HTMLElement;
         }
     > = new Map();
 
@@ -117,7 +117,7 @@ export class TabManager {
             }
 
             if (target.instance) {
-                const node = isBaseComponent(target.instance)
+                const node = isUIComponent(target.instance)
                     ? target.instance.element
                     : target.instance;
                 target.pane.appendChild(node);
@@ -132,7 +132,7 @@ export class TabManager {
     public dispose(): void {
         for (const item of this.tabs.values()) {
             item.button.removeEventListener('click', item.clickHandler);
-            if (item.instance && isBaseComponent(item.instance)) {
+            if (item.instance && isUIComponent(item.instance)) {
                 item.instance.dispose();
             }
         }

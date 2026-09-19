@@ -13,6 +13,7 @@ import {
     createColorPicker,
     createButton,
 } from '../components';
+import { ConfirmDialog } from '../feedback';
 import { settingsStore } from '../../store/settings-store';
 import { themeService } from '../theme/theme-service';
 import { eventBus } from '../../util/event-bus';
@@ -101,7 +102,15 @@ export class ThemeCard extends CardBase {
                 text: '重置回预设主题',
                 variant: 'secondary',
                 size: 'sm',
-                onClick: () => {
+                onClick: async () => {
+                    const confirmed = await ConfirmDialog.show({
+                        title: '重置主题方案',
+                        message: '确定要将全局主题与自定义强调色重置为出厂默认方案吗？',
+                        confirmText: '确认重置',
+                        cancelText: '取消',
+                    });
+                    if (!confirmed) return;
+
                     settingsStore.restoreDefaultPresets('themes');
                     const refreshedThemes = settingsStore.getPresets<ThemePresetData>('themes');
                     const defaultTheme = refreshedThemes.find((t) => t.id === 'dark') || refreshedThemes[0];

@@ -226,14 +226,6 @@ export class SettingsModal implements SettingsModalComponent {
         this.tabManager.setActiveTab(tabId);
     }
 
-    public getValue(): void {
-        // 弹窗无取值
-    }
-
-    public setValue(): void {
-        // 弹窗无设值
-    }
-
     public setDisabled(disabled: boolean): void {
         this.modalInner.classList.toggle('is-disabled', disabled);
     }

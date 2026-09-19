@@ -145,14 +145,6 @@ export class FloatingActionButton implements FabComponent {
         this.element.hidden = !visible;
     }
 
-    public getValue(): void {
-        // FAB 无取值
-    }
-
-    public setValue(): void {
-        // FAB 无设值
-    }
-
     public setDisabled(disabled: boolean): void {
         this.element.classList.toggle('is-disabled', disabled);
     }

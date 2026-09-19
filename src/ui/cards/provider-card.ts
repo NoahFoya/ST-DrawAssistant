@@ -38,26 +38,16 @@ export class ProviderCard extends CardBase {
     }
 
     private getCurrentProviderConfig(): { baseUrl: string; useHostRelay?: boolean; apiKey?: string } {
-        const settings = settingsStore.getSettings();
-        const cfg = settings.providers[this.activeProvider] as any;
+        const cfg = settingsStore.getProviderConfig<Record<string, unknown>>(this.activeProvider);
         return {
-            baseUrl: cfg?.baseUrl || '',
+            baseUrl: typeof cfg?.baseUrl === 'string' ? cfg.baseUrl : '',
             useHostRelay: Boolean(cfg?.useHostRelay),
-            apiKey: cfg?.apiKey || '',
+            apiKey: typeof cfg?.apiKey === 'string' ? cfg.apiKey : '',
         };
     }
 
     private updateCurrentProviderConfig(updates: Record<string, unknown>): void {
-        const settings = settingsStore.getSettings();
-        const current = (settings.providers[this.activeProvider] as any) || {};
-        const updated = { ...current, ...updates };
-
-        settingsStore.update({
-            providers: {
-                ...settings.providers,
-                [this.activeProvider]: updated,
-            },
-        } as any);
+        settingsStore.setProviderConfig(this.activeProvider, updates);
     }
 
     private buildFields(): void {
