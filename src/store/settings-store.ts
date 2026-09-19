@@ -186,7 +186,7 @@ export class SettingsStore {
      * 读取 hostContext.extensionSettings['ST-DrawAssistant'] 并与内置默认配置深合并。
      */
     public initializeFromHost(): void {
-        const hostContext = (window as any).SillyTavern?.getContext?.();
+        const hostContext = window.SillyTavern?.getContext?.();
         const rawSettings = hostContext?.extensionSettings?.[SettingsStore.EXTENSION_NAME];
 
         if (rawSettings && typeof rawSettings === 'object') {
@@ -511,7 +511,7 @@ export class SettingsStore {
      * 将当前内存配置持久化同步至 SillyTavern 宿主。
      */
     public saveToHost(): void {
-        const hostContext = (window as any).SillyTavern?.getContext?.();
+        const hostContext = window.SillyTavern?.getContext?.();
         if (hostContext?.extensionSettings) {
             hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = { ...this._settings };
         }

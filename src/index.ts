@@ -59,7 +59,7 @@ export async function initOnce(): Promise<void> {
         return;
     }
 
-    const hostContext = (window as any).SillyTavern?.getContext?.();
+    const hostContext = window.SillyTavern?.getContext?.();
     if (!hostContext) {
         logger.info('未检测到 SillyTavern 宿主上下文，跳过生命周期挂载');
         return;
@@ -104,7 +104,7 @@ export async function initOnce(): Promise<void> {
         };
         eventSource.on(charRenderedEvent, onCharRendered);
         hostEventCleanups.push(() => {
-            eventSource.removeListener(charRenderedEvent, onCharRendered);
+            eventSource.off(charRenderedEvent, onCharRendered);
         });
 
         // 监听会话变更
@@ -114,7 +114,7 @@ export async function initOnce(): Promise<void> {
         };
         eventSource.on(chatChangedEvent, onChatChanged);
         hostEventCleanups.push(() => {
-            eventSource.removeListener(chatChangedEvent, onChatChanged);
+            eventSource.off(chatChangedEvent, onChatChanged);
         });
     }
 
@@ -174,6 +174,6 @@ export function disposeExtension(): void {
 }
 
 // 浏览器环境下自动检测并尝试自激活
-if (typeof window !== 'undefined' && (window as any).SillyTavern?.getContext) {
+if (typeof window !== 'undefined' && window.SillyTavern?.getContext) {
     void initOnce();
 }

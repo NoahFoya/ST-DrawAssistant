@@ -6,7 +6,7 @@
  * 点击取消与失败重试等完整业务状态流转。
  */
 
-import type { BaseComponent } from '../components/types';
+import type { UIComponent } from '../components/types';
 import { eventBus, type TaskStatusEventData } from '../../util/event-bus';
 import type { TaskProgressInfo } from '@types';
 
@@ -25,7 +25,7 @@ export interface FloorActionButtonOptions {
     onCancel?: (taskId: string) => void;
 }
 
-export class FloorActionButton implements BaseComponent<void> {
+export class FloorActionButton implements UIComponent {
     public readonly element: HTMLDivElement;
     public readonly buttonElement: HTMLButtonElement;
 
@@ -155,14 +155,6 @@ export class FloorActionButton implements BaseComponent<void> {
                 this.textSpan.textContent = customText || '生成失败，点击重试 ✕';
                 break;
         }
-    }
-
-    public getValue(): void {
-        // 按钮无取值
-    }
-
-    public setValue(): void {
-        // 按钮无设值
     }
 
     public setDisabled(disabled: boolean): void {

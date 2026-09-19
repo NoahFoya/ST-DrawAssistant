@@ -16,7 +16,8 @@ export interface HostContextLike {
     chatId?: string;
     eventSource?: {
         on(event: string, handler: (...args: any[]) => void): void;
-        removeListener(event: string, handler: (...args: any[]) => void): void;
+        off?(event: string, handler: (...args: any[]) => void): void;
+        removeListener?(event: string, handler: (...args: any[]) => void): void;
         emit?(event: string, ...args: any[]): void;
     };
     eventTypes?: {
@@ -49,7 +50,7 @@ export class SessionLifecycleManager {
         this._getContext =
             options.getContext ??
             (() => {
-                return (window as any).SillyTavern?.getContext?.();
+                return window.SillyTavern?.getContext?.();
             });
     }
 
@@ -88,7 +89,11 @@ export class SessionLifecycleManager {
         context.eventSource.on(chatChangedEvent, onChatChanged);
 
         this._cleanups.push(() => {
-            context.eventSource?.removeListener(chatChangedEvent, onChatChanged);
+            if (typeof context.eventSource?.off === 'function') {
+                context.eventSource.off(chatChangedEvent, onChatChanged);
+            } else if (typeof context.eventSource?.removeListener === 'function') {
+                context.eventSource.removeListener(chatChangedEvent, onChatChanged);
+            }
         });
 
         this._isBound = true;

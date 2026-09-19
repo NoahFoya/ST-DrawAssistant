@@ -33,7 +33,7 @@ export class MessageDecorator {
             }
 
             const task = eventData.task;
-            const hostContext = (window as any).SillyTavern?.getContext?.();
+            const hostContext = window.SillyTavern?.getContext?.();
             const currentChatId = hostContext?.chatId;
 
             // 跨会话安全防护：若当前活跃会话与任务所属会话不一致，跳过当前视图 DOM 渲染
@@ -56,7 +56,7 @@ export class MessageDecorator {
     public async decorateMessage(messageId: number): Promise<void> {
         if (typeof document === 'undefined') return;
 
-        const hostContext = (window as any).SillyTavern?.getContext?.();
+        const hostContext = window.SillyTavern?.getContext?.();
         if (!hostContext || !Array.isArray(hostContext.chat)) return;
 
         const message = hostContext.chat[messageId];

@@ -85,7 +85,7 @@ export class GenerationOrchestrator {
         this._getActiveChatId =
             options.getActiveChatId ??
             (() => {
-                const hostContext = (window as any).SillyTavern?.getContext?.();
+                const hostContext = window.SillyTavern?.getContext?.();
                 return hostContext?.chatId;
             });
     }

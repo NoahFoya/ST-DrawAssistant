@@ -70,7 +70,7 @@ const TRANSIENT_STATUSES = new Set([408, 429, 502, 503, 504]);
  * 获取 SillyTavern 宿主环境的认证凭据与 CSRF Token 请求头。
  */
 export function getHostRequestHeaders(): Record<string, string> {
-    const hostContext = (window as any).SillyTavern?.getContext?.();
+    const hostContext = window.SillyTavern?.getContext?.();
     if (typeof hostContext?.getRequestHeaders === 'function') {
         try {
             return hostContext.getRequestHeaders() ?? {};
