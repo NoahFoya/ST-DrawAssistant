@@ -32,6 +32,8 @@ export interface HttpRequestOptions extends RequestInit {
     timeoutMs?: number;
     /** 针对瞬态故障的最大重试次数，默认为 1，0 为不重试 */
     retries?: number;
+    /** 通信通道，direct 为浏览器直连，relay 为宿主中继，未指定时默认为 direct */
+    transport?: TransportMode;
 }
 
 /** 接口 Ping 连通性与延迟测试配置项 */
@@ -40,7 +42,7 @@ export interface PingOptions {
     timeoutMs?: number;
     /** 自定义请求头参数，如 Authorization 认证凭据 */
     headers?: Record<string, string>;
-    /** 通信通道，direct 为浏览器直连，relay 为宿主中继，默认为 direct */
+    /** 通信通道，direct 为浏览器直连，relay 为宿主中继，未指定时默认为 direct */
     transport?: TransportMode;
     /** 用户中止信号 */
     signal?: AbortSignal;
@@ -135,8 +137,31 @@ function sleepWithSignal(ms: number, signal?: AbortSignal | null): Promise<void>
 
 /**
  * 浏览器端 HTTP 请求客户端。
+ *
+ * @remarks
+ * 统一承载插件内所有网络请求，内置支持 direct 浏览器直连与 relay 宿主中继模式，
+ * 集中管理超时控制、中止信号组合、宿主 CSRF 认证凭据注入与瞬态故障重试。
  */
 export class HttpClient {
+    /**
+     * 发送统一 HTTP 请求。
+     *
+     * @remarks
+     * 支持 direct 浏览器直连或 relay 宿主中继，未指定时默认为 direct；
+     * relay 模式下自动合并 SillyTavern 宿主环境的认证凭据与 CSRF 请求头；
+     * 统一支持请求超时控制与瞬态故障指数退避重试。
+     *
+     * @param url 目标接口地址
+     * @param options 请求配置项
+     */
+    public async fetch(url: string, options: HttpRequestOptions = {}): Promise<Response> {
+        const transport = options.transport ?? 'direct';
+        if (transport === 'relay') {
+            return this.fetchHost(url, options);
+        }
+        return this.fetchExternal(url, options);
+    }
+
     /**
      * 执行外部生图服务的直接 HTTP 请求。
      *
@@ -144,7 +169,7 @@ export class HttpClient {
      * 支持超时控制与瞬态网络故障退避重试。
      */
     public async fetchExternal(url: string, options: HttpRequestOptions = {}): Promise<Response> {
-        const { timeoutMs = 30000, retries = 1, signal: userSignal, ...init } = options;
+        const { timeoutMs = 30000, retries = 1, signal: userSignal, transport: _ignored, ...init } = options;
         const maxAttempts = Math.max(1, retries + 1);
 
         let lastError: unknown;
@@ -215,7 +240,7 @@ export class HttpClient {
      * 执行经由 SillyTavern 宿主中继的接口请求。
      *
      * @remarks
-     * 自动注入宿主 CSRF Token 与认证请求头。
+     * 自动合并宿主环境 CSRF 请求头凭据，并复用超时管理与瞬态故障重试逻辑。
      */
     public async fetchHost(endpoint: string, options: HttpRequestOptions = {}): Promise<Response> {
         const hostHeaders = getHostRequestHeaders();
@@ -224,46 +249,17 @@ export class HttpClient {
             ...((options.headers as Record<string, string>) || {}),
         };
 
-        const { timeoutMs = 30000, signal: userSignal, ...init } = options;
-
-        const timeoutSignal = typeof AbortSignal.timeout === 'function'
-            ? AbortSignal.timeout(timeoutMs)
-            : undefined;
-
-        const { signal, cleanup } = composeAbortSignal([userSignal, timeoutSignal]);
-
-        try {
-            const response = await fetch(endpoint, {
-                ...init,
-                headers: mergedHeaders,
-                signal,
-            });
-
-            if (!response.ok) {
-                let details: unknown;
-                try {
-                    details = await response.json();
-                } catch {
-                    try {
-                        details = await response.text();
-                    } catch {
-                        details = undefined;
-                    }
-                }
-                throw new HttpError(response.status, response.statusText, endpoint, details);
-            }
-
-            return response;
-        } finally {
-            cleanup();
-        }
+        return this.fetchExternal(endpoint, {
+            ...options,
+            headers: mergedHeaders,
+        });
     }
 
     /**
      * 测试指定服务接口的连通性与往返延迟。
      *
      * @remarks
-     * 支持 direct 浏览器直连与 relay 宿主中继两种通信通道。
+     * 内部使用统一 fetch 发起请求，自动处理 transport 通道与凭据合并；
      * 测试失败或超时不会抛出异常，而是返回包含错误信息的 PingResult 结构。
      *
      * @param url 待测试的服务接口地址
@@ -271,27 +267,17 @@ export class HttpClient {
      */
     public async ping(url: string, options: PingOptions = {}): Promise<PingResult> {
         const start = Date.now();
-        const { timeoutMs = 5000, headers, transport = 'direct', signal } = options;
+        const { timeoutMs = 5000, headers, transport, signal } = options;
 
         try {
-            let response: Response;
-            if (transport === 'relay') {
-                response = await this.fetchHost(url, {
-                    method: 'GET',
-                    headers,
-                    timeoutMs,
-                    retries: 0,
-                    signal,
-                });
-            } else {
-                response = await this.fetchExternal(url, {
-                    method: 'GET',
-                    headers,
-                    timeoutMs,
-                    retries: 0,
-                    signal,
-                });
-            }
+            const response = await this.fetch(url, {
+                method: 'GET',
+                headers,
+                timeoutMs,
+                retries: 0,
+                signal,
+                transport,
+            });
 
             return {
                 ok: response.ok,
@@ -309,7 +295,8 @@ export class HttpClient {
     }
 
     /**
-     * 探测指定服务接口连通性与往返延迟。
+     * 探测指定服务接口连通性与往返延迟（ping 的兼容别名）。
+     *
      * @param url 待测试的服务地址
      * @param options 超时与中止配置
      */

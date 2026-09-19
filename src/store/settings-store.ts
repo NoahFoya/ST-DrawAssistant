@@ -35,18 +35,29 @@ export interface SettingsImportResult {
     readonly error?: string;
 }
 
+/** 默认单任务超时时间（毫秒） */
+export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
+
+/** 默认图像存储格式 */
+export const DEFAULT_IMAGE_FORMAT: 'original' | 'webp' | 'png' = 'original';
+
+/** 默认图像压缩质量 */
+export const DEFAULT_IMAGE_QUALITY = 0.85;
+
 /** 插件核心配置结构定义 */
 export interface DrawAssistantSettings {
     enabled: boolean;
     showHelp: boolean;
     activeProvider: ProviderType;
     transport: TransportMode;
+    taskTimeoutMs: number;
     saveToIndexedDB: boolean;
     saveToServer: boolean;
     embedToBase64: boolean;
     enableThumbnail: boolean;
-    deduplicateHash: boolean;
     maxStoredImages: number;
+    imageFormat: 'original' | 'webp' | 'png';
+    imageQuality: number;
     autoGenerate: boolean;
     cleanPrompt: boolean;
     placeholderStart: string;

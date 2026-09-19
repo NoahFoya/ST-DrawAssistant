@@ -19,16 +19,18 @@ export type TransportMode = 'direct' | 'relay';
  * 主流程发起的通用绘图请求数据。
  *
  * @remarks
- * 仅包含指令中提取的通用提示词文本与基本环境配置，不包含特定服务提供方的私有超参数。
+ * 聚焦承载单次生图的核心即时意图（提示词与可选原图等）。
+ * 尺寸、步数、采样器、模型及工作流模板等常规超参数由各 Provider 每次生成时从配置中心加载其激活的参数预设；
+ * parameters 仅用于指令中极少数的临时覆盖项（如指定种子），绝非必须传递的常规字典。
  */
 export interface GenerationRequest {
     /** 正向提示词文本 */
     readonly prompt: string;
     /** 负向提示词文本 */
     readonly negativePrompt?: string;
-    /** 请求传输模式，缺省使用当前全局设置 */
-    readonly transport?: TransportMode;
-    /** 针对当前任务的临时覆盖参数，由各 Provider 自行解析 */
+    /** 图生图或图像变换时的原图数据（Blob 二进制流或 Base64 字符串） */
+    readonly sourceImage?: Blob | string;
+    /** 单次任务的可选临时覆盖参数（如特定 seed），常规超参数优先从预设加载 */
     readonly parameters?: Record<string, unknown>;
 }
 

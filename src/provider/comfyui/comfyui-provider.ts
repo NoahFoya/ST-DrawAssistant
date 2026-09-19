@@ -2,96 +2,44 @@
  * ComfyUI 绘图服务提供方适配器。
  *
  * @remarks
- * 基于 HTTP API 对接 ComfyUI 服务端。
- *
- * - 任务状态：单次生成任务的上下文由调用方法持有，实例本身不维护任务状态；
- * - 取消行为：AbortSignal 中止时前端停止轮询并返回，不干预服务端队列；
- * - 超时控制：默认设置 120 秒超时，避免请求长时间挂起。
+ * 基于 ComfyUI 原生 API 规范对接服务端：
+ * - 工作流编排：将绘图预设注入 Prompt Graph 变量占位符，提交至 /prompt 队列；
+ * - 结果获取：通过轮询 /history/{prompt_id} 检索执行完成的 Output 节点信息；
+ * - 图像下载：根据输出文件名与子目录通过 /view 接口获取原始图像二进制流。
  */
 
 import type {
-    GenerationProvider,
     GenerationRequest,
     GenerationResult,
     ProviderHealthResult,
     ProviderType,
-    TransportMode,
     TaskProgressCallback,
     ImageGenerationMetadata,
     ComfyUIProviderConfig,
     DrawingPresetData,
     WorkflowPresetData,
 } from '@types';
-import { httpClient, type HttpClient, type HttpRequestOptions } from '../../util/http-client';
-import { type SettingsStore, settingsStore } from '../../store/settings-store';
+import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
 
-/** 默认单任务超时时间（毫秒） */
-export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
-
 /** ComfyUI 提供方初始化配置项 */
-export interface ComfyUIProviderOptions {
-    /** 自定义 HTTP 客户端实例，缺省使用全局单例 */
-    httpClient?: HttpClient;
-    /** 自定义配置中心实例，缺省使用全局单例 */
-    settingsStore?: SettingsStore;
-    /** 显式指定服务端地址，未指定时从配置中心或默认值读取 */
-    serverUrl?: string;
-    /** 会话客户端唯一标识符 */
+export interface ComfyUIProviderOptions extends BaseProviderOptions {
+    /** 会话客户端唯一标识符（可选，缺省自动生成随机标识） */
     clientId?: string;
-    /** 任务最大超时时间，单位毫秒，缺省为 120_000 (120秒) */
-    timeoutMs?: number;
-}
-
-/**
- * 支持 AbortSignal 的延迟等待函数。
- *
- * @param ms 等待时间（毫秒）
- * @param signal 中止信号，收到信号时立即清理定时器并抛出 AbortError
- */
-function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
-    return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
-            return reject(new DOMException('Aborted', 'AbortError'));
-        }
-
-        const timer = setTimeout(() => {
-            if (signal) {
-                signal.removeEventListener('abort', onAbort);
-            }
-            resolve();
-        }, ms);
-
-        const onAbort = () => {
-            clearTimeout(timer);
-            reject(new DOMException('Aborted', 'AbortError'));
-        };
-
-        if (signal) {
-            signal.addEventListener('abort', onAbort, { once: true });
-        }
-    });
 }
 
 /**
  * ComfyUI 绘图服务提供方实现类。
  */
-export class ComfyUIProvider implements GenerationProvider {
+export class ComfyUIProvider extends BaseGenerationProvider {
     public readonly providerType: ProviderType = 'comfyui';
     public readonly name: string = 'ComfyUI';
 
-    private readonly _httpClient: HttpClient;
-    private readonly _settingsStore?: SettingsStore;
-    private _customServerUrl?: string;
     private _clientId: string;
-    private readonly _defaultTimeoutMs: number;
 
     public constructor(options: ComfyUIProviderOptions = {}) {
-        this._httpClient = options.httpClient ?? httpClient;
-        this._settingsStore = options.settingsStore ?? settingsStore;
-        this._customServerUrl = options.serverUrl;
+        super(options);
         this._clientId = options.clientId ?? `st-da-${Math.random().toString(36).substring(2, 10)}`;
-        this._defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
     }
 
     /** 获取当前客户端会话标识符 */
@@ -108,39 +56,15 @@ export class ComfyUIProvider implements GenerationProvider {
      * 获取 ComfyUI 服务基础地址。
      *
      * @remarks
-     * 优先级解析规则：构造函数显式指定 > 配置中心私有配置 > 默认本地地址 (http://127.0.0.1:8188)。
-     * 自动去除末尾斜杠以保证 URL 拼接的一致性。
+     * 读取配置中心的 ComfyUI 服务地址，未配置时回退为默认本地地址 (http://127.0.0.1:8188)。
+     * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
-        if (this._customServerUrl) {
-            return this._customServerUrl.replace(/\/+$/, '');
-        }
         const config = this._settingsStore?.getProviderConfig<ComfyUIProviderConfig>('comfyui');
         if (config?.serverUrl) {
-            return config.serverUrl.replace(/\/+$/, '');
+            return this.normalizeUrl(config.serverUrl);
         }
         return 'http://127.0.0.1:8188';
-    }
-
-    /**
-     * 解析当前请求所采用的传输模式。
-     */
-    private _resolveTransport(request?: GenerationRequest): TransportMode {
-        if (request?.transport) {
-            return request.transport;
-        }
-        const globalTransport = this._settingsStore?.getAll()?.transport;
-        return globalTransport ?? 'direct';
-    }
-
-    /**
-     * 发送 HTTP 请求并根据传输模式选择通信通道。
-     */
-    private async _fetch(url: string, init: HttpRequestOptions, transport: TransportMode): Promise<Response> {
-        if (transport === 'relay') {
-            return this._httpClient.fetchHost(url, init);
-        }
-        return this._httpClient.fetchExternal(url, init);
     }
 
     /**
@@ -150,7 +74,7 @@ export class ComfyUIProvider implements GenerationProvider {
      */
     public async checkHealth(signal?: AbortSignal): Promise<ProviderHealthResult> {
         const serverUrl = this.getServerUrl();
-        const transport = this._resolveTransport();
+        const transport = this.getTransport();
         const probeUrl = `${serverUrl}/system_stats`;
 
         const pingResult = await this._httpClient.ping(probeUrl, {
@@ -185,10 +109,10 @@ export class ComfyUIProvider implements GenerationProvider {
      */
     public async fetchModels(signal?: AbortSignal): Promise<string[]> {
         const serverUrl = this.getServerUrl();
-        const transport = this._resolveTransport();
+        const transport = this.getTransport();
         const url = `${serverUrl}/object_info`;
 
-        const response = await this._fetch(url, { method: 'GET', timeoutMs: 15000, signal }, transport);
+        const response = await this.fetchWithTransport(url, { method: 'GET', timeoutMs: 15000, signal }, transport);
         const data = (await response.json()) as Record<string, any>;
 
         const modelSet = new Set<string>();
@@ -243,14 +167,11 @@ export class ComfyUIProvider implements GenerationProvider {
         }
 
         const startTime = Date.now();
-        const transport = this._resolveTransport(request);
+        const transport = this.getTransport();
         const serverUrl = this.getServerUrl();
         const params = request.parameters ?? {};
-        const maxTimeoutMs = (typeof params.timeoutMs === 'number' && params.timeoutMs > 0)
-            ? params.timeoutMs
-            : this._defaultTimeoutMs;
+        const maxTimeoutMs = this.getTimeoutMs();
 
-        // 1. 获取工作流模板
         let rawWorkflow: Record<string, unknown> | undefined;
 
         if (params.workflow) {
@@ -280,7 +201,6 @@ export class ComfyUIProvider implements GenerationProvider {
             throw new Error('缺少有效的工作流模板，请在设置中选择或在请求参数中传入');
         }
 
-        // 2. 读取当前绘图预设
         let drawingPreset: DrawingPresetData | undefined;
         if (this._settingsStore) {
             const config = this._settingsStore.getProviderConfig<ComfyUIProviderConfig>('comfyui');
@@ -293,7 +213,6 @@ export class ComfyUIProvider implements GenerationProvider {
             }
         }
 
-        // 3. 组装工作流注入变量
         const resolvedBaseModel = (params.baseModel ?? drawingPreset?.baseModel) as string | undefined;
         const extraModels = (params.extraModels ?? drawingPreset?.extraModels ?? []) as string[];
         const resolvedSeed = resolveSeed(params.seed as number | undefined ?? drawingPreset?.seed);
@@ -334,16 +253,14 @@ export class ComfyUIProvider implements GenerationProvider {
             }
         }
 
-        // 4. 注入变量并构建工作流
         const injectedWorkflow = buildWorkflow(rawWorkflow, variables);
 
-        // 5. 提交执行任务
         const promptPayload = {
             client_id: this._clientId,
             prompt: injectedWorkflow,
         };
 
-        const submitResponse = await this._fetch(
+        const submitResponse = await this.fetchWithTransport(
             `${serverUrl}/prompt`,
             {
                 method: 'POST',
@@ -366,7 +283,6 @@ export class ComfyUIProvider implements GenerationProvider {
             >;
         };
 
-        // 6. 检查提交错误
         if (submitResult.node_errors && Object.keys(submitResult.node_errors).length > 0) {
             const errDetails = Object.entries(submitResult.node_errors)
                 .map(([nodeId, errObj]) => {
@@ -389,7 +305,7 @@ export class ComfyUIProvider implements GenerationProvider {
             throw new Error('ComfyUI 未返回有效任务标识 (prompt_id)');
         }
 
-        // 7. 轮询执行结果
+        // 轮询任务执行结果
         const pollIntervalMs = 1000;
         let promptHistory: any;
 
@@ -402,9 +318,9 @@ export class ComfyUIProvider implements GenerationProvider {
                 throw new Error(`ComfyUI 生图执行超时 (超过 ${Math.round(maxTimeoutMs / 1000)} 秒)`);
             }
 
-            await sleepWithSignal(pollIntervalMs, signal);
+            await this.sleep(pollIntervalMs, signal);
 
-            const historyResponse = await this._fetch(
+            const historyResponse = await this.fetchWithTransport(
                 `${serverUrl}/history/${promptId}`,
                 { method: 'GET', signal },
                 transport
@@ -434,7 +350,7 @@ export class ComfyUIProvider implements GenerationProvider {
             }
         }
 
-        // 8. 检索输出图像（优先选择 output 类型的正式输出）
+        // 检索输出图像（优先选择 output 类型的正式输出）
         let targetImage: { filename: string; subfolder?: string; type?: string } | undefined;
         let fallbackImage: { filename: string; subfolder?: string; type?: string } | undefined;
 
@@ -462,7 +378,6 @@ export class ComfyUIProvider implements GenerationProvider {
             throw new Error('ComfyUI 执行完成，但未检索到有效图像输出');
         }
 
-        // 9. 获取图像数据
         const viewParams = new URLSearchParams({
             filename: chosenImage.filename,
             subfolder: chosenImage.subfolder || '',
@@ -470,14 +385,13 @@ export class ComfyUIProvider implements GenerationProvider {
         });
         const viewUrl = `${serverUrl}/view?${viewParams.toString()}`;
 
-        const viewResponse = await this._fetch(viewUrl, { method: 'GET', signal }, transport);
+        const viewResponse = await this.fetchWithTransport(viewUrl, { method: 'GET', signal }, transport);
         const blob = await viewResponse.blob();
 
         if (onProgress) {
             onProgress({ percent: 100, statusText: '生图完成' });
         }
 
-        // 10. 组装元数据与返回结果
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
             prompt: request.prompt,
