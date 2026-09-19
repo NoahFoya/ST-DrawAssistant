@@ -13,8 +13,8 @@ ST-DrawAssistant 是一款运行于 SillyTavern（酒馆）网页前端的 AI �
   - 楼层图片支持原位点击展开/折叠、大图灯箱预览以及查看详细生成元数据。
 
 - **多后端生图引擎支持**：
-  - **ComfyUI**：支持标准 HTTP 接口提交与状态轮询、WeiLin 4 段式 LoRA 语法转换与标准 Checkpoint 工作流，支持节点错误校验与任务精准中断；
-  - **Stable Diffusion WebUI / Forge**：支持经典 txt2img 与 img2img 接口、高分辨率修复（Hires.fix）、多图网格拼版过滤、`<lora:name:weight>` 提示词嵌入与任务主动中断；
+  - **ComfyUI**：支持标准 HTTP 接口提交与状态轮询、工作流模板模型映射（`%basemodel_name%` 及多模型配置）、WeiLin 4 段式 LoRA 语法转换，支持任务取消与超时保护；
+  - **Stable Diffusion WebUI / Forge**：支持经典 txt2img 与 img2img 接口、高分辨率修复（Hires.fix）、多图网格拼版过滤、`<lora:name:weight>` 提示词嵌入与任务取消保护；
   - **NovelAI**：支持 V3、V4.5、V5 结构化提示词（`v4_prompt`）、标准 ZIP 协议流式解包、新版模型参数安全净化与 64 像素对齐约束；
   - **OpenAI 兼容接口**：支持调用 DALL-E 3、FLUX 以及其他符合 OpenAI 图像接口规范的第三方中转服务，支持服务地址智能规整与自定义请求头穿透。
 
@@ -94,25 +94,9 @@ ST-DrawAssistant 是一款运行于 SillyTavern（酒馆）网页前端的 AI �
 ### 3. 如何备份与迁移插件设置？
 - 在设置面板的 **关于与生态 ➔ 配置管理与重置** 卡片中，点击 **导出配置** 即可下载包含当前所有参数与预设的 JSON 备份文件；在其他设备上点击 **导入配置** 即可恢复。
 
----
+## 开发者指引
 
-## 本地开发与构建
-
-若需参与插件二次开发或本地编译：
-
-```bash
-# 安装依赖
-npm install
-
-# 类型检查 (TypeScript strict)
-npm run type-check
-
-# 运行全量单元测试
-npm test
-
-# 生产环境打包 (Webpack)
-npm run build
-```
+若需参与扩展二次开发、本地测试或打包构建，请参阅 [本地开发与维护规范](docs/maintenance-and-testing.md)。
 
 ---
 

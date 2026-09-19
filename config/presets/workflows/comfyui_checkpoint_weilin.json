@@ -78,7 +78,7 @@
   },
   "114": {
     "inputs": {
-      "ckpt_name": "%model_name%"
+      "ckpt_name": "%basemodel_name%"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {

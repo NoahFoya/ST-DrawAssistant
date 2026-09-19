@@ -78,6 +78,10 @@ export interface ChatMessageExtra {
  * 通过 `imageId` 与 `DrawingSlotEntry` 关联，供图片详情弹窗与重绘功能使用。
  */
 export interface ImageGenerationMetadata {
+    /** 主模型文件名 */
+    readonly baseModel?: string;
+    /** 额外模型文件名列表 */
+    readonly extraModels?: string[];
     /** 正向提示词文本 */
     readonly prompt: string;
     /** 负向提示词文本 */
@@ -94,6 +98,10 @@ export interface ImageGenerationMetadata {
     readonly engine?: string;
     /** 生成耗时，单位毫秒 */
     readonly durationMs?: number;
+    /** 图像宽度，单位像素 */
+    readonly width?: number;
+    /** 图像高度，单位像素 */
+    readonly height?: number;
     /** 引擎扩展参数快照 */
     readonly [key: string]: unknown;
 }

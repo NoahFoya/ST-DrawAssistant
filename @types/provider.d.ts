@@ -2,8 +2,8 @@
  * 绘图服务提供方与通信协议接口定义。
  *
  * @remarks
- * 采用服务提供方模式 Provider Pattern，为主流程对接异构绘图服务提供统一定义。
- * 主流程向绘图服务提供方传递通用绘图请求，各提供方自包含管理自身私有配置与协议细节。
+ * 绘图服务提供方统一接口定义。
+ * 主流程通过通用请求与提供方交互，具体协议细节由各提供方实现封装。
  */
 
 import type { TaskProgressCallback } from './task';
@@ -80,11 +80,6 @@ export interface GenerationProvider {
         onProgress?: TaskProgressCallback,
         signal?: AbortSignal
     ): Promise<GenerationResult>;
-
-    /**
-     * 中断正在执行的生成任务
-     */
-    interrupt?(): Promise<void>;
 
     /**
      * 检查后端服务连通性

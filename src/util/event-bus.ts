@@ -1,5 +1,5 @@
 /**
- * 类型安全的轻量事件发布订阅中枢。
+ * 事件发布订阅管理器。
  *
  * @remarks
  * 为任务状态通知、配置变更与界面反馈提供解耦的事件传递能力。
@@ -29,7 +29,7 @@ export type AppEventMap = {
 export type UnsubscribeFn = () => void;
 
 /**
- * 轻量类型安全事件发布订阅中枢实现类。
+ * 事件发布订阅类。
  */
 export class EventBus<Events extends Record<string, unknown> = AppEventMap> {
     private readonly _listeners = new Map<keyof Events, Set<(data: any) => void>>();

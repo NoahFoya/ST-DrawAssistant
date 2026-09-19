@@ -25,7 +25,7 @@
         },
         "4": {
           "inputs": {
-            "ckpt_name": "%model_name%"
+            "ckpt_name": "%basemodel_name%"
           },
           "class_type": "CheckpointLoaderSimple",
           "_meta": {
@@ -171,7 +171,7 @@
         },
         "114": {
           "inputs": {
-            "ckpt_name": "%model_name%"
+            "ckpt_name": "%basemodel_name%"
           },
           "class_type": "CheckpointLoaderSimple",
           "_meta": {
@@ -189,7 +189,7 @@
       "workflow": {
         "1": {
           "inputs": {
-            "unet_name": "%model_name%",
+            "unet_name": "%basemodel_name%",
             "weight_dtype": "default"
           },
           "class_type": "UNETLoader",
@@ -338,7 +338,7 @@
         },
         "44": {
           "inputs": {
-            "unet_name": "%model_name%",
+            "unet_name": "%basemodel_name%",
             "weight_dtype": "default"
           },
           "class_type": "UNETLoader",

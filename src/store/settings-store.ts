@@ -155,7 +155,7 @@ function buildDefaultSettings(): DrawAssistantSettings {
  * 插件配置状态中心类。
  */
 export class SettingsStore {
-    /** 与 manifest.json 保持严格一致的插件标识 */
+    /** 插件标识，与 manifest.json 一致 */
     public static readonly EXTENSION_NAME = 'ST-DrawAssistant';
     /** 敏感配置字段键名匹配规则 */
     private static readonly SECRET_FIELD_PATTERN = /^(?:apiKey|secret|token|password)$/i;

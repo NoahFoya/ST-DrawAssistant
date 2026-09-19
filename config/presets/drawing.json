@@ -4,7 +4,8 @@
       "id": "comfyui_drawing_wai_default",
       "name": "WAI 默认绘图方案",
       "data": {
-        "model": "waiIllustriousSDXL_v170.safetensors",
+        "baseModel": "waiIllustriousSDXL_v170.safetensors",
+        "extraModels": [],
         "clipName": "",
         "vaeName": "",
         "samplerName": "euler_ancestral",
@@ -25,7 +26,8 @@
       "id": "default_sd15",
       "name": "SD 1.5 默认方案",
       "data": {
-        "model": "",
+        "baseModel": "",
+        "extraModels": [],
         "vae": "",
         "clipSkip": 2,
         "samplerName": "Euler a",

@@ -9,3 +9,4 @@
 export type * from '@types';
 export * from './util';
 export * from './store';
+export * from './provider';

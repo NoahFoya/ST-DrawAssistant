@@ -3,8 +3,8 @@
  *
  * @remarks
  * 基于 localforage 封装独立的本地存储空间 st_draw_assistant_images。
- * 采用元数据表 metadata 与原始二进制数据表 blobs 双表隔离存储设计，
- * 避免画廊列表查询与条件检索时将大体积二进制数据载入内存。
+ * 采用元数据表 metadata 与二进制数据表 blobs 分表存储，
+ * 避免列表检索时读取二进制数据。
  */
 
 import localforage from 'localforage';
@@ -46,7 +46,7 @@ export class ImageStorage implements ImageStorageService {
      * 将图像元数据与二进制 Blob 保存至本地数据库。
      *
      * @remarks
-     * 元数据与二进制数据拆分存储，避免画廊检索索引时加载庞大的二进制流进内存。
+     * 元数据与二进制数据分表存储，避免列表检索时读取二进制数据。
      * @param record 图像元数据资产记录
      * @param blob 图像二进制数据
      */

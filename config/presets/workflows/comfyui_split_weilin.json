@@ -41,7 +41,7 @@
   },
   "44": {
     "inputs": {
-      "unet_name": "%model_name%",
+      "unet_name": "%basemodel_name%",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",

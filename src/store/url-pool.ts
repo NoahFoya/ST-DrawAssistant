@@ -1,9 +1,9 @@
 /**
- * Object URL 内存与显存管理池实现。
+ * Object URL 生命周期管理池实现。
  *
  * @remarks
- * 为本地 Blob 生成的临时 Object URL 提供统一的记录与释放机制。
- * 避免图像频繁生成或预览导致浏览器内存与显存占用持续上涨。
+ * 为本地 Blob 生成的临时 Object URL 提供统一的记录与释放。
+ * 避免图像频繁生成导致浏览器内存占用持续上涨。
  */
 
 import type { ImageUrlPool } from '@types';
@@ -20,7 +20,7 @@ export class UrlPool implements ImageUrlPool {
      * 为指定的 Blob 二进制数据创建并记录 Object URL。
      *
      * @remarks
-     * 若已存在相同 key 的历史 URL，会自动调用 URL.revokeObjectURL 释放旧资源，防止内存与显存泄漏。
+     * 若已存在同名 key，会自动调用 URL.revokeObjectURL 释放旧资源，避免内存泄漏。
      * @param key 资产唯一标识或展示定位 key
      * @param blob 待引用的图像二进制 Blob
      * @returns 生成的 Object URL 地址

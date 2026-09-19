@@ -3,7 +3,7 @@
  *
  * @remarks
  * 任务模型采用扁平结构，以插槽挂载坐标为锚点管理生成生命周期。
- * 取消与超时由原生 `AbortSignal` 协调，不引入冗余状态机抽象。
+ * 任务取消与超时由 AbortSignal 统一管理。
  */
 
 import type { ImageGenerationMetadata } from './st/chat';
@@ -51,7 +51,7 @@ export interface DrawingTask {
     readonly negativePrompt?: string;
     /** 选用的生图提供者标识符 */
     readonly providerType: ProviderType;
-    /** 任务入队时冻结的生成参数快照，防止配置变动串扰 */
+    /** 任务入队时的生成参数快照 */
     readonly parametersSnapshot?: Record<string, unknown>;
     /** 任务创建时间戳，单位毫秒 */
     readonly createdAt: number;

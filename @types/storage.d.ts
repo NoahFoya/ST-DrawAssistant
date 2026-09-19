@@ -3,7 +3,7 @@
  *
  * @remarks
  * 图像资产与完整技术参数以本地 IndexedDB 为核心存储，保证画廊浏览与离线访问稳定性。
- * Object URL 需成对创建与释放，防止内存与显存泄漏。
+ * Object URL 统一管理创建与释放，避免内存泄漏。
  */
 
 import type { StoredImageRecord, DrawingSlotEntry } from './st/chat';

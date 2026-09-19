@@ -2,8 +2,7 @@
  * SillyTavern 宿主事件与事件源类型定义。
  *
  * @remarks
- * 声明本生图插件依赖的宿主核心生命周期、消息渲染与分支切换事件常量与参数签名。
- * 剔除与生图领域无关的预留事件，保留动态索引签名以安全兼容宿主其他事件。
+ * 声明插件依赖的宿主核心生命周期与消息事件，并通过索引签名支持扩展事件。
  * 宿主内部 emit 属于异步触发，类型中返回 `Promise<void>` 以便调用方按需 await 等待。
  */
 
@@ -58,7 +57,7 @@ export interface SillyTavernEventTypes {
     readonly GENERATION_STARTED: 'generation_started';
     /** AI 文本生成被手动中止 */
     readonly GENERATION_STOPPED: 'generation_stopped';
-    /** AI 文本生成定稿结束，传递当前数组长度，用于自动生图精准定位 */
+    /** AI 文本生成定稿结束，传递当前数组长度，用于自动生图定位最新消息 */
     readonly GENERATION_ENDED: 'generation_ended';
     /** 扩展设置项更新 */
     readonly SETTINGS_UPDATED: 'settings_updated';
@@ -94,7 +93,7 @@ export interface SillyTavernEventPayloadMap {
 
 /** 宿主事件总线接口 */
 export interface SillyTavernEventSource {
-    /** 强类型事件监听注册 */
+    /** 注册事件监听器 */
     on<K extends keyof SillyTavernEventPayloadMap>(
         event: K,
         handler: (...args: SillyTavernEventPayloadMap[K]) => void | Promise<void>
@@ -102,7 +101,7 @@ export interface SillyTavernEventSource {
     /** 通用事件监听注册 */
     on(event: string, handler: (...args: unknown[]) => void | Promise<void>): void;
 
-    /** 强类型事件解绑 */
+    /** 解除事件监听器 */
     off<K extends keyof SillyTavernEventPayloadMap>(
         event: K,
         handler: (...args: SillyTavernEventPayloadMap[K]) => void | Promise<void>
@@ -110,7 +109,7 @@ export interface SillyTavernEventSource {
     /** 通用事件解绑 */
     off(event: string, handler: (...args: unknown[]) => void | Promise<void>): void;
 
-    /** 强类型事件派发 */
+    /** 派发事件 */
     emit<K extends keyof SillyTavernEventPayloadMap>(
         event: K,
         ...args: SillyTavernEventPayloadMap[K]
