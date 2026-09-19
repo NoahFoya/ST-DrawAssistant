@@ -199,6 +199,11 @@ export class SettingsStore {
         return this._settings;
     }
 
+    /** getAll 的别名方法，获取当前完整配置对象 */
+    public getSettings(): Readonly<DrawAssistantSettings> {
+        return this._settings;
+    }
+
     /**
      * 读取指定配置项的值。
      * @param key 根级配置键名
@@ -473,6 +478,11 @@ export class SettingsStore {
                 this.savePreset('themes', item);
             }
         }
+    }
+
+    /** restoreRecommendedPresets 的别名方法，恢复出厂推荐预设方案 */
+    public restoreDefaultPresets(category?: PresetCategory, providerType?: string): void {
+        this.restoreRecommendedPresets(category, providerType);
     }
 
     /**
