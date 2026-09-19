@@ -6,7 +6,7 @@
  * 单个监听器内部异常不会中断其他监听器的执行。
  */
 
-import type { DrawingTask, TaskProgressInfo, DrawingTaskStatus } from '@types';
+import type { DrawingTask, TaskProgressInfo, DrawingTaskStatus, PresetItem, ThemePresetData } from '@types';
 import { logger } from './logger';
 
 /** 任务状态流转事件数据对象（单一事实来源） */
@@ -35,6 +35,8 @@ export type AppEventMap = {
     'task:progress': { taskId: string; progress: TaskProgressInfo };
     /** 插件设置项更新 */
     'settings:updated': { key?: string; value?: unknown };
+    /** 界面主题变更通知 */
+    'settings:theme-changed': PresetItem<ThemePresetData>;
     /** 界面反馈提示条显示 */
     'toast:show': { type: 'info' | 'success' | 'warn' | 'error'; message: string; duration?: number };
     /** Object URL 资源注销释放 */
