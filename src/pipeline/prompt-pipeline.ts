@@ -59,6 +59,47 @@ export function cleanPromptText(rawPrompt: string): string {
     return tags.join(', ');
 }
 
+/** 楼层中提取出的绘图指令描述 */
+export interface ExtractedDrawingCommand {
+    rawMatch: string;
+    promptText: string;
+    instructionIndex: number;
+}
+
+/**
+ * 从文本中扫描并提取绘图指令。
+ * @param text 消息原文
+ * @param startTag 起始占位标签 (默认 '<draw>')
+ * @param endTag 结束占位标签 (默认 '</draw>')
+ */
+export function extractDrawingCommands(
+    text: string,
+    startTag = '<draw>',
+    endTag = '</draw>'
+): ExtractedDrawingCommand[] {
+    if (!text) return [];
+
+    const commands: ExtractedDrawingCommand[] = [];
+    const escapedStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`${escapedStart}([\\s\\S]*?)${escapedEnd}`, 'gi');
+
+    let match: RegExpExecArray | null;
+    let idx = 0;
+    while ((match = regex.exec(text)) !== null) {
+        const promptText = (match[1] || '').trim();
+        if (promptText) {
+            commands.push({
+                rawMatch: match[0],
+                promptText,
+                instructionIndex: idx++,
+            });
+        }
+    }
+
+    return commands;
+}
+
 /**
  * 按照首个英文管道符 `|` 分离正向提示词与负向提示词。
  *
@@ -172,6 +213,18 @@ export class PromptPipeline {
             sourceImage: options.sourceImage,
             parameters: options.parameters,
         };
+    }
+
+    /**
+     * 从文本中提取符合当前占位符配置的全部绘图指令
+     * @param text 消息原文
+     */
+    public extractCommands(text: string): ExtractedDrawingCommand[] {
+        const store = this._settingsStore ?? settingsStore;
+        const settings = store.getAll();
+        const startTag = settings.placeholderStart || '<draw>';
+        const endTag = settings.placeholderEnd || '</draw>';
+        return extractDrawingCommands(text, startTag, endTag);
     }
 }
 

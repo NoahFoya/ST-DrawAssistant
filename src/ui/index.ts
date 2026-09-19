@@ -6,3 +6,5 @@ export * from './theme';
 export * from './components';
 export * from './cards';
 export * from './modal';
+export * from './feedback';
+export * from './floor';
