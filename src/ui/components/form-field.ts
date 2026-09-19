@@ -6,10 +6,25 @@
  * 支持堆叠布局、阶梯宽度修饰与嵌套控件的生命周期联动。
  */
 
-import type { BaseComponent, FormFieldComponent, FormFieldOptions } from './types';
+import type { FormFieldComponent, FormFieldOptions, IControlHandle, SetValueOptions, UIComponent } from './types';
 
-function isBaseComponent(control: BaseComponent | HTMLElement): control is BaseComponent {
-    return 'element' in control && typeof (control as BaseComponent).dispose === 'function';
+export function isUIComponent(control: unknown): control is UIComponent {
+    return (
+        typeof control === 'object' &&
+        control !== null &&
+        'element' in control &&
+        typeof (control as UIComponent).dispose === 'function'
+    );
+}
+
+export function isControlHandle(control: unknown): control is IControlHandle<unknown> {
+    return (
+        isUIComponent(control) &&
+        'getValue' in control &&
+        typeof (control as IControlHandle).getValue === 'function' &&
+        'setValue' in control &&
+        typeof (control as IControlHandle).setValue === 'function'
+    );
 }
 
 export function createFormField(options: FormFieldOptions): FormFieldComponent {
@@ -26,7 +41,6 @@ export function createFormField(options: FormFieldOptions): FormFieldComponent {
         row.classList.add('is-disabled');
     }
 
-    // 1. 左侧标题与说明区
     const labelGroup = document.createElement('div');
     labelGroup.classList.add('da-field-label-group');
 
@@ -56,20 +70,19 @@ export function createFormField(options: FormFieldOptions): FormFieldComponent {
 
     row.appendChild(labelGroup);
 
-    // 2. 右侧操作插槽
     const slot = document.createElement('div');
     slot.classList.add('da-slot--right');
     if (options.slotWidth && options.slotWidth !== 'full') {
         slot.classList.add(`da-slot--w-${options.slotWidth}`);
     }
 
-    const controlNode = isBaseComponent(options.control) ? options.control.element : options.control;
+    const control = options.control;
+    const controlNode = isUIComponent(control) ? control.element : control;
     slot.appendChild(controlNode);
     row.appendChild(slot);
 
-    // 3. 初始可用性同步
-    if (options.disabled && isBaseComponent(options.control)) {
-        options.control.setDisabled(true);
+    if (options.disabled && isControlHandle(control)) {
+        control.setDisabled(true);
     }
 
     return {
@@ -77,31 +90,31 @@ export function createFormField(options: FormFieldOptions): FormFieldComponent {
             return row;
         },
         get control() {
-            return options.control;
+            return control;
         },
         getValue(): unknown {
-            if (isBaseComponent(options.control)) {
-                return options.control.getValue();
+            if (isControlHandle(control)) {
+                return control.getValue();
             }
             return undefined;
         },
-        setValue(val: unknown, triggerChange = false): void {
-            if (isBaseComponent(options.control)) {
-                options.control.setValue(val, triggerChange);
+        setValue(val: unknown, setValOpts?: SetValueOptions): void {
+            if (isControlHandle(control)) {
+                control.setValue(val, setValOpts);
             }
         },
         setDisabled(disabled: boolean): void {
             row.classList.toggle('is-disabled', disabled);
-            if (isBaseComponent(options.control)) {
-                options.control.setDisabled(disabled);
+            if (isControlHandle(control)) {
+                control.setDisabled(disabled);
             }
         },
         setVisible(visible: boolean): void {
             row.hidden = !visible;
         },
         dispose(): void {
-            if (isBaseComponent(options.control)) {
-                options.control.dispose();
+            if (isUIComponent(control)) {
+                control.dispose();
             }
         },
     };

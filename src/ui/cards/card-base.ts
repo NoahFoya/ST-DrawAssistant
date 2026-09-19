@@ -6,14 +6,23 @@
  * 与级联销毁生命周期支持。
  */
 
-import type { BaseComponent } from '../components/types';
+import type { UIComponent } from '../components/types';
 import type { CardComponent, CardOptions } from './types';
+
+function hasSetDisabled(
+    component: UIComponent
+): component is UIComponent & { setDisabled(disabled: boolean): void } {
+    return (
+        'setDisabled' in component &&
+        typeof (component as { setDisabled?: unknown }).setDisabled === 'function'
+    );
+}
 
 export class CardBase implements CardComponent {
     public readonly element: HTMLDivElement;
     public readonly bodyElement: HTMLDivElement;
 
-    private readonly children: BaseComponent[] = [];
+    private readonly children: UIComponent[] = [];
     private headerClickHandler: (() => void) | null = null;
     private _collapsed = false;
 
@@ -76,23 +85,25 @@ export class CardBase implements CardComponent {
     }
 
     /** 注册需要随卡片一同销毁的子控件 */
-    protected registerChild<T extends BaseComponent>(child: T): T {
+    protected registerChild<T extends UIComponent>(child: T): T {
         this.children.push(child);
         return child;
     }
 
     public getValue(): void {
-        // 卡片容器无取值
+        // 卡片容器无单一数据值
     }
 
     public setValue(): void {
-        // 卡片容器无设值
+        // 卡片容器无单一数据值
     }
 
     public setDisabled(disabled: boolean): void {
         this.element.classList.toggle('is-disabled', disabled);
         for (const child of this.children) {
-            child.setDisabled(disabled);
+            if (hasSetDisabled(child)) {
+                child.setDisabled(disabled);
+            }
         }
     }
 

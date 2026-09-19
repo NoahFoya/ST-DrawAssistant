@@ -63,12 +63,6 @@ export function createButton(options: ButtonOptions = {}): ButtonComponent {
         get element() {
             return button;
         },
-        getValue(): void {
-            // 按钮无取值
-        },
-        setValue(): void {
-            // 按钮无设值
-        },
         setDisabled(disabled: boolean): void {
             button.disabled = disabled;
         },

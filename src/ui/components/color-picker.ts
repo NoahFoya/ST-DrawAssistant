@@ -6,7 +6,7 @@
  * 遵循 .da-color-picker-wrapper 规范，内置正则校验与状态反馈。
  */
 
-import type { ColorPickerComponent, ColorPickerOptions } from './types';
+import type { ColorPickerComponent, ColorPickerOptions, SetValueOptions } from './types';
 
 const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{6})$/;
 
@@ -115,12 +115,12 @@ export function createColorPicker(options: ColorPickerOptions = {}): ColorPicker
         getValue(): string {
             return hexInput.value;
         },
-        setValue(value: string, triggerChange = false): void {
+        setValue(value: string, setValOptions?: SetValueOptions): void {
             const hex = normalizeHex(value);
             hexInput.value = hex;
             nativeInput.value = hex.toLowerCase();
             hexInput.classList.remove('is-invalid');
-            if (triggerChange) {
+            if (setValOptions?.triggerChange) {
                 options.onChange?.(hex);
             }
         },
@@ -132,6 +132,9 @@ export function createColorPicker(options: ColorPickerOptions = {}): ColorPicker
         markDirty(dirty: boolean): void {
             wrapper.classList.toggle('is-dirty', dirty);
             hexInput.classList.toggle('is-dirty', dirty);
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         markInvalid(invalid: boolean, message?: string): void {
             hexInput.classList.toggle('is-invalid', invalid);

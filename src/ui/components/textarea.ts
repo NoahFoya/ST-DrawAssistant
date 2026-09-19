@@ -6,7 +6,7 @@
  * 支持纵向缩放、修改态提示与事件注销。
  */
 
-import type { TextareaComponent, TextareaOptions } from './types';
+import type { SetValueOptions, TextareaComponent, TextareaOptions } from './types';
 
 export function createTextarea(options: TextareaOptions = {}): TextareaComponent {
     const textarea = document.createElement('textarea');
@@ -55,9 +55,9 @@ export function createTextarea(options: TextareaOptions = {}): TextareaComponent
         getValue(): string {
             return textarea.value;
         },
-        setValue(value: string, triggerChange = false): void {
+        setValue(value: string, options?: SetValueOptions): void {
             textarea.value = value ?? '';
-            if (triggerChange && changeHandler) {
+            if (options?.triggerChange && changeHandler) {
                 changeHandler(new Event('change'));
             }
         },
@@ -66,6 +66,9 @@ export function createTextarea(options: TextareaOptions = {}): TextareaComponent
         },
         markDirty(dirty: boolean): void {
             textarea.classList.toggle('is-dirty', dirty);
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         markInvalid(invalid: boolean, message?: string): void {
             textarea.classList.toggle('is-invalid', invalid);

@@ -6,7 +6,7 @@
  * 支持连续拖动与键盘精准微调。
  */
 
-import type { SliderComponent, SliderOptions } from './types';
+import type { SetValueOptions, SliderComponent, SliderOptions } from './types';
 
 export function createSlider(options: SliderOptions): SliderComponent {
     const container = document.createElement('div');
@@ -128,14 +128,14 @@ export function createSlider(options: SliderOptions): SliderComponent {
         getValue(): number {
             return parseFloat(rangeInput.value);
         },
-        setValue(value: number, triggerChange = false): void {
+        setValue(value: number, setValOptions?: SetValueOptions): void {
             const clamped = Math.max(min, Math.min(max, value));
             rangeInput.value = String(clamped);
             if (numberInput) {
                 numberInput.value = String(clamped);
             }
             updatePercent(clamped);
-            if (triggerChange) {
+            if (setValOptions?.triggerChange) {
                 options.onChange?.(clamped);
             }
         },
@@ -151,6 +151,9 @@ export function createSlider(options: SliderOptions): SliderComponent {
             if (numberInput) {
                 numberInput.classList.toggle('is-dirty', dirty);
             }
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         dispose(): void {
             if (rangeInputHandler) {

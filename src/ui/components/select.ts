@@ -11,6 +11,7 @@ import type {
     SelectOptionGroup,
     SelectOptionItem,
     SelectOptions,
+    SetValueOptions,
 } from './types';
 
 function isOptionGroup<T extends string>(
@@ -85,9 +86,9 @@ export function createSelect<T extends string = string>(
         getValue(): T {
             return select.value as T;
         },
-        setValue(value: T, triggerChange = false): void {
+        setValue(value: T, setValOptions?: SetValueOptions): void {
             select.value = value;
-            if (triggerChange && changeHandler) {
+            if (setValOptions?.triggerChange && changeHandler) {
                 changeHandler(new Event('change'));
             }
         },
@@ -100,6 +101,9 @@ export function createSelect<T extends string = string>(
         },
         markDirty(dirty: boolean): void {
             select.classList.toggle('is-dirty', dirty);
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         markInvalid(invalid: boolean, message?: string): void {
             select.classList.toggle('is-invalid', invalid);

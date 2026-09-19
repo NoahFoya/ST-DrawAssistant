@@ -234,7 +234,7 @@ export class DrawingCard extends CardBase {
                 text: '随机',
                 size: 'sm',
                 onClick: () => {
-                    seedInput.setValue('-1', true);
+                    seedInput.setValue('-1', { triggerChange: true });
                 },
             })
         );

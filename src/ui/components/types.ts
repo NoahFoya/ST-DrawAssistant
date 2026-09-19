@@ -6,26 +6,51 @@
  * 禁用状态切换与资源销毁生命周期规范。
  */
 
-/** 通用基础组件接口规范 */
-export interface BaseComponent<T = unknown> {
+/** 通用 UI 视图组件基础接口定义 */
+export interface UIComponent {
     /** 组件根 DOM 节点 */
     readonly element: HTMLElement;
+    /** 释放组件占用的 DOM 监听器与引用 */
+    dispose(): void;
+}
+
+/** 控件数据设值配置选项 */
+export interface SetValueOptions {
+    /** 是否静默更新，不触发 change 回调 */
+    silent?: boolean;
+    /** 是否显式触发 change 回调 */
+    triggerChange?: boolean;
+}
+
+/**
+ * 表单输入控件操作句柄接口。
+ *
+ * @remarks
+ * 规定输入控件的基础数据存取、可用性控制与脏状态响应接口。
+ */
+export interface IControlHandle<T = unknown> extends UIComponent {
     /** 获取当前控件数据值 */
     getValue(): T;
     /**
      * 设置当前控件数据值
      * @param value 目标数据值
-     * @param triggerChange 是否触发 change 回调 (默认 false)
+     * @param options 设值配置选项
      */
-    setValue(value: T, triggerChange?: boolean): void;
+    setValue(value: T, options?: SetValueOptions): void;
     /**
      * 设置控件可用性
      * @param disabled 是否禁用
      */
     setDisabled(disabled: boolean): void;
-    /** 释放组件占用的 DOM 监听器与引用 */
-    dispose(): void;
+    /**
+     * 设置脏状态指示 (针对方案管理器)
+     * @param isDirty 是否标记为脏状态
+     */
+    setDirty?(isDirty: boolean): void;
 }
+
+/** 表单组件操作句柄类型别名 */
+export type BaseComponent<T = unknown> = IControlHandle<T>;
 
 /** 按钮变体类型 */
 export type ButtonVariant = 'default' | 'primary' | 'secondary' | 'danger' | 'success';
@@ -46,10 +71,11 @@ export interface ButtonOptions {
 }
 
 /** 按钮组件扩展接口 */
-export interface ButtonComponent extends BaseComponent<void> {
+export interface ButtonComponent extends UIComponent {
     readonly element: HTMLButtonElement;
     setText(text: string): void;
     setLoading(loading: boolean): void;
+    setDisabled(disabled: boolean): void;
 }
 
 /** 文本输入框变体尺寸与排版形式 */
@@ -190,16 +216,19 @@ export interface FormFieldOptions {
     label: string;
     description?: string;
     tooltip?: string;
-    control: BaseComponent | HTMLElement;
+    control: UIComponent | HTMLElement;
     slotWidth?: FormSlotWidth;
     layout?: 'horizontal' | 'stacked';
     disabled?: boolean;
     className?: string;
 }
 
-/** 表单行组件扩展接口 */
-export interface FormFieldComponent extends BaseComponent<unknown> {
+/** 表单行组件操作接口 */
+export interface FormFieldComponent extends UIComponent {
     readonly element: HTMLDivElement;
-    readonly control: BaseComponent | HTMLElement;
+    readonly control: UIComponent | HTMLElement;
+    getValue(): unknown;
+    setValue(value: unknown, options?: SetValueOptions): void;
+    setDisabled(disabled: boolean): void;
     setVisible(visible: boolean): void;
 }

@@ -6,7 +6,7 @@
  * 支持未保存状态、校验失败状态与事件注销。
  */
 
-import type { TextInputComponent, TextInputOptions } from './types';
+import type { SetValueOptions, TextInputComponent, TextInputOptions } from './types';
 
 export function createTextInput(options: TextInputOptions = {}): TextInputComponent {
     const input = document.createElement('input');
@@ -70,9 +70,9 @@ export function createTextInput(options: TextInputOptions = {}): TextInputCompon
         getValue(): string {
             return input.value;
         },
-        setValue(value: string, triggerChange = false): void {
+        setValue(value: string, options?: SetValueOptions): void {
             input.value = value ?? '';
-            if (triggerChange && changeHandler) {
+            if (options?.triggerChange && changeHandler) {
                 changeHandler(new Event('change'));
             }
         },
@@ -81,6 +81,9 @@ export function createTextInput(options: TextInputOptions = {}): TextInputCompon
         },
         markDirty(dirty: boolean): void {
             input.classList.toggle('is-dirty', dirty);
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         markInvalid(invalid: boolean, message?: string): void {
             input.classList.toggle('is-invalid', invalid);

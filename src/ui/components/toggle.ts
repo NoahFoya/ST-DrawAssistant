@@ -6,7 +6,7 @@
  * 封装 .da-toggle 与 .da-toggle__track 容器，支持状态联动与修改标记。
  */
 
-import type { ToggleComponent, ToggleOptions } from './types';
+import type { SetValueOptions, ToggleComponent, ToggleOptions } from './types';
 
 export function createToggle(options: ToggleOptions = {}): ToggleComponent {
     const label = document.createElement('label');
@@ -50,10 +50,10 @@ export function createToggle(options: ToggleOptions = {}): ToggleComponent {
         getValue(): boolean {
             return input.checked;
         },
-        setValue(checked: boolean, triggerChange = false): void {
+        setValue(checked: boolean, setValOptions?: SetValueOptions): void {
             input.checked = Boolean(checked);
             label.classList.toggle('is-checked', input.checked);
-            if (triggerChange && changeHandler) {
+            if (setValOptions?.triggerChange && changeHandler) {
                 changeHandler(new Event('change'));
             }
         },
@@ -63,6 +63,9 @@ export function createToggle(options: ToggleOptions = {}): ToggleComponent {
         },
         markDirty(dirty: boolean): void {
             label.classList.toggle('is-dirty', dirty);
+        },
+        setDirty(isDirty: boolean): void {
+            this.markDirty(isDirty);
         },
         dispose(): void {
             if (changeHandler) {
