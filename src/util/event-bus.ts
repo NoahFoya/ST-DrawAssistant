@@ -2,21 +2,37 @@
  * 事件发布订阅管理器。
  *
  * @remarks
- * 为任务状态通知、配置变更与界面反馈提供解耦的事件传递能力。
+ * 为任务状态流转通知、配置变更与界面反馈提供解耦的事件传递能力。
  * 单个监听器内部异常不会中断其他监听器的执行。
  */
 
 import type { DrawingTask, TaskProgressInfo, DrawingTaskStatus } from '@types';
 import { logger } from './logger';
 
+/** 任务状态流转事件数据对象（单一事实来源） */
+export interface TaskStatusEventData {
+    /** 任务全局唯一标识符 UUID */
+    readonly taskId: string;
+    /** 变更后的新状态 */
+    readonly status: DrawingTaskStatus;
+    /** 关联的任务对象快照 */
+    readonly task?: DrawingTask;
+    /** 错误描述文本，失败时存在 */
+    readonly error?: string;
+    /** 生成成功关联的图像资产标识符，完成时存在 */
+    readonly imageId?: string;
+    /** 任务取消原因描述，取消时存在 */
+    readonly cancelReason?: string;
+}
+
 /** 插件默认事件类型映射 */
 export type AppEventMap = {
     /** 生图任务创建入队 */
     'task:created': DrawingTask;
+    /** 生图任务状态流转变更（统一承载 pending、generating、completed、failed、cancelled） */
+    'task:status': TaskStatusEventData;
     /** 生图任务生成进度更新 */
     'task:progress': { taskId: string; progress: TaskProgressInfo };
-    /** 生图任务状态流转变更 */
-    'task:status': { taskId: string; status: DrawingTaskStatus; error?: string; imageId?: string };
     /** 插件设置项更新 */
     'settings:updated': { key?: string; value?: unknown };
     /** 界面反馈提示条显示 */
