@@ -4,7 +4,7 @@
  * @remarks
  * 1. 尺寸规范：统一采用 38px 高度基准，避免表单区域纵向膨胀。
  * 2. 标题与说明：表单行保留简洁标题，说明统一置于悬停提示气泡（.da-help-icon）。
- * 3. 控件插槽：右侧操作槽（.da-slot--right）统一对齐，维持布局一致。
+ * 3. 控件操作区：右侧操作区统一对齐，维持布局一致。
  */
 
 /* 1. 标准 38px 表单行 (.da-form-row) */
@@ -117,9 +117,10 @@
     pointer-events: none;
 }
 
-/* 4. 控件右对齐插槽 */
+/* 4. 控件右对齐操作区 */
 .da-slot--right,
-.da-form-row__control-slot {
+.da-form-row__control-slot,
+.da-form-row__control {
     min-height: 32px;
     display: flex;
     align-items: center;

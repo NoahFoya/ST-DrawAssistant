@@ -1,9 +1,14 @@
 /**
- * 插件配置状态中心与持久化存储服务。
+ * 插件配置状态中心与持久化存储服务 (SettingsStore)。
  *
  * @remarks
- * 在内存中维护配置状态，管理通用设置、绘图服务提供方私有配置与预设方案。
- * 配置变更通过防抖同步至 SillyTavern 宿主 extensionSettings['ST-DrawAssistant']。
+ * 架构规范与数据安全策略：
+ * 1. 唯一事实来源 (SSOT)：集中维护插件通用开关、通信通道、当前激活提供方、私有后端配置以及四类预设方案；
+ * 2. 深拷贝快照保护：外部读取接口（getSettings/getProviderConfig）均返回 structuredClone 快照，
+ *    彻底阻断外部调用方的引用逃逸与私自修改内部状态，确保配置变更必须经由统一变更方法；
+ * 3. 宿主防抖持久化：每次状态变更通过 saveToHost 同步至宿主 extensionSettings，并委托 saveSettingsDebounced
+ *    防抖写入磁盘，规避高频变更造成的磁盘 I/O 峰值；
+ * 4. 敏感凭据防护：导出的 JSON 默认剔除 API Key / Token 等凭据；导入时若外部凭据为空，则主动保留本地已有有效密钥。
  */
 
 import type {
@@ -38,14 +43,9 @@ export interface SettingsImportResult {
 /** 默认单任务超时时间（毫秒） */
 export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
 
-/** 默认图像存储格式 */
-export const DEFAULT_IMAGE_FORMAT: 'original' | 'webp' | 'png' = 'original';
-
-/** 默认图像压缩质量 */
-export const DEFAULT_IMAGE_QUALITY = 0.85;
-
 /** 插件核心配置结构定义 */
 export interface DrawAssistantSettings {
+    isInitialized: boolean;
     enabled: boolean;
     showHelp: boolean;
     activeProvider: ProviderType;
@@ -53,17 +53,12 @@ export interface DrawAssistantSettings {
     taskTimeoutMs: number;
     saveToIndexedDB: boolean;
     saveToServer: boolean;
-    embedToBase64: boolean;
     enableThumbnail: boolean;
     maxStoredImages: number;
-    imageFormat: 'original' | 'webp' | 'png';
-    imageQuality: number;
     autoGenerate: boolean;
     cleanPrompt: boolean;
     placeholderStart: string;
     placeholderEnd: string;
-    enabledExtensions: Record<string, boolean>;
-    extensionCustomSettings: Record<string, unknown>;
     themePreset: string;
     presets: PresetSettings;
     providers: {
@@ -99,65 +94,68 @@ export interface DrawAssistantSettings {
     };
 }
 
-/** 递归深度合并两个纯对象 */
-function deepMerge<T extends Record<string, any>>(target: T, source?: Partial<T>): T {
-    const result = { ...target };
-    if (!source || typeof source !== 'object') {
-        return result;
-    }
-
-    for (const key of Object.keys(source) as (keyof T)[]) {
-        const sourceVal = source[key];
-        const targetVal = target[key];
-
-        if (
-            sourceVal &&
-            typeof sourceVal === 'object' &&
-            !Array.isArray(sourceVal) &&
-            targetVal &&
-            typeof targetVal === 'object' &&
-            !Array.isArray(targetVal)
-        ) {
-            result[key] = deepMerge(targetVal, sourceVal as any);
-        } else if (sourceVal !== undefined) {
-            result[key] = sourceVal as any;
-        }
-    }
-
-    return result;
+function isPlainObject(item: unknown): item is Record<string, unknown> {
+    return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
-/** 构建包含初始出厂推荐预设的默认配置实例 */
-function buildDefaultSettings(): DrawAssistantSettings {
-    const base = defaultSettingsData as unknown as DrawAssistantSettings;
-    const initialPresets: PresetSettings = {
-        drawing: (recommendedDrawingData as unknown as Record<string, PresetItem<DrawingPresetData>[]>) || {
-            comfyui: [],
-            sdwebui: [],
-            novelai: [],
-            openai: [],
-        },
-        prompts: (recommendedPromptsData as unknown as PresetItem<PromptPresetData>[]) || [],
-        workflows: (recommendedWorkflowsData as unknown as PresetItem<WorkflowPresetData>[]) || [],
-        themes: (recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || [],
-    };
+/** 递归深度合并两个纯对象，阻断外部对象引用逃逸 */
+function deepMerge<T extends object>(target: T, source?: unknown): T {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+        return target;
+    }
 
-    const mergedDrawing: Record<string, PresetItem<DrawingPresetData>[]> = { ...initialPresets.drawing };
-    if (base.presets?.drawing) {
-        for (const [providerKey, list] of Object.entries(base.presets.drawing)) {
-            if (Array.isArray(list) && list.length > 0) {
-                mergedDrawing[providerKey] = list;
-            }
+    const result = { ...target } as Record<string, unknown>;
+    const src = source as Record<string, unknown>;
+
+    for (const key of Object.keys(src)) {
+        const sourceVal = src[key];
+        const targetVal = result[key];
+
+        if (isPlainObject(sourceVal) && isPlainObject(targetVal)) {
+            result[key] = deepMerge(targetVal, sourceVal);
+        } else if (sourceVal !== undefined) {
+            result[key] = isPlainObject(sourceVal) || Array.isArray(sourceVal)
+                ? structuredClone(sourceVal)
+                : sourceVal;
         }
     }
 
+    return result as T;
+}
+
+/** 纯函数：更新或追加带时间戳的预设方案项 */
+function upsertPresetItem<P>(list: PresetItem<P>[], item: PresetItem<P>): PresetItem<P>[] {
+    const nextList = [...list];
+    const index = nextList.findIndex((p) => p.id === item.id);
+    const updated: PresetItem<P> = {
+        ...item,
+        updatedAt: item.updatedAt || Date.now(),
+    };
+    if (index >= 0) {
+        nextList[index] = updated;
+    } else {
+        nextList.push(updated);
+    }
+    return nextList;
+}
+
+/** 构建默认配置实例，预设方案集合默认初始化为空数组 */
+function buildDefaultSettings(): DrawAssistantSettings {
+    const base = defaultSettingsData as unknown as DrawAssistantSettings;
     return {
         ...base,
+        isInitialized: false,
+        themePreset: '',
         presets: {
-            drawing: mergedDrawing,
-            prompts: base.presets?.prompts?.length ? base.presets.prompts : initialPresets.prompts,
-            workflows: base.presets?.workflows?.length ? base.presets.workflows : initialPresets.workflows,
-            themes: base.presets?.themes?.length ? base.presets.themes : initialPresets.themes,
+            drawing: {
+                comfyui: [],
+                sdwebui: [],
+                novelai: [],
+                openai: [],
+            },
+            prompts: [],
+            workflows: [],
+            themes: [],
         },
     };
 }
@@ -172,7 +170,6 @@ export class SettingsStore {
     private static readonly SECRET_FIELD_PATTERN = /^(?:apiKey|secret|token|password)$/i;
 
     private _settings: DrawAssistantSettings;
-    private readonly _subscribers = new Map<string, Set<(val: any) => void>>();
 
     public constructor(initialData?: Partial<DrawAssistantSettings>) {
         const baseDefaults = buildDefaultSettings();
@@ -184,24 +181,52 @@ export class SettingsStore {
      *
      * @remarks
      * 读取 hostContext.extensionSettings['ST-DrawAssistant'] 并与内置默认配置深合并。
+     * 若检测到插件未初始化（首次安装或出厂重置），则受控载入静态推荐资产并标记为已初始化。
      */
     public initializeFromHost(): void {
         const hostContext = window.SillyTavern?.getContext?.();
-        const rawSettings = hostContext?.extensionSettings?.[SettingsStore.EXTENSION_NAME];
+        const rawSettings = hostContext?.extensionSettings?.[SettingsStore.EXTENSION_NAME] as Record<string, any> | undefined;
 
         if (rawSettings && typeof rawSettings === 'object') {
             this._settings = deepMerge(this._settings, rawSettings);
         }
+
+        if (!this._settings.isInitialized) {
+            this.importOfficialPresets();
+        }
     }
 
-    /** 获取当前完整配置对象，通过 Readonly 类型保护防止外部直接修改 */
-    public getAll(): Readonly<DrawAssistantSettings> {
-        return this._settings;
+    /**
+     * 从本地静态文件导入全套官方推荐预设方案并激活就绪。
+     *
+     * @remarks
+     * 载入 drawing、prompts、workflows 与 themes 官方预设资产，
+     * 并将 isInitialized 标志位置为 true，随后触发持久化同步与事件广播。
+     */
+    public importOfficialPresets(): void {
+        const drawingMap: Record<string, PresetItem<DrawingPresetData>[]> = {};
+        for (const [pKey, list] of Object.entries(recommendedDrawingData as Record<string, PresetItem<DrawingPresetData>[]>)) {
+            drawingMap[pKey] = structuredClone(list || []);
+        }
+
+        this._settings = {
+            ...this._settings,
+            isInitialized: true,
+            presets: {
+                drawing: drawingMap,
+                prompts: structuredClone((recommendedPromptsData as unknown as PresetItem<PromptPresetData>[]) || []),
+                workflows: structuredClone((recommendedWorkflowsData as unknown as PresetItem<WorkflowPresetData>[]) || []),
+                themes: structuredClone((recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || []),
+            },
+        };
+
+        eventBus.emit('settings:updated', { keys: ['presets', 'isInitialized'] });
+        this.saveToHost();
     }
 
-    /** getAll 的别名方法，获取当前完整配置对象 */
+    /** 获取当前完整配置快照，通过深拷贝快照保护防止外部直接篡改内部状态 */
     public getSettings(): Readonly<DrawAssistantSettings> {
-        return this._settings;
+        return structuredClone(this._settings);
     }
 
     /**
@@ -227,8 +252,7 @@ export class SettingsStore {
             [key]: value,
         };
 
-        this._notifySubscribers(String(key), value);
-        eventBus.emit('settings:updated', { key: String(key), value });
+        eventBus.emit('settings:updated', { key: String(key), value, keys: [String(key)] });
         this.saveToHost();
     }
 
@@ -239,21 +263,21 @@ export class SettingsStore {
     public update(patch: Partial<DrawAssistantSettings>): void {
         this._settings = deepMerge(this._settings, patch);
 
-        for (const [k, v] of Object.entries(patch)) {
-            this._notifySubscribers(k, v);
-        }
-
-        eventBus.emit('settings:updated', {});
+        eventBus.emit('settings:updated', { keys: Object.keys(patch), patch });
         this.saveToHost();
     }
 
     /**
-     * 读取指定绘图服务提供方的私有配置对象。
+     * 读取指定绘图服务提供方的私有配置对象快照。
      * @param type 绘图服务提供方类型标识
      */
     public getProviderConfig<T = Record<string, unknown>>(type: ProviderType): T | undefined {
         const providers = this._settings.providers as Record<string, unknown> | undefined;
-        return providers?.[type] as T | undefined;
+        const config = providers?.[type];
+        if (!config || typeof config !== 'object') {
+            return undefined;
+        }
+        return structuredClone(config as Record<string, unknown>) as T;
     }
 
     /**
@@ -263,10 +287,7 @@ export class SettingsStore {
      */
     public setProviderConfig<T = Record<string, unknown>>(type: ProviderType, patch: Partial<T>): void {
         const current = (this.getProviderConfig<T>(type) || {}) as T;
-        const updated: T = {
-            ...current,
-            ...patch,
-        };
+        const updated = deepMerge(current as Record<string, any>, patch as Record<string, any>) as T;
 
         this._settings = {
             ...this._settings,
@@ -276,7 +297,6 @@ export class SettingsStore {
             },
         };
 
-        this._notifySubscribers(`providers.${type}`, updated);
         eventBus.emit('settings:updated', { key: `providers.${type}`, value: updated });
         this.saveToHost();
     }
@@ -335,15 +355,8 @@ export class SettingsStore {
 
         if (category === 'drawing') {
             const providerKey = providerType || this._settings.activeProvider;
-            const currentList = this.getPresets<T>('drawing', providerKey);
-            const index = currentList.findIndex((p) => p.id === item.id);
-            const nextList = [...currentList];
-
-            if (index >= 0) {
-                nextList[index] = timestampedItem;
-            } else {
-                nextList.push(timestampedItem);
-            }
+            const currentList = this.getPresets<DrawingPresetData>('drawing', providerKey);
+            const nextList = upsertPresetItem(currentList, timestampedItem as unknown as PresetItem<DrawingPresetData>);
 
             this._settings = {
                 ...this._settings,
@@ -351,31 +364,42 @@ export class SettingsStore {
                     ...this._settings.presets,
                     drawing: {
                         ...this._settings.presets.drawing,
-                        [providerKey]: nextList as any,
+                        [providerKey]: nextList,
                     },
                 },
             };
-        } else {
-            const currentList = this.getPresets<T>(category);
-            const index = currentList.findIndex((p) => p.id === item.id);
-            const nextList = [...currentList];
-
-            if (index >= 0) {
-                nextList[index] = timestampedItem;
-            } else {
-                nextList.push(timestampedItem);
-            }
-
+        } else if (category === 'prompts') {
+            const currentList = this.getPresets<PromptPresetData>('prompts');
+            const nextList = upsertPresetItem(currentList, timestampedItem as unknown as PresetItem<PromptPresetData>);
             this._settings = {
                 ...this._settings,
                 presets: {
                     ...this._settings.presets,
-                    [category]: nextList as any,
+                    prompts: nextList,
+                },
+            };
+        } else if (category === 'workflows') {
+            const currentList = this.getPresets<WorkflowPresetData>('workflows');
+            const nextList = upsertPresetItem(currentList, timestampedItem as unknown as PresetItem<WorkflowPresetData>);
+            this._settings = {
+                ...this._settings,
+                presets: {
+                    ...this._settings.presets,
+                    workflows: nextList,
+                },
+            };
+        } else if (category === 'themes') {
+            const currentList = this.getPresets<ThemePresetData>('themes');
+            const nextList = upsertPresetItem(currentList, timestampedItem as unknown as PresetItem<ThemePresetData>);
+            this._settings = {
+                ...this._settings,
+                presets: {
+                    ...this._settings.presets,
+                    themes: nextList,
                 },
             };
         }
 
-        this._notifySubscribers(`presets.${category}`, item);
         eventBus.emit('settings:updated', { key: `presets.${category}`, value: item });
         this.saveToHost();
     }
@@ -391,7 +415,7 @@ export class SettingsStore {
     public deletePreset(category: PresetCategory, id: string, providerType?: string): boolean {
         if (category === 'drawing') {
             const providerKey = providerType || this._settings.activeProvider;
-            const currentList = this.getPresets('drawing', providerKey);
+            const currentList = this.getPresets<DrawingPresetData>('drawing', providerKey);
             const nextList = currentList.filter((p) => p.id !== id);
 
             if (nextList.length === currentList.length) {
@@ -404,107 +428,48 @@ export class SettingsStore {
                     ...this._settings.presets,
                     drawing: {
                         ...this._settings.presets.drawing,
-                        [providerKey]: nextList as any,
+                        [providerKey]: nextList,
                     },
                 },
             };
-        } else {
-            const currentList = this.getPresets(category);
+        } else if (category === 'prompts') {
+            const currentList = this.getPresets<PromptPresetData>('prompts');
             const nextList = currentList.filter((p) => p.id !== id);
-
-            if (nextList.length === currentList.length) {
-                return false;
-            }
-
+            if (nextList.length === currentList.length) return false;
             this._settings = {
                 ...this._settings,
                 presets: {
                     ...this._settings.presets,
-                    [category]: nextList as any,
+                    prompts: nextList,
+                },
+            };
+        } else if (category === 'workflows') {
+            const currentList = this.getPresets<WorkflowPresetData>('workflows');
+            const nextList = currentList.filter((p) => p.id !== id);
+            if (nextList.length === currentList.length) return false;
+            this._settings = {
+                ...this._settings,
+                presets: {
+                    ...this._settings.presets,
+                    workflows: nextList,
+                },
+            };
+        } else if (category === 'themes') {
+            const currentList = this.getPresets<ThemePresetData>('themes');
+            const nextList = currentList.filter((p) => p.id !== id);
+            if (nextList.length === currentList.length) return false;
+            this._settings = {
+                ...this._settings,
+                presets: {
+                    ...this._settings.presets,
+                    themes: nextList,
                 },
             };
         }
 
-        this._notifySubscribers(`presets.${category}`, { deletedId: id });
         eventBus.emit('settings:updated', { key: `presets.${category}`, value: { deletedId: id } });
         this.saveToHost();
         return true;
-    }
-
-    /**
-     * 恢复出厂推荐预设方案。
-     *
-     * @remarks
-     * 从静态推荐方案中重新填充至预设池。若当前已存在同 ID 预设，则重置为推荐参数；若不存在则追加。
-     *
-     * @param category 指定恢复的分类，缺省恢复全部分类
-     * @param providerType 绘图服务提供方类型 (针对 drawing 分类)
-     */
-    public restoreRecommendedPresets(category?: PresetCategory, providerType?: string): void {
-        const restoreDrawing = (pKey: string) => {
-            const recommended = (recommendedDrawingData as Record<string, PresetItem<DrawingPresetData>[]>)[pKey] || [];
-            for (const item of recommended) {
-                this.savePreset('drawing', item, pKey);
-            }
-        };
-
-        if (!category || category === 'drawing') {
-            if (providerType) {
-                restoreDrawing(providerType);
-            } else {
-                for (const pKey of Object.keys(recommendedDrawingData)) {
-                    restoreDrawing(pKey);
-                }
-            }
-        }
-
-        if (!category || category === 'prompts') {
-            const recommended = recommendedPromptsData as unknown as PresetItem<PromptPresetData>[];
-            for (const item of recommended) {
-                this.savePreset('prompts', item);
-            }
-        }
-
-        if (!category || category === 'workflows') {
-            const recommended = recommendedWorkflowsData as unknown as PresetItem<WorkflowPresetData>[];
-            for (const item of recommended) {
-                this.savePreset('workflows', item);
-            }
-        }
-
-        if (!category || category === 'themes') {
-            const recommended = recommendedThemesData as unknown as PresetItem<ThemePresetData>[];
-            for (const item of recommended) {
-                this.savePreset('themes', item);
-            }
-        }
-    }
-
-    /** restoreRecommendedPresets 的别名方法，恢复出厂推荐预设方案 */
-    public restoreDefaultPresets(category?: PresetCategory, providerType?: string): void {
-        this.restoreRecommendedPresets(category, providerType);
-    }
-
-    /**
-     * 订阅特定键名的配置项变更。
-     * @param key 配置键名
-     * @param callback 变更触发回调函数
-     * @returns 注销监听函数
-     */
-    public onSettingChange<T = unknown>(key: string, callback: (value: T) => void): () => void {
-        let set = this._subscribers.get(key);
-        if (!set) {
-            set = new Set();
-            this._subscribers.set(key, set);
-        }
-        set.add(callback);
-
-        return () => {
-            set?.delete(callback);
-            if (set?.size === 0) {
-                this._subscribers.delete(key);
-            }
-        };
     }
 
     /**
@@ -513,7 +478,7 @@ export class SettingsStore {
     public saveToHost(): void {
         const hostContext = window.SillyTavern?.getContext?.();
         if (hostContext?.extensionSettings) {
-            hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = { ...this._settings };
+            hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = structuredClone(this._settings);
         }
 
         // 调用宿主防抖持久化接口
@@ -531,7 +496,7 @@ export class SettingsStore {
      * @param includeSecrets 是否包含 API Key 等私密字段，默认 false 执行脱敏
      */
     public exportSettings(includeSecrets = false): string {
-        const cloned: DrawAssistantSettings = JSON.parse(JSON.stringify(this._settings));
+        const cloned: DrawAssistantSettings = structuredClone(this._settings);
 
         if (!includeSecrets && cloned.providers && typeof cloned.providers === 'object') {
             for (const [providerKey, providerCfg] of Object.entries(cloned.providers)) {
@@ -568,43 +533,40 @@ export class SettingsStore {
                 return { success: false, error: '配置格式必须为 JSON 对象' };
             }
 
+            // 保护现有敏感密钥：若导入数据中敏感字段为空字符串，保留本地已有有效密钥
+            if (parsed.providers && typeof parsed.providers === 'object') {
+                for (const [pKey, pCfg] of Object.entries(parsed.providers)) {
+                    if (pCfg && typeof pCfg === 'object') {
+                        const localCfg = this.getProviderConfig<Record<string, unknown>>(pKey as ProviderType);
+                        if (localCfg) {
+                            for (const [field, val] of Object.entries(pCfg as Record<string, unknown>)) {
+                                if (SettingsStore.SECRET_FIELD_PATTERN.test(field) && val === '' && localCfg[field]) {
+                                    (pCfg as Record<string, unknown>)[field] = localCfg[field];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             this.update(parsed);
             return { success: true };
-        } catch (err: any) {
+        } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            logger.error('导入配置发生 JSON 解析异常:', err);
+            logger.error('导入配置发生 JSON 解析异常:', message);
             return { success: false, error: `JSON 解析失败: ${message}` };
         }
     }
 
     /**
-     * 恢复所有设置为内置默认值。
+     * 恢复所有设置为内置默认值并重新装载静态推荐资产。
      */
     public resetToDefaults(): void {
         const baseDefaults = buildDefaultSettings();
-        this._settings = JSON.parse(JSON.stringify(baseDefaults));
+        this._settings = structuredClone(baseDefaults);
+        this.importOfficialPresets();
 
-        for (const [key, val] of Object.entries(this._settings)) {
-            this._notifySubscribers(key, val);
-        }
-
-        eventBus.emit('settings:updated', {});
-        this.saveToHost();
-    }
-
-    private _notifySubscribers(key: string, value: unknown): void {
-        const set = this._subscribers.get(key);
-        if (!set) {
-            return;
-        }
-
-        for (const callback of Array.from(set)) {
-            try {
-                callback(value);
-            } catch (err) {
-                logger.error(`字段订阅监听器执行异常 (${key}):`, err);
-            }
-        }
+        eventBus.emit('settings:updated', { isReset: true, keys: Object.keys(this._settings) });
     }
 }
 

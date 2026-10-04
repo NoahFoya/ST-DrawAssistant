@@ -1,177 +1,223 @@
 /**
- * ST-DrawAssistant 复合数值滑块原子控件。
+ * 受控连续范围滑块组件 (Slider)。
  *
  * @remarks
- * 包含轨道滑块与等宽数字输入框双向联动，动态维护 --slider-percent 渐变进度。
- * 支持连续拖动与键盘精准微调。
+ * 实现 IControlHandle<number> 操作句柄：
+ * 1. 原生 range 滑块并集成实时数值指示气泡与单位后缀；
+ * 2. 支持双击滑块重置为默认基准值；
+ * 3. 支持精确步长与区间边界截断。
  */
 
-import type { SetValueOptions, SliderComponent, SliderOptions } from './types';
+import type { IControlHandle, SetValueOptions, ControlChangeCallback } from '../types';
+import { logger } from '../../util/logger';
 
-export function createSlider(options: SliderOptions): SliderComponent {
-    const container = document.createElement('div');
-    container.classList.add('da-slider-composite');
+export interface SliderOptions {
+    /** 初始滑块值 */
+    value?: number;
+    /** 最小值，默认 0 */
+    min?: number;
+    /** 最大值，默认 100 */
+    max?: number;
+    /** 步长，默认 1 */
+    step?: number;
+    /** 双击重置默认基准值 */
+    defaultValue?: number;
+    /** 是否在右侧展示实时数值，默认 true */
+    showValue?: boolean;
+    /** 数值单位后缀 (如 px, %, s 等) */
+    unit?: string;
+    /** 小数精度位数，默认 0 */
+    precision?: number;
+    /** 是否禁用，默认 false */
+    disabled?: boolean;
+    /** 附加类名 */
+    className?: string;
+    /** 数值变更回调 */
+    onChange?: ControlChangeCallback<number>;
+}
 
-    if (options.className) {
-        container.classList.add(...options.className.split(' ').filter(Boolean));
-    }
-    if (options.disabled) {
-        container.classList.add('is-disabled');
-    }
+export class Slider implements IControlHandle<number> {
+    public readonly element: HTMLElement;
+    private readonly rangeInput: HTMLInputElement;
+    private readonly valueDisplay?: HTMLElement;
 
-    const min = options.min;
-    const max = options.max;
-    const step = options.step !== undefined ? options.step : 1;
-    const initialVal = options.value !== undefined ? options.value : min;
+    private currentValue: number;
+    private defaultValue?: number;
+    private min: number;
+    private max: number;
+    private step: number;
+    private precision: number;
+    private readonly unit: string;
 
-    // 1. 滑块轨道与滑钮
-    const trackWrap = document.createElement('div');
-    trackWrap.classList.add('da-slider-track-wrap');
+    private readonly changeCallbacks = new Set<ControlChangeCallback<number>>();
+    private readonly inputListener: () => void;
+    private readonly dblclickListener: () => void;
 
-    const rangeInput = document.createElement('input');
-    rangeInput.type = 'range';
-    rangeInput.classList.add('da-slider-range');
-    rangeInput.min = String(min);
-    rangeInput.max = String(max);
-    rangeInput.step = String(step);
-    rangeInput.value = String(initialVal);
-    if (options.disabled) {
-        rangeInput.disabled = true;
-    }
+    constructor(options: SliderOptions = {}) {
+        this.min = options.min ?? 0;
+        this.max = options.max ?? 100;
+        this.step = options.step ?? 1;
+        this.precision = options.precision ?? this.inferPrecision(this.step);
+        this.unit = options.unit ?? '';
+        this.defaultValue = options.defaultValue;
 
-    trackWrap.appendChild(rangeInput);
-    container.appendChild(trackWrap);
+        const raw = options.value ?? (this.defaultValue ?? this.min);
+        this.currentValue = this.clampAndFormat(raw);
 
-    // 2. 右侧数字微调框 (默认开启)
-    let numberInput: HTMLInputElement | undefined;
-    if (options.showInput !== false) {
-        numberInput = document.createElement('input');
-        numberInput.type = 'number';
-        numberInput.classList.add('da-input', 'da-input--num-short');
-        numberInput.min = String(min);
-        numberInput.max = String(max);
-        numberInput.step = String(step);
-        numberInput.value = String(initialVal);
+        // 1. 创建容器
+        this.element = document.createElement('div');
+        this.element.classList.add('da-slider-wrapper');
+        if (options.className) {
+            this.element.classList.add(options.className);
+        }
+
+        // 2. 原生 range input
+        this.rangeInput = document.createElement('input');
+        this.rangeInput.type = 'range';
+        this.rangeInput.classList.add('da-slider');
+        this.rangeInput.min = String(this.min);
+        this.rangeInput.max = String(this.max);
+        this.rangeInput.step = String(this.step);
+        this.rangeInput.value = String(this.currentValue);
         if (options.disabled) {
-            numberInput.disabled = true;
+            this.rangeInput.disabled = true;
+            this.element.classList.add('da-slider-wrapper--disabled');
         }
-        container.appendChild(numberInput);
-    }
+        this.element.appendChild(this.rangeInput);
 
-    // 3. 动态维护 CSS 变量进度值
-    const updatePercent = (numVal: number) => {
-        const clamped = Math.max(min, Math.min(max, numVal));
-        const span = max - min;
-        const percent = span > 0 ? ((clamped - min) / span) * 100 : 0;
-        rangeInput.style.setProperty('--slider-percent', `${percent.toFixed(2)}%`);
-    };
-
-    updatePercent(initialVal);
-
-    // 4. 事件联动处理
-    let rangeInputHandler: ((e: Event) => void) | null = null;
-    let rangeChangeHandler: ((e: Event) => void) | null = null;
-    let numInputHandler: ((e: Event) => void) | null = null;
-    let numChangeHandler: ((e: Event) => void) | null = null;
-
-    rangeInputHandler = () => {
-        const val = parseFloat(rangeInput.value);
-        updatePercent(val);
-        if (numberInput) {
-            numberInput.value = String(val);
+        // 3. 数值文本指示
+        const showValue = options.showValue ?? true;
+        if (showValue) {
+            this.valueDisplay = document.createElement('span');
+            this.valueDisplay.classList.add('da-slider__value');
+            this.updateDisplay();
+            this.element.appendChild(this.valueDisplay);
         }
-        options.onInput?.(val);
-    };
-    rangeInput.addEventListener('input', rangeInputHandler);
 
-    rangeChangeHandler = () => {
-        const val = parseFloat(rangeInput.value);
-        options.onChange?.(val);
-    };
-    rangeInput.addEventListener('change', rangeChangeHandler);
+        // 4. 事件监听
+        if (options.onChange) {
+            this.changeCallbacks.add(options.onChange);
+        }
 
-    if (numberInput) {
-        numInputHandler = () => {
-            const val = parseFloat(numberInput!.value);
-            if (!Number.isNaN(val)) {
-                rangeInput.value = String(val);
-                updatePercent(val);
-                options.onInput?.(val);
+        this.inputListener = () => {
+            const parsed = parseFloat(this.rangeInput.value);
+            this.currentValue = this.clampAndFormat(parsed);
+            this.updateDisplay();
+            this.dispatchChange(this.currentValue);
+        };
+        this.rangeInput.addEventListener('input', this.inputListener);
+
+        this.dblclickListener = () => {
+            if (this.defaultValue !== undefined && !this.rangeInput.disabled) {
+                this.resetToDefault();
             }
         };
-        numberInput.addEventListener('input', numInputHandler);
-
-        numChangeHandler = () => {
-            let val = parseFloat(numberInput!.value);
-            if (Number.isNaN(val)) {
-                val = min;
-            }
-            val = Math.max(min, Math.min(max, val));
-            numberInput!.value = String(val);
-            rangeInput.value = String(val);
-            updatePercent(val);
-            options.onChange?.(val);
-        };
-        numberInput.addEventListener('change', numChangeHandler);
+        this.rangeInput.addEventListener('dblclick', this.dblclickListener);
     }
 
-    return {
-        get element() {
-            return container;
-        },
-        get rangeElement() {
-            return rangeInput;
-        },
-        get numberInputElement() {
-            return numberInput;
-        },
-        getValue(): number {
-            return parseFloat(rangeInput.value);
-        },
-        setValue(value: number, setValOptions?: SetValueOptions): void {
-            const clamped = Math.max(min, Math.min(max, value));
-            rangeInput.value = String(clamped);
-            if (numberInput) {
-                numberInput.value = String(clamped);
+    public getValue(): number {
+        return this.currentValue;
+    }
+
+    public setValue(value: number, options?: boolean | SetValueOptions): void {
+        const nextValue = this.clampAndFormat(value);
+        this.currentValue = nextValue;
+        this.rangeInput.value = String(nextValue);
+        this.updateDisplay();
+
+        const shouldTrigger = typeof options === 'boolean'
+            ? options
+            : Boolean(options?.triggerChange && !options?.silent);
+
+        if (shouldTrigger) {
+            this.dispatchChange(nextValue);
+        }
+    }
+
+    public resetToDefault(): void {
+        if (this.defaultValue !== undefined) {
+            this.setValue(this.defaultValue, { triggerChange: true });
+        }
+    }
+
+    /**
+     * 动态更新滑块取值区间与步长。
+     *
+     * @param min 最小值
+     * @param max 最大值
+     * @param step 步长
+     * @param defaultValue 双击重置基准值
+     */
+    public setRange(min: number, max: number, step?: number, defaultValue?: number): void {
+        this.min = min;
+        this.max = max;
+        if (step !== undefined) {
+            this.step = step;
+            this.precision = this.inferPrecision(step);
+            this.rangeInput.step = String(step);
+        }
+        if (defaultValue !== undefined) {
+            this.defaultValue = defaultValue;
+        }
+        this.rangeInput.min = String(min);
+        this.rangeInput.max = String(max);
+        this.setValue(this.currentValue);
+    }
+
+    public setDisabled(disabled: boolean): void {
+        this.rangeInput.disabled = disabled;
+        if (disabled) {
+            this.element.classList.add('da-slider-wrapper--disabled');
+        } else {
+            this.element.classList.remove('da-slider-wrapper--disabled');
+        }
+    }
+
+    public setDirty(isDirty: boolean): void {
+        if (isDirty) {
+            this.element.classList.add('da-slider-wrapper--dirty');
+        } else {
+            this.element.classList.remove('da-slider-wrapper--dirty');
+        }
+    }
+
+    public onChange(callback: ControlChangeCallback<number>): void {
+        this.changeCallbacks.add(callback);
+    }
+
+    private inferPrecision(step: number): number {
+        const stepStr = String(step);
+        const decimalIdx = stepStr.indexOf('.');
+        return decimalIdx >= 0 ? stepStr.length - decimalIdx - 1 : 0;
+    }
+
+    private clampAndFormat(val: number): number {
+        let result = val;
+        if (result < this.min) result = this.min;
+        if (result > this.max) result = this.max;
+        return parseFloat(result.toFixed(this.precision));
+    }
+
+    private updateDisplay(): void {
+        if (this.valueDisplay) {
+            this.valueDisplay.textContent = `${this.currentValue.toFixed(this.precision)}${this.unit}`;
+        }
+    }
+
+    private dispatchChange(value: number): void {
+        for (const cb of this.changeCallbacks) {
+            try {
+                cb(value);
+            } catch (err) {
+                logger.error('[Slider] onChange 回调执行异常:', err instanceof Error ? err.message : String(err));
             }
-            updatePercent(clamped);
-            if (setValOptions?.triggerChange) {
-                options.onChange?.(clamped);
-            }
-        },
-        setDisabled(disabled: boolean): void {
-            container.classList.toggle('is-disabled', disabled);
-            rangeInput.disabled = disabled;
-            if (numberInput) {
-                numberInput.disabled = disabled;
-            }
-        },
-        markDirty(dirty: boolean): void {
-            container.classList.toggle('is-dirty', dirty);
-            if (numberInput) {
-                numberInput.classList.toggle('is-dirty', dirty);
-            }
-        },
-        setDirty(isDirty: boolean): void {
-            this.markDirty(isDirty);
-        },
-        dispose(): void {
-            if (rangeInputHandler) {
-                rangeInput.removeEventListener('input', rangeInputHandler);
-                rangeInputHandler = null;
-            }
-            if (rangeChangeHandler) {
-                rangeInput.removeEventListener('change', rangeChangeHandler);
-                rangeChangeHandler = null;
-            }
-            if (numberInput && numInputHandler) {
-                numberInput.removeEventListener('input', numInputHandler);
-                numInputHandler = null;
-            }
-            if (numberInput && numChangeHandler) {
-                numberInput.removeEventListener('change', numChangeHandler);
-                numChangeHandler = null;
-            }
-        },
-    };
+        }
+    }
+
+    public dispose(): void {
+        this.rangeInput.removeEventListener('input', this.inputListener);
+        this.rangeInput.removeEventListener('dblclick', this.dblclickListener);
+        this.changeCallbacks.clear();
+        this.element.parentElement?.removeChild(this.element);
+    }
 }

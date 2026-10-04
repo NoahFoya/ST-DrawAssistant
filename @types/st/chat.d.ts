@@ -98,6 +98,10 @@ export interface ImageGenerationMetadata {
     readonly engine?: string;
     /** 生成耗时，单位毫秒 */
     readonly durationMs?: number;
+    /** 模型显示名称 */
+    readonly modelName?: string;
+    /** 生成耗时，单位秒 (部分引擎返回) */
+    readonly duration?: number;
     /** 图像宽度，单位像素 */
     readonly width?: number;
     /** 图像高度，单位像素 */
@@ -138,7 +142,9 @@ export interface StoredImageRecord {
     /** 关联的角色名称 */
     readonly characterName?: string;
     /** 资产状态 */
-    readonly status: 'ready' | 'deleted';
+    readonly status: 'ready' | 'generating' | 'failed' | 'deleted';
+    /** 是否已标星收藏 */
+    readonly favorited?: boolean;
 }
 
 /**

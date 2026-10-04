@@ -1,11 +1,13 @@
 /**
- * NovelAI 绘图服务提供方适配器。
+ * NovelAI 绘图服务提供方适配器 (NovelAIProvider)。
  *
  * @remarks
  * 基于 NovelAI 官方 HTTP API 对接云端图像生成服务：
- * - 认证方式：请求头携带 Authorization: Bearer <apiKey>；
- * - 尺寸约束：宽度与高度必须为 64 的整数倍（需按 64 像素对齐）；
- * - 响应提取：服务端成功响应体为包含未压缩 PNG（compression method = 0）的 ZIP 二进制流，可直接扫描本地文件头解包。
+ * 1. 鉴权机制：请求头必须携带 `Authorization: Bearer <apiKey>`；
+ * 2. 尺寸整除约束：宽度与高度必须为 64 的正整数倍（通过 alignTo64 处理，防止云端校验抛错）；
+ * 3. 语法适配：自动识别 A1111 权重语法 (tag:1.2) 并转换为 NovelAI 原生花括号/方括号语法；
+ * 4. 响应解包算法：NovelAI 返回未压缩 ZIP 流（compression method = 0），直接通过 DataView
+ *    扫描本地文件头 Local File Header (PK\x03\x04) 计算数据偏移切片提取 PNG Blob，免于引入臃肿第三方库。
  */
 
 import type {
@@ -17,8 +19,32 @@ import type {
     ImageGenerationMetadata,
     NovelAIProviderConfig,
     DrawingPresetData,
+    PromptPresetData,
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
+
+/**
+ * 将 A1111 格式的数字权重语法 (tag:weight) 转换为 NovelAI 的花括号增强语法。
+ *
+ * @param text 输入提示词
+ * @returns 转换后的提示词
+ */
+export function convertWeightToBrackets(text: string): string {
+    return text.replace(/\(([^():]+):([0-9.]+)\)/g, (_match, tag, weightStr) => {
+        const weight = parseFloat(weightStr);
+        const trimmedTag = tag.trim();
+        if (isNaN(weight) || weight === 1.0) {
+            return trimmedTag;
+        }
+        if (weight > 1.0) {
+            const count = Math.min(5, Math.max(1, Math.round((weight - 1.0) / 0.1)));
+            return '{'.repeat(count) + trimmedTag + '}'.repeat(count);
+        } else {
+            const count = Math.min(5, Math.max(1, Math.round((1.0 - weight) / 0.1)));
+            return '['.repeat(count) + trimmedTag + ']'.repeat(count);
+        }
+    });
+}
 
 /** NovelAI 图像生成 API 端点 */
 const NOVELAI_IMAGE_HOST = 'https://image.novelai.net';
@@ -58,7 +84,7 @@ export function alignTo64(value: number): number {
  *
  * @remarks
  * NovelAI 响应返回未压缩的 PNG（compression method = 0），
- * 因此可直接扫描 Local File Header（PK\x03\x04）定位数据左瘻并切片，无需引入 zip 库。
+ * 因此可直接扫描 Local File Header（PK\x03\x04）定位数据起始偏移并切片，无需引入 zip 库。
  *
  * @param buffer 完整 ZIP 文件的 ArrayBuffer
  * @param mimeType 输出 Blob 的 MIME 类型
@@ -214,18 +240,71 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const maxTimeoutMs = this.getTimeoutMs();
 
         let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore && config.activeDrawingProfileId) {
-            drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                'drawing',
-                config.activeDrawingProfileId,
-                'novelai'
-            )?.data;
+        if (this._settingsStore) {
+            const activeDrawingId = config.activeDrawingPresetId;
+            if (activeDrawingId) {
+                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
+                    'drawing',
+                    activeDrawingId,
+                    'novelai'
+                )?.data;
+            }
+            if (!drawingPreset && typeof this._settingsStore.getPresets === 'function') {
+                const allPresets = this._settingsStore.getPresets<DrawingPresetData>('drawing', 'novelai');
+                if (allPresets && allPresets.length > 0) {
+                    drawingPreset = allPresets[0].data;
+                }
+            }
+        }
+
+        // 1. 尝试从绑定的提示词预设方案中解析模板 (SSOT)
+        let resolvedPrompt = request.prompt;
+        let resolvedNegative = request.negativePrompt || '';
+
+        const promptPresetId = (params.promptPresetId ?? drawingPreset?.promptPresetId) as string | undefined;
+        if (this._settingsStore && promptPresetId) {
+            const promptPreset = this._settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId)?.data;
+            if (promptPreset) {
+                const prefix = (promptPreset.positivePrefix || '').trim();
+                const suffix = (promptPreset.positiveSuffix || '').trim();
+                const defaultNeg = (promptPreset.negativePrompt || '').trim();
+
+                if (prefix) resolvedPrompt = `${prefix}, ${resolvedPrompt}`;
+                if (suffix) resolvedPrompt = `${resolvedPrompt}, ${suffix}`;
+                if (defaultNeg) {
+                    resolvedNegative = resolvedNegative
+                        ? `${defaultNeg}, ${resolvedNegative}`
+                        : defaultNeg;
+                }
+            }
         }
 
         const resolvedModel =
-            (params.model ?? drawingPreset?.baseModel ?? 'nai-diffusion-4-5-full') as string;
+            (params.baseModel ?? drawingPreset?.baseModel ?? 'nai-diffusion-4-5-full') as string;
 
-        // 尺寸向下对齐至 64 的整数倍
+        const isV5 = resolvedModel.includes('diffusion-5') || resolvedModel.includes('v5');
+        const isV4 = resolvedModel.includes('diffusion-4') || resolvedModel.includes('v4');
+        const isV4OrHigher = isV5 || isV4;
+
+        // 2. 自动追加官方画质标签 (仅在配置明确开启且提示词中未显式包含时)
+        const enableQualityTags = Boolean(params.qualityTags ?? drawingPreset?.qualityTags);
+        if (enableQualityTags && !resolvedPrompt.includes('masterpiece')) {
+            const qualityPrefix = isV4OrHigher
+                ? 'very aesthetic, masterpiece, absurdres'
+                : 'masterpiece, best quality';
+            resolvedPrompt = `${qualityPrefix}, ${resolvedPrompt}`;
+        }
+
+        // 3. 自动转换 SD 权重语法为 NovelAI 花括号语法 (仅在配置明确开启时)
+        const enableConvertSyntax = Boolean(params.convertSyntax ?? drawingPreset?.convertSyntax);
+        if (enableConvertSyntax) {
+            resolvedPrompt = convertWeightToBrackets(resolvedPrompt);
+            if (resolvedNegative) {
+                resolvedNegative = convertWeightToBrackets(resolvedNegative);
+            }
+        }
+
+        // 4. 尺寸向下对齐至 64 的整数倍
         const rawWidth = (params.width ?? drawingPreset?.width ?? 832) as number;
         const rawHeight = (params.height ?? drawingPreset?.height ?? 1216) as number;
         const resolvedWidth = alignTo64(rawWidth);
@@ -241,6 +320,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
                   ? drawingPreset.seed
                   : Math.floor(Math.random() * 2 ** 32);
 
+        // 5. 组装 NovelAI 专有生成参数
         const generationParams: Record<string, unknown> = {
             width: resolvedWidth,
             height: resolvedHeight,
@@ -251,16 +331,72 @@ export class NovelAIProvider extends BaseGenerationProvider {
             n_samples: 1,
         };
 
+        // 负向模板预设 (Undesired Content Preset: Heavy=0, Light=1, Human Focus=2, None=3)
+        const ucPresetMap: Record<string, number> = {
+            Heavy: 0,
+            Light: 1,
+            'Human Focus': 2,
+            None: 3,
+        };
+        const rawUc = (params.ucPreset ?? drawingPreset?.ucPreset ?? 'Heavy') as string | number;
+        const ucIndex = typeof rawUc === 'number' ? rawUc : (ucPresetMap[rawUc] ?? 0);
+        generationParams['ucPreset'] = ucIndex;
+
+        // 引导重缩放 (CFG Rescale)
+        const cfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
+        if (typeof cfgRescale === 'number' && cfgRescale > 0) {
+            generationParams['cfg_rescale'] = cfgRescale;
+        }
+
+        // 依据模型家族分流构造核心请求体
+        if (isV4OrHigher) {
+            // V4/V4.5/V5 官方要求提供 params_version 与结构化 v4_prompt / v4_negative_prompt
+            generationParams['params_version'] = isV5 ? 4 : 3;
+            generationParams['v4_prompt'] = {
+                caption: {
+                    base_caption: resolvedPrompt,
+                    char_captions: [],
+                },
+                use_coords: false,
+                use_order: true,
+            };
+            generationParams['v4_negative_prompt'] = {
+                caption: {
+                    base_caption: resolvedNegative,
+                    char_captions: [],
+                },
+            };
+            // 并在顶层 parameters 附带 negative_prompt 字段以适配下游代理网关与日志解析
+            if (resolvedNegative) {
+                generationParams['negative_prompt'] = resolvedNegative;
+            }
+        } else {
+            // V3 经典架构：扁平 negative_prompt，支持 SMEA 与 Decrisper
+            if (resolvedNegative) {
+                generationParams['negative_prompt'] = resolvedNegative;
+            }
+
+            const smeaMode = (params.smeaMode ?? drawingPreset?.smeaMode ?? 'smea_dyn') as string;
+            if (smeaMode === 'smea_dyn') {
+                generationParams['sm'] = true;
+                generationParams['sm_dyn'] = true;
+            } else if (smeaMode === 'smea') {
+                generationParams['sm'] = true;
+                generationParams['sm_dyn'] = false;
+            }
+
+            const decrisper = Boolean(params.decrisper ?? drawingPreset?.decrisper);
+            if (decrisper) {
+                generationParams['dynamic_thresholding'] = true;
+            }
+        }
+
         const requestBody: Record<string, unknown> = {
-            input: request.prompt,
+            input: resolvedPrompt,
             model: resolvedModel,
             action: 'generate',
             parameters: generationParams,
         };
-
-        if (request.negativePrompt) {
-            generationParams['negative_prompt'] = request.negativePrompt;
-        }
 
         if (onProgress) {
             onProgress({ percent: 5, statusText: '提交生图请求...' });
@@ -304,8 +440,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
 
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
-            prompt: request.prompt,
-            negativePrompt: request.negativePrompt,
+            prompt: resolvedPrompt,
+            negativePrompt: resolvedNegative || undefined,
             seed: resolvedSeed,
             sampler: resolvedSampler,
             steps: resolvedSteps,

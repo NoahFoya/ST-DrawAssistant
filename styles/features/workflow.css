@@ -29,17 +29,17 @@
 .da-workflow-status-badge--matched,
 .da-workflow-status-badge.is-matched,
 .da-workflow-status-badge.matched {
-    background: rgba(48, 209, 88, 0.15);
+    background: rgba(var(--da-color-success-rgb), 0.15);
     color: var(--da-color-success);
-    border: 1px solid rgba(48, 209, 88, 0.35);
+    border: 1px solid rgba(var(--da-color-success-rgb), 0.35);
 }
 
 .da-workflow-status-badge--unmatched,
 .da-workflow-status-badge.is-unmatched,
 .da-workflow-status-badge.unmatched {
-    background: rgba(255, 159, 10, 0.15);
+    background: rgba(var(--da-color-warn-rgb), 0.15);
     color: var(--da-color-warn);
-    border: 1px solid rgba(255, 159, 10, 0.35);
+    border: 1px solid rgba(var(--da-color-warn-rgb), 0.35);
 }
 
 /* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
@@ -116,15 +116,15 @@
 .da-workflow-var-item--matched,
 .da-workflow-var-item.is-matched,
 .da-workflow-var-item.matched {
-    background: rgba(48, 209, 88, 0.08);
-    border: 1px solid rgba(48, 209, 88, 0.2);
+    background: rgba(var(--da-color-success-rgb), 0.08);
+    border: 1px solid rgba(var(--da-color-success-rgb), 0.2);
 }
 
 .da-workflow-var-item--unmatched,
 .da-workflow-var-item.is-unmatched,
 .da-workflow-var-item.unmatched {
-    background: rgba(255, 159, 10, 0.08);
-    border: 1px solid rgba(255, 159, 10, 0.2);
+    background: rgba(var(--da-color-warn-rgb), 0.08);
+    border: 1px solid rgba(var(--da-color-warn-rgb), 0.2);
 }
 
 /* 等宽宏变量标签 (.da-macro-tag) */
@@ -146,17 +146,17 @@
 
 .da-macro-tag.is-valid,
 .da-macro-tag--valid {
-    color: var(--da-color-success, #30d158);
-    background: rgba(48, 209, 88, 0.12);
-    border-color: rgba(48, 209, 88, 0.3);
+    color: var(--da-color-success);
+    background: rgba(var(--da-color-success-rgb), 0.12);
+    border-color: rgba(var(--da-color-success-rgb), 0.3);
 }
 
 .da-macro-tag--warning,
 .da-macro-tag.is-warning,
 .da-macro-tag.warning {
-    color: var(--da-color-warn, #f59e0b);
-    background: rgba(255, 159, 10, 0.12);
-    border-color: rgba(255, 159, 10, 0.3);
+    color: var(--da-color-warn);
+    background: rgba(var(--da-color-warn-rgb), 0.12);
+    border-color: rgba(var(--da-color-warn-rgb), 0.3);
 }
 
 .da-workflow-var-target {

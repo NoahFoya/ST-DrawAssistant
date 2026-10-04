@@ -54,9 +54,18 @@
     color: var(--da-color-success, #30d158);
 }
 
-.da-stat-card--fav {
-    border-color: rgba(255, 159, 10, 0.35);
+.da-stat-card--warn .da-stat-card__val {
+    color: var(--da-warning-color, #f59e0b);
 }
+
+.da-stat-card--danger .da-stat-card__val {
+    color: var(--da-danger-color, #ef4444);
+}
+
+.da-stat-card--fav {
+    border-color: rgba(var(--da-color-warn-rgb), 0.35);
+}
+
 
 .da-stat-card--iso {
     border-color: var(--da-border-color);
@@ -190,7 +199,7 @@
     flex: 1;
     width: 100%;
     max-width: 18px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--da-bg-subtle);
     border-radius: 3px;
     display: flex;
     align-items: flex-end;

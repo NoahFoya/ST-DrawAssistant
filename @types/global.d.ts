@@ -39,6 +39,8 @@ declare global {
         toastr?: ToastrNotification;
         /** 宿主提供的 HTML 净化库 */
         DOMPurify?: DOMPurifyStatic;
+        /** SillyTavern 宿主全局提供的宏替换函数 */
+        substituteParams?: (text: string) => string;
     }
 
     /** 允许直接访问宿主全局暴露的 toastr 实例 */

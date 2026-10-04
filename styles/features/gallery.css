@@ -115,16 +115,36 @@
     accent-color: var(--da-accent-color);
 }
 
-/* 右下角收藏徽章（黄色星星提示） */
-.da-media-card__fav-badge {
+/* 右下角收藏按钮（点击切换，已收藏金黄 ★，未收藏悬停展示 ☆） */
+.da-media-card__fav-btn {
     position: absolute;
     bottom: 6px;
     right: 6px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-overlay-modal);
+    border: none;
+    border-radius: 50%;
+    color: var(--da-text-secondary);
     font-size: 14px;
     line-height: 1;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.95));
-    z-index: 4;
-    pointer-events: none;
+    cursor: pointer;
+    z-index: 6;
+    transition: all 0.15s ease;
+    backdrop-filter: blur(4px);
+}
+
+.da-media-card__fav-btn:hover {
+    transform: scale(1.15);
+    color: var(--da-color-fav);
+}
+
+.da-media-card__fav-btn.is-active {
+    color: var(--da-color-fav);
+    text-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
 }
 
 /* 顶部操作遮罩层：悬停时平滑显现快捷操作图标 */
@@ -139,7 +159,7 @@
     align-items: center;
     padding: 6px 8px;
     gap: 6px;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.75) 0%, transparent 100%);
+    background: linear-gradient(180deg, var(--da-bg-overlay-heavy) 0%, transparent 100%);
     opacity: 0;
     transition: opacity 0.18s ease;
     pointer-events: none;
@@ -150,6 +170,80 @@
     opacity: 1;
     pointer-events: auto;
 }
+
+.da-media-card__action-btn {
+    background: var(--da-bg-overlay-modal);
+    border: 1px solid var(--da-border-color);
+    border-radius: 4px;
+    color: var(--da-text-primary);
+    cursor: pointer;
+    padding: 3px 6px;
+    font-size: 11px;
+    transition: all 0.15s ease;
+}
+
+.da-media-card__action-btn:hover {
+    background: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+}
+
+.da-media-card__action-btn--danger:hover {
+    background: var(--da-danger-color, #ef4444);
+    border-color: var(--da-danger-color, #ef4444);
+}
+
+/* 4 态状态机辅助样式 */
+.da-media-card__state-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    text-align: center;
+    gap: 6px;
+    z-index: 2;
+}
+
+.da-media-card--generating .da-media-card__state-box {
+    background: linear-gradient(110deg, var(--da-bg-secondary) 8%, var(--da-separator) 18%, var(--da-bg-secondary) 33%);
+    background-size: 200% 100%;
+    animation: da-media-shimmer 1.5s infinite linear;
+}
+
+@keyframes da-media-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.da-media-card--failed .da-media-card__state-box {
+    background: rgba(var(--da-color-error-rgb), 0.08);
+    color: var(--da-color-error);
+}
+
+.da-media-card__state-text {
+    font-size: 11px;
+    color: var(--da-text-secondary);
+    line-height: 1.3;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.da-media-card--deleted {
+    opacity: 0.45;
+    filter: grayscale(1);
+    pointer-events: none;
+}
+
 
 /* 5. 底部粘性批量操作栏 (.da-batch-floating-bar)
    采用 position: sticky; bottom: 12px; 确保长图库纵向滚动时始终贴靠于视野下沿；

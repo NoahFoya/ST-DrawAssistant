@@ -27,6 +27,12 @@
     z-index: 20;
 }
 
+.da-footer-right {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-md, 12px);
+}
+
 /* 2. 状态指示项 (.da-status-item)
    包裹状态圆点与说明文本的扁平状态条；
    后端服务状态容器具备指针手势，支持点击即时重新探测连通性。 */
@@ -105,23 +111,23 @@
 /* 红色异常态 (连接失败或鉴权未通过) */
 .da-status-dot.da-status-error,
 .da-status-dot.is-error {
-    background: var(--da-color-error, #f43f5e);
-    box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+    background: var(--da-color-error);
+    box-shadow: 0 0 6px rgba(var(--da-color-error-rgb), 0.6);
 }
 
 /* 黄色探测中态 (正在执行健康检查或请求排队) */
 .da-status-dot.da-status-checking,
 .da-status-dot.is-checking {
-    background: var(--da-color-warn, #f59e0b);
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    background: var(--da-color-warn);
+    box-shadow: 0 0 6px rgba(var(--da-color-warn-rgb), 0.6);
     animation: da-pulse-dot 1.2s ease-in-out infinite;
 }
 
 /* 警告态 */
 .da-status-dot.da-status-warn,
 .da-status-dot.is-warn {
-    background: var(--da-color-warn, #f59e0b);
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    background: var(--da-color-warn);
+    box-shadow: 0 0 6px rgba(var(--da-color-warn-rgb), 0.6);
 }
 
 /* 空闲待命态 */

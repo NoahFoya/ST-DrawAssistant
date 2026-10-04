@@ -1,14 +1,29 @@
 /**
- * ST-DrawAssistant UI 原子控件聚合导出。
+ * 基础原子控件库聚合导出。
+ *
+ * @remarks
+ * 包含通用卡片容器 (Card) 与 9 大纯受控表单原子控件：
+ * - 容器：Card
+ * - 按钮：Button
+ * - 表单输入：TextInput, NumberInput, Select, Switch, Checkbox, Slider
+ * - 反馈与布局：Badge, FormField
  */
 
-export * from './types';
+export * from './card';
 export * from './button';
-export * from './input';
-export * from './textarea';
+export * from './text-input';
+export * from './number-input';
 export * from './select';
-export * from './toggle';
+export * from './switch';
+export * from './checkbox';
 export * from './slider';
-export * from './color-picker';
+export * from './badge';
 export * from './form-field';
-export * from './preset-dirty-tracker';
+
+export type {
+    Disposable,
+    UIComponent,
+    SetValueOptions,
+    ControlChangeCallback,
+    IControlHandle,
+} from '../types';

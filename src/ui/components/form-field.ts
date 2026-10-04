@@ -1,121 +1,138 @@
 /**
- * ST-DrawAssistant 表单行容器原子控件。
+ * 标准表单行包装组件 (FormField)。
  *
  * @remarks
- * 封装标准 38px .da-form-row 容器，组织标题、悬停提示气泡与右侧对齐插槽。
- * 支持堆叠布局、阶梯宽度修饰与嵌套控件的生命周期联动。
+ * 为受控原子控件提供一致的 38px 标准表单行外壳：
+ * 1. 标题与必填星号指示；
+ * 2. 悬浮帮助提示问号图标 (Tooltip)；
+ * 3. 字段级脏状态指示黄点；
+ * 4. 弹性右侧控件操作区与预设阶梯宽度。
  */
 
-import type { FormFieldComponent, FormFieldOptions, IControlHandle, SetValueOptions, UIComponent } from './types';
+import type { UIComponent } from '../types';
 
-export function isUIComponent(control: unknown): control is UIComponent {
-    return (
-        typeof control === 'object' &&
-        control !== null &&
-        'element' in control &&
-        typeof (control as UIComponent).dispose === 'function'
-    );
+export type FormFieldControlWidth = 'auto' | 'w-80' | 'w-120' | 'w-240' | 'w-toggle';
+
+export interface FormFieldOptions {
+    /** 表单字段标签文本 */
+    label: string;
+    /** 是否必填字段，默认 false */
+    required?: boolean;
+    /** 悬停帮助提示文字 */
+    tooltip?: string;
+    /** 内部挂载的受控控件组件或原生元素 */
+    control: UIComponent | HTMLElement;
+    /** 右侧控件操作区宽度预设，默认 'auto' */
+    width?: FormFieldControlWidth;
+    /** 附加类名 */
+    className?: string;
 }
 
-export function isControlHandle(control: unknown): control is IControlHandle<unknown> {
-    return (
-        isUIComponent(control) &&
-        'getValue' in control &&
-        typeof (control as IControlHandle).getValue === 'function' &&
-        'setValue' in control &&
-        typeof (control as IControlHandle).setValue === 'function'
-    );
-}
+export class FormField implements UIComponent {
+    public readonly element: HTMLElement;
+    private readonly labelElement: HTMLLabelElement;
+    private readonly requiredMark?: HTMLSpanElement;
+    private readonly tooltipIcon?: HTMLSpanElement;
+    private readonly dirtyDot: HTMLSpanElement;
+    private readonly controlContainer: HTMLElement;
 
-export function createFormField(options: FormFieldOptions): FormFieldComponent {
-    const row = document.createElement('div');
-    row.classList.add('da-form-row');
+    private activeControl: UIComponent | HTMLElement;
 
-    if (options.layout === 'stacked') {
-        row.classList.add('da-form-row--stacked');
-    }
-    if (options.className) {
-        row.classList.add(...options.className.split(' ').filter(Boolean));
-    }
-    if (options.disabled) {
-        row.classList.add('is-disabled');
-    }
+    constructor(options: FormFieldOptions) {
+        this.activeControl = options.control;
 
-    const labelGroup = document.createElement('div');
-    labelGroup.classList.add('da-field-label-group');
+        // 1. 创建 38px 表单行根容器
+        this.element = document.createElement('div');
+        this.element.classList.add('da-form-row');
+        if (options.className) {
+            this.element.classList.add(options.className);
+        }
 
-    const titleRow = document.createElement('div');
-    titleRow.classList.add('da-field-title-row');
+        // 2. 左侧标签组
+        const labelGroup = document.createElement('div');
+        labelGroup.classList.add('da-field-label-group');
 
-    const titleSpan = document.createElement('span');
-    titleSpan.classList.add('da-field-title');
-    titleSpan.textContent = options.label;
-    titleRow.appendChild(titleSpan);
+        if (options.required) {
+            this.requiredMark = document.createElement('span');
+            this.requiredMark.classList.add('da-field-required');
+            this.requiredMark.textContent = '*';
+            labelGroup.appendChild(this.requiredMark);
+        }
 
-    if (options.tooltip) {
-        const helpIcon = document.createElement('span');
-        helpIcon.classList.add('da-help-icon');
-        helpIcon.textContent = '?';
-        helpIcon.setAttribute('data-tooltip', options.tooltip);
-        titleRow.appendChild(helpIcon);
-    }
-    labelGroup.appendChild(titleRow);
+        this.labelElement = document.createElement('label');
+        this.labelElement.classList.add('da-field-label');
+        this.labelElement.textContent = options.label;
+        labelGroup.appendChild(this.labelElement);
 
-    if (options.description) {
-        const descSpan = document.createElement('div');
-        descSpan.classList.add('da-field-desc');
-        descSpan.textContent = options.description;
-        labelGroup.appendChild(descSpan);
-    }
+        if (options.tooltip) {
+            this.tooltipIcon = document.createElement('span');
+            this.tooltipIcon.classList.add('da-help-icon');
+            this.tooltipIcon.title = options.tooltip;
+            this.tooltipIcon.textContent = '?';
+            labelGroup.appendChild(this.tooltipIcon);
+        }
 
-    row.appendChild(labelGroup);
+        this.element.appendChild(labelGroup);
 
-    const slot = document.createElement('div');
-    slot.classList.add('da-slot--right');
-    if (options.slotWidth && options.slotWidth !== 'full') {
-        slot.classList.add(`da-slot--w-${options.slotWidth}`);
-    }
+        // 3. 中间脏状态黄点指示器
+        this.dirtyDot = document.createElement('span');
+        this.dirtyDot.classList.add('da-field-dirty-dot');
+        this.dirtyDot.title = '此项配置已修改但尚未保存';
+        this.dirtyDot.style.display = 'none';
+        this.element.appendChild(this.dirtyDot);
 
-    const control = options.control;
-    const controlNode = isUIComponent(control) ? control.element : control;
-    slot.appendChild(controlNode);
-    row.appendChild(slot);
+        // 4. 右侧控件操作区
+        this.controlContainer = document.createElement('div');
+        this.controlContainer.classList.add('da-form-row__control');
+        const width = options.width ?? 'auto';
+        if (width !== 'auto') {
+            this.controlContainer.classList.add(`da-slot--${width}`);
+        }
 
-    if (options.disabled && isControlHandle(control)) {
-        control.setDisabled(true);
+        const controlDom = 'element' in this.activeControl ? this.activeControl.element : this.activeControl;
+        this.controlContainer.appendChild(controlDom);
+        this.element.appendChild(this.controlContainer);
     }
 
-    return {
-        get element() {
-            return row;
-        },
-        get control() {
-            return control;
-        },
-        getValue(): unknown {
-            if (isControlHandle(control)) {
-                return control.getValue();
+    public setLabel(label: string): void {
+        this.labelElement.textContent = label;
+    }
+
+    public setDirty(isDirty: boolean): void {
+        this.dirtyDot.style.display = isDirty ? 'inline-block' : 'none';
+        if (isDirty) {
+            this.element.classList.add('da-form-row--dirty');
+        } else {
+            this.element.classList.remove('da-form-row--dirty');
+        }
+    }
+
+    public setTooltip(tooltip?: string): void {
+        if (this.tooltipIcon) {
+            if (tooltip) {
+                this.tooltipIcon.title = tooltip;
+                this.tooltipIcon.style.display = '';
+            } else {
+                this.tooltipIcon.style.display = 'none';
             }
-            return undefined;
-        },
-        setValue(val: unknown, setValOpts?: SetValueOptions): void {
-            if (isControlHandle(control)) {
-                control.setValue(val, setValOpts);
-            }
-        },
-        setDisabled(disabled: boolean): void {
-            row.classList.toggle('is-disabled', disabled);
-            if (isControlHandle(control)) {
-                control.setDisabled(disabled);
-            }
-        },
-        setVisible(visible: boolean): void {
-            row.hidden = !visible;
-        },
-        dispose(): void {
-            if (isUIComponent(control)) {
-                control.dispose();
-            }
-        },
-    };
+        }
+    }
+
+    public setControl(control: UIComponent | HTMLElement): void {
+        if ('dispose' in this.activeControl && typeof this.activeControl.dispose === 'function') {
+            this.activeControl.dispose();
+        }
+        this.controlContainer.innerHTML = '';
+        this.activeControl = control;
+        const dom = 'element' in control ? control.element : control;
+        this.controlContainer.appendChild(dom);
+    }
+
+    public dispose(): void {
+        if ('dispose' in this.activeControl && typeof this.activeControl.dispose === 'function') {
+            this.activeControl.dispose();
+        }
+        this.controlContainer.innerHTML = '';
+        this.element.parentElement?.removeChild(this.element);
+    }
 }

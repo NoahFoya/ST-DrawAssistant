@@ -1,12 +1,14 @@
 /**
- * 事件发布订阅管理器。
+ * 强类型事件发布订阅总线 (EventBus)。
  *
  * @remarks
- * 为任务状态流转通知、配置变更与界面反馈提供解耦的事件传递能力。
- * 单个监听器内部异常不会中断其他监听器的执行。
+ * 架构解耦与运行期可靠性保障：
+ * 1. 强类型事件流：基于 AppEventMap 对所有业务事件名称及其数据格式实施编译期严格类型约束；
+ * 2. 异常隔离：emit 执行监听器调用时封装独立 try-catch，单个监听器抛出异常绝不阻断其他监听器的正常执行或影响触发源；
+ * 3. 闭包注销句柄：on / once 统一返回标准 UnsubscribeFn 闭包，规范化适配 UI 组件或视图层的 Disposable 生命周期清理。
  */
 
-import type { DrawingTask, TaskProgressInfo, DrawingTaskStatus, PresetItem, ThemePresetData } from '@types';
+import type { DrawingTask, TaskProgressInfo, DrawingTaskStatus, PresetItem, ThemePresetData, SlotMountTarget } from '@types';
 import { logger } from './logger';
 
 /** 任务状态流转事件数据对象（单一事实来源） */
@@ -33,8 +35,18 @@ export type AppEventMap = {
     'task:status': TaskStatusEventData;
     /** 生图任务生成进度更新 */
     'task:progress': { taskId: string; progress: TaskProgressInfo };
+    /** 图像资产就绪通知（本地 IndexedDB 持久化存储完成，驱动楼层原位呈现） */
+    'image:ready': { imageId: string; target: SlotMountTarget };
     /** 插件设置项更新 */
-    'settings:updated': { key?: string; value?: unknown };
+    'settings:updated': {
+        key?: string;
+        keys?: string[];
+        value?: unknown;
+        patch?: Record<string, unknown>;
+        isReset?: boolean;
+    };
+    /** 常驻悬浮球位置复位交互动作 */
+    'ui:reset-fab-position': void;
     /** 界面主题变更通知 */
     'settings:theme-changed': PresetItem<ThemePresetData>;
     /** 界面反馈提示条显示 */
@@ -103,10 +115,14 @@ export class EventBus<Events extends Record<string, unknown> = AppEventMap> {
 
     /**
      * 触发指定事件并向所有已注册监听器分发数据
-     * @param event 事件名称
-     * @param data 事件携带的数据对象
+     * @param args 事件名称及携带的数据对象（若事件数据类型为 void 则数据参数可选）
      */
-    public emit<K extends keyof Events>(event: K, data: Events[K]): void {
+    public emit<K extends keyof Events>(
+        ...args: Events[K] extends void
+            ? [event: K, data?: Events[K]]
+            : [event: K, data: Events[K]]
+    ): void {
+        const [event, data] = args;
         const set = this._listeners.get(event);
         if (!set || set.size === 0) {
             return;
@@ -114,7 +130,7 @@ export class EventBus<Events extends Record<string, unknown> = AppEventMap> {
 
         for (const listener of Array.from(set)) {
             try {
-                listener(data);
+                listener(data as Events[K]);
             } catch (err) {
                 logger.error(`事件监听器执行异常 (${String(event)}):`, err);
             }

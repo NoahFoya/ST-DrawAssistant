@@ -1,11 +1,15 @@
 /**
- * ComfyUI 绘图服务提供方适配器。
+ * ComfyUI 绘图服务提供方适配器 (ComfyUIProvider)。
  *
  * @remarks
  * 基于 ComfyUI 原生 API 规范对接服务端：
- * - 工作流编排：将绘图预设注入 Prompt Graph 变量占位符，提交至 /prompt 队列；
- * - 结果获取：通过轮询 /history/{prompt_id} 检索执行完成的 Output 节点信息；
- * - 图像下载：根据输出文件名与子目录通过 /view 接口获取原始图像二进制流。
+ * 1. 变量注入与工作流构建：根据当前激活的绘图预设、提示词预设与单次临时覆盖参数，通过 workflow-builder
+ *    将变量（如 prompt, negative_prompt, seed, steps, cfg, sampler_name, scheduler, width, height 等）
+ *    动态编译并注入原始 Graph JSON 模板；
+ * 2. 会话隔离与提交：携带唯一 client_id 向 POST /prompt 提交任务，并深度解析服务端 node_errors 校验异常；
+ * 3. 结果轮询与下载：通过定时 GET /history/{prompt_id} 检索输出节点信息，经由 GET /view 下载原始图片二进制流；
+ * 4. 客户端丢弃策略 (Client Discard)：取消时不向服务端发送破坏性的全局 /interrupt（避免打断局域网或共享实例上正在执行的其他任务），
+ *    仅终止本地轮询并抛出 AbortError 释放前端资源。
  */
 
 import type {
@@ -18,6 +22,7 @@ import type {
     ComfyUIProviderConfig,
     DrawingPresetData,
     WorkflowPresetData,
+    PromptPresetData,
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
@@ -56,7 +61,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
      * 获取 ComfyUI 服务基础地址。
      *
      * @remarks
-     * 读取配置中心的 ComfyUI 服务地址，未配置时回退为默认本地地址 (http://127.0.0.1:8188)。
+     * 读取配置中心的 ComfyUI 服务地址，未配置时缺省为默认本地地址 (http://127.0.0.1:8188)。
      * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -172,6 +177,25 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
+        let drawingPreset: DrawingPresetData | undefined;
+        if (this._settingsStore) {
+            const config = this._settingsStore.getProviderConfig<ComfyUIProviderConfig>('comfyui');
+            const activeDrawingId = config?.activeDrawingPresetId;
+            if (activeDrawingId) {
+                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
+                    'drawing',
+                    activeDrawingId,
+                    'comfyui'
+                )?.data;
+            }
+            if (!drawingPreset && typeof this._settingsStore.getPresets === 'function') {
+                const allPresets = this._settingsStore.getPresets<DrawingPresetData>('drawing', 'comfyui');
+                if (allPresets && allPresets.length > 0) {
+                    drawingPreset = allPresets[0].data;
+                }
+            }
+        }
+
         let rawWorkflow: Record<string, unknown> | undefined;
 
         if (params.workflow) {
@@ -185,15 +209,29 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                 rawWorkflow = params.workflow as Record<string, unknown>;
             }
         } else if (this._settingsStore) {
-            const config = this._settingsStore.getProviderConfig<ComfyUIProviderConfig>('comfyui');
-            if (config?.activeWorkflowProfileId) {
-                const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
-                    'workflows',
-                    config.activeWorkflowProfileId
-                );
-                if (workflowPreset?.data?.workflow) {
-                    rawWorkflow = workflowPreset.data.workflow;
+            const isImg2Img = Boolean(request.sourceImage || params.sourceImage);
+            let workflowId: string | undefined;
+
+            if (isImg2Img) {
+                workflowId = drawingPreset?.img2imgWorkflowId;
+                if (!workflowId) {
+                    throw new Error('当前方案未配置图生图工作流，请在设置中绑定');
                 }
+            } else {
+                workflowId = drawingPreset?.txt2imgWorkflowId;
+                if (!workflowId) {
+                    throw new Error('当前方案未配置文生图工作流，请在设置中绑定');
+                }
+            }
+
+            const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
+                'workflows',
+                workflowId
+            );
+            if (workflowPreset?.data?.workflow) {
+                rawWorkflow = workflowPreset.data.workflow;
+            } else {
+                throw new Error(`缺少有效的工作流模板：绑定的工作流方案不存在或已失效 (ID: ${workflowId})`);
             }
         }
 
@@ -201,15 +239,36 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             throw new Error('缺少有效的工作流模板，请在设置中选择或在请求参数中传入');
         }
 
-        let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore) {
-            const config = this._settingsStore.getProviderConfig<ComfyUIProviderConfig>('comfyui');
-            if (config?.activeDrawingProfileId) {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                    'drawing',
-                    config.activeDrawingProfileId,
-                    'comfyui'
-                )?.data;
+        let promptText = request.prompt;
+        let negativePromptText = request.negativePrompt ?? '';
+
+        const linkedPromptId = drawingPreset?.promptPresetId;
+        if (this._settingsStore && linkedPromptId) {
+            const promptPreset = this._settingsStore.getPreset<PromptPresetData>('prompts', linkedPromptId);
+            if (promptPreset?.data) {
+                const pData = promptPreset.data;
+                const prefix = (pData.positivePrefix || '').trim();
+                const suffix = (pData.positiveSuffix || '').trim();
+                const defaultNeg = (pData.negativePrompt || '').trim();
+
+                if (prefix) {
+                    promptText = `${prefix}, ${promptText}`;
+                }
+                if (suffix) {
+                    promptText = `${promptText}, ${suffix}`;
+                }
+                if (defaultNeg) {
+                    negativePromptText = negativePromptText ? `${negativePromptText}, ${defaultNeg}` : defaultNeg;
+                }
+
+                // 若预设包含 LoRA 配置，且正向提示词中未显式写入该 LoRA，则按 ComfyUI 规范追加 <lora:name:weight>
+                if (Array.isArray(pData.loras)) {
+                    for (const lora of pData.loras) {
+                        if (lora && lora.name && !promptText.includes(`<lora:${lora.name}:`)) {
+                            promptText = `${promptText}, <lora:${lora.name}:${lora.weight ?? 1.0}>`;
+                        }
+                    }
+                }
             }
         }
 
@@ -223,8 +282,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             clip_name: (params.clipName ?? drawingPreset?.clipName) as string | undefined,
             vae_name: (params.vaeName ?? drawingPreset?.vaeName) as string | undefined,
 
-            prompt: request.prompt,
-            negative_prompt: request.negativePrompt ?? '',
+            prompt: promptText,
+            negative_prompt: negativePromptText,
 
             seed: resolvedSeed,
             steps: (params.steps ?? drawingPreset?.steps) as number | undefined,
@@ -305,7 +364,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             throw new Error('ComfyUI 未返回有效任务标识 (prompt_id)');
         }
 
-        // 轮询任务执行结果
+        // 轮询任务执行结果（采用客户端丢弃策略，收到中止信号时安全退出轮询并抛出 AbortError）
         const pollIntervalMs = 1000;
         let promptHistory: any;
 
@@ -394,8 +453,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
-            prompt: request.prompt,
-            negativePrompt: request.negativePrompt,
+            prompt: promptText,
+            negativePrompt: negativePromptText || undefined,
             seed: resolvedSeed,
             sampler: variables.sampler_name as string | undefined,
             steps: variables.steps as number | undefined,

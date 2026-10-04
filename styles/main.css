@@ -6,7 +6,7 @@
  * 1. Core (基础设计令牌、样式重置与全局动画)
  * 2. Layout (弹窗骨架、侧边栏、栅格排布、顶栏底栏与悬浮球)
  * 3. Controls (通用按钮、输入表单、卡片容器与反馈气泡)
- * 4. Features (画廊、工作流、局部重绘与图片详情业务模块)
+ * 4. Features (画廊、工作流、局部重绘、图片详情与楼层原位呈现)
  * 5. Skin (浅色主题修饰与设备多分辨率响应式规则)
  */
 
@@ -23,6 +23,7 @@
 @import url('./layout/content-area.css');
 @import url('./layout/footer-bar.css');
 @import url('./layout/fab.css');
+@import url('./layout/drawer.css');
 
 /* 3. Controls 通用组件控件库 (Layer 3) */
 /* (1) 输入控件族 (Inputs) */
@@ -31,7 +32,6 @@
 @import url('./controls/inputs/textarea.css');
 @import url('./controls/inputs/select.css');
 @import url('./controls/inputs/toggle.css');
-@import url('./controls/inputs/color-picker.css');
 @import url('./controls/inputs/slider.css');
 
 /* (2) 按钮控件族 (Buttons) */
@@ -40,10 +40,11 @@
 @import url('./controls/buttons/overlay-button.css');
 
 /* (3) 卡片与容器族 (Cards & Containers) */
-@import url('./controls/cards/item-card.css');
+@import url('./controls/cards/card.css');
+@import url('./controls/cards/dimension-picker.css');
+@import url('./controls/cards/sampler-card.css');
+@import url('./controls/cards/lora-card.css');
 @import url('./controls/cards/stat-card.css');
-@import url('./controls/cards/hero-card.css');
-@import url('./controls/cards/rich-link-card.css');
 
 /* (4) 工具栏与复合控制栏 (Toolbars) */
 @import url('./controls/toolbars/preset-toolbar.css');
@@ -55,17 +56,14 @@
 @import url('./controls/feedback/dialog.css');
 @import url('./controls/feedback/help-bubble.css');
 @import url('./controls/feedback/badge.css');
-@import url('./controls/feedback/chip.css');
 @import url('./controls/feedback/image-preview.css');
 
 /* 4. Features 业务功能领域专用样式 (Layer 4) */
+@import url('./features/floor.css');
 @import url('./features/gallery.css');
-@import url('./features/workflow-modal.css');
 @import url('./features/workflow.css');
-@import url('./features/inpaint.css');
 @import url('./features/image-info.css');
-@import url('./features/image-collapse.css');
-@import url('./features/changelog.css');
+@import url('./features/lightbox.css');
 @import url('./features/terminal.css');
 
 /* 5. Skin 主题皮肤与设备响应式 (Layer 5) */

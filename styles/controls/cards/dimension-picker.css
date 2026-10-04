@@ -1,0 +1,57 @@
+/**
+ * 画幅比例与尺寸卡片样式 (DimensionPicker)。
+ *
+ * @remarks
+ * 为画幅尺寸选择组件提供极简高密度布局：
+ * 1. 快捷画幅比例芯片组行；
+ * 2. 紧凑型宽高输入框与居中对齐的翻转操作按钮。
+ */
+
+.da-dimension-picker__ratios-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.da-dimension-picker__ratio-chip {
+    flex: 1 1 auto;
+    min-width: 68px;
+    text-align: center;
+}
+
+.da-dimension-picker__dimensions-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-dimension-picker__dimension-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-dimension-picker__col-label {
+    font-size: var(--da-font-size-xs, 0.75rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.65));
+    font-weight: 500;
+}
+
+.da-dimension-picker__swap-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-bottom: 2px;
+}
+
+.da-dimension-picker__swap-btn {
+    min-width: 36px;
+    height: 34px;
+    padding: 0 8px;
+}

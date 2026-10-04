@@ -30,3 +30,19 @@
     pointer-events: none;
     animation: da-fadein 0.15s ease;
 }
+
+.da-toast--success {
+    border-left: 3px solid var(--da-success, #10b981);
+}
+
+.da-toast--error {
+    border-left: 3px solid var(--da-danger, #ef4444);
+}
+
+.da-toast--warn {
+    border-left: 3px solid var(--da-warning, #f59e0b);
+}
+
+.da-toast--info {
+    border-left: 3px solid var(--da-info, #3b82f6);
+}

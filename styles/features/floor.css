@@ -1,0 +1,210 @@
+/**
+ * 宿主消息正文内原生绘图动作按钮与图片呈现容器样式。
+ *
+ * @remarks
+ * 为楼层原位呈现提供极简高可用视觉基准：
+ * 1. 楼层绘图动作按钮 (FloorActionButton)：ready / generating / done / error 状态机排版；
+ * 2. 楼层图片展示容器 (FloorImageContainer)：原位挂载、图片排版对齐、防窥模糊与操作胶囊。
+ */
+
+/* 0. 楼层正文原位插槽容器 */
+.da-floor-slot {
+    display: block;
+    margin: 8px 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.2s ease;
+}
+
+/* 1. 楼层动作按钮容器与按钮 */
+.da-floor-action-wrapper {
+    display: inline-flex;
+    margin: 4px 0;
+    align-items: center;
+}
+
+.da-floor-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    font-weight: 500;
+    color: var(--da-text-primary, #ffffff);
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.15));
+    border-radius: var(--da-radius-md, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s var(--da-ease, ease);
+}
+
+.da-floor-action-btn:hover {
+    background: var(--da-surface-card-hover, rgba(255, 255, 255, 0.14));
+    border-color: var(--da-primary, #4a90e2);
+    transform: translateY(-1px);
+}
+
+.da-floor-action-btn:active {
+    transform: translateY(0);
+}
+
+.da-floor-action-btn--generating {
+    cursor: default;
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.1);
+}
+
+.da-floor-action-btn--error {
+    border-color: var(--da-color-error);
+    color: var(--da-color-error);
+}
+
+.da-floor-action-btn--done {
+    opacity: 0.85;
+    border-color: var(--da-accent-color);
+    color: var(--da-text-secondary);
+}
+
+.da-floor-action-btn--done:hover {
+    opacity: 1;
+    color: var(--da-text-primary);
+}
+
+.da-floor-action-btn__spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--da-border-color);
+    border-top-color: var(--da-accent-color);
+    border-radius: 50%;
+    animation: da-spin 0.8s linear infinite;
+}
+
+.da-floor-action-btn__timer {
+    font-variant-numeric: tabular-nums;
+    color: var(--da-text-secondary);
+}
+
+/* 2. 楼层图片呈现容器 */
+.da-floor-image-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 8px 0;
+    box-sizing: border-box;
+}
+
+.da-floor-image-container--center {
+    align-items: center;
+}
+
+.da-floor-image-container--left {
+    align-items: flex-start;
+}
+
+.da-floor-image-box {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border-radius: var(--da-radius-md, 8px);
+    overflow: hidden;
+    box-shadow: var(--da-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.25));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+}
+
+.da-floor-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    cursor: pointer;
+    transition: filter 0.3s ease;
+}
+
+/* 防窥模糊遮罩 */
+.da-floor-image--blurred {
+    filter: blur(16px);
+}
+
+.da-floor-image--blurred:hover {
+    filter: blur(0);
+}
+
+/* 重新生成重绘过程中的占位透明度 */
+.da-floor-image--regenerating {
+    opacity: 0.55;
+    transition: opacity 0.3s ease;
+}
+
+/* 右上角悬浮操作胶囊 */
+.da-floor-image__actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: var(--da-bg-overlay-modal);
+    backdrop-filter: blur(6px);
+    border-radius: var(--da-radius-sm, 6px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.da-floor-image-box:hover .da-floor-image__actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.da-floor-image__action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--da-text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: background 0.15s ease;
+}
+
+.da-floor-image__action-btn:hover {
+    background: var(--da-bg-hover);
+}
+
+/* 3. 楼层图片生成中占位骨架屏 */
+.da-floor-image-skeleton {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 280px;
+    max-width: 100%;
+    height: 180px;
+    margin: 8px 0;
+    border-radius: var(--da-radius-md, 8px);
+    background: linear-gradient(90deg, var(--da-bg-subtle) 25%, var(--da-bg-hover) 50%, var(--da-bg-subtle) 75%);
+    background-size: 200% 100%;
+    animation: da-skeleton-pulse 1.8s ease-in-out infinite;
+    border: 1px dashed var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 0.78rem);
+    user-select: none;
+}
+
+@keyframes da-skeleton-pulse {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}

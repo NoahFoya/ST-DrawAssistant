@@ -1,4 +1,5 @@
 {
+  "isInitialized": false,
   "enabled": true,
   "showHelp": true,
   "activeProvider": "comfyui",
@@ -6,19 +7,14 @@
   "taskTimeoutMs": 120000,
   "saveToIndexedDB": true,
   "saveToServer": false,
-  "embedToBase64": false,
   "enableThumbnail": true,
   "maxStoredImages": 500,
-  "imageFormat": "original",
-  "imageQuality": 0.85,
 
   "autoGenerate": false,
   "cleanPrompt": true,
   "placeholderStart": "image###",
   "placeholderEnd": "###",
-  "enabledExtensions": {},
-  "extensionCustomSettings": {},
-  "themePreset": "dark",
+  "themePreset": "",
   "presets": {
     "themes": [],
     "prompts": [],
@@ -33,26 +29,22 @@
   "providers": {
     "comfyui": {
       "serverUrl": "http://127.0.0.1:8188",
-      "activeDrawingProfileId": "comfyui_drawing_wai_default",
-      "activePromptProfileId": "prompt_anime_general",
-      "activeWorkflowProfileId": "comfyui_checkpoint_standard"
+      "activeDrawingPresetId": ""
     },
     "sdwebui": {
       "serverUrl": "http://127.0.0.1:7860",
-      "activeDrawingProfileId": "default_sd15",
-      "activePromptProfileId": "prompt_anime_general"
+      "activeDrawingPresetId": ""
     },
     "novelai": {
       "serverUrl": "https://image.novelai.net",
       "apiKey": "",
-      "activeDrawingProfileId": "",
-      "activePromptProfileId": ""
+      "activeDrawingPresetId": ""
     },
     "openai": {
-      "activeProvider": "openai-official",
+      "serviceId": "openai-official",
       "serverUrl": "https://api.openai.com/v1",
       "apiKey": "",
-      "activeDrawingProfileId": ""
+      "activeDrawingPresetId": ""
     }
   },
   "ui": {

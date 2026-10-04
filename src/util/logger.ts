@@ -1,9 +1,12 @@
 /**
- * 分级日志记录器与只读调试缓冲区。
+ * 分级日志记录器与只读调试缓冲区 (Logger)。
  *
  * @remarks
- * 提供统一前缀的控制台输出，并维护内存环形缓冲区，
- * 供设置面板中的调试日志列表查看与划词复制。
+ * 架构规范与内存占用保护：
+ * 1. 控制台分级规范输出：统一携带 `[ST-DrawAssistant]` 前缀，依据 minLevel 路由至 console.debug / info / warn / error；
+ * 2. 内存环形缓冲区 (Circular Buffer)：限制最大保留条目（默认 200 条），超出容量自动先进先出丢弃最旧记录，
+ *    既支持设置面板调试视图实时查看与划词导出，又避免长期运行导致内存持续占用；
+ * 3. 实时响应式订阅：提供 onLog 监听订阅，方便 UI 诊断组件挂载与实时日志流展示。
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -45,6 +48,7 @@ export class Logger {
     private readonly _maxBufferSize: number;
     private readonly _prefix: string;
     private readonly _buffer: LogEntry[] = [];
+    private readonly _listeners = new Set<(entry: LogEntry) => void>();
 
     public constructor(options: LoggerOptions = {}) {
         this._minLevel = options.minLevel ?? 'info';
@@ -60,6 +64,18 @@ export class Logger {
     /** 获取当前生效的最低日志级别 */
     public getLogLevel(): LogLevel {
         return this._minLevel;
+    }
+
+    /**
+     * 订阅实时日志产生事件。
+     * @param listener 单条日志回调
+     * @returns 解绑函数
+     */
+    public onLog(listener: (entry: LogEntry) => void): () => void {
+        this._listeners.add(listener);
+        return () => {
+            this._listeners.delete(listener);
+        };
     }
 
     /** 输出调试级别日志 */
@@ -111,6 +127,15 @@ export class Logger {
             this._buffer.shift();
         }
         this._buffer.push(entry);
+
+        // 广播至实时日志流监听器
+        for (const listener of this._listeners) {
+            try {
+                listener(entry);
+            } catch (listenerErr) {
+                console.error('[Logger] 监听器执行异常:', listenerErr);
+            }
+        }
 
         // 控制台级别过滤
         if (LEVEL_WEIGHTS[level] < LEVEL_WEIGHTS[this._minLevel]) {

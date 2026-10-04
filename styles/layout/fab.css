@@ -83,16 +83,16 @@
     height: 16px;
     padding: 0 4px;
     border-radius: 10px;
-    background: var(--da-color-error, #ff453a);
-    color: #ffffff;
+    background: var(--da-color-error);
+    color: var(--da-text-on-accent, #ffffff);
     font-size: 10px;
     font-weight: 700;
     font-family: var(--da-font-mono, monospace);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 0 6px rgba(255, 69, 58, 0.8);
-    border: 1.5px solid var(--da-bg-primary, #0f1014);
+    box-shadow: 0 0 6px rgba(var(--da-color-error-rgb), 0.8);
+    border: 1.5px solid var(--da-bg-primary);
     pointer-events: none;
 }
 

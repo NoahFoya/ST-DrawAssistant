@@ -1,6 +1,5 @@
 /**
- * ST-DrawAssistant 界面反馈模块聚合导出。
+ * 用户反馈与交互提示模块统一导出。
  */
 
 export * from './toast';
-export * from './confirm-dialog';

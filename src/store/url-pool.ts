@@ -1,9 +1,15 @@
 /**
- * Object URL 生命周期管理池实现。
+ * Object URL 内存生命周期管理池 (UrlPool)。
  *
  * @remarks
- * 为本地 Blob 生成的临时 Object URL 提供统一的记录与释放。
- * 避免图像频繁生成导致浏览器内存占用持续上涨。
+ * 浏览器内存管理与防泄漏机制：
+ * 1. 内存驻留机理：浏览器中通过 `URL.createObjectURL(blob)` 创建的地址，会在底层创建对 Blob 二进制数据的
+ *    强引用常驻内存。该引用不会被垃圾回收器 (GC) 自动回收，直到文档被完全关闭或显式调用 `URL.revokeObjectURL`；
+ * 2. SPA 内存泄漏防范：SillyTavern 属于长时间不刷新的单页应用，若频繁生图而不主动释放 Object URL，
+ *    会导致浏览器内存占用单调暴增，最终引发页面崩溃；
+ * 3. 自动化回收策略：
+ *    - 同 key 重写：createUrl 时若已存在旧 key 映射，自动先触发 revokeUrl 释放旧资源；
+ *    - 会话联动：在 session-lifecycle 监听到 CHAT_CHANGED 会话切换时，全量调用 revokeAll 批量回收脱离视图的临时引用。
  */
 
 import type { ImageUrlPool } from '@types';

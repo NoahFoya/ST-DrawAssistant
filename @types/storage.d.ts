@@ -15,17 +15,47 @@ export interface ImageQueryOptions {
     /** 分页偏移量 */
     readonly offset?: number;
     /** 按资产状态筛选 */
-    readonly status?: 'ready' | 'deleted';
+    readonly status?: 'ready' | 'generating' | 'failed' | 'deleted';
     /** 按关联的会话标识符筛选 */
     readonly chatId?: string;
     /** 按关联的角色名称筛选 */
     readonly characterName?: string;
+    /** 按标星收藏状态筛选 */
+    readonly favorited?: boolean;
 }
 
 /** 图像资产持久化存储服务接口 */
 export interface ImageStorageService {
     /** 保存图像二进制数据与对应资产记录到 IndexedDB */
     saveImage(record: StoredImageRecord, blob: Blob): Promise<void>;
+
+    /**
+     * 仅保存图像元数据记录（不含 Blob），status 通常为 'generating'。
+     * 用于在生图任务开始时即建立可寻址的 imageId 占位，确保即使中途切换会话也能恢复关联。
+     */
+    saveImageMeta(record: StoredImageRecord): Promise<void>;
+
+    /**
+     * 完成图像保存：写入 Blob 数据并更新元数据字段（mimeType、byteSize、status、metadata）。
+     * 配合 saveImageMeta 实现两阶段写入。
+     */
+    finalizeImage(
+        imageId: string,
+        blob: Blob,
+        updates: Pick<StoredImageRecord, 'mimeType' | 'byteSize' | 'status' | 'metadata'>
+    ): Promise<void>;
+
+    /**
+     * 局部更新图像资产元数据字段（如 status、remotePath、favorited）。
+     * 不触碰 Blob 数据。
+     */
+    updateImageRecord(
+        imageId: string,
+        patch: Partial<Pick<StoredImageRecord, 'status' | 'remotePath' | 'favorited'>>
+    ): Promise<void>;
+
+    /** 切换指定图像资产的标星收藏状态，返回更新后的收藏状态 */
+    toggleFavorite(imageId: string): Promise<boolean>;
 
     /** 根据 imageId 获取本地图像 Blob 二进制数据 */
     getImageBlob(imageId: string): Promise<Blob | undefined>;
@@ -40,7 +70,7 @@ export interface ImageStorageService {
     listImages(options?: ImageQueryOptions): Promise<StoredImageRecord[]>;
 
     /** 获取本地存储中的图像资产总数，可指定状态筛选条件 */
-    countImages(status?: 'ready' | 'deleted'): Promise<number>;
+    countImages(status?: 'ready' | 'generating' | 'failed' | 'deleted'): Promise<number>;
 }
 
 /** Object URL 生命周期管理池接口 */

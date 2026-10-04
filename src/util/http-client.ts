@@ -1,9 +1,19 @@
 /**
- * 支持直连与宿主代理模式的 HTTP 网络客户端。
+ * 支持直连与宿主代理模式的 HTTP 网络客户端 (HttpClient)。
  *
  * @remarks
- * 提供向外部服务或 SillyTavern 宿主发送 HTTP 请求的能力，
- * 支持请求超时、中止信号管理以及瞬态网络波动的退避重试。
+ * 通信架构与网络安全机制：
+ * 1. 混合内容拦截 (Mixed Content) 与本地回环豁免：
+ *    - 当宿主处于 HTTPS 安全上下文时，向外部不安全 HTTP 发起的网络请求会被浏览器静默拦截并抛出通用 `Failed to fetch`；
+ *    - 本地回环地址（localhost, 127.0.0.1, [::1]）遵循 W3C 规范被主流现代浏览器（Chromium/Firefox）判定为
+ *      潜在可信源 (Potentially Trustworthy Origin)，因此享有混合内容直接通信豁免；
+ *    - 对非回环外部 HTTP 地址，提示切换至宿主中继模式 (relay) 借由宿主后端转发解决跨域与安全协议阻断；
+ * 2. 信号合成与生命周期管控 (composeAbortSignal)：
+ *    - 动态组合任务取消信号 (userSignal) 与请求超时信号 (timeoutSignal)；
+ *    - 响应返回后显式解绑 abort 监听器，规避长生命周期下的事件监听内存泄漏；
+ * 3. 瞬态故障容错重试：
+ *    - 识别 408 (Request Timeout)、429 (Too Many Requests)、502/503/504 等瞬态状态码；
+ *    - 采用带随机抖动 (Jitter) 的指数退避策略执行重试，防止网络瞬断或拥塞导致任务直接失败。
  */
 
 import type { TransportMode } from '@types';
@@ -136,6 +146,20 @@ function sleepWithSignal(ms: number, signal?: AbortSignal | null): Promise<void>
 }
 
 /**
+ * 判定目标地址是否属于本机回环地址。
+ * 本地回环地址受浏览器安全策略保护与豁免。
+ */
+function isLoopbackHost(urlStr: string): boolean {
+    try {
+        const parsed = new URL(urlStr);
+        const host = parsed.hostname.toLowerCase();
+        return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '0.0.0.0';
+    } catch {
+        return false;
+    }
+}
+
+/**
  * 浏览器端 HTTP 请求客户端。
  *
  * @remarks
@@ -169,6 +193,15 @@ export class HttpClient {
      * 支持超时控制与瞬态网络故障退避重试。
      */
     public async fetchExternal(url: string, options: HttpRequestOptions = {}): Promise<Response> {
+        // 显式拦截 Mixed Content：HTTPS 宿主页面直连非安全外部 HTTP 服务时由浏览器安全策略直接阻断
+        if (typeof window !== 'undefined' && window.location?.protocol === 'https:' && url.startsWith('http:')) {
+            if (!isLoopbackHost(url)) {
+                throw new Error(
+                    `网络请求受阻 (Mixed Content): 当前 SillyTavern 宿主页面为 HTTPS 协议，浏览器安全策略禁止直接请求非安全 HTTP 服务 [${url}]。请在常规设置中将“网络连接方式”切换为“宿主中继”，或为后端服务配置 HTTPS。`
+                );
+            }
+        }
+
         const { timeoutMs = 30000, retries = 1, signal: userSignal, transport: _ignored, ...init } = options;
         const maxAttempts = Math.max(1, retries + 1);
 
@@ -210,11 +243,22 @@ export class HttpClient {
                 }
 
                 return response;
-            } catch (err) {
+            } catch (err: unknown) {
                 lastError = err;
                 // 若用户已主动取消，不执行重试
                 if (userSignal?.aborted) {
                     throw err;
+                }
+
+                // 统一包装浏览器底层 Failed to fetch，转化为可定位排查的技术错误
+                if (err instanceof TypeError && err.message?.includes('fetch')) {
+                    const enhancedError = new Error(
+                        `网络连接失败 (Failed to fetch): 无法访问服务地址 [${url}]。请确认后端服务是否已正常启动、地址与端口是否正确，或检查是否存在跨域 (CORS) 限制。如需规避跨域可在常规设置中切换为“酒馆代理”。`
+                    );
+                    lastError = enhancedError;
+                    if (attempt >= maxAttempts - 1) {
+                        throw enhancedError;
+                    }
                 }
 
                 if (attempt < maxAttempts - 1) {
@@ -227,7 +271,7 @@ export class HttpClient {
                     }
                 }
 
-                throw err;
+                throw lastError;
             } finally {
                 cleanup();
             }
@@ -283,8 +327,9 @@ export class HttpClient {
                 ok: response.ok,
                 status: response.status,
                 latencyMs: Date.now() - start,
+                error: response.ok ? undefined : `HTTP ${response.status} ${response.statusText}`,
             };
-        } catch (err: any) {
+        } catch (err: unknown) {
             return {
                 ok: false,
                 status: err instanceof HttpError ? err.status : undefined,
@@ -293,20 +338,24 @@ export class HttpClient {
             };
         }
     }
-
-    /**
-     * 探测指定服务接口连通性与往返延迟（ping 的兼容别名）。
-     *
-     * @param url 待测试的服务地址
-     * @param options 超时与中止配置
-     */
-    public async probeEndpoint(
-        url: string,
-        options: { timeoutMs?: number; signal?: AbortSignal } = {}
-    ): Promise<PingResult> {
-        return this.ping(url, { ...options, transport: 'direct' });
-    }
 }
 
 /** 全局默认单例 HTTP 客户端 */
 export const httpClient = new HttpClient();
+
+/**
+ * 将 Base64 编码的图像字符串转换为 Blob 二进制对象。
+ *
+ * @param b64 Base64 编码图像字符串（支持包含 data URI 前缀）
+ * @param mimeType 图像 MIME 类型，默认为 'image/png'
+ * @returns 构造的二进制 Blob 对象
+ */
+export function base64ToBlob(b64: string, mimeType = 'image/png'): Blob {
+    const raw = b64.includes(',') ? b64.split(',')[1] : b64;
+    const binaryStr = atob(raw);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mimeType });
+}

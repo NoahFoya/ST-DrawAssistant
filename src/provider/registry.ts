@@ -1,9 +1,11 @@
 /**
- * 绘图服务提供方注册中心。
+ * 绘图服务提供方注册中心 (ProviderRegistry)。
  *
  * @remarks
- * 维护已注册的提供方实例映射，支持按类型查询与动态替换。
- * 导出预配置的全局单例 providerRegistry，在模块加载时注册四个默认提供方实例。
+ * 架构职责与解耦设计：
+ * 1. 驱动解耦：作为任务调度层 (GenerationOrchestrator) 与底层具体生图服务驱动 (ComfyUI / SD-WebUI / NovelAI / OpenAI) 的中介；
+ * 2. 运行时映射：维护 ProviderType 到 GenerationProvider 实例的单例映射字典；
+ * 3. 依赖替换：支持测试或高级扩展通过 registerProvider 动态注册或覆盖驱动实现，便于模拟测试与切片验证。
  */
 
 import type { GenerationProvider, ProviderRegistry, ProviderType } from '@types';
@@ -13,7 +15,7 @@ import { NovelAIProvider } from './novelai/novelai-provider';
 import { OpenAIProvider } from './openai/openai-provider';
 
 /**
- * 绘图服务提供方注册中心默认实现。
+ * 绘图服务提供方注册中心默认实现类。
  */
 export class DefaultProviderRegistry implements ProviderRegistry {
     private readonly _providers = new Map<ProviderType, GenerationProvider>();
@@ -21,7 +23,8 @@ export class DefaultProviderRegistry implements ProviderRegistry {
     /**
      * 注册绘图服务提供方实例。
      *
-     * @remarks 同类型注册时覆盖旧实例，用于测试替换或运行时动态切换。
+     * @remarks 同类型重复注册时覆盖旧实例，支持测试注入 mock 桩或运行时动态拓展。
+     * @param provider 实现 GenerationProvider 接口的具体提供方实例
      */
     public registerProvider(provider: GenerationProvider): void {
         this._providers.set(provider.providerType, provider);

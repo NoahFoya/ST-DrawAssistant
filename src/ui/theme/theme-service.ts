@@ -1,184 +1,197 @@
 /**
- * ST-DrawAssistant 主题服务。
+ * 主题管理服务 (ThemeService)。
  *
  * @remarks
- * 负责解析主题预设数据，动态注入 CSS 变量至目标 DOM 节点或根节点。
- * 派生计算 RGB 分量，支持浅色/深色模式标识切换与主题重置生命周期。
+ * 负责管理插件 CSS 变量设计令牌与主题切换监听：
+ * 1. 动态加载出厂精选主题预设与用户自定义主题列表；
+ * 2. 将主题令牌参数精准映射并注入至宿主根节点或目标视窗 DOM（`:root` / `document.documentElement`）；
+ * 3. 自动派生 `--da-accent-rgb` 等色彩透明度计算分量，保障高斯模糊与发光描边协调；
+ * 4. 监听 `settingsStore` 配置广播，动态切换全局主题。
  */
 
-import type { ThemePresetData, PresetItem } from '@types';
+import type { Disposable } from '../types';
+import type { PresetItem, ThemePresetData } from '@types';
+import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
+import recommendedThemesData from '../../../config/presets/themes.json';
 
-/** 十六进制颜色转 RGB 三元组格式字符串 (例如 "139, 92, 246") */
-export function hexToRgbString(hex: string): string | null {
-    const cleanHex = hex.trim().replace(/^#/, '');
+/** Hex 颜色转 RGB 数值三元组字符串辅助函数 */
+function hexToRgb(hex?: string): string | null {
+    if (!hex || typeof hex !== 'string') return null;
+    const cleanHex = hex.replace('#', '').trim();
     if (cleanHex.length === 3) {
         const r = parseInt(cleanHex[0] + cleanHex[0], 16);
         const g = parseInt(cleanHex[1] + cleanHex[1], 16);
         const b = parseInt(cleanHex[2] + cleanHex[2], 16);
-        if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
         return `${r}, ${g}, ${b}`;
     }
     if (cleanHex.length === 6) {
-        const r = parseInt(cleanHex.slice(0, 2), 16);
-        const g = parseInt(cleanHex.slice(2, 4), 16);
-        const b = parseInt(cleanHex.slice(4, 6), 16);
-        if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+        const r = parseInt(cleanHex.substring(0, 2), 16);
+        const g = parseInt(cleanHex.substring(2, 4), 16);
+        const b = parseInt(cleanHex.substring(4, 6), 16);
         return `${r}, ${g}, ${b}`;
     }
     return null;
 }
 
-/** 属性键名与 CSS 变量名映射表 */
-const PROPERTY_VAR_MAP: Record<string, string> = {
-    accentColor: '--da-accent-color',
-    accentCyan: '--da-accent-cyan',
-    bgPrimary: '--da-bg-primary',
-    bgSecondary: '--da-bg-secondary',
-    bgSidebar: '--da-bg-sidebar',
-    bgCard: '--da-bg-card',
-    bgCardHover: '--da-bg-card-hover',
-    bgInput: '--da-bg-input',
-    bgInputHover: '--da-bg-input-hover',
-    textPrimary: '--da-text-primary',
-    textSecondary: '--da-text-secondary',
-    borderColor: '--da-border-color',
-    borderHighlight: '--da-border-highlight',
-    radiusModal: '--da-radius-modal',
-    radiusCard: '--da-radius-card',
-    radiusInput: '--da-radius-input',
-    blurModal: '--da-blur-modal',
-    blurPanel: '--da-blur-panel',
-};
-
-export class ThemeService {
+export class ThemeService implements Disposable {
     private targetElement: HTMLElement | null = null;
-    private appliedCustomProperties: Set<string> = new Set();
-    private unbindEvent: (() => void) | null = null;
+    private unlistenSettingsCallback: (() => void) | null = null;
 
     /**
-     * 绑定目标容器或默认根节点
-     * @param target 目标元素 (默认 document.documentElement)
+     * 绑定应用主题的目标容器元素，默认绑定 document.documentElement。
+     *
+     * @param target 目标挂载元素
      */
     public bindTarget(target?: HTMLElement): void {
-        if (target) {
-            this.targetElement = target;
-        } else if (typeof document !== 'undefined') {
-            this.targetElement = document.documentElement;
+        if (typeof document !== 'undefined') {
+            this.targetElement = target ?? document.documentElement;
         }
     }
 
-    /** 获取当前绑定的目标 DOM 元素 */
-    public getTarget(): HTMLElement | null {
+    /**
+     * 获取所有可用主题预设列表。
+     * 优先从 settingsStore 中读取，若未配置则读取静态推荐预设。
+     */
+    public getAvailableThemes(): PresetItem<ThemePresetData>[] {
+        const storeThemes = settingsStore.getPresets<ThemePresetData>('themes');
+        if (storeThemes && storeThemes.length > 0) {
+            return storeThemes;
+        }
+        return (recommendedThemesData as PresetItem<ThemePresetData>[]) || [];
+    }
+
+    /**
+     * 根据主题标识符查询主题数据项。
+     *
+     * @param id 主题标识符
+     */
+    public getThemeById(id: string): PresetItem<ThemePresetData> | undefined {
+        const list = this.getAvailableThemes();
+        return list.find((item) => item.id === id);
+    }
+
+    /**
+     * 应用当前配置中心中保存的主题。
+     *
+     * @param overrides 额外的局部微调覆盖项（如用户自定义的圆角或主色）
+     */
+    public applyCurrentTheme(overrides?: Partial<ThemePresetData>): void {
         if (!this.targetElement && typeof document !== 'undefined') {
             this.targetElement = document.documentElement;
         }
-        return this.targetElement;
+
+        const currentThemeId = (settingsStore.get('themePreset') as string) || 'dark';
+        this.applyTheme(currentThemeId, overrides);
     }
 
     /**
-     * 开启监听全局设置中的主题变更事件
+     * 将指定主题的 CSS 变量设计令牌应用到目标容器。
+     *
+     * @param themeId 主题标识符
+     * @param overrides 额外的局部微调覆盖项
+     */
+    public applyTheme(themeId: string, overrides?: Partial<ThemePresetData>): void {
+        if (!this.targetElement && typeof document !== 'undefined') {
+            this.targetElement = document.documentElement;
+        }
+        if (!this.targetElement || !this.targetElement.style) {
+            return;
+        }
+
+        const theme = this.getThemeById(themeId) ?? this.getThemeById('dark') ?? this.getAvailableThemes()[0];
+        if (!theme || !theme.data) {
+            return;
+        }
+
+        const merged: ThemePresetData = {
+            ...theme.data,
+            ...overrides,
+        };
+
+        const target = this.targetElement;
+
+        // 1. 设置主题标记与深浅配色标识
+        const isLight = themeId === 'light' || themeId === 'sky-light';
+        target.setAttribute('data-theme', themeId);
+        target.style.setProperty('--da-color-scheme', isLight ? 'light' : 'dark');
+
+        // 2. 基础颜色令牌映射
+        if (merged.accentColor) {
+            target.style.setProperty('--da-accent-color', merged.accentColor);
+            const rgb = hexToRgb(merged.accentColor);
+            if (rgb) {
+                target.style.setProperty('--da-accent-rgb', rgb);
+            }
+        }
+        if (merged.accentCyan) {
+            target.style.setProperty('--da-accent-cyan', merged.accentCyan);
+            const rgb = hexToRgb(merged.accentCyan);
+            if (rgb) {
+                target.style.setProperty('--da-accent-cyan-rgb', rgb);
+            }
+        }
+        if (merged.bgPrimary) target.style.setProperty('--da-bg-primary', merged.bgPrimary);
+        if (merged.bgSecondary) target.style.setProperty('--da-bg-secondary', merged.bgSecondary);
+        if (merged.bgSidebar) target.style.setProperty('--da-bg-sidebar', merged.bgSidebar);
+        if (merged.bgCard) target.style.setProperty('--da-bg-card', merged.bgCard);
+        if (merged.bgCardHover) target.style.setProperty('--da-bg-card-hover', merged.bgCardHover);
+        if (merged.bgInput) target.style.setProperty('--da-bg-input', merged.bgInput);
+        if (merged.bgInputHover) target.style.setProperty('--da-bg-input-hover', merged.bgInputHover);
+        if (merged.textPrimary) target.style.setProperty('--da-text-primary', merged.textPrimary);
+        if (merged.textSecondary) target.style.setProperty('--da-text-secondary', merged.textSecondary);
+        if (merged.borderColor) target.style.setProperty('--da-border-color', merged.borderColor);
+        if (merged.borderHighlight) target.style.setProperty('--da-border-highlight', merged.borderHighlight);
+
+        // 3. 几何规格与毛玻璃滤镜
+        if (merged.borderRadius !== undefined) {
+            target.style.setProperty('--da-border-radius', `${merged.borderRadius}px`);
+        }
+        if (merged.radiusModal !== undefined) {
+            target.style.setProperty('--da-radius-modal', `${merged.radiusModal}px`);
+        }
+        if (merged.radiusCard !== undefined) {
+            target.style.setProperty('--da-radius-card', `${merged.radiusCard}px`);
+        }
+        if (merged.radiusInput !== undefined) {
+            target.style.setProperty('--da-radius-input', `${merged.radiusInput}px`);
+        }
+        if (merged.blurModal !== undefined) {
+            target.style.setProperty('--da-blur-modal', `${merged.blurModal}px`);
+        }
+        if (merged.blurPanel !== undefined) {
+            target.style.setProperty('--da-blur-panel', `${merged.blurPanel}px`);
+        }
+    }
+
+    /**
+     * 监听配置变更并联动更新主题。
      */
     public listenSettings(): void {
-        if (this.unbindEvent) {
-            this.unbindEvent();
+        if (this.unlistenSettingsCallback) {
+            return;
         }
-        this.unbindEvent = eventBus.on('settings:theme-changed', (themePreset: PresetItem<ThemePresetData>) => {
-            this.applyTheme(themePreset);
-        });
+
+        const handler = () => {
+            this.applyCurrentTheme();
+        };
+
+        eventBus.on('settings:updated', handler);
+        this.unlistenSettingsCallback = () => {
+            eventBus.off('settings:updated', handler);
+        };
     }
 
     /**
-     * 应用主题预设数据
-     * @param theme 预设项或裸主题数据
+     * 释放事件监听与容器引用。
      */
-    public applyTheme(theme: PresetItem<ThemePresetData> | ThemePresetData): void {
-        const target = this.getTarget();
-        if (!target) return;
-
-        const data: ThemePresetData = 'data' in theme ? (theme as PresetItem<ThemePresetData>).data : theme;
-        if (!data) return;
-
-        // 1. 判断并设置主题模式
-        const isLight = (theme as { id?: string }).id === 'light' ||
-            (typeof data.textPrimary === 'string' && data.textPrimary.toLowerCase() === '#0f172a');
-        const mode = isLight ? 'light' : 'dark';
-
-        target.setAttribute('data-da-mode', mode);
-        target.style.setProperty('--da-color-scheme', mode);
-        this.appliedCustomProperties.add('--da-color-scheme');
-
-        // 2. 注入颜色与基础变量
-        for (const [key, varName] of Object.entries(PROPERTY_VAR_MAP)) {
-            const rawVal = data[key];
-            if (rawVal === undefined || rawVal === null) continue;
-
-            const strVal = typeof rawVal === 'number' ? `${rawVal}px` : String(rawVal);
-            target.style.setProperty(varName, strVal);
-            this.appliedCustomProperties.add(varName);
-
-            // 派生计算 RGB 三元组变量
-            if (key === 'accentColor' && typeof rawVal === 'string') {
-                const rgb = hexToRgbString(rawVal);
-                if (rgb) {
-                    target.style.setProperty('--da-accent-rgb', rgb);
-                    this.appliedCustomProperties.add('--da-accent-rgb');
-                }
-            } else if (key === 'accentCyan' && typeof rawVal === 'string') {
-                const rgb = hexToRgbString(rawVal);
-                if (rgb) {
-                    target.style.setProperty('--da-accent-cyan-rgb', rgb);
-                    this.appliedCustomProperties.add('--da-accent-cyan-rgb');
-                }
-            }
-        }
-
-        // 3. 通用尺寸圆角扩展回退
-        if (data.borderRadius !== undefined) {
-            const radiusStr = `${data.borderRadius}px`;
-            if (data.radiusCard === undefined) {
-                target.style.setProperty('--da-radius-card', radiusStr);
-                this.appliedCustomProperties.add('--da-radius-card');
-            }
-            if (data.radiusModal === undefined) {
-                target.style.setProperty('--da-radius-modal', `${data.borderRadius + 2}px`);
-                this.appliedCustomProperties.add('--da-radius-modal');
-            }
-        }
-
-        // 4. 背景渐变角度与色值合成
-        if (data.bgPrimary && data.bgGradientEnd) {
-            const angle = typeof data.bgGradientAngle === 'number' ? data.bgGradientAngle : 140;
-            const gradientValue = `linear-gradient(${angle}deg, ${data.bgPrimary} 0%, ${data.bgGradientEnd} 100%)`;
-            target.style.setProperty('--da-bg-gradient', gradientValue);
-            this.appliedCustomProperties.add('--da-bg-gradient');
-        }
-    }
-
-    /**
-     * 重置清除由本服务注入的所有 CSS 变量并移除 mode 属性
-     */
-    public resetTheme(): void {
-        const target = this.getTarget();
-        if (!target) return;
-
-        target.removeAttribute('data-da-mode');
-        for (const varName of this.appliedCustomProperties) {
-            target.style.removeProperty(varName);
-        }
-        this.appliedCustomProperties.clear();
-    }
-
-    /** 释放资源与事件解绑 */
     public dispose(): void {
-        if (this.unbindEvent) {
-            this.unbindEvent();
-            this.unbindEvent = null;
+        if (this.unlistenSettingsCallback) {
+            this.unlistenSettingsCallback();
+            this.unlistenSettingsCallback = null;
         }
-        this.resetTheme();
         this.targetElement = null;
     }
 }
 
-/** 全局主题服务单例 */
 export const themeService = new ThemeService();

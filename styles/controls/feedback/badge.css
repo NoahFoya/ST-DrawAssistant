@@ -34,10 +34,10 @@
 
 /* 有新版本可用时的状态修饰符：切换为绿色并附加发光动画 */
 .da-version-badge--has-update {
-    color: var(--da-color-success, #30d158);
-    background: rgba(48, 209, 88, 0.12);
-    border-color: rgba(48, 209, 88, 0.35);
-    box-shadow: 0 0 10px rgba(48, 209, 88, 0.2);
+    color: var(--da-color-success);
+    background: rgba(var(--da-color-success-rgb), 0.12);
+    border-color: rgba(var(--da-color-success-rgb), 0.35);
+    box-shadow: 0 0 10px rgba(var(--da-color-success-rgb), 0.2);
     animation: da-update-pill-glow 2.5s infinite ease-in-out;
 }
 
@@ -53,15 +53,15 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--da-color-success, #30d158);
-    box-shadow: 0 0 6px rgba(48, 209, 88, 0.8);
+    background: var(--da-color-success);
+    box-shadow: 0 0 6px rgba(var(--da-color-success-rgb), 0.8);
     animation: da-pulse-dot 1.5s infinite;
 }
 
 .da-version-update-tag {
     font-size: 0.85em;
     font-weight: 700;
-    color: var(--da-color-success, #30d158);
+    color: var(--da-color-success);
 }
 
 /* 2. 通用语义状态微标族 */
@@ -78,9 +78,9 @@
 
 /* 成功 / 就绪 / 在线状态 */
 .da-badge--success {
-    background: rgba(48, 209, 88, 0.15) !important;
-    border-color: rgba(48, 209, 88, 0.35) !important;
-    color: var(--da-color-success, #30d158) !important;
+    background: rgba(var(--da-color-success-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-success-rgb), 0.35) !important;
+    color: var(--da-color-success) !important;
 }
 
 /* 品牌强调 / 活跃状态 */
@@ -92,17 +92,17 @@
 
 /* 次级弱化 / 离线 / 默认状态 */
 .da-badge--muted {
-    background: var(--da-bg-input, rgba(255, 255, 255, 0.05));
+    background: var(--da-bg-input);
     border-color: var(--da-border-color);
-    color: var(--da-text-muted, #9ca3af);
+    color: var(--da-text-muted);
 }
 
 /* 警告 / 待处理 / 连通延迟告警 */
 .da-badge--warn,
 .da-badge--warning {
-    background: rgba(255, 159, 10, 0.15) !important;
-    color: var(--da-color-warn, #ff9f0a) !important;
-    border: 1px solid rgba(255, 159, 10, 0.35) !important;
+    background: rgba(var(--da-color-warn-rgb), 0.15) !important;
+    color: var(--da-color-warn) !important;
+    border: 1px solid rgba(var(--da-color-warn-rgb), 0.35) !important;
 }
 
 /* 异常 / 错误 / 依赖模型失效告警 */
@@ -110,9 +110,9 @@
 .da-badge--error,
 .da-badge--invalid,
 .da-badge--missing {
-    background: rgba(255, 69, 58, 0.15) !important;
-    color: var(--da-color-error, #ff453a) !important;
-    border: 1px solid rgba(255, 69, 58, 0.35) !important;
+    background: rgba(var(--da-color-error-rgb), 0.15) !important;
+    color: var(--da-color-error) !important;
+    border: 1px solid rgba(var(--da-color-error-rgb), 0.35) !important;
 }
 
 

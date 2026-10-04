@@ -31,13 +31,13 @@
 }
 
 .da-btn:hover {
-    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
-    border-color: rgba(255, 255, 255, 0.16);
+    background: var(--da-bg-hover);
+    border-color: var(--da-border-highlight);
 }
 
 .da-btn:active {
     transform: scale(0.97);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--da-bg-active);
 }
 
 /* 键盘 Tab 聚焦时的高对比度焦点指示 */
@@ -53,7 +53,7 @@
     border-color: var(--da-accent-color) !important;
     color: var(--da-text-on-accent, #ffffff) !important;
     font-weight: 600;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), var(--da-inset-top-light) !important;
 }
 
 .da-btn--primary:hover {
@@ -65,33 +65,33 @@
 
 /* Secondary 次要按钮：半透明低对比度底色 */
 .da-btn--secondary {
-    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.04));
+    background: var(--da-bg-subtle);
     border-color: var(--da-border-color);
     color: var(--da-text-primary);
 }
 
 /* Danger 危险按钮：警示红半透明背景与红边框，用于清空与删除操作 */
 .da-btn--danger {
-    background: rgba(255, 69, 58, 0.12);
-    border-color: rgba(255, 69, 58, 0.35);
-    color: var(--da-color-error, #ff453a);
+    background: rgba(var(--da-color-error-rgb), 0.12);
+    border-color: rgba(var(--da-color-error-rgb), 0.35);
+    color: var(--da-color-error);
 }
 
 .da-btn--danger:hover {
-    background: rgba(255, 69, 58, 0.2);
-    box-shadow: 0 0 8px rgba(255, 69, 58, 0.2);
+    background: rgba(var(--da-color-error-rgb), 0.2);
+    box-shadow: 0 0 8px rgba(var(--da-color-error-rgb), 0.2);
 }
 
 /* Success 成功按钮变体：用于保存完毕或连通验证成功的即时反馈 */
 .da-btn--success {
-    background: rgba(52, 199, 89, 0.15) !important;
-    border-color: rgba(52, 199, 89, 0.4) !important;
-    color: var(--da-color-success, #34c759) !important;
+    background: rgba(var(--da-color-success-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-success-rgb), 0.4) !important;
+    color: var(--da-color-success) !important;
 }
 
 .da-btn--success:hover {
-    background: rgba(52, 199, 89, 0.25) !important;
-    box-shadow: 0 0 8px rgba(52, 199, 89, 0.25) !important;
+    background: rgba(var(--da-color-success-rgb), 0.25) !important;
+    box-shadow: 0 0 8px rgba(var(--da-color-success-rgb), 0.25) !important;
 }
 
 /* 加载中与禁用状态 */
@@ -147,7 +147,8 @@
     box-sizing: border-box;
 }
 
-/* 宿主消息正文中专门承载插槽的段落紧凑样式，消除默认段落造成的巨大空行 */
+/* 宿主消息正文中承载楼层交互组件的段落紧凑样式，消除默认段落造成的过度空行 */
+.mes_text p.da-floor-action-p,
 .mes_text p.da-floor-slot-p {
     margin-top: 4px !important;
     margin-bottom: 4px !important;
@@ -161,7 +162,7 @@
     padding: 4px 12px;
     border-radius: var(--da-radius-pill, 100px);
     border: 1px solid var(--da-border-color);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--da-bg-subtle);
     color: var(--da-text-primary);
     font-family: var(--da-font-family);
     font-size: var(--da-font-size-xs, 0.78rem);
@@ -175,7 +176,7 @@
 }
 
 .da-floor-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--da-bg-hover);
     border-color: rgba(var(--da-accent-rgb), 0.45);
 }
 
@@ -191,11 +192,11 @@
 .da-floor-btn--loading {
     opacity: 0.65;
     cursor: not-allowed;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--da-bg-subtle);
 }
 
 .da-floor-btn--default {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--da-bg-subtle);
     color: var(--da-text-primary);
 }
 
@@ -219,28 +220,28 @@
 /* 楼层生图完成状态 (.da-floor-btn--done)
    使用柔和绿色调边框与背景表示成功出图，鼠标悬停时增强对比度。 */
 .da-floor-btn--done {
-    background: rgba(48, 209, 88, 0.12);
-    border-color: rgba(48, 209, 88, 0.32);
-    color: var(--da-color-success, #30d158);
+    background: rgba(var(--da-color-success-rgb), 0.12);
+    border-color: rgba(var(--da-color-success-rgb), 0.32);
+    color: var(--da-color-success);
 }
 
 .da-floor-btn--done:hover {
-    background: rgba(48, 209, 88, 0.2);
-    border-color: rgba(48, 209, 88, 0.5);
-    color: #ffffff;
+    background: rgba(var(--da-color-success-rgb), 0.2);
+    border-color: rgba(var(--da-color-success-rgb), 0.5);
+    color: var(--da-text-on-accent, #ffffff);
 }
 
 /* 楼层生图异常状态 (.da-floor-btn--error)
    使用错误警示红色调提示生图失败或网络中断，点击可引导重试。 */
 .da-floor-btn--error {
-    background: rgba(255, 69, 58, 0.12);
-    border-color: rgba(255, 69, 58, 0.35);
-    color: var(--da-color-error, #ff453a);
+    background: rgba(var(--da-color-error-rgb), 0.12);
+    border-color: rgba(var(--da-color-error-rgb), 0.35);
+    color: var(--da-color-error);
 }
 
 .da-floor-btn--error:hover {
-    background: rgba(255, 69, 58, 0.22);
-    border-color: rgba(255, 69, 58, 0.55);
+    background: rgba(var(--da-color-error-rgb), 0.22);
+    border-color: rgba(var(--da-color-error-rgb), 0.55);
 }
 
 @keyframes da-floor-pulse {

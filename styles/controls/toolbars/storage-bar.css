@@ -49,20 +49,20 @@
 }
 
 .da-storage-pct-badge.is-warning {
-    color: var(--da-color-warn-subtle, #f59e0b);
-    border-color: rgba(245, 158, 11, 0.4);
+    color: var(--da-color-warn);
+    border-color: rgba(var(--da-color-warn-rgb), 0.4);
 }
 
 .da-storage-pct-badge.is-danger {
-    color: var(--da-color-danger, #ef4444);
-    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--da-color-error);
+    border-color: rgba(var(--da-color-error-rgb), 0.4);
 }
 
 /* 3. 进度条轨道与填充条 */
 .da-storage-track {
     width: 100%;
     height: 8px;
-    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-input);
     border-radius: var(--da-radius-pill);
     overflow: hidden;
     position: relative;
@@ -71,17 +71,17 @@
 
 .da-storage-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--da-accent-color), #38ef7d);
+    background: var(--da-accent-gradient);
     border-radius: var(--da-radius-pill);
     transition: width 0.35s ease, background 0.35s ease;
 }
 
 .da-storage-fill.is-warning {
-    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    background: linear-gradient(90deg, var(--da-color-warn), var(--da-color-fav));
 }
 
 .da-storage-fill.is-danger {
-    background: linear-gradient(90deg, #ef4444, #f87171);
+    background: linear-gradient(90deg, var(--da-color-error), rgba(var(--da-color-error-rgb), 0.7));
 }
 
 /* 4. 存储统计指标卡片网格与操作条带 (.da-storage-stats-grid)
@@ -141,11 +141,11 @@
 
 /* 存储配额异常或超限错误提示条 */
 .da-storage-error-hint {
-    color: var(--da-color-error, #ff453a);
+    color: var(--da-color-error);
     font-size: var(--da-font-size-xs, 0.76rem);
     padding: 6px 10px;
-    background: rgba(255, 69, 58, 0.08);
-    border: 1px solid rgba(255, 69, 58, 0.25);
+    background: rgba(var(--da-color-error-rgb), 0.08);
+    border: 1px solid rgba(var(--da-color-error-rgb), 0.25);
     border-radius: var(--da-radius-sm, 6px);
     text-align: center;
 }

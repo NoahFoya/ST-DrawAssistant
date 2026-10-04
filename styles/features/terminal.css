@@ -70,3 +70,119 @@
 .da-log-level--info  { color: var(--da-terminal-teal, #39c5bb);   }
 .da-log-level--warn  { color: var(--da-terminal-yellow, #d29922); }
 .da-log-level--error { color: var(--da-terminal-red, #f85149);    }
+
+/* 4. 终端外层包裹容器与顶部紧凑控制栏 */
+.da-terminal-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-terminal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+}
+
+.da-terminal-toolbar .da-select-wrapper {
+    width: 140px;
+    flex-shrink: 0;
+}
+
+.da-terminal-toolbar .da-input-wrapper {
+    flex: 1;
+    min-width: 120px;
+}
+
+.da-terminal-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.da-log-entry {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 5. 单行悬停快捷操作按钮 */
+.da-log-line {
+    position: relative;
+    padding: 2px 4px;
+    border-radius: var(--da-radius-xs, 4px);
+    transition: background-color 0.15s ease;
+}
+
+.da-log-line:hover {
+    background-color: var(--da-bg-subtle);
+}
+
+.da-log-actions {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.da-log-line:hover .da-log-actions {
+    display: inline-flex;
+}
+
+.da-log-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--da-terminal-muted, #8b949e);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.da-log-action-btn:hover {
+    color: var(--da-terminal-text, #e6edf3);
+    background-color: var(--da-bg-hover);
+}
+
+.da-log-action-btn.is-success {
+    color: var(--da-terminal-teal, #39c5bb);
+}
+
+.da-log-action-btn.is-error {
+    color: var(--da-terminal-red, #f85149);
+}
+
+/* 6. 结构化对象详情展开代码块 */
+.da-log-details-block {
+    margin: 4px 0 6px 24px;
+    padding: 8px 10px;
+    background: var(--da-bg-input);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-xs, 4px);
+    font-family: var(--da-font-mono, Consolas, monospace);
+    font-size: 11px;
+    color: var(--da-terminal-muted);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    user-select: text;
+}
+
+/* 7. 空态提示 */
+.da-log-empty-tip {
+    color: var(--da-terminal-muted, #8b949e);
+    text-align: center;
+    padding: 24px 0;
+    font-size: 12px;
+    user-select: none;
+}
+

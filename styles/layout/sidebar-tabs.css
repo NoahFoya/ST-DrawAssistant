@@ -159,3 +159,15 @@
     color: var(--da-accent-color);
     opacity: 1;
 }
+
+/* 5. 侧边栏功能分组小标题 (.da-sidebar-group-title) */
+.da-sidebar-group-title {
+    font-size: var(--da-font-size-xs, 11px);
+    font-weight: 600;
+    color: var(--da-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--da-space-xs, 4px) var(--da-space-sm, 8px) 2px;
+    user-select: none;
+    line-height: 1.2;
+}

@@ -1,181 +1,168 @@
 /**
- * ST-DrawAssistant 楼层生图触发与状态反馈按钮组件。
+ * 宿主消息正文原生生图动作按钮组件 (FloorActionButton)。
  *
  * @remarks
- * 嵌入在聊天消息楼层绘图指令对应位置，承载触发绘图、排队/进度展示、
- * 点击取消与失败重试等完整业务状态流转。
+ * 组件职责与状态机规范：
+ * 1. 纯视觉状态机模型：ready (就绪) -> pending (排队中) -> generating (生成中) -> done (完成) / error (失败)；
+ * 2. 交互分流：
+ *    - 空闲/终态 (ready / done / error)：点击触发 onTrigger 提交任务；
+ *    - 进行态 (pending / generating)：点击触发 onCancel 委托取消任务；
+ * 3. 边界解耦：不直接依赖具体的后台 TaskId 或网络通信细节，仅通过状态变更驱动按钮视觉图标与文本更新。
  */
 
-import type { UIComponent } from '../components/types';
-import { eventBus, type TaskStatusEventData } from '../../util/event-bus';
-import type { TaskProgressInfo } from '@types';
+import type { UIComponent } from '../types';
 
-export type FloorButtonState = 'ready' | 'pending' | 'progress' | 'done' | 'error';
+/** 楼层生图按钮视觉状态流转定义 */
+export type FloorButtonState = 'ready' | 'pending' | 'generating' | 'done' | 'error';
 
+/** 楼层生图按钮配置参数 */
 export interface FloorActionButtonOptions {
-    /** 绑定的会话标识符 */
+    /** 绑定的会话唯一标识符 */
     chatId: string;
-    /** 绑定的楼层消息索引 */
+    /** 绑定的楼层消息数字索引 */
     messageId: number;
-    /** 绑定的插槽索引 (默认 0) */
-    slotIndex?: number;
-    /** 触发绘图回调 */
-    onTrigger?: () => Promise<string | undefined> | string | undefined;
-    /** 取消当前任务回调 */
-    onCancel?: (taskId: string) => void;
+    /** 绑定的绘图指令插槽序号 (默认 0) */
+    instructionIndex?: number;
+    /** 触发绘图回调函数 */
+    onTrigger?: () => Promise<void | string | undefined> | void | string | undefined;
+    /** 取消当前任务回调函数 */
+    onCancel?: () => void;
 }
 
 export class FloorActionButton implements UIComponent {
-    public readonly element: HTMLDivElement;
+    public readonly element: HTMLElement;
     public readonly buttonElement: HTMLButtonElement;
 
+    private readonly iconSpan: HTMLSpanElement;
     private readonly textSpan: HTMLSpanElement;
-    private state: FloorButtonState = 'ready';
-    private currentTaskId?: string;
+    private readonly spinnerSpan: HTMLSpanElement;
 
-    private unbindProgress: (() => void) | null = null;
-    private unbindStatus: (() => void) | null = null;
+    private state: FloorButtonState = 'ready';
     private clickHandler: (() => void) | null = null;
 
-    constructor(private readonly options: FloorActionButtonOptions) {
+    public constructor(private readonly options: FloorActionButtonOptions) {
         this.element = document.createElement('div');
-        this.element.classList.add('da-floor-btn-wrapper');
+        this.element.className = 'da-floor-action-wrapper';
 
         this.buttonElement = document.createElement('button');
         this.buttonElement.type = 'button';
-        this.buttonElement.classList.add('da-floor-btn', 'da-floor-btn--default');
+        this.buttonElement.className = 'da-floor-action-btn';
 
-        const iconSpan = document.createElement('span');
-        iconSpan.classList.add('da-floor-btn-placeholder');
-        iconSpan.textContent = '🎨';
-        this.buttonElement.appendChild(iconSpan);
+        this.iconSpan = document.createElement('span');
+        this.iconSpan.className = 'da-floor-action-btn__icon';
+        this.iconSpan.textContent = '🎨';
+
+        this.spinnerSpan = document.createElement('span');
+        this.spinnerSpan.className = 'da-floor-action-btn__spinner';
+        this.spinnerSpan.style.display = 'none';
 
         this.textSpan = document.createElement('span');
-        this.textSpan.classList.add('da-floor-btn-prompt');
+        this.textSpan.className = 'da-floor-action-btn__text';
         this.textSpan.textContent = '开始绘图';
+
+        this.buttonElement.appendChild(this.iconSpan);
+        this.buttonElement.appendChild(this.spinnerSpan);
         this.buttonElement.appendChild(this.textSpan);
 
         this.element.appendChild(this.buttonElement);
 
         this.bindUserInteractions();
-        this.bindTaskEvents();
     }
 
     private bindUserInteractions(): void {
         this.clickHandler = async () => {
-            if (this.state === 'ready' || this.state === 'error') {
+            if (this.state === 'ready' || this.state === 'error' || this.state === 'done') {
                 this.setState('pending');
                 try {
-                    const taskId = await this.options.onTrigger?.();
-                    if (taskId) {
-                        this.currentTaskId = taskId;
-                    }
+                    await this.options.onTrigger?.();
                 } catch {
-                    this.setState('error', '触发失败');
+                    this.setState('error', '触发失败，点击重试');
                 }
-            } else if ((this.state === 'pending' || this.state === 'progress') && this.currentTaskId) {
-                this.options.onCancel?.(this.currentTaskId);
+            } else if ((this.state === 'pending' || this.state === 'generating') && this.options.onCancel) {
+                try {
+                    this.options.onCancel();
+                } catch {
+                    // 忽略取消回调内部异常
+                }
             }
         };
+
         this.buttonElement.addEventListener('click', this.clickHandler);
     }
 
-    private bindTaskEvents(): void {
-        this.unbindProgress = eventBus.on(
-            'task:progress',
-            ({ taskId, progress }: { taskId: string; progress: TaskProgressInfo }) => {
-                if (this.currentTaskId && taskId === this.currentTaskId) {
-                    const pct = Math.round(progress.percent || 0);
-                    this.setState('progress', `生成中 ${pct}%... [点击取消]`);
-                }
-            }
-        );
 
-        this.unbindStatus = eventBus.on('task:status', (eventData: TaskStatusEventData) => {
-            if (this.currentTaskId && eventData.taskId === this.currentTaskId) {
-                if (eventData.status === 'generating') {
-                    this.setState('progress', '正在生成... [点击取消]');
-                } else if (eventData.status === 'completed') {
-                    this.setState('done', '绘制完成 ✓');
-                } else if (eventData.status === 'failed') {
-                    this.setState('error', '生成失败，点击重试 ✕');
-                } else if (eventData.status === 'cancelled') {
-                    this.setState('error', '已取消，点击重试 ✕');
-                }
-            }
-        });
-    }
-
-    /** 关联指定的生图任务标识符 */
-    public bindTaskId(taskId: string): void {
-        this.currentTaskId = taskId;
-    }
-
-    /** 获取当前状态 */
+    /**
+     * 获取当前按钮的状态机状态。
+     */
     public getState(): FloorButtonState {
         return this.state;
     }
 
     /**
-     * 切换按钮的展示状态与文案
+     * 切换按钮的展示状态与文案。
+     *
      * @param state 目标状态
-     * @param customText 自定义文案 (可选)
+     * @param customText 可选的覆盖文案
      */
     public setState(state: FloorButtonState, customText?: string): void {
         this.state = state;
 
-        // 清除旧的状态类
         this.buttonElement.classList.remove(
-            'da-floor-btn--default',
-            'da-floor-btn--pending',
-            'da-floor-btn--progress',
-            'da-floor-btn--done',
-            'da-floor-btn--error'
+            'da-floor-action-btn--generating',
+            'da-floor-action-btn--done',
+            'da-floor-action-btn--error'
         );
 
         switch (state) {
             case 'ready':
-                this.buttonElement.classList.add('da-floor-btn--default');
+                this.iconSpan.style.display = '';
+                this.spinnerSpan.style.display = 'none';
                 this.textSpan.textContent = customText || '开始绘图';
                 break;
             case 'pending':
-                this.buttonElement.classList.add('da-floor-btn--pending');
+                this.iconSpan.style.display = '';
+                this.iconSpan.textContent = '⏳';
+                this.spinnerSpan.style.display = 'none';
                 this.textSpan.textContent = customText || '排队中... [点击取消]';
                 break;
-            case 'progress':
-                this.buttonElement.classList.add('da-floor-btn--progress');
+            case 'generating':
+                this.buttonElement.classList.add('da-floor-action-btn--generating');
+                this.iconSpan.style.display = 'none';
+                this.spinnerSpan.style.display = '';
                 this.textSpan.textContent = customText || '正在生成... [点击取消]';
                 break;
             case 'done':
-                this.buttonElement.classList.add('da-floor-btn--done');
-                this.textSpan.textContent = customText || '绘制完成 ✓';
+                this.buttonElement.classList.add('da-floor-action-btn--done');
+                this.spinnerSpan.style.display = 'none';
+                this.iconSpan.style.display = '';
+                this.iconSpan.textContent = '🔄';
+                this.textSpan.textContent = customText || '重新生成';
                 break;
             case 'error':
-                this.buttonElement.classList.add('da-floor-btn--error');
-                this.textSpan.textContent = customText || '生成失败，点击重试 ✕';
+                this.buttonElement.classList.add('da-floor-action-btn--error');
+                this.spinnerSpan.style.display = 'none';
+                this.iconSpan.style.display = '';
+                this.iconSpan.textContent = '⚠️';
+                this.textSpan.textContent = customText || '生成失败，点击重试';
                 break;
         }
     }
 
+    /**
+     * 设置按钮的禁用状态。
+     */
     public setDisabled(disabled: boolean): void {
         this.buttonElement.disabled = disabled;
     }
 
+    /**
+     * 释放事件监听器与 DOM 节点引用。
+     */
     public dispose(): void {
         if (this.clickHandler) {
             this.buttonElement.removeEventListener('click', this.clickHandler);
             this.clickHandler = null;
         }
-        if (this.unbindProgress) {
-            this.unbindProgress();
-            this.unbindProgress = null;
-        }
-        if (this.unbindStatus) {
-            this.unbindStatus();
-            this.unbindStatus = null;
-        }
-        if (this.element.parentElement) {
-            this.element.parentElement.removeChild(this.element);
-        }
+        this.element.remove();
     }
 }

@@ -64,7 +64,7 @@
     align-items: center;
 }
 
-/* 2. 表单行内左右占位槽与尺寸规格 */
+/* 2. 表单行内左右区域与尺寸规格 */
 .da-slot {
     min-width: 0;
     min-height: 0;

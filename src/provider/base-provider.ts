@@ -111,8 +111,11 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
      * 使用指定或默认的通信通道发送 HTTP 请求。
      *
      * @remarks
-     * 委托全局 HttpClient 执行网络请求，自动处理通道分发、CSRF 凭据注入与瞬态故障重试。
-     * 未显式传入 transport 时，自动获取当前环境配置的有效通道 getTransport()。
+     * 委托全局 HttpClient 执行底层网络请求：
+     * - 通道决策：未显式指定时，实时从 SettingsStore 获取当前激活通道 (getTransport())；
+     * - 直连模式 (direct)：由浏览器直接向本地或远程服务端发起 fetch，自动享受本地回环 loopback 的 Mixed Content 豁免；
+     * - 中继模式 (relay)：通过 SillyTavern 宿主后端中转，自动装配并合并宿主 CSRF 请求头；
+     * - 瞬态重试：对 408/429/502/503/504 等网络状态码执行带随机抖动的指数退避重试。
      *
      * @param url 请求目标地址
      * @param init 请求配置项
@@ -146,6 +149,13 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
 
     /**
      * 支持 AbortSignal 的安全延迟等待。
+     *
+     * @remarks
+     * 生命周期与内存安全设计：
+     * 1. 信号前置检查：若传入的 signal 已处于 aborted 状态，立即同步抛出 AbortError，跳过定时器创建；
+     * 2. 定时完成即时解绑：定时器到期触发时，显式调用 removeEventListener 解绑 abort 监听器，
+     *    防止在频繁轮询进度场景下未触发的 abort 事件累积导致内存泄漏；
+     * 3. 中止即刻清理：收到 abort 信号时立即 clearTimeout 取消定时器并抛出 DOMException。
      *
      * @param ms 等待时间（毫秒）
      * @param signal 中止信号，收到信号时立即清理定时器并抛出 AbortError

@@ -9,8 +9,6 @@
 export interface ComfyUIProviderConfig {
     /** 服务端基础接口地址 */
     readonly serverUrl: string;
-    /** 当前激活的工作流模板标识符 */
-    readonly activeWorkflowProfileId?: string;
     /** 当前激活的绘图预设标识符 */
-    readonly activeDrawingProfileId?: string;
+    readonly activeDrawingPresetId?: string;
 }

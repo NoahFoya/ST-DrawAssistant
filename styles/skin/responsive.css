@@ -310,6 +310,7 @@
         min-width: 0 !important;
     }
 
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control-slot,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right {
         width: 100% !important;

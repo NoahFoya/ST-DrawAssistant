@@ -12,7 +12,7 @@ export interface OpenAIProviderConfig {
     /** 访问认证密钥 */
     readonly apiKey: string;
     /** 选用的具体上游服务商标识 */
-    readonly activeProvider?: string;
+    readonly serviceId?: string;
     /** 当前激活的绘图预设标识符 */
-    readonly activeDrawingProfileId?: string;
+    readonly activeDrawingPresetId?: string;
 }

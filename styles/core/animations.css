@@ -2,11 +2,11 @@
  * 样式系统核心关键帧动画定义。
  *
  * @remarks
- * 声明淡入淡出、平滑缩放进入、边框流光与状态指示脉冲等基础关键帧。
- * 支持 prefers-reduced-motion 无障碍偏好，在系统减弱动效设置下平滑降级。
+ * 声明淡入淡出、缩放进入、边框流光与状态指示脉冲等基础关键帧。
+ * 支持 prefers-reduced-motion 无障碍偏好，在系统开启减弱动态效果时自动禁用非必要动画。
  */
 
-/* 1. 视图进入与平滑淡入关键帧 */
+/* 1. 视图进入与淡入关键帧 */
 @keyframes da-fadein {
     from {
         opacity: 0;
@@ -61,27 +61,27 @@
 
 /* 连通探测与更新指示小圆点发光脉冲 */
 @keyframes da-pulse-dot {
-    0%, 100% { box-shadow: 0 0 3px rgba(139, 92, 246, 0.4); }
-    50%      { box-shadow: 0 0 10px rgba(139, 92, 246, 0.85); }
+    0%, 100% { box-shadow: 0 0 3px rgba(var(--da-accent-rgb), 0.4); }
+    50%      { box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.85); }
 }
 
 /* 未保存修改状态指示小圆点轻量脉冲动画 */
 @keyframes da-pulse-dirty {
     0%, 100% {
-        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+        box-shadow: 0 0 0 0 rgba(var(--da-color-warn-rgb), 0.4);
     }
     50% {
-        box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.45);
+        box-shadow: 0 0 8px 2px rgba(var(--da-color-warn-rgb), 0.45);
     }
 }
 
 /* 版本更新徽标柔和发光动画 */
 @keyframes da-update-pill-glow {
     0%, 100% {
-        box-shadow: 0 0 6px rgba(16, 185, 129, 0.25);
+        box-shadow: 0 0 6px rgba(var(--da-color-success-rgb), 0.25);
     }
     50% {
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.55);
+        box-shadow: 0 0 12px rgba(var(--da-color-success-rgb), 0.55);
     }
 }
 

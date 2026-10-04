@@ -12,5 +12,5 @@ export interface NovelAIProviderConfig {
     /** 访问认证密钥 */
     readonly apiKey: string;
     /** 当前激活的绘图预设标识符 */
-    readonly activeDrawingProfileId?: string;
+    readonly activeDrawingPresetId?: string;
 }

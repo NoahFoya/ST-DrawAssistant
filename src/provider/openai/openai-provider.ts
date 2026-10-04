@@ -1,12 +1,15 @@
 /**
- * OpenAI 兼容绘图服务提供方适配器。
+ * OpenAI 兼容绘图服务提供方适配器 (OpenAIProvider)。
  *
  * @remarks
  * 兼容 OpenAI `/v1/images/generations` 规范的通用适配器，
- * 支持 GPT Image、Grok Imagine、Gemini OpenAI-compat 等第三方云端或自建服务：
- * - 认证方式：请求头携带 Authorization: Bearer <apiKey>；
- * - 数据提取：优先请求并解析 b64_json 字段以避免临时 URL 快速失效与跨域限制，在仅返回 url 时执行二次拉取；
- * - 模型发现：通过 /v1/models 接口动态发现具有图像生成能力的目标模型。
+ * 支持 GPT Image、Grok Imagine、Gemini OpenAI-compat 等第三方云端或自建兼容服务：
+ * 1. 认证规范：请求头携带 `Authorization: Bearer <apiKey>`；
+ * 2. 图像二进制数据提取：默认显式指定 `response_format: 'b64_json'`，直接解析 Base64 编码转换为 PNG Blob，
+ *    避免临时云端图片 URL 几分钟后过期失效或前端直连被 CORS 跨域策略阻断；
+ * 3. 提示词清洗：自动剥离 Stable Diffusion 专用的 `<lora:...>` 语法标签，避免污染自然语言多模态大模型的语义理解；
+ * 4. 纯净正向词请求：云端标准接口不支持 negative_prompt 字段，负向提示词不组装进请求体；
+ * 5. 模型发现与连通性：通过 GET /v1/models 探测服务可用性并提取包含 image/vision/dall-e/imagine 关键词的候选模型。
  */
 
 import type {
@@ -18,27 +21,14 @@ import type {
     ImageGenerationMetadata,
     OpenAIProviderConfig,
     DrawingPresetData,
+    PromptPresetData,
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
+import { logger } from '../../util/logger';
+import { base64ToBlob } from '../../util/http-client';
 
 /** OpenAI 兼容提供方初始化配置项 */
 export interface OpenAIProviderOptions extends BaseProviderOptions {}
-
-/**
- * 将 Base64 字符串解码为 Blob。
- *
- * @param b64 Base64 编码图像字符串（可含 data URI 前缀）
- * @param mimeType 图像 MIME 类型
- */
-function base64ToBlob(b64: string, mimeType = 'image/png'): Blob {
-    const raw = b64.includes(',') ? b64.split(',')[1] : b64;
-    const binaryStr = atob(raw);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-    }
-    return new Blob([bytes], { type: mimeType });
-}
 
 /**
  * 将 width/height 组装为 OpenAI images/generations 的 size 字符串。
@@ -71,6 +61,29 @@ export function filterImageModels(models: Array<{ id: string }>): string[] {
 }
 
 /**
+ * 解析 OpenAI 兼容服务的目标模型标识符。
+ *
+ * @remarks
+ * 优先级：单次覆盖参数 model > 单次覆盖参数 customModel > 预设 customModel > 预设 baseModel > 默认模型 (dall-e-3)。
+ *
+ * @param parameters 单次任务覆盖参数
+ * @param preset 当前绘图预设数据
+ * @returns 解析得到的有效模型名称
+ */
+export function resolveOpenAIModel(
+    parameters?: Record<string, unknown>,
+    preset?: DrawingPresetData
+): string {
+    return (
+        (parameters?.model as string | undefined) ??
+        (parameters?.customModel as string | undefined) ??
+        (preset?.customModel as string | undefined) ??
+        (preset?.baseModel as string | undefined) ??
+        'dall-e-3'
+    );
+}
+
+/**
  * OpenAI 兼容绘图服务提供方实现类。
  */
 export class OpenAIProvider extends BaseGenerationProvider {
@@ -89,7 +102,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务基础地址。
      *
      * @remarks
-     * 读取配置中心的 OpenAI 兼容服务地址，未配置时回退为默认公共端点 (https://api.openai.com)。
+     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com)。
      * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -180,7 +193,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
             const data = (await response.json()) as { data?: Array<{ id: string }> } | Array<{ id: string }>;
 
-            // 兼容 { data: [...] } 与直接数组两种响应格式
+            // 支持 { data: [...] } 与扁平数组两种响应格式
             const models = Array.isArray(data) ? data : (data as { data?: Array<{ id: string }> }).data ?? [];
             return filterImageModels(models);
         } catch {
@@ -218,31 +231,82 @@ export class OpenAIProvider extends BaseGenerationProvider {
         const maxTimeoutMs = this.getTimeoutMs();
 
         let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore && config?.activeDrawingProfileId) {
-            drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                'drawing',
-                config.activeDrawingProfileId,
-                'openai'
-            )?.data;
+        if (this._settingsStore) {
+            const activeDrawingId = config?.activeDrawingPresetId;
+            if (activeDrawingId) {
+                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
+                    'drawing',
+                    activeDrawingId,
+                    'openai'
+                )?.data;
+            }
+            if (!drawingPreset && typeof this._settingsStore.getPresets === 'function') {
+                const allPresets = this._settingsStore.getPresets<DrawingPresetData>('drawing', 'openai');
+                if (allPresets && allPresets.length > 0) {
+                    drawingPreset = allPresets[0].data;
+                }
+            }
         }
 
-        const resolvedModel =
-            (params.model as string | undefined) ??
-            (drawingPreset?.baseModel as string | undefined) ??
-            'dall-e-3';
+        // 1. 尝试从绑定的提示词预设方案中解析自然语言模板 (SSOT)
+        let resolvedPrompt = request.prompt;
+        const promptPresetId = (params.promptPresetId ?? drawingPreset?.promptPresetId) as string | undefined;
+        if (this._settingsStore && promptPresetId) {
+            const promptPreset = this._settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId)?.data;
+            if (promptPreset) {
+                const prefix = (promptPreset.positivePrefix || '').trim();
+                const suffix = (promptPreset.positiveSuffix || '').trim();
+                if (prefix) resolvedPrompt = `${prefix}, ${resolvedPrompt}`;
+                if (suffix) resolvedPrompt = `${resolvedPrompt}, ${suffix}`;
+            }
+        }
+
+        const resolvedModel = resolveOpenAIModel(params, drawingPreset);
 
         const resolvedWidth = (params.width ?? drawingPreset?.width) as number | undefined;
         const resolvedHeight = (params.height ?? drawingPreset?.height) as number | undefined;
         const sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
 
+        const resolvedQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
+        const resolvedStyle = (params.style ?? drawingPreset?.style) as string | undefined;
+
+        // 2. 清洗剥离 SD 专用 <lora:...> 语法，防止污染云端大模型对自然语言提示词的理解
+        resolvedPrompt = resolvedPrompt
+            .replace(/<lora:[^>]+>/gi, '')
+            .replace(/,\s*,+/g, ',')
+            .replace(/^\s*,\s*|\s*,\s*$/g, '')
+            .trim();
+
+        // 3. 组装标准生成请求体 (云端接口原生不支持负向提示词，严格保持纯净正向词请求)
         const requestBody: Record<string, unknown> = {
-            prompt: request.prompt,
+            prompt: resolvedPrompt,
             n: 1,
             response_format: 'b64_json',
         };
 
         if (resolvedModel) requestBody['model'] = resolvedModel;
         if (sizeStr) requestBody['size'] = sizeStr;
+        if (resolvedQuality) requestBody['quality'] = resolvedQuality;
+        if (resolvedStyle) requestBody['style'] = resolvedStyle;
+
+        // 3. 自定义 JSON 请求体合并扩展
+        const customBodyJson = (params.customBodyJson ?? drawingPreset?.customBodyJson) as string | undefined;
+        if (customBodyJson && typeof customBodyJson === 'string' && customBodyJson.trim()) {
+            try {
+                const customObj = JSON.parse(customBodyJson.trim());
+                if (customObj && typeof customObj === 'object' && !Array.isArray(customObj)) {
+                    Object.assign(requestBody, customObj);
+                    // 确保核心必要参数优先级
+                    requestBody['prompt'] = resolvedPrompt;
+                    requestBody['n'] = 1;
+                    if (!requestBody['response_format']) {
+                        requestBody['response_format'] = 'b64_json';
+                    }
+                }
+            } catch (err) {
+                logger.warn('[OpenAIProvider] 自定义请求体 JSON 解析失败，跳过附加参数:', err);
+            }
+        }
 
         if (onProgress) {
             onProgress({ percent: 5, statusText: '提交生图请求...' });
@@ -292,7 +356,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
         let blob: Blob;
 
-        // 优先 b64_json 避免 URL 过期；不含 b64_json 时回退下载 url 字段指向的图像
+        // 优先解析 b64_json 避免 URL 过期；无 b64_json 时拉取 url 字段指向的图像
         if (firstImage.b64_json) {
             blob = base64ToBlob(firstImage.b64_json, 'image/png');
         } else if (firstImage.url) {
@@ -315,8 +379,9 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
-            prompt: request.prompt,
-            negativePrompt: request.negativePrompt,
+            prompt: resolvedPrompt,
+            // OpenAI /v1/images/generations 协议无负向提示词字段，执行元数据如实记录为 undefined
+            negativePrompt: undefined,
             engine: 'openai',
             durationMs,
             baseModel: resolvedModel,

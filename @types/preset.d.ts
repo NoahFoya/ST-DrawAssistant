@@ -36,8 +36,6 @@ export interface DrawingPresetData {
     clipName?: string;
     /** 分立式 VAE 模型文件名 */
     vaeName?: string;
-    /** SD-WebUI 专用 VAE 文件名 (兼容 SD-WebUI 私有字段) */
-    vae?: string;
     /** CLIP 跳过层数 */
     clipSkip?: number;
     /** 采样算法名称 */
@@ -59,7 +57,7 @@ export interface DrawingPresetData {
     /** 单批次生成数量 */
     batchSize?: number;
     /** 关联的提示词预设方案标识符 */
-    promptProfileId?: string;
+    promptPresetId?: string;
     /** 关联的文生图工作流方案标识符 */
     txt2imgWorkflowId?: string;
     /** 关联的图生图工作流方案标识符 */
@@ -76,16 +74,35 @@ export interface DrawingPresetData {
     hiresSteps?: number;
     /** 高清修复重绘幅度 (SD-WebUI) */
     hiresDenoise?: number;
+    /** OpenAI 兼容生图画质档位 (如 standard / hd) */
+    quality?: string;
+    /** OpenAI 兼容生图画面风格 (如 vivid / natural) */
+    style?: string;
+    /** OpenAI 兼容自定义模型标识 */
+    customModel?: string;
+    /** OpenAI 兼容自定义请求体 JSON 字符串 */
+    customBodyJson?: string;
     /** 引擎扩展参数通用键值 */
     [key: string]: unknown;
 }
 
+/** LoRA 配置条目模型 */
+export interface LoraConfigItem {
+    name: string;
+    weight: number;
+    trigger?: string;
+}
+
 /** 提示词方案负载类型 */
 export interface PromptPresetData {
-    prefix?: string;
-    suffix?: string;
-    defaultNegative?: string;
-    loras?: Array<{ name: string; weight: number; trigger?: string }>;
+    /** 正向提示词前缀 */
+    positivePrefix?: string;
+    /** 正向提示词后缀 */
+    positiveSuffix?: string;
+    /** 负向提示词 */
+    negativePrompt?: string;
+    /** LoRA 配置列表 */
+    loras?: LoraConfigItem[];
     [key: string]: unknown;
 }
 

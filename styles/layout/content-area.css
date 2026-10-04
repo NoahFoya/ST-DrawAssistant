@@ -47,7 +47,8 @@
 /* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
    纵向弹性容器，各功能卡片间距统一为 var(--da-space-lg, 16px)；
    加载时配合 da-fadein 产生平滑淡入动效。 */
-.st-da-root .da-tab-pane {
+.st-da-root .da-tab-pane,
+.st-da-root .da-tab-view {
     width: 100%;
     display: flex;
     flex-direction: column;
