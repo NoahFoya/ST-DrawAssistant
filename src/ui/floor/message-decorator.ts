@@ -619,10 +619,10 @@ export class MessageDecorator implements Disposable {
 
         this.activeImageContainers.set(containerKey, imageContainer);
 
-        // 5. 若配置开启了 saveToServer 且尚未转存，触发静默后台服务端转存备份
+        // 5. 若配置开启了 saveToServer 且尚未转存，触发静默后台服务端转存
         if (settings.saveToServer && !serverImageUrl && imageId) {
             const currentContext = window.SillyTavern?.getContext?.();
-            void sessionLifecycle.ensureSlotBackups({
+            void sessionLifecycle.ensureSlotServerImage({
                 chatId: currentContext?.chatId || 'default_chat',
                 messageId,
                 swipeId: currentContext?.chat?.[messageId]?.swipe_id ?? 0,

@@ -15,6 +15,7 @@ export * from './text-input';
 export * from './number-input';
 export * from './select';
 export * from './switch';
+export * from './segmented-control';
 export * from './checkbox';
 export * from './slider';
 export * from './badge';

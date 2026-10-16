@@ -352,7 +352,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         }
 
         const pollProgress = async (): Promise<void> => {
-            const progressUrl = `${serverUrl}/sdapi/v1/progress`;
+            const progressUrl = `${serverUrl}/sdapi/v1/progress?skip_current_image=true`;
             while (!pollingStopped && !pollingSignal.aborted) {
                 try {
                     await this.sleep(800, pollingSignal);
@@ -385,6 +385,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
                 timeoutMs: maxTimeoutMs,
+                retries: 0,
                 signal,
             },
             transport

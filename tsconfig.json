@@ -23,6 +23,8 @@
     "removeComments": false,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "baseUrl": ".",
     "paths": {
       "@types": ["@types/index.d.ts"],
@@ -31,10 +33,10 @@
       "@util/*": ["src/util/*"],
       "@store": ["src/store/index.ts"],
       "@store/*": ["src/store/*"],
-      "@function": ["src/function/index.ts"],
-      "@function/*": ["src/function/*"],
-      "@extension": ["src/extension/index.ts"],
-      "@extension/*": ["src/extension/*"],
+      "@pipeline": ["src/pipeline/index.ts"],
+      "@pipeline/*": ["src/pipeline/*"],
+      "@provider": ["src/provider/index.ts"],
+      "@provider/*": ["src/provider/*"],
       "@ui": ["src/ui/index.ts"],
       "@ui/*": ["src/ui/*"],
       "@config/*": ["config/*"]

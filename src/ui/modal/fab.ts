@@ -3,8 +3,8 @@
  *
  * @remarks
  * 提供屏幕常驻的绘图助手快捷交互入口：
- * 1. 拖拽与贴边吸附：支持鼠标与触控指针平滑拖拽，释放时自动贴靠至屏幕最近边缘；
- * 2. 位置持久化与一键重置：记忆用户拖拽坐标并在刷新后恢复，支持位置重置事件广播；
+ * 1. 拖拽与自由停靠：支持鼠标与触控指针平滑拖拽，释放时停留在用户设定位置并执行屏幕越界保护；
+ * 2. 位置持久化与重置：记忆用户拖拽坐标并在刷新后恢复，支持位置重置事件广播；
  * 3. 动态外观与个性化：响应 settingsStore 的显隐、透明度、预设 SVG 或自定义图片图标；
  * 4. 状态指示徽标：支持在右上方呈现计数徽标（出图完成、异常告警等）。
  */
@@ -153,7 +153,7 @@ export class FloatingActionButton implements UIComponent {
         }
 
         if (this.hasMoved) {
-            this.handleSnapAndSavePosition();
+            this.clampAndSavePosition();
             // 延时重置 hasMoved 状态，避免拖拽释放紧随派发的原生 click 事件误触点击回调
             if (this.clickSuppressionTimer !== null) {
                 clearTimeout(this.clickSuppressionTimer);
@@ -174,28 +174,23 @@ export class FloatingActionButton implements UIComponent {
         this.clickHandler?.();
     }
 
-    private handleSnapAndSavePosition(): void {
+    private clampAndSavePosition(): void {
         if (typeof window === 'undefined') return;
 
-        const triggerConfig = settingsStore.get('ui')?.trigger;
-        const autoSnap = triggerConfig?.autoSnap ?? false;
         const width = this.element.offsetWidth || 48;
+        const height = this.element.offsetHeight || 48;
+
+        const maxLeft = Math.max(0, window.innerWidth - width);
+        const maxTop = Math.max(0, window.innerHeight - height);
 
         let left = parseInt(this.element.style.left, 10) || 0;
-        const top = parseInt(this.element.style.top, 10) || 0;
+        let top = parseInt(this.element.style.top, 10) || 0;
 
-        if (autoSnap) {
-            const centerX = left + width / 2;
-            const screenCenter = window.innerWidth / 2;
-            const padding = 12;
+        left = Math.min(Math.max(0, left), maxLeft);
+        top = Math.min(Math.max(0, top), maxTop);
 
-            if (centerX < screenCenter) {
-                left = padding;
-            } else {
-                left = Math.max(padding, window.innerWidth - width - padding);
-            }
-            this.element.style.left = `${left}px`;
-        }
+        this.element.style.left = `${left}px`;
+        this.element.style.top = `${top}px`;
 
         try {
             const pos = { left, top };
@@ -226,15 +221,15 @@ export class FloatingActionButton implements UIComponent {
                 }
             }
         } catch {
-            // 恢复默认停靠位置
+            // 恢复基准停靠位置
         }
 
-        // 默认右下角停靠
+        // 右下角基准位置停靠
         this.resetPosition(false);
     }
 
     /**
-     * 重置悬浮球停靠位置至右下角默认位置。
+     * 重置悬浮球停靠位置至右下角基准位置。
      *
      * @param clearStorage 是否同时清除 localStorage 记录，默认为 true
      */

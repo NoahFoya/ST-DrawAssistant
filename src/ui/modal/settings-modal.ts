@@ -157,6 +157,10 @@ export class SettingsModal implements Disposable {
                     void this.checkActiveProviderHealth();
                 }
             }
+            if (data.key === 'showHelp' || data.keys?.includes('showHelp')) {
+                const showHelp = settingsStore.get('showHelp') ?? true;
+                this.modalElement?.setAttribute('data-da-show-help', String(showHelp));
+            }
         });
     }
 
@@ -485,6 +489,8 @@ export class SettingsModal implements Disposable {
         // 2. 弹窗主体视窗骨架 (.st-da-root.da-main-modal-inner)
         this.modalElement = document.createElement('div');
         this.modalElement.className = 'st-da-root da-main-modal-inner';
+        const showHelp = settingsStore.get('showHelp') ?? true;
+        this.modalElement.setAttribute('data-da-show-help', String(showHelp));
         this.modalElement.addEventListener('click', (e) => {
             e.stopPropagation();
         });

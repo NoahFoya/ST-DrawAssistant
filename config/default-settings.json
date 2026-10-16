@@ -5,6 +5,7 @@
   "activeProvider": "comfyui",
   "transport": "direct",
   "taskTimeoutMs": 120000,
+  "cancelOnChatChange": false,
   "saveToIndexedDB": true,
   "saveToServer": false,
   "enableThumbnail": true,
@@ -51,8 +52,7 @@
     "trigger": {
       "visible": true,
       "opacity": 0.95,
-      "icon": "palette",
-      "autoSnap": false
+      "icon": "palette"
     },
     "lightbox": {
       "enabled": true

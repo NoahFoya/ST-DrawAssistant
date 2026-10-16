@@ -325,6 +325,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(promptPayload),
+                retries: 0,
                 signal,
             },
             transport

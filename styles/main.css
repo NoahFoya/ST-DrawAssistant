@@ -31,6 +31,7 @@
 @import url('./controls/inputs/text-input.css');
 @import url('./controls/inputs/textarea.css');
 @import url('./controls/inputs/select.css');
+@import url('./controls/inputs/segmented-control.css');
 @import url('./controls/inputs/toggle.css');
 @import url('./controls/inputs/slider.css');
 

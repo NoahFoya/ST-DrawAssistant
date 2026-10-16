@@ -146,6 +146,24 @@ function sleepWithSignal(ms: number, signal?: AbortSignal | null): Promise<void>
 }
 
 /**
+ * 判定目标地址是否属于 SillyTavern 宿主本地同源端点。
+ */
+export function isHostOriginEndpoint(urlStr: string): boolean {
+    if (urlStr.startsWith('/') && !urlStr.startsWith('//')) {
+        return true;
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        try {
+            const parsed = new URL(urlStr, window.location.origin);
+            return parsed.origin === window.location.origin;
+        } catch {
+            return false;
+        }
+    }
+    return false;
+}
+
+/**
  * 判定目标地址是否属于本机回环地址。
  * 本地回环地址受浏览器安全策略保护与豁免。
  */
@@ -220,13 +238,14 @@ export class HttpClient {
                 if (!response.ok) {
                     let details: unknown;
                     try {
-                        details = await response.json();
-                    } catch {
+                        const rawText = await response.text();
                         try {
-                            details = await response.text();
+                            details = JSON.parse(rawText);
                         } catch {
-                            details = undefined;
+                            details = rawText || undefined;
                         }
+                    } catch {
+                        details = undefined;
                     }
 
                     const error = new HttpError(response.status, response.statusText, url, details);
@@ -281,19 +300,31 @@ export class HttpClient {
     }
 
     /**
-     * 执行经由 SillyTavern 宿主中继的接口请求。
+     * 执行经由 SillyTavern 宿主中继或宿主本地同源的接口请求。
      *
      * @remarks
-     * 自动合并宿主环境 CSRF 请求头凭据，并复用超时管理与瞬态故障重试逻辑。
+     * 安全凭据与中继机制：
+     * 1. 宿主同源路径（如 /api/...）：自动合并宿主环境 CSRF 认证头；
+     * 2. 外部跨域目标（http:// 或 https://）：通过宿主 /proxy/:url 路由安全代理中转，并附带访问宿主所需的 CSRF 凭据，
+     *    避免向第三方服务泄露宿主 CSRF 令牌。
      */
     public async fetchHost(endpoint: string, options: HttpRequestOptions = {}): Promise<Response> {
+        const isHostOrigin = isHostOriginEndpoint(endpoint);
+        let targetUrl = endpoint;
         const hostHeaders = getHostRequestHeaders();
+
         const mergedHeaders: Record<string, string> = {
-            ...hostHeaders,
             ...((options.headers as Record<string, string>) || {}),
         };
 
-        return this.fetchExternal(endpoint, {
+        if (isHostOrigin) {
+            Object.assign(mergedHeaders, hostHeaders);
+        } else if (endpoint.startsWith('http:') || endpoint.startsWith('https:')) {
+            targetUrl = `/proxy/${endpoint}`;
+            Object.assign(mergedHeaders, hostHeaders);
+        }
+
+        return this.fetchExternal(targetUrl, {
             ...options,
             headers: mergedHeaders,
         });

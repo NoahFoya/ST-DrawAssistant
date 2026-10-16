@@ -301,3 +301,34 @@
 .da-section-group.is-collapsed .da-section-group__content {
     display: none;
 }
+
+/* 7. 色彩选择器色板组 (.da-color-palette-group) 与色块项 (.da-color-swatch) */
+.da-color-palette-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    padding: 0;
+    transition: transform 0.15s var(--da-ease), border-color 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
+}
+
+.da-color-swatch:hover {
+    transform: scale(1.15);
+}
+
+.da-color-swatch.is-active {
+    border-color: #ffffff !important;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4) !important;
+    transform: scale(1.1);
+}
+

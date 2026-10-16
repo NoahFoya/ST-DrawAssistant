@@ -16,9 +16,9 @@
 
 import type { SlotMountTarget, DrawingSlotEntry } from '@types';
 import { urlPool, type UrlPool } from '../store/url-pool';
-import { settingsStore } from '../store/settings-store';
+import { settingsStore, type SettingsStore } from '../store/settings-store';
 import { logger } from '../util/logger';
-import { storageBackupService } from './storage-backup-service';
+import { serverStorageService } from './server-storage-service';
 
 /** 宿主上下文轻量抽象 */
 export interface HostContextLike {
@@ -46,6 +46,7 @@ export interface SessionLifecycleOptions {
     urlPoolInstance?: UrlPool;
     getContext?: () => HostContextLike | undefined;
     cancelTasksByChat?: (chatId: string, reason?: string) => void;
+    settingsStore?: SettingsStore;
 }
 
 /**
@@ -54,6 +55,7 @@ export interface SessionLifecycleOptions {
 export class SessionLifecycleManager {
     private readonly _urlPool: UrlPool;
     private readonly _getContext: () => HostContextLike | undefined;
+    private readonly _settingsStore: SettingsStore;
     private readonly _cleanups: Array<() => void> = [];
     private _cancelTasksByChat?: (chatId: string, reason?: string) => void;
 
@@ -63,6 +65,7 @@ export class SessionLifecycleManager {
     public constructor(options: SessionLifecycleOptions = {}) {
         this._urlPool = options.urlPoolInstance ?? urlPool;
         this._cancelTasksByChat = options.cancelTasksByChat;
+        this._settingsStore = options.settingsStore ?? settingsStore;
         this._getContext =
             options.getContext ??
             (() => {
@@ -108,8 +111,9 @@ export class SessionLifecycleManager {
             logger.info(`检测到宿主会话变更 (${oldChatId ?? 'none'} -> ${newChatId ?? 'none'})`);
             this._lastChatId = newChatId ?? context.chatId;
 
-            // 1. 若上一个会话存在未决任务，执行主动熔断取消，释放算力与网络资源
-            if (oldChatId && typeof this._cancelTasksByChat === 'function') {
+            // 1. 若配置开启了切换会话时自动取消任务 (cancelOnChatChange)，则中止旧会话未决任务
+            const shouldCancel = (this._settingsStore ?? settingsStore).get('cancelOnChatChange') ?? false;
+            if (shouldCancel && oldChatId && typeof this._cancelTasksByChat === 'function') {
                 try {
                     this._cancelTasksByChat(oldChatId, '宿主会话已切换');
                 } catch (err) {
@@ -217,17 +221,24 @@ export class SessionLifecycleManager {
                 : slotEntryOrId;
 
         const swipeId = target.swipeId ?? 0;
-        const existingSlot = message.extra?.drawings?.[swipeId]?.[target.instructionIndex];
+        let existingSlot = message.extra?.drawings?.[swipeId]?.[target.instructionIndex];
+        if (
+            !existingSlot &&
+            Array.isArray(message.swipe_info) &&
+            message.swipe_info[swipeId]?.extra?.drawings?.[swipeId]?.[target.instructionIndex]
+        ) {
+            existingSlot = message.swipe_info[swipeId].extra.drawings[swipeId][target.instructionIndex];
+        }
 
-        // 1. 合并已有路径并通过 storageBackupService 统筹服务端备份
+        // 1. 合并已有路径并通过 serverStorageService 统筹服务端转存
         const candidateEntry: DrawingSlotEntry = {
             ...existingSlot,
             ...baseEntry,
         };
 
         const charName = this.getCurrentCharacterName(context);
-        const backupResult = await storageBackupService.syncSlotBackup(candidateEntry, charName);
-        const finalImageUrl = backupResult.imageUrl || candidateEntry.imageUrl;
+        const syncResult = await serverStorageService.syncSlotServerImage(candidateEntry, charName);
+        const finalImageUrl = syncResult.imageUrl || candidateEntry.imageUrl;
 
         const entry: DrawingSlotEntry = {
             ...candidateEntry,
@@ -239,6 +250,18 @@ export class SessionLifecycleManager {
 
         message.extra.drawings[swipeId] = message.extra.drawings[swipeId] ?? {};
         message.extra.drawings[swipeId][target.instructionIndex] = entry;
+
+        // 跨 swipe 异步回写防御：
+        // SillyTavern 在切换 swipe 时会通过 syncMesToSwipe / syncSwipeToMes 在 message.extra 与
+        // message.swipe_info[swipeId].extra 之间做完整快照拷贝。若生图完成时当前激活的 swipe 已被切走，
+        // 必须同步回写到目标分支的 swipe_info[swipeId].extra 中，避免用户切回目标分支时被旧快照覆盖。
+        if (Array.isArray(message.swipe_info) && message.swipe_info[swipeId]) {
+            const targetSwipe = message.swipe_info[swipeId];
+            targetSwipe.extra = targetSwipe.extra ?? {};
+            targetSwipe.extra.drawings = targetSwipe.extra.drawings ?? {};
+            targetSwipe.extra.drawings[swipeId] = targetSwipe.extra.drawings[swipeId] ?? {};
+            targetSwipe.extra.drawings[swipeId][target.instructionIndex] = entry;
+        }
 
         // 2. 触发宿主消息局部更新事件
         if (context.eventSource?.emit && context.eventTypes?.MESSAGE_UPDATED) {
@@ -263,16 +286,16 @@ export class SessionLifecycleManager {
     }
 
     /**
-     * 确保指定消息插槽中的图像根据当前设置完成服务端备份。
+     * 确保指定消息插槽中的图像根据当前设置完成宿主服务端转存。
      *
      * @remarks
      * 仅在宿主实际渲染完成的楼层（CHARACTER_MESSAGE_RENDERED / USER_MESSAGE_RENDERED）中定位到图片时调用：
-     * 若当前设置开启了 saveToServer 且尚未转存，自动在后台补齐备份并持久化会话记录。
+     * 若当前设置开启了 saveToServer 且尚未转存，自动在后台补齐服务端存储并持久化会话记录。
      *
      * @param target 插槽挂载目标定位坐标
-     * @returns 是否执行了补全备份并保存成功
+     * @returns 是否执行了服务端转存并保存成功
      */
-    public async ensureSlotBackups(target: SlotMountTarget): Promise<boolean> {
+    public async ensureSlotServerImage(target: SlotMountTarget): Promise<boolean> {
         const context = this._getContext();
         if (!context || !Array.isArray(context.chat)) {
             return false;
@@ -291,34 +314,48 @@ export class SessionLifecycleManager {
         }
 
         const charName = this.getCurrentCharacterName(context);
-        const backupResult = await storageBackupService.syncSlotBackup(slot, charName);
-        if (!backupResult.hasChanges || !backupResult.imageUrl) {
+        const syncResult = await serverStorageService.syncSlotServerImage(slot, charName);
+        if (!syncResult.hasChanges || !syncResult.imageUrl) {
             return false;
         }
 
         return this.updateMessageSlot(target, {
             ...slot,
-            imageUrl: backupResult.imageUrl,
+            imageUrl: syncResult.imageUrl,
         });
     }
 
     /**
-     * 将图像备份并上传至宿主服务器（后台非阻塞执行）。
+     * 兼容别名：保留 ensureSlotBackups 避免旧调用破坏
+     */
+    public async ensureSlotBackups(target: SlotMountTarget): Promise<boolean> {
+        return this.ensureSlotServerImage(target);
+    }
+
+    /**
+     * 将图像上传至宿主服务器（后台非阻塞执行）。
      * 无论宿主当前处于哪一个活跃会话，均可安全独立执行，不依赖或修改前台活跃 chat 数组。
      *
      * @param imageId 图像唯一标识符
      * @param characterName 关联角色名称
      * @returns 成功转存后的服务端静态相对路径
      */
-    public async backupImageToServer(imageId: string, characterName?: string): Promise<string | undefined> {
+    public async uploadImageToServer(imageId: string, characterName?: string): Promise<string | undefined> {
         const settings = settingsStore.getSettings();
         if (!settings.saveToServer) {
             return undefined;
         }
 
         const resolvedCharName = characterName ?? this.getCurrentCharacterName(this._getContext());
-        const backupResult = await storageBackupService.syncSlotBackup({ imageId }, resolvedCharName);
-        return backupResult.imageUrl;
+        const syncResult = await serverStorageService.syncSlotServerImage({ imageId }, resolvedCharName);
+        return syncResult.imageUrl;
+    }
+
+    /**
+     * 兼容别名：保留 backupImageToServer 避免旧调用破坏
+     */
+    public async backupImageToServer(imageId: string, characterName?: string): Promise<string | undefined> {
+        return this.uploadImageToServer(imageId, characterName);
     }
 
     /**

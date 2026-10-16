@@ -1,12 +1,12 @@
 /**
- * 图像服务端备份与转存调度服务 (StorageBackupService)。
+ * 可选宿主服务端存储服务 (ServerStorageService)。
  *
  * @remarks
- * 架构原则与主从存储哲学：
- * 1. 唯一事实主库 (SSOT)：本地 IndexedDB 存储原始高清 Blob 与元数据，作为前端即时渲染与画廊交互的核心依据；
- * 2. 弱依赖副本：SillyTavern 宿主静态目录通过 POST /api/images/upload 转存，作为支持跨设备同步的次级备份；
- * 3. 容错与非阻塞：服务端上传失败或网络中断时安全捕获并返回 null，绝不中断前端主流程或阻塞楼层秒显时序；
- * 4. 单向正向原则：备份服务仅将 IndexedDB 数据单向同步至服务端，不反向覆盖或污染本地主库。
+ * 存储模型与执行策略：
+ * 1. 存储目标选择：本地 IndexedDB 存储原始图像 Blob 与元数据，作为前端即时渲染与画廊交互的基础；
+ * 2. 可选服务端存储：当用户在设置中开启 saveToServer 时，将图像上传至 SillyTavern 宿主静态目录 (/api/images/upload)，供跨端访问或静态路径引用；
+ * 3. 容错与非阻塞：服务端上传失败或网络中断时安全捕获并返回 null，不阻断前端主流程与楼层呈现时序；
+ * 4. 单向同步：服务仅在开启配置时将本地图像上传至服务端并记录返回路径，不影响本地存储状态。
  */
 
 import type { DrawingSlotEntry } from '@types';
@@ -14,20 +14,20 @@ import { settingsStore } from '../store/settings-store';
 import { imageStorage } from '../store/image-storage';
 import { logger } from '../util/logger';
 
-/** 备份同步检查与执行结果 */
-export interface BackupSyncResult {
+/** 服务端存储同步检查与执行结果 */
+export interface ServerStorageSyncResult {
     /** 最终可用的服务端静态相对路径 */
     readonly imageUrl?: string;
-    /** 是否发生了新增备份更新（用于决定是否触发会话持久化） */
+    /** 是否发生了路径更新（用于决定是否触发会话持久化） */
     readonly hasChanges: boolean;
 }
 
-/** 宿主上下文必要接口抽象 */
+/** 宿主上下文上传接口抽象 */
 export interface HostUploadContextLike {
     getRequestHeaders?(): Record<string, string>;
 }
 
-export class StorageBackupService {
+export class ServerStorageService {
     private readonly _getContext: () => HostUploadContextLike | undefined;
 
     public constructor(options?: { getContext?: () => HostUploadContextLike | undefined }) {
@@ -63,10 +63,10 @@ export class StorageBackupService {
     }
 
     /**
-     * 将图像 Blob 对象统一转为 Base64 字符串。
+     * 将图像 Blob 对象转为 Base64 字符串。
      *
      * @remarks
-     * 主要作为宿主 /api/images/upload JSON 请求体的编码辅助。
+     * 作为宿主 /api/images/upload JSON 请求体的编码辅助。
      *
      * @param blob 目标二进制数据
      * @param withPrefix 是否包含 data:image/png;base64, 前缀
@@ -181,20 +181,20 @@ export class StorageBackupService {
     }
 
     /**
-     * 单向正向同步指定插槽的服务端备份。
+     * 同步指定插槽的服务端存储路径。
      *
      * @remarks
-     * 1. 严格以本地 IndexedDB 为核心事实主库；
-     * 2. 若当前配置开启了 saveToServer 且插槽尚未记录 imageUrl，则自动读取本地 Blob 上传并补全；
-     * 3. 若本地 IndexedDB 缺失，绝不反向向本地写入，安全返回现有状态。
+     * 1. 以本地 IndexedDB 为核心事实基础；
+     * 2. 若当前配置开启了 saveToServer 且插槽尚未记录 imageUrl，则自动读取本地 Blob 上传至宿主服务并补全路径；
+     * 3. 若本地数据不存在，安全返回现有状态。
      *
      * @param slot 目标图像插槽元数据
      * @param characterName 当前角色名称
      */
-    public async syncSlotBackup(
+    public async syncSlotServerImage(
         slot: DrawingSlotEntry,
         characterName?: string
-    ): Promise<BackupSyncResult> {
+    ): Promise<ServerStorageSyncResult> {
         const settings = settingsStore.getSettings();
         let finalImageUrl = slot.imageUrl;
         let hasChanges = false;
@@ -212,7 +212,7 @@ export class StorageBackupService {
             }
         }
 
-        // 服务端转存检查与执行
+        // 服务端上传检查与执行
         if (settings.saveToServer && !finalImageUrl && slot.imageId) {
             const blob = await imageStorage.getImageBlob(slot.imageId);
             if (blob) {
@@ -236,5 +236,5 @@ export class StorageBackupService {
     }
 }
 
-/** 全局单例服务端备份服务 */
-export const storageBackupService = new StorageBackupService();
+/** 全局单例服务端存储服务 */
+export const serverStorageService = new ServerStorageService();

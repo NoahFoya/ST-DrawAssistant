@@ -501,7 +501,7 @@ export class GenerationOrchestrator {
             logger.info(`生图任务执行成功: ${taskId} (资产 ID: ${imageId})`);
 
             // 后台弱依赖异步转存：服务端转存与 remotePath 后台执行，不阻塞前端视觉呈现时序
-            this._sessionLifecycle.backupImageToServer(imageId).catch((transferErr) => {
+            this._sessionLifecycle.uploadImageToServer(imageId).catch((transferErr) => {
                 logger.warn(`后台服务端转存异常 [${imageId}]:`, transferErr);
             });
         } catch (err: unknown) {

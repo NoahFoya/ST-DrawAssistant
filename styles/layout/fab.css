@@ -176,3 +176,17 @@
     height: 100%;
     object-fit: cover;
 }
+
+/* 5. 悬浮球设置面板操作区 */
+.da-fab-action-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-fab-reset-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+

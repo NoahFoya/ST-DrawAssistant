@@ -9,7 +9,9 @@
 
 /* 1. 显隐控制：当容器设置关闭帮助说明时，优雅隐藏所有问号按钮 */
 [data-da-show-help="false"] .da-help-btn,
-.st-da-root[data-da-show-help="false"] .da-help-btn {
+[data-da-show-help="false"] .da-help-icon,
+.st-da-root[data-da-show-help="false"] .da-help-btn,
+.st-da-root[data-da-show-help="false"] .da-help-icon {
     display: none !important;
 }
 

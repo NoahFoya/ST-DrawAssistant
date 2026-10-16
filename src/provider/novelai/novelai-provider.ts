@@ -49,7 +49,7 @@ export function convertWeightToBrackets(text: string): string {
 /** NovelAI 图像生成 API 端点 */
 const NOVELAI_IMAGE_HOST = 'https://image.novelai.net';
 const NOVELAI_GENERATE_ENDPOINT = '/ai/generate-image';
-const NOVELAI_SETTINGS_ENDPOINT = '/ai/settings';
+const NOVELAI_USER_DATA_ENDPOINT = 'https://api.novelai.net/user/data';
 
 /**
  * 已知 NovelAI 模型标识列表（NovelAI 不提供模型枚举 API）。
@@ -173,7 +173,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
         }
 
         const transport = this.getTransport();
-        const probeUrl = `${NOVELAI_IMAGE_HOST}${NOVELAI_SETTINGS_ENDPOINT}`;
+        const probeUrl = NOVELAI_USER_DATA_ENDPOINT;
 
         const pingResult = await this._httpClient.ping(probeUrl, {
             transport,
@@ -410,6 +410,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 headers: this._buildAuthHeaders(config.apiKey),
                 body: JSON.stringify(requestBody),
                 timeoutMs: maxTimeoutMs,
+                retries: 0,
                 signal,
             },
             transport

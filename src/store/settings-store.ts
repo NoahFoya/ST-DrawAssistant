@@ -51,6 +51,7 @@ export interface DrawAssistantSettings {
     activeProvider: ProviderType;
     transport: TransportMode;
     taskTimeoutMs: number;
+    cancelOnChatChange: boolean;
     saveToIndexedDB: boolean;
     saveToServer: boolean;
     enableThumbnail: boolean;
@@ -73,7 +74,6 @@ export interface DrawAssistantSettings {
             visible: boolean;
             opacity: number;
             icon: string;
-            autoSnap: boolean;
         };
         lightbox: {
             enabled: boolean;
@@ -166,6 +166,8 @@ function buildDefaultSettings(): DrawAssistantSettings {
 export class SettingsStore {
     /** 插件标识，与 manifest.json 一致 */
     public static readonly EXTENSION_NAME = 'ST-DrawAssistant';
+    /** 本地隔离私密凭据存储键名 */
+    public static readonly LOCAL_SECRETS_KEY = 'st_da_local_secrets';
     /** 敏感配置字段键名匹配规则 */
     private static readonly SECRET_FIELD_PATTERN = /^(?:apiKey|secret|token|password)$/i;
 
@@ -180,8 +182,9 @@ export class SettingsStore {
      * 从宿主环境初始化配置数据。
      *
      * @remarks
-     * 读取 hostContext.extensionSettings['ST-DrawAssistant'] 并与内置默认配置深合并。
-     * 若检测到插件未初始化（首次安装或出厂重置），则受控载入静态推荐资产并标记为已初始化。
+     * 1. 读取 hostContext.extensionSettings['ST-DrawAssistant'] 并与内置默认配置深合并；
+     * 2. 结合浏览器本地专用隔离存储 (localStorage) 载入真实私密凭据；
+     * 3. 若检测到插件未初始化，则受控载入静态推荐资产。
      */
     public initializeFromHost(): void {
         const hostContext = window.SillyTavern?.getContext?.();
@@ -190,6 +193,9 @@ export class SettingsStore {
         if (rawSettings && typeof rawSettings === 'object') {
             this._settings = deepMerge(this._settings, rawSettings);
         }
+
+        // 从本地专属隔离存储中载入真实私密凭据
+        this.restoreLocalSecrets();
 
         if (!this._settings.isInitialized) {
             this.importOfficialPresets();
@@ -474,14 +480,25 @@ export class SettingsStore {
 
     /**
      * 将当前内存配置持久化同步至 SillyTavern 宿主。
+     *
+     * @remarks
+     * 敏感凭据防护与隔离策略：
+     * 1. 真实 API Key 等私密字段自动提取并持久化至浏览器专属本地隔离存储 (localStorage)；
+     * 2. 写入宿主 extensionSettings 的配置副本中，所有敏感字段强制置空脱敏，
+     *    避免明文密钥持久化存储进入酒馆服务端的 settings.json 或随配置导出外泄。
      */
     public saveToHost(): void {
+        // 1. 持久化敏感凭据至本地隔离存储
+        this.persistLocalSecrets();
+
+        // 2. 构造脱敏副本同步给宿主
         const hostContext = window.SillyTavern?.getContext?.();
         if (hostContext?.extensionSettings) {
-            hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = structuredClone(this._settings);
+            const sanitized = this.stripSecretsFromSettings(this._settings);
+            hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = sanitized;
         }
 
-        // 调用宿主防抖持久化接口
+        // 3. 调用宿主防抖持久化接口
         if (typeof hostContext?.saveSettingsDebounced === 'function') {
             try {
                 hostContext.saveSettingsDebounced();
@@ -489,6 +506,76 @@ export class SettingsStore {
                 logger.error('调用宿主 saveSettingsDebounced 异常:', err);
             }
         }
+    }
+
+    /** 从本地专属隔离存储载入私密凭据并合并入内存 */
+    private restoreLocalSecrets(): void {
+        try {
+            const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : undefined);
+            if (!storage) return;
+            const raw = storage.getItem(SettingsStore.LOCAL_SECRETS_KEY);
+            if (!raw) {
+                // 若本地存储尚无凭据，但宿主存在历史遗留明文密钥，执行初次平滑迁移
+                this.persistLocalSecrets();
+                return;
+            }
+            const secrets = JSON.parse(raw) as Record<string, Record<string, string>>;
+            if (secrets && typeof secrets === 'object') {
+                for (const [pKey, secObj] of Object.entries(secrets)) {
+                    if (secObj && typeof secObj === 'object') {
+                        const provider = (this._settings.providers as Record<string, any>)[pKey];
+                        if (provider && typeof provider === 'object') {
+                            Object.assign(provider, secObj);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            logger.warn('从本地隔离存储载入私密凭据异常:', err);
+        }
+    }
+
+    /** 将内存中的敏感凭据持久化至本地专属隔离存储 */
+    private persistLocalSecrets(): void {
+        try {
+            const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : undefined);
+            if (!storage) return;
+            const secrets: Record<string, Record<string, string>> = {};
+            if (this._settings.providers && typeof this._settings.providers === 'object') {
+                for (const [pKey, pCfg] of Object.entries(this._settings.providers)) {
+                    if (pCfg && typeof pCfg === 'object') {
+                        for (const [field, val] of Object.entries(pCfg as Record<string, unknown>)) {
+                            if (SettingsStore.SECRET_FIELD_PATTERN.test(field) && typeof val === 'string' && val.trim()) {
+                                if (!secrets[pKey]) secrets[pKey] = {};
+                                secrets[pKey][field] = val;
+                            }
+                        }
+                    }
+                }
+            }
+            storage.setItem(SettingsStore.LOCAL_SECRETS_KEY, JSON.stringify(secrets));
+        } catch (err) {
+            logger.warn('持久化私密凭据至本地隔离存储异常:', err);
+        }
+    }
+
+    /** 构造剥离了所有敏感凭据的宿主同步配置副本 */
+    private stripSecretsFromSettings(settings: DrawAssistantSettings): DrawAssistantSettings {
+        const cloned: DrawAssistantSettings = structuredClone(settings);
+        if (cloned.providers && typeof cloned.providers === 'object') {
+            for (const [pKey, pCfg] of Object.entries(cloned.providers)) {
+                if (pCfg && typeof pCfg === 'object' && !Array.isArray(pCfg)) {
+                    const sanitized: Record<string, unknown> = { ...(pCfg as Record<string, unknown>) };
+                    for (const field of Object.keys(sanitized)) {
+                        if (SettingsStore.SECRET_FIELD_PATTERN.test(field)) {
+                            sanitized[field] = '';
+                        }
+                    }
+                    (cloned.providers as Record<string, unknown>)[pKey] = sanitized;
+                }
+            }
+        }
+        return cloned;
     }
 
     /**

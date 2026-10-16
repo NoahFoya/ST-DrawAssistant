@@ -1,0 +1,69 @@
+/**
+ * 分段选择器控件样式 (Segmented Control)。
+ *
+ * @remarks
+ * 贴近 Apple macOS 规范的胶囊分段条：
+ * 1. 结构紧凑：外层半透微圆角容器，内嵌无缝分段按钮；
+ * 2. 状态明确：选中态具备平滑过渡的微透高亮块与细致内阴影；
+ * 3. 无障碍访问：遵循 WAI-ARIA radiogroup / radio 交互规范。
+ */
+
+.da-segmented {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    padding: 2px;
+    background-color: var(--da-bg-input, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-sm, 6px);
+    box-sizing: border-box;
+    user-select: none;
+    max-width: 100%;
+}
+
+.da-segmented__item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    min-height: 24px;
+    font-size: var(--da-font-size-xs, 0.75rem);
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--da-text-secondary, #94a3b8);
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--da-radius-sm, 6px) - 2px);
+    cursor: pointer;
+    outline: none;
+    transition: color 0.15s var(--da-ease), background-color 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.da-segmented__item:hover:not(.is-disabled):not(.is-active) {
+    color: var(--da-text-primary, #f8fafc);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.da-segmented__item.is-active {
+    color: var(--da-text-primary, #ffffff);
+    background-color: var(--da-bg-card, rgba(255, 255, 255, 0.14));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.da-segmented__item:focus-visible {
+    box-shadow: 0 0 0 2px var(--da-accent-color, #3b82f6);
+}
+
+.da-segmented__item.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.da-segmented.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}

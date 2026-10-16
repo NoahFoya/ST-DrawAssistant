@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责管理插件 CSS 变量设计令牌与主题切换监听：
- * 1. 动态加载出厂精选主题预设与用户自定义主题列表；
+ * 1. 动态加载系统预置外观方案与用户自定义外观列表；
  * 2. 将主题令牌参数精准映射并注入至宿主根节点或目标视窗 DOM（`:root` / `document.documentElement`）；
  * 3. 自动派生 `--da-accent-rgb` 等色彩透明度计算分量，保障高斯模糊与发光描边协调；
  * 4. 监听 `settingsStore` 配置广播，动态切换全局主题。
@@ -114,6 +114,7 @@ export class ThemeService implements Disposable {
         // 1. 设置主题标记与深浅配色标识
         const isLight = themeId === 'light' || themeId === 'sky-light';
         target.setAttribute('data-theme', themeId);
+        target.setAttribute('data-da-mode', isLight ? 'light' : 'dark');
         target.style.setProperty('--da-color-scheme', isLight ? 'light' : 'dark');
 
         // 2. 基础颜色令牌映射

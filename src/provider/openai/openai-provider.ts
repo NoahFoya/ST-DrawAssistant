@@ -281,8 +281,13 @@ export class OpenAIProvider extends BaseGenerationProvider {
         const requestBody: Record<string, unknown> = {
             prompt: resolvedPrompt,
             n: 1,
-            response_format: 'b64_json',
         };
+
+        // 仅在明确为 DALL-E 系列模型时默认携带 response_format: 'b64_json'，
+        // 避免 gpt-image 或第三方兼容服务商因未知参数返回 400 Bad Request
+        if (!resolvedModel || resolvedModel.toLowerCase().startsWith('dall-e')) {
+            requestBody['response_format'] = 'b64_json';
+        }
 
         if (resolvedModel) requestBody['model'] = resolvedModel;
         if (sizeStr) requestBody['size'] = sizeStr;
@@ -299,9 +304,6 @@ export class OpenAIProvider extends BaseGenerationProvider {
                     // 确保核心必要参数优先级
                     requestBody['prompt'] = resolvedPrompt;
                     requestBody['n'] = 1;
-                    if (!requestBody['response_format']) {
-                        requestBody['response_format'] = 'b64_json';
-                    }
                 }
             } catch (err) {
                 logger.warn('[OpenAIProvider] 自定义请求体 JSON 解析失败，跳过附加参数:', err);
@@ -321,6 +323,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
                 body: JSON.stringify(requestBody),
                 timeoutMs: maxTimeoutMs,
                 signal,
+                retries: 0, // 生图为非幂等计费操作，禁止底层网络重试以防重复扣费
             },
             transport
         );

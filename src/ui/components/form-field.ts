@@ -68,6 +68,7 @@ export class FormField implements UIComponent {
             this.tooltipIcon = document.createElement('span');
             this.tooltipIcon.classList.add('da-help-icon');
             this.tooltipIcon.title = options.tooltip;
+            this.tooltipIcon.setAttribute('data-tooltip', options.tooltip);
             this.tooltipIcon.textContent = '?';
             labelGroup.appendChild(this.tooltipIcon);
         }
@@ -111,8 +112,10 @@ export class FormField implements UIComponent {
         if (this.tooltipIcon) {
             if (tooltip) {
                 this.tooltipIcon.title = tooltip;
+                this.tooltipIcon.setAttribute('data-tooltip', tooltip);
                 this.tooltipIcon.style.display = '';
             } else {
+                this.tooltipIcon.removeAttribute('data-tooltip');
                 this.tooltipIcon.style.display = 'none';
             }
         }

@@ -250,6 +250,7 @@ export class ConnectionCard implements UIComponent, Disposable {
                 label: '拉取资产列表',
                 variant: 'secondary',
                 size: 'sm',
+                className: 'da-connection-btn--refresh',
                 onClick: async () => {
                     await this.triggerFetchAssets();
                 },
@@ -263,6 +264,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             label: '测试连接',
             variant: 'primary',
             size: 'sm',
+            className: 'da-connection-btn--ping',
             onClick: async () => {
                 await this.triggerPing();
             },
