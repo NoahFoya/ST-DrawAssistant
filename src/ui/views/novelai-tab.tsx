@@ -146,7 +146,6 @@ export class NovelAITabView extends PreactSettingsView {
                 key: 'qualityTags',
                 label: '自动追加画质标签',
                 type: 'switch',
-                switchLabel: '自动追加画质标签',
                 tooltip:
                     '生成时自动在提示词前追加 masterpiece, best quality 等官方推荐画质标签',
                 transform: {
@@ -158,7 +157,6 @@ export class NovelAITabView extends PreactSettingsView {
                 key: 'convertSyntax',
                 label: '权重语法自动转换',
                 type: 'switch',
-                switchLabel: '权重语法自动转换',
                 tooltip:
                     '自动将 SD 风格 (tag:1.2) 转换为 NovelAI 专有的 {tag} 花括号增强语法',
                 transform: {
@@ -189,7 +187,6 @@ export class NovelAITabView extends PreactSettingsView {
                 key: 'decrisper',
                 label: '焦黑抑制 (Decrisper)',
                 type: 'switch',
-                switchLabel: '启用焦黑抑制',
                 tooltip: '平滑色彩高频边缘，减少过锐化造成的杂色斑点与焦黑伪影',
             },
         ];

@@ -130,7 +130,6 @@ export class SDWebUITabView extends PreactSettingsView {
                 key: 'enableHires',
                 label: '启用高清修复',
                 type: 'switch',
-                switchLabel: '启用高清修复',
                 tooltip: '开启后将先生成基准分辨率图像，随后按倍率放大并进行二次重绘采样',
             },
             {

@@ -11,10 +11,10 @@
     justify-content: space-between;
     gap: var(--da-space-md, 12px);
     padding: var(--da-space-sm, 8px) var(--da-space-lg, 16px);
-    background: var(--da-bg-card);
-    border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-card, 14px);
-    margin: var(--da-space-sm, 8px) 0 var(--da-space-md, 12px) 0;
+    background: var(--da-surface-card, var(--da-bg-card));
+    border: 1px solid var(--da-border-card, var(--da-border-color));
+    border-radius: var(--da-radius-lg, 10px);
+    margin: 0;
     box-sizing: border-box;
     width: 100%;
     flex-wrap: wrap;

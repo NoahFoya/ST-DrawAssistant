@@ -113,7 +113,7 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    width: 240px;
+    width: 100%;
     max-width: 100%;
 }
 

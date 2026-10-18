@@ -16,7 +16,6 @@
     background: var(--da-surface-card, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
     border-radius: var(--da-radius-lg, 10px);
-    margin-bottom: 12px;
     box-sizing: border-box;
     transition: border-color 0.2s var(--da-ease, ease), box-shadow 0.2s var(--da-ease, ease);
     overflow: hidden;
@@ -101,12 +100,14 @@
     transform: rotate(-90deg);
 }
 
-/* 4. 主体内容容器 */
+/* 4. 主体内容容器 (清零内部 padding 与 gap，让表单行通栏贯通且边缘贴合) */
 .da-card__body {
-    padding: 0 16px 16px 16px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
     transition: max-height 0.3s var(--da-ease, ease), opacity 0.25s var(--da-ease, ease);
 }
 
@@ -114,10 +115,18 @@
     display: none;
 }
 
+/* 嵌入式复合组件在卡片内保持标准内边距 */
+.da-card__body > .da-dimension-picker--embedded,
+.da-card__body > .da-sampler-card--embedded,
+.da-card__body > .da-card-embedded-content {
+    padding: 12px 16px;
+    box-sizing: border-box;
+}
+
 /* 5. 卡片与表单内语义分割线 (.da-settings-divider) */
 .da-settings-divider {
     height: 1px;
-    margin: 8px 0;
+    margin: 4px 0;
     background: var(--da-separator, rgba(139, 92, 246, 0.12));
     width: 100%;
     flex-shrink: 0;
@@ -129,15 +138,15 @@
     align-items: center;
     justify-content: flex-end;
     gap: var(--da-space-sm, 8px);
-    margin-top: 6px;
-    padding-top: 6px;
+    padding: 10px 16px 12px 16px;
     border-top: 1px dashed var(--da-border-light, rgba(255, 255, 255, 0.08));
     width: 100%;
+    box-sizing: border-box;
 }
 
 /* 7. 服务连接专用卡片样式 (.da-connection-card) */
 .da-connection-card .da-form-row {
-    padding: 0 12px;
+    padding: 4px 16px;
 }
 
 .da-connection-card .da-form-row__control {

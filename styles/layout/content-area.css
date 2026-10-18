@@ -53,7 +53,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--da-space-lg, 16px);
+    gap: var(--da-space-md, 12px);
     box-sizing: border-box;
     padding: 2px 0 16px 0;
     animation: da-fadein 0.18s var(--da-ease);
