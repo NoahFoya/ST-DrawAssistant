@@ -19,7 +19,7 @@ import type {
     WorkflowPresetData,
 } from '@types';
 import type { Disposable } from '../types';
-import type { SelectOption } from '../components/select';
+import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { AssetFetchResult, ConnectionCardData } from '../composite/connection-card';
 import type { PresetActionType } from '../composite/preset-toolbar';
 import type { PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-manager';
@@ -62,6 +62,10 @@ export interface ProviderTabViewModelOptions {
     ) => { allowed: boolean; message?: string };
     /** 自定义脏字段集计算函数 */
     evaluateDirtyFields?: (draft: DrawingPresetData, baseline: DrawingPresetData) => Set<string>;
+    /** 方案应用或切换回调 */
+    onPresetApplied?: (preset: PresetItem<DrawingPresetData> | null, draft: DrawingPresetData) => void;
+    /** 草稿数据变更回调 */
+    onDraftChanged?: (draft: DrawingPresetData) => void;
 }
 
 export class ProviderTabViewModel implements Disposable {
@@ -74,6 +78,8 @@ export class ProviderTabViewModel implements Disposable {
     /** 服务连接配置状态 */
     public readonly connectionData: Signal<ConnectionCardData>;
 
+    /** 服务端分类模型映射 (如 Checkpoint 与 UNet) */
+    public readonly categorizedModels: Signal<{ checkpoints: string[]; unets: string[] } | null>;
     /** 服务端拉取或预置的模型列表 */
     public readonly serverModels: Signal<string[]>;
     /** 是否已从服务端拉取过模型 */
@@ -82,6 +88,10 @@ export class ProviderTabViewModel implements Disposable {
     public readonly serverVaes: Signal<string[]>;
     /** 是否已从服务端拉取过 VAE */
     public readonly hasFetchedVaes: Signal<boolean>;
+    /** 服务端拉取的 CLIP 列表 */
+    public readonly serverClips: Signal<string[]>;
+    /** 是否已从服务端拉取过 CLIP */
+    public readonly hasFetchedClips: Signal<boolean>;
     /** 当前可用采样器选项列表 */
     public readonly samplerOptions: Signal<SelectOption[]>;
     /** 当前可用调度器选项列表 */
@@ -92,10 +102,12 @@ export class ProviderTabViewModel implements Disposable {
     /** 全局工作流预设方案列表信号 */
     public readonly workflowPresets: Signal<PresetItem<WorkflowPresetData>[]>;
 
-    /** 合并当前方案值与服务端列表后的主模型下拉选项 */
-    public readonly effectiveModelOptions: ReadonlySignal<SelectOption[]>;
+    /** 合并当前方案值与服务端列表后的主模型下拉选项 (支持 optgroup 分组) */
+    public readonly effectiveModelOptions: ReadonlySignal<Array<SelectOption | SelectOptGroup>>;
     /** 合并当前方案值与服务端列表后的外置 VAE 下拉选项 */
     public readonly effectiveVaeOptions: ReadonlySignal<SelectOption[]>;
+    /** 派生的 CLIP 编码器下拉选项 */
+    public readonly effectiveClipOptions: ReadonlySignal<SelectOption[]>;
     /** 关联提示词预设方案下拉选项（自动追加失效项提示） */
     public readonly promptPresetOptions: ReadonlySignal<SelectOption[]>;
     /** 文生图工作流下拉选项（自动追加失效项提示） */
@@ -121,10 +133,13 @@ export class ProviderTabViewModel implements Disposable {
             activePresetId: providerCfg.serviceId || options.defaultServiceId,
         });
 
+        this.categorizedModels = signal<{ checkpoints: string[]; unets: string[] } | null>(null);
         this.serverModels = signal<string[]>([]);
         this.hasFetchedModels = signal<boolean>(false);
         this.serverVaes = signal<string[]>([]);
         this.hasFetchedVaes = signal<boolean>(false);
+        this.serverClips = signal<string[]>([]);
+        this.hasFetchedClips = signal<boolean>(false);
         this.samplerOptions = signal<SelectOption[]>(options.defaultSamplers ?? []);
         this.schedulerOptions = signal<SelectOption[]>(options.defaultSchedulers ?? []);
 
@@ -148,19 +163,48 @@ export class ProviderTabViewModel implements Disposable {
                     activeDrawingPresetId: id,
                 });
             },
+            onPresetApplied: options.onPresetApplied,
+            onDraftChanged: options.onDraftChanged,
             validateRequired: options.validateRequired,
             canPerformAction: options.canPerformAction,
             evaluateDirtyFields: options.evaluateDirtyFields,
             evaluateInvalidFields: (draft) => this.computeInvalidBindings(draft),
         });
 
-        // 1. 派生主模型下拉选项
+        // 1. 派生主模型下拉选项 (支持类别分组)
         this.effectiveModelOptions = computed(() => {
             const currentModel = (this.presetController.draftConfig.value.baseModel as string) || '';
+            const cat = this.categorizedModels.value;
             const fetched = this.serverModels.value;
             const hasFetched = this.hasFetchedModels.value;
             const defaults = this.options.defaultModels ?? [];
 
+            // 若具有分类探测数据（如 ComfyUI），按照 Checkpoint 与 UNet / 扩散模型分组展示
+            if (hasFetched && cat && (cat.checkpoints.length > 0 || cat.unets.length > 0)) {
+                const groups: Array<SelectOption | SelectOptGroup> = [];
+                if (cat.checkpoints.length > 0) {
+                    groups.push({
+                        label: 'Checkpoint (完整模型)',
+                        options: cat.checkpoints.map((m) => ({ label: m, value: m })),
+                    });
+                }
+                if (cat.unets.length > 0) {
+                    groups.push({
+                        label: 'UNet / 扩散模型',
+                        options: cat.unets.map((m) => ({ label: m, value: m })),
+                    });
+                }
+                const allKnown = [...cat.checkpoints, ...cat.unets];
+                if (currentModel && !allKnown.includes(currentModel)) {
+                    groups.unshift({
+                        label: `${currentModel} (未在服务端检测到)`,
+                        value: currentModel,
+                    });
+                }
+                return groups;
+            }
+
+            // 扁平模型列表常规展示
             if (hasFetched && fetched.length > 0) {
                 const baseList: SelectOption[] =
                     defaults.length > 0
@@ -196,16 +240,27 @@ export class ProviderTabViewModel implements Disposable {
         // 2. 派生外置 VAE 下拉选项
         this.effectiveVaeOptions = computed(() => {
             const currentVae =
-                (this.presetController.draftConfig.value.vaeName as string) || 'automatic';
+                (this.presetController.draftConfig.value.vaeName as string) || '';
             const fetched = this.serverVaes.value;
             const hasFetched = this.hasFetchedVaes.value;
+            const isComfy = this.provider === 'comfyui';
+
+            const defaultLabel = isComfy ? '(使用模型内置)' : '自动匹配 (automatic)';
+            const defaultValue = isComfy ? '' : 'automatic';
+
+            const baseOpts: SelectOption[] = [
+                { label: defaultLabel, value: defaultValue },
+            ];
+            if (!isComfy) {
+                baseOpts.push({ label: '不使用外置 VAE (None)', value: 'None' });
+            }
 
             if (hasFetched && fetched.length > 0) {
                 const opts: SelectOption[] = [
-                    { label: '自动匹配 (automatic)', value: 'automatic' },
+                    ...baseOpts,
                     ...fetched.map((v) => ({ label: v, value: v })),
                 ];
-                if (currentVae && currentVae !== 'automatic' && !fetched.includes(currentVae)) {
+                if (currentVae && currentVae !== defaultValue && !fetched.includes(currentVae)) {
                     opts.splice(1, 0, {
                         label: `${currentVae} (未在服务端检测到)`,
                         value: currentVae,
@@ -214,17 +269,32 @@ export class ProviderTabViewModel implements Disposable {
                 return opts;
             }
 
-            const baseOpts: SelectOption[] = this.options.defaultVaes
-                ? [...this.options.defaultVaes]
-                : [
-                      { label: '自动匹配 (automatic)', value: 'automatic' },
-                      { label: '不使用外置 VAE (None)', value: 'None' },
-                  ];
+            if (this.options.defaultVaes) {
+                baseOpts.push(...this.options.defaultVaes.filter((o) => o.value !== defaultValue));
+            }
 
             if (currentVae && !baseOpts.some((o) => o.value === currentVae)) {
                 baseOpts.push({ label: currentVae, value: currentVae });
             }
             return baseOpts;
+        });
+
+        // 3. 派生 CLIP 编码器下拉选项
+        this.effectiveClipOptions = computed(() => {
+            const currentClip =
+                (this.presetController.draftConfig.value.clipName as string) || '';
+            const fetched = this.serverClips.value;
+            const hasFetched = this.hasFetchedClips.value;
+
+            const opts: SelectOption[] = [{ label: '(使用模型内置)', value: '' }];
+            if (hasFetched && fetched.length > 0) {
+                opts.push(...fetched.map((c) => ({ label: c, value: c })));
+            }
+
+            if (currentClip && !opts.some((o) => o.value === currentClip)) {
+                opts.push({ label: `${currentClip} (未在服务端检测到)`, value: currentClip });
+            }
+            return opts;
         });
 
         // 3. 派生提示词预设下拉选项
@@ -396,13 +466,7 @@ export class ProviderTabViewModel implements Disposable {
      * 从服务端拉取模型、VAE 与采样器列表并合并到响应式信号中。
      */
     public async refreshServerAssets(): Promise<AssetFetchResult> {
-        const provider = providerRegistry.getProvider(this.provider) as
-            | {
-                  fetchModels?: () => Promise<string[]>;
-                  fetchVaes?: () => Promise<string[]>;
-                  fetchSamplers?: () => Promise<string[]>;
-              }
-            | undefined;
+        const provider = providerRegistry.getProvider(this.provider);
 
         if (!provider) {
             throw new Error(`未注册 ${this.provider} 服务提供方`);
@@ -410,8 +474,17 @@ export class ProviderTabViewModel implements Disposable {
 
         let totalCount = 0;
 
-        // 1. 拉取主模型列表
-        if (typeof provider.fetchModels === 'function') {
+        // 1. 拉取主模型列表 (优先检查分类获取接口)
+        if (typeof provider.fetchCategorizedModels === 'function') {
+            const cat = await provider.fetchCategorizedModels();
+            if (cat && (cat.checkpoints?.length > 0 || cat.unets?.length > 0)) {
+                this.categorizedModels.value = cat;
+                const all = [...(cat.checkpoints || []), ...(cat.unets || [])];
+                this.serverModels.value = all;
+                this.hasFetchedModels.value = true;
+                totalCount += all.length;
+            }
+        } else if (typeof provider.fetchModels === 'function') {
             const models = await provider.fetchModels();
             if (Array.isArray(models) && models.length > 0) {
                 totalCount += models.length;
@@ -420,7 +493,7 @@ export class ProviderTabViewModel implements Disposable {
             }
         }
 
-        // 2. 拉取外置 VAE 列表（如 SD-WebUI）
+        // 2. 拉取外置 VAE 列表
         if (typeof provider.fetchVaes === 'function') {
             const vaes = await provider.fetchVaes();
             if (Array.isArray(vaes) && vaes.length > 0) {
@@ -430,7 +503,17 @@ export class ProviderTabViewModel implements Disposable {
             }
         }
 
-        // 3. 拉取采样器列表（如 SD-WebUI）
+        // 3. 拉取 CLIP 编码器列表
+        if (typeof provider.fetchClips === 'function') {
+            const clips = await provider.fetchClips();
+            if (Array.isArray(clips) && clips.length > 0) {
+                totalCount += clips.length;
+                this.serverClips.value = clips;
+                this.hasFetchedClips.value = true;
+            }
+        }
+
+        // 4. 拉取采样器列表 (如 SD-WebUI)
         if (typeof provider.fetchSamplers === 'function') {
             const samplers = await provider.fetchSamplers();
             if (Array.isArray(samplers) && samplers.length > 0) {

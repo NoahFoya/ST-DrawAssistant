@@ -109,6 +109,11 @@ export class OpenAITabView extends PreactSettingsView {
             promptMessageForNew: '请输入新方案名称:',
             defaultNewName: '新 OpenAI 兼容方案',
             defaultModels: OPENAI_MODEL_OPTIONS,
+            onPresetApplied: (_preset, draft) => {
+                const nextJson = (draft.customBodyJson as string) || '';
+                this.rawJsonInput.value = nextJson;
+                this.checkJsonValidity(nextJson);
+            },
             canPerformAction: (action) => {
                 if (
                     (action === 'new' || action === 'save' || action === 'saveAs') &&
@@ -138,35 +143,11 @@ export class OpenAITabView extends PreactSettingsView {
         this.rawJsonInput.value = initialJson;
         this.checkJsonValidity(initialJson);
 
-        // 当方案切换或重置时，同步更新 rawJsonInput
-        const origApply = this.vm.presetController.applyActivePreset.bind(this.vm.presetController);
-        this.vm.presetController.applyActivePreset = (presetId, opts) => {
-            origApply(presetId, opts);
-            const nextJson =
-                (this.vm.presetController.draftConfig.value.customBodyJson as string) || '';
-            this.rawJsonInput.value = nextJson;
-            this.checkJsonValidity(nextJson);
-        };
-
-        const origHandleAction = this.vm.presetController.handleAction.bind(
-            this.vm.presetController
-        );
-        this.vm.presetController.handleAction = (action, targetId) => {
-            origHandleAction(action, targetId);
-            if (action === 'reset') {
-                const resetJson =
-                    (this.vm.presetController.draftConfig.value.customBodyJson as string) || '';
-                this.rawJsonInput.value = resetJson;
-                this.checkJsonValidity(resetJson);
-            }
-        };
-
         this.modelFields = [
             {
                 key: 'baseModel',
-                label: '核心生图模型',
+                label: '生图模型',
                 type: 'select',
-                tooltip: '指定发送至 /v1/images/generations 的 model 参数',
                 options: () => this.vm.effectiveModelOptions.value,
                 transform: {
                     toView: (v) => (v as string) || 'dall-e-3',
@@ -186,10 +167,9 @@ export class OpenAITabView extends PreactSettingsView {
             },
             {
                 key: 'promptPresetId',
-                label: '提示词预设方案',
+                label: '提示词预设',
                 type: 'select',
                 placeholder: '选择关联提示词预设方案',
-                tooltip: '关联的提示词词库模板。出图时将自动融合正向前缀与后缀描述词',
                 options: () => this.vm.promptPresetOptions.value,
             },
         ];
@@ -254,7 +234,7 @@ export class OpenAITabView extends PreactSettingsView {
                 <SchemaCard
                     schema={{
                         id: 'openai-model-prompt',
-                        title: '生图模型与提示词方案',
+                        title: '模型与预设',
                         collapsible: true,
                         fields: this.modelFields,
                     }}
@@ -264,8 +244,9 @@ export class OpenAITabView extends PreactSettingsView {
                     onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                 />
 
-                <CardView title="画幅规格与渲染档位" collapsible={true}>
+                <CardView title="尺寸与规格" collapsible={true}>
                     <DimensionPickerView
+                        embedded={true}
                         width={draft.width || 1024}
                         height={draft.height || 1024}
                         dirty={isDimsDirty}

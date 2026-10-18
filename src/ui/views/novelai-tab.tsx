@@ -115,9 +115,8 @@ export class NovelAITabView extends PreactSettingsView {
         this.modelFields = [
             {
                 key: 'baseModel',
-                label: '核心生图模型',
+                label: '生图模型',
                 type: 'select',
-                tooltip: 'NovelAI 官方画质生成模型家族，V5 与 V4.5 具备强大的动漫人物理解能力',
                 options: () => this.vm.effectiveModelOptions.value,
                 transform: {
                     toView: (v) => (v as string) || 'nai-diffusion-4-5-full',
@@ -138,11 +137,9 @@ export class NovelAITabView extends PreactSettingsView {
             },
             {
                 key: 'promptPresetId',
-                label: '提示词预设方案',
+                label: '提示词预设',
                 type: 'select',
                 placeholder: '选择关联提示词预设方案',
-                tooltip:
-                    '关联的提示词词库模板。出图时将自动融合正向前缀、正向后缀与负向通用过滤词',
                 options: () => this.vm.promptPresetOptions.value,
             },
             {
@@ -216,6 +213,7 @@ export class NovelAITabView extends PreactSettingsView {
         return (
             <ProviderTabLayout
                 vm={this.vm}
+                connectionTitle="服务连接"
                 showApiKey={true}
                 showWorkflowManager={false}
                 showLoraInPromptManager={false}
@@ -223,7 +221,7 @@ export class NovelAITabView extends PreactSettingsView {
                 <SchemaCard
                     schema={{
                         id: 'novelai-model',
-                        title: '模型版本与提示词增强',
+                        title: '模型与预设',
                         collapsible: true,
                         fields: this.modelFields,
                     }}
@@ -233,8 +231,9 @@ export class NovelAITabView extends PreactSettingsView {
                     onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                 />
 
-                <CardView title="画幅尺寸与采样控制" collapsible={true}>
+                <CardView title="尺寸与采样" collapsible={true}>
                     <DimensionPickerView
+                        embedded={true}
                         width={draft.width || 832}
                         height={draft.height || 1216}
                         alignMultiple={64}
@@ -247,7 +246,7 @@ export class NovelAITabView extends PreactSettingsView {
                         }
                     />
                     <SamplerCardView
-                        title="核心采样参数"
+                        embedded={true}
                         showScheduler={false}
                         showDenoise={false}
                         samplers={this.vm.samplerOptions.value}
@@ -279,7 +278,7 @@ export class NovelAITabView extends PreactSettingsView {
                 <SchemaCard
                     schema={{
                         id: 'novelai-advanced',
-                        title: '渲染增强与高级特性',
+                        title: '高级特性',
                         collapsible: true,
                         fields: this.advancedFields,
                     }}

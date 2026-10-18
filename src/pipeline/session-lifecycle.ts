@@ -326,13 +326,6 @@ export class SessionLifecycleManager {
     }
 
     /**
-     * 兼容别名：保留 ensureSlotBackups 避免旧调用破坏
-     */
-    public async ensureSlotBackups(target: SlotMountTarget): Promise<boolean> {
-        return this.ensureSlotServerImage(target);
-    }
-
-    /**
      * 将图像上传至宿主服务器（后台非阻塞执行）。
      * 无论宿主当前处于哪一个活跃会话，均可安全独立执行，不依赖或修改前台活跃 chat 数组。
      *
@@ -349,13 +342,6 @@ export class SessionLifecycleManager {
         const resolvedCharName = characterName ?? this.getCurrentCharacterName(this._getContext());
         const syncResult = await serverStorageService.syncSlotServerImage({ imageId }, resolvedCharName);
         return syncResult.imageUrl;
-    }
-
-    /**
-     * 兼容别名：保留 backupImageToServer 避免旧调用破坏
-     */
-    public async backupImageToServer(imageId: string, characterName?: string): Promise<string | undefined> {
-        return this.uploadImageToServer(imageId, characterName);
     }
 
     /**

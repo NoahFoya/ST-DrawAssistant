@@ -26,12 +26,10 @@ export interface PresetItem<T = Record<string, unknown>> {
 }
 
 export interface DrawingPresetData {
-    /** 主模型 / 基底模型文件名 */
+    /** 主模型 / 基底模型文件名 (Checkpoint 或 UNet) */
     baseModel?: string;
     /** 级联额外模型文件名列表 */
     extraModels?: string[];
-    /** 分立式 UNet 模型文件名 */
-    unetName?: string;
     /** 分立式 CLIP 模型文件名 */
     clipName?: string;
     /** 分立式 VAE 模型文件名 */

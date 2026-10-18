@@ -31,7 +31,6 @@ export interface ProviderPreset {
 export interface ConnectionCardData {
     serverUrl: string;
     apiKey?: string;
-    customHeaders?: Record<string, string>;
     activePresetId?: string;
 }
 
@@ -54,8 +53,6 @@ export interface ConnectionCardOptions {
     showApiKey?: boolean;
     /** API Key 输入框占位提示 */
     apiKeyPlaceholder?: string;
-    /** 是否展示自定义请求头输入框，默认 false */
-    showCustomHeaders?: boolean;
     /** 可选的服务商预设模板列表 */
     providerPresets?: ProviderPreset[];
     /** 连通性健康探测处理函数 */
@@ -80,8 +77,6 @@ export class ConnectionCard implements UIComponent, Disposable {
     private readonly urlFormField: FormField;
     private apiKeyInput?: TextInput;
     private apiKeyFormField?: FormField;
-    private headersInput?: TextInput;
-    private headersFormField?: FormField;
 
     private readonly pingButton: Button;
     private fetchAssetsButton?: Button;
@@ -94,14 +89,13 @@ export class ConnectionCard implements UIComponent, Disposable {
         this.data = {
             serverUrl: options.initialData?.serverUrl ?? '',
             apiKey: options.initialData?.apiKey ?? '',
-            customHeaders: options.initialData?.customHeaders,
             activePresetId: options.initialData?.activePresetId,
         };
 
         // 1. 初始化 Card 容器外壳
         this.card = new Card({
-            title: options.title ?? '服务连接与状态探测',
-            subtitle: options.subtitle ?? '配置后端服务访问端点与鉴权凭据，并探测网络连通状态',
+            title: options.title ?? '服务连接',
+            subtitle: options.subtitle,
             collapsible: true,
             defaultCollapsed: false,
         });
@@ -140,7 +134,7 @@ export class ConnectionCard implements UIComponent, Disposable {
                 },
             });
             const presetField = new FormField({
-                label: '服务商预设模板',
+                label: '服务商预设',
                 tooltip: '快速填入主流 OpenAI 兼容云端服务的标准基础地址',
                 control: this.presetSelect,
             });
@@ -148,7 +142,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.disposables.push(this.presetSelect, presetField);
         }
 
-        // 3.2 服务基础地址 (Base URL)
+        // 3.2 服务地址 (Base URL)
         this.urlInput = new TextInput({
             value: this.data.serverUrl,
             placeholder: options.urlPlaceholder ?? 'http://127.0.0.1:8188',
@@ -160,9 +154,8 @@ export class ConnectionCard implements UIComponent, Disposable {
             },
         });
         this.urlFormField = new FormField({
-            label: '服务基础地址',
+            label: '服务地址',
             required: true,
-            tooltip: '后端 API 服务的监听地址（Base URL），如本地 ComfyUI (8188) 或第三方云端兼容端点',
             control: this.urlInput,
         });
         this.card.appendContent(this.urlFormField.element);
@@ -182,58 +175,12 @@ export class ConnectionCard implements UIComponent, Disposable {
                 },
             });
             this.apiKeyFormField = new FormField({
-                label: '接口鉴权密匙',
-                tooltip: '访问受保护服务接口所需的认证密钥或 Bearer Token（API Key）',
+                label: 'API Key',
+                tooltip: '访问受保护服务接口所需的认证密钥或 Bearer Token',
                 control: this.apiKeyInput,
             });
             this.card.appendContent(this.apiKeyFormField.element);
             this.disposables.push(this.apiKeyInput, this.apiKeyFormField);
-        }
-
-        // 3.4 可选：自定义请求头 (Headers)
-        if (options.showCustomHeaders) {
-            const initialHeadersStr = this.data.customHeaders
-                ? JSON.stringify(this.data.customHeaders)
-                : '';
-            this.headersInput = new TextInput({
-                value: initialHeadersStr,
-                placeholder: '{"Authorization": "Bearer ..."}',
-                onChange: (val: string) => {
-                    const trimmed = val.trim();
-                    if (!trimmed) {
-                        this.data.customHeaders = undefined;
-                        this.headersInput?.element.classList.remove('is-invalid');
-                        this.headersFormField?.setTooltip('针对特定中转站或网关所需的额外 HTTP Headers (JSON 格式)');
-                        this.resetStatusToIdle();
-                        this.notifyChange();
-                        return;
-                    }
-
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                            throw new Error('请求头必须为键值对 JSON 对象结构');
-                        }
-                        this.data.customHeaders = parsed;
-                        this.headersInput?.element.classList.remove('is-invalid');
-                        this.headersFormField?.setTooltip('针对特定中转站或网关所需的额外 HTTP Headers (JSON 格式)');
-                        this.resetStatusToIdle();
-                        this.notifyChange();
-                    } catch (err: unknown) {
-                        const message = err instanceof Error ? err.message : String(err);
-                        this.headersInput?.element.classList.add('is-invalid');
-                        this.headersFormField?.setTooltip(`当前输入的 JSON 格式非法: ${message}`);
-                        // 输入非法时阻止对外派发，防止损坏数据污染全局配置
-                    }
-                },
-            });
-            this.headersFormField = new FormField({
-                label: '自定义请求头',
-                tooltip: '针对特定中转站或网关所需的额外 HTTP Headers（JSON 格式）',
-                control: this.headersInput,
-            });
-            this.card.appendContent(this.headersFormField.element);
-            this.disposables.push(this.headersInput, this.headersFormField);
         }
 
         // 4. 构建操作按钮行
@@ -244,10 +191,10 @@ export class ConnectionCard implements UIComponent, Disposable {
         actionRow.style.gap = '8px';
         actionRow.style.marginTop = '8px';
 
-        // 4.1 可选：拉取资产列表按钮（若提供了 onFetchAssets 或由子类重载实现）
+        // 4.1 可选：同步模型按钮（若提供了 onFetchAssets 或由子类重载实现）
         if (options.onFetchAssets || this.hasCustomFetchAssetList()) {
             this.fetchAssetsButton = new Button({
-                label: '拉取资产列表',
+                label: '同步模型',
                 variant: 'secondary',
                 size: 'sm',
                 className: 'da-connection-btn--refresh',
@@ -282,7 +229,6 @@ export class ConnectionCard implements UIComponent, Disposable {
         return {
             serverUrl: this.data.serverUrl,
             apiKey: this.data.apiKey,
-            customHeaders: this.data.customHeaders ? { ...this.data.customHeaders } : undefined,
             activePresetId: this.data.activePresetId,
         };
     }
@@ -303,10 +249,6 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.data.activePresetId = data.activePresetId;
             this.presetSelect.setValue(data.activePresetId);
         }
-        if (data.customHeaders !== undefined && this.headersInput) {
-            this.data.customHeaders = data.customHeaders;
-            this.headersInput.setValue(JSON.stringify(data.customHeaders));
-        }
         this.resetStatusToIdle();
     }
 
@@ -316,7 +258,6 @@ export class ConnectionCard implements UIComponent, Disposable {
     public setDirty(isDirty: boolean): void {
         this.urlFormField.setDirty(isDirty);
         this.apiKeyFormField?.setDirty(isDirty);
-        this.headersFormField?.setDirty(isDirty);
     }
 
     /**

@@ -87,15 +87,13 @@ export class SDWebUITabView extends PreactSettingsView {
                 label: '主模型',
                 type: 'select',
                 placeholder: '选择主模型文件',
-                tooltip: '基础扩散模型文件（Checkpoint 或 UNet），决定画面的主体风格与生成能力',
                 options: () => this.vm.effectiveModelOptions.value,
             },
             {
                 key: 'vaeName',
                 label: '外置 VAE',
                 type: 'select',
-                tooltip:
-                    '变分自编码器。负责潜空间与像素画面的色彩及纹理重建；留空或选 automatic 时采用主模型内置 VAE',
+                tooltip: '变分自编码器。留空或选 automatic 时采用主模型内置 VAE',
                 options: () => this.vm.effectiveVaeOptions.value,
                 transform: {
                     toView: (v) => (v as string) || 'automatic',
@@ -120,10 +118,9 @@ export class SDWebUITabView extends PreactSettingsView {
             },
             {
                 key: 'promptPresetId',
-                label: '提示词预设方案',
+                label: '提示词预设',
                 type: 'select',
                 placeholder: '选择关联提示词预设方案',
-                tooltip: '关联的提示词模板。出图时将自动拼接质量词、通用负向词并加载对应 LoRA',
                 options: () => this.vm.promptPresetOptions.value,
             },
         ];
@@ -219,8 +216,7 @@ export class SDWebUITabView extends PreactSettingsView {
         return (
             <ProviderTabLayout
                 vm={this.vm}
-                connectionTitle="服务连接与状态探测"
-                connectionSubtitle="配置 SD-WebUI / Forge 服务访问地址与接口连通探测"
+                connectionTitle="服务连接"
                 urlPlaceholder="http://127.0.0.1:7860"
                 showApiKey={false}
                 showWorkflowManager={false}
@@ -229,7 +225,7 @@ export class SDWebUITabView extends PreactSettingsView {
                 <SchemaCard
                     schema={{
                         id: 'sdwebui-model',
-                        title: '模型与网络架构',
+                        title: '模型与预设',
                         collapsible: true,
                         fields: this.modelFields,
                     }}
@@ -239,8 +235,9 @@ export class SDWebUITabView extends PreactSettingsView {
                     onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                 />
 
-                <CardView title="画幅尺寸与采样控制" collapsible={true}>
+                <CardView title="尺寸与采样" collapsible={true}>
                     <DimensionPickerView
+                        embedded={true}
                         width={draft.width || 832}
                         height={draft.height || 1216}
                         dirty={isDimsDirty}
@@ -251,8 +248,8 @@ export class SDWebUITabView extends PreactSettingsView {
                             })
                         }
                     />
-                    <div className="da-settings-divider" />
                     <SamplerCardView
+                        embedded={true}
                         showScheduler={false}
                         showDenoise={true}
                         samplers={this.vm.samplerOptions.value}
