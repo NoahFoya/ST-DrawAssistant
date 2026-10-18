@@ -3,7 +3,8 @@
  *
  * @remarks
  * 声明弹窗左侧固定宽度（190px）导航栏（.da-sidebar-tabs），
- * 包含选项卡条目（.da-sidebar-item）、激活指示与悬停状态。
+ * 包含选项卡条目（.da-sidebar-item）、生图引擎按需子项（.da-sidebar-sub-item）、
+ * 禁用预留态、细分割线与激活指示。
  */
 
 /* 1. 侧边导航选项卡容器 (严格保持 190px 垂直宽度) */
@@ -67,13 +68,24 @@
     box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
-/* 3. 侧边栏分组细分割线 (.da-sidebar-divider)
-   用于划分“生图提供者设置区”（ComfyUI/SD/NovelAI/OpenAI）与“扩展配置区”（常规/外观/悬浮球/日志/画廊/关于） */
+/* 禁用与功能规划中预留状态 */
+.da-sidebar-item--disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.da-sidebar-item--disabled:hover {
+    background: transparent;
+    color: var(--da-text-secondary);
+    transform: none;
+}
+
+/* 3. 侧边栏语义细分割线 (.da-sidebar-divider) */
 .da-sidebar-divider {
     height: 1px;
     margin: 6px 4px;
-    background: var(--da-separator);
-    opacity: 0.8;
+    background: var(--da-separator, rgba(255, 255, 255, 0.08));
+    opacity: 0.6;
     flex-shrink: 0;
 }
 
@@ -99,29 +111,6 @@
     box-shadow: 0 0 10px var(--da-accent-color);
 }
 
-/* 选项卡内部图标容器与 SVG 尺寸约束 */
-.da-sidebar-item__icon {
-    font-size: 1.05em;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    color: inherit;
-}
-
-.da-sidebar-item__icon svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-    stroke-width: 2;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    display: block;
-}
-
 .da-sidebar-item__label {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -131,7 +120,8 @@
     min-width: 0;
 }
 
-/* 4. 提供者选项卡折叠/展开指示器 (.da-sidebar-item__expand-trigger) */
+
+/* 4. 绘图服务折叠/展开指示器 (.da-sidebar-item__expand-trigger) */
 .da-sidebar-item__expand-trigger {
     display: inline-flex;
     align-items: center;
@@ -160,14 +150,17 @@
     opacity: 1;
 }
 
-/* 5. 侧边栏功能分组小标题 (.da-sidebar-group-title) */
-.da-sidebar-group-title {
-    font-size: var(--da-font-size-xs, 11px);
-    font-weight: 600;
-    color: var(--da-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: var(--da-space-xs, 4px) var(--da-space-sm, 8px) 2px;
-    user-select: none;
-    line-height: 1.2;
+/* 5. 绘图服务子条目弹性容器与缩进样式 (.da-sidebar-sub-items / .da-sidebar-sub-item) */
+.da-sidebar-sub-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-xs, 4px);
+    margin: 2px 0 4px 0;
+}
+
+.da-sidebar-sub-item {
+    padding-left: 22px;
+    font-size: var(--da-font-size-sm, 12px);
+    height: 32px;
+    min-height: 32px;
 }

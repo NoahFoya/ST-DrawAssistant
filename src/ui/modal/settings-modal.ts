@@ -2,11 +2,11 @@
  * 主设置模态外壳 (SettingsModal)。
  *
  * @remarks
- * 负责主设置面板的完整三段式视窗渲染、选项卡调度与生命周期管理：
- * 1. 顶栏：标题徽标、版本路由至关于页、主题快捷切换下拉与关闭控制；
- * 2. 侧边栏：极简条目排布，绘图服务动态标题与双击展开，以及常规/角色/世界书等选项卡；
- * 3. 内容区：按需惰性构建、视图缓存与滚动上下文隔离；
- * 4. 底栏：当前生效绘图服务连通性与往返延迟遥测监控（支持点击手动重测），以及 JS 堆内存监测。
+ * 负责主设置面板的三段式视窗渲染、选项卡调度与生命周期管理：
+ * 1. 顶栏：标题字标、版本路由至关于页、主题快捷切换下拉与关闭控制；
+ * 2. 侧边栏：极简纯净排布，优先展示常规设置与当前生效生图引擎，其余引擎按需展开，预留未就绪项置灰；
+ * 3. 内容区：按需惰性构建、视图缓存与局部独立滚动上下文；
+ * 4. 底栏：当前生效绘图服务连通性与往返延迟遥测（支持点击手动即刻重新探测）。
  */
 
 import type { Disposable, UIComponent, SettingsView } from '../types';
@@ -97,16 +97,18 @@ interface NormalTabDefinition {
     id: string;
     title: string;
     isDivider?: boolean;
+    disabled?: boolean;
 }
 
 const NORMAL_TABS: NormalTabDefinition[] = [
     { id: 'general', title: '常规设置' },
-    { id: 'characters', title: '角色管理' },
-    { id: 'worldbook', title: '世界书' },
+    { id: 'characters', title: '角色管理', disabled: true },
+    { id: 'worldbook', title: '世界书', disabled: true },
     { id: 'divider-1', title: '', isDivider: true },
+    { id: 'gallery', title: '历史画廊' },
     { id: 'theme', title: '外观与主题' },
     { id: 'fab', title: '悬浮球设置' },
-    { id: 'gallery', title: '历史画廊' },
+    { id: 'divider-2', title: '', isDivider: true },
     { id: 'logs', title: '日志与统计' },
     { id: 'about', title: '关于与支持' },
 ];
@@ -124,7 +126,6 @@ export class SettingsModal implements Disposable {
     private contentAreaElement: HTMLElement | null = null;
     private statusDotElement: HTMLElement | null = null;
     private statusTextElement: HTMLElement | null = null;
-    private memoryTextElement: HTMLElement | null = null;
     private providerTitleTextElement: HTMLElement | null = null;
     private providerExpandTrigger: HTMLElement | null = null;
     private providerSubItemsContainer: HTMLElement | null = null;
@@ -137,7 +138,6 @@ export class SettingsModal implements Disposable {
 
     // 遥测定时器与中止控制器
     private healthTimer: ReturnType<typeof setInterval> | null = null;
-    private memoryTimer: ReturnType<typeof setInterval> | null = null;
     private abortController: AbortController | null = null;
 
     // 全局事件解绑函数
@@ -156,10 +156,6 @@ export class SettingsModal implements Disposable {
                 if (this.isOpenState) {
                     void this.checkActiveProviderHealth();
                 }
-            }
-            if (data.key === 'showHelp' || data.keys?.includes('showHelp')) {
-                const showHelp = settingsStore.get('showHelp') ?? true;
-                this.modalElement?.setAttribute('data-da-show-help', String(showHelp));
             }
         });
     }
@@ -202,17 +198,12 @@ export class SettingsModal implements Disposable {
         const targetTab = tabId || this.activeTabId || this.options.defaultTab || 'general';
         this.switchTab(targetTab);
 
-        // 启动底栏连通性探测与内存监测
+        // 启动底栏连通性探测
         void this.checkActiveProviderHealth();
         if (typeof setInterval !== 'undefined') {
             this.healthTimer = setInterval(() => {
                 void this.checkActiveProviderHealth();
             }, 15000);
-
-            this.updateMemoryStatus();
-            this.memoryTimer = setInterval(() => {
-                this.updateMemoryStatus();
-            }, 3000);
         }
 
         this.options.onOpen?.();
@@ -235,10 +226,6 @@ export class SettingsModal implements Disposable {
         if (this.healthTimer !== null) {
             clearInterval(this.healthTimer);
             this.healthTimer = null;
-        }
-        if (this.memoryTimer !== null) {
-            clearInterval(this.memoryTimer);
-            this.memoryTimer = null;
         }
         if (this.abortController !== null) {
             this.abortController.abort();
@@ -455,7 +442,6 @@ export class SettingsModal implements Disposable {
         this.contentAreaElement = null;
         this.statusDotElement = null;
         this.statusTextElement = null;
-        this.memoryTextElement = null;
         this.providerTitleTextElement = null;
         this.providerExpandTrigger = null;
         this.providerSubItemsContainer = null;
@@ -489,8 +475,6 @@ export class SettingsModal implements Disposable {
         // 2. 弹窗主体视窗骨架 (.st-da-root.da-main-modal-inner)
         this.modalElement = document.createElement('div');
         this.modalElement.className = 'st-da-root da-main-modal-inner';
-        const showHelp = settingsStore.get('showHelp') ?? true;
-        this.modalElement.setAttribute('data-da-show-help', String(showHelp));
         this.modalElement.addEventListener('click', (e) => {
             e.stopPropagation();
         });
@@ -516,7 +500,7 @@ export class SettingsModal implements Disposable {
 
         const title = document.createElement('h2');
         title.className = 'da-header-title';
-        title.textContent = '✨Starlight DrawAssistant';
+        title.textContent = 'Starlight DrawAssistant';
 
         const versionBadge = document.createElement('span');
         versionBadge.className = 'da-badge da-header-badge';
@@ -626,11 +610,11 @@ export class SettingsModal implements Disposable {
 
         this.sidebarItems.clear();
 
-        // 1. 常规设置项
+        // 1. 常规设置项（置顶主要设置）
         const generalItem = this.createSidebarItem('general', '常规设置');
         sidebar.appendChild(generalItem);
 
-        // 2. 绘图服务折叠主项
+        // 2. 绘图服务主条目（直接展示当前生效引擎）
         const providerMainItem = document.createElement('button');
         providerMainItem.className = 'da-sidebar-item';
         providerMainItem.type = 'button';
@@ -643,7 +627,7 @@ export class SettingsModal implements Disposable {
         this.providerExpandTrigger = document.createElement('span');
         this.providerExpandTrigger.className = 'da-sidebar-item__expand-trigger';
         this.providerExpandTrigger.textContent = '▾';
-        this.providerExpandTrigger.setAttribute('title', '展开/收起绘图服务列表');
+        this.providerExpandTrigger.setAttribute('title', '展开/收起更多生图引擎');
         this.providerExpandTrigger.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleProviderExpanded();
@@ -652,7 +636,7 @@ export class SettingsModal implements Disposable {
         providerMainItem.appendChild(this.providerTitleTextElement);
         providerMainItem.appendChild(this.providerExpandTrigger);
 
-        // 单击切换至当前生效引擎设置，双击切换展开/收起
+        // 单击直接切换至当前生效引擎设置，双击切换折叠展开
         providerMainItem.addEventListener('click', () => {
             this.switchTab('provider-main');
         });
@@ -663,38 +647,15 @@ export class SettingsModal implements Disposable {
         sidebar.appendChild(providerMainItem);
         this.sidebarItems.set('provider-main', providerMainItem);
 
-        // 3. 绘图服务 4 大引擎子项容器 (默认闭合)
+        // 3. 其余 3 大引擎子项容器（默认按需收拢）
         this.providerSubItemsContainer = document.createElement('div');
-        this.providerSubItemsContainer.style.display = 'none';
-        this.providerSubItemsContainer.style.flexDirection = 'column';
-        this.providerSubItemsContainer.style.gap = '2px';
-        this.providerSubItemsContainer.style.margin = '2px 0 4px 0';
+        this.providerSubItemsContainer.className = 'da-sidebar-sub-items';
+        this.providerSubItemsContainer.style.display = this.isServiceExpanded ? 'flex' : 'none';
 
-        for (const prov of PROVIDER_DEFINITIONS) {
-            const subItem = document.createElement('button');
-            subItem.className = 'da-sidebar-item';
-            subItem.type = 'button';
-            subItem.setAttribute('data-tab-id', prov.id);
-            subItem.style.paddingLeft = '22px';
-            subItem.style.fontSize = '12px';
-
-            const subLabel = document.createElement('span');
-            subLabel.className = 'da-sidebar-item__label';
-            subLabel.setAttribute('data-provider-label-for', prov.id);
-            subItem.appendChild(subLabel);
-
-            subItem.addEventListener('click', () => {
-                this.switchTab(prov.id);
-            });
-
-            this.providerSubItemsContainer.appendChild(subItem);
-            this.sidebarItems.set(prov.id, subItem);
-        }
-
-        this.updateProviderSubItemLabels();
+        this.rebuildProviderSubItems();
         sidebar.appendChild(this.providerSubItemsContainer);
 
-        // 4. 其余普通选项卡与分割线
+        // 4. 其余选项卡与细线分割（按开发者内部规划顺序呈现，不向用户展示冗余分组标题）
         for (const item of NORMAL_TABS) {
             if (item.id === 'general') {
                 continue;
@@ -706,27 +667,43 @@ export class SettingsModal implements Disposable {
                 continue;
             }
 
-            const navItem = this.createSidebarItem(item.id, item.title);
+            const navItem = this.createSidebarItem(
+                item.id,
+                item.title,
+                item.disabled
+            );
             sidebar.appendChild(navItem);
         }
 
         return sidebar;
     }
 
-    private createSidebarItem(tabId: string, title: string): HTMLElement {
+    private createSidebarItem(
+        tabId: string,
+        title: string,
+        disabled?: boolean
+    ): HTMLElement {
         const btn = document.createElement('button');
         btn.className = 'da-sidebar-item';
         btn.type = 'button';
         btn.setAttribute('data-tab-id', tabId);
+
+        if (disabled) {
+            btn.classList.add('da-sidebar-item--disabled');
+            btn.setAttribute('aria-disabled', 'true');
+            btn.title = '功能规划中';
+        }
 
         const label = document.createElement('span');
         label.className = 'da-sidebar-item__label';
         label.textContent = title;
         btn.appendChild(label);
 
-        btn.addEventListener('click', () => {
-            this.switchTab(tabId);
-        });
+        if (!disabled) {
+            btn.addEventListener('click', () => {
+                this.switchTab(tabId);
+            });
+        }
 
         this.sidebarItems.set(tabId, btn);
         return btn;
@@ -736,7 +713,7 @@ export class SettingsModal implements Disposable {
         const footer = document.createElement('div');
         footer.className = 'da-footer-bar';
 
-        // 左侧当前生效服务连通状态 (支持点击重测)
+        // 专注核心连通状态（去除普通用户非必要的 JS Heap 内存指标）
         const serverStatusContainer = document.createElement('div');
         serverStatusContainer.className = 'da-status-item';
         serverStatusContainer.id = 'da-server-status-container';
@@ -765,35 +742,19 @@ export class SettingsModal implements Disposable {
             }
         });
 
-        // 右侧 JS 堆内存实时监控
-        const rightContainer = document.createElement('div');
-        rightContainer.className = 'da-footer-right';
-
-        const memoryContainer = document.createElement('div');
-        memoryContainer.className = 'da-memory-status-container';
-
-        this.memoryTextElement = document.createElement('span');
-        this.memoryTextElement.className = 'da-memory-status-text';
-        this.memoryTextElement.textContent = 'JS Heap: --';
-
-        memoryContainer.appendChild(this.memoryTextElement);
-        rightContainer.appendChild(memoryContainer);
-
         footer.appendChild(serverStatusContainer);
-        footer.appendChild(rightContainer);
         return footer;
     }
 
     private updateSidebarHighlight(activeId: string): void {
         const activeProvider = this.getActiveProviderType();
-        const isProviderSubTab = PROVIDER_DEFINITIONS.some((p) => p.id === activeId);
 
         for (const [id, el] of this.sidebarItems) {
             let shouldBeActive = false;
             if (id === activeId) {
                 shouldBeActive = true;
-            } else if (id === 'provider-main' && isProviderSubTab && activeId === activeProvider) {
-                // 当正在查看当前生效的提供方时，主条目保持高亮关联
+            } else if (id === 'provider-main' && activeId === activeProvider) {
+                // 当正在查看当前全局生效的提供方时，主条目保持高亮关联
                 shouldBeActive = true;
             }
 
@@ -807,7 +768,7 @@ export class SettingsModal implements Disposable {
 
     private updateProviderLabels(): void {
         this.updateProviderTitleText();
-        this.updateProviderSubItemLabels();
+        this.rebuildProviderSubItems();
     }
 
     private updateProviderTitleText(): void {
@@ -816,34 +777,39 @@ export class SettingsModal implements Disposable {
         }
         const activeType = this.getActiveProviderType();
         const activeName = this.getProviderDisplayName(activeType);
-        this.providerTitleTextElement.textContent = `${activeName}`;
+        this.providerTitleTextElement.textContent = activeName;
     }
 
-    private updateProviderSubItemLabels(): void {
+    private rebuildProviderSubItems(): void {
+        if (!this.providerSubItemsContainer) {
+            return;
+        }
+        this.providerSubItemsContainer.innerHTML = '';
         const activeType = this.getActiveProviderType();
+
         for (const prov of PROVIDER_DEFINITIONS) {
-            const labelEl = this.modalElement?.querySelector(`[data-provider-label-for="${prov.id}"]`);
-            if (labelEl) {
-                const isActive = prov.id === activeType;
-                labelEl.textContent = isActive ? `${prov.name} (当前生效)` : prov.name;
+            if (prov.id === activeType) {
+                continue;
             }
-        }
-    }
+            const subItem = document.createElement('button');
+            subItem.className = 'da-sidebar-item da-sidebar-sub-item';
+            subItem.type = 'button';
+            subItem.setAttribute('data-tab-id', prov.id);
 
-    private updateMemoryStatus(): void {
-        if (!this.memoryTextElement) {
-            return;
-        }
-        const perf = typeof performance !== 'undefined'
-            ? (performance as Performance & { memory?: { usedJSHeapSize: number } })
-            : undefined;
+            const subLabel = document.createElement('span');
+            subLabel.className = 'da-sidebar-item__label';
+            subLabel.textContent = prov.name;
+            subItem.appendChild(subLabel);
 
-        if (perf?.memory && typeof perf.memory.usedJSHeapSize === 'number') {
-            const usedMb = (perf.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1);
-            this.memoryTextElement.textContent = `JS Heap: ${usedMb} MB`;
-            return;
+            subItem.addEventListener('click', () => {
+                this.switchTab(prov.id);
+            });
+
+            this.providerSubItemsContainer.appendChild(subItem);
+            this.sidebarItems.set(prov.id, subItem);
         }
-        this.memoryTextElement.textContent = 'JS Heap: 正常';
+
+        this.updateSidebarHighlight(this.activeTabId);
     }
 
     private bindKeyboardEvents(): void {

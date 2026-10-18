@@ -3,15 +3,15 @@
  *
  * @remarks
  * 声明弹窗底部紧凑状态条（.da-footer-bar，固定 34px 高度），
- * 包含生图提供者连通状态指示、端点信息与运行状态提示。
+ * 专注呈现当前生效生图服务的连通状态、往返耗时遥测与即时重测控制。
  */
 
 /* 1. 底部状态栏外壳 (.da-footer-bar)
-   紧凑单行 34px 高度，两端对齐排布，顶部细边框隔离内容区域 */
+   紧凑单行 34px 高度，左对齐专注核心信息，顶部细边框隔离内容区域 */
 .da-footer-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     height: 34px;
     min-height: 34px;
     padding: 0 var(--da-space-lg, 16px);
@@ -27,25 +27,19 @@
     z-index: 20;
 }
 
-.da-footer-right {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--da-space-md, 12px);
-}
-
 /* 2. 状态指示项 (.da-status-item)
    包裹状态圆点与说明文本的扁平状态条；
-   后端服务状态容器具备指针手势，支持点击即时重新探测连通性。 */
+   具备指针手势与轻度悬浮反馈，支持点击即时重新探测连通性。 */
 .da-status-item {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 0 4px;
+    padding: 2px 8px;
     background: transparent;
     border: none;
     box-sizing: border-box;
     cursor: default;
-    transition: color 0.16s ease, opacity 0.16s ease;
+    transition: background 0.16s var(--da-ease), color 0.16s var(--da-ease);
 }
 
 .da-status-item#da-server-status-container {
@@ -54,10 +48,11 @@
 }
 
 .da-status-item#da-server-status-container:hover {
+    background: var(--da-bg-hover);
     color: var(--da-text-primary);
 }
 
-.da-status-item#da-server-status-container:hover .da-status-info {
+.da-status-item#da-server-status-container:hover .da-server-status-text {
     color: var(--da-text-primary);
 }
 
@@ -66,18 +61,10 @@
     box-shadow: 0 0 0 2px var(--da-focus-ring);
 }
 
-.da-status-info,
-.da-server-status-container,
-.da-memory-status-container {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--da-space-xs, 6px);
-}
-
-.da-server-status-text,
-.da-memory-status-text {
+.da-server-status-text {
     color: var(--da-text-secondary);
     font-size: var(--da-font-size-xs, 11px);
+    transition: color 0.16s var(--da-ease);
 }
 
 /* 3. 状态指示小圆点与语义色彩 (.da-status-dot) */

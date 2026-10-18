@@ -2,20 +2,12 @@
  * 字段问号帮助提示按钮与浮动释义气泡样式。
  *
  * @remarks
- * 1. 结构形式：提供紧凑的圆形问号图标按钮（.da-help-btn），嵌入表单行标题侧边。
- * 2. 显隐控制：支持通过 [data-da-show-help="false"] 隐藏所有帮助按钮。
+ * 1. 结构形式：提供紧凑的圆形问号图标按钮（.da-help-btn / .da-help-icon），嵌入表单行标题侧边。
+ * 2. 交互控制：默认弱化视觉干扰（0.35 透明度），hover 时自然高亮呈现并支持 tooltip 浮层。
  * 3. 布局限制：气泡内容超出宽度自动换行，具备最大宽度约束。
  */
 
-/* 1. 显隐控制：当容器设置关闭帮助说明时，优雅隐藏所有问号按钮 */
-[data-da-show-help="false"] .da-help-btn,
-[data-da-show-help="false"] .da-help-icon,
-.st-da-root[data-da-show-help="false"] .da-help-btn,
-.st-da-root[data-da-show-help="false"] .da-help-icon {
-    display: none !important;
-}
-
-/* 2. 问号帮助按钮外壳与交互态 (.da-help-btn)
+/* 1. 问号帮助按钮外壳与交互态 (.da-help-btn)
    尺寸限制为 13px 圆形徽标，平时保持低透明度（0.35）弱化视觉干扰；
    当所在行或字段标题被 hover 时透明度提升至 0.85，引导用户发现；
    自身 hover 时放大至 1.15 倍并呈现品牌色背景。 */
