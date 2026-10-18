@@ -31,20 +31,8 @@ export interface CardViewProps {
 }
 
 export function CardView(props: CardViewProps) {
-    const collapsible = props.collapsible ?? true;
-    const [internalCollapsed, setInternalCollapsed] = useState(props.defaultCollapsed ?? false);
-    const isCollapsed = props.collapsed !== undefined ? props.collapsed : internalCollapsed;
-
-    const handleHeaderClick = () => {
-        if (!collapsible) return;
-        const next = !isCollapsed;
-        setInternalCollapsed(next);
-        props.onToggle?.(next);
-    };
-
     const rootClasses = [
         'da-card',
-        isCollapsed ? 'da-card--collapsed' : '',
         props.dirty ? 'is-dirty' : '',
         props.className || '',
     ]
@@ -53,7 +41,7 @@ export function CardView(props: CardViewProps) {
 
     return (
         <div className={rootClasses}>
-            <div className="da-card__header" onClick={handleHeaderClick}>
+            <div className="da-card__header">
                 <div className="da-card__header-left">
                     <div className="da-card__title-group">
                         <h3 className="da-card__title">{props.title}</h3>
@@ -73,13 +61,6 @@ export function CardView(props: CardViewProps) {
                     >
                         {props.actions}
                     </div>
-                    <span
-                        className="da-card__collapse-arrow"
-                        style={{ display: collapsible ? '' : 'none' }}
-                        dangerouslySetInnerHTML={{
-                            __html: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-                        }}
-                    />
                 </div>
             </div>
             <div className="da-card__body">{props.children}</div>

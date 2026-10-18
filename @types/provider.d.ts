@@ -126,6 +126,12 @@ export interface GenerationProvider {
      * @param signal 中止信号
      */
     fetchSchedulers?(signal?: AbortSignal): Promise<string[]>;
+
+    /**
+     * 获取后端已就绪的 LoRA 模型列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchLoras?(signal?: AbortSignal): Promise<string[]>;
 }
 
 /** 绘图服务提供方注册与检索中心接口 */

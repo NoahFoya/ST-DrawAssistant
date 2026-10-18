@@ -289,9 +289,6 @@ export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VN
                     callbacksRef.current.onChange?.(data);
                 },
             });
-            if (props.defaultCollapsed) {
-                inst.card.setCollapsed(true);
-            }
             return inst;
         },
         (instance) => {
@@ -302,6 +299,9 @@ export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VN
             if (nextJson !== prevPresetsJsonRef.current) {
                 prevPresetsJsonRef.current = nextJson;
                 instance.setPresets(props.presets as PromptCardPresetItem[], props.activePresetId);
+            }
+            if (props.availableModels) {
+                instance.setAvailableModels(props.availableModels);
             }
         }
     );
@@ -331,9 +331,6 @@ export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
                     callbacksRef.current.onChange?.(data);
                 },
             });
-            if (props.defaultCollapsed) {
-                inst.card.setCollapsed(true);
-            }
             return inst;
         },
         (instance) => {

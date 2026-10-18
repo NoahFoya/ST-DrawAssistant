@@ -79,7 +79,6 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 <WorkflowCardView
                     presets={workflowPresets}
                     activePresetId={activeWorkflowId}
-                    defaultCollapsed={true}
                     onAction={(action, wfId, data) =>
                         vm.handleWorkflowAssetAction(action, wfId, data)
                     }
@@ -92,7 +91,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 showLora={props.showLoraInPromptManager !== false}
                 showNegativePrompt={props.showNegativeInPromptManager !== false}
                 mode="standard"
-                defaultCollapsed={true}
+                availableModels={vm.serverLoras.value}
                 onAction={(action, pId, data) => vm.handlePromptAssetAction(action, pId, data)}
             />
         </>

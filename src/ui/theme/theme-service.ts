@@ -135,14 +135,26 @@ export class ThemeService implements Disposable {
         if (merged.bgPrimary) target.style.setProperty('--da-bg-primary', merged.bgPrimary);
         if (merged.bgSecondary) target.style.setProperty('--da-bg-secondary', merged.bgSecondary);
         if (merged.bgSidebar) target.style.setProperty('--da-bg-sidebar', merged.bgSidebar);
-        if (merged.bgCard) target.style.setProperty('--da-bg-card', merged.bgCard);
-        if (merged.bgCardHover) target.style.setProperty('--da-bg-card-hover', merged.bgCardHover);
+        if (merged.bgCard) {
+            target.style.setProperty('--da-bg-card', merged.bgCard);
+            target.style.setProperty('--da-surface-card', merged.bgCard);
+        }
+        if (merged.bgCardHover) {
+            target.style.setProperty('--da-bg-card-hover', merged.bgCardHover);
+            target.style.setProperty('--da-surface-card-hover', merged.bgCardHover);
+        }
         if (merged.bgInput) target.style.setProperty('--da-bg-input', merged.bgInput);
         if (merged.bgInputHover) target.style.setProperty('--da-bg-input-hover', merged.bgInputHover);
         if (merged.textPrimary) target.style.setProperty('--da-text-primary', merged.textPrimary);
         if (merged.textSecondary) target.style.setProperty('--da-text-secondary', merged.textSecondary);
-        if (merged.borderColor) target.style.setProperty('--da-border-color', merged.borderColor);
-        if (merged.borderHighlight) target.style.setProperty('--da-border-highlight', merged.borderHighlight);
+        if (merged.borderColor) {
+            target.style.setProperty('--da-border-color', merged.borderColor);
+            target.style.setProperty('--da-border-card', merged.borderColor);
+        }
+        if (merged.borderHighlight) {
+            target.style.setProperty('--da-border-highlight', merged.borderHighlight);
+            target.style.setProperty('--da-border-card-hover', merged.borderHighlight);
+        }
 
         // 3. 几何规格与毛玻璃滤镜
         if (merged.borderRadius !== undefined) {
@@ -153,6 +165,7 @@ export class ThemeService implements Disposable {
         }
         if (merged.radiusCard !== undefined) {
             target.style.setProperty('--da-radius-card', `${merged.radiusCard}px`);
+            target.style.setProperty('--da-radius-lg', `${merged.radiusCard}px`);
         }
         if (merged.radiusInput !== undefined) {
             target.style.setProperty('--da-radius-input', `${merged.radiusInput}px`);

@@ -212,6 +212,29 @@ export class SdWebUIProvider extends BaseGenerationProvider {
     }
 
     /**
+     * 获取 SD-WebUI 服务端已加载的 LoRA 模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用 LoRA 模型名称数组
+     */
+    public async fetchLoras(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/sdapi/v1/loras`;
+
+        const response = await this.fetchWithTransport(url, { method: 'GET', timeoutMs: 15000, signal }, transport);
+        const data = (await response.json()) as Array<{ name?: string; alias?: string }>;
+
+        if (!Array.isArray(data)) {
+            return [];
+        }
+
+        return data
+            .map((item) => item.name ?? item.alias ?? '')
+            .filter((name) => name.trim().length > 0);
+    }
+
+    /**
      * 执行 SD-WebUI 图像生成任务（txt2img）。
      *
      * @remarks

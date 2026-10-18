@@ -17,6 +17,7 @@ import {
     PreactSettingsView,
     CardView,
     SchemaCard,
+    SchemaFieldsView,
     type FieldSchema,
     DimensionPickerView,
     SamplerCardView,
@@ -221,20 +222,17 @@ export class SDWebUITabView extends PreactSettingsView {
                 showWorkflowManager={false}
                 showLoraInPromptManager={true}
             >
-                <SchemaCard
-                    schema={{
-                        id: 'sdwebui-model',
-                        title: '模型与预设',
-                        collapsible: true,
-                        fields: this.modelFields,
-                    }}
-                    model={draft}
-                    dirtyFields={dirtyFields}
-                    invalidFields={invalidFields}
-                    onFieldChange={(key, val) => presetController.updateDraft(key, val)}
-                />
+                <CardView title="生图配置">
+                    <SchemaFieldsView
+                        fields={this.modelFields}
+                        model={draft}
+                        dirtyFields={dirtyFields}
+                        invalidFields={invalidFields}
+                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                    />
 
-                <CardView title="尺寸与采样" collapsible={true}>
+                    <div className="da-settings-divider" />
+
                     <DimensionPickerView
                         embedded={true}
                         width={draft.width || 832}
@@ -247,6 +245,9 @@ export class SDWebUITabView extends PreactSettingsView {
                             })
                         }
                     />
+
+                    <div className="da-settings-divider" />
+
                     <SamplerCardView
                         embedded={true}
                         showScheduler={false}
@@ -276,8 +277,6 @@ export class SDWebUITabView extends PreactSettingsView {
                     schema={{
                         id: 'sdwebui-hires',
                         title: '高清修复 (Hires. fix)',
-                        collapsible: true,
-                        defaultCollapsed: !draft.enableHires,
                         fields: this.hiresFields,
                     }}
                     model={draft}

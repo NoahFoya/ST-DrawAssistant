@@ -14,7 +14,6 @@
 import type { UIComponent, Disposable } from '../types';
 import { Card } from '../components/card';
 import { Select, type SelectOption } from '../components/select';
-import { TextInput } from '../components/text-input';
 import { Switch } from '../components/switch';
 import { NumberInput } from '../components/number-input';
 import { Button } from '../components/button';
@@ -116,7 +115,6 @@ class LoraItemRow implements Disposable {
     private readonly paramsRow: HTMLElement;
 
     private selectComponent?: Select;
-    private textInputComponent?: TextInput;
 
     private modelWeightInput!: NumberInput;
     private clipWeightInput!: NumberInput;
@@ -181,51 +179,43 @@ class LoraItemRow implements Disposable {
         this.element.appendChild(this.paramsRow);
     }
 
-    /** 渲染首行模型资产选择或输入控件 */
+    /** 渲染首行模型资产下拉选择控件（仅支持下拉选择，防范手动输入错误） */
     public renderAssetControl(availableModels: string[]): void {
         this.assetContainer.innerHTML = '';
         this.selectComponent?.dispose();
-        this.textInputComponent?.dispose();
 
-        if (availableModels.length > 0) {
-            const options: SelectOption[] = availableModels.map(m => ({
-                value: m,
-                label: m
-            }));
+        const options: SelectOption[] = availableModels.map(m => ({
+            value: m,
+            label: m
+        }));
 
-            // 若当前条目模型名不在已载入列表中，在首位保留以保全数据
-            const exists = availableModels.includes(this.item.modelName);
-            if (this.item.modelName && !exists) {
-                options.unshift({
-                    value: this.item.modelName,
-                    label: `${this.item.modelName} (未探测到)`
-                });
-            }
-
-            this.selectComponent = new Select({
+        // 若当前条目模型名不在已载入列表中，在首位保留以保全数据
+        if (this.item.modelName && !availableModels.includes(this.item.modelName)) {
+            options.unshift({
                 value: this.item.modelName,
-                options,
-                placeholder: '选择 LoRA 资产...',
-                disabled: !this.item.enabled,
-                onChange: (val) => {
-                    this.item.modelName = val;
-                    this.options.onUpdate(this.item.id, { modelName: val });
-                }
+                label: `${this.item.modelName} (未探测到)`
             });
-            this.assetContainer.appendChild(this.selectComponent.element);
-        } else {
-            this.textInputComponent = new TextInput({
-                value: this.item.modelName,
-                placeholder: '输入 LoRA 模型文件名 (如 anime_v2.safetensors)',
-                disabled: !this.item.enabled,
-                onChange: (val) => {
-                    const clean = val.trim();
-                    this.item.modelName = clean;
-                    this.options.onUpdate(this.item.id, { modelName: clean });
-                }
-            });
-            this.assetContainer.appendChild(this.textInputComponent.element);
         }
+
+        if (options.length === 0) {
+            options.push({
+                value: '',
+                label: '(未拉取到可用 LoRA 列表)'
+            });
+        }
+
+        this.selectComponent = new Select({
+            value: this.item.modelName,
+            options,
+            placeholder: '选择 LoRA 资产...',
+            disabled: !this.item.enabled || (options.length === 1 && !options[0].value),
+            onChange: (val) => {
+                if (!val) return;
+                this.item.modelName = val;
+                this.options.onUpdate(this.item.id, { modelName: val });
+            }
+        });
+        this.assetContainer.appendChild(this.selectComponent.element);
     }
 
     /** 渲染次行参数步进器 */
@@ -332,7 +322,6 @@ class LoraItemRow implements Disposable {
         this.triggerWeightInput?.setDisabled(disabled);
 
         this.selectComponent?.setDisabled(disabled);
-        this.textInputComponent?.setDisabled(disabled);
     }
 
     public dispose(): void {
@@ -341,7 +330,6 @@ class LoraItemRow implements Disposable {
         }
         this.disposables.length = 0;
         this.selectComponent?.dispose();
-        this.textInputComponent?.dispose();
         this.modelWeightInput?.dispose();
         this.clipWeightInput?.dispose();
         this.triggerWeightInput?.dispose();
@@ -372,7 +360,6 @@ export class LoraManager implements UIComponent, Disposable {
     private readonly addModelButton: Button;
 
     private modelSelectInput?: Select;
-    private manualAddInput?: TextInput;
     private selectedAddModelName = '';
 
     private readonly listContainer: HTMLElement;
@@ -388,8 +375,6 @@ export class LoraManager implements UIComponent, Disposable {
         this.card = new Card({
             title: options.title ?? 'LoRA 模型管理',
             subtitle: options.subtitle ?? '挂载并配置生图 LoRA 模型及权重',
-            collapsible: true,
-            defaultCollapsed: false
         });
         this.element = this.card.element;
         this.disposables.push(this.card);
@@ -444,11 +429,10 @@ export class LoraManager implements UIComponent, Disposable {
         this.updateQuotaDisplay();
     }
 
-    /** 渲染顶部添加控制区 */
+    /** 渲染顶部添加控制区（使用下拉选择器，防范手动输入错误） */
     private renderAddBarControl(): void {
         this.addControlBox.innerHTML = '';
         this.modelSelectInput?.dispose();
-        this.manualAddInput?.dispose();
 
         if (this.availableModels.length > 0) {
             const options: SelectOption[] = this.availableModels.map(m => ({
@@ -456,7 +440,7 @@ export class LoraManager implements UIComponent, Disposable {
                 label: m
             }));
 
-            if (!this.selectedAddModelName && options.length > 0) {
+            if (!this.selectedAddModelName || !this.availableModels.includes(this.selectedAddModelName)) {
                 this.selectedAddModelName = options[0].value;
             }
 
@@ -469,15 +453,18 @@ export class LoraManager implements UIComponent, Disposable {
                 }
             });
             this.addControlBox.appendChild(this.modelSelectInput.element);
+            this.addModelButton.setDisabled(false);
         } else {
-            this.manualAddInput = new TextInput({
-                value: this.selectedAddModelName,
-                placeholder: '输入 LoRA 模型文件名 (如 anime_v2.safetensors)',
-                onChange: (val) => {
-                    this.selectedAddModelName = val.trim();
-                }
+            this.selectedAddModelName = '';
+            this.modelSelectInput = new Select({
+                value: '',
+                options: [
+                    { value: '', label: '(未检测到可用 LoRA，请先连接服务并同步)' }
+                ],
+                disabled: true
             });
-            this.addControlBox.appendChild(this.manualAddInput.element);
+            this.addControlBox.appendChild(this.modelSelectInput.element);
+            this.addModelButton.setDisabled(true);
         }
     }
 
@@ -610,7 +597,7 @@ export class LoraManager implements UIComponent, Disposable {
             this.addModelButton.setDisabled(true);
         } else {
             this.quotaBadge.setVariant('info');
-            this.addModelButton.setDisabled(false);
+            this.addModelButton.setDisabled(this.availableModels.length === 0);
         }
 
         this.emptyNoticeElement.style.display = count === 0 ? 'block' : 'none';
@@ -644,7 +631,6 @@ export class LoraManager implements UIComponent, Disposable {
         }
         this.itemRows.clear();
         this.modelSelectInput?.dispose();
-        this.manualAddInput?.dispose();
         for (const d of this.disposables) {
             d.dispose();
         }

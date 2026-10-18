@@ -46,7 +46,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     {
         id: 'general-basic',
         title: '基础配置',
-        collapsible: true,
         fields: [
             {
                 key: 'enabled',
@@ -97,7 +96,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     {
         id: 'general-interact',
         title: '交互与触发',
-        collapsible: true,
         fields: [
             {
                 key: 'placeholderStart',
@@ -161,7 +159,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     {
         id: 'general-display',
         title: '图片显示',
-        collapsible: true,
         fields: [
             {
                 key: 'align',
@@ -233,7 +230,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     {
         id: 'general-storage',
         title: '存储设置',
-        collapsible: true,
         fields: [
             {
                 key: 'imageQuality',

@@ -374,6 +374,7 @@ export interface SchemaCardProps<TModel extends Record<string, any> = any> {
     onChangeField?: (key: any, value: any) => void;
     onFieldChange?: (key: any, value: any) => void;
     onChangeFields?: (partial: Partial<TModel>) => void;
+    children?: ComponentChildren;
 }
 
 /**
@@ -390,16 +391,12 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
         onChangeField,
         onFieldChange,
         onChangeFields,
+        children,
     } = props;
 
     if (schema.visibleWhen && !schema.visibleWhen(model)) {
         return null;
     }
-
-    const initialCollapsed =
-        typeof schema.defaultCollapsed === 'function'
-            ? schema.defaultCollapsed(model)
-            : Boolean(schema.defaultCollapsed);
 
     const isCardDirty = Boolean(
         schema.cardDirtyKeys &&
@@ -411,8 +408,6 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
         <CardView
             title={schema.title}
             subtitle={schema.subtitle}
-            collapsible={schema.collapsible ?? true}
-            defaultCollapsed={initialCollapsed}
             dirty={isCardDirty}
             badges={schema.renderBadges?.(model)}
             actions={schema.renderActions?.(model)}
@@ -429,7 +424,52 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
                     onChangeFields={onChangeFields}
                 />
             ))}
+            {children}
         </CardView>
+    );
+}
+
+export interface SchemaFieldsViewProps<TModel extends Record<string, any> = any> {
+    fields: FieldSchema<TModel>[];
+    model: TModel;
+    dirtyFields?: ReadonlySet<string>;
+    invalidFields?: ReadonlySet<string>;
+    onChangeField?: (key: any, value: any) => void;
+    onFieldChange?: (key: any, value: any) => void;
+    onChangeFields?: (partial: Partial<TModel>) => void;
+}
+
+/**
+ * 批量渲染一组声明式表单字段（无需 CardView 外壳）。
+ */
+export function SchemaFieldsView<TModel extends Record<string, any> = any>(
+    props: SchemaFieldsViewProps<TModel>
+) {
+    const {
+        fields,
+        model,
+        dirtyFields,
+        invalidFields,
+        onChangeField,
+        onFieldChange,
+        onChangeFields,
+    } = props;
+
+    return (
+        <>
+            {fields.map((field) => (
+                <SchemaFieldRenderer
+                    key={field.key}
+                    schema={field}
+                    model={model}
+                    dirtyFields={dirtyFields}
+                    invalidFields={invalidFields}
+                    onChangeField={onChangeField}
+                    onFieldChange={onFieldChange}
+                    onChangeFields={onChangeFields}
+                />
+            ))}
+        </>
     );
 }
 

@@ -78,8 +78,7 @@ export class ConnectionCard implements UIComponent, Disposable {
     private apiKeyInput?: TextInput;
     private apiKeyFormField?: FormField;
 
-    private readonly pingButton: Button;
-    private fetchAssetsButton?: Button;
+    private readonly actionButton: Button;
 
     private pingAbortController: AbortController | null = null;
     private assetAbortController: AbortController | null = null;
@@ -96,8 +95,6 @@ export class ConnectionCard implements UIComponent, Disposable {
         this.card = new Card({
             title: options.title ?? '服务连接',
             subtitle: options.subtitle,
-            collapsible: true,
-            defaultCollapsed: false,
         });
         this.element = this.card.element;
         this.element.classList.add('da-connection-card');
@@ -155,7 +152,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             },
         });
         this.urlFormField = new FormField({
-            label: '服务地址',
+            label: 'Url',
             required: true,
             control: this.urlInput,
         });
@@ -184,7 +181,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.disposables.push(this.apiKeyInput, this.apiKeyFormField);
         }
 
-        // 4. 构建操作按钮行
+        // 4. 构建操作按钮行（合并测试连接与同步资产为统一主操作按钮）
         const actionRow = document.createElement('div');
         actionRow.classList.add('da-card__actions-row');
         actionRow.style.display = 'flex';
@@ -192,33 +189,18 @@ export class ConnectionCard implements UIComponent, Disposable {
         actionRow.style.gap = '8px';
         actionRow.style.marginTop = '8px';
 
-        // 4.1 可选：同步模型按钮（若提供了 onFetchAssets 或由子类重载实现）
-        if (options.onFetchAssets || this.hasCustomFetchAssetList()) {
-            this.fetchAssetsButton = new Button({
-                label: '同步模型',
-                variant: 'secondary',
-                size: 'sm',
-                className: 'da-connection-btn--refresh',
-                onClick: async () => {
-                    await this.triggerFetchAssets();
-                },
-            });
-            actionRow.appendChild(this.fetchAssetsButton.element);
-            this.disposables.push(this.fetchAssetsButton);
-        }
-
-        // 4.2 连通性健康测试按钮
-        this.pingButton = new Button({
-            label: '测试连接',
+        const hasAssetSync = Boolean(options.onFetchAssets || this.hasCustomFetchAssetList());
+        this.actionButton = new Button({
+            label: hasAssetSync ? '测试连接与同步' : '测试连接',
             variant: 'primary',
             size: 'sm',
-            className: 'da-connection-btn--ping',
+            className: 'da-connection-btn--sync',
             onClick: async () => {
-                await this.triggerPing();
+                await this.triggerPingAndSync();
             },
         });
-        actionRow.appendChild(this.pingButton.element);
-        this.disposables.push(this.pingButton);
+        actionRow.appendChild(this.actionButton.element);
+        this.disposables.push(this.actionButton);
 
         this.card.appendContent(actionRow);
     }
@@ -282,7 +264,7 @@ export class ConnectionCard implements UIComponent, Disposable {
         this.pingAbortController = new AbortController();
 
         this.updateBadge('info', '探测中...');
-        this.pingButton.setLoading(true);
+        this.actionButton.setLoading(true);
 
         try {
             const result = await this.options.onTestPing(this.data.serverUrl, this.data.apiKey);
@@ -299,7 +281,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.updateBadge('danger', `探测异常: ${msg}`);
             return { status: 'error', message: msg };
         } finally {
-            this.pingButton.setLoading(false);
+            this.actionButton.setLoading(false);
             this.pingAbortController = null;
         }
     }
@@ -324,9 +306,7 @@ export class ConnectionCard implements UIComponent, Disposable {
         }
         this.assetAbortController = new AbortController();
 
-        if (this.fetchAssetsButton) {
-            this.fetchAssetsButton.setLoading(true);
-        }
+        this.actionButton.setLoading(true);
 
         try {
             return await executor(this.data.serverUrl, this.data.apiKey);
@@ -334,11 +314,27 @@ export class ConnectionCard implements UIComponent, Disposable {
             logger.error('[ConnectionCard] 拉取模型资产失败:', err instanceof Error ? err.message : String(err));
             return null;
         } finally {
-            if (this.fetchAssetsButton) {
-                this.fetchAssetsButton.setLoading(false);
-            }
+            this.actionButton.setLoading(false);
             this.assetAbortController = null;
         }
+    }
+
+    /**
+     * 触发一键连通性测试与资产同步。
+     *
+     * @remarks
+     * 先进行健康连通探测；当且仅当连通成功且具备资产拉取能力时，立即自动级联同步模型等资产。
+     */
+    public async triggerPingAndSync(): Promise<{
+        ping: ProviderHealthResult | null;
+        assets: AssetFetchResult | null;
+    }> {
+        const pingResult = await this.triggerPing();
+        if (pingResult?.status === 'ok' && (this.options.onFetchAssets || this.hasCustomFetchAssetList())) {
+            const assetResult = await this.triggerFetchAssets();
+            return { ping: pingResult, assets: assetResult };
+        }
+        return { ping: pingResult, assets: null };
     }
 
     /**

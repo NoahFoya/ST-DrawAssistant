@@ -248,6 +248,45 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     }
 
     /**
+     * 获取 ComfyUI 服务端已载入的 LoRA 模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用 LoRA 模型文件名数组
+     */
+    public async fetchLoras(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/object_info`;
+
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
+        const data = (await response.json()) as Record<string, any>;
+        const loras = new Set<string>();
+
+        const list1 = data?.LoraLoader?.input?.required?.lora_name?.[0];
+        if (Array.isArray(list1)) {
+            for (const name of list1) {
+                if (typeof name === 'string' && name.trim()) {
+                    loras.add(name.trim());
+                }
+            }
+        }
+        const list2 = data?.LoraLoaderModelOnly?.input?.required?.lora_name?.[0];
+        if (Array.isArray(list2)) {
+            for (const name of list2) {
+                if (typeof name === 'string' && name.trim()) {
+                    loras.add(name.trim());
+                }
+            }
+        }
+
+        return Array.from(loras);
+    }
+
+    /**
      * 执行 ComfyUI 图像生成任务。
      *
      * @param request 生图请求参数

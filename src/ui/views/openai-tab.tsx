@@ -18,7 +18,7 @@ import type { ProviderPreset } from '../composite/connection-card';
 import {
     PreactSettingsView,
     CardView,
-    SchemaCard,
+    SchemaFieldsView,
     SchemaFieldRenderer,
     type FieldSchema,
     DimensionPickerView,
@@ -231,20 +231,17 @@ export class OpenAITabView extends PreactSettingsView {
                 showLoraInPromptManager={false}
                 showNegativeInPromptManager={false}
             >
-                <SchemaCard
-                    schema={{
-                        id: 'openai-model-prompt',
-                        title: '模型与预设',
-                        collapsible: true,
-                        fields: this.modelFields,
-                    }}
-                    model={draft}
-                    dirtyFields={dirtyFields}
-                    invalidFields={invalidFields}
-                    onFieldChange={(key, val) => presetController.updateDraft(key, val)}
-                />
+                <CardView title="生图配置">
+                    <SchemaFieldsView
+                        fields={this.modelFields}
+                        model={draft}
+                        dirtyFields={dirtyFields}
+                        invalidFields={invalidFields}
+                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                    />
 
-                <CardView title="尺寸与规格" collapsible={true}>
+                    <div className="da-settings-divider" />
+
                     <DimensionPickerView
                         embedded={true}
                         width={draft.width || 1024}
@@ -257,6 +254,9 @@ export class OpenAITabView extends PreactSettingsView {
                             })
                         }
                     />
+
+                    <div className="da-settings-divider" />
+
                     <SchemaFieldRenderer
                         field={QUALITY_FIELD}
                         model={draft}
@@ -273,11 +273,7 @@ export class OpenAITabView extends PreactSettingsView {
                     />
                 </CardView>
 
-                <CardView
-                    title="自定义请求体 JSON 扩展"
-                    collapsible={true}
-                    defaultCollapsed={true}
-                >
+                <CardView title="自定义请求体 JSON 扩展">
                     <div className="da-form-row">
                         <div className="da-form-label">JSON 扩展参数</div>
                         <textarea

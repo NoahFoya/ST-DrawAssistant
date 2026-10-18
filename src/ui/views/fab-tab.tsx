@@ -106,7 +106,7 @@ export class FabTabView extends PreactSettingsView {
 
         return (
             <>
-                <CardView title="基础行为" collapsible={true}>
+                <CardView title="基础行为">
                     <FormFieldView
                         label="启用常驻悬浮球"
                         tooltip="在屏幕边缘保留常驻悬浮入口，点击可随时打开设置面板"
@@ -150,7 +150,7 @@ export class FabTabView extends PreactSettingsView {
                     </div>
                 </CardView>
 
-                <CardView title="图标与外观" collapsible={true}>
+                <CardView title="图标与外观">
                     <FormFieldView
                         label="内置图标"
                         tooltip="选择内置矢量图标作为悬浮球图案"

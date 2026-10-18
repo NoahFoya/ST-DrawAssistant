@@ -17,6 +17,7 @@ import {
     PreactSettingsView,
     CardView,
     SchemaCard,
+    SchemaFieldsView,
     SchemaFieldRenderer,
     type FieldSchema,
     DimensionPickerView,
@@ -215,20 +216,17 @@ export class NovelAITabView extends PreactSettingsView {
                 showWorkflowManager={false}
                 showLoraInPromptManager={false}
             >
-                <SchemaCard
-                    schema={{
-                        id: 'novelai-model',
-                        title: '模型与预设',
-                        collapsible: true,
-                        fields: this.modelFields,
-                    }}
-                    model={draft}
-                    dirtyFields={dirtyFields}
-                    invalidFields={invalidFields}
-                    onFieldChange={(key, val) => presetController.updateDraft(key, val)}
-                />
+                <CardView title="生图配置">
+                    <SchemaFieldsView
+                        fields={this.modelFields}
+                        model={draft}
+                        dirtyFields={dirtyFields}
+                        invalidFields={invalidFields}
+                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                    />
 
-                <CardView title="尺寸与采样" collapsible={true}>
+                    <div className="da-settings-divider" />
+
                     <DimensionPickerView
                         embedded={true}
                         width={draft.width || 832}
@@ -242,6 +240,9 @@ export class NovelAITabView extends PreactSettingsView {
                             })
                         }
                     />
+
+                    <div className="da-settings-divider" />
+
                     <SamplerCardView
                         embedded={true}
                         showScheduler={false}
@@ -276,7 +277,6 @@ export class NovelAITabView extends PreactSettingsView {
                     schema={{
                         id: 'novelai-advanced',
                         title: '高级特性',
-                        collapsible: true,
                         fields: this.advancedFields,
                     }}
                     model={draft}

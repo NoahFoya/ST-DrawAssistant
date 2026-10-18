@@ -92,6 +92,10 @@ export class ProviderTabViewModel implements Disposable {
     public readonly serverClips: Signal<string[]>;
     /** 是否已从服务端拉取过 CLIP */
     public readonly hasFetchedClips: Signal<boolean>;
+    /** 服务端拉取的 LoRA 列表 */
+    public readonly serverLoras: Signal<string[]>;
+    /** 是否已从服务端拉取过 LoRA */
+    public readonly hasFetchedLoras: Signal<boolean>;
     /** 当前可用采样器选项列表 */
     public readonly samplerOptions: Signal<SelectOption[]>;
     /** 当前可用调度器选项列表 */
@@ -140,6 +144,8 @@ export class ProviderTabViewModel implements Disposable {
         this.hasFetchedVaes = signal<boolean>(false);
         this.serverClips = signal<string[]>([]);
         this.hasFetchedClips = signal<boolean>(false);
+        this.serverLoras = signal<string[]>([]);
+        this.hasFetchedLoras = signal<boolean>(false);
         this.samplerOptions = signal<SelectOption[]>(options.defaultSamplers ?? []);
         this.schedulerOptions = signal<SelectOption[]>(options.defaultSchedulers ?? []);
 
@@ -519,6 +525,16 @@ export class ProviderTabViewModel implements Disposable {
             if (Array.isArray(samplers) && samplers.length > 0) {
                 totalCount += samplers.length;
                 this.samplerOptions.value = samplers.map((s) => ({ label: s, value: s }));
+            }
+        }
+
+        // 5. 拉取 LoRA 模型列表 (如 SD-WebUI, ComfyUI)
+        if (typeof provider.fetchLoras === 'function') {
+            const loras = await provider.fetchLoras();
+            if (Array.isArray(loras) && loras.length > 0) {
+                totalCount += loras.length;
+                this.serverLoras.value = loras;
+                this.hasFetchedLoras.value = true;
             }
         }
 

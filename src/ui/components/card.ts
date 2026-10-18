@@ -31,25 +31,12 @@ export class Card implements UIComponent {
     private readonly subtitleElement: HTMLElement;
     private readonly badgesContainer: HTMLElement;
     private readonly actionsContainer: HTMLElement;
-    private readonly collapseArrow: HTMLElement;
     private readonly bodyElement: HTMLElement;
 
-    private isCollapsedState: boolean;
-    private readonly isCollapsible: boolean;
-    private readonly onToggleCallback?: (collapsed: boolean) => void;
-    private readonly headerClickHandler?: (event: MouseEvent) => void;
-
     constructor(options: CardOptions) {
-        this.isCollapsible = options.collapsible ?? true;
-        this.isCollapsedState = options.defaultCollapsed ?? false;
-        this.onToggleCallback = options.onToggle;
-
         // 1. 创建根卡片 DOM
         this.element = document.createElement('div');
         this.element.classList.add('da-card');
-        if (this.isCollapsedState) {
-            this.element.classList.add('da-card--collapsed');
-        }
 
         // 2. 组装头部
         this.headerElement = document.createElement('div');
@@ -77,7 +64,7 @@ export class Card implements UIComponent {
         headerLeft.appendChild(titleGroup);
         this.headerElement.appendChild(headerLeft);
 
-        // 3. 组装头部右侧（徽标、操作区、折叠箭头）
+        // 3. 组装头部右侧（徽标与操作区）
         const headerRight = document.createElement('div');
         headerRight.classList.add('da-card__header-right');
 
@@ -87,17 +74,7 @@ export class Card implements UIComponent {
 
         this.actionsContainer = document.createElement('div');
         this.actionsContainer.classList.add('da-card__actions');
-        // 阻止操作区内的交互事件冒泡触发卡片折叠
-        this.actionsContainer.addEventListener('click', (e) => e.stopPropagation());
         headerRight.appendChild(this.actionsContainer);
-
-        this.collapseArrow = document.createElement('span');
-        this.collapseArrow.classList.add('da-card__collapse-arrow');
-        this.collapseArrow.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-        if (!this.isCollapsible) {
-            this.collapseArrow.style.display = 'none';
-        }
-        headerRight.appendChild(this.collapseArrow);
 
         this.headerElement.appendChild(headerRight);
         this.element.appendChild(this.headerElement);
@@ -106,14 +83,6 @@ export class Card implements UIComponent {
         this.bodyElement = document.createElement('div');
         this.bodyElement.classList.add('da-card__body');
         this.element.appendChild(this.bodyElement);
-
-        // 5. 绑定折叠切换监听
-        if (this.isCollapsible) {
-            this.headerClickHandler = () => {
-                this.toggle();
-            };
-            this.headerElement.addEventListener('click', this.headerClickHandler);
-        }
     }
 
     /**
@@ -163,33 +132,24 @@ export class Card implements UIComponent {
     }
 
     /**
-     * 切换卡片折叠/展开状态。
+     * 切换卡片折叠/展开状态（当前设计卡片恒定展开，保留兼容空实现）。
      */
     public toggle(): void {
-        this.setCollapsed(!this.isCollapsedState);
+        // 卡片恒定展开
     }
 
     /**
-     * 受控设置卡片折叠/展开状态。
+     * 受控设置卡片折叠/展开状态（当前设计卡片恒定展开，保留兼容空实现）。
      */
-    public setCollapsed(collapsed: boolean): void {
-        if (!this.isCollapsible || this.isCollapsedState === collapsed) {
-            return;
-        }
-        this.isCollapsedState = collapsed;
-        if (this.isCollapsedState) {
-            this.element.classList.add('da-card--collapsed');
-        } else {
-            this.element.classList.remove('da-card--collapsed');
-        }
-        this.onToggleCallback?.(this.isCollapsedState);
+    public setCollapsed(_collapsed: boolean): void {
+        // 卡片恒定展开
     }
 
     /**
-     * 查询当前是否处于折叠状态。
+     * 查询当前是否处于折叠状态（恒定返回 false）。
      */
     public isCollapsed(): boolean {
-        return this.isCollapsedState;
+        return false;
     }
 
     /**
@@ -216,9 +176,6 @@ export class Card implements UIComponent {
      * 释放事件监听与 DOM 引用。
      */
     public dispose(): void {
-        if (this.headerClickHandler) {
-            this.headerElement.removeEventListener('click', this.headerClickHandler);
-        }
         this.clearContent();
         this.badgesContainer.innerHTML = '';
         this.actionsContainer.innerHTML = '';

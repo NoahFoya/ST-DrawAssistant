@@ -202,7 +202,6 @@ export class AboutTabView extends PreactSettingsView {
                 <CardView
                     title="Starlight DrawAssistant"
                     subtitle="轻量可靠、开箱即用的 SillyTavern AI 生图扩展插件"
-                    collapsible={true}
                 >
                     <div
                         className="da-about-intro"
@@ -283,7 +282,6 @@ export class AboutTabView extends PreactSettingsView {
                 <CardView
                     title="运行环境与系统诊断"
                     subtitle="实时探测宿主、浏览器内核与存储支持状态，排障时可一键生成诊断报告"
-                    collapsible={true}
                 >
                     <div
                         className="da-env-container"
@@ -330,7 +328,6 @@ export class AboutTabView extends PreactSettingsView {
                 <CardView
                     title="数据运维与全量备份"
                     subtitle="导出或导入插件全部设置与预设方案，支持在异常时恢复出厂默认设置"
-                    collapsible={true}
                 >
                     <input
                         ref={fileInputRef}

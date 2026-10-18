@@ -99,7 +99,7 @@ export class ThemeTabView extends PreactSettingsView {
                     onImportFile={(file) => this.presetController.handleImportFile(file)}
                 />
 
-                <CardView title="外观模式与强调色" collapsible={true}>
+                <CardView title="外观模式与强调色">
                     <FormFieldView
                         label="色彩模式"
                         tooltip="切换界面的基底色彩模式（深色或浅色）"
@@ -146,7 +146,7 @@ export class ThemeTabView extends PreactSettingsView {
                     </FormFieldView>
                 </CardView>
 
-                <CardView title="视觉细节微调" collapsible={true}>
+                <CardView title="视觉细节微调">
                     <FormFieldView
                         label="界面圆角"
                         tooltip="控制窗口、卡片与输入控件的圆角边缘弧度 (0px ~ 20px)"

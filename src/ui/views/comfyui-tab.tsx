@@ -15,7 +15,7 @@ import type { DrawingPresetData } from '@types';
 import {
     PreactSettingsView,
     CardView,
-    SchemaCard,
+    SchemaFieldsView,
     type FieldSchema,
     DimensionPickerView,
     SamplerCardView,
@@ -155,20 +155,17 @@ export class ComfyUITabView extends PreactSettingsView {
                 showWorkflowManager={true}
                 showLoraInPromptManager={true}
             >
-                <SchemaCard
-                    schema={{
-                        id: 'comfyui-model-workflow',
-                        title: '模型与工作流',
-                        collapsible: true,
-                        fields: this.modelWorkflowFields,
-                    }}
-                    model={draft}
-                    dirtyFields={dirtyFields}
-                    invalidFields={invalidFields}
-                    onFieldChange={(key, val) => presetController.updateDraft(key, val)}
-                />
+                <CardView title="生图配置">
+                    <SchemaFieldsView
+                        fields={this.modelWorkflowFields}
+                        model={draft}
+                        dirtyFields={dirtyFields}
+                        invalidFields={invalidFields}
+                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                    />
 
-                <CardView title="尺寸与采样" collapsible={true}>
+                    <div className="da-settings-divider" />
+
                     <DimensionPickerView
                         embedded={true}
                         width={draft.width || 1024}
@@ -181,7 +178,9 @@ export class ComfyUITabView extends PreactSettingsView {
                             })
                         }
                     />
+
                     <div className="da-settings-divider" />
+
                     <SamplerCardView
                         embedded={true}
                         showScheduler={true}
