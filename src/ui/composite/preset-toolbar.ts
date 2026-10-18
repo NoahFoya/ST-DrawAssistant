@@ -216,7 +216,8 @@ export class PresetToolbar implements UIComponent {
      */
     private updateActionButtonsState(): void {
         const hasActive = Boolean(this.activeId && this.currentPresets.some((p) => p.id === this.activeId));
-        this.saveButton.setDisabled(!hasActive);
+        // 无激活方案时（例如空预设列表或草稿编辑状态），允许通过保存按钮直接引导新建保存方案
+        this.saveButton.setDisabled(!hasActive && this.currentPresets.length > 0 && !this.isCurrentlyDirty);
         this.saveAsButton.setDisabled(!hasActive);
         this.renameButton.setDisabled(!hasActive);
         this.exportButton.setDisabled(!hasActive);
@@ -262,7 +263,8 @@ export class PresetToolbar implements UIComponent {
     public setDirty(isDirty: boolean, hint?: string): void {
         this.isCurrentlyDirty = isDirty;
         const hasActive = Boolean(this.activeId && this.currentPresets.some((p) => p.id === this.activeId));
-        this.saveButton.element.classList.toggle('is-dirty', isDirty && hasActive);
+        this.saveButton.element.classList.toggle('is-dirty', isDirty);
+        this.saveButton.setDisabled(!hasActive && this.currentPresets.length > 0 && !isDirty);
         this.resetButton.setDisabled(!isDirty || !hasActive);
         this.selectWrapper.classList.toggle('is-dirty', isDirty);
 

@@ -317,7 +317,11 @@ export class PresetController<TData extends Record<string, any>> {
 
             case 'save': {
                 const cur = this.currentPreset.value;
-                if (!cur) return;
+                if (!cur) {
+                    // 当无激活方案时自动触发新建方案命名保存流程，防止草稿丢失
+                    this.handleAction('new');
+                    return;
+                }
 
                 const toSave: PresetItem<TData> = {
                     ...cur,

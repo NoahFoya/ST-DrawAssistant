@@ -88,14 +88,12 @@ export class ComfyUITabView extends PreactSettingsView {
                 label: '文生图工作流',
                 type: 'select',
                 placeholder: '选择文生图工作流',
-                tooltip: '用于将文字描述转换为图像的节点图方案',
                 options: () => this.vm.txt2imgWorkflowOptions.value,
             },
             {
                 key: 'img2imgWorkflowId',
                 label: '图生图工作流',
                 type: 'select',
-                tooltip: '基于参考底图进行二次重绘或局部修改的节点图方案（可选）',
                 options: () => this.vm.img2imgWorkflowOptions.value,
             },
             {
@@ -103,7 +101,6 @@ export class ComfyUITabView extends PreactSettingsView {
                 label: '提示词预设方案',
                 type: 'select',
                 placeholder: '选择关联提示词预设方案',
-                tooltip: '关联的提示词模板。出图时将自动拼接质量词、通用负向词并加载对应 LoRA',
                 options: () => this.vm.promptPresetOptions.value,
             },
             {
@@ -115,36 +112,19 @@ export class ComfyUITabView extends PreactSettingsView {
                 label: '主模型',
                 type: 'select',
                 placeholder: '选择主模型文件',
-                tooltip: '基础扩散模型文件（Checkpoint 或 UNet），决定画面的主体风格与生成能力',
                 options: () => this.vm.effectiveModelOptions.value,
             },
             {
                 key: 'clipName',
                 label: 'CLIP 编码器',
                 type: 'select',
-                tooltip: 'CLIP 文本编码器。用于解析提示词语义，部分大模型（如 SD3、FLUX）需单独指定',
-                options: (model) => {
-                    const opts = [{ label: '(默认使用内置编码器)', value: '' }];
-                    const cur = (model.clipName as string) || '';
-                    if (cur) {
-                        opts.push({ label: cur, value: cur });
-                    }
-                    return opts;
-                },
+                options: () => this.vm.effectiveClipOptions.value,
             },
             {
                 key: 'vaeName',
                 label: 'VAE 编解码器',
                 type: 'select',
-                tooltip: 'VAE 编解码模型。负责潜空间特征与像素图像之间的相互转换与画质还原',
-                options: (model) => {
-                    const opts = [{ label: '(默认使用主模型内置 VAE)', value: '' }];
-                    const cur = (model.vaeName as string) || '';
-                    if (cur) {
-                        opts.push({ label: cur, value: cur });
-                    }
-                    return opts;
-                },
+                options: () => this.vm.effectiveVaeOptions.value,
             },
         ];
 
@@ -169,8 +149,7 @@ export class ComfyUITabView extends PreactSettingsView {
         return (
             <ProviderTabLayout
                 vm={this.vm}
-                connectionTitle="服务连接与状态探测"
-                connectionSubtitle="配置 ComfyUI 服务访问地址与接口连通探测"
+                connectionTitle="服务连接"
                 urlPlaceholder="http://127.0.0.1:8188"
                 showApiKey={false}
                 showWorkflowManager={true}
@@ -179,7 +158,7 @@ export class ComfyUITabView extends PreactSettingsView {
                 <SchemaCard
                     schema={{
                         id: 'comfyui-model-workflow',
-                        title: '模型与流程架构',
+                        title: '模型与工作流',
                         collapsible: true,
                         fields: this.modelWorkflowFields,
                     }}
@@ -189,8 +168,9 @@ export class ComfyUITabView extends PreactSettingsView {
                     onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                 />
 
-                <CardView title="画幅尺寸与采样控制" collapsible={true}>
+                <CardView title="尺寸与采样" collapsible={true}>
                     <DimensionPickerView
+                        embedded={true}
                         width={draft.width || 1024}
                         height={draft.height || 1024}
                         dirty={isDimsDirty}
@@ -203,6 +183,7 @@ export class ComfyUITabView extends PreactSettingsView {
                     />
                     <div className="da-settings-divider" />
                     <SamplerCardView
+                        embedded={true}
                         showScheduler={true}
                         showDenoise={true}
                         samplers={this.vm.samplerOptions.value}

@@ -57,6 +57,8 @@ export interface DimensionPickerOptions {
     maxDimension?: number;
     /** 快捷比例预设列表 */
     aspectRatios?: AspectRatioPreset[];
+    /** 是否作为嵌入组件（不创建外层 Card 边框与标题） */
+    embedded?: boolean;
     /** 数据变更通知回调 */
     onChange?: (data: DimensionPickerData) => void;
 }
@@ -67,12 +69,12 @@ export const DEFAULT_ASPECT_RATIOS: AspectRatioPreset[] = [
     { id: '3:4', label: '3:4 半身', width: 896, height: 1152, ratio: 896 / 1152 },
     { id: '9:16', label: '9:16 立绘', width: 768, height: 1344, ratio: 768 / 1344 },
     { id: '4:3', label: '4:3 场景', width: 1152, height: 896, ratio: 1152 / 896 },
-    { id: '16:9', label: '16:9 壁纸', width: 1344, height: 768, ratio: 1344 / 768 }
+    { id: '16:9', label: '16:9 壁纸', width: 1344, height: 768, ratio: 1344 / 768 },
 ];
 
 export class DimensionPicker implements UIComponent, Disposable {
     public readonly element: HTMLElement;
-    public readonly card: Card;
+    public readonly card?: Card;
 
     private readonly data: DimensionPickerData;
     private readonly options: DimensionPickerOptions;
@@ -104,27 +106,42 @@ export class DimensionPicker implements UIComponent, Disposable {
         this.data = {
             width: initialWidth,
             height: initialHeight,
-            aspectRatio: initialRatio
+            aspectRatio: initialRatio,
         };
 
         // 2. 初始化徽标与卡片外壳
         this.ratioBadge = new Badge({
             text: this.getBadgeText(this.data.width, this.data.height, this.data.aspectRatio),
-            variant: 'neutral'
+            variant: 'neutral',
         });
         this.disposables.push(this.ratioBadge);
 
-        this.card = new Card({
-            title: options.title ?? '画幅比例与尺寸',
-            subtitle: options.subtitle ?? '配置图像生成长宽像素与构图比例',
-            collapsible: true,
-            defaultCollapsed: false
-        });
-        this.card.setBadges([this.ratioBadge.element]);
-        this.element = this.card.element;
-        this.disposables.push(this.card);
+        if (options.embedded) {
+            this.element = document.createElement('div');
+            this.element.className = 'da-dimension-picker da-dimension-picker--embedded';
+        } else {
+            const card = new Card({
+                title: options.title ?? '画幅比例与尺寸',
+                subtitle: options.subtitle,
+                collapsible: true,
+                defaultCollapsed: false,
+            });
+            card.setBadges([this.ratioBadge.element]);
+            this.card = card;
+            this.element = card.element;
+            this.disposables.push(card);
+        }
 
-        // 3. 构建第 1 行：快捷画幅比例芯片组
+        // 3. 辅助挂载函数
+        const append = (el: HTMLElement) => {
+            if (this.card) {
+                this.card.appendContent(el);
+            } else {
+                this.element.appendChild(el);
+            }
+        };
+
+        // 4. 构建第 1 行：快捷画幅比例芯片组
         const ratiosRow = document.createElement('div');
         ratiosRow.classList.add('da-dimension-picker__ratios-row');
 
@@ -143,18 +160,18 @@ export class DimensionPicker implements UIComponent, Disposable {
             this.disposables.push(btn);
             ratiosRow.appendChild(btn.element);
         }
-        this.card.appendContent(ratiosRow);
+        append(ratiosRow);
 
-        // 4. 构建第 2 行：宽度、翻转按钮、高度紧凑布局
+        // 5. 构建第 2 行：宽度、翻转按钮、高度紧凑布局
         const dimensionsRow = document.createElement('div');
         dimensionsRow.classList.add('da-dimension-picker__dimensions-row');
 
-        // 4.1 宽度列
+        // 5.1 宽度列
         const widthCol = document.createElement('div');
         widthCol.classList.add('da-dimension-picker__dimension-col');
         const widthLabel = document.createElement('span');
         widthLabel.classList.add('da-dimension-picker__col-label');
-        widthLabel.textContent = '宽度 (Width)';
+        widthLabel.textContent = '宽度';
         widthCol.appendChild(widthLabel);
 
         this.widthInput = new NumberInput({
@@ -174,7 +191,7 @@ export class DimensionPicker implements UIComponent, Disposable {
         widthCol.appendChild(this.widthInput.element);
         dimensionsRow.appendChild(widthCol);
 
-        // 4.2 翻转宽高按钮
+        // 5.2 翻转宽高按钮
         const swapWrapper = document.createElement('div');
         swapWrapper.classList.add('da-dimension-picker__swap-wrapper');
         this.swapButton = new Button({
@@ -191,12 +208,12 @@ export class DimensionPicker implements UIComponent, Disposable {
         swapWrapper.appendChild(this.swapButton.element);
         dimensionsRow.appendChild(swapWrapper);
 
-        // 4.3 高度列
+        // 5.3 高度列
         const heightCol = document.createElement('div');
         heightCol.classList.add('da-dimension-picker__dimension-col');
         const heightLabel = document.createElement('span');
         heightLabel.classList.add('da-dimension-picker__col-label');
-        heightLabel.textContent = '高度 (Height)';
+        heightLabel.textContent = '高度';
         heightCol.appendChild(heightLabel);
 
         this.heightInput = new NumberInput({
@@ -216,7 +233,7 @@ export class DimensionPicker implements UIComponent, Disposable {
         heightCol.appendChild(this.heightInput.element);
         dimensionsRow.appendChild(heightCol);
 
-        this.card.appendContent(dimensionsRow);
+        append(dimensionsRow);
     }
 
     /**

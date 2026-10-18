@@ -104,54 +104,147 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     }
 
     /**
-     * 获取 ComfyUI 服务端支持的模型列表。
-     *
-     * @remarks
-     * 从 /object_info 元数据中提取 CheckpointLoader、CheckpointLoaderSimple 及 UNETLoader 的模型文件名并去重。
+     * 获取 ComfyUI 服务端支持的主模型列表。
      *
      * @param signal 中止信号
      * @returns 可用模型文件名数组
      */
     public async fetchModels(signal?: AbortSignal): Promise<string[]> {
+        const cat = await this.fetchCategorizedModels(signal);
+        return Array.from(new Set([...cat.checkpoints, ...cat.unets]));
+    }
+
+    /**
+     * 获取按类别分组的 ComfyUI 服务端支持的主模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 包含 checkpoints 与 unets 的分类模型列表
+     */
+    public async fetchCategorizedModels(
+        signal?: AbortSignal
+    ): Promise<{ checkpoints: string[]; unets: string[] }> {
         const serverUrl = this.getServerUrl();
         const transport = this.getTransport();
         const url = `${serverUrl}/object_info`;
 
-        const response = await this.fetchWithTransport(url, { method: 'GET', timeoutMs: 15000, signal }, transport);
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
         const data = (await response.json()) as Record<string, any>;
 
-        const modelSet = new Set<string>();
+        const checkpoints = new Set<string>();
+        const unets = new Set<string>();
 
-        // CheckpointLoader / CheckpointLoaderSimple 模型
-        const simpleCkptNames = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
-        if (Array.isArray(simpleCkptNames)) {
-            for (const name of simpleCkptNames) {
-                if (typeof name === 'string' && name.trim()) {
-                    modelSet.add(name.trim());
-                }
+        // 1. Checkpoint 模型 (CheckpointLoader / CheckpointLoaderSimple)
+        const simpleCkpt = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
+        if (Array.isArray(simpleCkpt)) {
+            for (const name of simpleCkpt) {
+                if (typeof name === 'string' && name.trim()) checkpoints.add(name.trim());
+            }
+        }
+        const fullCkpt = data?.CheckpointLoader?.input?.required?.ckpt_name?.[0];
+        if (Array.isArray(fullCkpt)) {
+            for (const name of fullCkpt) {
+                if (typeof name === 'string' && name.trim()) checkpoints.add(name.trim());
             }
         }
 
-        const fullCkptNames = data?.CheckpointLoader?.input?.required?.ckpt_name?.[0];
-        if (Array.isArray(fullCkptNames)) {
-            for (const name of fullCkptNames) {
-                if (typeof name === 'string' && name.trim()) {
-                    modelSet.add(name.trim());
-                }
-            }
-        }
-
-        // UNETLoader 模型
+        // 2. UNet / 扩散模型 (UNETLoader / UnetLoaderGGUF / DiffusionModelLoader)
         const unetNames = data?.UNETLoader?.input?.required?.unet_name?.[0];
         if (Array.isArray(unetNames)) {
             for (const name of unetNames) {
+                if (typeof name === 'string' && name.trim()) unets.add(name.trim());
+            }
+        }
+        const ggufNames = data?.UnetLoaderGGUF?.input?.required?.unet_name?.[0];
+        if (Array.isArray(ggufNames)) {
+            for (const name of ggufNames) {
+                if (typeof name === 'string' && name.trim()) unets.add(name.trim());
+            }
+        }
+        const diffNames = data?.DiffusionModelLoader?.input?.required?.unet_name?.[0];
+        if (Array.isArray(diffNames)) {
+            for (const name of diffNames) {
+                if (typeof name === 'string' && name.trim()) unets.add(name.trim());
+            }
+        }
+
+        return {
+            checkpoints: Array.from(checkpoints),
+            unets: Array.from(unets),
+        };
+    }
+
+    /**
+     * 获取 ComfyUI 服务端已加载的 VAE 模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用 VAE 模型名称数组
+     */
+    public async fetchVaes(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/object_info`;
+
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
+        const data = (await response.json()) as Record<string, any>;
+
+        const vaeSet = new Set<string>();
+        const vaeNames = data?.VAELoader?.input?.required?.vae_name?.[0];
+        if (Array.isArray(vaeNames)) {
+            for (const name of vaeNames) {
                 if (typeof name === 'string' && name.trim()) {
-                    modelSet.add(name.trim());
+                    vaeSet.add(name.trim());
                 }
             }
         }
 
-        return Array.from(modelSet);
+        return Array.from(vaeSet);
+    }
+
+    /**
+     * 获取 ComfyUI 服务端已加载的 CLIP 编码器模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用 CLIP 模型名称数组
+     */
+    public async fetchClips(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/object_info`;
+
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
+        const data = (await response.json()) as Record<string, any>;
+
+        const clipSet = new Set<string>();
+        const clipNames = data?.CLIPLoader?.input?.required?.clip_name?.[0];
+        if (Array.isArray(clipNames)) {
+            for (const name of clipNames) {
+                if (typeof name === 'string' && name.trim()) {
+                    clipSet.add(name.trim());
+                }
+            }
+        }
+        const dualClipNames = data?.DualCLIPLoader?.input?.required?.clip_name1?.[0];
+        if (Array.isArray(dualClipNames)) {
+            for (const name of dualClipNames) {
+                if (typeof name === 'string' && name.trim()) {
+                    clipSet.add(name.trim());
+                }
+            }
+        }
+
+        return Array.from(clipSet);
     }
 
     /**
@@ -278,7 +371,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         const variables: WorkflowVariables = {
             basemodel_name: resolvedBaseModel,
-            unet_name: (params.unetName ?? drawingPreset?.unetName ?? resolvedBaseModel) as string | undefined,
+            unet_name: (params.unetName ?? resolvedBaseModel) as string | undefined,
             clip_name: (params.clipName ?? drawingPreset?.clipName) as string | undefined,
             vae_name: (params.vaeName ?? drawingPreset?.vaeName) as string | undefined,
 

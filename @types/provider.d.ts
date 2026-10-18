@@ -94,6 +94,38 @@ export interface GenerationProvider {
      * @param signal 中止信号
      */
     fetchModels?(signal?: AbortSignal): Promise<string[]>;
+
+    /**
+     * 获取按类别分组的主模型列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchCategorizedModels?(
+        signal?: AbortSignal
+    ): Promise<{ checkpoints: string[]; unets: string[] }>;
+
+    /**
+     * 获取后端支持的 VAE 编解码器列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchVaes?(signal?: AbortSignal): Promise<string[]>;
+
+    /**
+     * 获取后端支持的 CLIP 文本编码器列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchClips?(signal?: AbortSignal): Promise<string[]>;
+
+    /**
+     * 获取后端支持的采样器算法列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchSamplers?(signal?: AbortSignal): Promise<string[]>;
+
+    /**
+     * 获取后端支持的采样调度器规则列表 (可选)
+     * @param signal 中止信号
+     */
+    fetchSchedulers?(signal?: AbortSignal): Promise<string[]>;
 }
 
 /** 绘图服务提供方注册与检索中心接口 */

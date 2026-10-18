@@ -65,6 +65,8 @@ export interface SamplerCardOptions {
     title?: string;
     /** 卡片副标题说明 */
     subtitle?: string;
+    /** 是否作为嵌入组件（不创建外层 Card 边框与标题） */
+    embedded?: boolean;
     /** 初始数据 */
     initialData?: Partial<SamplerCardData>;
     /** 是否展示调度规则选择框，默认 true */
@@ -121,7 +123,7 @@ export const FLUX_RANGE_CONFIG: SamplerRangeConfig = {
 
 export class SamplerCard implements UIComponent, Disposable {
     public readonly element: HTMLElement;
-    public readonly card: Card;
+    public readonly card?: Card;
 
     private readonly data: SamplerCardData;
     private readonly options: SamplerCardOptions;
@@ -169,16 +171,30 @@ export class SamplerCard implements UIComponent, Disposable {
         });
         this.disposables.push(this.seedBadge);
 
-        // 3. 构建 Card 外壳
-        this.card = new Card({
-            title: options.title ?? '核心采样参数',
-            subtitle: options.subtitle ?? '控制采样算法、调度规则、步数、引导系数与随机种子',
-            collapsible: true,
-            defaultCollapsed: false
-        });
-        this.card.setBadges([this.seedBadge.element]);
-        this.element = this.card.element;
-        this.disposables.push(this.card);
+        // 3. 构建容器或 Card 外壳
+        if (options.embedded) {
+            this.element = document.createElement('div');
+            this.element.className = 'da-sampler-card da-sampler-card--embedded';
+        } else {
+            const card = new Card({
+                title: options.title ?? '核心采样参数',
+                subtitle: options.subtitle,
+                collapsible: true,
+                defaultCollapsed: false
+            });
+            card.setBadges([this.seedBadge.element]);
+            this.card = card;
+            this.element = card.element;
+            this.disposables.push(card);
+        }
+
+        const append = (el: HTMLElement) => {
+            if (this.card) {
+                this.card.appendContent(el);
+            } else {
+                this.element.appendChild(el);
+            }
+        };
 
         // 4. 构建采样器选择器
         const samplerOptions = options.initialSamplers ?? DEFAULT_OFFLINE_SAMPLERS;
@@ -195,7 +211,7 @@ export class SamplerCard implements UIComponent, Disposable {
             tooltip: '控制去噪迭代每一步的数值积分算法（Sampler）',
             control: this.samplerSelect
         });
-        this.card.appendContent(this.samplerFormField.element);
+        append(this.samplerFormField.element);
         this.disposables.push(this.samplerSelect, this.samplerFormField);
 
         // 5. 构建调度器选择器（可选）
@@ -215,7 +231,7 @@ export class SamplerCard implements UIComponent, Disposable {
                 tooltip: '控制时间步与噪声衰减的离散化时间表（Scheduler，适用于 Forge/ComfyUI/SD 1.9+）',
                 control: this.schedulerSelect
             });
-            this.card.appendContent(this.schedulerFormField.element);
+            append(this.schedulerFormField.element);
             this.disposables.push(this.schedulerSelect, this.schedulerFormField);
         }
 
@@ -237,7 +253,7 @@ export class SamplerCard implements UIComponent, Disposable {
             tooltip: '迭代去噪的总步数（Steps），Flux 等蒸馏模型推荐 4~8 步，传统模型推荐 20~35 步',
             control: this.stepsSlider
         });
-        this.card.appendContent(this.stepsFormField.element);
+        append(this.stepsFormField.element);
         this.disposables.push(this.stepsSlider, this.stepsFormField);
 
         // 7. 构建引导系数滑块 (CFG Scale)
@@ -258,7 +274,7 @@ export class SamplerCard implements UIComponent, Disposable {
             tooltip: '提示词对画面的约束强度（CFG Scale），Flux/蒸馏模型推荐 1.0~3.5，SD1.5/SDXL 推荐 5.0~8.0',
             control: this.cfgScaleSlider
         });
-        this.card.appendContent(this.cfgScaleFormField.element);
+        append(this.cfgScaleFormField.element);
         this.disposables.push(this.cfgScaleSlider, this.cfgScaleFormField);
 
         // 8. 构建重绘去噪幅度滑块 (Denoise)（可选）
@@ -281,7 +297,7 @@ export class SamplerCard implements UIComponent, Disposable {
                 tooltip: '图生图或局部重绘时的去噪比例（Denoise，0.0 完全保留原图，1.0 完全重绘）',
                 control: this.denoiseSlider
             });
-            this.card.appendContent(this.denoiseFormField.element);
+            append(this.denoiseFormField.element);
             this.disposables.push(this.denoiseSlider, this.denoiseFormField);
         }
 
@@ -336,7 +352,7 @@ export class SamplerCard implements UIComponent, Disposable {
             tooltip: '随机数种子（Seed），设置为 -1 时每次生成使用动态随机种子，设置为具体正整数时固定画面构图',
             control: seedContainer
         });
-        this.card.appendContent(this.seedFormField.element);
+        append(this.seedFormField.element);
         this.disposables.push(
             this.seedInput,
             this.randomSeedButton,
@@ -358,7 +374,7 @@ export class SamplerCard implements UIComponent, Disposable {
                 }
             });
             actionRow.appendChild(this.refreshButton.element);
-            this.card.appendContent(actionRow);
+            append(actionRow);
             this.disposables.push(this.refreshButton);
         }
     }
