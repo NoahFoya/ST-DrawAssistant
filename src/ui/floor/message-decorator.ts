@@ -84,7 +84,7 @@ export class MessageDecorator implements Disposable {
             const button = this.activeButtons.get(buttonKey);
             if (button) {
                 const settings = settingsStore.getSettings();
-                const hideButtonOnDone = settings.ui?.actionPanel?.hideButtonOnDone ?? false;
+                const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
                 if (hideButtonOnDone) {
                     button.element.style.display = 'none';
                 }
@@ -251,11 +251,9 @@ export class MessageDecorator implements Disposable {
         // 2. 将正文中的指令文本原位拆分替换为插槽容器
         const slotsMap = this.replaceCommandsWithSlots(targetContainer, commands);
 
-        // 3. 读取当前交互面板与按钮隐藏设置
+        // 3. 读取当前出图后隐藏按钮配置
         const settings = settingsStore.getSettings();
-        const actionPanelCfg = settings.ui?.actionPanel;
-        const isActionPanelEnabled = actionPanelCfg?.enabled ?? true;
-        const hideButtonOnDone = actionPanelCfg?.hideButtonOnDone ?? false;
+        const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
 
         const drawingsMap = message.extra?.drawings?.[swipeId];
 
@@ -286,8 +284,9 @@ export class MessageDecorator implements Disposable {
                 this.renderSkeletonToFloor(messageId, cmd.instructionIndex, chatId, swipeId);
             }
 
-            // 若生图完成且配置了隐藏按钮，且当前没有正在执行的任务，或面板未开启，清理并跳过按钮挂载
-            if (!isActionPanelEnabled || (hasRenderedImage && hideButtonOnDone && !activeTask)) {
+            // 规则：只要插件启用且存在绘图指令，生图按钮恒定挂载；
+            // 仅当该插槽已生成图像，且用户配置了出图后隐藏按钮（且当前无重绘任务进行），才隐藏并跳过挂载
+            if (hasRenderedImage && hideButtonOnDone && !activeTask) {
                 const existingBtn = this.activeButtons.get(slotKey);
                 if (existingBtn) {
                     existingBtn.dispose();
@@ -490,18 +489,32 @@ export class MessageDecorator implements Disposable {
             imageContainer.classList.add('da-floor-image-container--center');
         } else if (displayCfg?.align === 'flex-start') {
             imageContainer.classList.add('da-floor-image-container--left');
+        } else if (displayCfg?.align === 'flex-end') {
+            imageContainer.classList.add('da-floor-image-container--right');
         }
 
         // 2. 构建图片包装盒与图片节点
         const imageBox = document.createElement('div');
         imageBox.className = 'da-floor-image-box';
+        if (displayCfg?.rounded === false) {
+            imageBox.style.borderRadius = '0px';
+        }
 
         const imgEl = document.createElement('img');
         imgEl.className = 'da-floor-image';
         imgEl.src = displayUrl;
         imgEl.alt = 'AI 生成图像';
         imgEl.loading = 'lazy';
-        imgEl.style.cursor = 'zoom-in';
+
+        const isLightboxEnabled = settings.ui?.lightbox?.enabled ?? true;
+        if (isLightboxEnabled) {
+            imgEl.style.cursor = 'zoom-in';
+            // 点击大图全屏画廊预览
+            imgEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                lightboxModal.open(displayUrl, { imageId });
+            });
+        }
 
         if (displayCfg?.maxHeight) {
             imgEl.style.maxHeight = `${displayCfg.maxHeight}px`;
@@ -525,11 +538,40 @@ export class MessageDecorator implements Disposable {
             });
         }
 
-        // 点击大图全屏画廊预览
-        imgEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            lightboxModal.open(displayUrl, { imageId });
-        });
+        const isImageActionPanelEnabled = settings.ui?.imageActionPanel?.enabled ?? true;
+        if (isImageActionPanelEnabled) {
+            // 桌面端鼠标右键呼出图片操作面板
+            imageBox.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
+            });
+
+            // 移动端长按手势呼出图片操作面板 (500ms)
+            let touchTimer: ReturnType<typeof setTimeout> | null = null;
+            imageBox.addEventListener(
+                'touchstart',
+                (e) => {
+                    if (e.touches.length !== 1) return;
+                    touchTimer = setTimeout(() => {
+                        touchTimer = null;
+                        void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
+                    }, 500);
+                },
+                { passive: true }
+            );
+
+            const cancelTouch = () => {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
+            };
+
+            imageBox.addEventListener('touchend', cancelTouch, { passive: true });
+            imageBox.addEventListener('touchcancel', cancelTouch, { passive: true });
+            imageBox.addEventListener('touchmove', cancelTouch, { passive: true });
+        }
 
         imageBox.appendChild(imgEl);
 
@@ -537,47 +579,33 @@ export class MessageDecorator implements Disposable {
         const actionsContainer = document.createElement('div');
         actionsContainer.className = 'da-floor-image__actions';
 
-        // 放大预览按钮
-        const zoomBtn = document.createElement('button');
-        zoomBtn.type = 'button';
-        zoomBtn.className = 'da-floor-image__action-btn';
-        zoomBtn.title = '放大预览';
-        zoomBtn.textContent = '🔍';
-        zoomBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            lightboxModal.open(displayUrl, { imageId });
-        });
-
-        // 图像提示词微调与重绘操作按钮
-        const actionBtn = document.createElement('button');
-        actionBtn.type = 'button';
-        actionBtn.className = 'da-floor-image__action-btn';
-        actionBtn.title = '图像提示词微调与重绘';
-        actionBtn.textContent = '⚙️';
-        actionBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const record = imageId ? await imageStorage.getImageRecord(imageId) : undefined;
-            const hostContext = window.SillyTavern?.getContext?.();
-            const currentChatId = hostContext?.chatId || 'default_chat';
-            const swipeId = hostContext?.chat?.[messageId]?.swipe_id ?? 0;
-
-            imageActionPanel.open({
-                messageId,
-                instructionIndex,
-                imageId,
-                imageUrl: displayUrl,
-                prompt: record?.metadata?.prompt,
-                negativePrompt: record?.metadata?.negativePrompt,
-                record,
-                onRegenerate: async (newPrompt, newNegPrompt) => {
-                    await this.regenerateSlot(
-                        { chatId: currentChatId, messageId, swipeId, instructionIndex },
-                        newPrompt,
-                        newNegPrompt
-                    );
-                },
+        // 放大预览按钮 (仅在开启大图预览时挂载)
+        if (isLightboxEnabled) {
+            const zoomBtn = document.createElement('button');
+            zoomBtn.type = 'button';
+            zoomBtn.className = 'da-floor-image__action-btn';
+            zoomBtn.title = '放大预览';
+            zoomBtn.textContent = '🔍';
+            zoomBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                lightboxModal.open(displayUrl, { imageId });
             });
-        });
+            actionsContainer.appendChild(zoomBtn);
+        }
+
+        // 图像提示词微调与重绘操作按钮 (仅在开启操作栏时挂载)
+        if (isImageActionPanelEnabled) {
+            const actionBtn = document.createElement('button');
+            actionBtn.type = 'button';
+            actionBtn.className = 'da-floor-image__action-btn';
+            actionBtn.title = '图像提示词微调与重绘';
+            actionBtn.textContent = '⚙️';
+            actionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
+            });
+            actionsContainer.appendChild(actionBtn);
+        }
 
         // 保存/下载按钮
         const downloadBtn = document.createElement('button');
@@ -598,12 +626,9 @@ export class MessageDecorator implements Disposable {
                 logger.error('下载图片异常:', err);
             }
         });
-
-        actionsContainer.appendChild(zoomBtn);
-        actionsContainer.appendChild(actionBtn);
         actionsContainer.appendChild(downloadBtn);
-        imageBox.appendChild(actionsContainer);
 
+        imageBox.appendChild(actionsContainer);
         imageContainer.appendChild(imageBox);
 
         // 4. 定位对应的 .da-floor-slot 元素进行原位插入
@@ -631,6 +656,43 @@ export class MessageDecorator implements Disposable {
         }
 
         logger.info(`已成功在楼层 #${messageId} 挂载生成图像 (插槽: ${instructionIndex})`);
+    }
+
+    /**
+     * 打开楼层图像提示词微调与原位重绘操作面板。
+     *
+     * @param messageId 宿主消息楼层 ID
+     * @param instructionIndex 插槽索引
+     * @param imageId 可选图像全局唯一标识
+     * @param displayUrl 可选图像展示地址
+     */
+    public async openImageActionPanel(
+        messageId: number,
+        instructionIndex: number,
+        imageId?: string,
+        displayUrl?: string
+    ): Promise<void> {
+        const record = imageId ? await imageStorage.getImageRecord(imageId) : undefined;
+        const hostContext = window.SillyTavern?.getContext?.();
+        const currentChatId = hostContext?.chatId || 'default_chat';
+        const swipeId = hostContext?.chat?.[messageId]?.swipe_id ?? 0;
+
+        imageActionPanel.open({
+            messageId,
+            instructionIndex,
+            imageId,
+            imageUrl: displayUrl,
+            prompt: record?.metadata?.prompt,
+            negativePrompt: record?.metadata?.negativePrompt,
+            record,
+            onRegenerate: async (newPrompt, newNegPrompt) => {
+                await this.regenerateSlot(
+                    { chatId: currentChatId, messageId, swipeId, instructionIndex },
+                    newPrompt,
+                    newNegPrompt
+                );
+            },
+        });
     }
 
     /**

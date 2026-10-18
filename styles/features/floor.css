@@ -104,6 +104,10 @@
     align-items: flex-start;
 }
 
+.da-floor-image-container--right {
+    align-items: flex-end;
+}
+
 .da-floor-image-box {
     position: relative;
     display: inline-block;

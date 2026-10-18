@@ -66,9 +66,12 @@ export class ReactiveSettingsBridge implements Disposable {
                 trigger: patch.trigger
                     ? { ...(currentUi.trigger || {}), ...patch.trigger }
                     : currentUi.trigger,
-                actionPanel: patch.actionPanel
-                    ? { ...(currentUi.actionPanel || {}), ...patch.actionPanel }
-                    : currentUi.actionPanel,
+                floorButton: patch.floorButton
+                    ? { ...(currentUi.floorButton || {}), ...patch.floorButton }
+                    : currentUi.floorButton,
+                imageActionPanel: patch.imageActionPanel
+                    ? { ...(currentUi.imageActionPanel || {}), ...patch.imageActionPanel }
+                    : currentUi.imageActionPanel,
                 lightbox: patch.lightbox
                     ? { ...(currentUi.lightbox || {}), ...patch.lightbox }
                     : currentUi.lightbox,

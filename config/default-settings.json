@@ -1,15 +1,13 @@
 {
   "isInitialized": false,
   "enabled": true,
-  "showHelp": true,
   "activeProvider": "comfyui",
   "transport": "direct",
   "taskTimeoutMs": 120000,
   "cancelOnChatChange": false,
   "saveToIndexedDB": true,
   "saveToServer": false,
-  "enableThumbnail": true,
-  "maxStoredImages": 500,
+  "imageQuality": "original",
 
   "autoGenerate": false,
   "cleanPrompt": true,
@@ -57,9 +55,11 @@
     "lightbox": {
       "enabled": true
     },
-    "actionPanel": {
-      "enabled": true,
-      "hideButtonOnDone": false
+    "floorButton": {
+      "hideOnDone": false
+    },
+    "imageActionPanel": {
+      "enabled": true
     },
     "imageDisplay": {
       "align": "center",

@@ -3,14 +3,20 @@
  *
  * @remarks
  * 基于 Preact JSX、SchemaForm 与 ReactiveSettingsBridge 声明式构建 4 大基础配置卡片：
- * 1. 基础配置：启用插件、绘图引擎、网络连接方式、请求超时、显示说明图标；
- * 2. 交互与触发：生图指令开头/结尾、角色回复后自动生图、生成后隐藏按钮、图片操作栏、大图预览、提示词自动去重；
- * 3. 图片显示：对齐方式、显示模式、最大宽度、最大高度、图片圆角、图片防窥；
- * 4. 存储设置：本地存储上限、生成缩略图、保存到酒馆服务器。
+ * 1. 基础配置：插件总开关、生图引擎、网络连接方式、请求超时；
+ * 2. 交互与触发：指令起始/结束标记、回复后自动生图、出图后隐藏按钮、图片操作栏、大图预览、提示词标签去重；
+ * 3. 图片显示：楼层对齐方式、缩放模式、最大宽度、最大高度、圆角显示、防窥模糊；
+ * 4. 存储设置：存储画质、同步到酒馆服务端。
+ *
+ * 架构规范：
+ * - 纯净排版：简单开关项彻底剔除冗余同义反复说明，仅对关键机制提供技术依据说明；
+ * - 领域解耦：出图后隐藏按钮 (ui.floorButton) 与图片操作栏 (ui.imageActionPanel) 独立建模，互不侵扰；
+ * - 级联禁用：当插件总开关关闭时，从属配置项自动联动置灰，提供直观的系统状态反馈。
  */
 
 import type { VNode } from 'preact';
 import type { ProviderType, TransportMode } from '@types';
+import type { ImageStorageQuality } from '@store';
 import { PreactSettingsView, SchemaForm, type CardSchema } from '../framework';
 import { ReactiveSettingsBridge } from '../viewmodels';
 
@@ -19,22 +25,20 @@ interface GeneralFormModel {
     activeProvider: ProviderType;
     transport: TransportMode;
     timeoutSec: number;
-    showHelp: boolean;
     placeholderStart: string;
     placeholderEnd: string;
     autoGenerate: boolean;
     hideButtonOnDone: boolean;
-    actionPanelEnabled: boolean;
+    imageActionPanelEnabled: boolean;
     lightboxEnabled: boolean;
     cleanPrompt: boolean;
-    align: 'left' | 'center' | 'right';
-    objectFit: 'contain' | 'cover';
+    align: 'center' | 'flex-start' | 'flex-end';
+    objectFit: 'contain' | 'cover' | 'none';
     maxWidthPct: number;
     maxHeight: number;
     rounded: boolean;
     autoBlur: boolean;
-    maxStoredImages: string;
-    enableThumbnail: boolean;
+    imageQuality: ImageStorageQuality;
     saveToServer: boolean;
 }
 
@@ -49,14 +53,13 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 label: '启用插件',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '开启或关闭绘画助手扩展功能',
             },
             {
                 key: 'activeProvider',
-                label: '绘图引擎',
+                label: '生图引擎',
                 type: 'select',
                 width: 'w-240',
-                tooltip: '选择当前用于生成图像的后端服务',
+                disabledWhen: (m) => !m.enabled,
                 options: [
                     { label: 'ComfyUI', value: 'comfyui' },
                     { label: 'SD-WebUI / Forge', value: 'sdwebui' },
@@ -66,11 +69,12 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             },
             {
                 key: 'transport',
-                label: '网络连接方式',
+                label: '连接方式',
                 type: 'segmented',
                 width: 'auto',
+                disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '直连：由浏览器直接请求服务，延迟更低；酒馆代理：服务端中继转发，可解决跨域与混合内容限制',
+                    '直连由浏览器直接请求绘图服务；代理经由酒馆服务端中继，可解决 HTTPS 访问本地服务时的跨域 (CORS) 与混合内容阻断',
                 options: [
                     { label: '浏览器直连', value: 'direct' },
                     { label: '酒馆代理', value: 'relay' },
@@ -85,14 +89,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 max: 600,
                 step: 10,
                 unit: '秒',
-                tooltip: '单次生图的最大等待秒数，超时后自动取消任务',
-            },
-            {
-                key: 'showHelp',
-                label: '显示说明图标',
-                type: 'switch',
-                width: 'w-toggle',
-                tooltip: '在各设置项旁显示帮助问号图标，悬停或点击可查看功能说明',
+                disabledWhen: (m) => !m.enabled,
+                tooltip: '单次生图的最大等待秒数，超时后自动中止网络请求',
             },
         ],
     },
@@ -103,54 +101,60 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
         fields: [
             {
                 key: 'placeholderStart',
-                label: '生图指令开头',
+                label: '指令起始标记',
                 type: 'text',
                 width: 'w-240',
                 placeholder: '例如: image###',
-                tooltip: '在 AI 回复正文中识别绘图提示词的前置起始标记',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '识别正文绘图指令的前置标识。支持使用英文竖线“|”分隔正向与负向提示词（示例：image### 1girl, masterpiece | lowres, blurry ###）',
             },
             {
                 key: 'placeholderEnd',
-                label: '生图指令结尾',
+                label: '指令结束标记',
                 type: 'text',
                 width: 'w-240',
                 placeholder: '例如: ###',
-                tooltip: '在 AI 回复正文中识别绘图提示词的闭合结束标记',
+                disabledWhen: (m) => !m.enabled,
             },
             {
                 key: 'autoGenerate',
-                label: '角色回复后自动生图',
+                label: '回复后自动生图',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '检测到角色回复中包含生图指令时，无需手动点击自动排队生成',
+                disabledWhen: (m) => !m.enabled,
             },
             {
                 key: 'hideButtonOnDone',
-                label: '生成后隐藏按钮',
+                label: '出图后隐藏按钮',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '当前楼层生图成功并展示图片后，自动隐藏该楼层的生图主按钮',
+                disabledWhen: (m) => !m.enabled,
             },
             {
-                key: 'actionPanelEnabled',
+                key: 'imageActionPanelEnabled',
                 label: '图片操作栏',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '在楼层图片下方显示重试、复制提示词等快捷操作栏',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '允许通过鼠标右键或长按楼层图片，打开图像提示词微调与原位重绘操作面板',
             },
             {
                 key: 'lightboxEnabled',
                 label: '大图预览',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '点击聊天楼层或画廊中的图片时，在全屏窗口中查看大图',
+                disabledWhen: (m) => !m.enabled,
             },
             {
                 key: 'cleanPrompt',
-                label: '提示词自动去重',
+                label: '提示词标签去重',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '自动清理提示词中的多余换行与重复标签，规范逗号连接',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '按逗号拆分并剔除重复标签（严格保留 <lora:...> 语法），规整标点符号',
             },
         ],
     },
@@ -164,7 +168,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 label: '对齐方式',
                 type: 'segmented',
                 width: 'auto',
-                tooltip: '图片在聊天消息楼层中的横向对齐位置',
+                disabledWhen: (m) => !m.enabled,
                 options: [
                     { label: '居中对齐', value: 'center' },
                     { label: '靠左对齐', value: 'flex-start' },
@@ -173,10 +177,12 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             },
             {
                 key: 'objectFit',
-                label: '显示模式',
+                label: '缩放模式',
                 type: 'segmented',
                 width: 'auto',
-                tooltip: '图片适应规则：完整显示保持比例；裁剪填充铺满容器；原始尺寸不缩放',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '图片在楼层中的适应规则：完整显示保持比例、裁剪填充铺满容器或以原始尺寸呈现',
                 options: [
                     { label: '完整显示', value: 'contain' },
                     { label: '裁剪填充', value: 'cover' },
@@ -192,7 +198,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 max: 100,
                 step: 5,
                 unit: '%',
-                tooltip: '限制图片占聊天气泡宽度的最大百分比',
+                disabledWhen: (m) => !m.enabled,
+                tooltip: '限制图片相对聊天气泡的最大宽度比例',
             },
             {
                 key: 'maxHeight',
@@ -203,21 +210,23 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 max: 1200,
                 step: 20,
                 unit: 'px',
+                disabledWhen: (m) => !m.enabled,
                 tooltip: '限制聊天楼层中图片的最大显示高度',
             },
             {
                 key: 'rounded',
-                label: '图片圆角',
+                label: '圆角显示',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '为聊天楼层生成的图片添加圆角显示',
+                disabledWhen: (m) => !m.enabled,
             },
             {
                 key: 'autoBlur',
-                label: '图片防窥',
+                label: '防窥模糊',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '为图片添加模糊遮罩，鼠标悬停时清晰显示',
+                disabledWhen: (m) => !m.enabled,
+                tooltip: '默认模糊遮罩图片，鼠标悬停时揭示清晰原图',
             },
         ],
     },
@@ -227,33 +236,27 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
         collapsible: true,
         fields: [
             {
-                key: 'maxStoredImages',
-                label: '本地存储上限',
+                key: 'imageQuality',
+                label: '存储画质',
                 type: 'select',
                 width: 'w-240',
-                tooltip: '本地数据库最多保存的图片数量，超出后自动清理较早且未收藏的图片',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '存入本地数据库与酒馆服务端的图像画质策略。原图保留原始尺寸与质量；WebP 格式可大幅压缩体积并加快多图加载',
                 options: [
-                    { label: '100 张', value: '100' },
-                    { label: '300 张', value: '300' },
-                    { label: '500 张', value: '500' },
-                    { label: '1000 张', value: '1000' },
-                    { label: '2000 张', value: '2000' },
-                    { label: '不限制', value: '0' },
+                    { label: '原始无损 (默认)', value: 'original' },
+                    { label: 'WebP 高画质 (90%)', value: 'webp-high' },
+                    { label: 'WebP 平衡 (80%)', value: 'webp-medium' },
                 ],
             },
             {
-                key: 'enableThumbnail',
-                label: '生成缩略图',
-                type: 'switch',
-                width: 'w-toggle',
-                tooltip: '在本地生成缩略图，加快画廊浏览速度',
-            },
-            {
                 key: 'saveToServer',
-                label: '保存到酒馆服务器',
+                label: '同步到酒馆服务端',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip: '可选同步上传图片至酒馆服务端，便于跨设备访问',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '自动将图片转存至酒馆服务端静态目录，便于多设备访问与外部引用',
             },
         ],
     },
@@ -274,7 +277,8 @@ export class GeneralTabView extends PreactSettingsView {
     private buildViewModel(): GeneralFormModel {
         const s = this.bridge.settings.value;
         const ui = s.ui;
-        const actionPanel = ui?.actionPanel;
+        const floorButton = ui?.floorButton;
+        const imageActionPanel = ui?.imageActionPanel;
         const lightbox = ui?.lightbox;
         const img = ui?.imageDisplay;
 
@@ -283,12 +287,11 @@ export class GeneralTabView extends PreactSettingsView {
             activeProvider: (s.activeProvider || 'comfyui') as ProviderType,
             transport: (s.transport || 'direct') as TransportMode,
             timeoutSec: Math.round((s.taskTimeoutMs || 120000) / 1000),
-            showHelp: s.showHelp ?? true,
             placeholderStart: s.placeholderStart || 'image###',
             placeholderEnd: s.placeholderEnd || '###',
             autoGenerate: s.autoGenerate ?? false,
-            hideButtonOnDone: actionPanel?.hideButtonOnDone ?? false,
-            actionPanelEnabled: actionPanel?.enabled ?? true,
+            hideButtonOnDone: floorButton?.hideOnDone ?? false,
+            imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
             lightboxEnabled: lightbox?.enabled ?? true,
             cleanPrompt: s.cleanPrompt ?? true,
             align: (img?.align || 'center') as GeneralFormModel['align'],
@@ -297,8 +300,7 @@ export class GeneralTabView extends PreactSettingsView {
             maxHeight: img?.maxHeight ?? 480,
             rounded: img?.rounded ?? true,
             autoBlur: Boolean(img?.autoBlur ?? img?.collapsed),
-            maxStoredImages: String(s.maxStoredImages ?? 500),
-            enableThumbnail: s.enableThumbnail ?? true,
+            imageQuality: (s.imageQuality || 'original') as ImageStorageQuality,
             saveToServer: s.saveToServer ?? false,
         };
     }
@@ -320,9 +322,6 @@ export class GeneralTabView extends PreactSettingsView {
             case 'timeoutSec':
                 this.bridge.set('taskTimeoutMs', Math.max(30, Number(val)) * 1000);
                 break;
-            case 'showHelp':
-                this.bridge.set('showHelp', Boolean(val));
-                break;
             case 'placeholderStart':
                 this.bridge.set('placeholderStart', String(val).trim() || 'image###');
                 break;
@@ -334,16 +333,14 @@ export class GeneralTabView extends PreactSettingsView {
                 break;
             case 'hideButtonOnDone':
                 this.bridge.updateUi({
-                    actionPanel: {
-                        ...(this.bridge.get('ui')?.actionPanel || { enabled: true }),
-                        hideButtonOnDone: Boolean(val),
+                    floorButton: {
+                        hideOnDone: Boolean(val),
                     },
                 });
                 break;
-            case 'actionPanelEnabled':
+            case 'imageActionPanelEnabled':
                 this.bridge.updateUi({
-                    actionPanel: {
-                        ...(this.bridge.get('ui')?.actionPanel || { hideButtonOnDone: false }),
+                    imageActionPanel: {
                         enabled: Boolean(val),
                     },
                 });
@@ -389,11 +386,8 @@ export class GeneralTabView extends PreactSettingsView {
                     collapsed: Boolean(val),
                 });
                 break;
-            case 'maxStoredImages':
-                this.bridge.set('maxStoredImages', Number(val));
-                break;
-            case 'enableThumbnail':
-                this.bridge.set('enableThumbnail', Boolean(val));
+            case 'imageQuality':
+                this.bridge.set('imageQuality', val as ImageStorageQuality);
                 break;
             case 'saveToServer':
                 this.bridge.set('saveToServer', Boolean(val));
@@ -402,8 +396,8 @@ export class GeneralTabView extends PreactSettingsView {
     }
 
     private updateImageDisplay(patch: {
-        align?: 'left' | 'center' | 'right';
-        objectFit?: 'contain' | 'cover';
+        align?: 'center' | 'flex-start' | 'flex-end';
+        objectFit?: 'contain' | 'cover' | 'none';
         maxWidthPct?: number;
         maxHeight?: number;
         rounded?: boolean;

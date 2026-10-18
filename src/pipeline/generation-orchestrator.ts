@@ -24,10 +24,11 @@ import type {
 import { providerRegistry } from '../provider/registry';
 import { imageStorage, type ImageStorage } from '../store/image-storage';
 import { promptPipeline, type PromptPipeline } from './prompt-pipeline';
-import { settingsStore, type SettingsStore, DEFAULT_TASK_TIMEOUT_MS } from '../store/settings-store';
+import { settingsStore, type SettingsStore, DEFAULT_TASK_TIMEOUT_MS, type ImageStorageQuality } from '../store/settings-store';
 import { eventBus, type EventBus } from '../util/event-bus';
 import { sessionLifecycle, type SessionLifecycleManager } from './session-lifecycle';
 import { logger } from '../util/logger';
+import { applyImageStorageQuality } from '../util/image-compress';
 
 /** 提交生图任务参数选项 */
 export interface SubmitTaskOptions {
@@ -464,16 +465,19 @@ export class GenerationOrchestrator {
                 return;
             }
 
-            // 10. 生图完成，写入 Blob 二进制并更新元数据为 ready 状态。优先记录提供方后处理完成的实际生图提示词
+            // 10. 生图完成，依据存储画质策略处理 Blob，写入持久化存储并更新元数据为 ready 状态
+            const configuredQuality = (this._settingsStore.get('imageQuality') || 'original') as ImageStorageQuality;
+            const finalBlob = await applyImageStorageQuality(result.blob, configuredQuality);
+
             const finalizedMetadata = {
                 ...result.metadata,
                 prompt: result.metadata?.prompt ?? task.prompt,
                 negativePrompt: result.metadata?.negativePrompt ?? task.negativePrompt,
             };
 
-            await this._storage.finalizeImage(imageId, result.blob, {
-                mimeType: result.blob.type || 'image/png',
-                byteSize: result.blob.size,
+            await this._storage.finalizeImage(imageId, finalBlob, {
+                mimeType: finalBlob.type || 'image/png',
+                byteSize: finalBlob.size,
                 status: 'ready',
                 metadata: finalizedMetadata,
             });

@@ -43,19 +43,20 @@ export interface SettingsImportResult {
 /** 默认单任务超时时间（毫秒） */
 export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
 
+/** 图像存储格式与画质策略 */
+export type ImageStorageQuality = 'original' | 'webp-high' | 'webp-medium';
+
 /** 插件核心配置结构定义 */
 export interface DrawAssistantSettings {
     isInitialized: boolean;
     enabled: boolean;
-    showHelp: boolean;
     activeProvider: ProviderType;
     transport: TransportMode;
     taskTimeoutMs: number;
     cancelOnChatChange: boolean;
     saveToIndexedDB: boolean;
     saveToServer: boolean;
-    enableThumbnail: boolean;
-    maxStoredImages: number;
+    imageQuality: ImageStorageQuality;
     autoGenerate: boolean;
     cleanPrompt: boolean;
     placeholderStart: string;
@@ -78,13 +79,15 @@ export interface DrawAssistantSettings {
         lightbox: {
             enabled: boolean;
         };
-        actionPanel: {
+        floorButton: {
+            hideOnDone: boolean;
+        };
+        imageActionPanel: {
             enabled: boolean;
-            hideButtonOnDone: boolean;
         };
         imageDisplay: {
-            align: string;
-            objectFit: string;
+            align: 'center' | 'flex-start' | 'flex-end' | string;
+            objectFit: 'contain' | 'cover' | 'none' | string;
             maxHeight: number;
             maxWidthPct: number;
             rounded: boolean;
