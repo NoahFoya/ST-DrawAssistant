@@ -383,3 +383,158 @@
     transform: translateY(-50%);
     pointer-events: none;
 }
+
+/* 9. 横向对称数字步进器 (NumberInput: [ - ] [ 居中数值 ] [ + ] [ 单位 ]) */
+.da-number-input {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-input);
+    overflow: hidden;
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background-color 0.14s var(--da-ease);
+}
+
+.da-number-input:hover:not(.da-number-input--disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background: var(--da-bg-input-hover);
+}
+
+.da-number-input:focus-within {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring);
+    background: var(--da-bg-input);
+}
+
+.da-number-input.da-number-input--disabled,
+.da-number-input:has(input:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+}
+
+.da-number-input.is-dirty,
+.da-number-input.da-number-input--dirty {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb), 0.25) !important;
+}
+
+.da-number-input__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    flex-shrink: 0;
+    transition: background-color 0.12s var(--da-ease), color 0.12s var(--da-ease);
+}
+
+.da-number-input__btn:hover:not(:disabled) {
+    background-color: var(--da-bg-hover);
+    color: var(--da-accent-color);
+}
+
+.da-number-input__btn:active:not(:disabled) {
+    background-color: var(--da-bg-active);
+}
+
+.da-number-input__btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.da-number-input__field {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    height: 100% !important;
+    width: 60px !important;
+    max-width: 80px !important;
+    min-width: 44px !important;
+    flex: 1 1 auto !important;
+    padding: 0 4px !important;
+    text-align: center !important;
+    font-family: var(--da-font-mono, monospace) !important;
+    font-variant-numeric: tabular-nums !important;
+    font-size: var(--da-font-size-sm, 13px) !important;
+    color: var(--da-text-primary) !important;
+    outline: none !important;
+    -moz-appearance: textfield;
+}
+
+.da-number-input__field::-webkit-outer-spin-button,
+.da-number-input__field::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.da-number-input__unit {
+    font-size: var(--da-font-size-xs, 11px);
+    color: var(--da-text-muted);
+    padding-right: 8px;
+    user-select: none;
+    font-family: var(--da-font-mono, monospace);
+}
+
+/* 10. 文本输入包装容器 (.da-input-wrapper) */
+.da-input-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 240px;
+    max-width: 100%;
+}
+
+.da-input-wrapper .da-input {
+    width: 100%;
+}
+
+.da-input__prefix {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--da-text-muted);
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.da-input-wrapper:has(.da-input__prefix) .da-input {
+    padding-left: 28px;
+}
+
+.da-input__clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--da-text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    padding: 0;
+    line-height: 1;
+}
+
+.da-input__clear:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}

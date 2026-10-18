@@ -633,7 +633,13 @@ export class SettingsModal implements Disposable {
             this.toggleProviderExpanded();
         });
 
+        const activeBadge = document.createElement('span');
+        activeBadge.className = 'da-sidebar-item__badge';
+        activeBadge.textContent = '生效中';
+        activeBadge.title = '当前全局生效的绘图引擎';
+
         providerMainItem.appendChild(this.providerTitleTextElement);
+        providerMainItem.appendChild(activeBadge);
         providerMainItem.appendChild(this.providerExpandTrigger);
 
         // 单击直接切换至当前生效引擎设置，双击切换折叠展开

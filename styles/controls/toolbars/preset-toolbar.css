@@ -55,19 +55,24 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
     min-width: 140px;
 }
 
-/* 未保存状态下下拉框呈现琥珀色轻量高亮，悬浮时由 title 呈现提示，无需额外角标元素 */
 .da-preset-select-wrapper.is-dirty .da-select,
 .da-preset-select.is-dirty {
     border-color: var(--da-color-warn) !important;
     box-shadow: 0 0 0 1px rgba(var(--da-color-warn-rgb), 0.3) !important;
 }
 
+.da-preset-select-wrapper .da-select-wrapper,
+.da-preset-select-wrapper .da-select,
 .da-preset-select {
-    width: 100%;
+    width: 100% !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
     height: 32px;
 }
 

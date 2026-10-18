@@ -68,12 +68,48 @@
 .da-badge {
     display: inline-flex;
     align-items: center;
+    gap: 5px;
     padding: 2px 6px;
     font-size: 0.72em;
     font-weight: 600;
     border-radius: 4px;
     white-space: nowrap;
     border: 1px solid transparent;
+}
+
+.da-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    flex-shrink: 0;
+}
+
+.da-badge--success .da-badge__dot {
+    background-color: var(--da-color-success);
+    box-shadow: 0 0 4px var(--da-color-success);
+}
+
+.da-badge--accent .da-badge__dot {
+    background-color: var(--da-accent-color);
+    box-shadow: 0 0 4px var(--da-accent-color);
+}
+
+.da-badge--warn .da-badge__dot,
+.da-badge--warning .da-badge__dot {
+    background-color: var(--da-color-warn);
+    box-shadow: 0 0 4px var(--da-color-warn);
+}
+
+.da-badge--danger .da-badge__dot,
+.da-badge--error .da-badge__dot,
+.da-badge--invalid .da-badge__dot {
+    background-color: var(--da-color-error);
+    box-shadow: 0 0 4px var(--da-color-error);
+}
+
+.da-badge__text {
+    line-height: 1.2;
 }
 
 /* 成功 / 就绪 / 在线状态 */

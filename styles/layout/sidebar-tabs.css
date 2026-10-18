@@ -120,6 +120,21 @@
     min-width: 0;
 }
 
+/* 侧边栏微型状态微标 (如生效中) */
+.da-sidebar-item__badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: var(--da-radius-pill, 10px);
+    background: rgba(var(--da-accent-rgb), 0.15);
+    color: var(--da-accent-color);
+    margin-left: 6px;
+    line-height: 1.2;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+
 
 /* 4. 绘图服务折叠/展开指示器 (.da-sidebar-item__expand-trigger) */
 .da-sidebar-item__expand-trigger {

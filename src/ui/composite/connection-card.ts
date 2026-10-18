@@ -100,6 +100,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             defaultCollapsed: false,
         });
         this.element = this.card.element;
+        this.element.classList.add('da-connection-card');
         this.disposables.push(this.card);
 
         // 2. 初始化头部右上角状态指示徽标

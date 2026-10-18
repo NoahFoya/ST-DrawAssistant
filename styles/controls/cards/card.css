@@ -113,3 +113,44 @@
 .da-card--collapsed .da-card__body {
     display: none;
 }
+
+/* 5. 卡片与表单内语义分割线 (.da-settings-divider) */
+.da-settings-divider {
+    height: 1px;
+    margin: 8px 0;
+    background: var(--da-separator, rgba(139, 92, 246, 0.12));
+    width: 100%;
+    flex-shrink: 0;
+}
+
+/* 6. 卡片底部操作按钮行 (.da-card__actions-row) */
+.da-card__actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--da-space-sm, 8px);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--da-border-light, rgba(255, 255, 255, 0.08));
+    width: 100%;
+}
+
+/* 7. 服务连接专用卡片样式 (.da-connection-card) */
+.da-connection-card .da-form-row {
+    padding: 0 12px;
+}
+
+.da-connection-card .da-form-row__control {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+}
+
+.da-connection-card .da-input,
+.da-connection-card .da-input-wrapper {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 auto;
+}
+
+

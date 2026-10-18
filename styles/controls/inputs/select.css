@@ -107,3 +107,54 @@
     text-align: center;
     padding: 4px 6px;
 }
+
+/* 5. 下拉选择器包装外壳与定制箭头 (.da-select-wrapper) */
+.da-select-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 240px;
+    max-width: 100%;
+}
+
+.da-select-wrapper .da-select {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+}
+
+.da-select__arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--da-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 当 wrapper 内部已有定制内联 SVG 箭头时，消除 select 自身的背景图标，避免双箭头重叠 */
+.da-select-wrapper:has(.da-select__arrow) .da-select {
+    background-image: none !important;
+}
+
+.da-select-wrapper.is-dirty .da-select,
+.da-select-wrapper.da-select-wrapper--dirty .da-select {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb), 0.25) !important;
+}
+
+.da-select-wrapper.is-invalid .da-select {
+    border-color: var(--da-color-error) !important;
+    box-shadow: 0 0 0 1px var(--da-color-error) !important;
+}
+
+.da-select-wrapper.da-select-wrapper--disabled,
+.da-select-wrapper:has(select:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+

@@ -16,6 +16,9 @@
     --da-bg-subtle: rgba(139, 92, 246, 0.04);
     --da-bg-card: #121522;
     --da-bg-card-hover: #181d30;
+    --da-surface-card: #121522;
+    --da-surface-card-hover: #181d30;
+    --da-bg-tertiary: #16192a;
     --da-bg-input: #0a0c14;
     --da-bg-input-hover: #111420;
     --da-bg-hover: rgba(139, 92, 246, 0.08);
@@ -34,6 +37,9 @@
     /* 3. 边框与分割线体系 */
     --da-border-color: rgba(139, 92, 246, 0.22);
     --da-border-subtle: rgba(139, 92, 246, 0.12);
+    --da-border-card: rgba(139, 92, 246, 0.18);
+    --da-border-card-hover: rgba(139, 92, 246, 0.35);
+    --da-border-light: rgba(255, 255, 255, 0.08);
     --da-border-highlight: rgba(139, 92, 246, 0.45);
     --da-border-focus: #8b5cf6;
     --da-border-glow: 0 0 16px rgba(139, 92, 246, 0.35);
@@ -43,6 +49,7 @@
     /* 4. 品牌主色、辅色与 RGB 分量 */
     --da-accent-color: #8b5cf6;
     --da-accent-hover: #a78bfa;
+    --da-accent-muted: rgba(139, 92, 246, 0.25);
     --da-accent-rgb: 139, 92, 246;
     --da-accent-cyan: #06b6d4;
     --da-accent-cyan-rgb: 6, 182, 212;
@@ -110,7 +117,10 @@
 
     /* 9. 圆角梯度标度 */
     --da-radius-modal: 12px;
+    --da-radius-large: 12px;
     --da-radius-card: 10px;
+    --da-radius-lg: 10px;
+    --da-radius-md: 8px;
     --da-radius-input: 6px;
     --da-radius-btn: 6px;
     --da-radius-pill: 9999px;
@@ -135,6 +145,10 @@
     --da-blur-panel: 20px;
     --da-z-fab: 9999;
     --da-z-modal: 10000;
+    --da-z-overlay: 100040;
+    --da-z-dialog: 100050;
+    --da-z-toast: 100200;
+    --da-z-tooltip: 100300;
 
     /* 13. 焦点指示环 */
     --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35);
