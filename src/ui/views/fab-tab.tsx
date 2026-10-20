@@ -137,7 +137,10 @@ export class FabTabView extends PreactSettingsView {
                         />
                     </FormFieldView>
 
-                    <div className="da-fab-reset-row">
+                    <FormFieldView
+                        label="停靠位置"
+                        tooltip="将悬浮球停靠坐标恢复至屏幕默认吸附位置"
+                    >
                         <ButtonControl
                             label="重置位置"
                             variant="secondary"
@@ -147,7 +150,7 @@ export class FabTabView extends PreactSettingsView {
                                 Toast.show('已重置悬浮球停靠位置', { level: 'info' });
                             }}
                         />
-                    </div>
+                    </FormFieldView>
                 </CardView>
 
                 <CardView title="图标与外观">

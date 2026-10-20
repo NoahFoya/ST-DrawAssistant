@@ -151,7 +151,7 @@ export class ConnectionCard implements UIComponent, Disposable {
         // 3.2 服务地址与测试操作单行流式排布 (.da-connection-row)
         // 左侧输入框居中且自适应占满剩余空间，右侧紧跟合并后的“测试连接与同步”主操作按钮，彻底删除冗余的“Url”字段标签
         this.connectionRow = document.createElement('div');
-        this.connectionRow.classList.add('da-connection-row', 'da-card__actions-row');
+        this.connectionRow.classList.add('da-connection-row');
 
         this.urlInput = new TextInput({
             value: this.data.serverUrl,

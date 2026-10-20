@@ -148,11 +148,13 @@
     flex: 0 0 240px;
 }
 
-.da-form-row .da-select-wrapper {
+.da-form-row .da-select-wrapper,
+.da-form-row__control .da-select-wrapper {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
     flex: 0 0 240px;
+    box-sizing: border-box;
 }
 
 .da-form-row__control:has(.da-select-wrapper) {

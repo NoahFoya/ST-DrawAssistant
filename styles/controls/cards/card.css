@@ -30,7 +30,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
     cursor: default;
     user-select: none;
     gap: 12px;
@@ -112,47 +112,57 @@
     flex-shrink: 0;
 }
 
-/* 6. 卡片底部操作按钮行 (.da-card__actions-row) */
-.da-card__actions-row {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--da-space-sm, 8px);
-    padding: 10px 16px 12px 16px;
-    border-top: 1px dashed var(--da-border-light, rgba(255, 255, 255, 0.08));
-    width: 100%;
-    box-sizing: border-box;
+/* 6. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
+.da-connection-card .da-card__header {
+    padding: 10px 16px;
 }
 
-/* 7. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
 .da-connection-card .da-card__body {
-    padding: 12px 16px;
+    padding: 10px 16px;
+    gap: 8px;
 }
 
 .da-connection-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
+    min-height: 32px;
+    height: 32px;
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
-.da-connection-row .da-input-wrapper,
-.da-connection-row .da-input {
+.da-connection-row .da-input-wrapper {
     flex: 1 1 auto;
     min-width: 0;
     width: 100%;
     max-width: none;
+    height: 32px;
+}
+
+.da-connection-row .da-input {
+    width: 100%;
+    max-width: none;
+    height: 32px;
     text-align: center;
 }
 
-.da-connection-row .da-btn {
+.da-connection-row .da-btn,
+.da-connection-btn--sync {
     flex-shrink: 0;
+    height: 32px !important;
+    min-height: 32px !important;
+    line-height: 30px !important;
     white-space: nowrap;
+    box-sizing: border-box;
 }
 
 .da-connection-card .da-form-row {
-    padding: 4px 16px;
+    padding: 6px 0 0 0;
+    border-bottom: none;
+    border-top: 1px solid var(--da-separator);
 }
 
 .da-connection-card .da-form-row__control {
@@ -161,12 +171,12 @@
     max-width: none;
 }
 
-/* 8. 卡片内语义小标题分割栏 (.da-section-banner) */
+/* 7. 卡片内语义小标题分割栏 (.da-section-banner) */
 .da-section-banner {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 6px 16px;
     background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
     border-top: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));
     border-bottom: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));

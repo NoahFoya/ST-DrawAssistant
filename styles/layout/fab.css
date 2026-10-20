@@ -184,9 +184,3 @@
     gap: 8px;
 }
 
-.da-fab-reset-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 12px;
-}
-
