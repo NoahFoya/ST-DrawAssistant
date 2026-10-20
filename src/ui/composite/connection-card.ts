@@ -18,6 +18,8 @@ import { Select, type SelectOption } from '../components/select';
 import { Button } from '../components/button';
 import { Badge, type BadgeVariant } from '../components/badge';
 import { FormField } from '../components/form-field';
+import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { Toast } from '../feedback/toast';
 import { logger } from '../../util/logger';
 
 /** 服务商预设模板定义 */
@@ -82,6 +84,7 @@ export class ConnectionCard implements UIComponent, Disposable {
 
     private pingAbortController: AbortController | null = null;
     private assetAbortController: AbortController | null = null;
+    private lastErrorDetails: { url: string; message: string } | null = null;
 
     constructor(options: ConnectionCardOptions = {}) {
         this.options = options;
@@ -105,6 +108,11 @@ export class ConnectionCard implements UIComponent, Disposable {
             text: '未探测',
             variant: 'neutral',
             dot: true,
+        });
+        this.statusBadge.element.addEventListener('click', () => {
+            if (this.lastErrorDetails) {
+                this.showErrorDetailsModal();
+            }
         });
         this.card.setBadges(this.statusBadge.element);
         this.disposables.push(this.statusBadge);
@@ -266,20 +274,59 @@ export class ConnectionCard implements UIComponent, Disposable {
             const result = await this.options.onTestPing(this.data.serverUrl, this.data.apiKey);
             if (result.status === 'ok') {
                 const latencyText = result.latencyMs !== undefined ? ` (${result.latencyMs}ms)` : '';
+                this.lastErrorDetails = null;
                 this.updateBadge('success', `已连接${latencyText}`);
+                this.statusBadge.element.removeAttribute('title');
+                this.statusBadge.element.style.cursor = 'default';
             } else {
-                const errorMsg = result.message ? `: ${result.message}` : '';
-                this.updateBadge('danger', `连接失败${errorMsg}`);
+                const rawMsg = result.message || '网络连接异常';
+                this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
+                this.updateBadge('danger', '连接失败');
+                this.statusBadge.element.title = '点击查看排查指引与详细错误';
+                this.statusBadge.element.style.cursor = 'pointer';
+                const briefMsg = rawMsg.length > 50 ? `${rawMsg.slice(0, 50)}...` : rawMsg;
+                Toast.error(`服务连接失败: ${briefMsg}`);
             }
             return result;
         } catch (err) {
             const msg = (err as Error)?.message || '网络异常';
-            this.updateBadge('danger', `探测异常: ${msg}`);
+            this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
+            this.updateBadge('danger', '探测异常');
+            this.statusBadge.element.title = '点击查看排查指引与详细错误';
+            this.statusBadge.element.style.cursor = 'pointer';
+            Toast.error(`服务探测异常: ${msg}`);
             return { status: 'error', message: msg };
         } finally {
             this.actionButton.setLoading(false);
             this.pingAbortController = null;
         }
+    }
+
+    /**
+     * 弹出服务连接排查与错误详情模态对话框。
+     */
+    public showErrorDetailsModal(): void {
+        if (!this.lastErrorDetails) return;
+        const { url, message } = this.lastErrorDetails;
+        const formattedMsg = [
+            `【请求地址】\n${url || '(未设置服务地址)'}`,
+            `\n【错误详情】\n${message}`,
+            `\n【排查建议】\n1. 请检查生图服务（如 ComfyUI / SD-WebUI / Forge）是否已在后台启动；\n2. 检查上方服务地址与端口是否正确输入；\n3. 若在浏览器中遇到跨域 (CORS) 拦截，可在「常规设置」中开启“酒馆代理”模式。`,
+        ].join('\n');
+
+        void ConfirmDialog.info({
+            title: '服务连接排查指引',
+            message: formattedMsg,
+            confirmText: '我知道了',
+            copyText: `服务地址: ${url}\n错误信息: ${message}`,
+        });
+    }
+
+    /**
+     * 获取最近一次失败的错误详情数据。
+     */
+    public getLastErrorDetails(): { url: string; message: string } | null {
+        return this.lastErrorDetails;
     }
 
     /**
@@ -343,6 +390,9 @@ export class ConnectionCard implements UIComponent, Disposable {
     }
 
     private resetStatusToIdle(): void {
+        this.lastErrorDetails = null;
+        this.statusBadge.element.removeAttribute('title');
+        this.statusBadge.element.style.cursor = 'default';
         this.updateBadge('neutral', '未探测');
     }
 

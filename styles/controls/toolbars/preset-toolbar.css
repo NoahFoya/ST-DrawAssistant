@@ -23,12 +23,12 @@
 /* 嵌入上下文样式适配：
    当工具栏嵌套在卡片体 (.da-card__body) 或行容器 (.da-row) 内部时，
    清除重复的外框、背景色与内外边距，维持扁平紧凑风格。 */
-.da-card > .da-card__body > .da-preset-toolbar {
+.da-card__body .da-preset-toolbar {
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--da-separator);
     border-radius: 0;
-    padding: 14px var(--da-space-xl, 20px);
+    padding: 10px 16px;
     margin: 0;
     box-shadow: none;
 }

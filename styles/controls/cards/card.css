@@ -96,9 +96,9 @@
 }
 
 /* 嵌入式复合组件在卡片内保持标准内边距 */
-.da-card__body > .da-dimension-picker--embedded,
-.da-card__body > .da-sampler-card--embedded,
-.da-card__body > .da-card-embedded-content {
+.da-card__body .da-dimension-picker--embedded,
+.da-card__body .da-sampler-card--embedded,
+.da-card__body .da-card-embedded-content {
     padding: 12px 16px;
     box-sizing: border-box;
 }
@@ -160,5 +160,40 @@
     width: 100%;
     max-width: none;
 }
+
+/* 8. 卡片内语义小标题分割栏 (.da-section-banner) */
+.da-section-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border-top: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));
+    width: 100%;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+.da-section-banner__title {
+    font-size: var(--da-font-size-xs, 0.8rem);
+    font-weight: 600;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-section-banner__title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 12px;
+    background: var(--da-primary, #6366f1);
+    border-radius: 2px;
+}
+
 
 

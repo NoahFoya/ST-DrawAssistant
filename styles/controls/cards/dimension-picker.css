@@ -10,22 +10,35 @@
 .da-dimension-picker__ratios-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .da-dimension-picker__ratio-chip {
-    flex: 1 1 auto;
-    min-width: 68px;
+    flex: 0 0 auto;
+    width: 76px;
+    min-width: 76px;
+    max-width: 76px;
+    height: 28px;
+    padding: 0 8px;
+    font-size: var(--da-font-size-xs, 12px);
     text-align: center;
+    box-sizing: border-box;
 }
 
 .da-dimension-picker__dimensions-row {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    justify-content: center;
+    gap: 12px;
     width: 100%;
+    max-width: 380px;
+    margin: 0 auto;
+    box-sizing: border-box;
 }
 
 .da-dimension-picker__dimension-col {

@@ -22,6 +22,7 @@ import {
     type FieldSchema,
     DimensionPickerView,
     SamplerCardView,
+    PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
 import { ProviderTabLayout } from './provider-tab-template';
@@ -217,6 +218,18 @@ export class NovelAITabView extends PreactSettingsView {
                 showLoraInPromptManager={false}
             >
                 <CardView title="生图配置">
+                    <PresetToolbarView
+                        presets={presetController.toolbarItems.value}
+                        activePresetId={presetController.activePresetId.value}
+                        dirty={presetController.isDirty.value}
+                        onAction={(action, id) => presetController.handleAction(action, id)}
+                        onImportFile={(file) => presetController.handleImportFile(file)}
+                    />
+
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">生图模型与预设</span>
+                    </div>
+
                     <SchemaFieldsView
                         fields={this.modelFields}
                         model={draft}
@@ -225,7 +238,9 @@ export class NovelAITabView extends PreactSettingsView {
                         onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                     />
 
-                    <div className="da-settings-divider" />
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">画幅尺寸与比例</span>
+                    </div>
 
                     <DimensionPickerView
                         embedded={true}
@@ -241,7 +256,9 @@ export class NovelAITabView extends PreactSettingsView {
                         }
                     />
 
-                    <div className="da-settings-divider" />
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">采样算法与参数</span>
+                    </div>
 
                     <SamplerCardView
                         embedded={true}

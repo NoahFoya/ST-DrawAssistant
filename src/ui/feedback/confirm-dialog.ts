@@ -18,14 +18,33 @@ export interface ConfirmDialogOptions {
     message: string;
     /** 确认按钮文本，默认 '确定' */
     confirmText?: string;
-    /** 取消按钮文本，默认 '取消' */
+    /** 取消按钮文本，默认 '取消'。若显式传入空字符串 '' 则不渲染取消按钮（用作单按钮提示/排查框） */
     cancelText?: string;
     /** 是否为破坏性高危操作（若为 true 渲染危险红色高亮按钮） */
     isDanger?: boolean;
+    /** 可选的剪贴板复制文本内容（若提供则额外渲染“复制日志”辅助按钮） */
+    copyText?: string;
 }
 
 export class ConfirmDialogService implements Disposable {
     private activeCleanup: (() => void) | null = null;
+
+    /**
+     * 调起模态单按钮信息/排查详情对话框。
+     */
+    public info(options: ConfirmDialogOptions | string): Promise<boolean> {
+        const opts: ConfirmDialogOptions = typeof options === 'string'
+            ? { message: options }
+            : options;
+        return this.confirm({
+            title: opts.title ?? '提示',
+            message: opts.message,
+            confirmText: opts.confirmText ?? '知道了',
+            cancelText: '',
+            isDanger: opts.isDanger,
+            copyText: opts.copyText,
+        });
+    }
 
     /**
      * 调起模态确认对话框并等待用户操作决策。
@@ -91,18 +110,41 @@ export class ConfirmDialogService implements Disposable {
             const actionsEl = document.createElement('div');
             actionsEl.className = 'da-dialog-actions';
 
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-            cancelBtn.textContent = cancelText;
+            if (opts.copyText) {
+                const copyBtn = document.createElement('button');
+                copyBtn.type = 'button';
+                copyBtn.className = 'da-btn da-btn--secondary da-btn--sm da-dialog-btn--copy';
+                copyBtn.textContent = '复制日志';
+                copyBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    try {
+                        await navigator.clipboard.writeText(opts.copyText!);
+                        copyBtn.textContent = '已复制';
+                        setTimeout(() => {
+                            copyBtn.textContent = '复制日志';
+                        }, 2000);
+                    } catch {
+                        // 剪贴板异常降级
+                    }
+                });
+                actionsEl.appendChild(copyBtn);
+            }
+
+            let cancelBtn: HTMLButtonElement | null = null;
+            if (cancelText !== '') {
+                cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+                cancelBtn.textContent = cancelText;
+                actionsEl.appendChild(cancelBtn);
+            }
 
             const confirmBtn = document.createElement('button');
             confirmBtn.type = 'button';
             confirmBtn.className = `da-btn ${isDanger ? 'da-btn--danger' : 'da-btn--primary'} da-btn--sm`;
             confirmBtn.textContent = confirmText;
-
-            actionsEl.appendChild(cancelBtn);
             actionsEl.appendChild(confirmBtn);
+
             panel.appendChild(actionsEl);
             backdrop.appendChild(panel);
 
@@ -129,10 +171,12 @@ export class ConfirmDialogService implements Disposable {
                 handleDecision(true);
             });
 
-            cancelBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleDecision(false);
-            });
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleDecision(false);
+                });
+            }
 
             backdrop.addEventListener('click', (e) => {
                 if (e.target === backdrop) {
@@ -147,7 +191,7 @@ export class ConfirmDialogService implements Disposable {
                     handleDecision(false);
                 } else if (e.key === 'Enter') {
                     // 若焦点不在取消按钮上，回车默认触发确认
-                    if (document.activeElement !== cancelBtn) {
+                    if (!cancelBtn || document.activeElement !== cancelBtn) {
                         e.preventDefault();
                         e.stopPropagation();
                         handleDecision(true);
@@ -158,7 +202,7 @@ export class ConfirmDialogService implements Disposable {
 
             // 6. 挂载 DOM 并聚焦按钮
             document.body.appendChild(backdrop);
-            if (isDanger) {
+            if (isDanger && cancelBtn) {
                 // 高危破坏性操作默认聚焦取消按钮以防误触
                 cancelBtn.focus();
             } else {

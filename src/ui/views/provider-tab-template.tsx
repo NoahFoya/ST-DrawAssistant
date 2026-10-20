@@ -4,16 +4,14 @@
  * @remarks
  * 为 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容服务视图提供统一的声明式 JSX 结构：
  * 1. 顶部服务连接与连通性探测卡片 (ConnectionCardView)；
- * 2. 绘画参数预设方案主控工具栏 (PresetToolbarView)；
- * 3. 中部由各提供商声明式注入的模型、尺寸、采样与专属特性卡片 (children)；
- * 4. 底部按需挂载的工作流管理器 (WorkflowCardView) 与提示词预设管理器 (PromptPresetManagerView)。
+ * 2. 中部由各提供商声明式注入的生图配置大卡片 (children，内含置顶预设方案工具栏、模型、尺寸与采样)；
+ * 3. 底部按需挂载的工作流管理器 (WorkflowCardView) 与提示词预设管理器 (PromptPresetManagerView)。
  */
 
 import type { ComponentChildren, VNode } from 'preact';
 import type { ProviderPreset } from '../composite/connection-card';
 import {
     ConnectionCardView,
-    PresetToolbarView,
     PromptPresetManagerView,
     WorkflowCardView,
 } from '../framework/composite-views';
@@ -63,14 +61,6 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 onChange={(data) => vm.updateConnection(data)}
                 onTestPing={() => vm.testPing()}
                 onFetchAssets={() => vm.refreshServerAssets()}
-            />
-
-            <PresetToolbarView
-                presets={vm.presetController.toolbarItems.value}
-                activePresetId={vm.presetController.activePresetId.value}
-                dirty={vm.presetController.isDirty.value}
-                onAction={(action, id) => vm.presetController.handleAction(action, id)}
-                onImportFile={(file) => vm.presetController.handleImportFile(file)}
             />
 
             {props.children}

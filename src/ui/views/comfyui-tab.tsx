@@ -19,6 +19,7 @@ import {
     type FieldSchema,
     DimensionPickerView,
     SamplerCardView,
+    PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
 import { ProviderTabLayout } from './provider-tab-template';
@@ -48,7 +49,8 @@ export class ComfyUITabView extends PreactSettingsView {
     public readonly title = 'ComfyUI';
 
     public readonly vm: ProviderTabViewModel;
-    private readonly modelWorkflowFields: FieldSchema<DrawingPresetData>[];
+    private readonly workflowFields: FieldSchema<DrawingPresetData>[];
+    private readonly modelFields: FieldSchema<DrawingPresetData>[];
 
     public constructor() {
         super('da-tab-pane da-view-comfyui');
@@ -82,7 +84,7 @@ export class ComfyUITabView extends PreactSettingsView {
             },
         });
 
-        this.modelWorkflowFields = [
+        this.workflowFields = [
             {
                 key: 'txt2imgWorkflowId',
                 label: '文生图工作流',
@@ -103,10 +105,9 @@ export class ComfyUITabView extends PreactSettingsView {
                 placeholder: '选择关联提示词预设方案',
                 options: () => this.vm.promptPresetOptions.value,
             },
-            {
-                key: 'divider_model',
-                type: 'divider',
-            },
+        ];
+
+        this.modelFields = [
             {
                 key: 'baseModel',
                 label: '主模型',
@@ -156,15 +157,41 @@ export class ComfyUITabView extends PreactSettingsView {
                 showLoraInPromptManager={true}
             >
                 <CardView title="生图配置">
+                    <PresetToolbarView
+                        presets={presetController.toolbarItems.value}
+                        activePresetId={presetController.activePresetId.value}
+                        dirty={presetController.isDirty.value}
+                        onAction={(action, id) => presetController.handleAction(action, id)}
+                        onImportFile={(file) => presetController.handleImportFile(file)}
+                    />
+
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">工作流模板与方案</span>
+                    </div>
+
                     <SchemaFieldsView
-                        fields={this.modelWorkflowFields}
+                        fields={this.workflowFields}
                         model={draft}
                         dirtyFields={dirtyFields}
                         invalidFields={invalidFields}
                         onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                     />
 
-                    <div className="da-settings-divider" />
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">主模型与核心组件</span>
+                    </div>
+
+                    <SchemaFieldsView
+                        fields={this.modelFields}
+                        model={draft}
+                        dirtyFields={dirtyFields}
+                        invalidFields={invalidFields}
+                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                    />
+
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">画幅尺寸与比例</span>
+                    </div>
 
                     <DimensionPickerView
                         embedded={true}
@@ -179,7 +206,9 @@ export class ComfyUITabView extends PreactSettingsView {
                         }
                     />
 
-                    <div className="da-settings-divider" />
+                    <div className="da-section-banner">
+                        <span className="da-section-banner__title">采样算法与参数</span>
+                    </div>
 
                     <SamplerCardView
                         embedded={true}

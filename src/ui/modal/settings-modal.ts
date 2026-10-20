@@ -395,10 +395,13 @@ export class SettingsModal implements Disposable {
                 this.statusDotElement.className = 'da-status-dot da-status-ok';
                 const latencyStr = typeof result.latencyMs === 'number' ? ` (${result.latencyMs}ms)` : '';
                 this.statusTextElement.textContent = `${providerName}: 在线${latencyStr}`;
+                this.statusTextElement.title = `${providerName} 响应正常${latencyStr}`;
             } else {
                 this.statusDotElement.className = 'da-status-dot da-status-error';
-                const msgStr = result.message ? ` (${result.message})` : '';
-                this.statusTextElement.textContent = `${providerName}: 连接失败${msgStr}`;
+                this.statusTextElement.textContent = `${providerName}: 连接失败`;
+                this.statusTextElement.title = result.message
+                    ? `${providerName}: ${result.message}`
+                    : `${providerName}: 连接失败`;
             }
         } catch (err: unknown) {
             const isAbort = (err as { name?: string })?.name === 'AbortError';
@@ -408,6 +411,7 @@ export class SettingsModal implements Disposable {
             logger.warn(`绘图服务 [${activeProvider}] 健康探测异常:`, err);
             this.statusDotElement.className = 'da-status-dot da-status-error';
             this.statusTextElement.textContent = `${providerName}: 探测异常`;
+            this.statusTextElement.title = `${providerName}: ${String(err)}`;
         }
     }
 
@@ -633,13 +637,7 @@ export class SettingsModal implements Disposable {
             this.toggleProviderExpanded();
         });
 
-        const activeBadge = document.createElement('span');
-        activeBadge.className = 'da-sidebar-item__badge';
-        activeBadge.textContent = '生效中';
-        activeBadge.title = '当前全局生效的绘图引擎';
-
         providerMainItem.appendChild(this.providerTitleTextElement);
-        providerMainItem.appendChild(activeBadge);
         providerMainItem.appendChild(this.providerExpandTrigger);
 
         // 单击直接切换至当前生效引擎设置，双击切换折叠展开

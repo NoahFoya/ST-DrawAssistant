@@ -116,14 +116,21 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    width: 100%;
+    width: 240px;
+    min-width: 240px;
     max-width: 100%;
+    flex: 0 0 240px;
+    box-sizing: border-box;
 }
 
 .da-select-wrapper .da-select {
     width: 100%;
+    min-width: 0;
     max-width: 100%;
     flex: 1 1 auto;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .da-select__arrow {
