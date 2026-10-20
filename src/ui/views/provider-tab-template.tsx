@@ -15,6 +15,7 @@ import {
     PromptPresetManagerView,
     WorkflowCardView,
 } from '../framework/composite-views';
+import { openBlueprintModal } from '../modal/blueprint-modal';
 import type { ProviderTabViewModel } from '../viewmodels/provider-tab-vm';
 
 export interface ProviderTabLayoutProps {
@@ -72,6 +73,11 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                     onAction={(action, wfId, data) =>
                         vm.handleWorkflowAssetAction(action, wfId, data)
                     }
+                    onOpenBlueprint={(currentJson) => {
+                        openBlueprintModal(currentJson, (updatedJson) => {
+                            vm.handleWorkflowAssetAction('save', activeWorkflowId, { json: updatedJson });
+                        });
+                    }}
                 />
             )}
 

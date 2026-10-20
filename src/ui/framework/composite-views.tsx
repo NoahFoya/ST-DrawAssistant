@@ -326,6 +326,9 @@ export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
                 onChange: (data) => {
                     callbacksRef.current.onChange?.(data);
                 },
+                onOpenBlueprint: (currentJson) => {
+                    callbacksRef.current.onOpenBlueprint?.(currentJson);
+                },
             });
             return inst;
         },

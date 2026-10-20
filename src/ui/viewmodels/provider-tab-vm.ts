@@ -563,7 +563,9 @@ export class ProviderTabViewModel implements Disposable {
         pId: string,
         data?: PromptCardData
     ): void {
-        if (action === 'save' && data) {
+        if (action === 'select') {
+            this.presetController.updateDraft('promptPresetId', pId);
+        } else if (action === 'save' && data) {
             const pr = settingsStore.getPreset<PromptPresetData>('prompts', pId);
             if (pr) {
                 pr.data = {
@@ -579,7 +581,30 @@ export class ProviderTabViewModel implements Disposable {
                         })),
                 };
                 settingsStore.savePreset('prompts', pr);
+                Toast.show(`提示词方案 "${pr.name}" 已保存`, { level: 'success' });
             }
+        } else if (action === 'delete') {
+            settingsStore.deletePreset('prompts', pId);
+            Toast.show('提示词方案已删除', { level: 'info' });
+        } else if (action === 'new' || action === 'saveAs') {
+            const newId = `prompt_${Date.now()}`;
+            const targetName = action === 'new' ? `新提示词 ${new Date().toLocaleTimeString()}` : `提示词 副本`;
+            const newPr: PresetItem<PromptPresetData> = {
+                id: newId,
+                name: targetName,
+                data: {
+                    positivePrefix: data?.positivePrefix || '',
+                    positiveSuffix: data?.positiveSuffix || '',
+                    negativePrompt: data?.negativePrompt || '',
+                    loras: (data?.loras || [])
+                        .filter((l) => l.enabled && l.modelName)
+                        .map((l) => ({ name: l.modelName, weight: l.modelWeight })),
+                },
+                updatedAt: Date.now(),
+            };
+            settingsStore.savePreset('prompts', newPr);
+            this.presetController.updateDraft('promptPresetId', newId);
+            Toast.show(`已创建提示词方案 "${targetName}"`, { level: 'success' });
         }
         this.refreshAssetPools();
     }
@@ -592,17 +617,43 @@ export class ProviderTabViewModel implements Disposable {
         wfId: string,
         data?: WorkflowCardData
     ): void {
-        if (action === 'save' && data?.json) {
+        if (action === 'select') {
+            this.presetController.updateDraft('txt2imgWorkflowId', wfId);
+        } else if (action === 'save' && data?.json) {
             try {
                 const parsed = JSON.parse(data.json);
                 const wf = settingsStore.getPreset<WorkflowPresetData>('workflows', wfId);
                 if (wf) {
                     wf.data = { ...wf.data, workflow: parsed };
                     settingsStore.savePreset('workflows', wf);
+                    Toast.show(`工作流 "${wf.name}" 已保存`, { level: 'success' });
                 }
             } catch {
                 Toast.show('工作流保存失败：JSON 语法错误', { level: 'error' });
             }
+        } else if (action === 'delete') {
+            settingsStore.deletePreset('workflows', wfId);
+            Toast.show('工作流方案已删除', { level: 'info' });
+        } else if (action === 'new' || action === 'saveAs') {
+            const newId = `workflow_${Date.now()}`;
+            const targetName = action === 'new' ? `新工作流 ${new Date().toLocaleTimeString()}` : `工作流 副本`;
+            let parsedData: Record<string, unknown> = {};
+            try {
+                if (data?.json) parsedData = JSON.parse(data.json);
+            } catch {
+                parsedData = {};
+            }
+            const newWf: PresetItem<WorkflowPresetData> = {
+                id: newId,
+                name: targetName,
+                data: {
+                    workflow: parsedData,
+                },
+                updatedAt: Date.now(),
+            };
+            settingsStore.savePreset('workflows', newWf);
+            this.presetController.updateDraft('txt2imgWorkflowId', newId);
+            Toast.show(`已创建工作流 "${targetName}"`, { level: 'success' });
         }
         this.refreshAssetPools();
     }

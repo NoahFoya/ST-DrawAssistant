@@ -14,13 +14,16 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding-bottom: 10px;
+    padding: 8px 16px 10px 16px;
     margin-bottom: 10px;
     border-bottom: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.08));
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
 }
 
 .da-lora-add-bar__control {
-    flex: 1;
+    flex: 1 1 200px;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -29,8 +32,15 @@
 
 .da-lora-add-bar__control .da-select-wrapper,
 .da-lora-add-bar__control .da-input-wrapper {
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
+    max-width: 100%;
+}
+
+.da-lora-add-bar .da-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* 2. 已挂载条目列表容器 */
@@ -38,6 +48,8 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    padding: 0 16px 12px 16px;
+    box-sizing: border-box;
 }
 
 .da-lora-list__empty {
