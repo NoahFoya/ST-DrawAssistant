@@ -11,8 +11,8 @@
 .da-select {
     width: 240px;
     max-width: 240px;
-    flex: 0 0 240px;
-    min-width: 120px;
+    flex: 0 1 240px;
+    min-width: 0;
     height: 32px;
     /* 右侧内边距预留 28px 防止长文字与内联箭头重叠 */
     padding: 0 28px 0 12px;
@@ -25,6 +25,9 @@
     font-size: var(--da-font-size-sm, 13px);
     cursor: pointer;
     outline: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     /* 跨浏览器居中兼容：text-align 作用于选中文本，text-align-last 覆盖 WebKit/Gecko 原生下拉行居中 */
     text-align: center;
     text-align-last: center;

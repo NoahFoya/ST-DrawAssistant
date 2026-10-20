@@ -104,8 +104,7 @@ export class PromptPresetManager implements UIComponent {
 
         // 2. 卡片外壳
         this.card = new Card({
-            title: '提示词预设管理器',
-            collapsible: true
+            title: '提示词预设管理器'
         });
         this.element = this.card.element;
         this.element.classList.add('da-prompt-preset-manager');

@@ -107,73 +107,7 @@
 
 /* 3. 通用卡片外壳结构已统一移交 controls/cards/card.css 统一定义，避免双重继承冲突 */
 
-/* 4. 卡片内部分组 (Section Group) */
-.da-section-group {
-    width: 100%;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    border-bottom: 1px solid var(--da-separator);
-}
 
-.da-section-group:last-child {
-    border-bottom: none;
-}
-
-.da-section-header {
-    position: relative;
-    padding: 8px 14px;
-    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.02));
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--da-space-sm, 6px);
-    box-sizing: border-box;
-    width: 100%;
-    border-bottom: 1px solid var(--da-separator);
-    cursor: pointer;
-    user-select: none;
-    transition: background-color 0.15s var(--da-ease);
-}
-
-.da-section-header:hover {
-    background-color: var(--da-bg-hover, rgba(255, 255, 255, 0.05));
-}
-
-.da-section-title {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--da-text-secondary);
-    letter-spacing: 0.02em;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.da-section-arrow {
-    margin-left: auto;
-    flex-shrink: 0;
-    font-size: 11px;
-    color: var(--da-text-secondary);
-    transition: transform 0.16s var(--da-ease);
-    display: inline-block;
-    line-height: 1;
-}
-
-.da-section-group--collapsed .da-section-arrow {
-    transform: rotate(-90deg);
-}
-
-.da-section-group--collapsed .da-section-header {
-    border-bottom: none;
-}
-
-.da-section-body {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-}
 
 /* 5. 布局原子工具类 */
 .da-w-full { width: 100%; box-sizing: border-box; }

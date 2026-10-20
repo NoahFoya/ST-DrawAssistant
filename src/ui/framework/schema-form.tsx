@@ -117,10 +117,6 @@ export interface CardSchema<TModel extends Record<string, any> = Record<string, 
     title: string;
     /** 卡片副标题 */
     subtitle?: string;
-    /** 是否可折叠，默认 true */
-    collapsible?: boolean;
-    /** 初始折叠状态（布尔值或基于初始模型的计算函数） */
-    defaultCollapsed?: boolean | ((model: TModel) => boolean);
     /** 卡片整体动态显隐条件 */
     visibleWhen?: (model: TModel) => boolean;
     /** 卡片级自定义脏状态判定（例如整张卡片边框变黄 .is-dirty） */

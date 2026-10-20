@@ -15,7 +15,7 @@
     min-width: 0;
     width: 100%;
     min-height: 0;
-    padding: 14px 18px 24px 18px;
+    padding: 16px 20px 24px 20px;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
@@ -45,7 +45,7 @@
 }
 
 /* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
-   纵向弹性容器，各功能卡片间距统一为 var(--da-space-lg, 16px)；
+   纵向弹性容器，各功能卡片间距适度舒展 14px；
    加载时配合 da-fadein 产生平滑淡入动效。 */
 .st-da-root .da-tab-pane,
 .st-da-root .da-tab-view {
@@ -53,9 +53,9 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--da-space-md, 12px);
+    gap: 14px;
     box-sizing: border-box;
-    padding: 2px 0 16px 0;
+    padding: 4px 0 20px 0;
     animation: da-fadein 0.18s var(--da-ease);
 }
 

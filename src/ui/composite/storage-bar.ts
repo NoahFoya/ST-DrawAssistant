@@ -106,8 +106,6 @@ export class StorageBar implements UIComponent {
         this.card = new Card({
             title: options.title ?? '本地存储空间 (IndexedDB)',
             subtitle: options.subtitle ?? '浏览器配额使用量、资产分布与分级安全清理',
-            collapsible: true,
-            defaultCollapsed: false,
         });
 
         this.element = this.card.element;

@@ -267,9 +267,7 @@ export function SamplerCardView(props: SamplerCardViewProps): VNode {
 
 // 5. 提示词预设管理器卡片 (PromptPresetManagerView)
 
-export interface PromptPresetManagerViewProps extends PromptPresetManagerOptions {
-    defaultCollapsed?: boolean;
-}
+export interface PromptPresetManagerViewProps extends PromptPresetManagerOptions {}
 
 export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VNode {
     const callbacksRef = useRef(props);
@@ -309,9 +307,7 @@ export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VN
 
 // 6. ComfyUI 工作流预设管理卡片 (WorkflowCardView)
 
-export interface WorkflowCardViewProps extends WorkflowCardOptions {
-    defaultCollapsed?: boolean;
-}
+export interface WorkflowCardViewProps extends WorkflowCardOptions {}
 
 export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
     const callbacksRef = useRef(props);

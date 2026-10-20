@@ -74,7 +74,7 @@ export class ConnectionCard implements UIComponent, Disposable {
     private readonly statusBadge: Badge;
     private presetSelect?: Select;
     private readonly urlInput: TextInput;
-    private readonly urlFormField: FormField;
+    private readonly connectionRow: HTMLElement;
     private apiKeyInput?: TextInput;
     private apiKeyFormField?: FormField;
 
@@ -140,7 +140,11 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.disposables.push(this.presetSelect, presetField);
         }
 
-        // 3.2 服务地址 (Base URL)
+        // 3.2 服务地址与测试操作单行流式排布 (.da-connection-row)
+        // 左侧输入框居中且自适应占满剩余空间，右侧紧跟合并后的“测试连接与同步”主操作按钮，彻底删除冗余的“Url”字段标签
+        this.connectionRow = document.createElement('div');
+        this.connectionRow.classList.add('da-connection-row', 'da-card__actions-row');
+
         this.urlInput = new TextInput({
             value: this.data.serverUrl,
             placeholder: options.urlPlaceholder ?? 'http://127.0.0.1:8188',
@@ -151,13 +155,23 @@ export class ConnectionCard implements UIComponent, Disposable {
                 this.notifyChange();
             },
         });
-        this.urlFormField = new FormField({
-            label: 'Url',
-            required: true,
-            control: this.urlInput,
+
+        const hasAssetSync = Boolean(options.onFetchAssets || this.hasCustomFetchAssetList());
+        this.actionButton = new Button({
+            label: hasAssetSync ? '测试连接与同步' : '测试连接',
+            variant: 'primary',
+            size: 'sm',
+            className: 'da-connection-btn--sync',
+            onClick: async () => {
+                await this.triggerPingAndSync();
+            },
         });
-        this.card.appendContent(this.urlFormField.element);
-        this.disposables.push(this.urlInput, this.urlFormField);
+
+        this.connectionRow.appendChild(this.urlInput.element);
+        this.connectionRow.appendChild(this.actionButton.element);
+
+        this.card.appendContent(this.connectionRow);
+        this.disposables.push(this.urlInput, this.actionButton);
 
         // 3.3 可选：接口鉴权凭据 (API Key / Token)
         if (options.showApiKey) {
@@ -180,29 +194,6 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.card.appendContent(this.apiKeyFormField.element);
             this.disposables.push(this.apiKeyInput, this.apiKeyFormField);
         }
-
-        // 4. 构建操作按钮行（合并测试连接与同步资产为统一主操作按钮）
-        const actionRow = document.createElement('div');
-        actionRow.classList.add('da-card__actions-row');
-        actionRow.style.display = 'flex';
-        actionRow.style.justifyContent = 'flex-end';
-        actionRow.style.gap = '8px';
-        actionRow.style.marginTop = '8px';
-
-        const hasAssetSync = Boolean(options.onFetchAssets || this.hasCustomFetchAssetList());
-        this.actionButton = new Button({
-            label: hasAssetSync ? '测试连接与同步' : '测试连接',
-            variant: 'primary',
-            size: 'sm',
-            className: 'da-connection-btn--sync',
-            onClick: async () => {
-                await this.triggerPingAndSync();
-            },
-        });
-        actionRow.appendChild(this.actionButton.element);
-        this.disposables.push(this.actionButton);
-
-        this.card.appendContent(actionRow);
     }
 
     /**
@@ -239,7 +230,12 @@ export class ConnectionCard implements UIComponent, Disposable {
      * 设置字段脏状态指示。
      */
     public setDirty(isDirty: boolean): void {
-        this.urlFormField.setDirty(isDirty);
+        this.urlInput.setDirty(isDirty);
+        if (isDirty) {
+            this.connectionRow.classList.add('da-form-row--dirty');
+        } else {
+            this.connectionRow.classList.remove('da-form-row--dirty');
+        }
         this.apiKeyFormField?.setDirty(isDirty);
     }
 

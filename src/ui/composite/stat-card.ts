@@ -91,8 +91,6 @@ export class StatCard implements UIComponent {
         this.card = new Card({
             title: options.title ?? '运行数据统计',
             subtitle: options.subtitle ?? '生图任务吞吐量、平均耗时与运行稳定性监控',
-            collapsible: true,
-            defaultCollapsed: false,
         });
 
         this.element = this.card.element;

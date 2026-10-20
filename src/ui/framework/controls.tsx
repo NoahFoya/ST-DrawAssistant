@@ -19,14 +19,10 @@ import type { BadgeVariant } from '../components/badge';
 export interface CardViewProps {
     title: string;
     subtitle?: string;
-    collapsible?: boolean;
-    collapsed?: boolean;
-    defaultCollapsed?: boolean;
     dirty?: boolean;
     className?: string;
     badges?: ComponentChildren;
     actions?: ComponentChildren;
-    onToggle?: (collapsed: boolean) => void;
     children?: ComponentChildren;
 }
 

@@ -16,12 +16,6 @@ export interface CardOptions {
     title: string;
     /** 卡片副标题辅助说明 */
     subtitle?: string;
-    /** 是否支持点击折叠/展开，默认 true */
-    collapsible?: boolean;
-    /** 初始是否处于折叠状态，默认 false */
-    defaultCollapsed?: boolean;
-    /** 折叠状态切换时的回调函数 */
-    onToggle?: (collapsed: boolean) => void;
 }
 
 export class Card implements UIComponent {
@@ -131,26 +125,6 @@ export class Card implements UIComponent {
         return this.bodyElement;
     }
 
-    /**
-     * 切换卡片折叠/展开状态（当前设计卡片恒定展开，保留兼容空实现）。
-     */
-    public toggle(): void {
-        // 卡片恒定展开
-    }
-
-    /**
-     * 受控设置卡片折叠/展开状态（当前设计卡片恒定展开，保留兼容空实现）。
-     */
-    public setCollapsed(_collapsed: boolean): void {
-        // 卡片恒定展开
-    }
-
-    /**
-     * 查询当前是否处于折叠状态（恒定返回 false）。
-     */
-    public isCollapsed(): boolean {
-        return false;
-    }
 
     /**
      * 动态更新主标题。

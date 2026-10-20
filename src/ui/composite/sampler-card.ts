@@ -178,9 +178,7 @@ export class SamplerCard implements UIComponent, Disposable {
         } else {
             const card = new Card({
                 title: options.title ?? '核心采样参数',
-                subtitle: options.subtitle,
-                collapsible: true,
-                defaultCollapsed: false
+                subtitle: options.subtitle
             });
             card.setBadges([this.seedBadge.element]);
             this.card = card;

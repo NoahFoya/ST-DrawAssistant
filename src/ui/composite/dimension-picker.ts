@@ -123,8 +123,6 @@ export class DimensionPicker implements UIComponent, Disposable {
             const card = new Card({
                 title: options.title ?? '画幅比例与尺寸',
                 subtitle: options.subtitle,
-                collapsible: true,
-                defaultCollapsed: false,
             });
             card.setBadges([this.ratioBadge.element]);
             this.card = card;

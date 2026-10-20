@@ -540,8 +540,7 @@ export class WorkflowCard implements UIComponent {
 
         // 2. 卡片外壳
         this.card = new Card({
-            title: 'ComfyUI 工作流设置',
-            collapsible: true
+            title: 'ComfyUI 工作流设置'
         });
         this.element = this.card.element;
         this.element.classList.add('da-workflow-preset-manager', 'da-workflow-card');
