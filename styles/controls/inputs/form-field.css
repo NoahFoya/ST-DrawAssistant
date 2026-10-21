@@ -52,21 +52,7 @@
     pointer-events: none;
 }
 
-/* 2. 行内标题容器 (.da-label-box) */
-.da-label-box {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--da-font-size-sm, 0.80rem);
-    font-weight: 500;
-    color: var(--da-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    user-select: none;
-}
-
-/* 3. 悬停微光提示气泡 (.da-help-icon) */
+/* 2. 悬停微光提示气泡 (.da-help-icon) */
 .da-help-icon {
     display: inline-flex;
     align-items: center;
@@ -235,32 +221,7 @@
     margin-right: -2px;
 }
 
-.da-field-title-row {
-    display: flex;
-    align-items: center;
-    gap: var(--da-space-xs, 4px);
-    white-space: nowrap;
-}
-
-.da-field-title {
-    font-size: var(--da-font-size-base, 0.86rem);
-    font-weight: 500;
-    color: var(--da-text-primary);
-    line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.da-field-desc {
-    font-size: var(--da-font-size-xs, 0.76rem);
-    color: var(--da-text-secondary);
-    line-height: 1.35;
-    white-space: normal;
-    overflow-wrap: break-word;
-}
-
-/* 6. 色彩选择器色板组 (.da-color-palette-group) 与色块项 (.da-color-swatch) */
+/* 5. 色彩选择器色板组 (.da-color-palette-group) 与色块项 (.da-color-swatch) */
 .da-color-palette-group {
     display: flex;
     align-items: center;

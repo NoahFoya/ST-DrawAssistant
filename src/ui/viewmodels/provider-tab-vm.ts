@@ -22,7 +22,7 @@ import type { Disposable } from '../types';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { AssetFetchResult, ConnectionCardData } from '../composite/connection-card';
 import type { PresetActionType } from '../composite/preset-toolbar';
-import type { PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-manager';
+import type { PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-card';
 import type { WorkflowCardData, WorkflowCardPresetItem } from '../composite/workflow-card';
 import { PresetController } from './preset-controller';
 import { settingsStore } from '../../store/settings-store';

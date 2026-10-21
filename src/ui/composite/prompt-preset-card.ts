@@ -1,5 +1,5 @@
 /**
- * 提示词预设方案管理复合卡片 (PromptPresetManager)。
+ * 提示词预设方案管理复合卡片 (PromptPresetCard)。
  *
  * @remarks
  * 装配 Card 基础容器组件、PresetToolbar 方案工具栏与 LoraManager 复合组件：
@@ -28,8 +28,8 @@ export interface PromptCardPresetItem {
     data: PromptCardData;
 }
 
-/** 提示词预设管理器配置选项 */
-export interface PromptPresetManagerOptions {
+/** 提示词预设方案卡片配置选项 */
+export interface PromptPresetCardOptions {
     /** 预设列表 */
     presets: PromptCardPresetItem[];
     /** 当前激活的预设 ID */
@@ -54,7 +54,7 @@ export interface PromptPresetManagerOptions {
     className?: string;
 }
 
-export class PromptPresetManager implements UIComponent {
+export class PromptPresetCard implements UIComponent {
     public readonly element: HTMLElement;
     public readonly card: Card;
     public readonly toolbar: PresetToolbar;
@@ -77,7 +77,7 @@ export class PromptPresetManager implements UIComponent {
     private readonly suffixInputListener: () => void;
     private readonly negInputListener: () => void;
 
-    constructor(options: PromptPresetManagerOptions) {
+    constructor(options: PromptPresetCardOptions) {
         this.rawPresets = [...options.presets];
         this.activePresetId = options.activePresetId || (this.rawPresets[0]?.id ?? '');
         this.showLora = options.showLora !== false;
@@ -104,10 +104,10 @@ export class PromptPresetManager implements UIComponent {
 
         // 2. 卡片外壳
         this.card = new Card({
-            title: '提示词预设管理器'
+            title: '提示词预设方案'
         });
         this.element = this.card.element;
-        this.element.classList.add('da-prompt-preset-manager');
+        this.element.classList.add('da-prompt-preset-card', 'da-prompt-preset-manager');
         if (options.className) {
             this.element.classList.add(options.className);
         }
@@ -399,3 +399,9 @@ export class PromptPresetManager implements UIComponent {
         }));
     }
 }
+
+// 向后兼容历史调用方别名
+export {
+    PromptPresetCard as PromptPresetManager,
+    type PromptPresetCardOptions as PromptPresetManagerOptions,
+};

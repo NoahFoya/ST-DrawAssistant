@@ -12,7 +12,7 @@ import type { ComponentChildren, VNode } from 'preact';
 import type { ProviderPreset } from '../composite/connection-card';
 import {
     ConnectionCardView,
-    PromptPresetManagerView,
+    PromptPresetCardView,
     WorkflowCardView,
 } from '../framework/composite-views';
 import { openBlueprintModal } from '../modal/blueprint-modal';
@@ -81,7 +81,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 />
             )}
 
-            <PromptPresetManagerView
+            <PromptPresetCardView
                 presets={promptPresets}
                 activePresetId={activePromptId}
                 showLora={props.showLoraInPromptManager !== false}

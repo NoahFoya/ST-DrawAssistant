@@ -25,8 +25,8 @@ import {
     SamplerCard,
     type SamplerCardOptions,
     type SamplerCardData,
-    PromptPresetManager,
-    type PromptPresetManagerOptions,
+    PromptPresetCard,
+    type PromptPresetCardOptions,
     type PromptCardPresetItem,
     WorkflowCard,
     type WorkflowCardOptions,
@@ -265,11 +265,11 @@ export function SamplerCardView(props: SamplerCardViewProps): VNode {
     );
 }
 
-// 5. 提示词预设管理器卡片 (PromptPresetManagerView)
+// 5. 提示词预设方案卡片 (PromptPresetCardView)
 
-export interface PromptPresetManagerViewProps extends PromptPresetManagerOptions {}
+export interface PromptPresetCardViewProps extends PromptPresetCardOptions {}
 
-export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VNode {
+export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
     const callbacksRef = useRef(props);
     callbacksRef.current = props;
     const prevPresetsJsonRef = useRef<string>(
@@ -278,7 +278,7 @@ export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VN
 
     return useCompositeInstance(
         () => {
-            const inst = new PromptPresetManager({
+            const inst = new PromptPresetCard({
                 ...props,
                 onAction: (action, presetId, data) => {
                     callbacksRef.current.onAction?.(action, presetId, data);
@@ -304,6 +304,10 @@ export function PromptPresetManagerView(props: PromptPresetManagerViewProps): VN
         }
     );
 }
+
+// 向后兼容历史别名
+export type PromptPresetManagerViewProps = PromptPresetCardViewProps;
+export const PromptPresetManagerView = PromptPresetCardView;
 
 // 6. ComfyUI 工作流预设管理卡片 (WorkflowCardView)
 

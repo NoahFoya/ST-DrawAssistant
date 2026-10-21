@@ -11,12 +11,9 @@ export * from './dimension-picker';
 export * from './lora-manager';
 export * from './preset-toolbar';
 export * from './workflow-card';
-export * from './prompt-preset-manager';
+export * from './prompt-preset-card';
 export * from './log-terminal';
 export * from './stat-card';
 export * from './storage-bar';
 export * from './media-card';
-
-
-
 

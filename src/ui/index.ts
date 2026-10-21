@@ -5,6 +5,7 @@
 export * from './types';
 export * from './theme';
 export * from './components';
+export * from './entry';
 export * from './modal';
 export * from './feedback';
 export * from './floor';

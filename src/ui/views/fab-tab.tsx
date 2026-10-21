@@ -20,7 +20,7 @@ import {
 import { ReactiveSettingsBridge } from '../viewmodels';
 import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
-import { FAB_BUILTIN_ICONS } from '../modal/fab';
+import { FAB_BUILTIN_ICONS } from '../entry/fab';
 
 interface BuiltinIconItem {
     id: string;

@@ -35,8 +35,7 @@
     transition: opacity 0.15s var(--da-ease), background 0.15s var(--da-ease), color 0.15s var(--da-ease), border-color 0.15s var(--da-ease), transform 0.12s var(--da-ease-spring);
 }
 
-.da-row:hover .da-help-btn,
-.da-field-title-row:hover .da-help-btn {
+.da-row:hover .da-help-btn {
     opacity: 0.85;
 }
 
