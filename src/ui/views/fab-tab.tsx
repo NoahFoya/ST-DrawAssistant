@@ -108,7 +108,7 @@ export class FabTabView extends PreactSettingsView {
             <>
                 <CardView title="基础行为">
                     <FormFieldView
-                        label="启用常驻悬浮球"
+                        label="启用悬浮球"
                         tooltip="在屏幕边缘保留常驻悬浮入口，点击可随时打开设置面板"
                         width="w-toggle"
                     >
@@ -119,7 +119,7 @@ export class FabTabView extends PreactSettingsView {
                     </FormFieldView>
 
                     <FormFieldView
-                        label="悬浮球不透明度"
+                        label="悬浮球透明度"
                         tooltip="调节悬浮球未悬停时的透明度 (20% ~ 100%)"
                         width="w-240"
                     >
@@ -138,11 +138,11 @@ export class FabTabView extends PreactSettingsView {
                     </FormFieldView>
 
                     <FormFieldView
-                        label="停靠位置"
+                        label="悬浮球位置"
                         tooltip="将悬浮球停靠坐标恢复至屏幕默认吸附位置"
                     >
                         <ButtonControl
-                            label="重置位置"
+                            label="重置默认位置"
                             variant="secondary"
                             size="sm"
                             onClick={() => {
@@ -177,7 +177,7 @@ export class FabTabView extends PreactSettingsView {
                     </FormFieldView>
 
                     <FormFieldView
-                        label="自定义圆形图标"
+                        label="自定义图标"
                         tooltip="上传本地图片作为悬浮球头像，自动裁剪为圆形显示"
                     >
                         <div className="da-fab-custom-icon-wrapper">

@@ -1,5 +1,5 @@
 /**
- * 日志与统计专属选项卡视图 (LogsAndStatsTabView)。
+ * 日志与统计专属选项卡视图 (LogsStatsTabView)。
  *
  * @remarks
  * 基于 Preact JSX 与 LogsStatsViewModel 声明式构建：
@@ -18,7 +18,7 @@ import {
 import { LogsStatsViewModel } from '../viewmodels';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 
-export class LogsAndStatsTabView extends PreactSettingsView {
+export class LogsStatsTabView extends PreactSettingsView {
     public readonly id = 'logs';
     public readonly title = '日志与统计';
 

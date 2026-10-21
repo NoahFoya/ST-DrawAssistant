@@ -124,14 +124,14 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             },
             {
                 key: 'hideButtonOnDone',
-                label: '出图后隐藏按钮',
+                label: '出图后隐藏生图按钮',
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
             },
             {
                 key: 'imageActionPanelEnabled',
-                label: '图片操作栏',
+                label: '图片快捷操作面板 (右键/长按)',
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,

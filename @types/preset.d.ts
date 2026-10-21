@@ -122,9 +122,6 @@ export interface ThemePresetData {
     bgCardHover?: string;
     bgInput?: string;
     bgInputHover?: string;
-    bgGradientEnd?: string;
-    bgGradientAngle?: number;
-    bgOpacity?: number;
     textPrimary?: string;
     textSecondary?: string;
     borderColor?: string;
@@ -133,7 +130,6 @@ export interface ThemePresetData {
     radiusModal?: number;
     radiusCard?: number;
     radiusInput?: number;
-    blurRadius?: number;
     blurModal?: number;
     blurPanel?: number;
     [key: string]: unknown;

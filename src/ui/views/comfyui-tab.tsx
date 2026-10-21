@@ -22,7 +22,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-template';
+import { ProviderTabLayout } from './provider-tab-layout';
 
 const COMFY_SAMPLER_OPTIONS = [
     { label: 'euler', value: 'euler' },

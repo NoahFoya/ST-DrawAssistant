@@ -12,7 +12,7 @@ import { ComfyUITabView } from './comfyui-tab';
 import { SDWebUITabView } from './sdwebui-tab';
 import { NovelAITabView } from './novelai-tab';
 import { OpenAITabView } from './openai-tab';
-import { LogsAndStatsTabView } from './logs-stats-tab';
+import { LogsStatsTabView } from './logs-stats-tab';
 import { AboutTabView } from './about-tab';
 import { ThemeTabView } from './theme-tab';
 import { FabTabView } from './fab-tab';
@@ -43,7 +43,7 @@ export function registerDefaultViews(modal: SettingsModal): void {
     modal.registerViewFactory('gallery', () => new GalleryTabView());
 
     // 7. 日志与统计选项卡
-    modal.registerViewFactory('logs', () => new LogsAndStatsTabView());
+    modal.registerViewFactory('logs', () => new LogsStatsTabView());
 
     // 8. 关于与支持选项卡
     modal.registerViewFactory('about', () => new AboutTabView());

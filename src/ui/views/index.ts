@@ -17,5 +17,5 @@ export * from './about-tab';
 export * from './theme-tab';
 export * from './fab-tab';
 export * from './gallery-tab';
-export * from './provider-tab-template';
+export * from './provider-tab-layout';
 export * from './registry';

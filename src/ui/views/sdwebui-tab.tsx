@@ -24,7 +24,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-template';
+import { ProviderTabLayout } from './provider-tab-layout';
 
 const SDWEBUI_DEFAULT_SAMPLERS = [
     { label: 'DPM++ 2M Karras', value: 'DPM++ 2M Karras' },

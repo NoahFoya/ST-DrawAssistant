@@ -2,7 +2,7 @@
  * 本地图像资产存储分级维护与配额统计服务 (StorageMaintenanceService)。
  *
  * @remarks
- * 统一封装画廊视图 (GalleryTabView) 与日志统计视图 (LogsAndStatsTabView) 共享的
+ * 统一封装画廊视图 (GalleryTabView) 与日志统计视图 (LogsStatsTabView) 共享的
  * IndexedDB 存储水位计算、失败记录清理、未收藏草稿清理及全量清理逻辑。
  */
 

@@ -25,7 +25,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-template';
+import { ProviderTabLayout } from './provider-tab-layout';
 
 const NOVELAI_MODEL_OPTIONS = [
     { label: 'NAI Diffusion Anime V5 (Full)', value: 'nai-diffusion-5-full' },

@@ -25,7 +25,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-template';
+import { ProviderTabLayout } from './provider-tab-layout';
 
 const OPENAI_MODEL_OPTIONS = [
     { label: 'dall-e-3', value: 'dall-e-3' },
