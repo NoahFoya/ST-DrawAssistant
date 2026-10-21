@@ -148,6 +148,22 @@ export class NovelAIProvider extends BaseGenerationProvider {
         return this._settingsStore?.getProviderConfig<NovelAIProviderConfig>('novelai');
     }
 
+    /**
+     * 获取 NovelAI 服务基础地址。
+     *
+     * @remarks
+     * 读取配置中心的 NovelAI 服务地址，支持用户配置第三方代理或自建中转端点，
+     * 未配置时缺省为官方图像服务地址 (https://image.novelai.net)。
+     * 自动规整末尾斜杠以确保 URL 拼接的一致性。
+     */
+    public getServerUrl(): string {
+        const config = this._getConfig();
+        if (config?.serverUrl) {
+            return this.normalizeUrl(config.serverUrl);
+        }
+        return NOVELAI_IMAGE_HOST;
+    }
+
     private _buildAuthHeaders(apiKey: string): Record<string, string> {
         return {
             Authorization: `Bearer ${apiKey}`,
@@ -173,14 +189,29 @@ export class NovelAIProvider extends BaseGenerationProvider {
         }
 
         const transport = this.getTransport();
-        const probeUrl = NOVELAI_USER_DATA_ENDPOINT;
+        const serverUrl = this.getServerUrl();
+        // 自定义反代端点优先探测反代地址，官方端点探测官方用户数据接口
+        const probeUrl =
+            serverUrl !== NOVELAI_IMAGE_HOST
+                ? `${serverUrl}/user/data`
+                : NOVELAI_USER_DATA_ENDPOINT;
 
-        const pingResult = await this._httpClient.ping(probeUrl, {
+        let pingResult = await this._httpClient.ping(probeUrl, {
             transport,
             signal,
             timeoutMs: 5000,
             headers: { Authorization: `Bearer ${config.apiKey}` },
         });
+
+        // 若自定义端点 /user/data 未响应，fallback 尝试官方端点确认 Token 有效性
+        if (!pingResult.ok && probeUrl !== NOVELAI_USER_DATA_ENDPOINT) {
+            pingResult = await this._httpClient.ping(NOVELAI_USER_DATA_ENDPOINT, {
+                transport,
+                signal,
+                timeoutMs: 5000,
+                headers: { Authorization: `Bearer ${config.apiKey}` },
+            });
+        }
 
         if (pingResult.ok) {
             return {
@@ -402,7 +433,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
             onProgress({ percent: 5, statusText: '提交生图请求...' });
         }
 
-        const generateUrl = `${NOVELAI_IMAGE_HOST}${NOVELAI_GENERATE_ENDPOINT}`;
+        const serverUrl = this.getServerUrl();
+        const generateUrl = `${serverUrl}${NOVELAI_GENERATE_ENDPOINT}`;
         const response = await this.fetchWithTransport(
             generateUrl,
             {

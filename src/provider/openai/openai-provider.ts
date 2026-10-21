@@ -102,7 +102,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务基础地址。
      *
      * @remarks
-     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com)。
+     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com/v1)。
      * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -111,6 +111,20 @@ export class OpenAIProvider extends BaseGenerationProvider {
             return this.normalizeUrl(config.serverUrl);
         }
         return 'https://api.openai.com';
+    }
+
+    /**
+     * 获取规范化后的以 /v1 结尾的 OpenAI 兼容服务基础端点。
+     *
+     * @remarks
+     * 智能识别用户输入：
+     * - 若输入已包含 /v1（如 "https://api.openai.com/v1" 或 "https://api.siliconflow.cn/v1"），规整后直接返回；
+     * - 若未包含 /v1（如 "https://api.openai.com"），自动追加 "/v1"；
+     * 确保下游各端点拼接时不会发生双重 "/v1/v1" 导致 404 故障。
+     */
+    public getV1BaseUrl(): string {
+        const base = this.getServerUrl();
+        return base.endsWith('/v1') ? base : `${base}/v1`;
     }
 
     private _buildHeaders(apiKey?: string): Record<string, string> {
@@ -127,15 +141,15 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 检查 OpenAI 兼容服务连通性。
      *
      * @remarks
-     * 请求 GET /v1/models 验证服务可达性；该端点在大多数兼容实现中均存在。
+     * 请求 GET /models 验证服务可达性；该端点在大多数兼容实现中均存在。
      *
      * @param signal 中止信号
      */
     public async checkHealth(signal?: AbortSignal): Promise<ProviderHealthResult> {
-        const serverUrl = this.getServerUrl();
+        const v1Base = this.getV1BaseUrl();
         const config = this._getConfig();
         const transport = this.getTransport();
-        const probeUrl = `${serverUrl}/v1/models`;
+        const probeUrl = `${v1Base}/models`;
 
         const pingResult = await this._httpClient.ping(probeUrl, {
             transport,
@@ -163,17 +177,17 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务的图像相关模型列表。
      *
      * @remarks
-     * 请求 GET /v1/models，过滤 id 含图像关键词的条目。
+     * 请求 GET /models，过滤 id 含图像关键词的条目。
      * 若后端不支持该端点则静默返回空数组。
      *
      * @param signal 中止信号
      * @returns 图像模型标识数组
      */
     public async fetchModels(signal?: AbortSignal): Promise<string[]> {
-        const serverUrl = this.getServerUrl();
+        const v1Base = this.getV1BaseUrl();
         const config = this._getConfig();
         const transport = this.getTransport();
-        const url = `${serverUrl}/v1/models`;
+        const url = `${v1Base}/models`;
 
         try {
             const response = await this.fetchWithTransport(
@@ -225,7 +239,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
         const startTime = Date.now();
         const config = this._getConfig();
-        const serverUrl = this.getServerUrl();
+        const v1Base = this.getV1BaseUrl();
         const transport = this.getTransport();
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
@@ -314,7 +328,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
             onProgress({ percent: 5, statusText: '提交生图请求...' });
         }
 
-        const generateUrl = `${serverUrl}/v1/images/generations`;
+        const generateUrl = `${v1Base}/images/generations`;
         const response = await this.fetchWithTransport(
             generateUrl,
             {

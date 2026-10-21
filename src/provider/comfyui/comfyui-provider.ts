@@ -287,6 +287,84 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     }
 
     /**
+     * 获取 ComfyUI 服务端支持的采样算法列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用采样算法名称数组
+     */
+    public async fetchSamplers(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/object_info`;
+
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
+        const data = (await response.json()) as Record<string, any>;
+        const samplers = new Set<string>();
+
+        const ksamplerSamplers = data?.KSampler?.input?.required?.sampler_name?.[0];
+        if (Array.isArray(ksamplerSamplers)) {
+            for (const name of ksamplerSamplers) {
+                if (typeof name === 'string' && name.trim()) {
+                    samplers.add(name.trim());
+                }
+            }
+        }
+        const customSamplers = data?.KSamplerAdvanced?.input?.required?.sampler_name?.[0];
+        if (Array.isArray(customSamplers)) {
+            for (const name of customSamplers) {
+                if (typeof name === 'string' && name.trim()) {
+                    samplers.add(name.trim());
+                }
+            }
+        }
+
+        return Array.from(samplers);
+    }
+
+    /**
+     * 获取 ComfyUI 服务端支持的调度器列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用调度器名称数组
+     */
+    public async fetchSchedulers(signal?: AbortSignal): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const url = `${serverUrl}/object_info`;
+
+        const response = await this.fetchWithTransport(
+            url,
+            { method: 'GET', timeoutMs: 15000, signal },
+            transport
+        );
+        const data = (await response.json()) as Record<string, any>;
+        const schedulers = new Set<string>();
+
+        const ksamplerSchedulers = data?.KSampler?.input?.required?.scheduler?.[0];
+        if (Array.isArray(ksamplerSchedulers)) {
+            for (const name of ksamplerSchedulers) {
+                if (typeof name === 'string' && name.trim()) {
+                    schedulers.add(name.trim());
+                }
+            }
+        }
+        const customSchedulers = data?.KSamplerAdvanced?.input?.required?.scheduler?.[0];
+        if (Array.isArray(customSchedulers)) {
+            for (const name of customSchedulers) {
+                if (typeof name === 'string' && name.trim()) {
+                    schedulers.add(name.trim());
+                }
+            }
+        }
+
+        return Array.from(schedulers);
+    }
+
+    /**
      * 执行 ComfyUI 图像生成任务。
      *
      * @param request 生图请求参数

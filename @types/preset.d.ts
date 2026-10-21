@@ -80,6 +80,18 @@ export interface DrawingPresetData {
     customModel?: string;
     /** OpenAI 兼容自定义请求体 JSON 字符串 */
     customBodyJson?: string;
+    /** NovelAI 官方负向模板预设 (Heavy / Light / Human Focus / None) */
+    ucPreset?: string | number;
+    /** NovelAI 是否自动追加官方画质标签 */
+    qualityTags?: boolean;
+    /** NovelAI 是否将权重语法自动转换为花括号 */
+    convertSyntax?: boolean;
+    /** NovelAI SMEA 采样增强模式 (smea_dyn / smea / none) */
+    smeaMode?: string;
+    /** NovelAI 是否启用焦黑抑制 (Decrisper) */
+    decrisper?: boolean;
+    /** NovelAI CFG 引导重缩放系数 */
+    cfgRescale?: number;
     /** 引擎扩展参数通用键值 */
     [key: string]: unknown;
 }

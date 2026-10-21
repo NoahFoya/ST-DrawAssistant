@@ -519,7 +519,7 @@ export class ProviderTabViewModel implements Disposable {
             }
         }
 
-        // 4. 拉取采样器列表 (如 SD-WebUI)
+        // 4. 拉取采样器列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchSamplers === 'function') {
             const samplers = await provider.fetchSamplers();
             if (Array.isArray(samplers) && samplers.length > 0) {
@@ -528,7 +528,16 @@ export class ProviderTabViewModel implements Disposable {
             }
         }
 
-        // 5. 拉取 LoRA 模型列表 (如 SD-WebUI, ComfyUI)
+        // 5. 拉取调度器列表 (如 ComfyUI)
+        if (typeof (provider as { fetchSchedulers?: () => Promise<string[]> }).fetchSchedulers === 'function') {
+            const schedulers = await (provider as { fetchSchedulers: () => Promise<string[]> }).fetchSchedulers();
+            if (Array.isArray(schedulers) && schedulers.length > 0) {
+                totalCount += schedulers.length;
+                this.schedulerOptions.value = schedulers.map((s) => ({ label: s, value: s }));
+            }
+        }
+
+        // 6. 拉取 LoRA 模型列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchLoras === 'function') {
             const loras = await provider.fetchLoras();
             if (Array.isArray(loras) && loras.length > 0) {
@@ -585,6 +594,9 @@ export class ProviderTabViewModel implements Disposable {
             }
         } else if (action === 'delete') {
             settingsStore.deletePreset('prompts', pId);
+            if (this.presetController.draftConfig.value.promptPresetId === pId) {
+                this.presetController.updateDraft('promptPresetId', '');
+            }
             Toast.show('提示词方案已删除', { level: 'info' });
         } else if (action === 'new' || action === 'saveAs') {
             const newId = `prompt_${Date.now()}`;
@@ -633,6 +645,12 @@ export class ProviderTabViewModel implements Disposable {
             }
         } else if (action === 'delete') {
             settingsStore.deletePreset('workflows', wfId);
+            if (this.presetController.draftConfig.value.txt2imgWorkflowId === wfId) {
+                this.presetController.updateDraft('txt2imgWorkflowId', '');
+            }
+            if (this.presetController.draftConfig.value.img2imgWorkflowId === wfId) {
+                this.presetController.updateDraft('img2imgWorkflowId', '');
+            }
             Toast.show('工作流方案已删除', { level: 'info' });
         } else if (action === 'new' || action === 'saveAs') {
             const newId = `workflow_${Date.now()}`;
