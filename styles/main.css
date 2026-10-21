@@ -68,5 +68,4 @@
 @import url('./features/terminal.css');
 
 /* 5. Skin 主题皮肤与设备响应式 (Layer 5) */
-@import url('./skin/light-mode.css');
 @import url('./skin/responsive.css');

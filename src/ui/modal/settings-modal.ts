@@ -544,19 +544,9 @@ export class SettingsModal implements Disposable {
         themeSelect.className = 'da-quick-theme-select';
         themeSelect.setAttribute('aria-label', '快捷切换界面主题');
 
-        const themeOptions: Array<{ id: string; name: string }> = [
-            { id: 'dark', name: '深色夜间' },
-            { id: 'light', name: '明亮日间' },
-            { id: 'deep-blue', name: '深海蓝' },
-            { id: 'sky-light', name: '晴空白' },
-            { id: 'iris-purple', name: '鸢尾紫' },
-            { id: 'mint-green', name: '薄荷绿' },
-            { id: 'warm-amber', name: '暖杏金' },
-            { id: 'berry-pink', name: '浆果粉' },
-        ];
-
+        const availableThemes = themeService.getAvailableThemes();
         const currentThemeId = (settingsStore.get('themePreset') as string) || 'dark';
-        for (const item of themeOptions) {
+        for (const item of availableThemes) {
             const opt = document.createElement('option');
             opt.value = item.id;
             opt.textContent = item.name;

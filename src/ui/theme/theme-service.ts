@@ -13,7 +13,7 @@ import type { Disposable } from '../types';
 import type { PresetItem, ThemePresetData } from '@types';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
-import recommendedThemesData from '../../../config/presets/themes.json';
+import { SAFE_FALLBACK_THEME } from '../../config/constants';
 
 /** Hex 颜色转 RGB 数值三元组字符串辅助函数 */
 function hexToRgb(hex?: string): string | null {
@@ -51,14 +51,23 @@ export class ThemeService implements Disposable {
 
     /**
      * 获取所有可用主题预设列表。
-     * 优先从 settingsStore 中读取，若未配置则读取静态推荐预设。
+     *
+     * @remarks
+     * 仅从 settingsStore 中读取已持久化的预设列表；
+     * 若未初始化或为空，则使用不可变常数 SAFE_FALLBACK_THEME 作为回退默认值。
      */
     public getAvailableThemes(): PresetItem<ThemePresetData>[] {
         const storeThemes = settingsStore.getPresets<ThemePresetData>('themes');
         if (storeThemes && storeThemes.length > 0) {
             return storeThemes;
         }
-        return (recommendedThemesData as PresetItem<ThemePresetData>[]) || [];
+        return [
+            {
+                id: 'fallback',
+                name: '默认外观',
+                data: { ...SAFE_FALLBACK_THEME },
+            },
+        ];
     }
 
     /**
@@ -99,23 +108,18 @@ export class ThemeService implements Disposable {
             return;
         }
 
-        const theme = this.getThemeById(themeId) ?? this.getThemeById('dark') ?? this.getAvailableThemes()[0];
-        if (!theme || !theme.data) {
-            return;
-        }
+        const theme = this.getThemeById(themeId) ?? this.getAvailableThemes()[0];
+        const baseData = theme?.data ?? SAFE_FALLBACK_THEME;
 
         const merged: ThemePresetData = {
-            ...theme.data,
+            ...baseData,
             ...overrides,
         };
 
         const target = this.targetElement;
 
-        // 1. 设置主题标记与深浅配色标识
-        const isLight = themeId === 'light' || themeId === 'sky-light';
-        target.setAttribute('data-theme', themeId);
-        target.setAttribute('data-da-mode', isLight ? 'light' : 'dark');
-        target.style.setProperty('--da-color-scheme', isLight ? 'light' : 'dark');
+        // 1. 设置当前主题标识符
+        target.setAttribute('data-theme', theme?.id || themeId || 'default');
 
         // 2. 基础颜色令牌映射
         if (merged.accentColor) {

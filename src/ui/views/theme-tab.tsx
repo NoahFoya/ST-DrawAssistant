@@ -2,10 +2,10 @@
  * 外观与主题专属选项卡视图 (ThemeTabView)。
  *
  * @remarks
- * 基于 Preact JSX 与 PresetController<ThemePresetData> 声明式构建：
+ * 基于 Preact JSX 与 PresetController<ThemePresetData> 构建：
  * 1. 顶部预设方案工具栏 (PresetToolbarView)；
- * 2. 外观模式与强调色卡片：色彩模式分段切换 + 品牌强调色快捷色块；
- * 3. 视觉细节微调卡片：界面圆角与毛玻璃虚化滑块，实时预览并驱动脏状态。
+ * 2. 品牌强调色快捷选择；
+ * 3. 界面圆角与毛玻璃虚化滑块微调，实时预览并驱动脏状态。
  */
 
 import type { VNode } from 'preact';
@@ -14,7 +14,6 @@ import {
     PreactSettingsView,
     CardView,
     FormFieldView,
-    SegmentedControlView,
     SliderControl,
     PresetToolbarView,
 } from '../framework';
@@ -85,111 +84,88 @@ export class ThemeTabView extends PreactSettingsView {
         const activeThemeId = this.presetController.activePresetId.value || 'dark';
         const draft = this.presetController.draftConfig.value;
         const isDirty = this.presetController.isDirty.value;
-
-        const isLight = activeThemeId === 'light' || activeThemeId === 'sky-light';
         const currentAccent = (draft.accentColor || '').toLowerCase();
 
         return (
-            <>
-                <CardView title="外观模式与强调色">
-                    <PresetToolbarView
-                        presets={this.presetController.toolbarItems.value}
-                        activePresetId={activeThemeId}
-                        dirty={isDirty}
-                        onAction={(action, id) => this.presetController.handleAction(action, id)}
-                        onImportFile={(file) => this.presetController.handleImportFile(file)}
+            <CardView title="外观配置">
+                <PresetToolbarView
+                    presets={this.presetController.toolbarItems.value}
+                    activePresetId={activeThemeId}
+                    dirty={isDirty}
+                    onAction={(action, id) => this.presetController.handleAction(action, id)}
+                    onImportFile={(file) => this.presetController.handleImportFile(file)}
+                />
+
+                <FormFieldView
+                    label="强调色"
+                    tooltip="选择界面的核心品牌强调高亮色彩"
+                    width="auto"
+                >
+                    <div className="da-color-palette-group">
+                        {ACCENT_COLOR_PALETTE.map((item) => {
+                            const isActive = currentAccent === item.color.toLowerCase();
+                            return (
+                                <button
+                                    key={item.color}
+                                    type="button"
+                                    className={`da-color-swatch${isActive ? ' is-active' : ''}`}
+                                    data-color={item.color}
+                                    title={item.label}
+                                    style={{ backgroundColor: item.color }}
+                                    onClick={() =>
+                                        this.presetController.updateDraft(
+                                            'accentColor',
+                                            item.color
+                                        )
+                                    }
+                                />
+                            );
+                        })}
+                    </div>
+                </FormFieldView>
+
+                <FormFieldView
+                    label="界面圆角"
+                    tooltip="控制窗口、卡片与输入控件的圆角边缘弧度 (0px ~ 20px)"
+                    width="w-240"
+                >
+                    <SliderControl
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={draft.borderRadius ?? 10}
+                        unit="px"
+                        onChange={(val) =>
+                            this.presetController.patchDraft({
+                                borderRadius: val,
+                                radiusModal: Math.max(12, val + 2),
+                                radiusCard: val,
+                                radiusInput: Math.min(6, val),
+                            })
+                        }
                     />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="色彩模式"
-                        tooltip="切换界面的基底色彩模式（深色或浅色）"
-                        width="w-240"
-                    >
-                        <SegmentedControlView
-                            value={isLight ? 'light' : 'dark'}
-                            options={[
-                                { label: '深色', value: 'dark' },
-                                { label: '浅色', value: 'light' },
-                            ]}
-                            onChange={(mode) =>
-                                this.presetController.handleAction('select', mode)
-                            }
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="强调色"
-                        tooltip="选择界面的核心品牌强调高亮色彩"
-                        width="auto"
-                    >
-                        <div className="da-color-palette-group">
-                            {ACCENT_COLOR_PALETTE.map((item) => {
-                                const isActive = currentAccent === item.color.toLowerCase();
-                                return (
-                                    <button
-                                        key={item.color}
-                                        type="button"
-                                        className={`da-color-swatch${isActive ? ' is-active' : ''}`}
-                                        data-color={item.color}
-                                        title={item.label}
-                                        style={{ backgroundColor: item.color }}
-                                        onClick={() =>
-                                            this.presetController.updateDraft(
-                                                'accentColor',
-                                                item.color
-                                            )
-                                        }
-                                    />
-                                );
-                            })}
-                        </div>
-                    </FormFieldView>
-                </CardView>
-
-                <CardView title="视觉细节微调">
-                    <FormFieldView
-                        label="界面圆角"
-                        tooltip="控制窗口、卡片与输入控件的圆角边缘弧度 (0px ~ 20px)"
-                        width="w-240"
-                    >
-                        <SliderControl
-                            min={0}
-                            max={20}
-                            step={1}
-                            value={draft.borderRadius ?? 10}
-                            unit="px"
-                            onChange={(val) =>
-                                this.presetController.patchDraft({
-                                    borderRadius: val,
-                                    radiusModal: Math.max(12, val + 2),
-                                    radiusCard: val,
-                                    radiusInput: Math.min(6, val),
-                                })
-                            }
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="毛玻璃虚化"
-                        tooltip="调整模态弹窗与浮层背后的高斯虚化半径 (0px ~ 30px)"
-                        width="w-240"
-                    >
-                        <SliderControl
-                            min={0}
-                            max={30}
-                            step={2}
-                            value={draft.blurModal ?? 18}
-                            unit="px"
-                            onChange={(val) =>
-                                this.presetController.patchDraft({
-                                    blurModal: val,
-                                    blurPanel: val + 2,
-                                })
-                            }
-                        />
-                    </FormFieldView>
-                </CardView>
-            </>
+                <FormFieldView
+                    label="毛玻璃虚化"
+                    tooltip="调整模态弹窗与浮层背后的高斯虚化半径 (0px ~ 30px)"
+                    width="w-240"
+                >
+                    <SliderControl
+                        min={0}
+                        max={30}
+                        step={2}
+                        value={draft.blurModal ?? 18}
+                        unit="px"
+                        onChange={(val) =>
+                            this.presetController.patchDraft({
+                                blurModal: val,
+                                blurPanel: val + 2,
+                            })
+                        }
+                    />
+                </FormFieldView>
+            </CardView>
         );
     }
 
