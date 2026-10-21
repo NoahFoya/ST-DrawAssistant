@@ -94,33 +94,53 @@ describe('BlueprintModal 蓝图可视化节点编辑器测试', () => {
         expect(fieldRows.length).toBeGreaterThan(0);
     });
 
-    it('在输入框聚焦时点击宏变量胶囊能正确填入变量', () => {
+    it('检视器不包含旧胶囊栏，属性附带快捷按钮并支持智能推荐与一键替换', () => {
         modal.open(sampleWorkflowJson);
 
         const card6 = document.querySelector('[data-node-id="6"]') as HTMLElement;
         card6.click();
+
+        // 验证旧胶囊栏已完全移除
+        expect(document.querySelector('.da-blueprint-macro-box')).toBeNull();
+        expect(document.querySelector('.da-blueprint-capsule-btn')).toBeNull();
 
         const textInput = document.querySelector(
             'textarea[data-input-field-key="text"]'
         ) as HTMLTextAreaElement;
         expect(textInput).not.toBeNull();
 
-        // 模拟聚焦
-        textInput.focus();
-
-        // 点击正向提示词胶囊按钮
-        const capsuleBtns = document.querySelectorAll(
-            '.da-blueprint-capsule-btn'
-        );
-        expect(capsuleBtns.length).toBeGreaterThan(0);
-
-        const promptCapsule = Array.from(capsuleBtns).find((btn) =>
-            btn.textContent?.includes('%prompt%')
+        // 验证节点连线依赖推荐算法：节点 6 连向 KSampler positive，故推荐 %prompt%
+        const varBtn6 = document.querySelector(
+            'button[data-var-btn-key="text"]'
         ) as HTMLButtonElement;
-        expect(promptCapsule).toBeDefined();
+        expect(varBtn6).not.toBeNull();
+        expect(varBtn6.classList.contains('da-blueprint-var-btn--has-rec')).toBe(true);
+        expect(varBtn6.title).toContain('%prompt%');
 
-        promptCapsule.click();
+        // 点击快捷按钮，弹出浮层菜单
+        varBtn6.click();
+        const dropdown = document.querySelector('.da-blueprint-var-dropdown') as HTMLElement;
+        expect(dropdown).not.toBeNull();
+
+        // 验证置顶推荐项
+        const recItem = dropdown.querySelector('.da-blueprint-var-item--recommended') as HTMLButtonElement;
+        expect(recItem).not.toBeNull();
+        expect(recItem.textContent).toContain('%prompt%');
+
+        // 点击推荐项完成替换
+        recItem.click();
         expect(textInput.value).toBe('%prompt%');
+        expect(document.querySelector('.da-blueprint-var-dropdown')).toBeNull();
+
+        // 切换至节点 7 (连向 KSampler negative)，验证推荐为 %negative_prompt%
+        const card7 = document.querySelector('[data-node-id="7"]') as HTMLElement;
+        card7.click();
+
+        const varBtn7 = document.querySelector(
+            'button[data-var-btn-key="text"]'
+        ) as HTMLButtonElement;
+        expect(varBtn7).not.toBeNull();
+        expect(varBtn7.title).toContain('%negative_prompt%');
     });
 
     it('点击保存工作流修改能格式化 JSON 并执行回调', () => {

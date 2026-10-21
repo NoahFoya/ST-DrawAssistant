@@ -517,44 +517,154 @@
     color: var(--da-accent-color);
 }
 
-.da-blueprint-macro-box {
-    padding: 10px 12px;
-    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.05);
-    border: 1px dashed rgba(var(--da-accent-rgb, 99, 102, 241), 0.3);
+/* 字段编辑复合控件 (输入框 + 快捷变量按钮) */
+.da-blueprint-field-control-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-blueprint-input-field {
+    flex: 1 1 0;
+    min-width: 0;
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.8rem;
+    box-sizing: border-box;
+}
+
+.da-blueprint-textarea-field {
+    flex: 1 1 0;
+    min-width: 0;
+    box-sizing: border-box;
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.78rem;
+    resize: vertical;
+}
+
+/* 快捷变量按钮 */
+.da-blueprint-var-btn {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    background: var(--da-bg-secondary, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.da-blueprint-var-btn:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.12));
+    border-color: var(--da-accent-color);
+    transform: translateY(-1px);
+}
+
+.da-blueprint-var-btn:active {
+    transform: translateY(0);
+}
+
+.da-blueprint-var-btn--has-rec {
+    border-color: rgba(var(--da-accent-rgb, 99, 102, 241), 0.45);
+    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.12);
+}
+
+.da-blueprint-var-btn--has-rec:hover {
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.22);
+}
+
+/* 快捷变量替换下拉浮层菜单 */
+.da-blueprint-var-dropdown {
+    position: fixed;
+    z-index: 100060;
+    width: 270px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--da-bg-card, #24242d);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-md, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
+    box-sizing: border-box;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-.da-blueprint-macro-title {
-    font-size: 0.78rem;
+.da-blueprint-var-group-title {
+    font-size: 0.72rem;
     font-weight: 600;
-    color: var(--da-accent-color);
+    color: var(--da-text-secondary);
+    padding: 6px 8px 3px 8px;
+    user-select: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.da-blueprint-capsule-list {
+.da-blueprint-var-group-title--rec {
+    color: #eab308;
+}
+
+.da-blueprint-var-item {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.da-blueprint-capsule-btn {
-    padding: 3px 8px;
-    font-size: 0.74rem;
-    font-family: var(--da-font-mono, monospace);
-    background: var(--da-bg-card, #25252d);
-    color: var(--da-text-primary);
-    border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-pill, 999px);
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--da-radius-sm, 5px);
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    text-align: left;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    box-sizing: border-box;
+    font-size: 0.78rem;
 }
 
-.da-blueprint-capsule-btn:hover {
-    background: var(--da-accent-color);
-    color: #ffffff;
-    border-color: var(--da-accent-color);
+.da-blueprint-var-item:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    border-color: var(--da-border-color);
+}
+
+.da-blueprint-var-item--recommended {
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.35);
+}
+
+.da-blueprint-var-item--recommended:hover {
+    background: rgba(234, 179, 8, 0.22);
+    border-color: rgba(234, 179, 8, 0.6);
+}
+
+.da-blueprint-var-item-name {
+    font-family: var(--da-font-mono, monospace);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-blueprint-var-item-desc {
+    font-size: 0.72rem;
+    color: var(--da-text-secondary);
+    margin-left: 8px;
+}
+
+.da-blueprint-var-item--recommended .da-blueprint-var-item-name {
+    color: #fde047;
+}
+
+.da-blueprint-var-item--recommended .da-blueprint-var-item-desc {
+    color: #fef08a;
 }
 
 .da-blueprint-fields-container {

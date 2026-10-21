@@ -54,6 +54,8 @@ export class BlueprintModal implements Disposable {
     private canvasInnerElement: HTMLElement | null = null;
     private inspectorContentElement: HTMLElement | null = null;
     private nodeCountBadge: HTMLElement | null = null;
+    private activeDropdown: HTMLElement | null = null;
+    private closeDropdownListener: ((e: MouseEvent) => void) | null = null;
 
     private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -101,6 +103,7 @@ export class BlueprintModal implements Disposable {
      * 关闭蓝图编辑器并释放 DOM。
      */
     public close(): void {
+        this.closeDropdown();
         if (!this.isOpenState && !this.backdropElement) {
             return;
         }
@@ -428,35 +431,7 @@ export class BlueprintModal implements Disposable {
         `;
         this.inspectorContentElement.appendChild(nodeSummary);
 
-        // 2. 宏变量胶囊快捷注入栏
-        const macroCapsuleBox = document.createElement('div');
-        macroCapsuleBox.className = 'da-blueprint-macro-box';
-
-        const macroTitle = document.createElement('div');
-        macroTitle.className = 'da-blueprint-macro-title';
-        macroTitle.textContent = '快捷变量胶囊 (点击填入聚焦字段):';
-        macroCapsuleBox.appendChild(macroTitle);
-
-        const capsuleList = document.createElement('div');
-        capsuleList.className = 'da-blueprint-capsule-list';
-
-        // 选取常用变量
-        const quickVars = COMFYUI_VARIABLE_DEFINITIONS.slice(0, 8);
-        for (const item of quickVars) {
-            const pill = document.createElement('button');
-            pill.type = 'button';
-            pill.className = 'da-blueprint-capsule-btn';
-            pill.textContent = `${item.label} (${item.variable})`;
-            pill.title = `${item.tip} -> ${item.variable}`;
-            pill.addEventListener('click', () => {
-                this.injectMacroIntoActiveField(item.variable);
-            });
-            capsuleList.appendChild(pill);
-        }
-        macroCapsuleBox.appendChild(capsuleList);
-        this.inspectorContentElement.appendChild(macroCapsuleBox);
-
-        // 3. 遍历 inputs 表单字段
+        // 2. 遍历 inputs 表单字段
         const inputs = node.inputs || {};
         const fieldContainer = document.createElement('div');
         fieldContainer.className = 'da-blueprint-fields-container';
@@ -495,28 +470,68 @@ export class BlueprintModal implements Disposable {
                 switchWrap.appendChild(chk);
                 switchWrap.appendChild(track);
                 row.appendChild(switchWrap);
-            } else if (typeof val === 'number') {
-                const numInput = document.createElement('input');
-                numInput.type = 'number';
-                numInput.className = 'da-input da-input--number';
-                numInput.value = String(val);
-                numInput.setAttribute('data-input-field-key', key);
-                numInput.addEventListener('input', () => {
-                    const parsedNum = Number(numInput.value);
-                    node.inputs[key] = Number.isNaN(parsedNum) ? numInput.value : parsedNum;
-                });
-                row.appendChild(numInput);
             } else {
-                // 字符串或未知类型
-                const strInput = document.createElement('textarea');
-                strInput.className = 'da-textarea da-blueprint-textarea-field';
-                strInput.rows = typeof val === 'string' && val.length > 50 ? 4 : 2;
-                strInput.value = String(val ?? '');
-                strInput.setAttribute('data-input-field-key', key);
-                strInput.addEventListener('input', () => {
-                    node.inputs[key] = strInput.value;
+                // 可编辑属性复合行 (输入框 + 快捷变量替换按钮)
+                const controlGroup = document.createElement('div');
+                controlGroup.className = 'da-blueprint-field-control-group';
+
+                const isLongText = typeof val === 'string' && (key.toLowerCase().includes('text') || key.toLowerCase().includes('prompt') || val.length > 50);
+
+                let inputEl: HTMLInputElement | HTMLTextAreaElement;
+                if (isLongText) {
+                    const strInput = document.createElement('textarea');
+                    strInput.className = 'da-textarea da-blueprint-textarea-field';
+                    strInput.rows = typeof val === 'string' && val.length > 80 ? 4 : 2;
+                    strInput.value = String(val ?? '');
+                    strInput.setAttribute('data-input-field-key', key);
+                    strInput.addEventListener('input', () => {
+                        node.inputs[key] = strInput.value;
+                        this.renderCanvas();
+                    });
+                    inputEl = strInput;
+                } else {
+                    const txtInput = document.createElement('input');
+                    txtInput.type = 'text';
+                    txtInput.className = 'da-input da-blueprint-input-field';
+                    txtInput.value = val !== undefined && val !== null ? String(val) : '';
+                    txtInput.setAttribute('data-input-field-key', key);
+                    txtInput.addEventListener('input', () => {
+                        const raw = txtInput.value.trim();
+                        if (/^-?\d+(\.\d+)?$/.test(raw)) {
+                            node.inputs[key] = Number(raw);
+                        } else if (raw === 'true' || raw === 'false') {
+                            node.inputs[key] = raw === 'true';
+                        } else {
+                            node.inputs[key] = txtInput.value;
+                        }
+                        this.renderCanvas();
+                    });
+                    inputEl = txtInput;
+                }
+
+                // 快捷变量按钮
+                const varBtn = document.createElement('button');
+                varBtn.type = 'button';
+                varBtn.className = 'da-btn da-blueprint-var-btn';
+                varBtn.textContent = '🏷️';
+                varBtn.setAttribute('data-var-btn-key', key);
+
+                const recommended = this.findRecommendedVariable(nodeId, node, key);
+                if (recommended) {
+                    varBtn.title = `推荐: ${recommended.variable} (${recommended.label}) - 点击替换`;
+                    varBtn.classList.add('da-blueprint-var-btn--has-rec');
+                } else {
+                    varBtn.title = '选择参数变量进行替换';
+                }
+
+                varBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleVarDropdown(varBtn, inputEl, key, node, recommended);
                 });
-                row.appendChild(strInput);
+
+                controlGroup.appendChild(inputEl);
+                controlGroup.appendChild(varBtn);
+                row.appendChild(controlGroup);
             }
 
             fieldContainer.appendChild(row);
@@ -525,24 +540,201 @@ export class BlueprintModal implements Disposable {
         this.inspectorContentElement.appendChild(fieldContainer);
     }
 
-    private injectMacroIntoActiveField(macro: string): void {
-        const active = document.activeElement as HTMLElement | null;
-        if (
-            active &&
-            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
-            active.hasAttribute('data-input-field-key')
-        ) {
-            const inputEl = active as HTMLInputElement | HTMLTextAreaElement;
-            const key = inputEl.getAttribute('data-input-field-key')!;
-            inputEl.value = macro;
-            if (this.selectedNodeId && this.workflowData[this.selectedNodeId]?.inputs) {
-                this.workflowData[this.selectedNodeId].inputs[key] = macro;
+    /**
+     * 切换展开快捷变量选择浮层下拉菜单。
+     */
+    private toggleVarDropdown(
+        btn: HTMLButtonElement,
+        inputEl: HTMLInputElement | HTMLTextAreaElement,
+        fieldKey: string,
+        node: WorkflowNodeData,
+        recommended: (typeof COMFYUI_VARIABLE_DEFINITIONS)[number] | null
+    ): void {
+        if (this.activeDropdown) {
+            const isSame = this.activeDropdown.getAttribute('data-dropdown-for') === fieldKey;
+            this.closeDropdown();
+            if (isSame) {
+                return;
             }
-            Toast.info(`已为字段 [${key}] 填入变量 ${macro}`);
-            this.renderCanvas();
-        } else {
-            Toast.warning('请先将光标点击聚焦到具体的输入字段，再点击变量胶囊');
         }
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'da-blueprint-var-dropdown';
+        dropdown.setAttribute('data-dropdown-for', fieldKey);
+        dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+        // 1. 推荐匹配分类
+        if (recommended) {
+            const recHeader = document.createElement('div');
+            recHeader.className = 'da-blueprint-var-group-title da-blueprint-var-group-title--rec';
+            recHeader.textContent = '★ 推荐匹配';
+            dropdown.appendChild(recHeader);
+
+            const recItem = document.createElement('button');
+            recItem.type = 'button';
+            recItem.className = 'da-blueprint-var-item da-blueprint-var-item--recommended';
+            recItem.innerHTML = `
+                <span class="da-blueprint-var-item-name">${recommended.variable}</span>
+                <span class="da-blueprint-var-item-desc">${recommended.label}</span>
+            `;
+            recItem.addEventListener('click', () => {
+                inputEl.value = recommended.variable;
+                node.inputs[fieldKey] = recommended.variable;
+                this.closeDropdown();
+                this.renderCanvas();
+                Toast.info(`已为字段 [${fieldKey}] 填入推荐变量 ${recommended.variable}`);
+            });
+            dropdown.appendChild(recItem);
+        }
+
+        // 2. 所有可用参数变量列表
+        const allHeader = document.createElement('div');
+        allHeader.className = 'da-blueprint-var-group-title';
+        allHeader.textContent = '所有参数变量';
+        dropdown.appendChild(allHeader);
+
+        for (const item of COMFYUI_VARIABLE_DEFINITIONS) {
+            if (recommended && item.variable === recommended.variable) {
+                continue;
+            }
+            const varItem = document.createElement('button');
+            varItem.type = 'button';
+            varItem.className = 'da-blueprint-var-item';
+            varItem.innerHTML = `
+                <span class="da-blueprint-var-item-name">${item.variable}</span>
+                <span class="da-blueprint-var-item-desc">${item.label}</span>
+            `;
+            varItem.addEventListener('click', () => {
+                inputEl.value = item.variable;
+                node.inputs[fieldKey] = item.variable;
+                this.closeDropdown();
+                this.renderCanvas();
+                Toast.info(`已为字段 [${fieldKey}] 填入变量 ${item.variable}`);
+            });
+            dropdown.appendChild(varItem);
+        }
+
+        // 浮层定位计算
+        const rect = btn.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        const dropdownWidth = 270;
+        const dropdownMaxHeight = 320;
+
+        const left = Math.max(12, rect.right - dropdownWidth);
+        dropdown.style.left = `${left}px`;
+
+        if (rect.bottom + dropdownMaxHeight > window.innerHeight && rect.top > dropdownMaxHeight) {
+            dropdown.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+        } else {
+            dropdown.style.top = `${rect.bottom + 4}px`;
+        }
+
+        document.body.appendChild(dropdown);
+        this.activeDropdown = dropdown;
+
+        // 全局点击监听延迟挂载
+        setTimeout(() => {
+            if (!this.closeDropdownListener && this.activeDropdown) {
+                this.closeDropdownListener = (e: MouseEvent) => {
+                    if (this.activeDropdown && !this.activeDropdown.contains(e.target as Node) && e.target !== btn) {
+                        this.closeDropdown();
+                    }
+                };
+                document.addEventListener('click', this.closeDropdownListener);
+            }
+        }, 0);
+    }
+
+    /**
+     * 关闭当前活动的变量选择浮层。
+     */
+    private closeDropdown(): void {
+        if (this.closeDropdownListener) {
+            document.removeEventListener('click', this.closeDropdownListener);
+            this.closeDropdownListener = null;
+        }
+        if (this.activeDropdown) {
+            this.activeDropdown.remove();
+            this.activeDropdown = null;
+        }
+    }
+
+    /**
+     * 基于工作流节点连线与语义分析识别最匹配的宏变量。
+     */
+    public findRecommendedVariable(
+        nodeId: string,
+        node: WorkflowNodeData,
+        fieldKey: string
+    ): (typeof COMFYUI_VARIABLE_DEFINITIONS)[number] | null {
+        const keyLower = fieldKey.toLowerCase();
+        const classLower = (node.class_type || '').toLowerCase();
+        const titleLower = (node._meta?.title || '').toLowerCase();
+
+        // 1. 优先通过连线依赖关系检测正负向提示词
+        if (keyLower === 'text' || keyLower === 'positive' || keyLower === 'negative') {
+            let isWiredToPositive = false;
+            let isWiredToNegative = false;
+
+            for (const targetNode of Object.values(this.workflowData)) {
+                const targetClass = (targetNode.class_type || '').toLowerCase();
+                if (targetClass.includes('sampler')) {
+                    const posInput = targetNode.inputs?.positive;
+                    if (Array.isArray(posInput) && String(posInput[0]) === nodeId) {
+                        isWiredToPositive = true;
+                    }
+                    const negInput = targetNode.inputs?.negative;
+                    if (Array.isArray(negInput) && String(negInput[0]) === nodeId) {
+                        isWiredToNegative = true;
+                    }
+                }
+            }
+
+            if (isWiredToNegative) {
+                return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%negative_prompt%') ?? null;
+            }
+            if (isWiredToPositive) {
+                return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%prompt%') ?? null;
+            }
+
+            // 若无直接连线引用，检查节点标题或键名特征
+            const isNegText = titleLower.includes('neg') || titleLower.includes('负') || keyLower.includes('neg');
+            if (isNegText) {
+                return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%negative_prompt%') ?? null;
+            }
+            if (classLower.includes('cliptextencode') || titleLower.includes('prompt') || titleLower.includes('正')) {
+                return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%prompt%') ?? null;
+            }
+        }
+
+        // 2. 字段名精准映射
+        for (const def of COMFYUI_VARIABLE_DEFINITIONS) {
+            if (def.variable === '%prompt%' || def.variable === '%negative_prompt%') {
+                continue;
+            }
+            if (def.matchKeys.some((k) => k.toLowerCase() === keyLower)) {
+                return def;
+            }
+        }
+
+        // 3. 次级模糊匹配
+        if (keyLower.includes('width')) {
+            return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%width%') ?? null;
+        }
+        if (keyLower.includes('height')) {
+            return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%height%') ?? null;
+        }
+        if (keyLower.includes('seed')) {
+            return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%seed%') ?? null;
+        }
+        if (keyLower.includes('step')) {
+            return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%steps%') ?? null;
+        }
+        if (keyLower.includes('cfg')) {
+            return COMFYUI_VARIABLE_DEFINITIONS.find((v) => v.variable === '%cfg%') ?? null;
+        }
+
+        return null;
     }
 
     private classifyNode(_nodeId: string, node: WorkflowNodeData): {
@@ -614,9 +806,16 @@ export class BlueprintModal implements Disposable {
     private bindEvents(): void {
         this.unbindEvents();
         this.keydownHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && this.isOpenState) {
-                e.stopPropagation();
-                this.close();
+            if (e.key === 'Escape') {
+                if (this.activeDropdown) {
+                    e.stopPropagation();
+                    this.closeDropdown();
+                    return;
+                }
+                if (this.isOpenState) {
+                    e.stopPropagation();
+                    this.close();
+                }
             }
         };
         window.addEventListener('keydown', this.keydownHandler, true);
