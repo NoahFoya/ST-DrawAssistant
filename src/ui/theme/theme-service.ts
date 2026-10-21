@@ -81,6 +81,30 @@ export class ThemeService implements Disposable {
     }
 
     /**
+     * 获取当前有效的主题方案标识符（具备失效自动恢复能力）。
+     *
+     * @remarks
+     * 1. 优先读取配置中心记录的 themePreset；
+     * 2. 若配置值有效存在于可用列表中，则直接返回；
+     * 3. 若配置为空或对应方案已被删除，则自动归正为可用列表第一项，并同步写回配置中心。
+     */
+    public getActiveThemeId(): string {
+        const available = this.getAvailableThemes();
+        const storedId = (settingsStore.get('themePreset') as string) || '';
+
+        const matched = available.find((t) => t.id === storedId);
+        if (matched) {
+            return matched.id;
+        }
+
+        const fallbackId = available[0]?.id || 'fallback';
+        if (storedId !== fallbackId) {
+            settingsStore.set('themePreset', fallbackId);
+        }
+        return fallbackId;
+    }
+
+    /**
      * 应用当前配置中心中保存的主题。
      *
      * @param overrides 额外的局部微调覆盖项（如用户自定义的圆角或主色）
@@ -90,7 +114,7 @@ export class ThemeService implements Disposable {
             this.targetElement = document.documentElement;
         }
 
-        const currentThemeId = (settingsStore.get('themePreset') as string) || 'dark';
+        const currentThemeId = this.getActiveThemeId();
         this.applyTheme(currentThemeId, overrides);
     }
 
@@ -138,6 +162,9 @@ export class ThemeService implements Disposable {
         }
         if (merged.bgPrimary) target.style.setProperty('--da-bg-primary', merged.bgPrimary);
         if (merged.bgSecondary) target.style.setProperty('--da-bg-secondary', merged.bgSecondary);
+        if (merged.bgSecondary || merged.bgPrimary) {
+            target.style.setProperty('--da-bg-modal', (merged.bgSecondary || merged.bgPrimary)!);
+        }
         if (merged.bgSidebar) target.style.setProperty('--da-bg-sidebar', merged.bgSidebar);
         if (merged.bgCard) {
             target.style.setProperty('--da-bg-card', merged.bgCard);

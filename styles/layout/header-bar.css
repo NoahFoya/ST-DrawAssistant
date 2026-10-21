@@ -106,7 +106,6 @@
     width: auto !important;
     appearance: none;
     -webkit-appearance: none;
-    color-scheme: var(--da-color-scheme, dark);
 }
 
 .da-quick-theme-select option {

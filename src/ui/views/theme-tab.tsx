@@ -52,7 +52,7 @@ export class ThemeTabView extends PreactSettingsView {
             minRemainingWarning: '至少保留一套基准外观方案，无法删除',
             showToast: true,
             getPresetsOverride: () => themeService.getAvailableThemes(),
-            getActiveId: () => (settingsStore.get('themePreset') as string) || 'dark',
+            getActiveId: () => themeService.getActiveThemeId(),
             setActiveId: (id) => {
                 settingsStore.set('themePreset', id);
             },
@@ -81,7 +81,7 @@ export class ThemeTabView extends PreactSettingsView {
     }
 
     protected renderContent(): VNode {
-        const activeThemeId = this.presetController.activePresetId.value || 'dark';
+        const activeThemeId = this.presetController.activePresetId.value || themeService.getActiveThemeId();
         const draft = this.presetController.draftConfig.value;
         const isDirty = this.presetController.isDirty.value;
         const currentAccent = (draft.accentColor || '').toLowerCase();
@@ -170,7 +170,7 @@ export class ThemeTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
-        const storedId = (settingsStore.get('themePreset') as string) || 'dark';
+        const storedId = themeService.getActiveThemeId();
         this.presetController.applyActivePreset(storedId, { persist: false, silent: true });
     }
 }

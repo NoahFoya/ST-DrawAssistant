@@ -129,6 +129,7 @@ export class SettingsModal implements Disposable {
     private providerTitleTextElement: HTMLElement | null = null;
     private providerExpandTrigger: HTMLElement | null = null;
     private providerSubItemsContainer: HTMLElement | null = null;
+    private quickThemeSelectElement: HTMLSelectElement | null = null;
 
     // 视图实例与选项卡映射
     private readonly sidebarItems = new Map<string, HTMLElement>();
@@ -156,6 +157,14 @@ export class SettingsModal implements Disposable {
                 if (this.isOpenState) {
                     void this.checkActiveProviderHealth();
                 }
+            }
+            if (
+                data.key === 'themePreset' ||
+                data.key?.startsWith('presets.themes') ||
+                data.keys?.includes('themePreset') ||
+                data.keys?.includes('presets')
+            ) {
+                this.refreshThemeSelector();
             }
         });
     }
@@ -449,6 +458,7 @@ export class SettingsModal implements Disposable {
         this.providerTitleTextElement = null;
         this.providerExpandTrigger = null;
         this.providerSubItemsContainer = null;
+        this.quickThemeSelectElement = null;
         this.sidebarItems.clear();
         this.activeView = null;
     }
@@ -543,18 +553,9 @@ export class SettingsModal implements Disposable {
         const themeSelect = document.createElement('select');
         themeSelect.className = 'da-quick-theme-select';
         themeSelect.setAttribute('aria-label', '快捷切换界面主题');
+        this.quickThemeSelectElement = themeSelect;
 
-        const availableThemes = themeService.getAvailableThemes();
-        const currentThemeId = (settingsStore.get('themePreset') as string) || 'dark';
-        for (const item of availableThemes) {
-            const opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = item.name;
-            if (item.id === currentThemeId) {
-                opt.selected = true;
-            }
-            themeSelect.appendChild(opt);
-        }
+        this.refreshThemeSelector();
 
         themeSelect.addEventListener('change', () => {
             const newTheme = themeSelect.value;
@@ -758,6 +759,28 @@ export class SettingsModal implements Disposable {
                 el.classList.remove('da-sidebar-item--active');
             }
         }
+    }
+
+    /**
+     * 响应式刷新顶栏快捷换肤下拉框选项与当前选中态。
+     */
+    private refreshThemeSelector(): void {
+        if (!this.quickThemeSelectElement) {
+            return;
+        }
+
+        const select = this.quickThemeSelectElement;
+        const availableThemes = themeService.getAvailableThemes();
+        const activeThemeId = themeService.getActiveThemeId();
+
+        select.innerHTML = '';
+        for (const item of availableThemes) {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.name;
+            select.appendChild(opt);
+        }
+        select.value = activeThemeId;
     }
 
     private updateProviderLabels(): void {
