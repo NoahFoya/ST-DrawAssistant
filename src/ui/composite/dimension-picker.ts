@@ -261,7 +261,7 @@ export class DimensionPicker implements UIComponent, Disposable {
     }
 
     /**
-     * 兼容性保留：互换当前宽度与高度。
+     * 互换当前宽度与高度数值。
      */
     public swapDimensions(): void {
         const currentWidth = this.data.width;
