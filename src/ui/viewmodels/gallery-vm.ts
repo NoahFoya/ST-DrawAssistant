@@ -88,7 +88,8 @@ export class GalleryViewModel implements Disposable {
                     const prompt = String(r.metadata?.prompt || '').toLowerCase();
                     const neg = String(r.metadata?.negativePrompt || '').toLowerCase();
                     const model = String(
-                        r.metadata?.modelName ??
+                        r.metadata?.baseModel ??
+                            r.metadata?.modelName ??
                             (r.metadata as Record<string, unknown> | undefined)?.model ??
                             ''
                     ).toLowerCase();
@@ -312,6 +313,18 @@ export class GalleryViewModel implements Disposable {
         nextSel.delete(imageId);
         this.selectedIds.value = nextSel;
 
+        const nextUrlMap = new Map(this.pageUrlMap.value);
+        const oldUrl = nextUrlMap.get(imageId);
+        if (oldUrl && oldUrl.startsWith('blob:')) {
+            try {
+                URL.revokeObjectURL(oldUrl);
+            } catch {
+                // 忽略撤销异常
+            }
+        }
+        nextUrlMap.delete(imageId);
+        this.pageUrlMap.value = nextUrlMap;
+
         this.storageSummary.value = await StorageMaintenanceService.computeStorageSummary(
             this.allRecords.value
         );
@@ -393,11 +406,22 @@ export class GalleryViewModel implements Disposable {
         if (!confirmed) return;
 
         const nextSel = new Set(sel);
+        const nextUrlMap = new Map(this.pageUrlMap.value);
         for (const rec of toDelete) {
             await imageStorage.deleteImage(rec.imageId);
             nextSel.delete(rec.imageId);
+            const oldUrl = nextUrlMap.get(rec.imageId);
+            if (oldUrl && oldUrl.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(oldUrl);
+                } catch {
+                    // 忽略撤销异常
+                }
+            }
+            nextUrlMap.delete(rec.imageId);
         }
         this.selectedIds.value = nextSel;
+        this.pageUrlMap.value = nextUrlMap;
 
         Toast.success(`已批量删除 ${toDelete.length} 张图片`);
         await this.refresh();

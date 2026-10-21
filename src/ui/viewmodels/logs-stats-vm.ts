@@ -14,6 +14,7 @@ import { StorageMaintenanceService } from './storage-maintenance';
 import { imageStorage } from '../../store/image-storage';
 import { eventBus } from '../../util/event-bus';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { Toast } from '../feedback/toast';
 import { logger } from '../../util/logger';
 
 export class LogsStatsViewModel implements Disposable {
@@ -122,23 +123,27 @@ export class LogsStatsViewModel implements Disposable {
         });
         if (!confirmed) return;
 
-        await StorageMaintenanceService.cleanFailedRecords();
+        const count = await StorageMaintenanceService.cleanFailedRecords();
         await this.refreshMetrics();
+        Toast.success(`已重置并清理 ${count} 条失败记录`);
     }
 
     public async cleanFailedRecords(): Promise<void> {
-        await StorageMaintenanceService.cleanFailedRecords();
+        const count = await StorageMaintenanceService.cleanFailedRecords();
         await this.refreshMetrics();
+        Toast.success(`已清理 ${count} 条失败记录`);
     }
 
     public async cleanUnfavoritedRecords(): Promise<void> {
-        await StorageMaintenanceService.cleanUnfavoritedRecords();
+        const count = await StorageMaintenanceService.cleanUnfavoritedRecords();
         await this.refreshMetrics();
+        Toast.success(`已安全清理 ${count} 张未标星草稿图片`);
     }
 
     public async clearAllImageRecords(): Promise<void> {
-        await StorageMaintenanceService.clearAllRecords(false);
+        const count = await StorageMaintenanceService.clearAllRecords(false);
         await this.refreshMetrics();
+        Toast.success(`已清理 ${count} 条本地图像记录`);
     }
 
     public activate(): void {

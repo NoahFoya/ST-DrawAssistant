@@ -98,6 +98,9 @@ export class StorageMaintenanceService {
         const list = records ?? (await imageStorage.listImages({ limit: 10000 }));
         let count = 0;
         for (const r of list) {
+            if (r.status === 'deleted') {
+                continue;
+            }
             if (protectFavorited && r.favorited) {
                 continue;
             }
