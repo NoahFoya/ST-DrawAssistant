@@ -50,6 +50,14 @@
     gap: 2px;
 }
 
+.da-card__title-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
 .da-card__title {
     font-size: var(--da-font-size-md, 0.95rem);
     font-weight: 600;

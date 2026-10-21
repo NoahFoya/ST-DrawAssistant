@@ -149,7 +149,11 @@
 }
 
 .da-form-row .da-select-wrapper,
-.da-form-row__control .da-select-wrapper {
+.da-form-row__control .da-select-wrapper,
+.da-form-row .da-input-wrapper,
+.da-form-row__control .da-input-wrapper,
+.da-form-row .da-dimension-picker__size-group,
+.da-form-row__control .da-dimension-picker__size-group {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
@@ -157,7 +161,9 @@
     box-sizing: border-box;
 }
 
-.da-form-row__control:has(.da-select-wrapper) {
+.da-form-row__control:has(.da-select-wrapper),
+.da-form-row__control:has(.da-input-wrapper),
+.da-form-row__control:has(.da-dimension-picker__size-group) {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
@@ -191,8 +197,8 @@
     flex-direction: row;
     align-items: center;
     gap: 6px;
-    min-width: 0;
-    flex: 0 1 auto;
+    min-width: 80px;
+    flex: 0 0 auto;
     user-select: none;
     box-sizing: border-box;
 }
@@ -205,6 +211,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 160px;
 }
 
 .da-field-required {

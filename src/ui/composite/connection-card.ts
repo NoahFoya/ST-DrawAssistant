@@ -76,7 +76,7 @@ export class ConnectionCard implements UIComponent, Disposable {
     private readonly statusBadge: Badge;
     private presetSelect?: Select;
     private readonly urlInput: TextInput;
-    private readonly connectionRow: HTMLElement;
+    private readonly urlFormField: FormField;
     private apiKeyInput?: TextInput;
     private apiKeyFormField?: FormField;
 
@@ -103,7 +103,7 @@ export class ConnectionCard implements UIComponent, Disposable {
         this.element.classList.add('da-connection-card');
         this.disposables.push(this.card);
 
-        // 2. 初始化头部右上角状态指示徽标
+        // 2. 初始化头部主标题旁的状态指示徽标
         this.statusBadge = new Badge({
             text: '未探测',
             variant: 'neutral',
@@ -114,11 +114,25 @@ export class ConnectionCard implements UIComponent, Disposable {
                 this.showErrorDetailsModal();
             }
         });
-        this.card.setBadges(this.statusBadge.element);
+        this.card.setTitleBadges(this.statusBadge.element);
         this.disposables.push(this.statusBadge);
 
-        // 3. 构建表单主体内容
-        // 3.1 可选：服务商预设模板选择
+        // 3. 初始化头部右上角“测试连接与同步”操作按钮
+        const hasAssetSync = Boolean(options.onFetchAssets || this.hasCustomFetchAssetList());
+        this.actionButton = new Button({
+            label: hasAssetSync ? '测试连接与同步' : '测试连接',
+            variant: 'primary',
+            size: 'sm',
+            className: 'da-connection-btn--sync',
+            onClick: async () => {
+                await this.triggerPingAndSync();
+            },
+        });
+        this.card.setHeaderActions(this.actionButton.element);
+        this.disposables.push(this.actionButton);
+
+        // 4. 构建标准表单行主体内容
+        // 4.1 可选：服务商预设模板选择
         if (options.providerPresets && options.providerPresets.length > 0) {
             const presetOptions: SelectOption[] = options.providerPresets.map((p) => ({
                 value: p.id,
@@ -148,11 +162,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.disposables.push(this.presetSelect, presetField);
         }
 
-        // 3.2 服务地址与测试操作单行流式排布 (.da-connection-row)
-        // 左侧输入框居中且自适应占满剩余空间，右侧紧跟合并后的“测试连接与同步”主操作按钮，彻底删除冗余的“Url”字段标签
-        this.connectionRow = document.createElement('div');
-        this.connectionRow.classList.add('da-connection-row');
-
+        // 4.2 服务基础地址标准表单行
         this.urlInput = new TextInput({
             value: this.data.serverUrl,
             placeholder: options.urlPlaceholder ?? 'http://127.0.0.1:8188',
@@ -163,25 +173,15 @@ export class ConnectionCard implements UIComponent, Disposable {
                 this.notifyChange();
             },
         });
-
-        const hasAssetSync = Boolean(options.onFetchAssets || this.hasCustomFetchAssetList());
-        this.actionButton = new Button({
-            label: hasAssetSync ? '测试连接与同步' : '测试连接',
-            variant: 'primary',
-            size: 'sm',
-            className: 'da-connection-btn--sync',
-            onClick: async () => {
-                await this.triggerPingAndSync();
-            },
+        this.urlFormField = new FormField({
+            label: '服务地址',
+            tooltip: '生图后端服务接口的基础 URL (Base URL)',
+            control: this.urlInput,
         });
+        this.card.appendContent(this.urlFormField.element);
+        this.disposables.push(this.urlInput, this.urlFormField);
 
-        this.connectionRow.appendChild(this.urlInput.element);
-        this.connectionRow.appendChild(this.actionButton.element);
-
-        this.card.appendContent(this.connectionRow);
-        this.disposables.push(this.urlInput, this.actionButton);
-
-        // 3.3 可选：接口鉴权凭据 (API Key / Token)
+        // 4.3 可选：接口鉴权凭据 (API Key / Token)
         if (options.showApiKey) {
             this.apiKeyInput = new TextInput({
                 value: this.data.apiKey,
@@ -239,11 +239,7 @@ export class ConnectionCard implements UIComponent, Disposable {
      */
     public setDirty(isDirty: boolean): void {
         this.urlInput.setDirty(isDirty);
-        if (isDirty) {
-            this.connectionRow.classList.add('da-form-row--dirty');
-        } else {
-            this.connectionRow.classList.remove('da-form-row--dirty');
-        }
+        this.urlFormField.setDirty(isDirty);
         this.apiKeyFormField?.setDirty(isDirty);
     }
 

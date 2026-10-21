@@ -23,6 +23,7 @@ export class Card implements UIComponent {
     private readonly headerElement: HTMLElement;
     private readonly titleElement: HTMLElement;
     private readonly subtitleElement: HTMLElement;
+    private readonly titleBadgesContainer: HTMLElement;
     private readonly badgesContainer: HTMLElement;
     private readonly actionsContainer: HTMLElement;
     private readonly bodyElement: HTMLElement;
@@ -56,6 +57,11 @@ export class Card implements UIComponent {
         }
         titleGroup.appendChild(this.subtitleElement);
         headerLeft.appendChild(titleGroup);
+
+        this.titleBadgesContainer = document.createElement('div');
+        this.titleBadgesContainer.classList.add('da-card__title-badges');
+        headerLeft.appendChild(this.titleBadgesContainer);
+
         this.headerElement.appendChild(headerLeft);
 
         // 3. 组装头部右侧（徽标与操作区）
@@ -77,6 +83,17 @@ export class Card implements UIComponent {
         this.bodyElement = document.createElement('div');
         this.bodyElement.classList.add('da-card__body');
         this.element.appendChild(this.bodyElement);
+    }
+
+    /**
+     * 设置紧随主标题右侧的状态徽标区内容。
+     */
+    public setTitleBadges(badges: HTMLElement[] | HTMLElement): void {
+        this.titleBadgesContainer.innerHTML = '';
+        const items = Array.isArray(badges) ? badges : [badges];
+        for (const badge of items) {
+            this.titleBadgesContainer.appendChild(badge);
+        }
     }
 
     /**
