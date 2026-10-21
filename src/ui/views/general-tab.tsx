@@ -295,7 +295,7 @@ export class GeneralTabView extends PreactSettingsView {
             maxWidthPct: img?.maxWidthPct ?? 100,
             maxHeight: img?.maxHeight ?? 480,
             rounded: img?.rounded ?? true,
-            autoBlur: Boolean(img?.autoBlur ?? img?.collapsed),
+            autoBlur: Boolean(img?.autoBlur),
             imageQuality: (s.imageQuality || 'original') as ImageStorageQuality,
             saveToServer: s.saveToServer ?? false,
         };
@@ -379,7 +379,6 @@ export class GeneralTabView extends PreactSettingsView {
             case 'autoBlur':
                 this.updateImageDisplay({
                     autoBlur: Boolean(val),
-                    collapsed: Boolean(val),
                 });
                 break;
             case 'imageQuality':
@@ -398,7 +397,6 @@ export class GeneralTabView extends PreactSettingsView {
         maxHeight?: number;
         rounded?: boolean;
         autoBlur?: boolean;
-        collapsed?: boolean;
     }): void {
         const current = this.bridge.get('ui')?.imageDisplay ?? {
             align: 'center' as const,
@@ -407,7 +405,6 @@ export class GeneralTabView extends PreactSettingsView {
             maxHeight: 512,
             rounded: true,
             autoBlur: false,
-            collapsed: false,
         };
         this.bridge.updateUi({
             imageDisplay: {

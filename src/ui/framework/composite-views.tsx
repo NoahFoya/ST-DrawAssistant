@@ -3,7 +3,7 @@
  *
  * @remarks
  * 将现有的高内聚复合组件（ConnectionCard、PresetToolbar、DimensionPicker、SamplerCard、
- * PromptPresetManager、WorkflowCard、StorageBar、StatCard、MediaCard、LogTerminal）
+ * PromptPresetCard、WorkflowCard、StorageBar、StatCard、MediaCard、LogTerminal）
  * 封装为受控的 Preact JSX 组件。
  * 采用同步引用挂载与卸载自动调用 dispose() 的桥接策略，使视图层无需手动维护 disposables 列表，
  * 同时保证单元测试中同步派发 DOM 事件时立即完成状态同步。
@@ -304,10 +304,6 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
         }
     );
 }
-
-// 向后兼容历史别名
-export type PromptPresetManagerViewProps = PromptPresetCardViewProps;
-export const PromptPresetManagerView = PromptPresetCardView;
 
 // 6. ComfyUI 工作流预设管理卡片 (WorkflowCardView)
 

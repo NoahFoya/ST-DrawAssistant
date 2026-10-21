@@ -8,7 +8,7 @@
  * 3. 生图模型与提示词方案卡片 (SchemaCard)；
  * 4. 画幅规格与渲染档位卡片 (DimensionPickerView + quality/style)；
  * 5. 自定义请求体 JSON 扩展卡片（实时语法校验，非法时标红 .is-invalid 并拦截保存）；
- * 6. 提示词预设管理器 (PromptPresetManagerView，showLora: false, showNegativePrompt: false)。
+ * 6. 提示词预设方案卡片 (PromptPresetCardView，showLora: false, showNegativePrompt: false)。
  */
 
 import { signal, type Signal } from '@preact/signals';

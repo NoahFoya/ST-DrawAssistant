@@ -399,9 +399,3 @@ export class PromptPresetCard implements UIComponent {
         }));
     }
 }
-
-// 向后兼容历史调用方别名
-export {
-    PromptPresetCard as PromptPresetManager,
-    type PromptPresetCardOptions as PromptPresetManagerOptions,
-};

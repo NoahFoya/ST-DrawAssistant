@@ -5,7 +5,7 @@
  * 为 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容服务视图提供统一的声明式 JSX 结构：
  * 1. 顶部服务连接与连通性探测卡片 (ConnectionCardView)；
  * 2. 中部由各提供商声明式注入的生图配置大卡片 (children，内含置顶预设方案工具栏、模型、尺寸与采样)；
- * 3. 底部按需挂载的工作流管理器 (WorkflowCardView) 与提示词预设管理器 (PromptPresetManagerView)。
+ * 3. 底部按需挂载的工作流管理器 (WorkflowCardView) 与提示词预设方案卡片 (PromptPresetCardView)。
  */
 
 import type { ComponentChildren, VNode } from 'preact';

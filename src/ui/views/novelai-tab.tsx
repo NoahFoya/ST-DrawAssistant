@@ -8,7 +8,7 @@
  * 3. 模型版本与提示词增强卡片 (SchemaCard)；
  * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView + CFG Rescale)；
  * 5. 渲染增强与高级特性卡片 (SchemaCard，SMEA 根据所选模型自动禁用/启用)；
- * 6. 提示词预设管理器 (PromptPresetManagerView，showLora: false)。
+ * 6. 提示词预设方案卡片 (PromptPresetCardView，showLora: false)。
  */
 
 import type { VNode } from 'preact';

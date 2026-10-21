@@ -67,8 +67,7 @@
       "maxHeight": 480,
       "maxWidthPct": 100,
       "rounded": true,
-      "autoBlur": false,
-      "collapsed": false
+      "autoBlur": false
     }
   }
 }

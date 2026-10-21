@@ -7,7 +7,7 @@
  * 2. 预设方案主控工具栏 (PresetToolbarView)；
  * 3. 模型与工作流声明式表单卡片 (SchemaCard)；
  * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView)；
- * 5. 工作流预设管理器 (WorkflowCardView) 与提示词预设管理器 (PromptPresetManagerView)。
+ * 5. 工作流预设管理器 (WorkflowCardView) 与提示词预设方案卡片 (PromptPresetCardView)。
  */
 
 import type { VNode } from 'preact';

@@ -119,7 +119,7 @@ export class ProviderTabViewModel implements Disposable {
     /** 图生图工作流下拉选项（含不启用项与失效项提示） */
     public readonly img2imgWorkflowOptions: ReadonlySignal<SelectOption[]>;
 
-    /** 供内嵌 PromptPresetManager 消费的条目列表 */
+    /** 供内嵌 PromptPresetCard 消费的条目列表 */
     public readonly promptCardPresets: ReadonlySignal<PromptCardPresetItem[]>;
     /** 供内嵌 WorkflowCard 消费的条目列表 */
     public readonly workflowCardPresets: ReadonlySignal<WorkflowCardPresetItem[]>;
@@ -357,7 +357,7 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 6. 派生 PromptPresetManager 条目列表
+        // 6. 派生 PromptPresetCard 条目列表
         this.promptCardPresets = computed(() =>
             this.promptPresets.value.map((p) => ({
                 id: p.id,
@@ -556,7 +556,7 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
-     * 响应内嵌 PromptPresetManager 的操作动作。
+     * 响应内嵌 PromptPresetCard 的操作动作。
      */
     public handlePromptAssetAction(
         action: PresetActionType,

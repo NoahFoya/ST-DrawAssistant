@@ -17,6 +17,7 @@ import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
+import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 
 interface EnvSummaryState {
     hasST: boolean;
@@ -82,8 +83,8 @@ export class AboutTabView extends PreactSettingsView {
         const env = this.envState.value;
 
         return [
-            '### ST-DrawAssistant 系统诊断报告',
-            `- **插件版本**: v0.4.0 (Beta)`,
+            `### ${EXTENSION_TITLE} 系统诊断报告`,
+            `- **插件版本**: ${EXTENSION_VERSION}`,
             `- **生成时间**: ${new Date().toISOString()}`,
             `- **SillyTavern 宿主**: ${env.hasST ? '已集成' : '未检测到宿主'}`,
             `- **当前后端**: ${env.activeProvider}`,
@@ -200,7 +201,7 @@ export class AboutTabView extends PreactSettingsView {
         return (
             <>
                 <CardView
-                    title="Starlight DrawAssistant"
+                    title={EXTENSION_TITLE}
                     subtitle="轻量可靠、开箱即用的 SillyTavern AI 生图扩展插件"
                 >
                     <div
@@ -230,7 +231,7 @@ export class AboutTabView extends PreactSettingsView {
                         }}
                     >
                         {[
-                            { label: '当前插件版本', value: 'v0.4.0 (Beta)' },
+                            { label: '当前插件版本', value: EXTENSION_VERSION },
                             { label: '开发者', value: 'NoahFoya' },
                             { label: '开源许可证', value: 'GPL-3.0 License' },
                             { label: '架构模式', value: 'Preact + Signals + Schema UI' },

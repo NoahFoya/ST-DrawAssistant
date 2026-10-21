@@ -9,6 +9,3 @@
 export * from './settings-modal';
 export * from './blueprint-modal';
 
-// 向后兼容别名导出
-export * from '../entry';
-

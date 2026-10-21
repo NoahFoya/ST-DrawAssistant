@@ -92,7 +92,6 @@ export interface DrawAssistantSettings {
             maxWidthPct: number;
             rounded: boolean;
             autoBlur: boolean;
-            collapsed: boolean;
         };
     };
 }

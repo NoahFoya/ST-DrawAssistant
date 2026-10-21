@@ -8,7 +8,7 @@
  * 3. 模型与网络架构卡片 (SchemaCard)；
  * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView)；
  * 5. 高清修复 (Hires. fix) 级联声明式卡片 (SchemaCard，子项通过 disabledWhen 联动)；
- * 6. 底部提示词与通用 LoRA 预设管理器 (PromptPresetManagerView)。
+ * 6. 底部提示词与通用 LoRA 预设方案卡片 (PromptPresetCardView)。
  */
 
 import type { VNode } from 'preact';

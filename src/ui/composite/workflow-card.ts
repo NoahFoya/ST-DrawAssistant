@@ -83,7 +83,7 @@ export interface WorkflowCardOptions {
 /** ComfyUI 标准变量占位符定义字典 */
 export const COMFYUI_VARIABLE_DEFINITIONS: readonly ComfyWorkflowVariableDefinition[] = [
     {
-        variable: '%model_name%',
+        variable: '%basemodel_name%',
         label: '主模型',
         matchKeys: ['ckpt_name', 'unet_name', 'model_name'],
         tip: '主模型文件名 (通常位于 CheckpointLoaderSimple 或 UNETLoader 节点)'

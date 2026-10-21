@@ -410,6 +410,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         const variables: WorkflowVariables = {
             basemodel_name: resolvedBaseModel,
+            model_name: resolvedBaseModel,
             unet_name: (params.unetName ?? resolvedBaseModel) as string | undefined,
             clip_name: (params.clipName ?? drawingPreset?.clipName) as string | undefined,
             vae_name: (params.vaeName ?? drawingPreset?.vaeName) as string | undefined,
