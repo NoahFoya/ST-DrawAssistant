@@ -25,9 +25,17 @@
     width: 100%;
 }
 
+.da-gallery-toolbar .da-input-wrapper,
 .da-gallery-toolbar .da-input-group {
     flex: 2;
-    min-width: 180px;
+    min-width: 220px;
+}
+
+.da-gallery-toolbar .da-input-wrapper .da-input {
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    padding-left: 12px;
 }
 
 .da-gallery-toolbar .da-gallery-filter-row {
@@ -36,6 +44,12 @@
     gap: 8px;
     flex: 3;
     flex-wrap: wrap;
+}
+
+.da-gallery-toolbar .da-gallery-filter-row .da-select-wrapper {
+    flex: 1 1 130px;
+    min-width: 120px;
+    width: auto;
 }
 
 

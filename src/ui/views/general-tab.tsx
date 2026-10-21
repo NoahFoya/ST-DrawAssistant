@@ -70,7 +70,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 key: 'transport',
                 label: '连接方式',
                 type: 'segmented',
-                width: 'auto',
+                width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
                     '直连由浏览器直接请求绘图服务；代理经由酒馆服务端中继，可解决 HTTPS 访问本地服务时的跨域 (CORS) 与混合内容阻断',
@@ -164,7 +164,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 key: 'align',
                 label: '对齐方式',
                 type: 'segmented',
-                width: 'auto',
+                width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 options: [
                     { label: '居中对齐', value: 'center' },
@@ -176,7 +176,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 key: 'objectFit',
                 label: '缩放模式',
                 type: 'segmented',
-                width: 'auto',
+                width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
                     '图片在楼层中的适应规则：完整显示保持比例、裁剪填充铺满容器或以原始尺寸呈现',

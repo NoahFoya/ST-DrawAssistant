@@ -8,6 +8,15 @@
 /* 1. 生图历史指标卡片网格 (.da-stat-grid)
    自适应 4 列或 3 列卡片网格，展示累计生成数、成功率、平均耗时与收藏总数等指标；
    单个指标卡片采用垂直居中排布，数值采用等宽字体（font-family: var(--da-font-mono)）。 */
+.da-logs-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .da-stat-dashboard {
     display: flex;
     flex-direction: column;

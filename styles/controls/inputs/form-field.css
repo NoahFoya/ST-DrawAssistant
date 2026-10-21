@@ -152,6 +152,10 @@
 .da-form-row__control .da-select-wrapper,
 .da-form-row .da-input-wrapper,
 .da-form-row__control .da-input-wrapper,
+.da-form-row .da-slider-wrapper,
+.da-form-row__control .da-slider-wrapper,
+.da-form-row .da-segmented,
+.da-form-row__control .da-segmented,
 .da-form-row .da-dimension-picker__size-group,
 .da-form-row__control .da-dimension-picker__size-group {
     width: 240px;
@@ -163,11 +167,20 @@
 
 .da-form-row__control:has(.da-select-wrapper),
 .da-form-row__control:has(.da-input-wrapper),
+.da-form-row__control:has(.da-slider-wrapper),
+.da-form-row__control:has(.da-segmented),
 .da-form-row__control:has(.da-dimension-picker__size-group) {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
     flex: 0 0 240px;
+}
+
+/* 分段选择器在表单行中各子项等分排布 */
+.da-form-row .da-segmented__item,
+.da-form-row__control .da-segmented__item {
+    flex: 1 1 0;
+    text-align: center;
 }
 
 .da-slot--w-120 {

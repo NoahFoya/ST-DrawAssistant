@@ -44,15 +44,7 @@ export class LogsAndStatsTabView extends PreactSettingsView {
 
         return (
             <>
-                <div
-                    className="da-logs-stats-grid"
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-                        gap: '12px',
-                        marginBottom: '12px',
-                    }}
-                >
+                <div className="da-logs-stats-grid">
                     <StatCardView
                         title="运行数据统计"
                         data={statsData}

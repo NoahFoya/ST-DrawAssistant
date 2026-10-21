@@ -91,19 +91,19 @@ export class ThemeTabView extends PreactSettingsView {
 
         return (
             <>
-                <PresetToolbarView
-                    presets={this.presetController.toolbarItems.value}
-                    activePresetId={activeThemeId}
-                    dirty={isDirty}
-                    onAction={(action, id) => this.presetController.handleAction(action, id)}
-                    onImportFile={(file) => this.presetController.handleImportFile(file)}
-                />
-
                 <CardView title="外观模式与强调色">
+                    <PresetToolbarView
+                        presets={this.presetController.toolbarItems.value}
+                        activePresetId={activeThemeId}
+                        dirty={isDirty}
+                        onAction={(action, id) => this.presetController.handleAction(action, id)}
+                        onImportFile={(file) => this.presetController.handleImportFile(file)}
+                    />
+
                     <FormFieldView
                         label="色彩模式"
                         tooltip="切换界面的基底色彩模式（深色或浅色）"
-                        width="auto"
+                        width="w-240"
                     >
                         <SegmentedControlView
                             value={isLight ? 'light' : 'dark'}
