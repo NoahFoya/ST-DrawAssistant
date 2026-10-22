@@ -28,22 +28,22 @@
   "providers": {
     "comfyui": {
       "serverUrl": "http://127.0.0.1:8188",
-      "activeDrawingPresetId": ""
+      "activeDrawingPresetId": "comfyui_default"
     },
     "sdwebui": {
       "serverUrl": "http://127.0.0.1:7860",
-      "activeDrawingPresetId": ""
+      "activeDrawingPresetId": "sdwebui_default"
     },
     "novelai": {
       "serverUrl": "https://image.novelai.net",
       "apiKey": "",
-      "activeDrawingPresetId": ""
+      "activeDrawingPresetId": "novelai_default"
     },
     "openai": {
       "serviceId": "openai-official",
       "serverUrl": "https://api.openai.com/v1",
       "apiKey": "",
-      "activeDrawingPresetId": ""
+      "activeDrawingPresetId": "openai_default"
     }
   },
   "ui": {

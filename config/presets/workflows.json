@@ -1,7 +1,7 @@
 [
   {
     "id": "comfyui_checkpoint_basic",
-    "name": "基础全量模型工作流（无weilin）",
+    "name": "通用全量模型工作流_原生",
     "description": "基于 CheckpointLoaderSimple 的原生基础全量模型工作流，无 WeiLin 插件，LoRA 标签不生效",
     "data": {
       "workflow": {
@@ -115,7 +115,7 @@
   },
   {
     "id": "comfyui_split_basic",
-    "name": "基础分化模型工作流（无weilin）",
+    "name": "通用分化模型工作流_原生",
     "description": "基于 UNet / CLIP / VAE 拆分架构的原生基础分化模型工作流，无 WeiLin 插件，LoRA 标签不生效",
     "data": {
       "workflow": {
@@ -251,7 +251,7 @@
   },
   {
     "id": "comfyui_weilin_moody",
-    "name": "带weilin工作流——moody",
+    "name": "Moody定制模型工作流_WeiLin",
     "description": "定制分化模型专属 DIY 工作流，集成 WeiLin 提示词与 LoRA 扩展，内置 4 步极速高级采样与 Ultimate SD 放大链路",
     "data": {
       "workflow": {
@@ -552,7 +552,7 @@
   },
   {
     "id": "comfyui_weilin_checkpoint_wai",
-    "name": "带weilin工作流——全量模型（默认wai）",
+    "name": "通用全量模型工作流_WeiLin",
     "description": "通用全量模型工作流，集成 WeiLin 提示词与 LoRA 扩展，默认底模为 waiIllustriousSDXL_v170，参数全量动态联动",
     "data": {
       "workflow": {
@@ -677,7 +677,7 @@
   },
   {
     "id": "comfyui_weilin_split_miaomiao",
-    "name": "带weilin工作流——分化模型（默认miaomiao）",
+    "name": "通用分化模型工作流_WeiLin",
     "description": "通用分化模型工作流，集成 WeiLin 提示词与 LoRA 扩展，默认底模为 miaomiaoHarem_anima14，参数全量动态联动",
     "data": {
       "workflow": {
