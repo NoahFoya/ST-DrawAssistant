@@ -12,12 +12,14 @@ import type { UIComponent } from '../types';
 import { Card } from '../components/card';
 import { PresetToolbar, type PresetToolbarItem, type PresetActionType } from './preset-toolbar';
 import { LoraManager, type LoraEntryItem, type LoraSyntaxMode } from './lora-manager';
+import { SegmentedControl } from '../components/segmented-control';
 
 /** 提示词卡片表单数据模型 */
 export interface PromptCardData {
     positivePrefix: string;
     positiveSuffix: string;
     negativePrompt: string;
+    loraSyntaxMode?: LoraSyntaxMode;
     loras: LoraEntryItem[];
 }
 
@@ -59,6 +61,7 @@ export class PromptPresetCard implements UIComponent {
     public readonly card: Card;
     public readonly toolbar: PresetToolbar;
     public readonly loraManager: LoraManager | null = null;
+    public readonly syntaxSegmented: SegmentedControl | null = null;
 
     private readonly prefixTextarea: HTMLTextAreaElement;
     private readonly suffixTextarea: HTMLTextAreaElement;
@@ -91,6 +94,7 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: found?.data?.positivePrefix || '',
             positiveSuffix: found?.data?.positiveSuffix || '',
             negativePrompt: found?.data?.negativePrompt || '',
+            loraSyntaxMode: found?.data?.loraSyntaxMode ?? options.mode ?? 'standard',
             loras: found?.data?.loras ? found.data.loras.map((l) => ({ ...l })) : []
         };
 
@@ -98,6 +102,7 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: options.value?.positivePrefix ?? defaultData.positivePrefix,
             positiveSuffix: options.value?.positiveSuffix ?? defaultData.positiveSuffix,
             negativePrompt: options.value?.negativePrompt ?? defaultData.negativePrompt,
+            loraSyntaxMode: options.value?.loraSyntaxMode ?? defaultData.loraSyntaxMode,
             loras: options.value?.loras ? options.value.loras.map((l) => ({ ...l })) : defaultData.loras
         };
         this.baselineData = this.cloneData(this.currentData);
@@ -172,10 +177,47 @@ export class PromptPresetCard implements UIComponent {
         }
         this.card.appendContent(negGroup.container);
 
-        // 7. 内嵌 LoRA 模型管理器 (按需加载)
+        // 7. LoRA 语法模式正规切换项与内嵌 LoRA 管理器
         if (this.showLora) {
+            const syntaxRow = document.createElement('div');
+            syntaxRow.className = 'da-textarea-row da-prompt-syntax-row';
+
+            const syntaxHeader = document.createElement('div');
+            syntaxHeader.className = 'da-textarea-header';
+
+            const syntaxLabel = document.createElement('label');
+            syntaxLabel.className = 'da-field-label';
+            syntaxLabel.textContent = 'LoRA 语法模式';
+
+            const syntaxHelp = document.createElement('span');
+            syntaxHelp.className = 'da-field-help';
+            syntaxHelp.textContent = '标准模式输出 <lora:...>，WeiLin 扩展模式输出三权重 <wlr:...>';
+
+            syntaxHeader.appendChild(syntaxLabel);
+            syntaxHeader.appendChild(syntaxHelp);
+            syntaxRow.appendChild(syntaxHeader);
+
+            const activeMode = this.currentData.loraSyntaxMode ?? options.mode ?? 'standard';
+
+            this.syntaxSegmented = new SegmentedControl({
+                value: activeMode,
+                options: [
+                    { label: '标准模式 (SD 原生)', value: 'standard' },
+                    { label: 'WeiLin 扩展模式', value: 'weilin' },
+                ],
+                onChange: (val) => {
+                    const newMode = (val === 'weilin' ? 'weilin' : 'standard') as LoraSyntaxMode;
+                    this.currentData.loraSyntaxMode = newMode;
+                    this.loraManager?.setMode(newMode);
+                    this.updateDirtyState();
+                    this.onChangeCallback?.(this.getValue());
+                },
+            });
+            syntaxRow.appendChild(this.syntaxSegmented.element);
+            this.card.appendContent(syntaxRow);
+
             this.loraManager = new LoraManager({
-                mode: options.mode ?? 'standard',
+                mode: activeMode,
                 availableModels: options.availableModels ?? [],
                 initialItems: this.currentData.loras,
                 onChange: (items) => {
@@ -202,6 +244,7 @@ export class PromptPresetCard implements UIComponent {
         if (val.positivePrefix !== undefined) this.currentData.positivePrefix = val.positivePrefix;
         if (val.positiveSuffix !== undefined) this.currentData.positiveSuffix = val.positiveSuffix;
         if (val.negativePrompt !== undefined) this.currentData.negativePrompt = val.negativePrompt;
+        if (val.loraSyntaxMode !== undefined) this.currentData.loraSyntaxMode = val.loraSyntaxMode;
         if (val.loras !== undefined) {
             this.currentData.loras = val.loras.map((l) => ({ ...l }));
         }
@@ -246,6 +289,8 @@ export class PromptPresetCard implements UIComponent {
      * 动态更新 LoRA 语法模式。
      */
     public setMode(mode: LoraSyntaxMode): void {
+        this.currentData.loraSyntaxMode = mode;
+        this.syntaxSegmented?.setValue(mode);
         this.loraManager?.setMode(mode);
     }
 
@@ -272,6 +317,7 @@ export class PromptPresetCard implements UIComponent {
         this.negTextarea.removeEventListener('input', this.negInputListener);
 
         this.toolbar.dispose();
+        this.syntaxSegmented?.dispose?.();
         this.loraManager?.dispose();
         this.card.dispose();
     }
@@ -312,8 +358,15 @@ export class PromptPresetCard implements UIComponent {
         this.prefixTextarea.value = data.positivePrefix || '';
         this.suffixTextarea.value = data.positiveSuffix || '';
         this.negTextarea.value = data.negativePrompt || '';
-        if (this.loraManager && data.loras) {
-            this.loraManager.setItems(data.loras);
+        const mode = data.loraSyntaxMode || 'standard';
+        if (this.syntaxSegmented) {
+            this.syntaxSegmented.setValue(mode);
+        }
+        if (this.loraManager) {
+            this.loraManager.setMode(mode);
+            if (data.loras) {
+                this.loraManager.setItems(data.loras);
+            }
         }
     }
 
@@ -328,6 +381,12 @@ export class PromptPresetCard implements UIComponent {
         if (this.currentData.positivePrefix !== this.baselineData.positivePrefix) return true;
         if (this.currentData.positiveSuffix !== this.baselineData.positiveSuffix) return true;
         if (this.currentData.negativePrompt !== this.baselineData.negativePrompt) return true;
+        if (
+            (this.currentData.loraSyntaxMode ?? 'standard') !==
+            (this.baselineData.loraSyntaxMode ?? 'standard')
+        ) {
+            return true;
+        }
 
         const currentLoras = this.currentData.loras || [];
         const baseLoras = this.baselineData.loras || [];
@@ -351,6 +410,7 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: data.positivePrefix,
             positiveSuffix: data.positiveSuffix,
             negativePrompt: data.negativePrompt,
+            loraSyntaxMode: data.loraSyntaxMode ?? 'standard',
             loras: data.loras ? data.loras.map((l) => ({ ...l })) : []
         };
     }

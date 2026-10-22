@@ -96,11 +96,18 @@ export interface DrawingPresetData {
     [key: string]: unknown;
 }
 
+/** LoRA 语法模式：标准模式 ('standard') 与 WeiLin 扩展模式 ('weilin') */
+export type LoraSyntaxMode = 'standard' | 'weilin';
+
 /** LoRA 配置条目模型 */
 export interface LoraConfigItem {
     name: string;
     weight: number;
+    modelWeight?: number;
+    clipWeight?: number;
+    triggerWeight?: number;
     trigger?: string;
+    enabled?: boolean;
 }
 
 /** 提示词方案负载类型 */
@@ -111,6 +118,8 @@ export interface PromptPresetData {
     positiveSuffix?: string;
     /** 负向提示词 */
     negativePrompt?: string;
+    /** LoRA 语法模式，默认 'standard' */
+    loraSyntaxMode?: LoraSyntaxMode;
     /** LoRA 配置列表 */
     loras?: LoraConfigItem[];
     [key: string]: unknown;

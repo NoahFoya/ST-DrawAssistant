@@ -26,6 +26,7 @@ import type {
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
+import { formatLoraTag } from '../../ui/composite/lora-manager';
 
 interface ComfyPromptHistoryOutput {
     images?: Array<{ filename: string; subfolder?: string; type?: string }>;
@@ -483,11 +484,20 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                     negativePromptText = negativePromptText ? `${negativePromptText}, ${defaultNeg}` : defaultNeg;
                 }
 
-                // 若预设包含 LoRA 配置，且正向提示词中未显式写入该 LoRA，则按 ComfyUI 规范追加 <lora:name:weight>
+                // 若预设包含 LoRA 配置，且正向提示词中未显式写入该 LoRA，则遵从方案语法模式追加对应标签
                 if (Array.isArray(pData.loras)) {
+                    const syntaxMode = pData.loraSyntaxMode ?? 'standard';
                     for (const lora of pData.loras) {
-                        if (lora && lora.name && !promptText.includes(`<lora:${lora.name}:`)) {
-                            promptText = `${promptText}, <lora:${lora.name}:${lora.weight ?? 1.0}>`;
+                        if (!lora || !lora.name) continue;
+                        const cleanName = lora.name.replace(/\.(safetensors|pt|ckpt|pth)$/i, '').trim();
+                        const hasTag =
+                            promptText.includes(`<lora:${cleanName}:`) ||
+                            promptText.includes(`<wlr:${cleanName}:`);
+                        if (!hasTag) {
+                            const tag = formatLoraTag(lora, syntaxMode);
+                            if (tag) {
+                                promptText = `${promptText}, ${tag}`;
+                            }
                         }
                     }
                 }

@@ -12,6 +12,7 @@
  */
 
 import type { UIComponent, Disposable } from '../types';
+import type { LoraSyntaxMode } from '@types';
 import { Card } from '../components/card';
 import { Select, type SelectOption } from '../components/select';
 import { Switch } from '../components/switch';
@@ -19,8 +20,7 @@ import { NumberInput } from '../components/number-input';
 import { Button } from '../components/button';
 import { Badge } from '../components/badge';
 
-/** LoRA 语法模式：标准模式 ('standard') 与 WeiLin 扩展模式 ('weilin') */
-export type LoraSyntaxMode = 'standard' | 'weilin';
+export type { LoraSyntaxMode };
 
 /** 单个已挂载 LoRA 条目数据模型 */
 export interface LoraEntryItem {
@@ -55,6 +55,16 @@ export interface LoraManagerOptions {
     onChange?(items: LoraEntryItem[]): void;
 }
 
+/** 可被格式化为 LoRA 标签的输入数据规范 */
+export interface FormatLoraTagInput {
+    modelName?: string;
+    name?: string;
+    modelWeight?: number;
+    weight?: number;
+    clipWeight?: number;
+    triggerWeight?: number;
+}
+
 /**
  * 根据指定模式将 LoRA 条目格式化为提示词标签。
  *
@@ -63,21 +73,39 @@ export interface LoraManagerOptions {
  * 标准模式：两权重一致简写为 <lora:name:model>，不同时为 <lora:name:model:clip>。
  * WeiLin 扩展模式：四段式语法 <wlr:name:model:clip:trigger>。
  *
- * @param item LoRA 条目数据
+ * @param item LoRA 条目数据 (支持 LoraEntryItem 或 LoraConfigItem)
  * @param mode 语法模式 ('standard' | 'weilin')，默认 'standard'
  * @returns 格式化后的标签字符串，若模型名为空则返回空字符串
  */
-export function formatLoraTag(item: LoraEntryItem, mode: LoraSyntaxMode = 'standard'): string {
-    if (!item || !item.modelName) {
+export function formatLoraTag(
+    item: FormatLoraTagInput | LoraEntryItem,
+    mode: LoraSyntaxMode = 'standard'
+): string {
+    if (!item) {
         return '';
     }
-    const cleanName = item.modelName.replace(/\.(safetensors|pt|ckpt|pth)$/i, '').trim();
+    const rawName =
+        'modelName' in item && typeof item.modelName === 'string' && item.modelName
+            ? item.modelName
+            : 'name' in item && typeof item.name === 'string'
+              ? item.name
+              : '';
+    if (!rawName) {
+        return '';
+    }
+    const cleanName = rawName.replace(/\.(safetensors|pt|ckpt|pth)$/i, '').trim();
     if (!cleanName) {
         return '';
     }
 
-    const model = Number.isFinite(item.modelWeight) ? item.modelWeight : 0.8;
-    const clip = Number.isFinite(item.clipWeight) ? item.clipWeight : model;
+    const rawModel =
+        'modelWeight' in item && typeof item.modelWeight === 'number'
+            ? item.modelWeight
+            : 'weight' in item && typeof item.weight === 'number'
+              ? item.weight
+              : undefined;
+    const model = Number.isFinite(rawModel) ? (rawModel as number) : 0.8;
+    const clip = Number.isFinite(item.clipWeight) ? item.clipWeight! : model;
 
     if (mode === 'weilin') {
         const trigger = Number.isFinite(item.triggerWeight) ? item.triggerWeight! : 1.0;

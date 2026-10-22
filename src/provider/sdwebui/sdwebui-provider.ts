@@ -21,8 +21,10 @@ import type {
     SDWebUIProviderConfig,
     DrawingPresetData,
     PromptPresetData,
+    LoraSyntaxMode,
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
+import { formatLoraTag } from '../../ui/composite/lora-manager';
 import { base64ToBlob } from '../../util/http-client';
 
 /** SD-WebUI 提供方初始化配置项 */
@@ -33,25 +35,31 @@ export interface SdWebUIProviderOptions extends BaseProviderOptions {}
  *
  * @param loras LoRA 配置列表
  * @param existingPrompt 当前已存在的提示词文本，用于防重检测
+ * @param syntaxMode 语法模式，默认 'standard'
  * @returns 追加至提示词的标签字符串，无 LoRA 或均已存在时返回空字符串
  */
 export function buildLoraTagString(
-    loras?: Array<{ name: string; weight: number; trigger?: string }>,
-    existingPrompt = ''
+    loras?: PromptPresetData['loras'],
+    existingPrompt = '',
+    syntaxMode: LoraSyntaxMode = 'standard'
 ): string {
     if (!loras || loras.length === 0) {
         return '';
     }
     const tags: string[] = [];
     for (const lora of loras) {
-        const name = lora?.name?.trim();
-        if (!name) continue;
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`<lora:${escaped}:`, 'i');
+        const rawName = lora?.name?.trim();
+        if (!rawName) continue;
+        const cleanName = rawName.replace(/\.(safetensors|pt|ckpt|pth)$/i, '').trim();
+        const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`<(?:lora|wlr):${escaped}:`, 'i');
         if (pattern.test(existingPrompt)) {
             continue;
         }
-        tags.push(`<lora:${name}:${Number(lora.weight ?? 1)}>`);
+        const tag = formatLoraTag(lora, syntaxMode);
+        if (tag) {
+            tags.push(tag);
+        }
     }
     return tags.join(' ');
 }
@@ -308,8 +316,9 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         const promptSuffix = promptPreset?.positiveSuffix ?? '';
         const negativeDefault = promptPreset?.negativePrompt ?? '';
 
-        // 将 Prompt 预设的 LoRA 标签追加至正向提示词（防重）
-        const loraTagStr = buildLoraTagString(promptPreset?.loras, request.prompt);
+        // 将 Prompt 预设的 LoRA 标签追加至正向提示词（防重，遵从方案语法模式）
+        const syntaxMode = promptPreset?.loraSyntaxMode ?? 'standard';
+        const loraTagStr = buildLoraTagString(promptPreset?.loras, request.prompt, syntaxMode);
 
         const fullPrompt = [promptPrefix, request.prompt, loraTagStr, promptSuffix]
             .filter(Boolean)

@@ -366,12 +366,14 @@ export class ProviderTabViewModel implements Disposable {
                     positivePrefix: p.data?.positivePrefix || '',
                     positiveSuffix: p.data?.positiveSuffix || '',
                     negativePrompt: p.data?.negativePrompt || '',
+                    loraSyntaxMode: p.data?.loraSyntaxMode || 'standard',
                     loras: (p.data?.loras || []).map((l, idx) => ({
                         id: `lora_${p.id}_${idx}`,
-                        enabled: true,
+                        enabled: l.enabled !== false,
                         modelName: l.name || '',
-                        modelWeight: l.weight ?? 0.8,
-                        clipWeight: l.weight ?? 0.8,
+                        modelWeight: l.modelWeight ?? l.weight ?? 0.8,
+                        clipWeight: l.clipWeight ?? l.weight ?? 0.8,
+                        triggerWeight: l.triggerWeight ?? 1.0,
                     })),
                 },
             }))
@@ -582,11 +584,16 @@ export class ProviderTabViewModel implements Disposable {
                     positivePrefix: data.positivePrefix,
                     positiveSuffix: data.positiveSuffix,
                     negativePrompt: data.negativePrompt,
+                    loraSyntaxMode: data.loraSyntaxMode || 'standard',
                     loras: (data.loras || [])
                         .filter((l) => l.enabled && l.modelName)
                         .map((l) => ({
                             name: l.modelName,
                             weight: l.modelWeight,
+                            modelWeight: l.modelWeight,
+                            clipWeight: l.clipWeight,
+                            triggerWeight: l.triggerWeight,
+                            enabled: l.enabled,
                         })),
                 };
                 settingsStore.savePreset('prompts', pr);
@@ -608,9 +615,17 @@ export class ProviderTabViewModel implements Disposable {
                     positivePrefix: data?.positivePrefix || '',
                     positiveSuffix: data?.positiveSuffix || '',
                     negativePrompt: data?.negativePrompt || '',
+                    loraSyntaxMode: data?.loraSyntaxMode || 'standard',
                     loras: (data?.loras || [])
                         .filter((l) => l.enabled && l.modelName)
-                        .map((l) => ({ name: l.modelName, weight: l.modelWeight })),
+                        .map((l) => ({
+                            name: l.modelName,
+                            weight: l.modelWeight,
+                            modelWeight: l.modelWeight,
+                            clipWeight: l.clipWeight,
+                            triggerWeight: l.triggerWeight,
+                            enabled: l.enabled,
+                        })),
                 },
                 updatedAt: Date.now(),
             };
