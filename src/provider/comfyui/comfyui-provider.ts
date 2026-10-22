@@ -615,14 +615,30 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
                 if (currentHistory) {
                     if (currentHistory.status?.status_str === 'error') {
-                        const msgs = Array.isArray(currentHistory.status.messages)
-                            ? currentHistory.status.messages
-                                  .map((m: unknown) =>
-                                      Array.isArray(m) ? m.join(': ') : typeof m === 'object' && m !== null ? JSON.stringify(m) : String(m)
-                                  )
-                                  .join('; ')
-                            : '未知节点执行异常';
-                        throw new Error(`ComfyUI 执行失败: ${msgs}`);
+                        let errorDetails = '';
+                        if (Array.isArray(currentHistory.status.messages)) {
+                            const errMessages: string[] = [];
+                            for (const msgItem of currentHistory.status.messages) {
+                                if (Array.isArray(msgItem)) {
+                                    const [event, payload] = msgItem;
+                                    if (event === 'execution_error' && typeof payload === 'object' && payload !== null) {
+                                        const p = payload as Record<string, unknown>;
+                                        const nodeInfo = p.node_id ? `节点 ${p.node_id} (${p.node_type || 'Unknown'}): ` : '';
+                                        const exMsg = p.exception_message || p.exception_type || JSON.stringify(p);
+                                        errMessages.push(`${nodeInfo}${exMsg}`);
+                                    }
+                                } else if (typeof msgItem === 'string') {
+                                    errMessages.push(msgItem);
+                                }
+                            }
+                            if (errMessages.length > 0) {
+                                errorDetails = errMessages.join('; ');
+                            }
+                        }
+                        if (!errorDetails) {
+                            errorDetails = '未知节点执行异常';
+                        }
+                        throw new Error(`ComfyUI 执行失败: ${errorDetails}`);
                     }
 
                     if (currentHistory.outputs && Object.keys(currentHistory.outputs).length > 0) {
