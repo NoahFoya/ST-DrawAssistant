@@ -141,23 +141,26 @@ function upsertPresetItem<P>(list: PresetItem<P>[], item: PresetItem<P>): Preset
     return nextList;
 }
 
-/** 构建默认配置实例，预设方案集合默认初始化为空数组 */
+/** 构建默认配置实例，直接装配官方静态预设方案以确保单一事实来源与自洽性 */
 function buildDefaultSettings(): DrawAssistantSettings {
     const base = defaultSettingsData as unknown as DrawAssistantSettings;
+    const drawingMap: Record<string, PresetItem<DrawingPresetData>[]> = {};
+    for (const [pKey, list] of Object.entries(recommendedDrawingData as Record<string, PresetItem<DrawingPresetData>[]>)) {
+        drawingMap[pKey] = structuredClone(list || []);
+    }
+
+    const themes = structuredClone((recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || []);
+    const resolvedThemePreset = base.themePreset || themes[0]?.id || 'default_glass';
+
     return {
         ...base,
         isInitialized: false,
-        themePreset: '',
+        themePreset: resolvedThemePreset,
         presets: {
-            drawing: {
-                comfyui: [],
-                sdwebui: [],
-                novelai: [],
-                openai: [],
-            },
-            prompts: [],
-            workflows: [],
-            themes: [],
+            drawing: drawingMap,
+            prompts: structuredClone((recommendedPromptsData as unknown as PresetItem<PromptPresetData>[]) || []),
+            workflows: structuredClone((recommendedWorkflowsData as unknown as PresetItem<WorkflowPresetData>[]) || []),
+            themes,
         },
     };
 }
@@ -200,7 +203,12 @@ export class SettingsStore {
         this.restoreLocalSecrets();
 
         if (!this._settings.isInitialized) {
-            this.importOfficialPresets();
+            this._settings = {
+                ...this._settings,
+                isInitialized: true,
+            };
+            this.saveToHost();
+            eventBus.emit('settings:updated', { keys: ['isInitialized'] });
         }
     }
 
@@ -208,7 +216,7 @@ export class SettingsStore {
      * 从本地静态文件导入全套官方推荐预设方案并激活就绪。
      *
      * @remarks
-     * 载入 drawing、prompts、workflows 与 themes 官方预设资产，
+     * 重新装载 drawing、prompts、workflows 与 themes 官方预设资产，
      * 若当前 themePreset 未选定则显式初始化为推荐主题列表首项，
      * 并将 isInitialized 标志位置为 true，随后触发持久化同步与事件广播。
      */
@@ -219,7 +227,7 @@ export class SettingsStore {
         }
 
         const themes = structuredClone((recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || []);
-        const resolvedThemePreset = this._settings.themePreset || themes[0]?.id || '';
+        const resolvedThemePreset = this._settings.themePreset || themes[0]?.id || 'default_glass';
         const updateKeys = ['presets', 'isInitialized'];
         if (resolvedThemePreset && resolvedThemePreset !== this._settings.themePreset) {
             updateKeys.push('themePreset');
@@ -662,7 +670,8 @@ export class SettingsStore {
     public resetToDefaults(): void {
         const baseDefaults = buildDefaultSettings();
         this._settings = structuredClone(baseDefaults);
-        this.importOfficialPresets();
+        this._settings.isInitialized = true;
+        this.saveToHost();
 
         eventBus.emit('settings:updated', { isReset: true, keys: Object.keys(this._settings) });
     }
