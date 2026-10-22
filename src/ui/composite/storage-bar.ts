@@ -223,9 +223,7 @@ export class StorageBar implements UIComponent {
         this.card.dispose();
     }
 
-    // ─────────────────────────────────────────────────────────────
     // 私有辅助方法
-    // ─────────────────────────────────────────────────────────────
 
     private buildContent(options: StorageBarOptions): void {
         const body = this.card.getBodyElement();

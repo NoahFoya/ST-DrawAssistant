@@ -8,7 +8,7 @@
  *    - 说明：支持多分支 (swipeId) 与单消息多指令 (instructionIndex) 复合定位。
  * 2. 轻量索引设计哲学：
  *    - 宿主会话 JSON 仅记录 `{ imageId, imageUrl }` 等轻量索引，不内嵌巨型 Base64 或元数据；
- *    - 高清 Blob 二进制和完整生成参数由本地 IndexedDB 分表维护，确保宿主会话文件极度轻量且读写极速。
+ *    - 高清 Blob 二进制和完整生成参数由本地 IndexedDB 分表维护，保持宿主会话文件轻量并降低持久化开销。
  * 3. 会话切换 (CHAT_CHANGED) 生命周期：
  *    - 主动任务熔断：通过 setTaskCanceller 注册的委托取消旧会话中的未决排队与执行任务；
  *    - 内存释放：调用 UrlPool.revokeAll() 释放当前视图中创建的所有 Object URL，避免单页应用内存溢出。

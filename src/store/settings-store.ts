@@ -5,7 +5,7 @@
  * 架构规范与数据安全策略：
  * 1. 唯一事实来源 (SSOT)：集中维护插件通用开关、通信通道、当前激活提供方、私有后端配置以及四类预设方案；
  * 2. 深拷贝快照保护：外部读取接口（getSettings/getProviderConfig）均返回 structuredClone 快照，
- *    彻底阻断外部调用方的引用逃逸与私自修改内部状态，确保配置变更必须经由统一变更方法；
+ *    防止外部直接修改内部状态，确保配置变更经由统一变更方法；
  * 3. 宿主防抖持久化：每次状态变更通过 saveToHost 同步至宿主 extensionSettings，并委托 saveSettingsDebounced
  *    防抖写入磁盘，规避高频变更造成的磁盘 I/O 峰值；
  * 4. 敏感凭据防护：导出的 JSON 默认剔除 API Key / Token 等凭据；导入时若外部凭据为空，则主动保留本地已有有效密钥。
@@ -100,7 +100,7 @@ function isPlainObject(item: unknown): item is Record<string, unknown> {
     return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
-/** 递归深度合并两个纯对象，阻断外部对象引用逃逸 */
+/** 递归深度合并两个纯对象，防止外部对象引用逃逸 */
 function deepMerge<T extends object>(target: T, source?: unknown): T {
     if (!source || typeof source !== 'object' || Array.isArray(source)) {
         return target;
@@ -312,7 +312,7 @@ export class SettingsStore {
      */
     public setProviderConfig<T = Record<string, unknown>>(type: ProviderType, patch: Partial<T>): void {
         const current = (this.getProviderConfig<T>(type) || {}) as T;
-        const updated = deepMerge(current as Record<string, any>, patch as Record<string, any>) as T;
+        const updated = deepMerge(current as Record<string, unknown>, patch as Record<string, unknown>) as T;
 
         this._settings = {
             ...this._settings,

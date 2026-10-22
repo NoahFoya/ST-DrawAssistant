@@ -249,7 +249,7 @@ export class GenerationOrchestrator {
             status: 'pending',
         };
 
-        // 3. 立即在宿主消息中执行插槽占位记录（实现生命周期与渲染层彻底解耦，切出会话后重载亦能还原）
+        // 3. 立即在宿主消息中执行插槽占位记录（解耦生命周期与渲染层，切出会话后重载亦能还原）
         try {
             this._sessionLifecycle.recordSlotEntry(options.target, {
                 imageId,

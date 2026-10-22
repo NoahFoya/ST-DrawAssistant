@@ -21,7 +21,7 @@ export type TransportMode = 'direct' | 'relay';
  * @remarks
  * 聚焦承载单次生图的核心即时意图（提示词与可选原图等）。
  * 尺寸、步数、采样器、模型及工作流模板等常规超参数由各 Provider 每次生成时从配置中心加载其激活的参数预设；
- * parameters 仅用于指令中极少数的临时覆盖项（如指定种子），绝非必须传递的常规字典。
+ * parameters 仅用于指令中极少数的临时覆盖项（如指定种子），无需传递常规超参数字典。
  */
 export interface GenerationRequest {
     /** 正向提示词文本 */

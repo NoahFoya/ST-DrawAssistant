@@ -208,9 +208,15 @@ export async function initOnce(): Promise<void> {
 
         // 监听候选分支左右滑动切换 (Swipe)
         const swipeEvent = eventTypesMap.MESSAGE_SWIPED || 'message_swiped';
-        bindHostEvent(swipeEvent, (data: any) => {
-            const messageId = typeof data === 'number' ? data : (data?.messageId ?? 0);
-            const swipeId = typeof data === 'object' ? data?.swipeId : undefined;
+        bindHostEvent(swipeEvent, (data: unknown) => {
+            const messageId = typeof data === 'number'
+                ? data
+                : (data && typeof data === 'object' && 'messageId' in data && typeof (data as { messageId?: unknown }).messageId === 'number'
+                    ? (data as { messageId: number }).messageId
+                    : 0);
+            const swipeId = data && typeof data === 'object' && 'swipeId' in data && typeof (data as { swipeId?: unknown }).swipeId === 'number'
+                ? (data as { swipeId: number }).swipeId
+                : undefined;
             void messageDecorator.handleMessageSwiped(messageId, swipeId);
         });
 
@@ -223,8 +229,12 @@ export async function initOnce(): Promise<void> {
 
         // 监听消息删除 (MESSAGE_DELETED)
         const msgDeletedEvent = eventTypesMap.MESSAGE_DELETED || 'message_deleted';
-        bindHostEvent(msgDeletedEvent, (data: any) => {
-            const messageId = typeof data === 'number' ? data : (data?.messageId ?? undefined);
+        bindHostEvent(msgDeletedEvent, (data: unknown) => {
+            const messageId = typeof data === 'number'
+                ? data
+                : (data && typeof data === 'object' && 'messageId' in data && typeof (data as { messageId?: unknown }).messageId === 'number'
+                    ? (data as { messageId: number }).messageId
+                    : undefined);
             messageDecorator.handleMessageDeleted(messageId);
         });
 

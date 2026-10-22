@@ -387,9 +387,7 @@ export class LogTerminal implements UIComponent {
         this.element.remove();
     }
 
-    // ─────────────────────────────────────────────────────────────
     // 私有辅助方法
-    // ─────────────────────────────────────────────────────────────
 
     private clearActiveTimers(): void {
         for (const timer of this.activeTimers) {

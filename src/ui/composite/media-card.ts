@@ -232,9 +232,7 @@ export class MediaCard implements UIComponent {
         this.element.remove();
     }
 
-    // ─────────────────────────────────────────────────────────────
     // 私有辅助方法
-    // ─────────────────────────────────────────────────────────────
 
     private buildCheckbox(): void {
         if (!this.isSelectable && !this.checkboxEl) {

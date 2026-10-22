@@ -7,7 +7,7 @@
  *    - `metadata` 表：仅存储轻量级索引记录（imageId, taskId, chatId, status, byteSize, prompt 等）；
  *    - `blobs` 表：独立持久化原始高清图片二进制（Blob 对象）；
  *    - 技术价值：历史画廊浏览、按会话筛选或分页查询时，仅扫描反序列化 metadata 轻量记录，
- *      避免将动辄数百兆的图片二进制拉入主线程内存，彻底消除列表渲染掉帧卡顿与 OOM 隐患；
+ *      避免将大量图片二进制载入主线程内存，降低列表渲染开销与内存占用；
  * 2. 两阶段写入 (Two-Phase Commit)：
  *    - 阶段一：任务执行伊始调用 saveImageMeta 写入 generating 状态占位，保障重载会话后的可追溯性；
  *    - 阶段二：生图成功后调用 finalizeImage 原子写入 Blob 并将元数据状态更新为 ready；

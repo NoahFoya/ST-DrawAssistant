@@ -27,6 +27,18 @@ import type {
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
 
+interface ComfyPromptHistoryOutput {
+    images?: Array<{ filename: string; subfolder?: string; type?: string }>;
+}
+
+interface ComfyPromptHistoryItem {
+    status?: {
+        status_str?: string;
+        messages?: unknown[];
+    };
+    outputs?: Record<string, ComfyPromptHistoryOutput>;
+}
+
 /** ComfyUI 提供方初始化配置项 */
 export interface ComfyUIProviderOptions extends BaseProviderOptions {
     /** 会话客户端唯一标识符（可选，缺省自动生成随机标识） */
@@ -578,7 +590,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         // 轮询任务执行结果（采用客户端丢弃策略，收到中止信号时安全退出轮询并抛出 AbortError）
         const pollIntervalMs = 1000;
-        let promptHistory: any;
+        let promptHistory: ComfyPromptHistoryItem | undefined;
 
         while (true) {
             if (signal?.aborted) {
@@ -598,15 +610,15 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             );
 
             if (historyResponse.ok) {
-                const historyData = (await historyResponse.json()) as Record<string, any>;
+                const historyData = (await historyResponse.json()) as Record<string, ComfyPromptHistoryItem>;
                 const currentHistory = historyData[promptId];
 
                 if (currentHistory) {
                     if (currentHistory.status?.status_str === 'error') {
                         const msgs = Array.isArray(currentHistory.status.messages)
                             ? currentHistory.status.messages
-                                  .map((m: any) =>
-                                      Array.isArray(m) ? m.join(': ') : typeof m === 'object' ? JSON.stringify(m) : String(m)
+                                  .map((m: unknown) =>
+                                      Array.isArray(m) ? m.join(': ') : typeof m === 'object' && m !== null ? JSON.stringify(m) : String(m)
                                   )
                                   .join('; ')
                             : '未知节点执行异常';
@@ -625,7 +637,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         let targetImage: { filename: string; subfolder?: string; type?: string } | undefined;
         let fallbackImage: { filename: string; subfolder?: string; type?: string } | undefined;
 
-        for (const nodeOutput of Object.values(promptHistory.outputs as Record<string, any>)) {
+        const outputs = promptHistory?.outputs || {};
+        for (const nodeOutput of Object.values(outputs)) {
             if (Array.isArray(nodeOutput.images)) {
                 for (const img of nodeOutput.images) {
                     if (img && typeof img.filename === 'string') {

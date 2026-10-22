@@ -279,13 +279,13 @@ export function analyzeAndReplaceWorkflowVariables(jsonStr: string): WorkflowAna
         }
     }
 
-    const isExplicitNegative = (nodeId: string, node: any): boolean => {
+    const isExplicitNegative = (nodeId: string, node: { _meta?: { title?: string }; title?: string }): boolean => {
         if (negativeNodeIds.has(nodeId)) return true;
         const title = String(node._meta?.title || node.title || '').toLowerCase();
         return title.includes('negative') || title.includes('负向') || title.includes('负面');
     };
 
-    const isExplicitPositive = (nodeId: string, node: any): boolean => {
+    const isExplicitPositive = (nodeId: string, node: { _meta?: { title?: string }; title?: string }): boolean => {
         if (positiveNodeIds.has(nodeId)) return true;
         const title = String(node._meta?.title || node.title || '').toLowerCase();
         return title.includes('positive') || title.includes('正向') || title.includes('正面');

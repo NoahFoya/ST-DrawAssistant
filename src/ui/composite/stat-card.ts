@@ -205,9 +205,7 @@ export class StatCard implements UIComponent {
         this.card.dispose();
     }
 
-    // ─────────────────────────────────────────────────────────────
     // 私有辅助方法
-    // ─────────────────────────────────────────────────────────────
 
     private buildMetricsGrid(): MetricsElementsGroup {
         const body = this.card.getBodyElement();

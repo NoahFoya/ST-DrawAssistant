@@ -6,7 +6,7 @@
  * 1. 视窗层级与环境：依托 .da-lightbox-backdrop 提供沉浸式暗色模糊遮罩；
  * 2. 变换舞台：支持滚轮缩放 (0.2x ~ 5.0x)、鼠标拖拽平移及双击原图比例复位；
  * 3. 标星收藏管理：支持直接基于 imageId 调用 imageStorage.toggleFavorite 切换收藏状态；
- * 4. 键盘接管与生命周期：接管 Esc 退出、左右方向键切图，并在销毁时彻底解绑全局监听。
+ * 4. 键盘接管与生命周期：接管 Esc 退出、左右方向键切图，并在销毁时注销全局事件监听。
  */
 
 import type { Disposable } from '../types';

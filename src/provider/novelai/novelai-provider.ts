@@ -7,7 +7,7 @@
  * 2. 尺寸整除约束：宽度与高度必须为 64 的正整数倍（通过 alignTo64 处理，防止云端校验抛错）；
  * 3. 语法适配：自动识别 A1111 权重语法 (tag:1.2) 并转换为 NovelAI 原生花括号/方括号语法；
  * 4. 响应解包算法：NovelAI 返回未压缩 ZIP 流（compression method = 0），直接通过 DataView
- *    扫描本地文件头 Local File Header (PK\x03\x04) 计算数据偏移切片提取 PNG Blob，免于引入臃肿第三方库。
+ *    扫描本地文件头 Local File Header (PK\x03\x04) 计算数据偏移切片提取 PNG Blob，避免引入额外解压依赖。
  */
 
 import type {

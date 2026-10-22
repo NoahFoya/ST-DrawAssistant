@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责统一为 SettingsModal 视窗骨架注册各功能选项卡的工厂函数，
- * 彻底解耦容器外壳与叶子视图实现，确保依赖方向单向清晰。
+ * 解耦容器外壳与具体视图实现，保持单向依赖清晰。
  */
 
 import type { SettingsModal } from '../modal/settings-modal';
