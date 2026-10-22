@@ -130,15 +130,13 @@ export interface CardSchema<TModel extends Record<string, any> = Record<string, 
 }
 
 export interface SchemaFieldRendererProps<TModel extends Record<string, any> = any> {
-    schema?: FieldSchema<TModel>;
-    field?: FieldSchema<TModel>;
+    schema: FieldSchema<TModel>;
     model: TModel;
     dirty?: boolean;
     invalid?: boolean;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
     onChange?: (value: any) => void;
-    onChangeField?: (key: any, value: any) => void;
     onFieldChange?: (key: any, value: any) => void;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
@@ -149,15 +147,14 @@ export interface SchemaFieldRendererProps<TModel extends Record<string, any> = a
 export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
     props: SchemaFieldRendererProps<TModel>
 ) {
-    const schema = (props.schema ?? props.field)!;
     const {
+        schema,
         model,
         dirty,
         invalid,
         dirtyFields,
         invalidFields,
         onChange,
-        onChangeField,
         onFieldChange,
         onChangeFields,
     } = props;
@@ -165,9 +162,6 @@ export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
     const emitFieldChange = (key: string, value: any) => {
         if (onChange) {
             onChange(value);
-        }
-        if (onChangeField) {
-            onChangeField(key, value);
         }
         if (onFieldChange) {
             onFieldChange(key, value);
@@ -367,7 +361,6 @@ export interface SchemaCardProps<TModel extends Record<string, any> = any> {
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onChangeField?: (key: any, value: any) => void;
     onFieldChange?: (key: any, value: any) => void;
     onChangeFields?: (partial: Partial<TModel>) => void;
     children?: ComponentChildren;
@@ -384,7 +377,6 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
         model,
         dirtyFields,
         invalidFields,
-        onChangeField,
         onFieldChange,
         onChangeFields,
         children,
@@ -415,7 +407,6 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
                     model={model}
                     dirtyFields={dirtyFields}
                     invalidFields={invalidFields}
-                    onChangeField={onChangeField}
                     onFieldChange={onFieldChange}
                     onChangeFields={onChangeFields}
                 />
@@ -430,7 +421,6 @@ export interface SchemaFieldsViewProps<TModel extends Record<string, any> = any>
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onChangeField?: (key: any, value: any) => void;
     onFieldChange?: (key: any, value: any) => void;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
@@ -446,7 +436,6 @@ export function SchemaFieldsView<TModel extends Record<string, any> = any>(
         model,
         dirtyFields,
         invalidFields,
-        onChangeField,
         onFieldChange,
         onChangeFields,
     } = props;
@@ -460,7 +449,6 @@ export function SchemaFieldsView<TModel extends Record<string, any> = any>(
                     model={model}
                     dirtyFields={dirtyFields}
                     invalidFields={invalidFields}
-                    onChangeField={onChangeField}
                     onFieldChange={onFieldChange}
                     onChangeFields={onChangeFields}
                 />
@@ -474,7 +462,6 @@ export interface SchemaFormProps<TModel extends Record<string, any> = any> {
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onChangeField?: (key: any, value: any) => void;
     onFieldChange?: (key: any, value: any) => void;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
@@ -494,7 +481,6 @@ export function SchemaForm<TModel extends Record<string, any> = any>(
                     model={props.model}
                     dirtyFields={props.dirtyFields}
                     invalidFields={props.invalidFields}
-                    onChangeField={props.onChangeField}
                     onFieldChange={props.onFieldChange}
                     onChangeFields={props.onChangeFields}
                 />

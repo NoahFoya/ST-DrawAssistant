@@ -209,6 +209,7 @@ export class SettingsStore {
      *
      * @remarks
      * 载入 drawing、prompts、workflows 与 themes 官方预设资产，
+     * 若当前 themePreset 未选定则显式初始化为推荐主题列表首项，
      * 并将 isInitialized 标志位置为 true，随后触发持久化同步与事件广播。
      */
     public importOfficialPresets(): void {
@@ -217,18 +218,26 @@ export class SettingsStore {
             drawingMap[pKey] = structuredClone(list || []);
         }
 
+        const themes = structuredClone((recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || []);
+        const resolvedThemePreset = this._settings.themePreset || themes[0]?.id || '';
+        const updateKeys = ['presets', 'isInitialized'];
+        if (resolvedThemePreset && resolvedThemePreset !== this._settings.themePreset) {
+            updateKeys.push('themePreset');
+        }
+
         this._settings = {
             ...this._settings,
             isInitialized: true,
+            themePreset: resolvedThemePreset,
             presets: {
                 drawing: drawingMap,
                 prompts: structuredClone((recommendedPromptsData as unknown as PresetItem<PromptPresetData>[]) || []),
                 workflows: structuredClone((recommendedWorkflowsData as unknown as PresetItem<WorkflowPresetData>[]) || []),
-                themes: structuredClone((recommendedThemesData as unknown as PresetItem<ThemePresetData>[]) || []),
+                themes,
             },
         };
 
-        eventBus.emit('settings:updated', { keys: ['presets', 'isInitialized'] });
+        eventBus.emit('settings:updated', { keys: updateKeys });
         this.saveToHost();
     }
 

@@ -3,7 +3,7 @@
  *
  * @remarks
  * 基于纯函数实现 ComfyUI API 格式工作流的参数替换。
- * 支持主模型 (%basemodel_name%)、额外模型 (%extramodel_name%n)、提示词及采样参数的注入。
+ * 支持模型（%basemodel_name% / %model_name% / %unet_name% / %clip_name% / %vae_name%）、提示词及数值采样参数的注入。
  *
  * ComfyUI 节点对输入类型有明确区分（如采样器数值参数要求 number，文本编码节点要求 string）。
  * 模块根据占位符类型进行分流处理，保证类型与节点输入要求一致。

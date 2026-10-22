@@ -275,14 +275,14 @@ export class OpenAITabView extends PreactSettingsView {
                     </div>
 
                     <SchemaFieldRenderer
-                        field={QUALITY_FIELD}
+                        schema={QUALITY_FIELD}
                         model={draft}
                         dirty={dirtyFields.has('quality')}
                         invalid={invalidFields.has('quality')}
                         onChange={(val) => presetController.updateDraft('quality', val)}
                     />
                     <SchemaFieldRenderer
-                        field={STYLE_FIELD}
+                        schema={STYLE_FIELD}
                         model={draft}
                         dirty={dirtyFields.has('style')}
                         invalid={invalidFields.has('style')}

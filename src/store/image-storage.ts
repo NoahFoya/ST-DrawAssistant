@@ -91,10 +91,10 @@ export class ImageStorage implements ImageStorageService {
         const existing = await this._metaStore.getItem<StoredImageRecord>(imageId);
         if (!existing) {
             logger.warn(`finalizeImage: 未找到 imageId=${imageId} 的元数据记录，执行全量写入`);
-            // 元数据丢失时用 updates 中可用内容补全写入
-            const fallback = { imageId, chatId: undefined, createdAt: Date.now(), ...updates } as StoredImageRecord;
+            // 元数据丢失时使用 updates 可用字段构造默认记录写入
+            const defaultRecord = { imageId, chatId: undefined, createdAt: Date.now(), ...updates } as StoredImageRecord;
             await Promise.all([
-                this._metaStore.setItem(imageId, fallback),
+                this._metaStore.setItem(imageId, defaultRecord),
                 this._blobStore.setItem(imageId, blob),
             ]);
             return;

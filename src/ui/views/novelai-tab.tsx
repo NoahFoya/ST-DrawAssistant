@@ -282,7 +282,7 @@ export class NovelAITabView extends PreactSettingsView {
                         }
                     />
                     <SchemaFieldRenderer
-                        field={CFG_RESCALE_FIELD}
+                        schema={CFG_RESCALE_FIELD}
                         model={draft}
                         dirty={dirtyFields.has('cfgRescale')}
                         invalid={invalidFields.has('cfgRescale')}

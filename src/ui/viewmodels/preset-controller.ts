@@ -40,7 +40,7 @@ export interface PresetControllerOptions<TData extends Record<string, any>> {
     minRemainingOnDelete?: number;
     /** 删除受阻时的提示消息 */
     minRemainingWarning?: string;
-    /** 自定义获取预设列表函数（如 ThemeService 合并内置与自定义主题） */
+    /** 自定义获取预设列表函数（如从独立服务或动态源提供预设方案列表） */
     getPresetsOverride?: () => PresetItem<TData>[];
     /** 读取当前持久化激活方案 ID 的函数 */
     getActiveId: () => string;
