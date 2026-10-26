@@ -1,0 +1,824 @@
+[
+  {
+    "id": "comfyui_checkpoint_basic",
+    "name": "通用全量模型工作流_原生",
+    "description": "基于 CheckpointLoaderSimple 的原生基础全量模型工作流，无 WeiLin 插件，LoRA 标签不生效",
+    "data": {
+      "workflow": {
+        "3": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "4",
+              0
+            ],
+            "positive": [
+              "6",
+              0
+            ],
+            "negative": [
+              "7",
+              0
+            ],
+            "latent_image": [
+              "5",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "4": {
+          "inputs": {
+            "ckpt_name": "%basemodel_name%"
+          },
+          "class_type": "CheckpointLoaderSimple",
+          "_meta": {
+            "title": "Checkpoint加载器"
+          }
+        },
+        "5": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent图像"
+          }
+        },
+        "6": {
+          "inputs": {
+            "text": "%prompt%",
+            "clip": [
+              "4",
+              1
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "正向提示词编码"
+          }
+        },
+        "7": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "4",
+              1
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "负向提示词编码"
+          }
+        },
+        "8": {
+          "inputs": {
+            "samples": [
+              "3",
+              0
+            ],
+            "vae": [
+              "4",
+              2
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "9": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_split_basic",
+    "name": "通用分化模型工作流_原生",
+    "description": "基于 UNet / CLIP / VAE 拆分架构的原生基础分化模型工作流，无 WeiLin 插件，LoRA 标签不生效",
+    "data": {
+      "workflow": {
+        "1": {
+          "inputs": {
+            "unet_name": "%basemodel_name%",
+            "weight_dtype": "default"
+          },
+          "class_type": "UNETLoader",
+          "_meta": {
+            "title": "UNet加载器"
+          }
+        },
+        "2": {
+          "inputs": {
+            "clip_name": "%clip_name%",
+            "type": "stable_diffusion",
+            "device": "default"
+          },
+          "class_type": "CLIPLoader",
+          "_meta": {
+            "title": "CLIP加载器"
+          }
+        },
+        "3": {
+          "inputs": {
+            "vae_name": "%vae_name%",
+            "device": "default"
+          },
+          "class_type": "VAELoader",
+          "_meta": {
+            "title": "VAE加载器"
+          }
+        },
+        "4": {
+          "inputs": {
+            "text": "%prompt%",
+            "clip": [
+              "2",
+              0
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "正向提示词编码"
+          }
+        },
+        "5": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "2",
+              0
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "负向提示词编码"
+          }
+        },
+        "6": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent图像"
+          }
+        },
+        "7": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "1",
+              0
+            ],
+            "positive": [
+              "4",
+              0
+            ],
+            "negative": [
+              "5",
+              0
+            ],
+            "latent_image": [
+              "6",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "8": {
+          "inputs": {
+            "samples": [
+              "7",
+              0
+            ],
+            "vae": [
+              "3",
+              0
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "9": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_weilin_moody",
+    "name": "Moody定制模型工作流_WeiLin",
+    "description": "定制分化模型专属 DIY 工作流，集成 WeiLin 提示词与 LoRA 扩展，内置 4 步极速高级采样与 Ultimate SD 放大链路",
+    "data": {
+      "workflow": {
+        "599": {
+          "inputs": {
+            "add_noise": "enable",
+            "noise_seed": [
+              "649",
+              0
+            ],
+            "steps": 4,
+            "cfg": 1,
+            "sampler_name": "er_sde",
+            "scheduler": "simple",
+            "start_at_step": 0,
+            "end_at_step": 4,
+            "return_with_leftover_noise": "enable",
+            "model": [
+              "826",
+              3
+            ],
+            "positive": [
+              "826",
+              1
+            ],
+            "negative": [
+              "827",
+              0
+            ],
+            "latent_image": [
+              "698",
+              0
+            ]
+          },
+          "class_type": "KSamplerAdvanced",
+          "_meta": {
+            "title": "K采样器(高级)"
+          }
+        },
+        "609": {
+          "inputs": {
+            "samples": [
+              "599",
+              0
+            ],
+            "vae": [
+              "757",
+              0
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "618": {
+          "inputs": {
+            "image": [
+              "609",
+              0
+            ]
+          },
+          "class_type": "GetImageSize",
+          "_meta": {
+            "title": "获取图像尺寸"
+          }
+        },
+        "630": {
+          "inputs": {
+            "value": "(a*b + (96 * 2))/2",
+            "a": [
+              "618",
+              1
+            ],
+            "b": [
+              "637",
+              0
+            ]
+          },
+          "class_type": "SimpleMath+",
+          "_meta": {
+            "title": "Calculate optimized height"
+          }
+        },
+        "631": {
+          "inputs": {
+            "value": "(a*b + (96 * 2))/2",
+            "a": [
+              "618",
+              0
+            ],
+            "b": [
+              "637",
+              0
+            ]
+          },
+          "class_type": "SimpleMath+",
+          "_meta": {
+            "title": "Calculate optimized width"
+          }
+        },
+        "637": {
+          "inputs": {
+            "value": 2
+          },
+          "class_type": "FloatConstant",
+          "_meta": {
+            "title": "SD Upscale Factor (放大大小）"
+          }
+        },
+        "644": {
+          "inputs": {
+            "model_name": "UltraSharp\\4x-UltraSharp.pth"
+          },
+          "class_type": "UpscaleModelLoader",
+          "_meta": {
+            "title": "放大模型加载器"
+          }
+        },
+        "649": {
+          "inputs": {
+            "seed": "%seed%"
+          },
+          "class_type": "Seed (rgthree)",
+          "_meta": {
+            "title": "Seed (1ST)"
+          }
+        },
+        "663": {
+          "inputs": {
+            "upscale_by": [
+              "637",
+              0
+            ],
+            "seed": [
+              "775",
+              0
+            ],
+            "steps": 2,
+            "cfg": 1,
+            "sampler_name": "dpmpp_2m_sde",
+            "scheduler": "beta",
+            "denoise": 0.25,
+            "mode_type": "Linear",
+            "tile_width": [
+              "631",
+              0
+            ],
+            "tile_height": [
+              "630",
+              0
+            ],
+            "mask_blur": 64,
+            "tile_padding": 96,
+            "seam_fix_mode": "None",
+            "seam_fix_denoise": 1,
+            "seam_fix_width": 64,
+            "seam_fix_mask_blur": 8,
+            "seam_fix_padding": 16,
+            "force_uniform_tiles": true,
+            "tiled_decode": false,
+            "batch_size": 1,
+            "image": [
+              "609",
+              0
+            ],
+            "model": [
+              "826",
+              3
+            ],
+            "positive": [
+              "826",
+              1
+            ],
+            "negative": [
+              "827",
+              0
+            ],
+            "vae": [
+              "757",
+              0
+            ],
+            "upscale_model": [
+              "644",
+              0
+            ]
+          },
+          "class_type": "UltimateSDUpscale",
+          "_meta": {
+            "title": "SD放大"
+          }
+        },
+        "698": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "Empty Latent Image (Base Dimensions) 初始大小"
+          }
+        },
+        "732": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "663",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "755": {
+          "inputs": {
+            "clip_name": "%clip_name%",
+            "type": "stable_diffusion",
+            "device": "default"
+          },
+          "class_type": "CLIPLoader",
+          "_meta": {
+            "title": "加载CLIP"
+          }
+        },
+        "757": {
+          "inputs": {
+            "vae_name": "%vae_name%"
+          },
+          "class_type": "VAELoader",
+          "_meta": {
+            "title": "加载VAE"
+          }
+        },
+        "761": {
+          "inputs": {
+            "unet_name": "%basemodel_name%",
+            "weight_dtype": "default"
+          },
+          "class_type": "UNETLoader",
+          "_meta": {
+            "title": "UNET加载器"
+          }
+        },
+        "775": {
+          "inputs": {
+            "value": [
+              "649",
+              0
+            ]
+          },
+          "class_type": "PrimitiveInt",
+          "_meta": {
+            "title": "Seed (SD) - Keep 0 by default"
+          }
+        },
+        "826": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": "",
+            "打开Lora堆": null,
+            "opt_clip": [
+              "755",
+              0
+            ],
+            "opt_model": [
+              "761",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        },
+        "827": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "826",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_weilin_checkpoint_wai",
+    "name": "通用全量模型工作流_WeiLin",
+    "description": "通用全量模型工作流，集成 WeiLin 提示词与 LoRA 扩展，默认底模为 waiIllustriousSDXL_v170，参数全量动态联动",
+    "data": {
+      "workflow": {
+        "8": {
+          "inputs": {
+            "samples": [
+              "63",
+              0
+            ],
+            "vae": [
+              "114",
+              2
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "12": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "113",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        },
+        "28": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent"
+          }
+        },
+        "63": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "113",
+              3
+            ],
+            "positive": [
+              "113",
+              1
+            ],
+            "negative": [
+              "12",
+              0
+            ],
+            "latent_image": [
+              "28",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "99": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "113": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": null,
+            "打开Lora堆": "",
+            "opt_clip": [
+              "114",
+              1
+            ],
+            "opt_model": [
+              "114",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        },
+        "114": {
+          "inputs": {
+            "ckpt_name": "%basemodel_name%"
+          },
+          "class_type": "CheckpointLoaderSimple",
+          "_meta": {
+            "title": "Checkpoint大模型加载器(简易)"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_weilin_split_miaomiao",
+    "name": "通用分化模型工作流_WeiLin",
+    "description": "通用分化模型工作流，集成 WeiLin 提示词与 LoRA 扩展，默认底模为 miaomiaoHarem_anima14，参数全量动态联动",
+    "data": {
+      "workflow": {
+        "8": {
+          "inputs": {
+            "samples": [
+              "63",
+              0
+            ],
+            "vae": [
+              "15",
+              0
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "12": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "113",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        },
+        "15": {
+          "inputs": {
+            "vae_name": "%vae_name%"
+          },
+          "class_type": "VAELoader",
+          "_meta": {
+            "title": "加载VAE"
+          }
+        },
+        "28": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent"
+          }
+        },
+        "44": {
+          "inputs": {
+            "unet_name": "%basemodel_name%",
+            "weight_dtype": "default"
+          },
+          "class_type": "UNETLoader",
+          "_meta": {
+            "title": "UNET加载器"
+          }
+        },
+        "45": {
+          "inputs": {
+            "clip_name": "%clip_name%",
+            "type": "stable_diffusion",
+            "device": "default"
+          },
+          "class_type": "CLIPLoader",
+          "_meta": {
+            "title": "加载CLIP"
+          }
+        },
+        "63": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "113",
+              3
+            ],
+            "positive": [
+              "113",
+              1
+            ],
+            "negative": [
+              "12",
+              0
+            ],
+            "latent_image": [
+              "28",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "99": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "113": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": null,
+            "打开Lora堆": "",
+            "opt_clip": [
+              "45",
+              0
+            ],
+            "opt_model": [
+              "44",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        }
+      }
+    }
+  }
+]

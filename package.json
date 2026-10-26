@@ -1,0 +1,44 @@
+{
+  "name": "st-drawassistant",
+  "version": "0.1.0",
+  "description": "SillyTavern context-aware AI image generation extension with multi-backend support",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "build:dev": "webpack --mode development",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run tests/core/",
+    "test:core": "vitest run tests/core/",
+    "test:live": "vitest run tests/live/",
+    "test:comfyui": "vitest run tests/live/comfyui-live.test.ts",
+    "test:novelai": "vitest run tests/live/novelai-live.test.ts",
+    "test:gemini": "vitest run tests/live/gemini-live.test.ts",
+    "test:all": "vitest run",
+    "mock:openai": "node tests/helpers/start-mock-server.mjs",
+    "check-terms": "node tests/check-terms.mjs",
+    "clean:test-output": "node -e \"const fs = require('fs'); fs.rmSync('tests/output', { recursive: true, force: true }); fs.mkdirSync('tests/output', { recursive: true }); fs.writeFileSync('tests/output/.gitkeep', '');\""
+  },
+  "keywords": [
+    "sillytavern",
+    "extension",
+    "image-generation",
+    "comfyui",
+    "stable-diffusion"
+  ],
+  "author": "NoahFoya",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@preact/signals": "^2.11.3",
+    "localforage": "^1.10.0",
+    "preact": "^11.0.1"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.12.2",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.11",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

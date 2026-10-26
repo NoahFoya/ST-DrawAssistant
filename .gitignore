@@ -1,0 +1,61 @@
+# 本地研发资料、智能体配置与私有参数
+docs/
+.agents/
+scratch/
+*.local.*
+*.local.json
+*.private.*
+
+# 测试运行环境
+tests/
+vitest.config.mts
+coverage/
+.vitest/
+test-results/
+tests/output/*
+!tests/output/.gitkeep
+
+# 依赖包与构建缓存
+node_modules/
+dist/*.map
+build/
+out/
+.cache/
+*.tsbuildinfo
+.parcel-cache/
+.eslintcache
+
+# 日志与临时调试输出
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# 环境变量与私有凭据
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 操作系统生成文件与编辑器配置
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*~
+*.tmp
+*.temp
+*.bak
+.vscode/
+.idea/
+.fleet/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo

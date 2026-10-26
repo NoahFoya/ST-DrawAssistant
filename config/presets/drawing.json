@@ -1,0 +1,67 @@
+{
+  "comfyui": [
+    {
+      "id": "comfyui_default",
+      "name": "默认方案",
+      "description": "ComfyUI 官方基础绘图方案，搭载通用全量原生工作流与基础画幅",
+      "data": {
+        "baseModel": "",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfgScale": 7,
+        "samplerName": "euler_ancestral",
+        "scheduler": "normal",
+        "txt2imgWorkflowId": "comfyui_checkpoint_basic",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "sdwebui": [
+    {
+      "id": "sdwebui_default",
+      "name": "默认方案",
+      "description": "SD-WebUI 官方基础绘图方案，搭载主流竖屏画幅与基础参数",
+      "data": {
+        "baseModel": "",
+        "width": 832,
+        "height": 1216,
+        "steps": 20,
+        "cfgScale": 7,
+        "samplerName": "Euler a",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "novelai": [
+    {
+      "id": "novelai_default",
+      "name": "默认方案",
+      "description": "NovelAI 官方基础绘图方案，搭载最新 V4.5 动漫模型与基础画幅",
+      "data": {
+        "baseModel": "nai-diffusion-4-5-curated-preview",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 5,
+        "samplerName": "k_euler",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "openai": [
+    {
+      "id": "openai_default",
+      "name": "默认方案",
+      "description": "OpenAI 兼容官方基础绘图方案，搭载 DALL-E 3 标准画质与方形画幅",
+      "data": {
+        "baseModel": "dall-e-3",
+        "width": 1024,
+        "height": 1024,
+        "quality": "standard",
+        "style": "vivid",
+        "promptPresetId": ""
+      }
+    }
+  ]
+}

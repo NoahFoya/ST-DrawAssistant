@@ -1,0 +1,12 @@
+/**
+ * ST-DrawAssistant 样式系统总入口 (Milestone 1: Core Tokens & Reset)。
+ *
+ * @remarks
+ * 组织并按顺序加载系统基础视觉变量与重置规范：
+ * 1. Core (基础设计令牌、样式重置与全局动画)
+ */
+
+/* 1. Core 核心基础与设计令牌 (Layer 1) */
+@import url('./core/tokens.css');
+@import url('./core/reset.css');
+@import url('./core/animations.css');
