@@ -1,0 +1,68 @@
+/**
+ * SillyTavern 宿主原生扩展设置抽屉入口卡片样式 (.da-drawer-entry)
+ *
+ * @remarks
+ * 在宿主 #extensions_settings 抽屉容器中呈现插件入口卡片，
+ * 遵循 ITCSS Layer 2 (Layout) 规范与 --da-* 设计令牌。
+ */
+
+.da-drawer-entry {
+    background: var(--da-bg-secondary-rgba, rgba(30, 34, 46, 0.75));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.12));
+    border-radius: var(--da-radius-md, 8px);
+    padding: var(--da-space-md, 12px);
+    margin: var(--da-space-sm, 8px) 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-sm, 8px);
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.da-drawer-entry:hover {
+    border-color: var(--da-border-focus, rgba(var(--da-accent-rgb), 0.4));
+    box-shadow: var(--da-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.25));
+}
+
+.da-drawer-entry__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.da-drawer-entry__title {
+    font-size: var(--da-font-size-base, 0.88rem);
+    font-weight: 600;
+    color: var(--da-text-primary, #e2e8f0);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+}
+
+.da-drawer-entry__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-sm, 8px);
+}
+
+.da-drawer-entry__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--da-space-sm, 8px);
+}
+
+.da-drawer-entry__toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 2px;
+    font-size: var(--da-font-size-sm, 0.82rem);
+    color: var(--da-text-secondary, #94a3b8);
+    user-select: none;
+    cursor: pointer;
+}
+
+.da-drawer-entry__toggle-row:hover {
+    color: var(--da-text-primary, #f1f5f9);
+}
