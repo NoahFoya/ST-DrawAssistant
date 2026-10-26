@@ -1,0 +1,223 @@
+/**
+ * 布局系统基础容器与通用工具类。
+ *
+ * @remarks
+ * 1. 结构划分：声明流式行（.da-row）、列（.da-col）、网格及表单占位槽等基础布局单元。
+ * 2. 样式解耦：容器仅负责空间划分与对齐基线，颜色等外观统一引用 var(--da-*) 设计令牌。
+ */
+
+/* 1. 基础流式容器 */
+.da-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-lg, 16px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-row--wrap {
+    flex-wrap: wrap;
+}
+
+.da-row--center-y {
+    align-items: center;
+}
+
+.da-row--align-top {
+    align-items: flex-start;
+}
+
+/* 分割线行：带底部边框与悬停高亮 */
+.da-row--divided {
+    padding: 6px 16px;
+    min-height: 38px;
+    border-bottom: 1px solid var(--da-separator);
+    transition: background-color 0.12s var(--da-ease);
+}
+
+.da-row--divided:last-child {
+    border-bottom: none;
+}
+
+.da-row--divided:hover:not(.is-disabled) {
+    background-color: var(--da-bg-hover);
+}
+
+.da-row.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 垂直列容器 */
+.da-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--da-space-xs, 4px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-col--center {
+    align-items: center;
+}
+
+/* 2. 表单行内左右区域与尺寸规格 */
+.da-slot {
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.da-slot--full,
+.da-slot--fill {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+}
+
+.da-slot--left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+    flex: 1 1 auto;
+}
+
+.da-slot--right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    text-align: right;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.da-slot--center {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* 3. 通用卡片外壳结构已统一移交 controls/cards/card.css 统一定义，避免双重继承冲突 */
+
+
+
+/* 5. 布局原子工具类 */
+.da-w-full { width: 100%; box-sizing: border-box; }
+.da-flex-center { display: flex; align-items: center; justify-content: center; }
+.da-flex-center-row { display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.da-flex-row { display: flex; flex-direction: row; align-items: center; }
+.da-flex-col { display: flex; flex-direction: column; }
+.da-flex-1 { flex: 1 1 0%; min-width: 0; }
+.da-flex-auto { flex: 0 0 auto; }
+.da-hidden { display: none !important; }
+
+/* 输入控件组合容器 (如带清除/眼睛/单位/测试按钮的复合输入行) */
+.da-input-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--da-space-xs, 6px);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.da-input-group .da-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* 内嵌后缀单行输入控件容器 (如密码内嵌眼睛显隐切换按钮) */
+.da-input-suffix-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 240px;
+    max-width: 100%;
+    flex: 0 0 240px;
+    flex-shrink: 0;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.da-input-suffix-wrapper .da-input {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    height: 32px !important;
+    padding-right: 32px !important;
+}
+
+/* 卡片底部操作栏 (多按钮居右排列) */
+.da-card-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--da-space-sm, 8px);
+    padding: 10px 16px;
+    box-sizing: border-box;
+    width: 100%;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--da-separator);
+}
+
+/* 间距工具类 */
+.da-gap-xs { gap: var(--da-space-xs, 4px); }
+.da-gap-sm { gap: var(--da-space-sm, 8px); }
+.da-gap-md { gap: var(--da-space-md, 12px); }
+.da-gap-lg { gap: var(--da-space-lg, 16px); }
+
+.da-mb-xs { margin-bottom: var(--da-space-xs, 4px); }
+.da-mb-sm { margin-bottom: var(--da-space-sm, 8px); }
+.da-mb-md { margin-bottom: var(--da-space-md, 12px); }
+.da-mt-xs { margin-top: var(--da-space-xs, 4px); }
+.da-mt-sm { margin-top: var(--da-space-sm, 8px); }
+.da-mt-md { margin-top: var(--da-space-md, 12px); }
+
+/* 文本状态工具类 */
+.da-text-muted { color: var(--da-text-muted) !important; }
+.da-text-danger { color: var(--da-color-error) !important; }
+.da-text-success { color: var(--da-color-success) !important; }
+.da-text-warn { color: var(--da-color-warn) !important; }
+.da-text-bold { font-weight: 600 !important; }
+.da-nowrap { white-space: nowrap !important; }
+
+/* 6. 空状态占位提示 (.da-empty-tip) */
+.da-empty-tip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--da-space-lg, 20px) var(--da-space-md, 12px);
+    color: var(--da-text-muted);
+    font-size: var(--da-font-size-xs, 0.76rem);
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+    grid-column: 1 / -1;
+    gap: var(--da-space-xs, 4px);
+}
+
+.da-empty-tip__icon {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.da-empty-tip__title {
+    font-weight: 600;
+    color: var(--da-text-secondary);
+}
+
+.da-empty-tip__sub {
+    font-size: 0.82em;
+    opacity: 0.75;
+}

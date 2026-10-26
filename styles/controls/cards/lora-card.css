@@ -1,0 +1,177 @@
+/**
+ * LoRA 动态管理卡片复合组件样式 (LoraManager)。
+ *
+ * @remarks
+ * 为 LoRA 模型挂载管理卡片提供高密度紧凑布局：
+ * 1. 顶部模型选择与快速添加控制栏 (.da-lora-add-bar)；
+ * 2. 已挂载条目卡片流 (.da-lora-item)，右上角绝对定位角标式删除；
+ * 3. 首行模型资产呈现与主开关，次行弹性自适应 2 列或 3 列受控参数步进器；
+ * 4. 禁用/未启用条目的半透明休眠态。
+ */
+
+/* 1. 顶部模型选择与添加控制栏 */
+.da-lora-add-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 10px 16px;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.08));
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.da-lora-add-bar__control {
+    flex: 1 1 200px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-lora-add-bar__control .da-select-wrapper,
+.da-lora-add-bar__control .da-input-wrapper {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.da-lora-add-bar .da-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* 2. 已挂载条目列表容器 */
+.da-lora-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px 12px 16px;
+    box-sizing: border-box;
+}
+
+.da-lora-list__empty {
+    font-size: var(--da-font-size-xs, 0.75rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    text-align: center;
+    padding: 16px 8px;
+    font-style: italic;
+}
+
+/* 3. 单个 LoRA 条目卡片 */
+.da-lora-item {
+    position: relative;
+    padding: 10px 12px;
+    background: var(--da-bg-card-hover, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-card, 6px);
+    transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.da-lora-item:hover {
+    border-color: var(--da-border-highlight, rgba(255, 255, 255, 0.15));
+}
+
+.da-lora-item.is-disabled {
+    opacity: 0.5;
+    background: transparent;
+}
+
+/* 4. 右上角角标式删除按钮 */
+.da-lora-item__delete-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    z-index: 2;
+}
+
+.da-lora-item__delete-badge svg {
+    width: 10px;
+    height: 10px;
+    stroke: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    fill: none;
+}
+
+.da-lora-item__delete-badge:hover,
+.da-lora-item__delete-badge:focus-visible {
+    opacity: 1;
+    background: var(--da-danger-bg, rgba(245, 108, 108, 0.2));
+}
+
+.da-lora-item__delete-badge:hover svg,
+.da-lora-item__delete-badge:focus-visible svg {
+    stroke: var(--da-danger-color, #ff4d4f);
+}
+
+/* 5. 首行：左侧模型资产选择，右侧主开关 */
+.da-lora-item__row--header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.da-lora-item__asset-box {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.da-lora-item__asset-box .da-select-wrapper,
+.da-lora-item__asset-box .da-input-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-lora-item__switch-box {
+    flex-shrink: 0;
+    margin-right: 22px; /* 避开右上角角标式删除按钮 */
+}
+
+/* 6. 次行：参数步进器容器 */
+.da-lora-item__row--params {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.da-lora-param-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-lora-param-label {
+    font-size: var(--da-font-size-xs, 0.75rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.65));
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 38px;
+}
+
+.da-lora-param-group .da-number-input {
+    flex: 1;
+    min-width: 0;
+}

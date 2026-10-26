@@ -1,0 +1,129 @@
+/**
+ * 连续范围滑块控件样式 (Slider)。
+ *
+ * @remarks
+ * 支持 .da-slider-wrapper / .da-slider / .da-slider__value 与复合规范：
+ * 1. 轨道与滑纽：6px 凹槽轨道、发光渐变填充与 16px 圆形滑纽；
+ * 2. 数值指示：等宽字体右对齐呈现当前数值；
+ * 3. 状态联动：支持 .is-dirty / .da-slider-wrapper--dirty 变更提示与禁用态。
+ */
+
+/* 1. 滑块容器外壳 */
+.da-slider-composite,
+.da-slider-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    height: 32px;
+    width: 100%;
+    min-width: 120px;
+    box-sizing: border-box;
+}
+
+.da-slider-composite.is-disabled,
+.da-slider-wrapper.is-disabled,
+.da-slider-wrapper--disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 2. 原生 range 滑块输入控件 */
+.da-slider-range,
+.da-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 6px;
+    margin: 0;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    background: var(--da-bg-input, #0a0c14);
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s var(--da-ease);
+}
+
+.da-slider-range:hover:not(:disabled),
+.da-slider:hover:not(:disabled) {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+}
+
+.da-slider-range:focus-visible,
+.da-slider:focus-visible {
+    outline: 2px solid var(--da-accent-color);
+    outline-offset: 2px;
+}
+
+/* WebKit (Chrome, Safari, Edge) 滑纽 */
+.da-slider-range::-webkit-slider-thumb,
+.da-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid var(--da-accent-color);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: grab;
+    transition: transform 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
+}
+
+.da-slider-range:hover:not(:disabled)::-webkit-slider-thumb,
+.da-slider:hover:not(:disabled)::-webkit-slider-thumb {
+    transform: scale(1.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.da-slider-range:active:not(:disabled)::-webkit-slider-thumb,
+.da-slider:active:not(:disabled)::-webkit-slider-thumb {
+    transform: scale(1.25);
+    cursor: grabbing;
+    box-shadow: 0 0 0 4px var(--da-accent-muted, rgba(139, 92, 246, 0.25));
+}
+
+/* Gecko (Firefox) 滑纽与轨道 */
+.da-slider-range::-moz-range-thumb,
+.da-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid var(--da-accent-color);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: grab;
+    transition: transform 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
+}
+
+.da-slider-range::-moz-range-track,
+.da-slider::-moz-range-track {
+    background: transparent;
+    border: none;
+}
+
+/* 3. 实时数值指示标签 (.da-slider__value) */
+.da-slider__value {
+    font-family: var(--da-font-mono, monospace);
+    font-size: var(--da-font-size-xs, 12px);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    min-width: 48px;
+    text-align: right;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+/* 4. 状态联动 (未保存修改与报错校验) */
+.da-slider-composite.is-dirty .da-slider-range,
+.da-slider-wrapper.is-dirty .da-slider,
+.da-slider-wrapper--dirty .da-slider {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 6px rgba(var(--da-color-warn-rgb), 0.25) !important;
+}
+
+.da-slider-composite.is-invalid .da-slider-range,
+.da-slider-wrapper.is-invalid .da-slider {
+    border-color: var(--da-color-error) !important;
+}

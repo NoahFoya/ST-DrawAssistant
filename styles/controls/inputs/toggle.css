@@ -1,0 +1,130 @@
+/**
+ * 拨动开关与切换控件样式 (Switch / Toggle)。
+ *
+ * @remarks
+ * 统一支持 .da-switch 与 .da-toggle 双向规范类名：
+ * 1. 结构布局：38×20px 胶囊形滑动轨道与 14×14px 圆形滑动钮；
+ * 2. 状态联动：支持 checked 激活、.is-dirty / .da-switch--dirty 未保存高亮与禁用态；
+ * 3. 无障碍访问：隐藏原生 input[type="checkbox"] 但保留在 DOM 中，支持键盘 Tab 聚焦与空格切换；
+ * 4. 宿主环境防护：清除 SillyTavern 全局注入的 label 冒号与额外外边距。
+ */
+
+/* 1. 基础容器与宿主样式隔离 */
+.da-toggle,
+.da-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 38px;
+    height: 20px;
+    flex-shrink: 0;
+    margin: 0;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 清除宿主环境全局 label 冒号伪元素 */
+.da-toggle::before,
+.da-toggle::after,
+.da-switch::before,
+.da-switch::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* 隐藏原生复选框，保留无障碍交互 */
+.da-toggle input,
+.da-switch input,
+.da-switch__input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+}
+
+/* 2. 轨道与滑动圆钮 */
+.da-toggle__track,
+.da-switch__track {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-pill, 20px);
+    box-sizing: border-box;
+    transition: background-color 0.18s var(--da-ease), border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+/* 独立滑纽元素 (.da-switch__thumb) 与伪元素 (.da-toggle__track::before) 样式对齐 */
+.da-switch__thumb,
+.da-toggle__track::before {
+    position: absolute;
+    content: '';
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    top: 2px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    transition: transform 0.18s var(--da-ease-spring), background-color 0.15s ease;
+}
+
+.da-toggle:hover:not(.is-disabled) .da-toggle__track,
+.da-switch:hover:not(.is-disabled):not(.da-switch--disabled) .da-switch__track {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+}
+
+/* 3. 选中激活与焦点态 */
+.da-toggle.is-checked .da-toggle__track,
+.da-toggle input:checked + .da-toggle__track,
+.da-switch.is-checked .da-switch__track,
+.da-switch input:checked + .da-switch__track {
+    background-color: var(--da-accent-color);
+    border-color: var(--da-accent-color);
+}
+
+.da-toggle.is-checked .da-toggle__track::before,
+.da-toggle input:checked + .da-toggle__track::before,
+.da-switch.is-checked .da-switch__thumb,
+.da-switch input:checked + .da-switch__track .da-switch__thumb {
+    transform: translateX(18px);
+}
+
+.da-toggle input:focus-visible + .da-toggle__track,
+.da-switch input:focus-visible + .da-switch__track {
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* 4. 开关伴随标签文本 (.da-switch__label) */
+.da-switch__label {
+    margin-left: 46px;
+    font-size: var(--da-font-size-sm, 13px);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* 5. 表单状态联动 (未保存修改 / 禁用) */
+/* 未保存修改态 */
+.da-toggle.is-dirty .da-toggle__track,
+.da-switch.is-dirty .da-switch__track,
+.da-switch.da-switch--dirty .da-switch__track {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 6px rgba(var(--da-color-warn-rgb), 0.25) !important;
+}
+
+/* 禁用态 */
+.da-toggle.is-disabled,
+.da-toggle:has(input:disabled),
+.da-switch.is-disabled,
+.da-switch.da-switch--disabled,
+.da-switch:has(input:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}

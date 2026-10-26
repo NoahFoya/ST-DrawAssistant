@@ -1,14 +1,16 @@
 /**
- * ST-DrawAssistant 插件入口与生命周期管理 (Milestone 2: Host & Floor MVP)。
+ * ST-DrawAssistant 插件入口与生命周期管理 (Milestone 3: Settings Console & Presets)。
  *
  * @remarks
- * 负责检测 SillyTavern 宿主环境并挂载全局生命周期事件监听器、悬浮操作球与楼层装配调度器。
+ * 负责检测 SillyTavern 宿主环境并挂载全局生命周期事件监听器、主设置控制台弹窗、悬浮操作球与楼层装配调度器。
  */
 
 import { sessionLifecycle } from './pipeline/session-lifecycle';
 import { urlPool } from './store/url-pool';
 import { settingsStore } from './store/settings-store';
 import { themeService } from './ui/theme';
+import { SettingsModal } from './ui/modal/settings-modal';
+import { registerDefaultViews } from './ui/views/registry';
 import { FloatingActionButton, DrawerEntry } from './ui/entry';
 import { toastService } from './ui/feedback/toast';
 import { messageDecorator } from './ui/floor/message-decorator';
@@ -24,9 +26,14 @@ export * from './provider';
 export * from './pipeline';
 
 let isInitialized = false;
+let settingsModalInstance: SettingsModal | null = null;
 let fabInstance: FloatingActionButton | null = null;
 let drawerEntryInstance: DrawerEntry | null = null;
 const hostEventCleanups: Array<() => void> = [];
+
+export function getSettingsModal(): SettingsModal | null {
+    return settingsModalInstance;
+}
 
 export function getFloatingActionButton(): FloatingActionButton | null {
     return fabInstance;
@@ -52,18 +59,31 @@ export async function initOnce(): Promise<void> {
     themeService.applyCurrentTheme();
     themeService.listenSettings();
 
-    // 2. 挂载悬浮球与抽屉入口
-    fabInstance = new FloatingActionButton();
+    // 2. 实例化主设置模态外壳并注册默认功能视图
+    settingsModalInstance = new SettingsModal();
+    registerDefaultViews(settingsModalInstance);
+
+    // 3. 挂载常驻悬浮球与侧边栏抽屉入口
+    fabInstance = new FloatingActionButton({
+        onClick: () => {
+            settingsModalInstance?.open();
+        },
+    });
     if (document.body) {
         document.body.appendChild(fabInstance.element);
     }
-    drawerEntryInstance = new DrawerEntry();
+
+    drawerEntryInstance = new DrawerEntry({
+        onOpenSettings: () => {
+            settingsModalInstance?.open();
+        },
+    });
     drawerEntryInstance.mount();
 
-    // 3. 绑定会话生命周期
+    // 4. 绑定会话生命周期
     sessionLifecycle.bindHostEvents();
 
-    // 4. 绑定宿主消息全生命周期事件
+    // 5. 绑定宿主消息全生命周期事件
     const eventSource = hostContext.eventSource;
     const eventTypes = (hostContext.eventTypes || {}) as Record<string, string | undefined>;
 
@@ -165,7 +185,7 @@ export async function initOnce(): Promise<void> {
     }
 
     isInitialized = true;
-    logger.info('ST-DrawAssistant 楼层生图核心与悬浮入口已就绪');
+    logger.info('ST-DrawAssistant 主设置控制台、楼层生图核心与悬浮入口已就绪');
 }
 
 export async function onActivate(): Promise<void> {
@@ -179,6 +199,10 @@ export function disposeExtension(): void {
     hostEventCleanups.length = 0;
     sessionLifecycle.unbindHostEvents();
 
+    if (settingsModalInstance) {
+        settingsModalInstance.dispose();
+        settingsModalInstance = null;
+    }
     if (drawerEntryInstance) {
         drawerEntryInstance.dispose();
         drawerEntryInstance = null;

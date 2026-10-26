@@ -1,0 +1,155 @@
+/**
+ * 状态徽标、版本徽标与更新指示器样式。
+ *
+ * @remarks
+ * 1. 结构形式：维护行内状态微标与紧凑版本药丸标签。
+ * 2. 语义色彩：提供 success / accent / muted / warn / error 色彩变体。
+ * 3. 字符对齐：采用等宽字体（--da-font-mono）保证数字与版本号字符宽度对齐。
+ */
+
+/* 1. 插件版本徽标与可更新指示 */
+.da-version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72em;
+    font-weight: 600;
+    font-family: var(--da-font-mono);
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.12);
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    user-select: none;
+    transition: all 0.2s var(--da-ease);
+}
+
+.da-version-badge:hover {
+    background: rgba(var(--da-accent-rgb), 0.18);
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb), 0.25);
+}
+
+/* 有新版本可用时的状态修饰符：切换为绿色并附加发光动画 */
+.da-version-badge--has-update {
+    color: var(--da-color-success);
+    background: rgba(var(--da-color-success-rgb), 0.12);
+    border-color: rgba(var(--da-color-success-rgb), 0.35);
+    box-shadow: 0 0 10px rgba(var(--da-color-success-rgb), 0.2);
+    animation: da-update-pill-glow 2.5s infinite ease-in-out;
+}
+
+.da-version-text {
+    display: inline-block;
+    color: inherit;
+    font-family: inherit;
+}
+
+/* 6px 圆形小绿点，持续微弱脉冲闪烁提示存在更新 */
+.da-version-update-dot,
+.da-version-update-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--da-color-success);
+    box-shadow: 0 0 6px rgba(var(--da-color-success-rgb), 0.8);
+    animation: da-pulse-dot 1.5s infinite;
+}
+
+.da-version-update-tag {
+    font-size: 0.85em;
+    font-weight: 700;
+    color: var(--da-color-success);
+}
+
+/* 2. 通用语义状态微标族 */
+.da-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    font-size: 0.72em;
+    font-weight: 600;
+    border-radius: 4px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.da-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    flex-shrink: 0;
+}
+
+.da-badge--success .da-badge__dot {
+    background-color: var(--da-color-success);
+    box-shadow: 0 0 4px var(--da-color-success);
+}
+
+.da-badge--accent .da-badge__dot {
+    background-color: var(--da-accent-color);
+    box-shadow: 0 0 4px var(--da-accent-color);
+}
+
+.da-badge--warn .da-badge__dot,
+.da-badge--warning .da-badge__dot {
+    background-color: var(--da-color-warn);
+    box-shadow: 0 0 4px var(--da-color-warn);
+}
+
+.da-badge--danger .da-badge__dot,
+.da-badge--error .da-badge__dot,
+.da-badge--invalid .da-badge__dot {
+    background-color: var(--da-color-error);
+    box-shadow: 0 0 4px var(--da-color-error);
+}
+
+.da-badge__text {
+    line-height: 1.2;
+}
+
+/* 成功 / 就绪 / 在线状态 */
+.da-badge--success {
+    background: rgba(var(--da-color-success-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-success-rgb), 0.35) !important;
+    color: var(--da-color-success) !important;
+}
+
+/* 品牌强调 / 活跃状态 */
+.da-badge--accent {
+    background: rgba(var(--da-accent-rgb), 0.15) !important;
+    border-color: rgba(var(--da-accent-rgb), 0.35) !important;
+    color: var(--da-accent-color) !important;
+}
+
+/* 次级弱化 / 离线 / 默认状态 */
+.da-badge--muted {
+    background: var(--da-bg-input);
+    border-color: var(--da-border-color);
+    color: var(--da-text-muted);
+}
+
+/* 警告 / 待处理 / 连通延迟告警 */
+.da-badge--warn,
+.da-badge--warning {
+    background: rgba(var(--da-color-warn-rgb), 0.15) !important;
+    color: var(--da-color-warn) !important;
+    border: 1px solid rgba(var(--da-color-warn-rgb), 0.35) !important;
+}
+
+/* 异常 / 错误 / 依赖模型失效告警 */
+.da-badge--danger,
+.da-badge--error,
+.da-badge--invalid,
+.da-badge--missing {
+    background: rgba(var(--da-color-error-rgb), 0.15) !important;
+    color: var(--da-color-error) !important;
+    border: 1px solid rgba(var(--da-color-error-rgb), 0.35) !important;
+}
+
+
+

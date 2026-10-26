@@ -1,0 +1,51 @@
+/**
+ * 画幅比例与尺寸卡片样式 (DimensionPicker)。
+ *
+ * @remarks
+ * 为画幅尺寸选择组件提供极简高密度表单行布局：
+ * 1. 【画幅比例】下拉框与【画幅尺寸】宽×高对称复合控件；
+ * 2. 严格对齐 240px 标准表单控件宽度，居中排版。
+ */
+
+.da-dimension-picker {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker--embedded {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 尺寸复合输入控件组 (宽 × 高)，总宽 240px */
+.da-dimension-picker__size-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px;
+    gap: 8px;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__size-group .da-number-input {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.da-dimension-picker__size-separator {
+    font-size: var(--da-font-size-sm, 13px);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    user-select: none;
+    flex-shrink: 0;
+    line-height: 1;
+}

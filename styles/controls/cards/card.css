@@ -1,0 +1,217 @@
+/**
+ * 通用卡片容器组件样式 (Card)。
+ *
+ * @remarks
+ * 为所有业务卡片提供标准统一的视觉外壳：
+ * 1. 头部标题区：主标题与副标题辅助说明；
+ * 2. 头部右上角操作区与状态徽标区；
+ * 3. 平滑折叠/展开动画与收起态隐藏；
+ * 4. 主体内容容器。
+ */
+
+.da-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-lg, 10px);
+    box-sizing: border-box;
+    transition: border-color 0.2s var(--da-ease, ease), box-shadow 0.2s var(--da-ease, ease);
+    overflow: hidden;
+}
+
+.da-card:hover {
+    border-color: var(--da-border-card-hover, rgba(255, 255, 255, 0.14));
+}
+
+/* 1. 头部标题与控制区 */
+.da-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    cursor: default;
+    user-select: none;
+    gap: 12px;
+}
+
+.da-card__header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-card__title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-card__title-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+.da-card__title {
+    font-size: var(--da-font-size-md, 0.95rem);
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.da-card__subtitle {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* 2. 头部右侧操作区与徽标区 */
+.da-card__header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.da-card__badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 3. 主体内容容器 (清零内部 padding 与 gap，让表单行通栏贯通且边缘贴合) */
+.da-card__body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 嵌入式复合组件在卡片内保持标准内边距 */
+.da-card__body .da-dimension-picker--embedded,
+.da-card__body .da-sampler-card--embedded,
+.da-card__body .da-card-embedded-content {
+    padding: 12px 16px;
+    box-sizing: border-box;
+}
+
+/* 5. 卡片与表单内语义分割线 (.da-settings-divider) */
+.da-settings-divider {
+    height: 1px;
+    margin: 6px 0;
+    background: var(--da-separator, rgba(139, 92, 246, 0.12));
+    width: 100%;
+    flex-shrink: 0;
+}
+
+/* 6. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
+.da-connection-card .da-card__header {
+    padding: 10px 16px;
+}
+
+.da-connection-card .da-card__body {
+    padding: 10px 16px;
+    gap: 8px;
+}
+
+.da-connection-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 32px;
+    height: 32px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.da-connection-row .da-input-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    height: 32px;
+}
+
+.da-connection-row .da-input {
+    width: 100%;
+    max-width: none;
+    height: 32px;
+    text-align: center;
+}
+
+.da-connection-row .da-btn,
+.da-connection-btn--sync {
+    flex-shrink: 0;
+    height: 32px !important;
+    min-height: 32px !important;
+    line-height: 30px !important;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.da-connection-card .da-form-row {
+    padding: 6px 0 0 0;
+    border-bottom: none;
+    border-top: 1px solid var(--da-separator);
+}
+
+.da-connection-card .da-form-row__control {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+}
+
+/* 7. 卡片内语义小标题分割栏 (.da-section-banner) */
+.da-section-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border-top: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--da-border-light, rgba(255, 255, 255, 0.06));
+    width: 100%;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+.da-section-banner__title {
+    font-size: var(--da-font-size-xs, 0.8rem);
+    font-weight: 600;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-section-banner__title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 12px;
+    background: var(--da-primary, #6366f1);
+    border-radius: 2px;
+}
+
+
+
