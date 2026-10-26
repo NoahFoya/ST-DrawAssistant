@@ -1,8 +1,16 @@
 /**
- * ST-DrawAssistant 插件入口与生命周期管理 (Milestone 3: Settings Console & Presets)。
+ * ST-DrawAssistant 插件入口与生命周期管理。
  *
  * @remarks
- * 负责检测 SillyTavern 宿主环境并挂载全局生命周期事件监听器、主设置控制台弹窗、悬浮操作球与楼层装配调度器。
+ * 插件生命周期与宿主事件绑定：
+ * 1. 模块导出：导出类型定义、存储中心、服务提供方、任务调度及 UI 组件；
+ * 2. 初始化 (initOnce)：
+ *    - 宿主环境检查：检测 window.SillyTavern 上下文；
+ *    - 配置与主题：初始化配置存储并应用主题；
+ *    - UI 挂载：初始化主设置弹窗 (SettingsModal)、悬浮球 (FAB) 与抽屉入口；
+ *    - 事件绑定：监听宿主消息接收、滑动、编辑、删除与会话切换事件；
+ * 3. 注销 (disposeExtension)：
+ *    - 解绑宿主监听器、销毁 UI 组件、释放临时 Object URL 并重置状态。
  */
 
 import { sessionLifecycle } from './pipeline/session-lifecycle';
@@ -14,9 +22,11 @@ import { registerDefaultViews } from './ui/views/registry';
 import { FloatingActionButton, DrawerEntry } from './ui/entry';
 import { toastService } from './ui/feedback/toast';
 import { messageDecorator } from './ui/floor/message-decorator';
+import { lightboxModal, imageInfoModal } from './ui/media';
 import { promptPipeline } from './pipeline/prompt-pipeline';
 import { generationOrchestrator } from './pipeline/generation-orchestrator';
 import { logger } from './util/logger';
+import type { ProviderType } from '@types';
 
 export type * from '@types';
 export * from './config/constants';
@@ -24,6 +34,7 @@ export * from './util';
 export * from './store';
 export * from './provider';
 export * from './pipeline';
+export * from './ui';
 
 let isInitialized = false;
 let settingsModalInstance: SettingsModal | null = null;
@@ -31,21 +42,42 @@ let fabInstance: FloatingActionButton | null = null;
 let drawerEntryInstance: DrawerEntry | null = null;
 const hostEventCleanups: Array<() => void> = [];
 
+/**
+ * 获取当前全局设置弹窗实例
+ */
 export function getSettingsModal(): SettingsModal | null {
     return settingsModalInstance;
 }
 
+/**
+ * 获取当前全局悬浮球实例
+ */
 export function getFloatingActionButton(): FloatingActionButton | null {
     return fabInstance;
 }
 
+/**
+ * 获取当前宿主抽屉入口实例
+ */
 export function getDrawerEntry(): DrawerEntry | null {
     return drawerEntryInstance;
 }
 
+/**
+ * 插件单例初始化函数。
+ *
+ * @remarks
+ * 负责检测 SillyTavern 宿主环境并挂载全局生命周期事件监听器、UI 设计系统与悬浮操作球。
+ * 具备幂等性保护，重复调用直接安全返回。
+ */
 export async function initOnce(): Promise<void> {
-    if (isInitialized) return;
-    if (typeof window === 'undefined') return;
+    if (isInitialized) {
+        return;
+    }
+
+    if (typeof window === 'undefined') {
+        return;
+    }
 
     const hostContext = window.SillyTavern?.getContext?.();
     if (!hostContext) {
@@ -53,17 +85,17 @@ export async function initOnce(): Promise<void> {
         return;
     }
 
-    // 1. 初始化配置与主题
+    // 1. 从宿主初始化配置存储
     settingsStore.initializeFromHost();
+
+    // 2. 初始化主题服务与视觉变量
     themeService.bindTarget();
     themeService.applyCurrentTheme();
     themeService.listenSettings();
 
-    // 2. 实例化主设置模态外壳并注册默认功能视图
+    // 3. 实例化主设置弹窗、装配默认视图与常驻悬浮球
     settingsModalInstance = new SettingsModal();
     registerDefaultViews(settingsModalInstance);
-
-    // 3. 挂载常驻悬浮球与侧边栏抽屉入口
     fabInstance = new FloatingActionButton({
         onClick: () => {
             settingsModalInstance?.open();
@@ -73,6 +105,7 @@ export async function initOnce(): Promise<void> {
         document.body.appendChild(fabInstance.element);
     }
 
+    // 4. 实例化并挂载 SillyTavern 宿主抽屉入口
     drawerEntryInstance = new DrawerEntry({
         onOpenSettings: () => {
             settingsModalInstance?.open();
@@ -80,14 +113,16 @@ export async function initOnce(): Promise<void> {
     });
     drawerEntryInstance.mount();
 
-    // 4. 绑定会话生命周期
+    // 5. 绑定宿主会话生命周期监听器
     sessionLifecycle.bindHostEvents();
 
-    // 5. 绑定宿主消息全生命周期事件
+    // 6. 绑定宿主消息渲染与全生命周期事件
     const eventSource = hostContext.eventSource;
-    const eventTypes = (hostContext.eventTypes || {}) as Record<string, string | undefined>;
+    const eventTypes = hostContext.eventTypes || {};
 
     if (eventSource) {
+        const eventTypesMap = eventTypes as Record<string, string | undefined>;
+
         const extractMessageId = (data: unknown): number => {
             if (typeof data === 'number') return data;
             if (data && typeof data === 'object') {
@@ -109,117 +144,192 @@ export async function initOnce(): Promise<void> {
             });
         };
 
-        // 监听新回复接收 (MESSAGE_RECEIVED) - 自动生图调度
-        const msgReceivedEvent = eventTypes.MESSAGE_RECEIVED || 'message_received';
+        // 监听新回复接收 (MESSAGE_RECEIVED) - 官方标准业务生命周期钩子，触发自动生图调度
+        const msgReceivedEvent = eventTypesMap.MESSAGE_RECEIVED || 'message_received';
         bindHostEvent(msgReceivedEvent, async (data: unknown) => {
             const messageId = extractMessageId(data);
             const settings = settingsStore.getSettings();
-            if (!settings.enabled || !settings.autoGenerate) return;
+            if (!settings.enabled || !settings.autoGenerate) {
+                return;
+            }
 
             const currentChat = hostContext.chat;
-            if (!Array.isArray(currentChat) || !currentChat[messageId]) return;
+            if (!Array.isArray(currentChat) || !currentChat[messageId]) {
+                return;
+            }
 
             const message = currentChat[messageId];
-            if (!message || typeof message.mes !== 'string') return;
+            if (!message || typeof message.mes !== 'string') {
+                return;
+            }
 
             const commands = promptPipeline.extractCommands(message.mes);
-            if (commands.length === 0) return;
+            if (commands.length === 0) {
+                return;
+            }
 
             const chatId = hostContext.chatId || 'default_chat';
             const swipeId = message.swipe_id ?? 0;
             const drawingsMap = message.extra?.drawings?.[swipeId];
 
             for (const cmd of commands) {
+                // 若该插槽已有图像资产，跳过自动派发
                 if (drawingsMap?.[cmd.instructionIndex]?.imageId || drawingsMap?.[cmd.instructionIndex]?.imageUrl) {
                     continue;
                 }
+
                 try {
                     await generationOrchestrator.submitTask({
                         rawPrompt: cmd.promptText,
-                        target: { chatId, messageId, swipeId, instructionIndex: cmd.instructionIndex },
-                        providerType: settings.activeProvider,
+                        providerType: settings.activeProvider as ProviderType,
+                        target: {
+                            chatId,
+                            messageId,
+                            swipeId,
+                            instructionIndex: cmd.instructionIndex,
+                        },
                     });
                 } catch (err) {
-                    logger.error(`[ST-DrawAssistant] 自动生图触发失败:`, err);
+                    logger.error(`[AutoGenerate] 自动派发生图任务失败 (#${messageId}, 插槽 ${cmd.instructionIndex}):`, err);
                 }
             }
         });
 
-        // 监听消息滑动、编辑与删除事件
-        bindHostEvent(eventTypes.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered', () => {
-            messageDecorator.scheduleScanAllMessages(100);
+        // 监听角色与用户消息原位渲染
+        const charRenderedEvent = eventTypesMap.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered';
+        bindHostEvent(charRenderedEvent, (messageId: number) => {
+            void messageDecorator.decorateMessage(messageId);
         });
-        bindHostEvent(eventTypes.USER_MESSAGE_RENDERED || 'user_message_rendered', () => {
-            messageDecorator.scheduleScanAllMessages(100);
+
+        const userRenderedEvent = eventTypesMap.USER_MESSAGE_RENDERED || 'user_message_rendered';
+        bindHostEvent(userRenderedEvent, (messageId: number) => {
+            void messageDecorator.decorateMessage(messageId);
         });
-        bindHostEvent(eventTypes.MESSAGE_SWIPED || 'message_swiped', (data: unknown) => {
-            const msgId = extractMessageId(data);
-            const swipeId = data && typeof data === 'object' && 'swipeId' in data && typeof (data as { swipeId: unknown }).swipeId === 'number'
-                ? (data as { swipeId: number }).swipeId : undefined;
-            messageDecorator.handleMessageSwiped(msgId, swipeId);
+
+        // 监听候选分支左右滑动切换 (Swipe)
+        const swipeEvent = eventTypesMap.MESSAGE_SWIPED || 'message_swiped';
+        bindHostEvent(swipeEvent, (data: unknown) => {
+            const messageId = typeof data === 'number'
+                ? data
+                : (data && typeof data === 'object' && 'messageId' in data && typeof (data as { messageId?: unknown }).messageId === 'number'
+                    ? (data as { messageId: number }).messageId
+                    : 0);
+            const swipeId = data && typeof data === 'object' && 'swipeId' in data && typeof (data as { swipeId?: unknown }).swipeId === 'number'
+                ? (data as { swipeId: number }).swipeId
+                : undefined;
+            void messageDecorator.handleMessageSwiped(messageId, swipeId);
         });
-        bindHostEvent(eventTypes.MESSAGE_UPDATED || eventTypes.MESSAGE_EDITED || 'message_updated', (data: unknown) => {
-            const msgId = extractMessageId(data);
-            messageDecorator.handleMessageEdited(msgId);
+
+        // 监听消息正文编辑完成 (MESSAGE_UPDATED / MESSAGE_EDITED)
+        const msgUpdatedEvent = eventTypesMap.MESSAGE_UPDATED || eventTypesMap.MESSAGE_EDITED || 'message_updated';
+        bindHostEvent(msgUpdatedEvent, (data: unknown) => {
+            const messageId = extractMessageId(data);
+            void messageDecorator.handleMessageEdited(messageId);
         });
-        bindHostEvent(eventTypes.MESSAGE_DELETED || 'message_deleted', (data: unknown) => {
-            const msgId = typeof data === 'number' ? data : (data && typeof data === 'object' && 'messageId' in data && typeof (data as { messageId: unknown }).messageId === 'number' ? (data as { messageId: number }).messageId : undefined);
-            messageDecorator.handleMessageDeleted(msgId);
+
+        // 监听消息删除 (MESSAGE_DELETED)
+        const msgDeletedEvent = eventTypesMap.MESSAGE_DELETED || 'message_deleted';
+        bindHostEvent(msgDeletedEvent, (data: unknown) => {
+            const messageId = typeof data === 'number'
+                ? data
+                : (data && typeof data === 'object' && 'messageId' in data && typeof (data as { messageId?: unknown }).messageId === 'number'
+                    ? (data as { messageId: number }).messageId
+                    : undefined);
+            messageDecorator.handleMessageDeleted(messageId);
         });
-        bindHostEvent(eventTypes.CHAT_CHANGED || 'chat_id_changed', () => {
+
+        // 监听会话变更与初次载入（任务后台静默执行持久化存储，重回会话或重新加载时基于 imageId 找回）
+        const chatChangedEvent = eventTypes.CHAT_CHANGED || 'chat_id_changed';
+        bindHostEvent(chatChangedEvent, () => {
             messageDecorator.clearCurrentButtons();
             messageDecorator.scheduleScanAllMessages(300);
         });
-        bindHostEvent(eventTypes.CHAT_LOADED || 'chatLoaded', () => {
+
+        const chatLoadedEvent = eventTypes.CHAT_LOADED || 'chatLoaded';
+        bindHostEvent(chatLoadedEvent, () => {
             messageDecorator.scheduleScanAllMessages(150);
         });
-        bindHostEvent(eventTypes.MORE_MESSAGES_LOADED || 'more_messages_loaded', () => {
-            messageDecorator.scanAllMessages();
+
+        const moreLoadedEvent = eventTypes.MORE_MESSAGES_LOADED || 'more_messages_loaded';
+        bindHostEvent(moreLoadedEvent, () => {
+            void messageDecorator.scanAllMessages();
         });
-        bindHostEvent(eventTypes.APP_INITIALIZED || 'app_initialized', () => {
+
+        // 监听宿主就绪事件，延迟重试挂载抽屉入口
+        const appInitEvent = eventTypes.APP_INITIALIZED || 'app_initialized';
+        bindHostEvent(appInitEvent, () => {
             drawerEntryInstance?.mount();
         });
-        bindHostEvent(eventTypes.APP_READY || 'app_ready', () => {
+
+        const appReadyEvent = eventTypes.APP_READY || 'app_ready';
+        bindHostEvent(appReadyEvent, () => {
             drawerEntryInstance?.mount();
         });
     }
 
     isInitialized = true;
-    logger.info('ST-DrawAssistant 主设置控制台、楼层生图核心与悬浮入口已就绪');
+    logger.info('ST-DrawAssistant 扩展核心生命周期与 UI 系统已就绪');
 }
 
+/**
+ * SillyTavern 扩展清单规范激活钩子。
+ *
+ * @remarks
+ * 由 manifest.json 中的 hooks.activate 配置项指定调用。
+ */
 export async function onActivate(): Promise<void> {
     await initOnce();
 }
 
+/**
+ * 插件全局资源卸载与监听器清理函数。
+ *
+ * @remarks
+ * 解绑全部宿主事件，注销 UI 弹窗与悬浮球，释放 Object URL 内存映射，重置初始化状态。
+ */
 export function disposeExtension(): void {
+    // 1. 解绑宿主全局事件
     for (const cleanup of hostEventCleanups) {
-        try { cleanup(); } catch {}
+        try {
+            cleanup();
+        } catch {
+            // 忽略清理异常
+        }
     }
     hostEventCleanups.length = 0;
+
     sessionLifecycle.unbindHostEvents();
+
+    // 2. 销毁 UI 组件
+    if (drawerEntryInstance) {
+        drawerEntryInstance.dispose();
+        drawerEntryInstance = null;
+    }
+
+    if (fabInstance) {
+        fabInstance.dispose();
+        fabInstance = null;
+    }
 
     if (settingsModalInstance) {
         settingsModalInstance.dispose();
         settingsModalInstance = null;
     }
-    if (drawerEntryInstance) {
-        drawerEntryInstance.dispose();
-        drawerEntryInstance = null;
-    }
-    if (fabInstance) {
-        fabInstance.dispose();
-        fabInstance = null;
-    }
+
     messageDecorator.dispose();
+    lightboxModal.dispose();
+    imageInfoModal.dispose();
     toastService.dispose();
     themeService.dispose();
+
+    // 3. 释放 Object URL 内存映射
     urlPool.revokeAll();
 
     isInitialized = false;
     logger.info('ST-DrawAssistant 扩展已安全卸载');
 }
 
+// 浏览器环境下自动检测并尝试自激活
 if (typeof window !== 'undefined' && window.SillyTavern?.getContext) {
     void initOnce();
 }

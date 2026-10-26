@@ -1,5 +1,5 @@
 /**
- * 设置模态弹窗选项卡视图集中装配中枢 (Milestone 3)。
+ * 设置模态弹窗选项卡视图集中装配中枢。
  *
  * @remarks
  * 负责统一为 SettingsModal 视窗骨架注册各功能选项卡的工厂函数，
@@ -16,6 +16,7 @@ import { LogsStatsTabView } from './logs-stats-tab';
 import { AboutTabView } from './about-tab';
 import { ThemeTabView } from './theme-tab';
 import { FabTabView } from './fab-tab';
+import { GalleryTabView } from './gallery-tab';
 
 /**
  * 为主设置模态外壳集中注册所有已就绪的选项卡视图工厂。
@@ -38,15 +39,18 @@ export function registerDefaultViews(modal: SettingsModal): void {
     // 5. OpenAI 兼容专属绘图服务设置选项卡
     modal.registerViewFactory('openai', () => new OpenAITabView());
 
-    // 6. 日志与统计选项卡
+    // 6. 历史生图画廊选项卡
+    modal.registerViewFactory('gallery', () => new GalleryTabView());
+
+    // 7. 日志与统计选项卡
     modal.registerViewFactory('logs', () => new LogsStatsTabView());
 
-    // 7. 关于与支持选项卡
+    // 8. 关于与支持选项卡
     modal.registerViewFactory('about', () => new AboutTabView());
 
-    // 8. 外观与主题选项卡
+    // 9. 外观与主题选项卡
     modal.registerViewFactory('theme', () => new ThemeTabView());
 
-    // 9. 悬浮球设置选项卡
+    // 10. 悬浮球设置选项卡
     modal.registerViewFactory('fab', () => new FabTabView());
 }

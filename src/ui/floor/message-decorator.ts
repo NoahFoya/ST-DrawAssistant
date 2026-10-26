@@ -15,8 +15,8 @@ import { generationOrchestrator, type SubmitTaskOptions } from '../../pipeline/g
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { urlPool } from '../../store/url-pool';
-// import { lightboxModal } from '../media/lightbox-modal';
-// import { imageActionPanel } from '../media/image-action-panel';
+import { lightboxModal } from '../media/lightbox-modal';
+import { imageActionPanel } from '../media/image-action-panel';
 import { Toast } from '../feedback/toast';
 import { eventBus, type TaskStatusEventData } from '../../util/event-bus';
 import { sessionLifecycle } from '../../pipeline/session-lifecycle';
@@ -547,7 +547,7 @@ export class MessageDecorator implements Disposable {
             // 点击大图全屏画廊预览
             imgEl.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // lightboxModal in M4
+                lightboxModal.open(displayUrl, { imageId });
             });
         }
 
@@ -579,7 +579,7 @@ export class MessageDecorator implements Disposable {
             imageBox.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // imageActionPanel in M4
+                void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
             });
 
             // 移动端长按手势呼出图片操作面板 (500ms)
@@ -590,7 +590,7 @@ export class MessageDecorator implements Disposable {
                     if (e.touches.length !== 1) return;
                     touchTimer = setTimeout(() => {
                         touchTimer = null;
-                        // imageActionPanel in M4
+                        void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
                     }, 500);
                 },
                 { passive: true }
@@ -623,7 +623,7 @@ export class MessageDecorator implements Disposable {
             zoomBtn.textContent = '🔍';
             zoomBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // lightboxModal in M4
+                lightboxModal.open(displayUrl, { imageId });
             });
             actionsContainer.appendChild(zoomBtn);
         }
@@ -637,7 +637,7 @@ export class MessageDecorator implements Disposable {
             actionBtn.textContent = '⚙️';
             actionBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // imageActionPanel in M4
+                void this.openImageActionPanel(messageId, instructionIndex, imageId, displayUrl);
             });
             actionsContainer.appendChild(actionBtn);
         }
@@ -702,12 +702,32 @@ export class MessageDecorator implements Disposable {
      * @param displayUrl 可选图像展示地址
      */
     public async openImageActionPanel(
-        _messageId: number,
-        _instructionIndex: number,
-        _imageId?: string,
-        _displayUrl?: string
+        messageId: number,
+        instructionIndex: number,
+        imageId?: string,
+        displayUrl?: string
     ): Promise<void> {
-        // Milestone 4: 集成 imageActionPanel 弹出微调面板
+        const record = imageId ? await imageStorage.getImageRecord(imageId) : undefined;
+        const hostContext = window.SillyTavern?.getContext?.();
+        const currentChatId = hostContext?.chatId || 'default_chat';
+        const swipeId = hostContext?.chat?.[messageId]?.swipe_id ?? 0;
+
+        imageActionPanel.open({
+            messageId,
+            instructionIndex,
+            imageId,
+            imageUrl: displayUrl,
+            prompt: record?.metadata?.prompt,
+            negativePrompt: record?.metadata?.negativePrompt,
+            record,
+            onRegenerate: async (newPrompt, newNegPrompt) => {
+                await this.regenerateSlot(
+                    { chatId: currentChatId, messageId, swipeId, instructionIndex },
+                    newPrompt,
+                    newNegPrompt
+                );
+            },
+        });
     }
 
     /**
@@ -910,7 +930,7 @@ export class MessageDecorator implements Disposable {
             this.unbindEventListener = null;
         }
         this.clearCurrentButtons();
-        // imageActionPanel in M4
+        imageActionPanel.dispose();
     }
 }
 

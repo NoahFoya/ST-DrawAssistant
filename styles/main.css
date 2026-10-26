@@ -1,13 +1,13 @@
 /**
- * ST-DrawAssistant 样式系统总入口 (Milestone 3: Settings Console & Presets)。
+ * ST-DrawAssistant 样式系统总入口。
  *
  * @remarks
  * 组织并按顺序加载全系统样式分层（ITCSS 架构）：
  * 1. Core (基础设计令牌、样式重置与全局动画)
  * 2. Layout (弹窗骨架、侧边栏、栅格排布、顶栏底栏与悬浮球)
  * 3. Controls (通用按钮、输入表单、卡片容器与反馈气泡)
- * 4. Features (对话楼层呈现、工作流蓝图编辑与日志终端)
- * 5. Skin (设备多分辨率响应式规则)
+ * 4. Features (画廊、工作流、局部重绘、图片详情与楼层原位呈现)
+ * 5. Skin (浅色主题修饰与设备多分辨率响应式规则)
  */
 
 /* 1. Core 核心基础与设计令牌 (Layer 1) */
@@ -61,7 +61,10 @@
 
 /* 4. Features 业务功能领域专用样式 (Layer 4) */
 @import url('./features/floor.css');
+@import url('./features/gallery.css');
 @import url('./features/workflow.css');
+@import url('./features/image-info.css');
+@import url('./features/lightbox.css');
 @import url('./features/terminal.css');
 
 /* 5. Skin 主题皮肤与设备响应式 (Layer 5) */

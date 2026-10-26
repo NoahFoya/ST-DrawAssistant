@@ -1,0 +1,230 @@
+/**
+ * 全屏大图画廊灯箱视窗、手势交互舞台与浮动胶囊工具栏样式。
+ *
+ * @remarks
+ * 1. 视窗层级：顶层固定遮罩 (z-index 100200)，高斯模糊虚化背景。
+ * 2. 变换舞台：基于 transform 矩阵实现连续缩放、拖拽平移与顺时针旋转。
+ * 3. 悬浮胶囊：底部居中浮动控制栏与两侧翻页箭头，支持平滑淡入。
+ */
+
+/* 1. 全屏遮罩层 */
+.da-lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-modal, 100100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-overlay-heavy);
+    backdrop-filter: blur(var(--da-blur-modal, 16px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 16px));
+    animation: da-fadein 0.2s var(--da-ease);
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+}
+
+/* 2. 交互舞台与视口容器 */
+.da-lightbox-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+}
+
+.da-lightbox-stage.is-dragging {
+    cursor: grabbing;
+}
+
+/* 3. 核心图像呈现元素 */
+.da-lightbox-image-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    transition: transform 0.08s linear;
+    will-change: transform;
+}
+
+.da-lightbox-image-wrapper.is-animating {
+    transition: transform 0.22s var(--da-ease);
+}
+
+.da-lightbox-img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: var(--da-radius-sm, 6px);
+    box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.55));
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* 4. 顶部信息栏 (页码计数与标题) */
+.da-lightbox-header {
+    position: absolute;
+    top: 20px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.da-lightbox-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.da-lightbox-counter {
+    font-size: 0.88em;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--da-border-color);
+}
+
+.da-lightbox-title {
+    font-size: 0.9em;
+    color: var(--da-text-secondary);
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.da-lightbox-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+/* 5. 左右翻页导航悬浮按钮 */
+.da-lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--da-bg-hover);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.18s var(--da-ease), transform 0.18s var(--da-ease);
+    z-index: 10;
+}
+
+.da-lightbox-nav:hover {
+    background: var(--da-bg-active);
+    transform: translateY(-50%) scale(1.08);
+}
+
+.da-lightbox-nav:active {
+    transform: translateY(-50%) scale(0.96);
+}
+
+.da-lightbox-nav.is-disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.da-lightbox-prev {
+    left: 24px;
+}
+
+.da-lightbox-next {
+    right: 24px;
+}
+
+.da-lightbox-nav svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+}
+
+/* 6. 底部悬浮胶囊工具栏 */
+.da-lightbox-toolbar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 30px;
+    background: var(--da-bg-overlay-modal);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-modal, 0 10px 30px rgba(0, 0, 0, 0.45));
+    z-index: 10;
+}
+
+.da-lightbox-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--da-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s var(--da-ease), color 0.15s var(--da-ease), transform 0.15s var(--da-ease);
+}
+
+.da-lightbox-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    transform: scale(1.08);
+}
+
+.da-lightbox-btn:active {
+    transform: scale(0.94);
+}
+
+.da-lightbox-btn svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+}
+
+.da-lightbox-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--da-separator, rgba(255, 255, 255, 0.15));
+    margin: 0 2px;
+}
+
+.da-lightbox-scale-indicator {
+    font-size: 0.82em;
+    font-weight: 600;
+    min-width: 48px;
+    text-align: center;
+    color: var(--da-text-secondary, #ccc);
+    user-select: none;
+    font-family: monospace;
+}
