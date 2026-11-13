@@ -693,10 +693,15 @@ export class NovelAIProvider extends BaseGenerationProvider {
         };
 
         // 引导重缩放 (CFG Rescale)
-        const cfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
-        if (typeof cfgRescale === 'number' && cfgRescale > 0) {
-            generationParams['cfg_rescale'] = cfgRescale;
+        const rawCfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
+        const resolvedCfgRescale =
+            typeof rawCfgRescale === 'number' && rawCfgRescale > 0 ? rawCfgRescale : undefined;
+        if (resolvedCfgRescale !== undefined) {
+            generationParams['cfg_rescale'] = resolvedCfgRescale;
         }
+
+        let resolvedSmeaMode: string | undefined;
+        let resolvedDecrisper: boolean | undefined;
 
         // 依据模型家族分流构造核心请求体
         if (isV4OrHigher) {
@@ -727,6 +732,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             }
 
             const smeaMode = (params.smeaMode ?? drawingPreset?.smeaMode ?? 'smea_dyn') as string;
+            resolvedSmeaMode = smeaMode;
             if (smeaMode === 'smea_dyn') {
                 generationParams['sm'] = true;
                 generationParams['sm_dyn'] = true;
@@ -737,6 +743,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
 
             const decrisper = Boolean(params.decrisper ?? drawingPreset?.decrisper);
             if (decrisper) {
+                resolvedDecrisper = true;
                 generationParams['dynamic_thresholding'] = true;
             }
         }
@@ -873,6 +880,9 @@ export class NovelAIProvider extends BaseGenerationProvider {
             sampler: resolvedSampler,
             steps: resolvedSteps,
             cfgScale: resolvedCfgScale,
+            cfgRescale: resolvedCfgRescale,
+            smeaMode: resolvedSmeaMode,
+            decrisper: resolvedDecrisper,
             engine: 'novelai',
             durationMs,
             baseModel: resolvedModel,

@@ -481,24 +481,6 @@
     display: none !important;
 }
 
-.da-action-panel__meta-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.da-action-panel__meta-chip {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11px;
-    font-family: var(--da-font-mono, monospace);
-    padding: 2px 8px;
-    border-radius: var(--da-radius-pill, 999px);
-    background: var(--da-bg-subtle);
-    border: 1px solid var(--da-border-color);
-    color: var(--da-text-secondary);
-}
-
 .da-action-panel__footer {
     display: flex;
     align-items: center;

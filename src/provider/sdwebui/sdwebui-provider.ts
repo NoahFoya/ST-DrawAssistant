@@ -501,7 +501,10 @@ export class SdWebUIProvider extends BaseGenerationProvider {
 
         let endpoint = `${serverUrl}/sdapi/v1/txt2img`;
         let enableHires = false;
+        let resolvedHiresUpscaler: string | undefined;
         let resolvedHiresScale: number | undefined;
+        let resolvedHiresSteps: number | undefined;
+        let resolvedHiresDenoise: number | undefined;
 
         if (isInpaintMode) {
             endpoint = `${serverUrl}/sdapi/v1/img2img`;
@@ -532,17 +535,17 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             enableHires = Boolean(params.enableHires ?? drawingPreset?.enableHires);
             if (enableHires) {
                 requestBody['enable_hr'] = true;
-                const hiresUpscaler = (params.hiresUpscaler ?? drawingPreset?.hiresUpscaler) as string | undefined;
-                if (hiresUpscaler) requestBody['hr_upscaler'] = hiresUpscaler;
+                resolvedHiresUpscaler = (params.hiresUpscaler ?? drawingPreset?.hiresUpscaler) as string | undefined;
+                if (resolvedHiresUpscaler) requestBody['hr_upscaler'] = resolvedHiresUpscaler;
                 const hiresScale = (params.hiresScale ?? drawingPreset?.hiresScale) as number | undefined;
                 if (hiresScale !== undefined) {
                     resolvedHiresScale = hiresScale;
                     requestBody['hr_scale'] = hiresScale;
                 }
-                const hiresSteps = (params.hiresSteps ?? drawingPreset?.hiresSteps) as number | undefined;
-                if (hiresSteps !== undefined) requestBody['hr_second_pass_steps'] = hiresSteps;
-                const hiresDenoise = (params.hiresDenoise ?? drawingPreset?.hiresDenoise) as number | undefined;
-                if (hiresDenoise !== undefined) requestBody['denoising_strength'] = hiresDenoise;
+                resolvedHiresSteps = (params.hiresSteps ?? drawingPreset?.hiresSteps) as number | undefined;
+                if (resolvedHiresSteps !== undefined) requestBody['hr_second_pass_steps'] = resolvedHiresSteps;
+                resolvedHiresDenoise = (params.hiresDenoise ?? drawingPreset?.hiresDenoise) as number | undefined;
+                if (resolvedHiresDenoise !== undefined) requestBody['denoising_strength'] = resolvedHiresDenoise;
             }
         }
 
@@ -632,12 +635,19 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             engine: 'sdwebui',
             durationMs,
             baseModel: resolvedBaseModel,
+            vaeName: resolvedVae?.trim() || undefined,
+            clipSkip: resolvedClipSkip,
             width: effectiveWidth,
             height: effectiveHeight,
             mode: isInpaintMode ? 'inpaint' : 'txt2img',
             denoiseStrength: isInpaintMode ? (params.denoiseStrength ?? 0.75) : undefined,
             maskBlur: isInpaintMode ? (params.maskBlur ?? 4) : undefined,
             parentImageId: (params as { parentImageId?: string }).parentImageId,
+            enableHires: enableHires || undefined,
+            hiresUpscaler: enableHires ? resolvedHiresUpscaler : undefined,
+            hiresScale: enableHires ? resolvedHiresScale : undefined,
+            hiresSteps: enableHires ? resolvedHiresSteps : undefined,
+            hiresDenoise: enableHires ? resolvedHiresDenoise : undefined,
         };
 
         return {

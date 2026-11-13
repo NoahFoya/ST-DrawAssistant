@@ -73,6 +73,12 @@
     border: 1px solid var(--da-border-color);
 }
 
+.da-inspect-badge--accent {
+    color: var(--da-accent-color);
+    border-color: rgba(129, 140, 248, 0.35);
+    background: rgba(129, 140, 248, 0.12);
+}
+
 /* 3. 详情主体双列网格 (.da-inspect-body)
    采用 1fr 340px 左右列划分，内部具备独立垂直滚动能力 */
 .da-inspect-body {
@@ -195,9 +201,26 @@
     }
 }
 
-/* 6. 生成参数双列网格与点击复制 (.da-inspect-params-matrix)
-   采用双列等宽网格（repeat(2, 1fr)）展示步数、CFG、种子、模型、采样器等核心元数据；
-   每个单元格支持鼠标悬停高亮与点击快速复制取值。 */
+/* 6. 分组参数卡与生成参数双列网格 (.da-inspect-param-section / .da-inspect-params-matrix)
+   按核心生成参数、模型与工作流、重绘与引擎扩展参数分层组织；
+   采用双列等宽网格（repeat(2, 1fr)），每个单元格支持悬停高亮与点击复制取值。 */
+.da-inspect-param-section {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-inspect-section-header {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+    letter-spacing: 0.3px;
+}
+
 .da-inspect-params-matrix {
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);
@@ -206,6 +229,13 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px 14px;
+}
+
+.da-inspect-param-section .da-inspect-params-matrix {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }
 
 .da-inspect-param-cell {
@@ -217,6 +247,10 @@
     border: 1px solid var(--da-border-subtle, rgba(255, 255, 255, 0.05));
     border-radius: 6px;
     min-width: 0;
+}
+
+.da-inspect-param-cell--wide {
+    grid-column: 1 / -1;
 }
 
 .da-inspect-param-label {

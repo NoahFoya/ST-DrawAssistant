@@ -515,6 +515,8 @@ export class OpenAIProvider extends BaseGenerationProvider {
             baseModel: finalModel,
             width: finalWidth,
             height: finalHeight,
+            quality: resolvedQuality || undefined,
+            style: resolvedStyle || undefined,
         };
 
         return {

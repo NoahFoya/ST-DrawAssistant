@@ -58,6 +58,10 @@ export interface ImageGenerationMetadata {
     readonly baseModel?: string;
     /** 额外模型文件名列表 */
     readonly extraModels?: string[];
+    /** 外置 VAE 模型名称 */
+    readonly vaeName?: string;
+    /** CLIP 跳过层数 */
+    readonly clipSkip?: number;
     /** 最终发送给后端的正向提示词文本 (已处理完毕) */
     readonly prompt: string;
     /** 最终发送给后端的负向提示词文本 */
@@ -98,6 +102,26 @@ export interface ImageGenerationMetadata {
     readonly denoiseStrength?: number;
     /** 局部重绘蒙版羽化半径 */
     readonly maskBlur?: number;
+    /** SD-WebUI 是否启用高清修复 */
+    readonly enableHires?: boolean;
+    /** SD-WebUI 高清修复放大算法 */
+    readonly hiresUpscaler?: string;
+    /** SD-WebUI 高清修复放大倍率 */
+    readonly hiresScale?: number;
+    /** SD-WebUI 高清修复二阶段采样步数 */
+    readonly hiresSteps?: number;
+    /** SD-WebUI 高清修复重绘幅度 */
+    readonly hiresDenoise?: number;
+    /** NovelAI CFG 重缩放系数 */
+    readonly cfgRescale?: number;
+    /** NovelAI V3 SMEA 模式 */
+    readonly smeaMode?: string;
+    /** NovelAI V3 是否开启 Decrisper (Dynamic Thresholding) */
+    readonly decrisper?: boolean;
+    /** OpenAI 兼容接口生成画质选项 */
+    readonly quality?: string;
+    /** OpenAI 兼容接口画面风格选项 */
+    readonly style?: string;
     /** 引擎扩展参数快照 */
     readonly [key: string]: unknown;
 }

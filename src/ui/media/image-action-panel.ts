@@ -61,7 +61,6 @@ export class ImageActionPanel implements Disposable {
     private resetNegUndo?: () => void;
     private updatePosHighlight?: () => void;
     private updateNegHighlight?: () => void;
-    private metaBadgeContainer?: HTMLElement;
     private readonly autocompletes: TagAutocomplete[] = [];
 
     // 全局事件解绑器列表
@@ -137,12 +136,6 @@ export class ImageActionPanel implements Disposable {
         this.autocompletes.push(negAc);
         this.disposers.push(() => negAc.dispose());
         body.appendChild(negSection.container);
-
-        // 技术参数摘要胶囊栏
-        const metaBadgeContainer = document.createElement('div');
-        metaBadgeContainer.className = 'da-action-panel__meta-badges';
-        body.appendChild(metaBadgeContainer);
-        this.metaBadgeContainer = metaBadgeContainer;
 
         panel.appendChild(body);
 
@@ -517,8 +510,6 @@ export class ImageActionPanel implements Disposable {
             ac.refreshMacroStatus();
         }
 
-        this.renderMetaBadges(context.record);
-
         if (this.backdropEl && typeof document !== 'undefined') {
             // 打开时始终置入 body 末位，使后打开的次级弹窗/详情窗自然处于其上方
             document.body.appendChild(this.backdropEl);
@@ -538,47 +529,6 @@ export class ImageActionPanel implements Disposable {
             (typeof meta?.provider === 'string' && meta.provider) ||
             settingsStore.getSettings().activeProvider
         );
-    }
-
-    /**
-     * 渲染简明技术参数徽标。
-     */
-    private renderMetaBadges(record?: StoredImageRecord): void {
-        if (!this.metaBadgeContainer) return;
-        this.metaBadgeContainer.innerHTML = '';
-
-        if (!record?.metadata) {
-            return;
-        }
-
-        const meta = record.metadata;
-        const badges: string[] = [];
-
-        if (meta.engine) {
-            badges.push(`引擎: ${meta.engine}`);
-        }
-        if (record.width && record.height) {
-            badges.push(`尺寸: ${record.width}×${record.height}`);
-        }
-        if (meta.steps) {
-            badges.push(`步数: ${meta.steps}`);
-        }
-        if (meta.cfgScale) {
-            badges.push(`CFG: ${meta.cfgScale}`);
-        }
-        if (meta.seed !== undefined) {
-            badges.push(`Seed: ${meta.seed}`);
-        }
-        if (meta.sampler) {
-            badges.push(`采样: ${meta.sampler}`);
-        }
-
-        for (const text of badges) {
-            const span = document.createElement('span');
-            span.className = 'da-action-panel__meta-chip';
-            span.textContent = text;
-            this.metaBadgeContainer.appendChild(span);
-        }
     }
 
     /**
