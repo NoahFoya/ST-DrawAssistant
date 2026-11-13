@@ -189,11 +189,7 @@ export class ProviderTabViewModel implements Disposable {
         this.options = options;
 
         const providerCfg = this.readProviderStoreConfig();
-        this.connectionData = signal<ConnectionCardData>({
-            serverUrl: providerCfg.serverUrl !== undefined ? providerCfg.serverUrl : options.defaultServerUrl,
-            apiKey: providerCfg.apiKey || '',
-            activePresetId: providerCfg.serviceId || options.defaultServiceId,
-        });
+        this.connectionData = signal<ConnectionCardData>(this.buildConnectionData(providerCfg));
 
         // 优先从本地持久化资产缓存秒开渲染，避免白屏与等待
         const cache = providerCfg.assetCache;
@@ -500,6 +496,46 @@ export class ProviderTabViewModel implements Disposable {
      */
     private readProviderStoreConfig(): ProviderStoredConfig {
         return settingsStore.getProviderConfig<ProviderStoredConfig>(this.provider) || {};
+    }
+
+    /**
+     * 解析有效的服务商预设标识，兼容仅保存了自定义 serverUrl 但缺失 serviceId 的配置。
+     */
+    private resolveServiceId(cfg: ProviderStoredConfig): string | undefined {
+        if (cfg.serviceId) {
+            return cfg.serviceId;
+        }
+        const profiles = this.options.serviceProfiles;
+        if (!profiles) {
+            return this.options.defaultServiceId;
+        }
+        const normalizeUrl = (url: string): string => url.trim().replace(/\/+$/, '');
+        const normalizedUrl = normalizeUrl(cfg.serverUrl ?? '');
+        if (!normalizedUrl) {
+            return this.options.defaultServiceId;
+        }
+        for (const [id, url] of Object.entries(profiles.fixedUrls || {})) {
+            if (normalizeUrl(url) === normalizedUrl) {
+                return id;
+            }
+        }
+        for (const [id, url] of Object.entries(profiles.defaultUrls || {})) {
+            if (normalizeUrl(url) === normalizedUrl) {
+                return id;
+            }
+        }
+        return 'custom';
+    }
+
+    /**
+     * 根据持久化的提供商配置构建前端连接卡片数据。
+     */
+    private buildConnectionData(cfg: ProviderStoredConfig): ConnectionCardData {
+        return {
+            serverUrl: cfg.serverUrl !== undefined ? cfg.serverUrl : this.options.defaultServerUrl,
+            apiKey: cfg.apiKey || '',
+            activePresetId: this.resolveServiceId(cfg),
+        };
     }
 
     /**
@@ -1219,11 +1255,7 @@ export class ProviderTabViewModel implements Disposable {
      */
     public activate(): void {
         const cfg = this.readProviderStoreConfig();
-        this.connectionData.value = {
-            serverUrl: cfg.serverUrl !== undefined ? cfg.serverUrl : this.options.defaultServerUrl,
-            apiKey: cfg.apiKey || '',
-            activePresetId: cfg.serviceId || this.options.defaultServiceId,
-        };
+        this.connectionData.value = this.buildConnectionData(cfg);
         this.refreshAssetPools();
         this.presetController.applyActivePreset(cfg.activeDrawingPresetId || '');
         // 选项卡切换时严格遵循单次缓存原则：仅读取本地持久化资产渲染下拉列表，不发起网络请求
@@ -1231,11 +1263,7 @@ export class ProviderTabViewModel implements Disposable {
         if (!this.unlistenSettings) {
             this.unlistenSettings = eventBus.on('settings:updated', (payload) => {
                 const freshCfg = this.readProviderStoreConfig();
-                this.connectionData.value = {
-                    serverUrl: freshCfg.serverUrl !== undefined ? freshCfg.serverUrl : this.options.defaultServerUrl,
-                    apiKey: freshCfg.apiKey || '',
-                    activePresetId: freshCfg.serviceId || this.options.defaultServiceId,
-                };
+                this.connectionData.value = this.buildConnectionData(freshCfg);
 
                 const freshActiveId = freshCfg.activeDrawingPresetId;
                 if (freshActiveId && freshActiveId !== this.presetController.activePresetId.value) {

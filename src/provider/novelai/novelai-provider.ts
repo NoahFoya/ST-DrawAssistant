@@ -487,9 +487,9 @@ export class NovelAIProvider extends BaseGenerationProvider {
      *
      * @remarks
      * 1. 官方服务请求用户数据接口 (/user/data)，可确认 Token 有效性；
-     * 2. 第三方端点向生图路由发送轻量连通性检查请求 (Ping)，HTTP 405 表示路由存在；
-     *    仅当生图路由未命中（如 404）时回退检测站点 `/api/health`。
-     *    第三方网关的检测路由通常不校验密钥，此处只能确认服务可达，密钥在生图时校验。
+     * 2. 第三方端点向生图路由发送轻量连通性检查请求 (Ping)，HTTP 400 / 405 / 415 / 422 均表明生图路由存在；
+     *    401 / 403 表明鉴权失败；仅当生图路由未命中 (404) 时回退检测站点 `/api/health`。
+     *    第三方网关的连通性检测通常不校验完整参数或密钥，可达时提示密钥将在生图时校验。
      *
      * @param signal 中止信号
      */
@@ -516,10 +516,22 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 };
             }
 
+            if (pingResult.status === 401 || pingResult.status === 403) {
+                return {
+                    status: 'error',
+                    latencyMs: pingResult.latencyMs,
+                    message: `NovelAI API Key 无效或已过期 (HTTP ${pingResult.status})`,
+                };
+            }
+
             return {
                 status: 'error',
                 latencyMs: pingResult.latencyMs,
-                message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
+                message:
+                    pingResult.error ||
+                    (pingResult.status !== undefined
+                        ? `连接失败 (HTTP ${pingResult.status})`
+                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在常规设置开启“酒馆代理”或改用自定义反代）'),
             };
         }
 
@@ -540,10 +552,23 @@ export class NovelAIProvider extends BaseGenerationProvider {
             headers: { Authorization: `Bearer ${config.apiKey}` },
         };
 
-        // 1. 首选单点检查：向生图路由发送轻量连通性检查请求 (Ping) (HTTP 405 Method Not Allowed 代表路由存在并监听请求)
+        // 1. 首选单点检查：向生图路由发送轻量连通性检查请求 (Ping)
+        // 多数代理在生图路由收到 GET 空请求时返回 400 / 405 / 415 / 422，均代表路由已存在并正常响应
         const endpointPing = await this._httpClient.ping(resolveNovelAIEndpoint(serverUrl), pingOptions);
-        if (endpointPing.ok || endpointPing.status === 405) {
+        const reachableErrorStatuses = new Set([400, 405, 415, 422]);
+        if (
+            endpointPing.ok ||
+            (endpointPing.status !== undefined && reachableErrorStatuses.has(endpointPing.status))
+        ) {
             return { status: 'ok', latencyMs: endpointPing.latencyMs, message: okMessage(endpointPing.latencyMs) };
+        }
+
+        if (endpointPing.status === 401 || endpointPing.status === 403) {
+            return {
+                status: 'error',
+                latencyMs: endpointPing.latencyMs,
+                message: endpointPing.error || `API Key 无效或无权访问 (HTTP ${endpointPing.status})`,
+            };
         }
 
         // 2. 判定是否属于底层网络连接失败（端口拒绝 ECONNREFUSED、主机无法解析 ENOTFOUND 或完全不可达）
@@ -565,11 +590,15 @@ export class NovelAIProvider extends BaseGenerationProvider {
             };
         }
 
-        // 3. 仅当服务端处于开放状态但生图路由返回 404 等未命中状态时，回退检测站点健康路由
-        if (!signal?.aborted) {
+        // 3. 仅当生图路由明确返回 404 未命中时，回退检测站点简单健康路由（不附带 Authorization 以减少 CORS 预检阻塞）
+        if (endpointPing.status === 404 && !signal?.aborted) {
             try {
                 const healthUrl = `${new URL(serverUrl).origin}/api/health`;
-                const res = await this._httpClient.ping(healthUrl, pingOptions);
+                const res = await this._httpClient.ping(healthUrl, {
+                    transport,
+                    signal,
+                    timeoutMs: 4000,
+                });
                 if (res.ok) {
                     return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
                 }

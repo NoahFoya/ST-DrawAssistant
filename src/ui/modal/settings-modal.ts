@@ -244,10 +244,14 @@ export class SettingsModal implements Disposable {
         // 注册全局浮层栈 Escape 响应
         this.bindKeyboardEvents();
 
-        // 注册页面可见性监听（失焦冻结轮询，切回前台唤醒）
+        // 注册页面可见性监听（失焦冻结轮询，切回前台唤醒；仅针对支持周期轮询的本地后端）
         if (typeof document !== 'undefined') {
             this.onVisibilityChangeHandler = () => {
-                if (document.visibilityState === 'visible' && this.isOpenState) {
+                if (
+                    document.visibilityState === 'visible' &&
+                    this.isOpenState &&
+                    this.shouldPollActiveProviderHealth()
+                ) {
                     void this.checkActiveProviderHealth();
                 } else if (document.visibilityState === 'hidden' && this.healthTimer !== null) {
                     clearTimeout(this.healthTimer);
@@ -435,18 +439,28 @@ export class SettingsModal implements Disposable {
     }
 
     /**
+     * 判断当前激活引擎是否需要启动后台周期健康轮询。
+     * 仅针对本地常驻进程（ComfyUI / SD-WebUI）持续轮询；云端 HTTP 服务仅在打开面板、切换引擎或手动测试时单次校验。
+     */
+    private shouldPollActiveProviderHealth(): boolean {
+        const activeProvider = this.getActiveProviderType();
+        return activeProvider !== 'novelai' && activeProvider !== 'openai';
+    }
+
+    /**
      * 调度下一次底栏服务健康检查。
      *
      * @remarks
-     * 1. 页面可见性感知：当浏览器标签页处于后台隐藏状态时，冻结轮询，切回前台时唤醒；
-     * 2. 连续失败动态退避：正常在线时维持 15 秒轮询；初次失败延长至 30 秒；持续失败延长至 60 秒；
+     * 1. 云端引擎不启动后台周期轮询；
+     * 2. 页面可见性感知：当浏览器标签页处于后台隐藏状态时，冻结轮询，切回前台时唤醒；
+     * 3. 连续失败动态退避：正常在线时维持 15 秒轮询；初次失败延长至 30 秒；持续失败延长至 60 秒；
      *    连续失败达 4 次后挂起自动轮询，避免在离线状态下向宿主中继终端产生持续报错噪音；
-     * 3. 用户交互即时唤醒：用户切换选项卡、变更激活服务或修改服务地址时重置计数器并立即唤醒。
+     * 4. 用户交互即时唤醒：用户切换选项卡、变更激活服务或修改服务地址时重置计数器并立即唤醒。
      *
      * @param delayMs 可选的指定延迟毫秒数
      */
     private scheduleNextHealthCheck(delayMs?: number): void {
-        if (!this.isOpenState) return;
+        if (!this.isOpenState || !this.shouldPollActiveProviderHealth()) return;
 
         if (this.healthTimer !== null) {
             clearTimeout(this.healthTimer);
