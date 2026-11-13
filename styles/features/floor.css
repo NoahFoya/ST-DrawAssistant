@@ -1,0 +1,503 @@
+/**
+ * 宿主消息正文内原生生图动作按钮与图片呈现容器样式。
+ *
+ * @remarks
+ * 为楼层内嵌生图呈现提供视觉基准：
+ * 1. 楼层生图动作按钮 (FloorActionButton)：ready / generating / done / error 状态机排版；
+ * 2. 楼层图片展示容器 (FloorImageContainer)：容器挂载、图片排版对齐、防窥模糊与操作胶囊。
+ */
+
+/* 0. 楼层正文内嵌生图容器 */
+.da-floor-slot {
+    display: block;
+    margin: 8px 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.2s ease;
+}
+
+/* 1. 楼层动作按钮容器与按钮 */
+.da-floor-action-wrapper {
+    display: inline-flex;
+    margin: 4px 0;
+    align-items: center;
+}
+
+.da-floor-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    font-weight: 500;
+    color: var(--da-text-primary, #ffffff);
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.15));
+    border-radius: var(--da-radius-md, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s var(--da-ease, ease);
+}
+
+.da-floor-action-btn:hover {
+    background: var(--da-surface-card-hover, rgba(255, 255, 255, 0.14));
+    border-color: var(--da-accent-color);
+    transform: translateY(-1px);
+}
+
+.da-floor-action-btn:active {
+    transform: translateY(0);
+}
+
+.da-floor-action-btn--pending,
+.da-floor-action-btn[data-state="pending"] {
+    color: var(--da-accent-color);
+    background: var(--da-bg-subtle, rgba(var(--da-accent-rgb, 129, 140, 248), 0.08));
+    border-color: var(--da-border-highlight, rgba(var(--da-accent-rgb, 129, 140, 248), 0.45));
+}
+
+.da-floor-action-btn--generating,
+.da-floor-action-btn[data-state="generating"] {
+    color: var(--da-accent-color, #818cf8);
+    font-weight: 600;
+    border-color: var(--da-border-highlight, rgba(var(--da-accent-rgb, 129, 140, 248), 0.45));
+    background: var(--da-bg-active, rgba(var(--da-accent-rgb, 129, 140, 248), 0.16));
+    box-shadow: 0 0 12px rgba(var(--da-accent-rgb, 129, 140, 248), 0.22);
+    cursor: pointer;
+}
+
+.da-floor-action-btn--generating:hover,
+.da-floor-action-btn[data-state="generating"]:hover {
+    background: rgba(var(--da-accent-rgb, 129, 140, 248), 0.22);
+    border-color: var(--da-accent-color, #818cf8);
+    box-shadow: 0 0 16px rgba(var(--da-accent-rgb, 129, 140, 248), 0.35);
+}
+
+.da-floor-action-btn--error {
+    border-color: var(--da-color-error);
+    color: var(--da-color-error);
+}
+
+.da-floor-action-btn--done {
+    opacity: 0.85;
+    border-color: var(--da-accent-color);
+    color: var(--da-text-secondary);
+}
+
+.da-floor-action-btn--done:hover {
+    opacity: 1;
+    color: var(--da-text-primary);
+}
+
+.da-floor-action-btn__spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(var(--da-accent-rgb, 129, 140, 248), 0.25);
+    border-top-color: var(--da-accent-color, #818cf8);
+    border-radius: 50%;
+    animation: da-spin 0.8s linear infinite;
+}
+
+/* 浅色主题模式适配 */
+[data-theme-mode="light"] .da-floor-action-btn {
+    color: var(--da-text-primary, #1e293b);
+    background: var(--da-surface-card, #ffffff);
+    border-color: var(--da-border-card, #e2e8f0);
+}
+
+[data-theme-mode="light"] .da-floor-action-btn--generating,
+[data-theme-mode="light"] .da-floor-action-btn[data-state="generating"] {
+    color: var(--da-accent-color, #6366f1);
+    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.12);
+    border-color: rgba(var(--da-accent-rgb, 99, 102, 241), 0.4);
+    box-shadow: 0 0 8px rgba(var(--da-accent-rgb, 99, 102, 241), 0.15);
+}
+
+.da-floor-action-btn__timer {
+    font-variant-numeric: tabular-nums;
+    color: var(--da-text-secondary);
+}
+
+/* 2. 楼层图片呈现容器 */
+.da-floor-image-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 8px 0;
+    box-sizing: border-box;
+}
+
+.da-floor-image-container--center {
+    align-items: center;
+}
+
+.da-floor-image-container--left {
+    align-items: flex-start;
+}
+
+.da-floor-image-container--right {
+    align-items: flex-end;
+}
+
+.da-floor-image-box {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border-radius: var(--da-radius-md, 8px);
+    overflow: hidden;
+    box-shadow: var(--da-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.25));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.da-floor-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    cursor: pointer;
+    transition: filter 0.3s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* 防窥模糊遮罩 */
+.da-floor-image--blurred {
+    filter: blur(16px);
+}
+
+.da-floor-image--blurred:hover {
+    filter: blur(0);
+}
+
+/* 重新生成重绘过程中的占位透明度 */
+.da-floor-image--regenerating {
+    opacity: 0.55;
+    transition: opacity 0.3s ease;
+}
+
+/* 右上角悬浮操作胶囊 */
+.da-floor-image__actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: var(--da-bg-overlay-modal);
+    backdrop-filter: blur(6px);
+    border-radius: var(--da-radius-sm, 6px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.da-floor-image-box:hover .da-floor-image__actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.da-floor-image__action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--da-text-primary);
+    cursor: pointer;
+    border-radius: var(--da-radius-sm, 6px);
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.da-floor-image__action-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-accent-color);
+}
+
+.da-floor-image__action-btn.is-active {
+    color: var(--da-color-fav);
+}
+
+/* 3. 楼层图片生成中占位骨架屏 */
+.da-floor-image-skeleton {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 280px;
+    max-width: 100%;
+    height: 180px;
+    margin: 8px 0;
+    border-radius: var(--da-radius-md, 8px);
+    background: linear-gradient(90deg, var(--da-bg-subtle) 25%, var(--da-bg-hover) 50%, var(--da-bg-subtle) 75%);
+    background-size: 200% 100%;
+    animation: da-skeleton-pulse 1.8s ease-in-out infinite;
+    border: 1px dashed var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 0.78rem);
+    user-select: none;
+}
+
+@keyframes da-skeleton-pulse {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 4. 图像提示词微调与重绘面板 (ImageActionPanel) */
+.da-action-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: var(--da-bg-overlay-modal);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.da-action-panel {
+    width: 100%;
+    max-width: 540px;
+    background: var(--da-bg-modal);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 14px);
+    box-shadow: var(--da-shadow-modal);
+    color: var(--da-text-primary);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 86vh;
+}
+
+.da-action-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+}
+
+.da-action-panel__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--da-text-primary);
+}
+
+.da-action-panel__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--da-radius-sm, 6px);
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.da-action-panel__close:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    border-color: var(--da-border-color);
+}
+
+.da-action-panel__body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+}
+
+.da-action-panel__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-action-panel__field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.da-action-panel__label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--da-text-secondary);
+}
+
+.da-action-panel__field-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-action-panel__copy-btn,
+.da-action-panel__expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: var(--da-radius-xs, 4px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-subtle);
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.da-action-panel__copy-btn:hover,
+.da-action-panel__expand-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    border-color: var(--da-border-highlight);
+}
+
+/* 提示词双层镜像宏高亮编辑器容器 */
+.da-highlight-editor {
+    position: relative;
+    width: 100%;
+    background: var(--da-bg-input);
+    border-radius: var(--da-radius-md, 8px);
+    border: 1px solid var(--da-border-color);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.da-highlight-editor:focus-within {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring);
+}
+
+.da-highlight-editor__backdrop {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: var(--da-radius-md, 8px);
+    box-sizing: border-box;
+}
+
+.da-highlight-editor__highlights {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--da-text-primary);
+    font-size: var(--da-font-size-sm, 0.82rem);
+    line-height: 1.5;
+    font-family: var(--da-font-mono, monospace);
+    letter-spacing: normal;
+    word-spacing: normal;
+    tab-size: 4;
+    user-select: none;
+}
+
+.da-action-panel__textarea.da-highlight-editor__textarea {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    padding: var(--da-space-sm, 8px) var(--da-space-md, 12px);
+    border-radius: var(--da-radius-md, 8px);
+    border: none !important;
+    background: transparent !important;
+    color: transparent !important;
+    caret-color: var(--da-text-primary) !important;
+    font-size: var(--da-font-size-sm, 0.82rem);
+    line-height: 1.5;
+    font-family: var(--da-font-mono, monospace);
+    letter-spacing: normal;
+    word-spacing: normal;
+    tab-size: 4;
+    resize: vertical;
+    box-sizing: border-box;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.da-highlight-editor__textarea::selection {
+    background: rgba(99, 102, 241, 0.35);
+    color: transparent;
+}
+
+.da-highlight-editor__textarea::placeholder {
+    color: var(--da-text-muted) !important;
+}
+
+/* 宏轻量高亮色值（有效绿、无效红） */
+.da-macro--valid {
+    color: var(--da-color-success, #10b981) !important;
+    font-weight: 600;
+}
+
+.da-macro--invalid {
+    color: var(--da-color-danger, #ef4444) !important;
+    font-weight: 600;
+}
+
+/* 楼层微调面板中已通过双层文字变色提供轻量反馈，隐藏冗余外置状态胶囊栏 */
+.da-action-panel .da-macro-status-bar {
+    display: none !important;
+}
+
+.da-action-panel__meta-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.da-action-panel__meta-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-family: var(--da-font-mono, monospace);
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 999px);
+    background: var(--da-bg-subtle);
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-secondary);
+}
+
+.da-action-panel__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-top: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-action-panel__footer-left,
+.da-action-panel__footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
