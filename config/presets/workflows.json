@@ -1,0 +1,418 @@
+[
+  {
+    "id": "comfyui_checkpoint_default",
+    "name": "默认-全量模型文生图",
+    "description": "基于单个 Checkpoint 大模型的通用文生图工作流，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "data": {
+      "workflow": {
+        "8": {
+          "inputs": {
+            "samples": [
+              "63",
+              0
+            ],
+            "vae": [
+              "114",
+              2
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "12": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "113",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        },
+        "28": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent"
+          }
+        },
+        "63": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "113",
+              3
+            ],
+            "positive": [
+              "113",
+              1
+            ],
+            "negative": [
+              "12",
+              0
+            ],
+            "latent_image": [
+              "28",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "99": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "113": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": null,
+            "打开Lora堆": "",
+            "opt_clip": [
+              "114",
+              1
+            ],
+            "opt_model": [
+              "114",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        },
+        "114": {
+          "inputs": {
+            "ckpt_name": "%basemodel_name%"
+          },
+          "class_type": "CheckpointLoaderSimple",
+          "_meta": {
+            "title": "Checkpoint大模型加载器(简易)"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_split_default",
+    "name": "默认-分立模型文生图",
+    "description": "基于 UNet、CLIP 与 VAE 独立分立加载的进阶文生图工作流，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "data": {
+      "workflow": {
+        "8": {
+          "inputs": {
+            "samples": [
+              "63",
+              0
+            ],
+            "vae": [
+              "15",
+              0
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "12": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "113",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        },
+        "15": {
+          "inputs": {
+            "vae_name": "%vae_name%"
+          },
+          "class_type": "VAELoader",
+          "_meta": {
+            "title": "加载VAE"
+          }
+        },
+        "28": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空Latent"
+          }
+        },
+        "44": {
+          "inputs": {
+            "unet_name": "%basemodel_name%",
+            "weight_dtype": "default"
+          },
+          "class_type": "UNETLoader",
+          "_meta": {
+            "title": "UNET加载器"
+          }
+        },
+        "45": {
+          "inputs": {
+            "clip_name": "%clip_name%",
+            "type": "stable_diffusion",
+            "device": "default"
+          },
+          "class_type": "CLIPLoader",
+          "_meta": {
+            "title": "加载CLIP"
+          }
+        },
+        "63": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "113",
+              3
+            ],
+            "positive": [
+              "113",
+              1
+            ],
+            "negative": [
+              "12",
+              0
+            ],
+            "latent_image": [
+              "28",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "99": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "113": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": null,
+            "打开Lora堆": "",
+            "opt_clip": [
+              "45",
+              0
+            ],
+            "opt_model": [
+              "44",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "comfyui_inpaint_default",
+    "name": "默认局部重绘预设",
+    "description": "基于单个 Checkpoint 大模型的局部重绘工作流，内置图像加载与重绘 VAE 编码器，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "data": {
+      "workflow": {
+        "8": {
+          "inputs": {
+            "samples": [
+              "63",
+              0
+            ],
+            "vae": [
+              "114",
+              2
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE解码"
+          }
+        },
+        "12": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "113",
+              2
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "CLIP文本编码器"
+          }
+        },
+        "63": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": "%denoise%",
+            "model": [
+              "113",
+              3
+            ],
+            "positive": [
+              "113",
+              1
+            ],
+            "negative": [
+              "12",
+              0
+            ],
+            "latent_image": [
+              "121",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K采样器"
+          }
+        },
+        "99": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-Inpaint-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "113": {
+          "inputs": {
+            "positive": "%prompt%",
+            "auto_random": false,
+            "lora_str": "",
+            "temp_str": "",
+            "temp_lora_str": "",
+            "random_template": "",
+            "打开提示词编辑器": null,
+            "打开Lora堆": "",
+            "opt_clip": [
+              "114",
+              1
+            ],
+            "opt_model": [
+              "114",
+              0
+            ]
+          },
+          "class_type": "WeiLinPromptUI",
+          "_meta": {
+            "title": "WeiLin 全能提示词编辑器"
+          }
+        },
+        "114": {
+          "inputs": {
+            "ckpt_name": "%basemodel_name%"
+          },
+          "class_type": "CheckpointLoaderSimple",
+          "_meta": {
+            "title": "Checkpoint大模型加载器(简易)"
+          }
+        },
+        "120": {
+          "inputs": {
+            "image": "%input_image%",
+            "upload": "image"
+          },
+          "class_type": "LoadImage",
+          "_meta": {
+            "title": "加载图像(重绘原图)"
+          }
+        },
+        "121": {
+          "inputs": {
+            "grow_mask_by": 6,
+            "pixels": [
+              "120",
+              0
+            ],
+            "vae": [
+              "114",
+              2
+            ],
+            "mask": [
+              "120",
+              1
+            ]
+          },
+          "class_type": "VAEEncodeForInpaint",
+          "_meta": {
+            "title": "VAE内补重绘编码"
+          }
+        }
+      }
+    }
+  }
+]

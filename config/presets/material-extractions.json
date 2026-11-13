@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ext_default",
+    "name": "默认解析预设",
+    "description": "默认楼层角色与服装档案提取解析预设",
+    "data": {
+      "enabled": true,
+      "autoDetect": true,
+      "collapseInFloor": true,
+      "charStartTag": "<角色>",
+      "charEndTag": "</角色>",
+      "outfitStartTag": "<服装>",
+      "outfitEndTag": "</服装>",
+      "nameKeys": "NAME|名称|角色名|服装名|CN_NAME|中文名",
+      "aliasesKeys": "ALIASES|ALIAS|别名|EN_NAME|英文名",
+      "triggerKeys": "TRIGGER|IDENTITY|IDENTITY_TAG|TAGS|触发词|身份标识|身份标签|服装标识|服饰标识",
+      "descriptionKeys": "DESCRIPTION|DESC|SUMMARY|角色描述|服装描述|说明|简介",
+      "baseTraitKeys": "APPEARANCE|STYLE|OVERALL|体貌|外貌|样式|风格|BASE|固有",
+      "outfitKeys": "OUTFITS|OUTFIT|服装|绑定服装|专属服装|专属服饰|专属服装列表"
+    }
+  }
+]

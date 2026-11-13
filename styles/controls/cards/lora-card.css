@@ -1,0 +1,574 @@
+/**
+ * LoRA 管理组件、提示词卡片 LoRA 胶囊与独立配置模态框样式。
+ *
+ * @remarks
+ * 1. 提示词卡片内嵌胶囊 (.da-lora-chip)：支持一键切换启用/休眠状态与快速移除；
+ * 2. 独立模态框 (.da-lora-modal-panel)：扁平无嵌套容器，内嵌 LoraManager；
+ * 3. 顶部两行控制栏 (.da-lora-add-bar)：首行为标准表单行模式选择，次行为输入联想下拉框与添加按钮；
+ * 4. 已挂载条目卡片 (.da-lora-item)：首行展示开关、模型名、实时标签预览与移除按钮，次行采用自适应网格排布 2/3 列权重步进器。
+ */
+
+/* 1. 提示词预设卡片内的 LoRA 概要与交互胶囊 */
+.da-prompt-lora-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+}
+
+.da-prompt-lora-title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-prompt-lora-mode-badge {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+}
+
+.da-prompt-lora-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    min-height: 40px;
+    background: var(--da-bg-input, rgba(0, 0, 0, 0.22));
+    border-radius: var(--da-radius-input, 6px);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    box-sizing: border-box;
+}
+
+.da-prompt-lora-empty {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.5));
+}
+
+.da-lora-chip {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(var(--da-accent-rgb), 0.12);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.32);
+    border-radius: var(--da-radius-pill, 999px);
+    overflow: hidden;
+    transition: all 0.15s var(--da-ease);
+    max-width: 100%;
+}
+
+.da-lora-chip:hover {
+    border-color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.18);
+}
+
+.da-lora-chip.is-disabled {
+    opacity: 0.55;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.04));
+    border-color: var(--da-border-color, rgba(255, 255, 255, 0.12));
+    border-style: dashed;
+}
+
+.da-lora-chip.is-missing {
+    border-color: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.6) !important;
+    background: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.12) !important;
+}
+
+.da-lora-chip.is-missing .da-lora-chip__dot {
+    background: var(--da-color-error, #ef4444) !important;
+}
+
+.da-lora-chip__main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px 3px 10px;
+    background: transparent;
+    border: none;
+    color: var(--da-text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.da-lora-chip__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--da-color-success, #22c55e);
+    flex-shrink: 0;
+}
+
+.da-lora-chip.is-disabled .da-lora-chip__dot {
+    background: var(--da-text-muted, #888);
+}
+
+.da-lora-chip__name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+.da-lora-chip.is-disabled .da-lora-chip__name {
+    text-decoration: line-through;
+}
+
+.da-lora-chip__weight {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+    color: var(--da-accent-color);
+    background: var(--da-bg-input);
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.da-lora-chip__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--da-separator);
+    color: var(--da-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.da-lora-chip__remove:hover {
+    background: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.22);
+    color: var(--da-color-error, #ef4444);
+}
+
+/* 2. 独立 LoRA 管理模态框 (.da-lora-modal-panel) */
+.da-lora-modal-panel {
+    width: 94%;
+    max-width: 680px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal);
+    border-radius: var(--da-radius-modal, 14px);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-modal);
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.da-lora-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+}
+
+.da-lora-modal-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.da-lora-modal-title {
+    font-size: var(--da-font-size-md, 15px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-lora-modal-subtitle {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    line-height: 1.4;
+}
+
+.da-lora-modal-close {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    border: none;
+    color: var(--da-text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.da-lora-modal-close:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-lora-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.da-lora-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+}
+
+.da-lora-modal-footer__left,
+.da-lora-modal-footer__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 3. LoraManager 主容器与顶部两行式控制栏 (.da-lora-add-bar) */
+.da-lora-manager--embedded {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-lora-add-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px 12px;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-md, 8px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-card .da-lora-add-bar {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    padding: 10px 16px 12px;
+}
+
+/* 第 1 行：标准表单行（左：LoRA 添加模式 + ? 帮助提示；右：SD-WebUI / ComfyUI 切换） */
+.da-lora-mode-row.da-form-row {
+    padding: 2px 0 8px 0;
+    min-height: 36px;
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+}
+
+.da-lora-mode-row.da-form-row:hover {
+    background-color: transparent;
+}
+
+/* 第 2 行：可输入联想选择下拉框 + 添加按钮 */
+.da-lora-add-bar__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-lora-combobox {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.da-lora-combobox__box {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding-right: 4px;
+    box-sizing: border-box;
+}
+
+.da-lora-combobox__input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.da-lora-combobox__clear,
+.da-lora-combobox__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.da-lora-combobox__clear:hover,
+.da-lora-combobox__toggle:hover:not(:disabled) {
+    color: var(--da-text-primary);
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.da-lora-combobox__toggle:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.da-lora-combobox.is-open .da-lora-combobox__toggle svg {
+    transform: rotate(180deg);
+}
+
+.da-lora-combobox__dropdown {
+    position: fixed;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--da-bg-secondary, #1a1e29);
+    border: 1px solid var(--da-border-focus, var(--da-accent-color));
+    border-radius: var(--da-radius-md, 8px);
+    box-shadow: var(--da-shadow-modal, 0 12px 32px rgba(0, 0, 0, 0.6));
+    padding: 4px;
+    z-index: 10050;
+    box-sizing: border-box;
+}
+
+.da-lora-combobox__option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--da-text-primary);
+    font-size: var(--da-font-size-xs, 12.5px);
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.da-lora-combobox__option:hover,
+.da-lora-combobox__option.is-active {
+    background: rgba(var(--da-accent-rgb), 0.16);
+    color: var(--da-accent-color);
+}
+
+.da-lora-combobox__empty {
+    padding: 10px 12px;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted);
+    text-align: center;
+}
+
+.da-lora-add-bar__row > .da-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* 4. 已挂载条目列表与卡片 (.da-lora-list / .da-lora-item) */
+.da-lora-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-card .da-lora-list {
+    padding: 12px 16px;
+}
+
+.da-lora-list__empty {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    text-align: center;
+    padding: 24px 12px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.02));
+    border: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.1));
+    border-radius: var(--da-radius-md, 8px);
+}
+
+.da-lora-item {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.09));
+    border-radius: var(--da-radius-md, 8px);
+    box-sizing: border-box;
+    transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.da-lora-item:hover {
+    border-color: rgba(var(--da-accent-rgb), 0.4);
+}
+
+.da-lora-item.is-missing {
+    border-color: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.5) !important;
+    background: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.04) !important;
+}
+
+.da-lora-item__missing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--da-color-error, #ef4444);
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.da-lora-item.is-disabled {
+    opacity: 0.52;
+    background: transparent;
+    border-style: dashed;
+}
+
+/* 首行：开关 + 名称与实时标签预览 + 移除按钮 */
+.da-lora-item__row--header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+}
+
+.da-lora-item__identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.da-lora-item__switch-box {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.da-lora-item__title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.da-lora-item__name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.da-lora-item__name {
+    font-size: var(--da-font-size-sm, 13px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.da-lora-item__missing-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--da-color-warn, #f59e0b);
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.14);
+    border: 1px solid rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.35);
+    flex-shrink: 0;
+}
+
+.da-lora-item__tag-preview {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+    color: var(--da-accent-color);
+    background: var(--da-bg-input, rgba(0, 0, 0, 0.25));
+    padding: 2px 6px;
+    border-radius: 4px;
+    width: fit-content;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-lora-item__remove-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    color: var(--da-text-secondary);
+    font-size: 11.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.da-lora-item__remove-btn:hover,
+.da-lora-item__remove-btn:focus-visible {
+    color: var(--da-color-error, #ef4444);
+    background: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.12);
+    border-color: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.3);
+}
+
+/* 次行：自适应多列参数步进器网格 */
+.da-lora-item__row--params {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-lora-param-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.da-lora-param-label {
+    font-size: var(--da-font-size-xs, 11.5px);
+    color: var(--da-text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.da-lora-param-group .da-number-input {
+    width: 100%;
+    min-width: 0;
+}

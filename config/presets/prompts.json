@@ -1,0 +1,94 @@
+{
+  "comfyui": [
+    {
+      "id": "prompt_anime_general",
+      "name": "日系二次元插画",
+      "data": {
+        "positivePrefix": "masterpiece, best quality, absurdres,",
+        "positiveSuffix": ", beautiful detailed eyes, detailed hair, cinematic lighting",
+        "negativePrompt": "worst quality, low quality, normal quality, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry",
+        "loraSyntaxMode": "weilin",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_photo_realistic",
+      "name": "通用写实摄影",
+      "data": {
+        "positivePrefix": "photo of, masterpiece, realistic, photorealistic, 8k uhd, dslr, high quality, film grain,",
+        "positiveSuffix": ", natural skin texture, 8k resolution, soft natural lighting",
+        "negativePrompt": "worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch, bad anatomy, bad hands, deformed, watermark, signature",
+        "loraSyntaxMode": "weilin",
+        "loras": []
+      }
+    }
+  ],
+  "sdwebui": [
+    {
+      "id": "prompt_anime_general",
+      "name": "日系二次元插画",
+      "data": {
+        "positivePrefix": "masterpiece, best quality, absurdres,",
+        "positiveSuffix": ", beautiful detailed eyes, detailed hair, cinematic lighting",
+        "negativePrompt": "worst quality, low quality, normal quality, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_photo_realistic",
+      "name": "通用写实摄影",
+      "data": {
+        "positivePrefix": "photo of, masterpiece, realistic, photorealistic, 8k uhd, dslr, high quality, film grain,",
+        "positiveSuffix": ", natural skin texture, 8k resolution, soft natural lighting",
+        "negativePrompt": "worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch, bad anatomy, bad hands, deformed, watermark, signature",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    }
+  ],
+  "novelai": [
+    {
+      "id": "prompt_nai_anime",
+      "name": "NAI 进阶动漫",
+      "data": {
+        "positivePrefix": "masterpiece, best quality,",
+        "positiveSuffix": ", cinematic lighting, detailed background",
+        "negativePrompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_vivid",
+      "name": "NAI 绚丽视觉",
+      "data": {
+        "positivePrefix": "masterpiece, highly aesthetic,",
+        "positiveSuffix": ", colorful, dynamic angle, beautiful detailed eyes",
+        "negativePrompt": "lowres, bad anatomy, bad hands, signature, watermark",
+        "loras": []
+      }
+    }
+  ],
+  "openai": [
+    {
+      "id": "prompt_openai_illustration",
+      "name": "质感插画描述模板",
+      "data": {
+        "positivePrefix": "An exquisite anime illustration of a character,",
+        "positiveSuffix": ", vibrant color palette, dynamic composition, masterpiece digital painting",
+        "negativePrompt": "",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_openai_photo",
+      "name": "写实摄影人像模板",
+      "data": {
+        "positivePrefix": "A crisp cinematic photograph of,",
+        "positiveSuffix": ", 85mm portrait lens, natural ambient lighting, 8k resolution, studio quality",
+        "negativePrompt": "",
+        "loras": []
+      }
+    }
+  ]
+}

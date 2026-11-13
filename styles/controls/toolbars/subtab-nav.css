@@ -1,0 +1,13 @@
+/**
+ * 共享二级标签导航栏样式 (Subtab Navigation Bar)。
+ * 用于提示词、素材库等子模块之间的紧凑切换导航。
+ */
+
+.da-subtab-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 4px 0;
+}

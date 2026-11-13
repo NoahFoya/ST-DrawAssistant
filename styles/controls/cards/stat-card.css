@@ -1,0 +1,386 @@
+/**
+ * 本地生图历史统计卡片、调用占比进度条与近期频次趋势图样式。
+ *
+ * @remarks
+ * 用于设置面板中的“日志与统计”视图，展示本地存储的累计生图数、成功率、生图提供者调用比例与近 7 天简易频次趋势。
+ */
+
+/* 1. 生图历史指标卡片网格 (.da-stat-grid)
+   自适应 4 列或 3 列卡片网格，展示累计生成数、成功率、平均耗时与收藏总数等指标；
+   单个指标卡片采用垂直居中排布，数值采用等宽字体（font-family: var(--da-font-mono)）。 */
+.da-logs-stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-stat-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.da-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-stat-grid--3-cols {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.da-stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--da-space-xs, 4px);
+    padding: 12px 10px;
+    min-width: 0;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    text-align: center;
+    box-sizing: border-box;
+    transition: border-color 0.2s var(--da-ease), transform 0.15s var(--da-ease);
+}
+
+.da-stat-card:hover {
+    border-color: var(--da-accent-color);
+    transform: translateY(-2px);
+}
+
+/* 状态修饰符 */
+.da-stat-card--success .da-stat-card__val {
+    color: var(--da-color-success, #30d158);
+}
+
+.da-stat-card--warn .da-stat-card__val {
+    color: var(--da-color-warn, #f59e0b);
+}
+
+.da-stat-card--danger .da-stat-card__val {
+    color: var(--da-color-error, #ef4444);
+}
+
+.da-stat-card--fav {
+    border-color: rgba(var(--da-color-warn-rgb), 0.35);
+}
+
+
+.da-stat-card--iso {
+    border-color: var(--da-border-color);
+}
+
+/* 指标内部子元素 */
+.da-stat-card__label {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.da-stat-card__val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--da-text-primary);
+    line-height: 1.2;
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-stat-card__val--accent {
+    color: var(--da-accent-color);
+}
+
+.da-stat-card__sub {
+    font-size: 10px;
+    color: var(--da-text-secondary);
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+/* 2. 双列统计排布区 (.da-stat-analytics-row)
+   左右等宽 1:1 双列容器，分别容纳生图提供者/模型分布占比与历史生成趋势。 */
+.da-stat-analytics-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-stat-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    background: var(--da-bg-primary);
+    border: 1px solid var(--da-separator);
+    border-radius: var(--da-radius-sm, 8px);
+    box-sizing: border-box;
+}
+
+.da-stat-section__title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+/* 3. 分布占比列表与进度条 (.da-distribution-list)
+   展示生图提供者与模型调用占比，包含标签名称、计数值与百分比，下附进度填充条。 */
+.da-distribution-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-distribution-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.da-distribution-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--da-font-size-xs, 0.74rem);
+}
+
+.da-distribution-name {
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.da-distribution-pct {
+    color: var(--da-text-secondary);
+    font-weight: 600;
+}
+
+.da-progress-track {
+    height: 4px;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.da-progress-fill {
+    height: 100%;
+    background: var(--da-accent-color);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* 4. 时间序列趋势柱状图 (.da-trend-chart)
+   纯 CSS 弹性柱状图，展示近 7 天每日生图频次；
+   支持根据高度百分比弹性填充，底部附带日期标签。 */
+.da-trend-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 90px;
+    padding-top: 10px;
+    gap: 6px;
+    box-sizing: border-box;
+}
+
+.da-trend-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    flex: 1;
+    gap: 4px;
+}
+
+.da-trend-bar-wrapper {
+    flex: 1;
+    width: 100%;
+    max-width: 18px;
+    background: var(--da-bg-subtle);
+    border-radius: 3px;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+}
+
+.da-trend-bar {
+    width: 100%;
+    min-height: 4px;
+    background: var(--da-accent-color);
+    border-radius: 3px;
+    transition: height 0.3s ease;
+}
+
+.da-trend-count {
+    font-size: 10px;
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-trend-date {
+    font-size: 9px;
+    color: var(--da-text-muted);
+    white-space: nowrap;
+}
+
+/* 5. 统计面板操作栏 (.da-stat-dashboard__actions)
+   统计看板底部按钮栏，包含刷新统计、导出简报与清空记录等操作入口。 */
+.da-stat-dashboard__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+/* 6. 近 7 天双轨走势微图表与最近生图任务流水表 */
+.da-stat-chart-container,
+.da-stat-tasks-container {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    margin-top: 14px;
+    background: var(--da-bg-primary, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+    border-radius: var(--da-radius-sm, 8px);
+    box-sizing: border-box;
+}
+
+.da-stat-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.da-stat-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-stat-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.da-stat-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.da-stat-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+.da-stat-legend-dot--bar {
+    background: var(--da-accent-color, #6366f1);
+}
+
+.da-stat-legend-dot--line {
+    background: var(--da-accent-secondary, #38bdf8);
+    border-radius: 50%;
+}
+
+.da-stat-chart-svg {
+    width: 100%;
+    height: auto;
+    max-height: 140px;
+    overflow: visible;
+}
+
+.da-stat-empty {
+    text-align: center;
+    padding: 22px 0;
+    font-size: 12px;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.4));
+}
+
+.da-stat-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.da-stat-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.da-stat-table th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.da-stat-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.04));
+    color: var(--da-text-primary, #ffffff);
+    vertical-align: middle;
+}
+
+.da-stat-table tr:last-child td {
+    border-bottom: none;
+}
+
+.da-stat-td-time {
+    font-family: var(--da-font-mono, monospace);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.da-stat-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.06));
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--da-text-primary, #ffffff);
+    white-space: nowrap;
+}
+
+.da-stat-td-model {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-stat-td-dim {
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.da-stat-td-dur {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+    white-space: nowrap;
+}
+

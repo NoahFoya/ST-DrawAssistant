@@ -1,0 +1,37 @@
+/**
+ * 采样卡片复合组件样式 (SamplerCard)。
+ *
+ * @remarks
+ * 为核心采样参数卡片提供样式支持：
+ * 1. 随机种子输入框与骰子/重置快捷操作按钮布局；
+ * 2. 底部能力刷新与辅助操作栏。
+ */
+
+.da-sampler-card__seed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-sampler-card__seed-input-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-sampler-card__seed-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.da-sampler-card__actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--da-border-light, rgba(255, 255, 255, 0.08));
+}
