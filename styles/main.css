@@ -1,11 +1,19 @@
 /**
- * ST-DrawAssistant 样式系统入口（基础层与控件层）。
+ * ST-DrawAssistant 样式系统入口（加入壳层布局与弹窗媒体样式）。
  */
 
 /* 1. Core 核心基础与设计令牌 (Layer 1) */
 @import url('./core/tokens.css');
 @import url('./core/reset.css');
 @import url('./core/animations.css');
+
+/* 2. Layout 骨架与容器布局 (Layer 2) */
+@import url('./layout/layout-system.css');
+@import url('./layout/modal-shell.css');
+@import url('./layout/header-bar.css');
+@import url('./layout/sidebar-tabs.css');
+@import url('./layout/content-area.css');
+@import url('./layout/footer-bar.css');
 
 /* 3. Controls 通用组件控件库 (Layer 3) */
 @import url('./controls/inputs/form-field.css');
@@ -37,6 +45,13 @@
 @import url('./controls/feedback/badge.css');
 @import url('./controls/feedback/image-preview.css');
 @import url('./controls/feedback/autocomplete.css');
+
+/* 4. Features 媒体与弹窗样式 (Layer 4) */
+@import url('./features/image-info.css');
+@import url('./features/lightbox.css');
+@import url('./features/inpaint.css');
+@import url('./features/update.css');
+@import url('./features/onboarding.css');
 
 /* 5. Skin 主题皮肤与设备响应式 (Layer 5) */
 @import url('./skin/responsive.css');

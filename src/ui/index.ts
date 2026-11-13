@@ -1,11 +1,13 @@
 /**
- * ST-DrawAssistant UI 模块基础聚合导出。
+ * ST-DrawAssistant UI 壳层与组件模块导出。
  */
 
 export * from './types';
 export * from './theme';
 export * from './components';
+export * from './modal';
 export * from './feedback';
-export { overlayStack } from './framework/overlay-stack';
-export { StorageBar, type StorageSummaryData } from './composite/storage-bar';
-export { StorageMaintenanceService } from './viewmodels/storage-maintenance';
+export * from './media';
+export * from './composite';
+export * from './framework';
+export * from './viewmodels';

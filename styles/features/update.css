@@ -1,0 +1,439 @@
+/**
+ * ST-DrawAssistant 更新与版本说明样式表 (Update & Changelog Stylesheet)。
+ *
+ * @remarks
+ * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏更新提示小红点。
+ */
+
+/* 1. 更新说明模态窗背景与外壳 */
+.da-changelog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--da-z-dialog, 100095);
+    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.7));
+    backdrop-filter: blur(var(--da-blur-modal, 8px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    animation: da-fadein 0.2s var(--da-ease, ease-out);
+}
+
+.da-changelog-modal-panel {
+    width: 100%;
+    max-width: 680px;
+    max-height: 85vh;
+    padding: 18px 24px;
+    border-radius: var(--da-radius-large, 16px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--da-bg-secondary, #1e1e24);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    box-shadow: var(--da-shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* 2. 模态窗顶栏 */
+.da-changelog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    padding-bottom: 12px;
+}
+
+.da-changelog-empty {
+    padding: 32px 0;
+    text-align: center;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.4));
+}
+
+.da-changelog-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-changelog-title {
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--da-text-primary, #ffffff);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-changelog-subtitle {
+    font-size: 0.85em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.65));
+}
+
+/* 3. 滚动版本日志列表 */
+.da-changelog-content {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-right: 4px;
+}
+
+.da-changelog-version-card {
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-medium, 10px);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s ease;
+}
+
+.da-changelog-version-card:hover {
+    border-color: var(--da-border-color-hover, rgba(255, 255, 255, 0.18));
+}
+
+.da-changelog-version-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-changelog-tag-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-changelog-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 600;
+    background: var(--da-accent-color, #4a88f7);
+    color: #ffffff;
+}
+
+.da-changelog-date {
+    font-size: 0.82em;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+}
+
+.da-changelog-version-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-changelog-items-list {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-changelog-item {
+    font-size: 0.88em;
+    line-height: 1.5;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.8));
+}
+
+/* 4. 模态窗底栏操作动作 */
+.da-changelog-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    padding-top: 10px;
+}
+
+/* 5. 关于页版本微胶囊与状态指示 */
+.da-version-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    height: 22px;
+    border-radius: 9999px;
+    font-size: 0.78em;
+    font-weight: 500;
+    line-height: 1;
+    box-sizing: border-box;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.da-version-pill__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.da-version-pill--success {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.28);
+}
+.da-version-pill--success .da-version-pill__dot {
+    background: #4ade80;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.da-version-pill--warn {
+    background: rgba(234, 179, 8, 0.12);
+    color: #facc15;
+    border: 1px solid rgba(234, 179, 8, 0.28);
+}
+.da-version-pill--warn .da-version-pill__dot {
+    background: #facc15;
+    box-shadow: 0 0 6px rgba(250, 204, 21, 0.5);
+}
+
+.da-version-pill--info {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.28);
+}
+.da-version-pill--info .da-version-pill__dot {
+    background: #60a5fa;
+    animation: da-pulse 1.8s infinite;
+}
+
+.da-version-pill--error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+.da-version-pill--error .da-version-pill__dot {
+    background: #f87171;
+}
+
+/* 兼容保留 .da-update-status-badge 类 */
+.da-update-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.da-update-status-badge--success {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.da-update-status-badge--warn {
+    background: rgba(234, 179, 8, 0.12);
+    color: #facc15;
+    border: 1px solid rgba(234, 179, 8, 0.28);
+}
+
+.da-update-status-badge--info {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.28);
+}
+
+.da-update-status-badge--error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+/* 6. 顶栏品牌标识与独立操作工具行 */
+.da-about-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 4px 16px 4px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.06));
+}
+
+.da-about-header__title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.da-about-header__title {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--da-text-primary, #ffffff);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.da-about-header__desc {
+    font-size: 0.8em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    line-height: 1.4;
+}
+
+.da-about-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
+/* 7. Linear / Raycast 范式线性设置分组与属性行 */
+.da-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.da-settings-section:last-child {
+    margin-bottom: 6px;
+}
+
+.da-settings-section__title {
+    font-size: 0.76em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    padding: 0 4px;
+    margin: 0;
+}
+
+.da-settings-group {
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.025));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.07));
+    border-radius: var(--da-radius-medium, 10px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.da-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    gap: 16px;
+    transition: background 0.15s ease;
+}
+
+.da-settings-row:last-child {
+    border-bottom: none;
+}
+
+.da-settings-row:hover {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.da-settings-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-settings-row__title {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--da-text-primary, #ffffff);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-settings-row__desc {
+    font-size: 0.78em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.48));
+    line-height: 1.4;
+}
+
+.da-settings-row__action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* 微型存储用量指示 */
+.da-meter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.da-meter-track {
+    width: 68px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.da-meter-fill {
+    height: 100%;
+    background: var(--da-accent-color, #4a88f7);
+    border-radius: 9999px;
+    transition: width 0.3s ease;
+}
+
+.da-meter-label {
+    font-size: 0.82em;
+    font-weight: 500;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.75));
+    font-variant-numeric: tabular-nums;
+}
+
+/* 文本标签微徽标 */
+.da-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.76em;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.8));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 8. 顶栏版本徽标更新提示红点 */
+.da-header-badge-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.da-update-indicator-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+    display: none;
+}
+
+.da-update-indicator-dot--active {
+    display: block;
+    animation: da-pulse 2s infinite;
+}
