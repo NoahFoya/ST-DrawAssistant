@@ -1,7 +1,7 @@
 {
   "name": "ST-DrawAssistant",
   "display_name": "ST-DrawAssistant 绘画助手",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "NoahFoya",
   "description": "SillyTavern context-aware AI image generation extension with multi-backend support",
   "js": "dist/index.js",
