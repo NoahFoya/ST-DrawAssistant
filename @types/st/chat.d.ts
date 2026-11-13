@@ -3,44 +3,21 @@
  *
  * @remarks
  * `message.extra` 是宿主开放给所有扩展的共享字典，本插件通过 `drawings` 键独立命名空间。
- * `DrawingInstruction` 为运行时解析产物，不持久化，不依赖宿主存储。
  * `StoredImageRecord` 独立于 `messageId`/`swipeId` 存在，画廊功能可直接基于其管理。
  */
-
-/**
- * 从消息正文中按先后次序提取的单条绘图指令只读数据视图。
- *
- * @remarks
- * instructionIndex 由指令在正文中的出现次序决定，从 0 开始递增，
- * 是容器挂载与 MessageDrawingMap 存储的对应键。
- * 该结构为运行时解析产物，不持久化。
- */
-export interface DrawingInstruction {
-    /** 指令在当前消息正文中的出现序号，从 0 开始递增 */
-    readonly instructionIndex: number;
-    /** 正向提示词文本 */
-    readonly prompt: string;
-    /** 负向提示词文本，指令中包含管道符分隔时存在 */
-    readonly negativePrompt?: string;
-    /** 原始指令标签文本，用于定位与替换原正文显示 */
-    readonly rawTag: string;
-}
 
 /**
  * 写入 `message.extra.drawings[instructionIndex]`（及 `swipe_info[swipeId].extra.drawings[instructionIndex]`）的单条展示记录。
  *
  * @remarks
  * imageId 为必选字段，指向插件私有 IndexedDB 中的 StoredImageRecord。
- * imageUrl 与 base64 为独立可选叠加字段，依据用户配置按需存在。
- * 展示图源解析优先级：imageUrl > base64 > 通过 imageId 读取本地 Blob。
+ * 展示图源解析优先级：imageUrl > 通过 imageId 读取本地 Blob。
  */
 export interface DrawingSlotEntry {
     /** 插件本地 IndexedDB 图像资产唯一标识符 UUID */
     readonly imageId: string;
     /** 宿主静态资源相对路径，在成功保存至服务端时存在 */
     readonly imageUrl?: string;
-    /** 聊天记录内嵌 Base64 文本，在开启内嵌选项时存在 */
-    readonly base64?: string;
 }
 
 /**
@@ -81,10 +58,18 @@ export interface ImageGenerationMetadata {
     readonly baseModel?: string;
     /** 额外模型文件名列表 */
     readonly extraModels?: string[];
+    /** 外置 VAE 模型名称 */
+    readonly vaeName?: string;
+    /** CLIP 跳过层数 */
+    readonly clipSkip?: number;
     /** 最终发送给后端的正向提示词文本 (已处理完毕) */
     readonly prompt: string;
     /** 最终发送给后端的负向提示词文本 */
     readonly negativePrompt?: string;
+    /** 预设拼接与语法转换前的原始正向提示词（用于再次编辑与重生成） */
+    readonly rawPrompt?: string;
+    /** 预设合并与语法转换前的原始负向提示词（用于再次编辑与重生成） */
+    readonly rawNegativePrompt?: string;
     /** 工作流模板标识符 */
     readonly workflowId?: string;
     /** 任务或生图请求唯一标识符 */
@@ -93,6 +78,8 @@ export interface ImageGenerationMetadata {
     readonly seed?: number;
     /** 采样器名称 */
     readonly sampler?: string;
+    /** 采样调度器名称 */
+    readonly scheduler?: string;
     /** 采样步数 */
     readonly steps?: number;
     /** 提示词引导系数 CFG Scale */
@@ -115,6 +102,26 @@ export interface ImageGenerationMetadata {
     readonly denoiseStrength?: number;
     /** 局部重绘蒙版羽化半径 */
     readonly maskBlur?: number;
+    /** SD-WebUI 是否启用高清修复 */
+    readonly enableHires?: boolean;
+    /** SD-WebUI 高清修复放大算法 */
+    readonly hiresUpscaler?: string;
+    /** SD-WebUI 高清修复放大倍率 */
+    readonly hiresScale?: number;
+    /** SD-WebUI 高清修复二阶段采样步数 */
+    readonly hiresSteps?: number;
+    /** SD-WebUI 高清修复重绘幅度 */
+    readonly hiresDenoise?: number;
+    /** NovelAI CFG 重缩放系数 */
+    readonly cfgRescale?: number;
+    /** NovelAI V3 SMEA 模式 */
+    readonly smeaMode?: string;
+    /** NovelAI V3 是否开启 Decrisper (Dynamic Thresholding) */
+    readonly decrisper?: boolean;
+    /** OpenAI 兼容接口生成画质选项 */
+    readonly quality?: string;
+    /** OpenAI 兼容接口画面风格选项 */
+    readonly style?: string;
     /** 引擎扩展参数快照 */
     readonly [key: string]: unknown;
 }

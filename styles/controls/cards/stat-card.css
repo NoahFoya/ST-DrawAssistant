@@ -108,15 +108,7 @@
     white-space: nowrap;
 }
 
-/* 2. 双列统计排布区 (.da-stat-analytics-row)
-   左右等宽 1:1 双列容器，分别容纳生图提供者/模型分布占比与历史生成趋势。 */
-.da-stat-analytics-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    width: 100%;
-}
-
+/* 2. 统计区块卡片 (.da-stat-section) */
 .da-stat-section {
     display: flex;
     flex-direction: column;
@@ -134,108 +126,7 @@
     color: var(--da-text-primary);
 }
 
-/* 3. 分布占比列表与进度条 (.da-distribution-list)
-   展示生图提供者与模型调用占比，包含标签名称、计数值与百分比，下附进度填充条。 */
-.da-distribution-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.da-distribution-item {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.da-distribution-info {
-    display: flex;
-    justify-content: space-between;
-    font-size: var(--da-font-size-xs, 0.74rem);
-}
-
-.da-distribution-name {
-    color: var(--da-text-primary);
-    font-family: var(--da-font-mono, monospace);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 140px;
-}
-
-.da-distribution-pct {
-    color: var(--da-text-secondary);
-    font-weight: 600;
-}
-
-.da-progress-track {
-    height: 4px;
-    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.da-progress-fill {
-    height: 100%;
-    background: var(--da-accent-color);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-
-/* 4. 时间序列趋势柱状图 (.da-trend-chart)
-   纯 CSS 弹性柱状图，展示近 7 天每日生图频次；
-   支持根据高度百分比弹性填充，底部附带日期标签。 */
-.da-trend-chart {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    height: 90px;
-    padding-top: 10px;
-    gap: 6px;
-    box-sizing: border-box;
-}
-
-.da-trend-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-    flex: 1;
-    gap: 4px;
-}
-
-.da-trend-bar-wrapper {
-    flex: 1;
-    width: 100%;
-    max-width: 18px;
-    background: var(--da-bg-subtle);
-    border-radius: 3px;
-    display: flex;
-    align-items: flex-end;
-    position: relative;
-}
-
-.da-trend-bar {
-    width: 100%;
-    min-height: 4px;
-    background: var(--da-accent-color);
-    border-radius: 3px;
-    transition: height 0.3s ease;
-}
-
-.da-trend-count {
-    font-size: 10px;
-    color: var(--da-text-secondary);
-    font-family: var(--da-font-mono, monospace);
-}
-
-.da-trend-date {
-    font-size: 9px;
-    color: var(--da-text-muted);
-    white-space: nowrap;
-}
-
-/* 5. 统计面板操作栏 (.da-stat-dashboard__actions)
+/* 3. 统计面板操作栏 (.da-stat-dashboard__actions)
    统计看板底部按钮栏，包含刷新统计、导出简报与清空记录等操作入口。 */
 .da-stat-dashboard__actions {
     display: flex;
@@ -245,7 +136,7 @@
     margin-top: 4px;
 }
 
-/* 6. 近 7 天双轨走势微图表与最近生图任务流水表 */
+/* 4. 近 7 天双轨走势微图表与最近生图任务流水表 */
 .da-stat-chart-container,
 .da-stat-tasks-container {
     display: flex;
@@ -336,6 +227,13 @@
     font-weight: 500;
     white-space: nowrap;
 }
+
+.da-stat-table th:nth-child(1) { width: 15%; }
+.da-stat-table th:nth-child(2) { width: 17%; }
+.da-stat-table th:nth-child(3) { width: 28%; }
+.da-stat-table th:nth-child(4) { width: 18%; }
+.da-stat-table th:nth-child(5) { width: 12%; }
+.da-stat-table th:nth-child(6) { width: 10%; }
 
 .da-stat-table td {
     padding: 8px;

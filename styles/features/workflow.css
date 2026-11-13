@@ -45,15 +45,14 @@
 /* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
    用于呈现 ComfyUI 工作流中的宏变量替换诊断报告，
    展示变量匹配率、未匹配占位符警示以及格式化前后的 JSON 结构比对。 */
-.da-workflow-format-backdrop {
+.da-modal-backdrop.da-workflow-format-backdrop {
     background: var(--da-bg-overlay-modal);
-    z-index: var(--da-z-overlay);
+    z-index: var(--da-z-secondary-modal, 10020);
 }
 
 .da-workflow-format-modal {
-    width: 94vw;
-    max-width: 740px;
-    max-height: 85vh;
+    width: min(740px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     display: flex;
     flex-direction: column;
 }
@@ -68,6 +67,10 @@
 }
 
 .da-workflow-format-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
     font-size: 0.9em;
     color: var(--da-text-secondary);
     line-height: 1.5;
@@ -75,6 +78,13 @@
     background: var(--da-bg-card);
     border-radius: var(--da-radius-sm, 4px);
     border: 1px solid var(--da-border-color);
+}
+
+.da-workflow-format-error {
+    color: var(--da-color-error);
+    padding: 12px;
+    background: rgba(var(--da-color-error-rgb), 0.08);
+    border-radius: var(--da-radius-md);
 }
 
 .da-workflow-format-section {
@@ -285,26 +295,16 @@
 }
 
 /* 5. ComfyUI 蓝图可视化节点编辑器 (.da-blueprint-*) */
-.da-blueprint-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+.da-modal-backdrop.da-blueprint-backdrop {
     background: var(--da-bg-overlay-modal);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--da-z-overlay);
+    z-index: var(--da-z-secondary-modal, 10020);
     backdrop-filter: blur(4px);
-    box-sizing: border-box;
 }
 
 .da-blueprint-container {
-    width: 92vw;
-    max-width: 1400px;
-    height: 88vh;
-    max-height: 900px;
+    width: min(1400px, calc(var(--da-vvw, 100vw) - 24px));
+    height: min(900px, calc(var(--da-vvh, 100dvh) * 0.88));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     background: var(--da-bg-modal, #1e1e24);
     border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-lg, 12px);
@@ -395,7 +395,7 @@
 .da-blueprint-canvas-inner {
     padding: 24px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 16px;
     align-content: start;
     align-items: start;
@@ -756,24 +756,9 @@
     background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.22);
 }
 
-/* 快捷变量替换下拉浮层菜单 */
+/* 快捷变量替换下拉浮层菜单（样式装饰由 FloatingSurface 门户容器统一定位承载） */
 .da-blueprint-var-dropdown {
-    position: fixed;
-    z-index: 100060;
-    width: 270px;
-    max-height: 320px;
-    overflow-y: auto;
-    background: var(--da-bg-modal);
-    border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-md, 8px);
-    box-shadow: var(--da-shadow-lg);
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    box-sizing: border-box;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    min-width: 250px;
 }
 
 .da-blueprint-var-group-title {
@@ -868,14 +853,6 @@
     font-size: 0.78rem;
     color: var(--da-accent-color);
     font-family: var(--da-font-mono, monospace);
-}
-
-.da-blueprint-textarea-field {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: var(--da-font-mono, monospace);
-    font-size: 0.78rem;
-    resize: vertical;
 }
 
 .da-blueprint-footer {

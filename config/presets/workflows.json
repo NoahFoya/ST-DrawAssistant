@@ -403,13 +403,36 @@
               2
             ],
             "mask": [
-              "120",
-              1
+              "123",
+              0
             ]
           },
           "class_type": "VAEEncodeForInpaint",
           "_meta": {
             "title": "VAE内补重绘编码"
+          }
+        },
+        "122": {
+          "inputs": {
+            "image": "%inpaint_mask%",
+            "upload": "image"
+          },
+          "class_type": "LoadImage",
+          "_meta": {
+            "title": "加载遮罩蒙版"
+          }
+        },
+        "123": {
+          "inputs": {
+            "channel": "red",
+            "image": [
+              "122",
+              0
+            ]
+          },
+          "class_type": "ImageToMask",
+          "_meta": {
+            "title": "遮罩图像转蒙版"
           }
         }
       }

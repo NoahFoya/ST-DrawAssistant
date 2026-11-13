@@ -4,9 +4,8 @@
 
 import type { ThemePresetData } from '@types';
 
-export const EXTENSION_NAME = 'ST-DrawAssistant';
 export const EXTENSION_TITLE = 'ST-DrawAssistant 绘画助手';
-export const EXTENSION_VERSION = '1.0.0';
+export const EXTENSION_VERSION = '1.1.2';
 
 /** 插件 GitHub 仓库与更新检测配置 */
 export const GITHUB_REPO = 'NoahFoya/ST-DrawAssistant';
@@ -14,7 +13,6 @@ export const GITHUB_DEFAULT_BRANCH = 'dev';
 export const GITHUB_API_BASE = 'https://api.github.com';
 export const GITHUB_MIRROR_API_BASE = 'https://ghproxy.net/https://api.github.com';
 export const INSTALLED_COMMIT_SHA_KEY = 'st_da_installed_sha';
-export const LAST_SEEN_VERSION_KEY = 'st_da_last_seen_version';
 
 /**
  * 宿主消息全量扫描防抖延时（毫秒）。

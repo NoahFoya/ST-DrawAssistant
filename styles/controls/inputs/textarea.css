@@ -52,6 +52,11 @@
     transition: border-color 0.16s var(--da-ease), box-shadow 0.16s var(--da-ease);
 }
 
+.da-textarea--mono {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 12px;
+}
+
 .da-textarea:hover:not(:disabled) {
     border-color: rgba(var(--da-accent-rgb), 0.45);
 }

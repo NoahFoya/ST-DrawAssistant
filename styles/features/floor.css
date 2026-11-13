@@ -166,6 +166,17 @@
     -webkit-touch-callout: none;
 }
 
+.da-floor-image--zoomable {
+    cursor: zoom-in;
+}
+
+.da-floor-archive-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
 /* 防窥模糊遮罩 */
 .da-floor-image--blurred {
     filter: blur(16px);
@@ -258,22 +269,14 @@
 }
 
 /* 4. 图像提示词微调与重绘面板 (ImageActionPanel) */
-.da-action-panel-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10002;
+.da-modal-backdrop.da-action-panel-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal);
     backdrop-filter: blur(4px);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    box-sizing: border-box;
 }
 
 .da-action-panel {
-    width: 100%;
-    max-width: 540px;
+    width: min(540px, calc(var(--da-vvw, 100vw) - 24px));
     background: var(--da-bg-modal);
     border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-modal, 14px);
@@ -282,7 +285,19 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    max-height: 86vh;
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
+    box-sizing: border-box;
+}
+
+@media (max-width: 680px) {
+    .da-action-panel {
+        width: 100%;
+        max-width: 100%;
+        border-radius: var(--da-radius-modal, 14px) var(--da-radius-modal, 14px) 0 0;
+        max-height: calc(var(--da-vvh, 100dvh) - 24px);
+        padding-bottom: env(safe-area-inset-bottom);
+        animation: da-sheet-slide-up 0.2s var(--da-ease);
+    }
 }
 
 .da-action-panel__header {
@@ -464,24 +479,6 @@
 /* 楼层微调面板中已通过双层文字变色提供轻量反馈，隐藏冗余外置状态胶囊栏 */
 .da-action-panel .da-macro-status-bar {
     display: none !important;
-}
-
-.da-action-panel__meta-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.da-action-panel__meta-chip {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11px;
-    font-family: var(--da-font-mono, monospace);
-    padding: 2px 8px;
-    border-radius: var(--da-radius-pill, 999px);
-    background: var(--da-bg-subtle);
-    border: 1px solid var(--da-border-color);
-    color: var(--da-text-secondary);
 }
 
 .da-action-panel__footer {

@@ -98,7 +98,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '开启后，在生图过程中切换至其他酒馆会话将立即中断并取消当前任务；若保持关闭，任务将在后台继续生成并保存至「本地图库」，仅跳过向离开的会话楼层回写图片。',
+                    '默认开启，在生图过程中切换至其他酒馆会话将立即中断并丢弃未完成任务；关闭后，任务将在后台继续生成并仅保存至「本地图库」，不向已离开的会话楼层回写图片。',
             },
         ],
     },
@@ -247,7 +247,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '开启后，楼层中生成完成的图片默认施加高斯模糊遮罩；鼠标悬停或触控点击图片时即时解除模糊，适合在公共场合或多人环境下保护隐私。',
+                    '开启后，楼层中生成完成的图片默认施加高斯模糊遮罩；鼠标悬停时临时解除模糊，点击可进入大图查看清晰原图，适合在公共场合或多人环境下保护隐私。',
             },
         ],
     },
@@ -307,7 +307,7 @@ export class GeneralTabView extends PreactSettingsView {
             activeProvider: (s.activeProvider || 'comfyui') as ProviderType,
             transport: (s.transport || 'direct') as TransportMode,
             timeoutSec: Math.round((s.taskTimeoutMs || 120000) / 1000),
-            cancelOnChatChange: s.cancelOnChatChange ?? false,
+            cancelOnChatChange: s.cancelOnChatChange ?? true,
             promptStartTag: s.promptStartTag || 'image###',
             promptEndTag: s.promptEndTag || '###',
             autoGenerate: s.autoGenerate ?? false,
@@ -431,7 +431,7 @@ export class GeneralTabView extends PreactSettingsView {
             align: 'center' as const,
             objectFit: 'contain' as const,
             maxWidthPct: 100,
-            maxHeight: 512,
+            maxHeight: 480,
             rounded: true,
             autoBlur: false,
         };

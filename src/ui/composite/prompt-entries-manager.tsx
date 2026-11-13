@@ -29,29 +29,17 @@ export interface WiPositionOption {
     readonly role: 0 | 1 | 2;
 }
 
-/** 酒馆世界书原生 10 项插入位置枚举定义 (完全对齐原生文案与图标) */
+/** SillyTavern setExtensionPrompt 实际支持的 5 个插入位置枚举 */
 export const WI_POSITION_OPTIONS: readonly WiPositionOption[] = [
-    { value: 0, label: '角色定义前（↑ Char）', isDepthEnabled: false, position: 2, role: 0 },
-    { value: 1, label: '角色定义后（↓ Char）', isDepthEnabled: false, position: 0, role: 0 },
-    { value: 5, label: '示例消息前（↑ EM）', isDepthEnabled: false, position: 2, role: 0 },
-    { value: 6, label: '示例消息后（↓ EM）', isDepthEnabled: false, position: 0, role: 0 },
-    { value: 2, label: '作者注释前（↑ AN）', isDepthEnabled: false, position: 2, role: 0 },
-    { value: 3, label: '作者注释后（↓ AN）', isDepthEnabled: false, position: 0, role: 0 },
+    { value: 0, label: '角色定义前 (Prompt Top)', isDepthEnabled: false, position: 2, role: 0 },
+    { value: 1, label: '角色定义后 (Prompt Bottom)', isDepthEnabled: false, position: 0, role: 0 },
     { value: 40, label: '[系统⚙] 插入深度 @D', isDepthEnabled: true, position: 1, role: 0 },
     { value: 41, label: '[用户👤] 插入深度 @D', isDepthEnabled: true, position: 1, role: 1 },
     { value: 42, label: '[AI🤖] 插入深度 @D', isDepthEnabled: true, position: 1, role: 2 },
-    { value: 7, label: '➡ 锚点', isDepthEnabled: false, position: 0, role: 0 },
 ];
 
-/** 从当前条目的 position 与 role 推断其对应的世界书位置项 */
+/** 从条目的 position 与 role 映射到位置下拉选项值 */
 export function resolveWiPositionValue(entry: PromptInjectionEntry): number {
-    const rawWi = entry.wiPosition;
-    if (typeof rawWi === 'number') {
-        if (rawWi === 4) {
-            return entry.role === 1 ? 41 : entry.role === 2 ? 42 : 40;
-        }
-        return rawWi;
-    }
     if (entry.position === 1) {
         return entry.role === 1 ? 41 : entry.role === 2 ? 42 : 40;
     }
@@ -413,7 +401,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                             </select>
                                         </div>
 
-                                        {/* 10 选项插入位置下拉 */}
+                                        {/* 插入位置下拉 */}
                                         <SelectControl
                                             className="da-wi-pos-select"
                                             value={String(wiPosVal)}
@@ -423,17 +411,9 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                     (o) => o.value === nextVal
                                                 );
                                                 if (!opt) return;
-                                                const patch: Partial<PromptInjectionEntry> & {
-                                                    wiPosition?: number;
-                                                } = {
+                                                const patch: Partial<PromptInjectionEntry> = {
                                                     position: opt.position,
                                                     role: opt.role,
-                                                    wiPosition:
-                                                        opt.value === 40 ||
-                                                        opt.value === 41 ||
-                                                        opt.value === 42
-                                                            ? 4
-                                                            : opt.value,
                                                 };
                                                 if (!opt.isDepthEnabled) {
                                                     patch.depth = 0;

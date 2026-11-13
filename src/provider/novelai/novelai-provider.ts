@@ -19,19 +19,22 @@ import type {
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import {
+    base64ToBlob,
+    detectImageMimeFromBytes,
+    ensureValidImageBlob,
+    HttpError,
+} from '../../util/http-client';
+import {
     NOVELAI_IMAGE_HOST,
     NOVELAI_CUSTOM_SERVICE_ID,
     NOVELAI_OFFICIAL_SERVICE_ID,
-    OFFICIAL_NOVELAI_MODELS,
     resolveNovelAIModelFamily,
+    resolveNovelAIModelName,
 } from './novelai-models';
 
 /** NovelAI 图像生成 API 端点 */
 const NOVELAI_GENERATE_ENDPOINT = '/ai/generate-image';
 const NOVELAI_USER_DATA_ENDPOINT = 'https://api.novelai.net/user/data';
-
-/** 第三方端点常见的模型列表路由，依次检测 */
-const MODEL_PROBE_PATHS = ['/v1/models', '/models', '/ai/models'];
 
 /** NovelAI 提供方初始化配置项 */
 export interface NovelAIProviderOptions extends BaseProviderOptions {}
@@ -210,58 +213,213 @@ export function alignTo64(value: number): number {
     return Math.max(64, Math.floor(value / 64) * 64);
 }
 
-/**
- * 从 ZIP 二进制数据中提取第一个条目的文件内容 Blob。
- *
- * @remarks
- * NovelAI 响应返回未压缩的 PNG（compression method = 0），
- * 因此可直接扫描 Local File Header（PK\x03\x04）定位数据起始偏移并切片，无需引入 zip 库。
- *
- * @param buffer 完整 ZIP 文件的 ArrayBuffer
- * @param mimeType 输出 Blob 的 MIME 类型
- * @throws 未找到有效图像条目时抛出错误
- */
-export function extractFirstEntryFromZip(buffer: ArrayBuffer, mimeType = 'image/png'): Blob {
-    const view = new DataView(buffer);
-    const bytes = new Uint8Array(buffer);
+interface ZipEntryRecord {
+    fileName: string;
+    compressionMethod: number;
+    compressedSize: number;
+    uncompressedSize: number;
+    dataStart: number;
+}
 
-    // 扫描 Local File Header magic: PK (0x50 0x4B) 0x03 0x04
+const IMAGE_ENTRY_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|avif)$/i;
+
+function inferMimeFromFileName(fileName: string, fallback: string): string {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.bmp')) return 'image/bmp';
+    if (lower.endsWith('.avif')) return 'image/avif';
+    if (lower.endsWith('.png')) return 'image/png';
+    return fallback;
+}
+
+function findEocdOffset(bytes: Uint8Array): number {
+    const minOffset = Math.max(0, bytes.length - 65557);
+    for (let i = bytes.length - 22; i >= minOffset; i--) {
+        if (
+            bytes[i] === 0x50 &&
+            bytes[i + 1] === 0x4b &&
+            bytes[i + 2] === 0x05 &&
+            bytes[i + 3] === 0x06
+        ) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function parseCentralDirectoryEntries(bytes: Uint8Array, view: DataView): ZipEntryRecord[] {
+    const eocdOffset = findEocdOffset(bytes);
+    if (eocdOffset < 0) {
+        return [];
+    }
+
+    const totalEntries = view.getUint16(eocdOffset + 10, true);
+    const cdSize = view.getUint32(eocdOffset + 12, true);
+    const cdOffset = view.getUint32(eocdOffset + 16, true);
+    if (cdOffset + cdSize > eocdOffset || totalEntries === 0) {
+        return [];
+    }
+
+    const entries: ZipEntryRecord[] = [];
+    const decoder = new TextDecoder('utf-8');
+    let offset = cdOffset;
+
+    for (let i = 0; i < totalEntries && offset + 46 <= cdOffset + cdSize; i++) {
+        if (
+            bytes[offset] !== 0x50 ||
+            bytes[offset + 1] !== 0x4b ||
+            bytes[offset + 2] !== 0x01 ||
+            bytes[offset + 3] !== 0x02
+        ) {
+            break;
+        }
+
+        const compressionMethod = view.getUint16(offset + 10, true);
+        const compressedSize = view.getUint32(offset + 20, true);
+        const uncompressedSize = view.getUint32(offset + 24, true);
+        const fileNameLen = view.getUint16(offset + 28, true);
+        const extraLen = view.getUint16(offset + 30, true);
+        const commentLen = view.getUint16(offset + 32, true);
+        const localHeaderOffset = view.getUint32(offset + 42, true);
+
+        const nameStart = offset + 46;
+        const nameEnd = nameStart + fileNameLen;
+        if (nameEnd > bytes.length) {
+            break;
+        }
+        const fileName = decoder.decode(bytes.subarray(nameStart, nameEnd));
+
+        if (
+            localHeaderOffset + 30 <= bytes.length &&
+            bytes[localHeaderOffset] === 0x50 &&
+            bytes[localHeaderOffset + 1] === 0x4b &&
+            bytes[localHeaderOffset + 2] === 0x03 &&
+            bytes[localHeaderOffset + 3] === 0x04
+        ) {
+            const lfhNameLen = view.getUint16(localHeaderOffset + 26, true);
+            const lfhExtraLen = view.getUint16(localHeaderOffset + 28, true);
+            const dataStart = localHeaderOffset + 30 + lfhNameLen + lfhExtraLen;
+            if (dataStart + compressedSize <= bytes.length) {
+                entries.push({
+                    fileName,
+                    compressionMethod,
+                    compressedSize,
+                    uncompressedSize,
+                    dataStart,
+                });
+            }
+        }
+
+        offset = nameEnd + extraLen + commentLen;
+    }
+
+    return entries;
+}
+
+function parseLocalHeaderEntries(bytes: Uint8Array, view: DataView): ZipEntryRecord[] {
+    const entries: ZipEntryRecord[] = [];
+    const decoder = new TextDecoder('utf-8');
     let offset = 0;
-    while (offset < bytes.length - 30) {
+
+    while (offset <= bytes.length - 30) {
         if (
             bytes[offset] === 0x50 &&
             bytes[offset + 1] === 0x4b &&
             bytes[offset + 2] === 0x03 &&
             bytes[offset + 3] === 0x04
         ) {
-            // Local File Header 各字段偏移（相对 header 起始）：
-            //   [0..3]   signature
-            //   [4..5]   version needed
-            //   [6..7]   general purpose bit flag
-            //   [8..9]   compression method
-            //   [10..11] last mod file time
-            //   [12..13] last mod file date
-            //   [14..17] crc-32
-            //   [18..21] compressed size
-            //   [22..25] uncompressed size
-            //   [26..27] file name length
-            //   [28..29] extra field length
+            const compressionMethod = view.getUint16(offset + 8, true);
+            const compressedSize = view.getUint32(offset + 18, true);
+            const uncompressedSize = view.getUint32(offset + 22, true);
             const fileNameLength = view.getUint16(offset + 26, true);
             const extraFieldLength = view.getUint16(offset + 28, true);
-            const compressedSize = view.getUint32(offset + 18, true);
+            const nameStart = offset + 30;
+            const dataStart = nameStart + fileNameLength + extraFieldLength;
 
-            // 文件数据起始偏移
-            const dataStart = offset + 30 + fileNameLength + extraFieldLength;
-            const dataEnd = dataStart + compressedSize;
-
-            if (dataEnd <= bytes.length) {
-                return new Blob([bytes.slice(dataStart, dataEnd)], { type: mimeType });
+            if (compressedSize > 0 && dataStart + compressedSize <= bytes.length) {
+                const fileName = decoder.decode(bytes.subarray(nameStart, nameStart + fileNameLength));
+                entries.push({
+                    fileName,
+                    compressionMethod,
+                    compressedSize,
+                    uncompressedSize,
+                    dataStart,
+                });
+                offset = dataStart + compressedSize;
+                continue;
             }
         }
         offset++;
     }
 
-    throw new Error('NovelAI 响应 ZIP 解包失败：未找到有效图像条目');
+    return entries;
+}
+
+function selectZipImageEntry(bytes: Uint8Array): ZipEntryRecord {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let entries = parseCentralDirectoryEntries(bytes, view);
+    if (entries.length === 0) {
+        entries = parseLocalHeaderEntries(bytes, view);
+    }
+
+    const candidates = entries.filter((entry) => {
+        if (!entry.fileName || entry.fileName.endsWith('/')) {
+            return false;
+        }
+        if (entry.fileName.startsWith('__MACOSX/') || entry.fileName.includes('/__MACOSX/')) {
+            return false;
+        }
+        return entry.compressedSize > 0;
+    });
+
+    if (candidates.length === 0) {
+        throw new Error('NovelAI 响应 ZIP 解包失败：未找到有效图像条目');
+    }
+
+    return candidates.find((entry) => IMAGE_ENTRY_EXT_REGEX.test(entry.fileName)) ?? candidates[0];
+}
+
+async function inflateRawBytes(compressed: Uint8Array): Promise<Uint8Array> {
+    if (typeof DecompressionStream === 'undefined') {
+        throw new Error('当前浏览器运行环境不支持原生 DecompressionStream("deflate-raw") 解压 Deflate ZIP');
+    }
+    const copied = new Uint8Array(compressed);
+    const stream = new Blob([copied]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    const decompressedBuffer = await new Response(stream).arrayBuffer();
+    return new Uint8Array(decompressedBuffer);
+}
+
+/**
+ * 异步解包 NovelAI 返回的 ZIP 响应，提取首张有效图像 Blob。
+ *
+ * @remarks
+ * 兼容官方原生 STORE (method = 0) 与第三方端点常见的流式 Data Descriptor (`flags & 0x0008`) + Deflate (`method = 8`) ZIP：
+ * 优先解析 Central Directory 读取真实大小与偏移，并通过原生 `DecompressionStream('deflate-raw')` 解压。
+ */
+export async function extractImageFromZip(buffer: ArrayBuffer, mimeType = 'image/png'): Promise<Blob> {
+    const bytes = new Uint8Array(buffer);
+    const entry = selectZipImageEntry(bytes);
+    const payloadSlice = bytes.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
+
+    let outputBytes: Uint8Array;
+    if (entry.compressionMethod === 0) {
+        outputBytes = payloadSlice.slice();
+    } else if (entry.compressionMethod === 8) {
+        outputBytes = await inflateRawBytes(payloadSlice);
+    } else {
+        throw new Error(`NovelAI 响应 ZIP 使用了不支持的压缩方法 (method=${entry.compressionMethod})`);
+    }
+
+    if (outputBytes.length === 0) {
+        throw new Error('NovelAI 响应 ZIP 解压结果为空 (0 字节)');
+    }
+
+    const resolvedMime =
+        detectImageMimeFromBytes(outputBytes) ?? inferMimeFromFileName(entry.fileName, mimeType);
+    const safeBytes = new Uint8Array(outputBytes);
+    return new Blob([safeBytes], { type: resolvedMime });
 }
 
 /**
@@ -271,22 +429,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
     public readonly providerType: ProviderType = 'novelai';
     public readonly name: string = 'NovelAI';
 
-    /** 资产短时内存缓存过期时间 (60 秒) */
-    public static readonly ASSET_CACHE_TTL_MS = 60_000;
-
-    private _customModelsCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-    private _inFlightCustomModels: Promise<string[]> | null = null;
-
     public constructor(options: NovelAIProviderOptions = {}) {
         super(options);
-    }
-
-    /**
-     * 清空当前提供方内存中的资产缓存与进行中的请求单飞状态。
-     */
-    public clearAssetCache(): void {
-        this._customModelsCache = null;
-        this._inFlightCustomModels = null;
     }
 
     private _getConfig(): NovelAIProviderConfig | undefined {
@@ -339,34 +483,13 @@ export class NovelAIProvider extends BaseGenerationProvider {
     }
 
     /**
-     * 构建第三方端点的模型列表检测地址，按优先级分为两级。
-     *
-     * @remarks
-     * 部分网关的生图路由与模型列表不在同一路径下（例如生图为 /novelai，模型列表在站点根路径 /v1/models），
-     * 因此第一级尝试配置路径本身，第二级回退到站点根路径。
-     */
-    private _buildModelProbeLevels(serverUrl: string): string[][] {
-        const cleanBase = serverUrl.replace(/\/+$/, '');
-        const levels: string[][] = [MODEL_PROBE_PATHS.map((p) => `${cleanBase}${p}`)];
-        try {
-            const origin = new URL(cleanBase).origin;
-            if (origin !== cleanBase) {
-                levels.push(MODEL_PROBE_PATHS.map((p) => `${origin}${p}`));
-            }
-        } catch {
-            // 非标准 URL 无法提取站点根路径，仅尝试配置路径
-        }
-        return levels;
-    }
-
-    /**
      * 检查 NovelAI 服务连通性。
      *
      * @remarks
      * 1. 官方服务请求用户数据接口 (/user/data)，可确认 Token 有效性；
-     * 2. 第三方端点检测常见模型列表路由（配置路径与站点根路径）及站点健康路由；
-     *    向生图路由发送轻量连通性检查请求 (Ping)，HTTP 405 表示路由存在。
-     *    第三方网关的检测路由通常不校验密钥，此处只能确认服务可达，密钥在生图时校验。
+     * 2. 第三方端点向生图路由发送轻量连通性检查请求 (Ping)，HTTP 400 / 405 / 415 / 422 均表明生图路由存在；
+     *    401 / 403 表明鉴权失败；仅当生图路由未命中 (404) 时回退检测站点 `/api/health`。
+     *    第三方网关的连通性检测通常不校验完整参数或密钥，可达时提示密钥将在生图时校验。
      *
      * @param signal 中止信号
      */
@@ -393,10 +516,22 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 };
             }
 
+            if (pingResult.status === 401 || pingResult.status === 403) {
+                return {
+                    status: 'error',
+                    latencyMs: pingResult.latencyMs,
+                    message: `NovelAI API Key 无效或已过期 (HTTP ${pingResult.status})`,
+                };
+            }
+
             return {
                 status: 'error',
                 latencyMs: pingResult.latencyMs,
-                message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
+                message:
+                    pingResult.error ||
+                    (pingResult.status !== undefined
+                        ? `连接失败 (HTTP ${pingResult.status})`
+                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在常规设置开启“酒馆代理”或改用自定义反代）'),
             };
         }
 
@@ -417,10 +552,23 @@ export class NovelAIProvider extends BaseGenerationProvider {
             headers: { Authorization: `Bearer ${config.apiKey}` },
         };
 
-        // 1. 首选单点检查：向生图路由发送轻量连通性检查请求 (Ping) (HTTP 405 Method Not Allowed 代表路由存在并监听请求)
+        // 1. 首选单点检查：向生图路由发送轻量连通性检查请求 (Ping)
+        // 多数代理在生图路由收到 GET 空请求时返回 400 / 405 / 415 / 422，均代表路由已存在并正常响应
         const endpointPing = await this._httpClient.ping(resolveNovelAIEndpoint(serverUrl), pingOptions);
-        if (endpointPing.ok || endpointPing.status === 405) {
+        const reachableErrorStatuses = new Set([400, 405, 415, 422]);
+        if (
+            endpointPing.ok ||
+            (endpointPing.status !== undefined && reachableErrorStatuses.has(endpointPing.status))
+        ) {
             return { status: 'ok', latencyMs: endpointPing.latencyMs, message: okMessage(endpointPing.latencyMs) };
+        }
+
+        if (endpointPing.status === 401 || endpointPing.status === 403) {
+            return {
+                status: 'error',
+                latencyMs: endpointPing.latencyMs,
+                message: endpointPing.error || `API Key 无效或无权访问 (HTTP ${endpointPing.status})`,
+            };
         }
 
         // 2. 判定是否属于底层网络连接失败（端口拒绝 ECONNREFUSED、主机无法解析 ENOTFOUND 或完全不可达）
@@ -442,18 +590,20 @@ export class NovelAIProvider extends BaseGenerationProvider {
             };
         }
 
-        // 3. 仅当服务端处于开放状态但返回 404 等未命中路由时，才回退依次检测模型列表与健康路由
-        const candidateUrls = this._buildModelProbeLevels(serverUrl).flat();
-        try {
-            candidateUrls.push(`${new URL(serverUrl).origin}/api/health`);
-        } catch {
-            // 忽略非标准 URL
-        }
-        for (const url of candidateUrls) {
-            if (signal?.aborted) break;
-            const res = await this._httpClient.ping(url, pingOptions);
-            if (res.ok) {
-                return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
+        // 3. 仅当生图路由明确返回 404 未命中时，回退检测站点简单健康路由（不附带 Authorization 以减少 CORS 预检阻塞）
+        if (endpointPing.status === 404 && !signal?.aborted) {
+            try {
+                const healthUrl = `${new URL(serverUrl).origin}/api/health`;
+                const res = await this._httpClient.ping(healthUrl, {
+                    transport,
+                    signal,
+                    timeoutMs: 4000,
+                });
+                if (res.ok) {
+                    return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
+                }
+            } catch {
+                // 忽略非标准 URL
             }
         }
 
@@ -465,138 +615,11 @@ export class NovelAIProvider extends BaseGenerationProvider {
     }
 
     /**
-     * 获取可用 NovelAI 模型标识列表。
-     *
-     * @remarks
-     * 1. 官方服务不提供模型枚举 API，返回固定的官方模型表；
-     * 2. 第三方端点按两级检测 /v1/models、/models、/ai/models（配置路径，再站点根路径）；
-     *    同一级内依次请求，按路由优先级取第一个解析出模型的结果；
-     * 3. 支持单飞并发合并与 60 秒短时内存缓存，避免频繁拉取模型造成网络冗余；
-     * 4. 网关对未知路径可能返回 HTTP 200 加 {"error": ...} 响应体，此类响应解析不出模型，视为未命中；
-     * 5. 第三方端点以服务端返回为准，不与官方模型表合并；全部未命中时返回空数组。
-     *
-     * @param signal 中止信号
-     * @param forceRefresh 是否强制忽略缓存拉取最新数据
-     */
-    public async fetchModels(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
-        if (this._isOfficial()) {
-            return [...OFFICIAL_NOVELAI_MODELS];
-        }
-
-        const serverUrl = this.getServerUrl();
-        if (!serverUrl) {
-            return [];
-        }
-
-        const now = Date.now();
-        if (
-            !forceRefresh &&
-            this._customModelsCache &&
-            this._customModelsCache.serverUrl === serverUrl &&
-            now - this._customModelsCache.timestamp < NovelAIProvider.ASSET_CACHE_TTL_MS
-        ) {
-            return this._customModelsCache.data;
-        }
-
-        if (this._inFlightCustomModels) {
-            return this._inFlightCustomModels;
-        }
-
-        const config = this._getConfig();
-        const transport = this.getTransport();
-
-        const fetchPromise = (async () => {
-            try {
-                for (const level of this._buildModelProbeLevels(serverUrl)) {
-                    if (signal?.aborted) {
-                        return [];
-                    }
-
-                    for (const url of level) {
-                        if (signal?.aborted) {
-                            return [];
-                        }
-                        try {
-                            const response = await this.fetchWithTransport(
-                                url,
-                                {
-                                    method: 'GET',
-                                    headers: this._buildAuthHeaders(config?.apiKey || ''),
-                                    timeoutMs: 4000,
-                                    signal,
-                                },
-                                transport
-                            );
-                            if (response.ok) {
-                                const models = this._extractModelIdsFromJson(await response.json());
-                                if (models.length > 0) {
-                                    const deduplicated = Array.from(new Set(models));
-                                    this._customModelsCache = { data: deduplicated, timestamp: Date.now(), serverUrl };
-                                    return deduplicated;
-                                }
-                            }
-                        } catch {
-                            // 遇到连接失败或 404 等，继续尝试后续候选路由
-                        }
-                    }
-                }
-                return [];
-            } finally {
-                this._inFlightCustomModels = null;
-            }
-        })();
-
-        this._inFlightCustomModels = fetchPromise;
-        return fetchPromise;
-    }
-
-    /**
-     * 从第三方服务响应 JSON 中解析并提取模型标识数组。
-     */
-    private _extractModelIdsFromJson(data: unknown): string[] {
-        if (!data || typeof data !== 'object') return [];
-
-        const results: string[] = [];
-
-        // 格式 1: 扁平数组 (字符串或包含 id/name/model 的对象)
-        if (Array.isArray(data)) {
-            for (const item of data) {
-                if (typeof item === 'string' && item.trim()) {
-                    results.push(item.trim());
-                } else if (item && typeof item === 'object') {
-                    const id =
-                        (item as Record<string, unknown>).id ||
-                        (item as Record<string, unknown>).name ||
-                        (item as Record<string, unknown>).model;
-                    if (typeof id === 'string' && id.trim()) {
-                        results.push(id.trim());
-                    }
-                }
-            }
-            return results;
-        }
-
-        const obj = data as Record<string, unknown>;
-
-        // 格式 2: OpenAI 兼容结构 { data: [{ id: "..." }] }
-        if (Array.isArray(obj.data)) {
-            return this._extractModelIdsFromJson(obj.data);
-        }
-
-        // 格式 3: { models: [...] }
-        if (Array.isArray(obj.models)) {
-            return this._extractModelIdsFromJson(obj.models);
-        }
-
-        return results;
-    }
-
-    /**
      * 执行 NovelAI 图像生成任务。
      *
      * @remarks
-     * 向 /ai/generate-image 端点提交请求，服务端返回未压缩 PNG 的 ZIP 二进制流，
-     * 通过 extractFirstEntryFromZip 解包提取目标图像 Blob。
+     * 向 /ai/generate-image 端点提交请求，服务端返回 ZIP 二进制流（STORE / Deflate），
+     * 通过 {@link extractImageFromZip} 解包提取目标图像 Blob。
      *
      * @param request 生图请求参数
      * @param signal 中止信号
@@ -625,38 +648,13 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 2. 读取激活的绘图预设
-        let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore) {
-            const activeDrawingId = config.activeDrawingPresetId;
-            if (activeDrawingId) {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                    'drawing',
-                    activeDrawingId,
-                    'novelai'
-                )?.data;
-                if (!drawingPreset) {
-                    throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${activeDrawingId})，请重新选择预设`);
-                }
-            }
-        }
+        // 2. 读取激活的绘图预设（优先使用队列快照固定的 drawingPresetId）
+        const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         // 3. 解析提示词与模型规格
         const resolvedPrompt = request.prompt;
         const resolvedNegative = request.negativePrompt || '';
-
-        const customModel =
-            (typeof params.customModel === 'string' && params.customModel.trim()) ||
-            (typeof drawingPreset?.customModel === 'string' && drawingPreset.customModel.trim()) ||
-            '';
-
-        const resolvedModel: string =
-            customModel ||
-            (typeof params.baseModel === 'string' && params.baseModel.trim()
-                ? params.baseModel.trim()
-                : typeof drawingPreset?.baseModel === 'string' && drawingPreset.baseModel.trim()
-                  ? drawingPreset.baseModel.trim()
-                  : 'nai-diffusion-4-5-full');
+        const resolvedModel = resolveNovelAIModelName(params, drawingPreset);
 
         // 架构分流：V3 按传统扁平参数组装，其余（V4 / V4.5 / V5 及无法识别的第三方模型）按 V4+ 结构化参数组装
         const modelFamily = resolveNovelAIModelFamily(resolvedModel);
@@ -673,13 +671,16 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale ?? 5.0) as number;
         const resolvedSampler = (params.samplerName ?? drawingPreset?.samplerName ?? 'k_euler') as string;
         const resolvedSeed =
-            typeof params.seed === 'number' && params.seed >= 0
-                ? (params.seed as number)
-                : typeof drawingPreset?.seed === 'number' && drawingPreset.seed >= 0
-                  ? drawingPreset.seed
+            typeof params.seed === 'number' && Number.isFinite(params.seed) && params.seed >= 0
+                ? Math.floor(params.seed)
+                : typeof drawingPreset?.seed === 'number' &&
+                    Number.isFinite(drawingPreset.seed) &&
+                    drawingPreset.seed >= 0
+                  ? Math.floor(drawingPreset.seed)
                   : Math.floor(Math.random() * 2 ** 32);
 
         // 5. 组装 NovelAI 专有生成参数
+        // 固定携带 ucPreset: 3 (None) 禁用意外预设追加，负向词完全由本地提示词预设与指令管理
         const generationParams: Record<string, unknown> = {
             width: resolvedWidth,
             height: resolvedHeight,
@@ -688,24 +689,19 @@ export class NovelAIProvider extends BaseGenerationProvider {
             sampler: resolvedSampler,
             seed: resolvedSeed,
             n_samples: 1,
+            ucPreset: 3,
         };
-
-        // 负向模板预设 (Undesired Content Preset: Heavy=0, Light=1, Human Focus=2, None=3)
-        const ucPresetMap: Record<string, number> = {
-            Heavy: 0,
-            Light: 1,
-            'Human Focus': 2,
-            None: 3,
-        };
-        const rawUc = (params.ucPreset ?? drawingPreset?.ucPreset ?? 'Heavy') as string | number;
-        const ucIndex = typeof rawUc === 'number' ? rawUc : (ucPresetMap[rawUc] ?? 0);
-        generationParams['ucPreset'] = ucIndex;
 
         // 引导重缩放 (CFG Rescale)
-        const cfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
-        if (typeof cfgRescale === 'number' && cfgRescale > 0) {
-            generationParams['cfg_rescale'] = cfgRescale;
+        const rawCfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
+        const resolvedCfgRescale =
+            typeof rawCfgRescale === 'number' && rawCfgRescale > 0 ? rawCfgRescale : undefined;
+        if (resolvedCfgRescale !== undefined) {
+            generationParams['cfg_rescale'] = resolvedCfgRescale;
         }
+
+        let resolvedSmeaMode: string | undefined;
+        let resolvedDecrisper: boolean | undefined;
 
         // 依据模型家族分流构造核心请求体
         if (isV4OrHigher) {
@@ -736,6 +732,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             }
 
             const smeaMode = (params.smeaMode ?? drawingPreset?.smeaMode ?? 'smea_dyn') as string;
+            resolvedSmeaMode = smeaMode;
             if (smeaMode === 'smea_dyn') {
                 generationParams['sm'] = true;
                 generationParams['sm_dyn'] = true;
@@ -746,6 +743,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
 
             const decrisper = Boolean(params.decrisper ?? drawingPreset?.decrisper);
             if (decrisper) {
+                resolvedDecrisper = true;
                 generationParams['dynamic_thresholding'] = true;
             }
         }
@@ -764,18 +762,27 @@ export class NovelAIProvider extends BaseGenerationProvider {
         // 6. 发起 HTTP 生图请求
         const serverUrl = this.getServerUrl();
         const generateUrl = resolveNovelAIEndpoint(serverUrl);
-        const response = await this.fetchWithTransport(
-            generateUrl,
-            {
-                method: 'POST',
-                headers: this._buildAuthHeaders(config.apiKey),
-                body: JSON.stringify(requestBody),
-                timeoutMs: maxTimeoutMs,
-                retries: 0,
-                signal,
-            },
-            transport
-        );
+        let response: Response;
+        try {
+            response = await this.fetchWithTransport(
+                generateUrl,
+                {
+                    method: 'POST',
+                    headers: this._buildAuthHeaders(config.apiKey),
+                    body: JSON.stringify(requestBody),
+                    timeoutMs: maxTimeoutMs,
+                    retries: 0,
+                    signal,
+                },
+                transport
+            );
+        } catch (err: unknown) {
+            if (err instanceof HttpError) {
+                const extracted = extractGatewayErrorMessage(err.details);
+                throw new Error(`NovelAI 生图请求失败: ${extracted || `HTTP ${err.status}`}`);
+            }
+            throw err;
+        }
 
         if (!response.ok) {
             let errorDetail = `HTTP ${response.status}`;
@@ -816,15 +823,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 (Array.isArray(json.images) ? json.images[0] : undefined);
 
             if (typeof b64Candidate === 'string' && b64Candidate.length > 50) {
-                const cleanB64 = b64Candidate.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
-                const binStr = atob(cleanB64);
-                const len = binStr.length;
-                const u8 = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    u8[i] = binStr.charCodeAt(i);
-                }
                 const mime = b64Candidate.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
-                blob = new Blob([u8], { type: mime });
+                blob = base64ToBlob(b64Candidate, mime);
             } else {
                 // 2. 检查图片外链 URL
                 const imageUrl =
@@ -853,8 +853,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 }
             }
         } else if (bodyType === 'zip') {
-            // 官方原生未压缩 ZIP 二进制归档
-            blob = extractFirstEntryFromZip(arrayBuffer, 'image/png');
+            // 兼容官方 STORE 与第三方流式 Data Descriptor + Deflate ZIP
+            blob = await extractImageFromZip(arrayBuffer, 'image/png');
         } else if (bodyType === 'image') {
             // 直接返回图像二进制流 (PNG / JPEG / WebP 等)
             const mimeType = contentType.startsWith('image/') ? contentType.split(';')[0] : 'image/png';
@@ -869,6 +869,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
             throw new Error(`NovelAI 响应格式异常（非有效 ZIP 或图像数据）${snippet}`);
         }
 
+        blob = await ensureValidImageBlob(blob, 'NovelAI');
+
         // 8. 装配生成元数据
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
@@ -878,6 +880,9 @@ export class NovelAIProvider extends BaseGenerationProvider {
             sampler: resolvedSampler,
             steps: resolvedSteps,
             cfgScale: resolvedCfgScale,
+            cfgRescale: resolvedCfgRescale,
+            smeaMode: resolvedSmeaMode,
+            decrisper: resolvedDecrisper,
             engine: 'novelai',
             durationMs,
             baseModel: resolvedModel,

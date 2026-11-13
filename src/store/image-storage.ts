@@ -76,6 +76,10 @@ export class ImageStorage implements ImageStorageService {
      * @param blob 图像二进制数据
      */
     public async saveImage(record: StoredImageRecord, blob: Blob): Promise<void> {
+        if (!blob || blob.size === 0) {
+            throw new Error('拒绝保存空图像数据 (0 字节)');
+        }
+
         try {
             await this._blobStore.setItem(record.imageId, blob);
             await this._metaStore.setItem(record.imageId, record);
@@ -87,48 +91,6 @@ export class ImageStorage implements ImageStorageService {
             }
             throw err;
         }
-    }
-
-    /**
-     * 仅保存图像元数据记录（不含 Blob）。
-     *
-     * @remarks
-     * 在任务开始时写入状态占位（status: 'generating'），
-     * 生图完成后再通过 finalizeImage 写入 Blob 并更新为 ready。
-     * @param record 图像元数据资产记录（byteSize 可为 0）
-     */
-    public async saveImageMeta(record: StoredImageRecord): Promise<void> {
-        await this._metaStore.setItem(record.imageId, record);
-    }
-
-    /**
-     * 完成图像保存：写入 Blob 数据并更新元数据字段。
-     *
-     * @param imageId 图像全局唯一标识符
-     * @param blob 图像二进制数据
-     * @param updates 需要更新的字段（mimeType、byteSize、status、metadata）
-     */
-    public async finalizeImage(
-        imageId: string,
-        blob: Blob,
-        updates: Pick<StoredImageRecord, 'mimeType' | 'byteSize' | 'status' | 'metadata'>
-    ): Promise<void> {
-        const existing = await this._metaStore.getItem<StoredImageRecord>(imageId);
-        if (!existing) {
-            logger.warn(`finalizeImage: 未找到 imageId=${imageId} 的元数据记录，执行全量写入`);
-            // 元数据丢失时使用 updates 可用字段构造默认记录写入
-            const defaultRecord = { imageId, chatId: undefined, createdAt: Date.now(), ...updates } as StoredImageRecord;
-            await Promise.all([
-                this._metaStore.setItem(imageId, defaultRecord),
-                this._blobStore.setItem(imageId, blob),
-            ]);
-            return;
-        }
-        const updated: StoredImageRecord = { ...existing, ...updates };
-        await Promise.all([
-            this._metaStore.setItem(imageId, updated),
-            this._blobStore.setItem(imageId, blob),
-        ]);
     }
 
     /**

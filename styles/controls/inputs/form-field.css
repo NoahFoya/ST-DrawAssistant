@@ -2,7 +2,7 @@
  * 表单行排布、标签标题组与提示气泡样式。
  *
  * @remarks
- * 1. 尺寸规范：统一采用 38px 高度基准，避免表单区域纵向膨胀。
+ * 1. 尺寸规范：标准表单行统一采用 42px 高度基准，避免表单区域纵向膨胀。
  * 2. 标题与说明：表单行保留简洁标题，说明统一置于悬停提示气泡（.da-help-icon）。
  * 3. 控件操作区：右侧操作区统一对齐，维持布局一致。
  */
@@ -74,38 +74,17 @@
     transition: all 0.15s var(--da-ease);
 }
 
-.da-help-icon:hover {
+.da-help-icon:hover,
+.da-help-icon:focus-visible,
+.da-help-icon.is-tooltip-open {
     background: var(--da-accent-color);
     border-color: var(--da-accent-color);
     color: var(--da-text-on-accent, #ffffff);
     box-shadow: 0 0 8px var(--da-accent-color);
+    outline: none;
 }
 
-/* 纯 CSS 悬停气泡：向正下方展开，高 z-index 避免被父容器裁剪且避开右侧操作栏 */
-.da-help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: 0;
-    top: calc(100% + 6px);
-    transform: none;
-    background: var(--da-bg-card, #181a20);
-    border: 1px solid var(--da-border-highlight, rgba(129, 140, 248, 0.45));
-    border-radius: var(--da-radius-sm, 6px);
-    padding: 8px 12px;
-    font-size: 11.5px;
-    font-weight: 400;
-    color: var(--da-text-primary, #f8fafc);
-    line-height: 1.5;
-    white-space: pre-wrap;
-    width: max-content;
-    max-width: 340px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.1);
-    z-index: var(--da-z-tooltip, 100100);
-    pointer-events: none;
-    animation: da-fadein 0.12s var(--da-ease);
-}
-
-/* 4. 控件右对齐操作区 (具备弹性缩容能力，避免超出实际行宽) */
+/* 3. 控件右对齐操作区 (具备弹性缩容能力，避免超出实际行宽) */
 .da-slot--right,
 .da-form-row__control-slot,
 .da-form-row__control {
@@ -260,5 +239,50 @@
     border-color: var(--da-accent-color) !important;
     box-shadow: 0 0 0 2px var(--da-bg-card, #22232b), 0 0 0 4px var(--da-accent-color) !important;
     transform: scale(1.1);
+}
+
+/* 6. 双模拾色器控件 (.da-color-picker) 与纵向设置卡片栈 (.da-settings-stack) */
+.da-settings-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-color-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.da-color-picker__swatch {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--da-border-color);
+    cursor: pointer;
+    box-shadow: var(--da-inset-top-light);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.da-color-picker__native {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 46px;
+    height: 46px;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.da-input.da-color-picker__text {
+    width: 130px;
+    height: 28px;
+    text-align: left;
+    padding: 0 8px;
+    font-size: 12px;
+    font-family: var(--da-font-mono);
 }
 

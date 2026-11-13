@@ -5,7 +5,7 @@
  * 1. 将提示词与参数注入工作流模板并提交至 POST /prompt；
  * 2. 深度解析服务端返回的 node_errors 节点校验异常；
  * 3. 轮询 GET /history/{prompt_id} 并在完成后从 GET /view 下载图片；
- * 4. 取消时中止本地轮询并释放资源。
+ * 4. 任务取消或超时时采用客户端丢弃策略，仅中止本地轮询，不向服务端发送队列删除或中断指令。
  */
 
 import type {
@@ -20,7 +20,7 @@ import type {
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
-import { imageInputToBlob } from '../../util/http-client';
+import { imageInputToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
 import { logger } from '../../util/logger';
 
 interface ComfyPromptHistoryOutput {
@@ -30,9 +30,64 @@ interface ComfyPromptHistoryOutput {
 interface ComfyPromptHistoryItem {
     status?: {
         status_str?: string;
+        completed?: boolean;
         messages?: unknown[];
     };
     outputs?: Record<string, ComfyPromptHistoryOutput>;
+}
+
+/** 解析 ComfyUI 提交接口返回或 HttpError 中的 node_errors / error 详细校验信息 */
+function formatComfySubmitError(payload: unknown): string | undefined {
+    if (!payload || typeof payload !== 'object') {
+        return typeof payload === 'string' && payload.trim() ? payload.trim() : undefined;
+    }
+    const obj = payload as {
+        error?: { message?: string; details?: string } | string;
+        node_errors?: Record<
+            string,
+            {
+                errors?: Array<{ message?: string; details?: string } | string>;
+                message?: string;
+                class_type?: string;
+            }
+        >;
+    };
+
+    if (obj.node_errors && Object.keys(obj.node_errors).length > 0) {
+        return Object.entries(obj.node_errors)
+            .map(([nodeId, errObj]) => {
+                let errorText = '';
+                if (Array.isArray(errObj.errors)) {
+                    errorText = errObj.errors
+                        .map((e) =>
+                            typeof e === 'object' && e?.message
+                                ? `${e.message}${e.details ? ` (${e.details})` : ''}`
+                                : String(e)
+                        )
+                        .join(', ');
+                } else {
+                    errorText = errObj.message || JSON.stringify(errObj);
+                }
+                return `节点 ${nodeId} (${errObj.class_type || 'Unknown'}): ${errorText}`;
+            })
+            .join('; ');
+    }
+
+    if (typeof obj.error === 'string' && obj.error.trim()) {
+        return obj.error.trim();
+    }
+    if (obj.error && typeof obj.error === 'object' && obj.error.message) {
+        return `${obj.error.message}${obj.error.details ? ` (${obj.error.details})` : ''}`;
+    }
+    return undefined;
+}
+
+/** 判定 ComfyUI 历史记录中是否已产出有效图像文件 */
+function hasComfyImageOutputs(item?: ComfyPromptHistoryItem): boolean {
+    if (!item?.outputs) return false;
+    return Object.values(item.outputs).some(
+        (nodeOut) => Array.isArray(nodeOut?.images) && nodeOut.images.some((img) => Boolean(img?.filename))
+    );
 }
 
 /** ComfyUI 提供方初始化配置项 */
@@ -82,16 +137,6 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     public constructor(options: ComfyUIProviderOptions = {}) {
         super(options);
         this._clientId = options.clientId ?? `st-da-${Math.random().toString(36).substring(2, 10)}`;
-    }
-
-    /** 获取当前客户端会话标识符 */
-    public getClientId(): string {
-        return this._clientId;
-    }
-
-    /** 设置客户端会话标识符 */
-    public setClientId(clientId: string): void {
-        this._clientId = clientId;
     }
 
     /**
@@ -189,7 +234,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             try {
                 const response = await this.fetchWithTransport(
                     url,
-                    { method: 'GET', timeoutMs: 15000, signal },
+                    { method: 'GET', timeoutMs: 30000, signal },
                     transport
                 );
                 const data = (await response.json()) as ComfyObjectInfoMap;
@@ -481,22 +526,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 1. 读取激活的绘图预设
-        let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore) {
-            const config = this._settingsStore.getProviderConfig<ComfyUIProviderConfig>('comfyui');
-            const activeDrawingId = config?.activeDrawingPresetId;
-            if (activeDrawingId) {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                    'drawing',
-                    activeDrawingId,
-                    'comfyui'
-                )?.data;
-                if (!drawingPreset) {
-                    throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${activeDrawingId})，请重新选择预设`);
-                }
-            }
-        }
+        // 1. 读取激活的绘图预设（优先使用队列快照固定的 drawingPresetId）
+        const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         const isInpaintMode = params.mode === 'inpaint';
 
@@ -524,17 +555,10 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                     throw new Error('当前预设未绑定局部重绘预设，请前往设置中心-ComfyUI 绑定局部重绘预设');
                 }
             } else {
-                const isImg2Img = Boolean(request.sourceImage || params.sourceImage);
-                if (isImg2Img) {
-                    resolvedWorkflowId = drawingPreset?.img2imgWorkflowId;
-                    if (!resolvedWorkflowId) {
-                        throw new Error('当前预设未配置图生图工作流，请在设置中绑定');
-                    }
-                } else {
-                    resolvedWorkflowId = drawingPreset?.txt2imgWorkflowId;
-                    if (!resolvedWorkflowId) {
-                        throw new Error('当前预设未配置文生图工作流，请在设置中绑定');
-                    }
+                resolvedWorkflowId =
+                    (params.txt2imgWorkflowId as string | undefined) ?? drawingPreset?.txt2imgWorkflowId;
+                if (!resolvedWorkflowId) {
+                    throw new Error('当前预设未配置文生图工作流，请在设置中绑定');
                 }
             }
 
@@ -566,7 +590,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         if (isInpaintMode) {
             const sourceImage = request.sourceImage;
-            const maskImage = request.maskImage ?? params.maskImage;
+            const maskImage = request.maskImage;
 
             if (!sourceImage) {
                 throw new Error('局部重绘模式下必须提供底图数据');
@@ -594,8 +618,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             basemodel_name: resolvedBaseModel,
             model_name: resolvedBaseModel,
             unet_name: (params.unetName ?? resolvedBaseModel) as string | undefined,
-            clip_name: (params.clipName ?? drawingPreset?.clipName) as string | undefined,
-            vae_name: (params.vaeName ?? drawingPreset?.vaeName) as string | undefined,
+            clip_name: (params.clipName ?? drawingPreset?.clipName ?? '') as string,
+            vae_name: (params.vaeName ?? drawingPreset?.vaeName ?? '') as string,
 
             prompt: promptText,
             negative_prompt: negativePromptText,
@@ -647,45 +671,37 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             prompt: injectedWorkflow,
         };
 
-        const submitResponse = await this.fetchWithTransport(
-            `${serverUrl}/prompt`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(promptPayload),
-                retries: 0,
-                signal,
-            },
-            transport
-        );
+        let submitResponse: Response;
+        try {
+            submitResponse = await this.fetchWithTransport(
+                `${serverUrl}/prompt`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(promptPayload),
+                    timeoutMs: maxTimeoutMs,
+                    retries: 0,
+                    signal,
+                },
+                transport
+            );
+        } catch (err: unknown) {
+            if (err instanceof HttpError) {
+                const detail = formatComfySubmitError(err.details) ?? `HTTP ${err.status}`;
+                throw new Error(`ComfyUI 工作流校验失败: ${detail}`);
+            }
+            throw err;
+        }
 
         const submitResult = (await submitResponse.json()) as {
             prompt_id?: string;
-            node_errors?: Record<
-                string,
-                {
-                    errors?: Array<{ message?: string } | string>;
-                    message?: string;
-                    class_type?: string;
-                }
-            >;
+            error?: unknown;
+            node_errors?: Record<string, unknown>;
         };
 
-        if (submitResult.node_errors && Object.keys(submitResult.node_errors).length > 0) {
-            const errDetails = Object.entries(submitResult.node_errors)
-                .map(([nodeId, errObj]) => {
-                    let errorText = '';
-                    if (Array.isArray(errObj.errors)) {
-                        errorText = errObj.errors
-                            .map((e) => (typeof e === 'object' && e?.message ? e.message : String(e)))
-                            .join(', ');
-                    } else {
-                        errorText = errObj.message || JSON.stringify(errObj);
-                    }
-                    return `节点 ${nodeId} (${errObj.class_type || 'Unknown'}): ${errorText}`;
-                })
-                .join('; ');
-            throw new Error(`ComfyUI 工作流校验失败: ${errDetails}`);
+        const submitErrDetail = formatComfySubmitError(submitResult);
+        if (submitErrDetail) {
+            throw new Error(`ComfyUI 工作流校验失败: ${submitErrDetail}`);
         }
 
         const promptId = submitResult.prompt_id;
@@ -693,7 +709,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             throw new Error('ComfyUI 未返回有效任务标识 (prompt_id)');
         }
 
-        // 5. 轮询 GET /history/{prompt_id} 等待任务执行完成，收到中止信号时退出轮询
+        // 5. 轮询 GET /history/{prompt_id} 等待任务执行完成，收到中止信号时仅客户端退出（不发服务端中断）
         const pollIntervalMs = 1000;
         const maxConsecutiveNetworkErrors = 5;
         let consecutiveNetworkErrors = 0;
@@ -714,13 +730,16 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             try {
                 historyResponse = await this.fetchWithTransport(
                     `${serverUrl}/history/${promptId}`,
-                    { method: 'GET', retries: 0, signal },
+                    { method: 'GET', timeoutMs: maxTimeoutMs, retries: 0, signal },
                     transport
                 );
                 consecutiveNetworkErrors = 0;
             } catch (err: unknown) {
                 if (signal?.aborted) {
                     throw err;
+                }
+                if (err instanceof HttpError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) {
+                    throw new Error(`ComfyUI 轮询任务状态失败 (HTTP ${err.status})`);
                 }
                 consecutiveNetworkErrors++;
                 if (consecutiveNetworkErrors >= maxConsecutiveNetworkErrors) {
@@ -767,9 +786,17 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                         throw new Error(`ComfyUI 执行失败: ${errorDetails}`);
                     }
 
-                    if (currentHistory.outputs && Object.keys(currentHistory.outputs).length > 0) {
+                    if (hasComfyImageOutputs(currentHistory)) {
                         promptHistory = currentHistory;
                         break;
+                    }
+
+                    // 任务已完成但无图像输出节点，立刻报错避免空转等到超时
+                    if (
+                        currentHistory.status?.completed === true ||
+                        currentHistory.status?.status_str === 'success'
+                    ) {
+                        throw new Error('ComfyUI 执行完成，但未检索到有效图像输出');
                     }
                 }
             }
@@ -811,16 +838,24 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         });
         const viewUrl = `${serverUrl}/view?${viewParams.toString()}`;
 
-        const viewResponse = await this.fetchWithTransport(viewUrl, { method: 'GET', signal }, transport);
-        const blob = await viewResponse.blob();
+        const viewResponse = await this.fetchWithTransport(
+            viewUrl,
+            { method: 'GET', timeoutMs: maxTimeoutMs, signal },
+            transport
+        );
+        if (!viewResponse.ok) {
+            throw new Error(`ComfyUI 图像下载失败 (/view HTTP ${viewResponse.status})`);
+        }
+        const blob = await ensureValidImageBlob(await viewResponse.blob(), 'ComfyUI');
 
         // 7. 装配生成元数据
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
-            prompt: promptText,
-            negativePrompt: negativePromptText || undefined,
-            seed: resolvedSeed,
-            sampler: variables.sampler_name as string | undefined,
+            prompt: String(variables.prompt ?? promptText),
+            negativePrompt: String(variables.negative_prompt ?? negativePromptText) || undefined,
+            seed: Number(variables.seed ?? resolvedSeed),
+            sampler: (variables.sampler_name as string | undefined) || undefined,
+            scheduler: (variables.scheduler as string | undefined) || undefined,
             steps: variables.steps as number | undefined,
             cfgScale: variables.cfg as number | undefined,
             engine: 'comfyui',

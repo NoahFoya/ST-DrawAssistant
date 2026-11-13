@@ -18,6 +18,22 @@
     }
 }
 
+@keyframes da-backdrop-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes da-sheet-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* 模态弹窗轻微缩放与平滑上浮进入动画 (从 0.96 缩放至 1.0) */
 @keyframes da-modal-slide-in {
     from {

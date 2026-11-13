@@ -29,8 +29,6 @@ export interface TaskStatusEventData {
 
 /** 插件默认事件类型映射 */
 export type AppEventMap = {
-    /** 生图任务创建入队 */
-    'task:created': DrawingTask;
     /** 生图任务状态流转变更（统一承载 pending、generating、completed、failed、cancelled） */
     'task:status': TaskStatusEventData;
     /** 图像资产就绪通知（本地 IndexedDB 持久化存储完成，通知楼层展示图片） */

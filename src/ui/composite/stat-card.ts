@@ -511,12 +511,12 @@ export class StatCard implements UIComponent {
         const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr>
-                <th style="width: 15%;">时间</th>
-                <th style="width: 17%;">服务后端</th>
-                <th style="width: 28%;">模型 / 工作流</th>
-                <th style="width: 18%;">分辨率</th>
-                <th style="width: 12%;">耗时</th>
-                <th style="width: 10%;">状态</th>
+                <th>时间</th>
+                <th>服务后端</th>
+                <th>模型 / 工作流</th>
+                <th>分辨率</th>
+                <th>耗时</th>
+                <th>状态</th>
             </tr>
         `;
         table.appendChild(thead);

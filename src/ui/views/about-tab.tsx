@@ -21,6 +21,7 @@ import { openResetFactoryModal } from '../modal/reset-factory-modal';
 import { openChangelogModal } from '../modal/changelog-modal';
 import { updateService } from '../../pipeline/update-service';
 import { eventBus } from '../../util/event-bus';
+import { copyTextToClipboard } from '../../util/clipboard';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 import type { UpdateState } from '@types';
 
@@ -107,31 +108,11 @@ export class AboutTabView extends PreactSettingsView {
         ].join('\n');
     }
 
-    private async writeClipboard(text: string): Promise<boolean> {
-        try {
-            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(text);
-                return true;
-            }
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            const success = document.execCommand('copy');
-            textarea.remove();
-            return success;
-        } catch {
-            return false;
-        }
-    }
-
     private async handleCopyDiagnosticReport(): Promise<void> {
         this.isCopying.value = true;
         try {
             const report = await this.generateDiagnosticReport();
-            const success = await this.writeClipboard(report);
+            const success = await copyTextToClipboard(report);
             if (success) {
                 this.copyLabel.value = '已复制';
                 if (this.copyResetTimer !== null) {
@@ -488,7 +469,7 @@ export class AboutTabView extends PreactSettingsView {
                             ref={fileInputRef}
                             type="file"
                             accept=".json,application/json"
-                            style={{ display: 'none' }}
+                            className="da-hidden"
                             onChange={(e) =>
                                 this.handleImportFile(e.currentTarget as HTMLInputElement)
                             }
@@ -523,7 +504,7 @@ export class AboutTabView extends PreactSettingsView {
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span style={{ color: 'var(--da-color-danger, #f87171)' }}>
+                                    <span className="da-text-danger">
                                         恢复出厂设置
                                     </span>
                                 </div>

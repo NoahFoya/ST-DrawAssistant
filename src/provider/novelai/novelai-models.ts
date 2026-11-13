@@ -17,7 +17,8 @@ export const NOVELAI_CUSTOM_SERVICE_ID = 'custom';
 /**
  * NovelAI 官方图像模型标识。
  *
- * 官方不提供模型枚举接口，此表是官方服务商唯一的模型来源。
+ * NovelAI 官方及常规兼容反代均不提供模型枚举接口，此表为界面下拉的静态模型目录，
+ * 非标准模型由预设中的 customModel 字段覆盖。
  */
 export const OFFICIAL_NOVELAI_MODELS: readonly string[] = [
     'nai-diffusion-5-full',
@@ -51,8 +52,38 @@ export function formatNovelAIModelLabel(modelId: string): string {
     return NOVELAI_MODEL_LABELS[modelId] ?? modelId;
 }
 
+/** NovelAI 默认回退模型标识 */
+export const DEFAULT_NOVELAI_MODEL = 'nai-diffusion-4-5-full';
+
 /** NovelAI 模型架构族：V3 使用扁平参数，V4 / V5 使用结构化 v4_prompt */
 export type NovelAIModelFamily = 'v3' | 'v4' | 'v5';
+
+/**
+ * 统一解析 NovelAI 实际生效的模型标识。
+ *
+ * @remarks
+ * Provider 构建请求体时按以下优先级解析最终模型：
+ * `params.customModel` > `preset.customModel` > `params.baseModel` > `preset.baseModel` > {@link DEFAULT_NOVELAI_MODEL}。
+ *
+ * @param params 运行时参数覆写字典
+ * @param preset 当前生效的绘图预设数据
+ * @returns 最终模型标识符
+ */
+export function resolveNovelAIModelName(
+    params?: Record<string, unknown>,
+    preset?: { customModel?: unknown; baseModel?: unknown }
+): string {
+    const readTrimmed = (value: unknown): string =>
+        typeof value === 'string' ? value.trim() : '';
+
+    return (
+        readTrimmed(params?.customModel) ||
+        readTrimmed(preset?.customModel) ||
+        readTrimmed(params?.baseModel) ||
+        readTrimmed(preset?.baseModel) ||
+        DEFAULT_NOVELAI_MODEL
+    );
+}
 
 /**
  * 依据模型标识判定架构族。

@@ -28,9 +28,9 @@ export class UrlPool implements ImageUrlPool {
      * @returns 生成的 Object URL 地址
      */
     public createUrl(key: string, blob: Blob): string {
-        if (!blob) {
-            logger.error(`创建 Object URL 失败: 传入的 Blob 为空 (key: ${key})`);
-            throw new Error(`[UrlPool] 创建 Object URL 失败: Blob 不能为空 (key: ${key})`);
+        if (!blob || blob.size === 0) {
+            logger.error(`创建 Object URL 失败: 传入的 Blob 为空或 0 字节 (key: ${key})`);
+            throw new Error(`[UrlPool] 创建 Object URL 失败: Blob 不能为空或 0 字节 (key: ${key})`);
         }
 
         this.revokeUrl(key);

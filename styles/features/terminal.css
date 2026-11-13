@@ -31,11 +31,15 @@
 /* 2. 单行日志结构 (.da-log-line)
    基线对齐排布时间戳、级别、命名空间与日志消息主体 */
 .da-log-line {
+    position: relative;
     display: flex;
     align-items: baseline;
     gap: 8px;
+    padding: 2px 4px;
+    border-radius: var(--da-radius-xs, 4px);
     line-height: 1.5;
     font-family: var(--da-font-mono, Consolas, monospace);
+    transition: background-color 0.15s ease;
 }
 
 .da-log-time,
@@ -113,13 +117,6 @@
 }
 
 /* 5. 单行悬停快捷操作按钮 */
-.da-log-line {
-    position: relative;
-    padding: 2px 4px;
-    border-radius: var(--da-radius-xs, 4px);
-    transition: background-color 0.15s ease;
-}
-
 .da-log-line:hover {
     background-color: var(--da-bg-subtle);
 }

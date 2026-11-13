@@ -33,6 +33,10 @@ export interface InpaintConfirmResult {
     readonly initImage: string;
     /** 遮罩蒙版图像数据 (Data URI / PNG) */
     readonly maskImage: string;
+    /** 底图原始像素宽度 */
+    readonly width?: number;
+    /** 底图原始像素高度 */
+    readonly height?: number;
     /** 正向提示词文本 */
     readonly prompt: string;
     /** 负向提示词文本 */
@@ -51,8 +55,8 @@ export interface InpaintModalOptions {
     readonly initialPrompt?: string;
     /** 初始负向提示词 */
     readonly initialNegativePrompt?: string;
-    /** 确认提交重绘回调 */
-    readonly onConfirm: (data: InpaintConfirmResult) => Promise<void> | void;
+    /** 确认提交重绘回调，返回 false 时表示用户取消或未实际入队 */
+    readonly onConfirm: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
     /** 取消或关闭回调 */
     readonly onCancel?: () => void;
 }
@@ -144,7 +148,7 @@ export class InpaintModal implements Disposable {
 
         // 1. 全屏背景遮罩
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-inpaint-backdrop st-da-root';
+        backdrop.className = 'da-inpaint-backdrop da-modal-backdrop da-modal-backdrop--fullscreen st-da-root';
         this.backdropEl = backdrop;
 
         // 2. 居中面板容器
@@ -781,6 +785,8 @@ export class InpaintModal implements Disposable {
             const result: InpaintConfirmResult = {
                 initImage: initBase64,
                 maskImage: maskBase64,
+                width: this.bgCanvas.width > 0 ? this.bgCanvas.width : undefined,
+                height: this.bgCanvas.height > 0 ? this.bgCanvas.height : undefined,
                 prompt,
                 negativePrompt,
                 denoiseStrength: this.denoiseStrength,
@@ -789,8 +795,10 @@ export class InpaintModal implements Disposable {
 
             this.dispose();
 
-            await this.options.onConfirm(result);
-            Toast.success('已提交局部重绘任务');
+            const confirmed = await this.options.onConfirm(result);
+            if (confirmed !== false) {
+                Toast.success('已提交局部重绘任务');
+            }
         } catch (err) {
             logger.error('[InpaintModal] 导出或提交局部重绘异常:', err);
             Toast.error('提交局部重绘任务失败');

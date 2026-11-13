@@ -13,6 +13,7 @@ import type { Disposable } from '../types';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { openFloatingSurface, type FloatingMenuEntry } from '../layout/floating-sheet';
 import { logger } from '../../util/logger';
 import { COMFYUI_VARIABLE_DEFINITIONS } from '../composite/workflow-card';
 
@@ -58,8 +59,8 @@ export class BlueprintModal implements Disposable {
     private inspectorContentElement: HTMLElement | null = null;
     private nodeCountBadge: HTMLElement | null = null;
     private saveBtnElement: HTMLButtonElement | null = null;
-    private activeDropdown: HTMLElement | null = null;
-    private closeDropdownListener: ((e: MouseEvent) => void) | null = null;
+    private activeDropdownHandle: Disposable | null = null;
+    private activeDropdownFieldKey: string | null = null;
 
     private removeOverlayEntry: (() => void) | null = null;
 
@@ -134,9 +135,9 @@ export class BlueprintModal implements Disposable {
     }
 
     private buildDOM(): void {
-        // 1. 遮罩层
+        // 1. 遮罩层（桌面居中卡片，移动端全屏）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root da-blueprint-backdrop';
+        backdrop.className = 'da-modal-backdrop da-modal-backdrop--fullscreen st-da-root da-blueprint-backdrop';
         backdrop.addEventListener('click', (e) => {
             if (e.target === backdrop) {
                 this.close();
@@ -709,7 +710,7 @@ export class BlueprintModal implements Disposable {
     }
 
     /**
-     * 切换展开快捷变量选择浮层下拉菜单。
+     * 通过统一响应式门户展开变量选择菜单（桌面端相对触发按钮弹出，移动端自动切换底部 Action Sheet）。
      */
     private toggleVarDropdown(
         btn: HTMLButtonElement,
@@ -719,112 +720,77 @@ export class BlueprintModal implements Disposable {
         node: WorkflowNodeData,
         recommended: (typeof COMFYUI_VARIABLE_DEFINITIONS)[number] | null
     ): void {
-        if (this.activeDropdown) {
-            const isSame = this.activeDropdown.getAttribute('data-dropdown-for') === fieldKey;
+        if (this.activeDropdownHandle) {
+            const isSame = this.activeDropdownFieldKey === fieldKey;
             this.closeDropdown();
             if (isSame) {
                 return;
             }
         }
 
-        const dropdown = document.createElement('div');
-        dropdown.className = 'da-blueprint-var-dropdown';
-        dropdown.setAttribute('data-dropdown-for', fieldKey);
-        dropdown.addEventListener('click', (e) => e.stopPropagation());
+        const entries: FloatingMenuEntry[] = [];
 
         // 1. 推荐匹配分类
         if (recommended) {
-            const recHeader = document.createElement('div');
-            recHeader.className = 'da-blueprint-var-group-title da-blueprint-var-group-title--rec';
-            recHeader.textContent = '★ 推荐匹配';
-            dropdown.appendChild(recHeader);
-
-            const recItem = document.createElement('button');
-            recItem.type = 'button';
-            recItem.className = 'da-blueprint-var-item da-blueprint-var-item--recommended';
-            recItem.innerHTML = `
-                <span class="da-blueprint-var-item-name">${recommended.variable}</span>
-                <span class="da-blueprint-var-item-desc">${recommended.label}</span>
-            `;
-            recItem.addEventListener('click', () => {
-                inputEl.value = recommended.variable;
-                node.inputs[fieldKey] = recommended.variable;
-                this.closeDropdown();
-                this.markNodeDirty(nodeId);
-                Toast.info(`已为字段 [${fieldKey}] 填入推荐变量 ${recommended.variable}`);
+            entries.push({ type: 'header', label: '★ 推荐匹配', highlighted: true });
+            entries.push({
+                badgeText: recommended.variable,
+                label: recommended.label,
+                highlighted: true,
+                onSelect: () => {
+                    inputEl.value = recommended.variable;
+                    node.inputs[fieldKey] = recommended.variable;
+                    this.markNodeDirty(nodeId);
+                    Toast.info(`已为字段 [${fieldKey}] 填入推荐变量 ${recommended.variable}`);
+                },
             });
-            dropdown.appendChild(recItem);
         }
 
         // 2. 所有可用参数变量列表
-        const allHeader = document.createElement('div');
-        allHeader.className = 'da-blueprint-var-group-title';
-        allHeader.textContent = '所有参数变量';
-        dropdown.appendChild(allHeader);
-
+        entries.push({ type: 'header', label: '所有参数变量' });
         for (const item of COMFYUI_VARIABLE_DEFINITIONS) {
             if (recommended && item.variable === recommended.variable) {
                 continue;
             }
-            const varItem = document.createElement('button');
-            varItem.type = 'button';
-            varItem.className = 'da-blueprint-var-item';
-            varItem.innerHTML = `
-                <span class="da-blueprint-var-item-name">${item.variable}</span>
-                <span class="da-blueprint-var-item-desc">${item.label}</span>
-            `;
-            varItem.addEventListener('click', () => {
-                inputEl.value = item.variable;
-                node.inputs[fieldKey] = item.variable;
-                this.closeDropdown();
-                this.markNodeDirty(nodeId);
-                Toast.info(`已为字段 [${fieldKey}] 填入变量 ${item.variable}`);
+            entries.push({
+                badgeText: item.variable,
+                label: item.label,
+                onSelect: () => {
+                    inputEl.value = item.variable;
+                    node.inputs[fieldKey] = item.variable;
+                    this.markNodeDirty(nodeId);
+                    Toast.info(`已为字段 [${fieldKey}] 填入变量 ${item.variable}`);
+                },
             });
-            dropdown.appendChild(varItem);
         }
 
-        // 浮层定位计算
-        const rect = btn.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        const dropdownWidth = 270;
-        const dropdownMaxHeight = 320;
-
-        const left = Math.max(12, rect.right - dropdownWidth);
-        dropdown.style.left = `${left}px`;
-
-        if (rect.bottom + dropdownMaxHeight > window.innerHeight && rect.top > dropdownMaxHeight) {
-            dropdown.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-        } else {
-            dropdown.style.top = `${rect.bottom + 4}px`;
-        }
-
-        document.body.appendChild(dropdown);
-        this.activeDropdown = dropdown;
-
-        // 全局点击监听延迟挂载
-        setTimeout(() => {
-            if (!this.closeDropdownListener && this.activeDropdown) {
-                this.closeDropdownListener = (e: MouseEvent) => {
-                    if (this.activeDropdown && !this.activeDropdown.contains(e.target as Node) && e.target !== btn) {
-                        this.closeDropdown();
-                    }
-                };
-                document.addEventListener('click', this.closeDropdownListener);
-            }
-        }, 0);
+        this.activeDropdownFieldKey = fieldKey;
+        this.activeDropdownHandle = openFloatingSurface({
+            stackId: 'blueprint-var-dropdown',
+            title: `插入参数变量（${fieldKey}）`,
+            anchorRect: btn.getBoundingClientRect(),
+            preferredPlacement: 'bottom',
+            align: 'end',
+            desktopWidth: 270,
+            estimatedHeight: 320,
+            panelClassName: 'da-blueprint-var-dropdown',
+            entries,
+            onClose: () => {
+                this.activeDropdownHandle = null;
+                this.activeDropdownFieldKey = null;
+            },
+        });
     }
 
     /**
      * 关闭当前活动的变量选择浮层。
      */
     private closeDropdown(): void {
-        if (this.closeDropdownListener) {
-            document.removeEventListener('click', this.closeDropdownListener);
-            this.closeDropdownListener = null;
-        }
-        if (this.activeDropdown) {
-            this.activeDropdown.remove();
-            this.activeDropdown = null;
+        if (this.activeDropdownHandle) {
+            const handle = this.activeDropdownHandle;
+            this.activeDropdownHandle = null;
+            this.activeDropdownFieldKey = null;
+            handle.dispose();
         }
     }
 
@@ -975,10 +941,6 @@ export class BlueprintModal implements Disposable {
     private bindEvents(): void {
         this.unbindEvents();
         this.removeOverlayEntry = overlayStack.push('blueprint-modal', () => {
-            if (this.activeDropdown) {
-                this.closeDropdown();
-                return;
-            }
             if (this.isOpenState) {
                 this.close();
             }

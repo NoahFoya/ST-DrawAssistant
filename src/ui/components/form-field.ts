@@ -2,7 +2,7 @@
  * 标准表单行包装组件 (FormField)。
  *
  * @remarks
- * 为受控原子控件提供一致的 38px 标准表单行外壳：
+ * 为受控原子控件提供一致的 42px 标准表单行外壳：
  * 1. 标题与必填星号指示；
  * 2. 悬浮帮助提示问号图标 (Tooltip)；
  * 3. 字段级脏状态指示黄点；
@@ -41,7 +41,7 @@ export class FormField implements UIComponent {
     constructor(options: FormFieldOptions) {
         this.activeControl = options.control;
 
-        // 1. 创建 38px 表单行根容器
+        // 1. 创建 42px 表单行根容器
         this.element = document.createElement('div');
         this.element.classList.add('da-form-row');
         if (options.className) {
@@ -67,7 +67,9 @@ export class FormField implements UIComponent {
         if (options.tooltip) {
             this.tooltipIcon = document.createElement('span');
             this.tooltipIcon.classList.add('da-help-icon');
-            this.tooltipIcon.title = options.tooltip;
+            this.tooltipIcon.setAttribute('role', 'button');
+            this.tooltipIcon.tabIndex = 0;
+            this.tooltipIcon.setAttribute('aria-label', options.tooltip);
             this.tooltipIcon.setAttribute('data-tooltip', options.tooltip);
             this.tooltipIcon.textContent = '?';
             labelGroup.appendChild(this.tooltipIcon);
@@ -111,10 +113,11 @@ export class FormField implements UIComponent {
     public setTooltip(tooltip?: string): void {
         if (this.tooltipIcon) {
             if (tooltip) {
-                this.tooltipIcon.title = tooltip;
+                this.tooltipIcon.setAttribute('aria-label', tooltip);
                 this.tooltipIcon.setAttribute('data-tooltip', tooltip);
                 this.tooltipIcon.style.display = '';
             } else {
+                this.tooltipIcon.removeAttribute('aria-label');
                 this.tooltipIcon.removeAttribute('data-tooltip');
                 this.tooltipIcon.style.display = 'none';
             }

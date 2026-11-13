@@ -165,6 +165,9 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                             <span
                                 className="da-help-icon"
                                 data-tooltip="官方服饰收录规范：若为具有专属名称的成套服装或制服，填写 Danbooru 标准服饰标签（例如 school_uniform, serafuku）；若为通用散件搭配或自设日常服装，无需填写专属标识，此处留空即可，模型将依据下方各部位衣着标签进行生成。"
+                                role="button"
+                                tabIndex={0}
+                                aria-label="查看服装触发词填写规范"
                             >
                                 ?
                             </span>

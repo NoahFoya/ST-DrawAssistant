@@ -11,7 +11,6 @@
 
 import type { Disposable } from '../types';
 import { imageStorage } from '../../store/image-storage';
-import { urlPool } from '../../store/url-pool';
 import { eventBus } from '../../util/event-bus';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
@@ -78,9 +77,10 @@ export class LightboxModal implements Disposable {
     private infoBtnEl?: HTMLButtonElement;
     private editBtnEl?: HTMLButtonElement;
 
-    // 全局事件解绑器列表
+    // 全局事件解绑器与灯箱自建回退 URL 管理列表（独立于楼层会话 urlPool）
     private readonly disposers: (() => void)[] = [];
     private readonly failedFallbackIds = new Set<string>();
+    private readonly allocatedFallbackUrls: string[] = [];
 
     public constructor() {
         this.initDom();
@@ -96,7 +96,7 @@ export class LightboxModal implements Disposable {
 
         // 1. 全屏遮罩
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-lightbox-backdrop st-da-root';
+        backdrop.className = 'da-lightbox-backdrop da-modal-backdrop da-modal-backdrop--fullscreen st-da-root';
         backdrop.style.display = 'none';
 
         // 2. 图片展示区
@@ -116,8 +116,9 @@ export class LightboxModal implements Disposable {
                 this.failedFallbackIds.add(currentItem.imageId);
                 try {
                     const blob = await imageStorage.getImageBlob(currentItem.imageId);
-                    if (blob) {
-                        const fallbackUrl = urlPool.createUrl(currentItem.imageId, blob);
+                    if (blob && blob.size > 0) {
+                        const fallbackUrl = URL.createObjectURL(blob);
+                        this.allocatedFallbackUrls.push(fallbackUrl);
                         img.src = fallbackUrl;
                         return;
                     }
@@ -293,10 +294,7 @@ export class LightboxModal implements Disposable {
 
         backdrop.appendChild(toolbar);
 
-        // 6. 挂载到 body
-        document.body.appendChild(backdrop);
-
-        // 保存 DOM 引用
+        // 6. 保存 DOM 引用（保持游离态，在 openItems() 打开时动态挂至 document.body 末位以保证置顶层级）
         this.backdropEl = backdrop;
         this.wrapperEl = wrapper;
         this.imgEl = img;
@@ -347,33 +345,96 @@ export class LightboxModal implements Disposable {
             this.resetTransform();
         });
 
-        stage.addEventListener('mousedown', (e) => {
-            if (!this.isOpenState || e.button !== 0) return;
-            this.isDragging = true;
+        // 统一 PointerEvent 手势：放大态拖拽平移，常态水平轻扫切图，双击/双触复原
+        let activePointerId: number | null = null;
+        let pointerStartX = 0;
+        let pointerStartY = 0;
+        let pointerStartAt = 0;
+        let lastTouchTapAt = 0;
+
+        const finishPointerGesture = (e?: PointerEvent) => {
+            if (activePointerId === null) {
+                return;
+            }
+            if (e && e.pointerId !== activePointerId) {
+                return;
+            }
+
+            const startedAt = pointerStartAt;
+            const startX = pointerStartX;
+            const startY = pointerStartY;
+            const pid = activePointerId;
+            activePointerId = null;
+
+            if (this.isDragging) {
+                this.isDragging = false;
+                stage.classList.remove('is-dragging');
+            }
+            if (stage.hasPointerCapture?.(pid)) {
+                stage.releasePointerCapture?.(pid);
+            }
+
+            // 未放大状态下识别水平轻扫切图
+            if (e && e.type === 'pointerup' && this.zoom <= 1.05 && this.items.length > 1) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                const elapsed = Date.now() - startedAt;
+                if (Math.abs(dx) > 52 && Math.abs(dx) > Math.abs(dy) * 1.35 && elapsed < 500) {
+                    if (dx > 0) {
+                        this.prev();
+                    } else {
+                        this.next();
+                    }
+                }
+            }
+        };
+
+        stage.addEventListener('pointerdown', (e) => {
+            if (!this.isOpenState || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            if (e.pointerType === 'touch') {
+                const now = Date.now();
+                if (now - lastTouchTapAt < 280) {
+                    lastTouchTapAt = 0;
+                    this.resetTransform();
+                    return;
+                }
+                lastTouchTapAt = now;
+            }
+
+            activePointerId = e.pointerId;
+            pointerStartX = e.clientX;
+            pointerStartY = e.clientY;
+            pointerStartAt = Date.now();
+            this.isDragging = this.zoom > 1.05;
             this.dragStartX = e.clientX - this.translateX;
             this.dragStartY = e.clientY - this.translateY;
-            stage.classList.add('is-dragging');
+            stage.setPointerCapture?.(e.pointerId);
+            if (this.isDragging) {
+                stage.classList.add('is-dragging');
+            }
         });
 
-        const onMouseMove = (e: MouseEvent) => {
-            if (!this.isDragging) return;
+        const onPointerMove = (e: PointerEvent) => {
+            if (activePointerId === null || e.pointerId !== activePointerId) return;
+            if (!this.isDragging && this.zoom <= 1.05) return;
+            this.isDragging = true;
+            stage.classList.add('is-dragging');
             this.translateX = e.clientX - this.dragStartX;
             this.translateY = e.clientY - this.dragStartY;
             this.applyTransform();
         };
 
-        const onMouseUp = () => {
-            if (this.isDragging) {
-                this.isDragging = false;
-                stage.classList.remove('is-dragging');
-            }
+        const onPointerEnd = (e: PointerEvent) => {
+            finishPointerGesture(e);
         };
 
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerEnd);
+        window.addEventListener('pointercancel', onPointerEnd);
         this.disposers.push(() => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerEnd);
+            window.removeEventListener('pointercancel', onPointerEnd);
         });
     }
 
@@ -479,15 +540,16 @@ export class LightboxModal implements Disposable {
             return;
         }
 
+        this.revokeAllocatedFallbackUrls();
+        this.failedFallbackIds.clear();
         this.items = [...items];
         this.currentIndex = Math.max(0, Math.min(startIndex, this.items.length - 1));
         this.isOpenState = true;
         overlayStack.push('lightbox-modal', () => this.close());
 
-        if (this.backdropEl) {
-            if (!this.backdropEl.parentNode && typeof document !== 'undefined') {
-                document.body.appendChild(this.backdropEl);
-            }
+        if (this.backdropEl && typeof document !== 'undefined') {
+            // 每次打开均追加入 body 末位，与 SettingsModal / ImageInfoModal 同处正确绘制序
+            document.body.appendChild(this.backdropEl);
             this.backdropEl.style.display = 'flex';
         }
 
@@ -588,7 +650,9 @@ export class LightboxModal implements Disposable {
      * 打开当前图像的元信息弹窗。
      */
     private async openCurrentMetadata(): Promise<void> {
-        const item = this.items[this.currentIndex];
+        const snapshotItems = [...this.items];
+        const snapshotIndex = this.currentIndex;
+        const item = snapshotItems[snapshotIndex];
         if (!item) return;
 
         const record = item.imageId ? await imageStorage.getImageRecord(item.imageId) : undefined;
@@ -598,6 +662,7 @@ export class LightboxModal implements Disposable {
             metadata: record?.metadata,
             imageUrl: item.url,
             onEdit: item.onEdit,
+            onPreview: () => this.openItems(snapshotItems, snapshotIndex),
         });
     }
 
@@ -652,8 +717,22 @@ export class LightboxModal implements Disposable {
         overlayStack.remove('lightbox-modal');
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';
+            this.backdropEl.remove();
         }
+        this.revokeAllocatedFallbackUrls();
+        this.failedFallbackIds.clear();
         this.resetTransform();
+    }
+
+    private revokeAllocatedFallbackUrls(): void {
+        for (const url of this.allocatedFallbackUrls) {
+            try {
+                URL.revokeObjectURL(url);
+            } catch {
+                // 忽略释放异常
+            }
+        }
+        this.allocatedFallbackUrls.length = 0;
     }
 
     /**

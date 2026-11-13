@@ -149,10 +149,13 @@
 }
 
 /* 2. 独立 LoRA 管理模态框 (.da-lora-modal-panel) */
+.da-modal-backdrop.da-lora-modal-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
+}
+
 .da-lora-modal-panel {
-    width: 94%;
-    max-width: 680px;
-    max-height: 86vh;
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     display: flex;
     flex-direction: column;
     background: var(--da-bg-modal);
@@ -161,6 +164,22 @@
     box-shadow: var(--da-shadow-modal);
     overflow: hidden;
     box-sizing: border-box;
+}
+
+@media (max-width: 680px) {
+    .da-lora-modal-header {
+        padding: 12px 14px;
+    }
+
+    .da-lora-modal-body {
+        padding: 12px 14px;
+    }
+
+    .da-lora-modal-footer {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
 }
 
 .da-lora-modal-header {
@@ -342,14 +361,16 @@
 
 .da-lora-combobox__dropdown {
     position: fixed;
-    max-height: 220px;
+    max-height: min(220px, calc(var(--da-vvh, 100dvh) * 0.45));
+    max-width: calc(var(--da-vvw, 100vw) - 16px);
     overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--da-bg-secondary, #1a1e29);
     border: 1px solid var(--da-border-focus, var(--da-accent-color));
     border-radius: var(--da-radius-md, 8px);
     box-shadow: var(--da-shadow-modal, 0 12px 32px rgba(0, 0, 0, 0.6));
     padding: 4px;
-    z-index: 10050;
+    z-index: var(--da-z-popover, 10035);
     box-sizing: border-box;
 }
 

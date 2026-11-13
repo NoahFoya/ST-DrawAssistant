@@ -12,6 +12,7 @@ import type { ImageGenerationMetadata, StoredImageRecord } from '@types';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { copyTextToClipboard } from '../../util/clipboard';
 import { logger } from '../../util/logger';
 
 export interface ImageInfoModalOpenOptions {
@@ -23,8 +24,107 @@ export interface ImageInfoModalOpenOptions {
     record?: StoredImageRecord;
     /** 可选的打开图片编辑面板回调（移动端可通过此入口唤出编辑面板） */
     onEdit?: () => void;
+    /** 可选的预览原图回调（未提供时回退至浏览器新标签页打开） */
+    onPreview?: (imageUrl: string) => void;
     /** 可选的删除当前图像记录回调 */
     onDelete?: () => void;
+}
+
+interface ParamEntry {
+    label: string;
+    value: string;
+    copyValue?: string;
+    wide?: boolean;
+}
+
+interface ParamSection {
+    title: string;
+    entries: ParamEntry[];
+}
+
+/** 内部追踪与不可复用的字段集合，不在可复用参数面板与复制 JSON 中展示 */
+const NON_REUSABLE_META_KEYS = new Set([
+    'rawPrompt',
+    'rawNegativePrompt',
+    'promptId',
+    'filename',
+    'parentImageId',
+    'durationMs',
+    'provider',
+    'taskId',
+    'imageId',
+    'chatId',
+    'remotePath',
+]);
+
+/** 已归类映射的已知元数据字段 */
+const KNOWN_REUSABLE_META_KEYS = new Set([
+    'prompt',
+    'negativePrompt',
+    'engine',
+    'mode',
+    'width',
+    'height',
+    'sampler',
+    'scheduler',
+    'steps',
+    'cfgScale',
+    'seed',
+    'baseModel',
+    'modelName',
+    'vaeName',
+    'clipSkip',
+    'extraModels',
+    'workflowId',
+    'denoiseStrength',
+    'maskBlur',
+    'enableHires',
+    'hiresUpscaler',
+    'hiresScale',
+    'hiresSteps',
+    'hiresDenoise',
+    'cfgRescale',
+    'smeaMode',
+    'decrisper',
+    'quality',
+    'style',
+]);
+
+function formatEngineDisplay(engine?: string): string | undefined {
+    if (!engine) return undefined;
+    switch (engine.toLowerCase()) {
+        case 'comfyui':
+            return 'ComfyUI';
+        case 'sdwebui':
+            return 'SD-WebUI';
+        case 'novelai':
+            return 'NovelAI';
+        case 'openai':
+            return 'OpenAI';
+        default:
+            return engine;
+    }
+}
+
+function formatSmeaDisplay(mode?: string): string | undefined {
+    if (!mode) return undefined;
+    switch (mode) {
+        case 'smea_dyn':
+            return 'SMEA + Dyn';
+        case 'smea':
+            return 'SMEA';
+        case 'none':
+            return '关闭';
+        default:
+            return mode;
+    }
+}
+
+function hasDisplayValue(val: unknown): boolean {
+    if (val === undefined || val === null) return false;
+    if (typeof val === 'string') return val.trim().length > 0;
+    if (Array.isArray(val)) return val.length > 0;
+    return true;
 }
 
 export class ImageInfoModal implements Disposable {
@@ -65,7 +165,7 @@ export class ImageInfoModal implements Disposable {
         const imageUrl = options.imageUrl || options.record?.remotePath;
         const record = options.record;
 
-        // 1. 构建全屏遮罩容器
+        // 1. 构建弹窗遮罩容器（居中弹性外层）
         const backdrop = document.createElement('div');
         backdrop.className = 'da-modal-backdrop st-da-root da-inspect-backdrop';
 
@@ -85,11 +185,19 @@ export class ImageInfoModal implements Disposable {
         titleEl.textContent = '生图信息与参数';
         headerLeft.appendChild(titleEl);
 
-        const engineName = String(metadata.engine || record?.taskId || 'Standard');
+        const rawEngine = (metadata.engine as string | undefined) || (metadata.provider as string | undefined);
+        const engineLabel = formatEngineDisplay(rawEngine) || 'Standard';
         const badgeEl = document.createElement('span');
         badgeEl.className = 'da-inspect-badge';
-        badgeEl.textContent = engineName;
+        badgeEl.textContent = engineLabel;
         headerLeft.appendChild(badgeEl);
+
+        if (metadata.mode === 'inpaint') {
+            const modeBadge = document.createElement('span');
+            modeBadge.className = 'da-inspect-badge da-inspect-badge--accent';
+            modeBadge.textContent = '局部重绘';
+            headerLeft.appendChild(modeBadge);
+        }
         header.appendChild(headerLeft);
 
         const closeBtn = document.createElement('button');
@@ -109,69 +217,24 @@ export class ImageInfoModal implements Disposable {
         const body = document.createElement('div');
         body.className = 'da-inspect-body';
 
-        // 左栏：提示词与生成参数 (.da-inspect-col-meta)
+        // 左栏：提示词与分组可复用参数 (.da-inspect-col-meta)
         const colMeta = document.createElement('div');
         colMeta.className = 'da-inspect-col-meta';
 
         // 1. 正向提示词卡片
         const promptText = String(metadata.prompt || '');
-        const promptBox = this.createPromptCard('正向提示词 (Prompt)', promptText, false);
-        colMeta.appendChild(promptBox);
+        colMeta.appendChild(this.createPromptCard('正向提示词 (Prompt)', promptText, false));
 
         // 2. 负向提示词卡片 (若存在)
         const negativeText = String(metadata.negativePrompt || '');
         if (negativeText) {
-            const negBox = this.createPromptCard('负向提示词 (Negative Prompt)', negativeText, true);
-            colMeta.appendChild(negBox);
+            colMeta.appendChild(this.createPromptCard('负向提示词 (Negative Prompt)', negativeText, true));
         }
 
-        // 3. 生成参数表格 (.da-inspect-params-matrix)
-        const paramsMatrix = document.createElement('div');
-        paramsMatrix.className = 'da-inspect-params-matrix';
-
-        const widthVal = metadata.width ?? record?.width;
-        const heightVal = metadata.height ?? record?.height;
-        const paramEntries: Array<{ label: string; value: string | number | undefined }> = [
-            { label: '服务引擎', value: metadata.engine as string | undefined },
-            { label: '模型文件', value: (metadata.baseModel as string) || (metadata.modelName as string) },
-            { label: '工作流模板', value: metadata.workflowId as string | undefined },
-            { label: '采样算法', value: metadata.sampler as string | undefined },
-            { label: '调度器', value: metadata.scheduler as string | undefined },
-            { label: '采样步数', value: metadata.steps as number | undefined },
-            { label: 'CFG Scale', value: metadata.cfgScale as number | undefined },
-            { label: '随机种子', value: metadata.seed as number | undefined },
-            {
-                label: '输出分辨率',
-                value: widthVal && heightVal ? `${widthVal} × ${heightVal}` : undefined,
-            },
-        ];
-
-        let hasRenderedParam = false;
-        for (const entry of paramEntries) {
-            if (entry.value !== undefined && entry.value !== '') {
-                hasRenderedParam = true;
-                const cell = document.createElement('div');
-                cell.className = 'da-inspect-param-cell';
-
-                const labelEl = document.createElement('span');
-                labelEl.className = 'da-inspect-param-label';
-                labelEl.textContent = entry.label;
-                cell.appendChild(labelEl);
-
-                const valEl = document.createElement('span');
-                valEl.className = 'da-inspect-param-val is-copyable';
-                valEl.textContent = String(entry.value);
-                valEl.title = '点击复制此参数值';
-                valEl.addEventListener('click', () => {
-                    void this.copyText(String(entry.value), `已复制 ${entry.label}`);
-                });
-                cell.appendChild(valEl);
-
-                paramsMatrix.appendChild(cell);
-            }
-        }
-        if (hasRenderedParam) {
-            colMeta.appendChild(paramsMatrix);
+        // 3. 分组可复用生成参数卡片
+        const sections = this.buildParamSections(metadata, record);
+        for (const section of sections) {
+            colMeta.appendChild(this.createParamSectionCard(section));
         }
         body.appendChild(colMeta);
 
@@ -183,7 +246,7 @@ export class ImageInfoModal implements Disposable {
         if (imageUrl) {
             const previewBox = document.createElement('div');
             previewBox.className = 'da-inspect-preview-box';
-            previewBox.title = '点击在新标签页打开原图';
+            previewBox.title = options.onPreview ? '点击放大预览原图' : '点击在新标签页打开原图';
 
             const imgEl = document.createElement('img');
             imgEl.className = 'da-inspect-preview-img';
@@ -193,47 +256,24 @@ export class ImageInfoModal implements Disposable {
 
             const zoomBadge = document.createElement('div');
             zoomBadge.className = 'da-inspect-zoom-badge';
-            zoomBadge.textContent = '打开原图';
+            zoomBadge.textContent = options.onPreview ? '放大预览' : '打开原图';
             previewBox.appendChild(zoomBadge);
 
             previewBox.addEventListener('click', () => {
+                if (options.onPreview) {
+                    const previewCallback = options.onPreview;
+                    this.close();
+                    previewCallback(imageUrl);
+                    return;
+                }
                 window.open(imageUrl, '_blank');
             });
             colVisual.appendChild(previewBox);
         }
 
-        // 2. 规格指标
-        if (record) {
-            const specsBox = document.createElement('div');
-            specsBox.className = 'da-inspect-tech-specs';
-
-            const items: Array<{ label: string; val: string }> = [
-                { label: '文件体积', val: this.formatBytes(record.byteSize) },
-                { label: '媒体类型', val: record.mimeType || 'image/png' },
-            ];
-            if (typeof metadata.durationMs === 'number') {
-                items.push({ label: '生成耗时', val: `${(metadata.durationMs / 1000).toFixed(2)}s` });
-            }
-            if (record.createdAt) {
-                items.push({
-                    label: '生成时间',
-                    val: new Date(record.createdAt).toLocaleString(),
-                });
-            }
-
-            for (const item of items) {
-                const itemEl = document.createElement('div');
-                itemEl.className = 'da-inspect-tech-item';
-                const labelSpan = document.createElement('span');
-                labelSpan.className = 'da-inspect-tech-label';
-                labelSpan.textContent = item.label;
-                const valSpan = document.createElement('span');
-                valSpan.className = 'da-inspect-tech-value';
-                valSpan.textContent = item.val;
-                itemEl.appendChild(labelSpan);
-                itemEl.appendChild(valSpan);
-                specsBox.appendChild(itemEl);
-            }
+        // 2. 规格指标（文件信息与耗时，即使未传入 record 也能展示 generationMs/durationMs）
+        const specsBox = this.createSpecsCard(metadata, record);
+        if (specsBox) {
             colVisual.appendChild(specsBox);
         }
 
@@ -268,10 +308,11 @@ export class ImageInfoModal implements Disposable {
         const copyJsonBtn = document.createElement('button');
         copyJsonBtn.type = 'button';
         copyJsonBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        copyJsonBtn.textContent = '复制元数据 JSON';
+        copyJsonBtn.textContent = '复制可复用参数 JSON';
         copyJsonBtn.addEventListener('click', () => {
-            const jsonPayload = JSON.stringify(metadata, null, 2);
-            void this.copyText(jsonPayload, '已复制元数据 JSON');
+            const reusablePayload = this.buildReusableMetadataPayload(metadata);
+            const jsonPayload = JSON.stringify(reusablePayload, null, 2);
+            void this.copyText(jsonPayload, '已复制可复用参数 JSON');
         });
         actionsCard.appendChild(copyJsonBtn);
 
@@ -314,6 +355,237 @@ export class ImageInfoModal implements Disposable {
         this.backdropEl = backdrop;
         this.isOpenState = true;
         overlayStack.push('image-info-modal', () => this.close());
+    }
+
+    /**
+     * 将生成参数筛选并组织为分组展示模型，自动剔除 rawPrompt 与内部追踪字段。
+     */
+    private buildParamSections(
+        metadata: Record<string, unknown>,
+        record?: StoredImageRecord
+    ): ParamSection[] {
+        const pushIfPresent = (
+            list: ParamEntry[],
+            label: string,
+            rawVal: unknown,
+            opts?: { display?: string; copyValue?: string; wide?: boolean }
+        ): void => {
+            if (!hasDisplayValue(rawVal)) return;
+            const text = opts?.display ?? String(rawVal);
+            list.push({
+                label,
+                value: text,
+                copyValue: opts?.copyValue ?? text,
+                wide: opts?.wide,
+            });
+        };
+
+        // 1. 核心生成参数（采样与画幅）
+        const coreEntries: ParamEntry[] = [];
+        const rawEngine = (metadata.engine as string | undefined) || (metadata.provider as string | undefined);
+        pushIfPresent(coreEntries, '服务引擎', rawEngine, {
+            display: formatEngineDisplay(rawEngine),
+            copyValue: rawEngine,
+        });
+        if (metadata.mode === 'inpaint' || metadata.mode === 'txt2img') {
+            pushIfPresent(coreEntries, '生成模式', metadata.mode, {
+                display: metadata.mode === 'inpaint' ? '局部重绘' : '文生图',
+                copyValue: String(metadata.mode),
+            });
+        }
+        const widthVal = metadata.width ?? record?.width;
+        const heightVal = metadata.height ?? record?.height;
+        if (hasDisplayValue(widthVal) && hasDisplayValue(heightVal)) {
+            coreEntries.push({
+                label: '输出分辨率',
+                value: `${widthVal} × ${heightVal}`,
+            });
+        }
+        pushIfPresent(coreEntries, '采样算法', metadata.sampler);
+        pushIfPresent(coreEntries, '调度器', metadata.scheduler);
+        pushIfPresent(coreEntries, '采样步数', metadata.steps);
+        pushIfPresent(coreEntries, 'CFG Scale', metadata.cfgScale);
+        pushIfPresent(coreEntries, '随机种子', metadata.seed);
+
+        // 2. 模型与工作流
+        const modelEntries: ParamEntry[] = [];
+        const baseModel = metadata.baseModel as string | undefined;
+        const modelName = metadata.modelName as string | undefined;
+        const primaryModel = baseModel || modelName;
+        pushIfPresent(modelEntries, '主模型', primaryModel, { wide: Boolean(primaryModel && primaryModel.length > 36) });
+        if (baseModel && modelName && modelName !== baseModel) {
+            pushIfPresent(modelEntries, '模型名称', modelName);
+        }
+        pushIfPresent(modelEntries, 'VAE 模型', metadata.vaeName);
+        pushIfPresent(modelEntries, 'CLIP 跳过层', metadata.clipSkip);
+        if (Array.isArray(metadata.extraModels) && metadata.extraModels.length > 0) {
+            const joined = metadata.extraModels.map((m) => String(m)).filter(Boolean).join(', ');
+            pushIfPresent(modelEntries, '附加模型', joined, { wide: true });
+        }
+        pushIfPresent(modelEntries, '工作流模板', metadata.workflowId);
+
+        // 3. 重绘与引擎扩展参数
+        const extEntries: ParamEntry[] = [];
+        pushIfPresent(extEntries, '重绘幅度', metadata.denoiseStrength);
+        if (hasDisplayValue(metadata.maskBlur)) {
+            pushIfPresent(extEntries, '蒙版羽化', metadata.maskBlur, {
+                display: `${metadata.maskBlur} px`,
+                copyValue: String(metadata.maskBlur),
+            });
+        }
+        if (metadata.enableHires === true) {
+            extEntries.push({ label: '高清修复', value: '开启', copyValue: 'true' });
+        }
+        pushIfPresent(extEntries, '放大算法', metadata.hiresUpscaler);
+        if (hasDisplayValue(metadata.hiresScale)) {
+            pushIfPresent(extEntries, '放大倍率', metadata.hiresScale, {
+                display: `${metadata.hiresScale}x`,
+                copyValue: String(metadata.hiresScale),
+            });
+        }
+        pushIfPresent(extEntries, '高修步数', metadata.hiresSteps);
+        pushIfPresent(extEntries, '高修重绘幅度', metadata.hiresDenoise);
+        pushIfPresent(extEntries, 'CFG 重缩放', metadata.cfgRescale);
+        if (hasDisplayValue(metadata.smeaMode)) {
+            const rawSmea = String(metadata.smeaMode);
+            pushIfPresent(extEntries, 'SMEA 模式', rawSmea, {
+                display: formatSmeaDisplay(rawSmea),
+                copyValue: rawSmea,
+            });
+        }
+        if (metadata.decrisper === true) {
+            extEntries.push({ label: '防过曝 (Decrisper)', value: '开启', copyValue: 'true' });
+        }
+        pushIfPresent(extEntries, '生成画质', metadata.quality);
+        pushIfPresent(extEntries, '画面风格', metadata.style);
+
+        // 附加未知的引擎自定义可复用字段（自动排除非复用及已归类字段）
+        for (const [key, val] of Object.entries(metadata)) {
+            if (KNOWN_REUSABLE_META_KEYS.has(key) || NON_REUSABLE_META_KEYS.has(key) || !hasDisplayValue(val)) {
+                continue;
+            }
+            const formatted =
+                Array.isArray(val)
+                    ? val.map((item) => String(item)).join(', ')
+                    : typeof val === 'object'
+                      ? JSON.stringify(val)
+                      : String(val);
+            if (!formatted) continue;
+            extEntries.push({
+                label: key,
+                value: formatted,
+                wide: formatted.length > 36,
+            });
+        }
+
+        const sections: ParamSection[] = [];
+        if (coreEntries.length > 0) sections.push({ title: '核心生成参数', entries: coreEntries });
+        if (modelEntries.length > 0) sections.push({ title: '模型与工作流', entries: modelEntries });
+        if (extEntries.length > 0) sections.push({ title: '重绘与引擎扩展参数', entries: extEntries });
+        return sections;
+    }
+
+    /**
+     * 创建分组生成参数卡片。
+     */
+    private createParamSectionCard(section: ParamSection): HTMLElement {
+        const card = document.createElement('div');
+        card.className = 'da-inspect-param-section';
+
+        const header = document.createElement('div');
+        header.className = 'da-inspect-section-header';
+        header.textContent = section.title;
+        card.appendChild(header);
+
+        const matrix = document.createElement('div');
+        matrix.className = 'da-inspect-params-matrix';
+
+        for (const entry of section.entries) {
+            const cell = document.createElement('div');
+            cell.className = `da-inspect-param-cell${entry.wide ? ' da-inspect-param-cell--wide' : ''}`;
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'da-inspect-param-label';
+            labelEl.textContent = entry.label;
+            cell.appendChild(labelEl);
+
+            const valEl = document.createElement('span');
+            valEl.className = 'da-inspect-param-val is-copyable';
+            valEl.textContent = entry.value;
+            valEl.title = '点击复制此参数值';
+            const copyTarget = entry.copyValue ?? entry.value;
+            valEl.addEventListener('click', () => {
+                void this.copyText(copyTarget, `已复制 ${entry.label}`);
+            });
+            cell.appendChild(valEl);
+
+            matrix.appendChild(cell);
+        }
+
+        card.appendChild(matrix);
+        return card;
+    }
+
+    /**
+     * 创建右栏文件与耗时规格卡片。
+     */
+    private createSpecsCard(
+        metadata: Record<string, unknown>,
+        record?: StoredImageRecord
+    ): HTMLElement | null {
+        const items: Array<{ label: string; val: string }> = [];
+        if (record) {
+            items.push(
+                { label: '文件体积', val: this.formatBytes(record.byteSize) },
+                { label: '媒体类型', val: record.mimeType || 'image/png' }
+            );
+        }
+        if (typeof metadata.durationMs === 'number') {
+            items.push({ label: '生成耗时', val: `${(metadata.durationMs / 1000).toFixed(2)}s` });
+        }
+        if (record?.createdAt) {
+            items.push({
+                label: '生成时间',
+                val: new Date(record.createdAt).toLocaleString(),
+            });
+        }
+        if (items.length === 0) {
+            return null;
+        }
+
+        const specsBox = document.createElement('div');
+        specsBox.className = 'da-inspect-tech-specs';
+        for (const item of items) {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'da-inspect-tech-item';
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'da-inspect-tech-label';
+            labelSpan.textContent = item.label;
+            const valSpan = document.createElement('span');
+            valSpan.className = 'da-inspect-tech-value';
+            valSpan.textContent = item.val;
+            itemEl.appendChild(labelSpan);
+            itemEl.appendChild(valSpan);
+            specsBox.appendChild(itemEl);
+        }
+        return specsBox;
+    }
+
+    /**
+     * 过滤掉 rawPrompt 与内部追踪标识，生成可复制的纯净参数 JSON。
+     */
+    private buildReusableMetadataPayload(metadata: Record<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+        if (!metadata.engine && typeof metadata.provider === 'string' && metadata.provider) {
+            result.engine = metadata.provider;
+        }
+        for (const [key, val] of Object.entries(metadata)) {
+            if (NON_REUSABLE_META_KEYS.has(key) || val === undefined) {
+                continue;
+            }
+            result[key] = val;
+        }
+        return result;
     }
 
     /**
@@ -371,21 +643,10 @@ export class ImageInfoModal implements Disposable {
      * 复制文本到剪贴板。
      */
     private async copyText(content: string, successMessage: string): Promise<void> {
-        try {
-            if (navigator?.clipboard?.writeText) {
-                await navigator.clipboard.writeText(content);
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = content;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                textarea.remove();
-            }
+        const ok = await copyTextToClipboard(content);
+        if (ok) {
             Toast.success(successMessage);
-        } catch {
+        } else {
             Toast.error('复制失败，请手动选择复制');
         }
     }

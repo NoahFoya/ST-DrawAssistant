@@ -13,6 +13,7 @@
 import type { VNode } from 'preact';
 import { signal } from '@preact/signals';
 import type { LocalLexiconFileMeta, LocalCustomWordItem } from '@types';
+import type { Disposable } from '../types';
 import {
     PreactSettingsView,
     CardView,
@@ -29,6 +30,7 @@ import {
 import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { createPointAnchorRect, openFloatingSurface } from '../layout/floating-sheet';
 
 export type LexiconSubTab = 'files' | 'custom';
 
@@ -54,7 +56,6 @@ export class LexiconTabView extends PreactSettingsView {
     public readonly subTab = signal<LexiconSubTab>('files');
     public readonly filesMeta = signal<LocalLexiconFileMeta[]>([]);
     public readonly customWords = signal<LocalCustomWordItem[]>([]);
-    public readonly loading = signal<boolean>(false);
 
     // Excel 级纯单元格数据网格状态
     public readonly tailDraft = signal<{ tag: string; cn: string }>({
@@ -67,15 +68,6 @@ export class LexiconTabView extends PreactSettingsView {
         cn: string;
     } | null>(null);
     public readonly cellBackupValue = signal<string>('');
-    public readonly contextMenu = signal<{
-        visible: boolean;
-        x: number;
-        y: number;
-        wordId: string;
-        tag: string;
-        cn?: string;
-        index: number;
-    } | null>(null);
 
     public readonly batchPasteText = signal<string>('');
     public readonly showBatchBox = signal<boolean>(false);
@@ -86,6 +78,7 @@ export class LexiconTabView extends PreactSettingsView {
     private fileInputEl: HTMLInputElement | null = null;
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
     private draftBlurTimer: ReturnType<typeof setTimeout> | null = null;
+    private contextMenuHandle: Disposable | null = null;
     private touchStartX = 0;
     private touchStartY = 0;
 
@@ -98,7 +91,6 @@ export class LexiconTabView extends PreactSettingsView {
         });
 
         if (typeof window !== 'undefined') {
-            window.addEventListener('pointerdown', this.handleGlobalPointerDown, true);
             window.addEventListener('keydown', this.handleGlobalKeyDown, true);
         }
 
@@ -111,7 +103,13 @@ export class LexiconTabView extends PreactSettingsView {
         super.activate();
     }
 
+    public override deactivate(): void {
+        this.closeContextMenu();
+        super.deactivate();
+    }
+
     public override dispose(): void {
+        this.closeContextMenu();
         if (this.unlistenLexicon) {
             this.unlistenLexicon();
             this.unlistenLexicon = null;
@@ -121,7 +119,6 @@ export class LexiconTabView extends PreactSettingsView {
             this.fileInputEl = null;
         }
         if (typeof window !== 'undefined') {
-            window.removeEventListener('pointerdown', this.handleGlobalPointerDown, true);
             window.removeEventListener('keydown', this.handleGlobalKeyDown, true);
         }
         if (this.touchTimer) {
@@ -135,32 +132,13 @@ export class LexiconTabView extends PreactSettingsView {
         super.dispose();
     }
 
-    private readonly handleGlobalPointerDown = (e: MouseEvent | TouchEvent): void => {
-        if (this.contextMenu.value) {
-            const target = e.target as HTMLElement | null;
-            if (!target?.closest('.da-lexicon-context-menu')) {
-                this.contextMenu.value = null;
-            }
-        }
-    };
-
     private readonly handleGlobalKeyDown = (e: KeyboardEvent): void => {
-        if (e.key === 'Escape') {
-            let handled = false;
-            if (this.contextMenu.value) {
-                this.contextMenu.value = null;
-                handled = true;
-            }
-            if (this.insertedDraft.value) {
-                this.insertedDraft.value = null;
-                handled = true;
-            }
-            if (handled) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof e.stopImmediatePropagation === 'function') {
-                    e.stopImmediatePropagation();
-                }
+        if (e.key === 'Escape' && this.insertedDraft.value) {
+            this.insertedDraft.value = null;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') {
+                e.stopImmediatePropagation();
             }
         }
     };
@@ -338,35 +316,91 @@ export class LexiconTabView extends PreactSettingsView {
     }
 
     /**
-     * 呼出右键或长按操作上下文菜单。
+     * 通过全局门户浮层呼出右键或长按操作菜单（桌面端相对锚点展开，移动端自动切换底部 Action Sheet）。
      */
     public openContextMenu(
         clientX: number,
         clientY: number,
         item: LocalCustomWordItem,
-        index: number
+        index: number,
+        anchorEl?: HTMLElement | null
     ): void {
-        let x = clientX;
-        let y = clientY;
-        if (typeof window !== 'undefined') {
-            const menuWidth = 190;
-            const menuHeight = 210;
-            if (x + menuWidth > window.innerWidth - 12) {
-                x = Math.max(12, window.innerWidth - menuWidth - 12);
-            }
-            if (y + menuHeight > window.innerHeight - 12) {
-                y = Math.max(12, window.innerHeight - menuHeight - 12);
-            }
+        this.closeContextMenu();
+        const anchorRect = anchorEl
+            ? anchorEl.getBoundingClientRect()
+            : createPointAnchorRect(clientX, clientY);
+
+        this.contextMenuHandle = openFloatingSurface({
+            stackId: 'lexicon-context-menu',
+            title: item.tag ? `词条：${item.tag}` : '词条操作',
+            anchorRect,
+            preferredPlacement: 'bottom',
+            align: anchorEl ? 'end' : 'start',
+            desktopWidth: 190,
+            estimatedHeight: 220,
+            panelClassName: 'da-lexicon-context-menu',
+            entries: [
+                {
+                    icon: '📋',
+                    label: '复制英文 Tag',
+                    onSelect: () => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            void navigator.clipboard.writeText(item.tag);
+                            Toast.show(`已复制 Tag: ${item.tag}`, { level: 'success' });
+                        }
+                    },
+                },
+                {
+                    icon: '✏️',
+                    label: '编辑此行',
+                    onSelect: () => {
+                        this.focusCell(`.da-lexicon-grid-row[data-row-index="${index}"]`, 'tag', true);
+                    },
+                },
+                { type: 'divider' },
+                {
+                    icon: '⬆️',
+                    label: '在上方插入行',
+                    onSelect: () => {
+                        this.insertedDraft.value = { index, tag: '', cn: '' };
+                        this.focusCell('.da-lexicon-inserted-row', 'tag');
+                    },
+                },
+                {
+                    icon: '⬇️',
+                    label: '在下方插入行',
+                    onSelect: () => {
+                        this.insertedDraft.value = { index: index + 1, tag: '', cn: '' };
+                        this.focusCell('.da-lexicon-inserted-row', 'tag');
+                    },
+                },
+                { type: 'divider' },
+                {
+                    icon: '🗑️',
+                    label: '删除此词条',
+                    danger: true,
+                    onSelect: () => {
+                        void (async () => {
+                            await this._storage.deleteCustomWord(item.id);
+                            await this.reloadFromStorage();
+                            Toast.show('已删除词条', { level: 'info' });
+                        })();
+                    },
+                },
+            ],
+            onClose: () => {
+                this.contextMenuHandle = null;
+            },
+        });
+    }
+
+    /** 关闭当前活动的词库上下文菜单浮层 */
+    public closeContextMenu(): void {
+        if (this.contextMenuHandle) {
+            const handle = this.contextMenuHandle;
+            this.contextMenuHandle = null;
+            handle.dispose();
         }
-        this.contextMenu.value = {
-            visible: true,
-            x,
-            y,
-            wordId: item.id,
-            tag: item.tag,
-            cn: item.cn,
-            index,
-        };
     }
 
     /**
@@ -643,58 +677,6 @@ export class LexiconTabView extends PreactSettingsView {
             clearTimeout(this.touchTimer);
             this.touchTimer = null;
         }
-    }
-
-    private handleMenuCopyTag(): void {
-        const menu = this.contextMenu.value;
-        if (!menu) return;
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-            void navigator.clipboard.writeText(menu.tag);
-            Toast.show(`已复制 Tag: ${menu.tag}`, { level: 'success' });
-        }
-        this.contextMenu.value = null;
-    }
-
-    private handleMenuEditRow(): void {
-        const menu = this.contextMenu.value;
-        if (!menu) return;
-        const index = menu.index;
-        this.contextMenu.value = null;
-        this.focusCell(`.da-lexicon-grid-row[data-row-index="${index}"]`, 'tag', true);
-    }
-
-    private handleMenuInsertAbove(): void {
-        const menu = this.contextMenu.value;
-        if (!menu) return;
-        this.insertedDraft.value = {
-            index: menu.index,
-            tag: '',
-            cn: '',
-        };
-        this.contextMenu.value = null;
-        this.focusCell('.da-lexicon-inserted-row', 'tag');
-    }
-
-    private handleMenuInsertBelow(): void {
-        const menu = this.contextMenu.value;
-        if (!menu) return;
-        this.insertedDraft.value = {
-            index: menu.index + 1,
-            tag: '',
-            cn: '',
-        };
-        this.contextMenu.value = null;
-        this.focusCell('.da-lexicon-inserted-row', 'tag');
-    }
-
-    private async handleMenuDeleteRow(): Promise<void> {
-        const menu = this.contextMenu.value;
-        if (!menu) return;
-        const wordId = menu.wordId;
-        this.contextMenu.value = null;
-        await this._storage.deleteCustomWord(wordId);
-        await this.reloadFromStorage();
-        Toast.show('已删除词条', { level: 'info' });
     }
 
     private renderCustomWordsSubPanel(): VNode {
@@ -1101,7 +1083,8 @@ export class LexiconTabView extends PreactSettingsView {
                                                     e.clientX,
                                                     e.clientY,
                                                     item,
-                                                    idx
+                                                    idx,
+                                                    e.currentTarget as HTMLElement
                                                 );
                                             }}
                                         >
@@ -1212,63 +1195,6 @@ export class LexiconTabView extends PreactSettingsView {
                         )}
                     </div>
                 </div>
-
-                {/* 5. 浮动上下文菜单 (Context Menu) */}
-                {this.contextMenu.value && (
-                    <div
-                        className="da-lexicon-context-menu"
-                        style={{
-                            top: `${this.contextMenu.value.y}px`,
-                            left: `${this.contextMenu.value.x}px`,
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <button
-                            type="button"
-                            className="da-lexicon-menu-item"
-                            onClick={() => this.handleMenuCopyTag()}
-                        >
-                            <span className="da-lexicon-menu-icon">📋</span>
-                            <span className="da-lexicon-menu-text">复制英文 Tag</span>
-                        </button>
-                        <button
-                            type="button"
-                            className="da-lexicon-menu-item"
-                            onClick={() => this.handleMenuEditRow()}
-                        >
-                            <span className="da-lexicon-menu-icon">✏️</span>
-                            <span className="da-lexicon-menu-text">编辑此行</span>
-                        </button>
-                        <div className="da-lexicon-menu-divider" />
-                        <button
-                            type="button"
-                            className="da-lexicon-menu-item"
-                            onClick={() => this.handleMenuInsertAbove()}
-                        >
-                            <span className="da-lexicon-menu-icon">⬆️</span>
-                            <span className="da-lexicon-menu-text">在上方插入行</span>
-                        </button>
-                        <button
-                            type="button"
-                            className="da-lexicon-menu-item"
-                            onClick={() => this.handleMenuInsertBelow()}
-                        >
-                            <span className="da-lexicon-menu-icon">⬇️</span>
-                            <span className="da-lexicon-menu-text">在下方插入行</span>
-                        </button>
-                        <div className="da-lexicon-menu-divider" />
-                        <button
-                            type="button"
-                            className="da-lexicon-menu-item is-danger"
-                            onClick={() => {
-                                void this.handleMenuDeleteRow();
-                            }}
-                        >
-                            <span className="da-lexicon-menu-icon">🗑️</span>
-                            <span className="da-lexicon-menu-text">删除此词条</span>
-                        </button>
-                    </div>
-                )}
             </CardView>
         );
     }

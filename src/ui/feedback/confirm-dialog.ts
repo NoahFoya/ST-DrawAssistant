@@ -93,7 +93,7 @@ export class ConfirmDialogService implements Disposable {
             let settled = false;
 
             const backdrop = document.createElement('div');
-            backdrop.className = 'da-dialog-backdrop st-da-root';
+            backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
 
             const panel = document.createElement('div');
             panel.className = 'da-dialog-panel';
@@ -247,7 +247,7 @@ export class ConfirmDialogService implements Disposable {
             let settled = false;
 
             const backdrop = document.createElement('div');
-            backdrop.className = 'da-dialog-backdrop st-da-root';
+            backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
 
             const panel = document.createElement('div');
             panel.className = 'da-dialog-panel da-dialog-panel--prompt';

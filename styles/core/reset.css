@@ -6,7 +6,7 @@
  * 严禁声明全局未加作用域的选择器，确保不破坏 SillyTavern 宿主自身的样式。
  */
 
-/* 1. 作用域容器文本渲染初始化 */
+/* 1. 作用域容器文本渲染与移动端触控初始化 */
 .st-da-root,
 .da-modal-backdrop,
 .da-main-modal-inner,
@@ -16,6 +16,8 @@
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
     color: var(--da-text-primary);
 }
 
@@ -77,15 +79,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-}
-
-/* 6. 移动端触控与文字缩放重置 (防止 iOS 表单聚焦自动放大致版心错位) */
-.st-da-root,
-.da-modal-backdrop,
-.da-main-modal-inner,
-.da-overlay-host {
-    -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
 }
 
 

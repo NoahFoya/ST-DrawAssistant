@@ -20,12 +20,13 @@ import type {
 } from '@types';
 import { providerRegistry } from '../provider/registry';
 import { imageStorage, type ImageStorage } from '../store/image-storage';
-import { promptPipeline, type PromptPipeline } from './prompt-pipeline';
+import { PromptPipeline, promptPipeline } from './prompt-pipeline';
 import { settingsStore, type SettingsStore, DEFAULT_TASK_TIMEOUT_MS, type ImageStorageQuality } from '../store/settings-store';
 import { eventBus, type EventBus } from '../util/event-bus';
 import { sessionLifecycle, type SessionLifecycleManager } from './session-lifecycle';
 import { logger } from '../util/logger';
 import { applyImageStorageQuality } from '../util/image-compress';
+import { ensureValidImageBlob } from '../util/http-client';
 
 /** 提交生图任务参数选项 */
 export interface SubmitTaskOptions {
@@ -82,8 +83,8 @@ export class GenerationOrchestrator {
     public constructor(options: OrchestratorOptions = {}) {
         this._registry = options.registry ?? providerRegistry;
         this._storage = options.storage ?? imageStorage;
-        this._promptPipeline = options.promptPipeline ?? promptPipeline;
         this._settingsStore = options.settingsStore ?? settingsStore;
+        this._promptPipeline = options.promptPipeline ?? promptPipeline;
         this._eventBus = options.eventBus ?? eventBus;
         this._sessionLifecycle = options.sessionLifecycle ?? sessionLifecycle;
         if (typeof this._sessionLifecycle?.setTaskCanceller === 'function') {
@@ -148,16 +149,6 @@ export class GenerationOrchestrator {
         }
 
         return 1;
-    }
-
-    /**
-     * 设置自定义最大并发数。
-     */
-    public setMaxConcurrent(limit: number): void {
-        if (limit > 0) {
-            this._customMaxConcurrent = limit;
-            this.processQueue();
-        }
     }
 
     /**
@@ -258,40 +249,52 @@ export class GenerationOrchestrator {
             (this._settingsStore.get('activeProvider') as ProviderType) ??
             'comfyui';
 
-        // 1. 预处理提示词并构造生图请求
-        const effectiveSourceImage = options.sourceImage ?? (options.parameters?.sourceImage as Blob | string | undefined);
-        const effectiveMaskImage = options.maskImage ?? (options.parameters?.maskImage as Blob | string | undefined);
+        // 1. 预处理提示词并固化当前生效的绘图预设快照，确保排队期间切换预设不导致参数错配
+        const explicitDrawingId =
+            typeof options.parameters?.drawingPresetId === 'string'
+                ? options.parameters.drawingPresetId
+                : undefined;
+        const resolvedDrawing = this._settingsStore.resolveDrawingPreset(providerType, {
+            explicitPresetId: explicitDrawingId,
+            throwOnMissingActive: false,
+        });
+        const effectiveDrawingPresetId = resolvedDrawing.presetId;
+
+        const effectiveSourceImage = options.sourceImage;
+        const effectiveMaskImage = options.maskImage;
+
+        const mergedParamsSnapshot: Record<string, unknown> | undefined =
+            options.parameters || effectiveDrawingPresetId
+                ? { ...(options.parameters ?? {}) }
+                : undefined;
+
+        if (mergedParamsSnapshot) {
+            if (effectiveDrawingPresetId && !mergedParamsSnapshot.drawingPresetId) {
+                mergedParamsSnapshot.drawingPresetId = effectiveDrawingPresetId;
+            }
+        }
 
         const request = this._promptPipeline.buildGenerationRequest({
             rawPrompt: options.rawPrompt,
             sourceImage: effectiveSourceImage,
             maskImage: effectiveMaskImage,
-            parameters: options.parameters,
+            parameters: mergedParamsSnapshot,
             providerType,
         });
 
         // 2. 创建任务对象并分配 imageId
-        const mergedParamsSnapshot = options.parameters
-            ? { ...options.parameters }
-            : (effectiveSourceImage || effectiveMaskImage ? {} : undefined);
-
-        if (mergedParamsSnapshot) {
-            if (effectiveSourceImage && !mergedParamsSnapshot.sourceImage) {
-                mergedParamsSnapshot.sourceImage = effectiveSourceImage;
-            }
-            if (effectiveMaskImage && !mergedParamsSnapshot.maskImage) {
-                mergedParamsSnapshot.maskImage = effectiveMaskImage;
-            }
-        }
-
         const task: DrawingTask = {
             taskId,
             imageId,
             target: options.target,
             prompt: request.prompt,
             negativePrompt: request.negativePrompt,
+            rawPrompt: request.rawPrompt,
+            rawNegativePrompt: request.rawNegativePrompt,
             providerType,
             parametersSnapshot: mergedParamsSnapshot,
+            sourceImage: effectiveSourceImage,
+            maskImage: effectiveMaskImage,
             createdAt: Date.now(),
             status: 'pending',
         };
@@ -300,7 +303,6 @@ export class GenerationOrchestrator {
         this._queue.push(taskId);
 
         logger.info(`生图任务已入队: ${taskId} (资产: ${imageId}, 会话: ${options.target.chatId}, 楼层 #${options.target.messageId})`);
-        this._eventBus.emit('task:created', task);
         this.transitionTaskStatus(taskId, 'pending');
 
         // 3. 驱动队列消费
@@ -329,13 +331,11 @@ export class GenerationOrchestrator {
             if (queueIndex !== -1) {
                 this._queue.splice(queueIndex, 1);
             }
-            if (task.parametersSnapshot) {
-                if (task.parametersSnapshot.sourceImage instanceof Blob) {
-                    task.parametersSnapshot.sourceImage = undefined;
-                }
-                if (task.parametersSnapshot.maskImage instanceof Blob) {
-                    task.parametersSnapshot.maskImage = undefined;
-                }
+            if (task.sourceImage instanceof Blob) {
+                task.sourceImage = undefined;
+            }
+            if (task.maskImage instanceof Blob) {
+                task.maskImage = undefined;
             }
             this.transitionTaskStatus(taskId, 'cancelled', { cancelReason: reason });
             logger.info(`排队中任务已取消: ${taskId}`);
@@ -450,8 +450,8 @@ export class GenerationOrchestrator {
             const request: GenerationRequest = {
                 prompt: task.prompt,
                 negativePrompt: task.negativePrompt,
-                sourceImage: task.parametersSnapshot?.sourceImage as Blob | string | undefined,
-                maskImage: task.parametersSnapshot?.maskImage as Blob | string | undefined,
+                sourceImage: task.sourceImage,
+                maskImage: task.maskImage,
                 parameters: task.parametersSnapshot,
             };
 
@@ -464,19 +464,30 @@ export class GenerationOrchestrator {
                 return;
             }
 
-            // 8. 图像质量处理与元数据归一化
+            // 8. 图像产物有效性校验与质量处理（拦截 0 字节或损坏结果，防止写入库中）
+            const validatedRawBlob = await ensureValidImageBlob(
+                result?.blob,
+                provider.name || task.providerType
+            );
             const configuredQuality = (this._settingsStore.get('imageQuality') || 'original') as ImageStorageQuality;
-            const finalBlob = await applyImageStorageQuality(result.blob, configuredQuality);
+            const finalBlob = await applyImageStorageQuality(validatedRawBlob, configuredQuality);
 
             if (controller.signal.aborted || this.isTaskCancelled(taskId)) {
                 logger.info(`已取消任务在编码处理后退出，已丢弃结果: ${taskId}`);
                 return;
             }
 
+            const supportsNegative = provider.supportsNegativePrompt !== false;
             const finalizedMetadata = {
                 ...result.metadata,
                 prompt: result.metadata?.prompt ?? task.prompt,
-                negativePrompt: result.metadata?.negativePrompt ?? task.negativePrompt,
+                negativePrompt: supportsNegative
+                    ? (result.metadata?.negativePrompt ?? task.negativePrompt)
+                    : undefined,
+                rawPrompt: result.metadata?.rawPrompt ?? task.rawPrompt,
+                rawNegativePrompt: supportsNegative
+                    ? (result.metadata?.rawNegativePrompt ?? task.rawNegativePrompt)
+                    : undefined,
             };
 
             // 9. 资产原子持久化（成功后同步写入元数据与二进制 Blob，保证图库索引纯净）
@@ -497,16 +508,13 @@ export class GenerationOrchestrator {
             task.generationMetadata = finalizedMetadata;
             this.transitionTaskStatus(taskId, 'completed', { imageId });
 
-            // 11. 调度宿主楼层消息资产回写（仅在当前活跃会话与任务会话一致时回写楼层，跨会话后台任务仅保留至图库）
+            // 11. 调度宿主楼层消息资产回写：若完成时已切换会话，严格仅存入本地 IndexedDB，不回写楼层且不触碰当前会话角色目录
             const currentChatId = this._getActiveChatId();
             const isCrossSession = Boolean(currentChatId && currentChatId !== task.target.chatId);
             if (isCrossSession) {
                 logger.info(
-                    `[GenerationOrchestrator] 任务 [${taskId}] 完成时当前活跃会话 (${currentChatId}) 与目标会话 (${task.target.chatId}) 不一致，仅保存图库而不回写楼层`
+                    `[GenerationOrchestrator] 任务 [${taskId}] 完成时当前活跃会话 (${currentChatId}) 与目标会话 (${task.target.chatId}) 不一致，仅保存至 IndexedDB 图库`
                 );
-                this._sessionLifecycle.uploadImageToServer(imageId).catch((transferErr) => {
-                    logger.warn(`后台服务端转存异常 [${imageId}]:`, transferErr);
-                });
             } else {
                 try {
                     await this._sessionLifecycle.updateMessageSlot(task.target, {
@@ -550,14 +558,12 @@ export class GenerationOrchestrator {
             this._timeoutTimers.delete(taskId);
             this._controllers.delete(taskId);
 
-            // 释放任务快照中残留的大型 Blob 二进制引用，防止内存占用滞留
-            if (task.parametersSnapshot) {
-                if (task.parametersSnapshot.sourceImage instanceof Blob) {
-                    task.parametersSnapshot.sourceImage = undefined;
-                }
-                if (task.parametersSnapshot.maskImage instanceof Blob) {
-                    task.parametersSnapshot.maskImage = undefined;
-                }
+            // 释放任务上下文中残留的大型 Blob 二进制引用，防止内存占用滞留
+            if (task.sourceImage instanceof Blob) {
+                task.sourceImage = undefined;
+            }
+            if (task.maskImage instanceof Blob) {
+                task.maskImage = undefined;
             }
 
             // 计数递减并调度后续任务

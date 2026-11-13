@@ -47,7 +47,7 @@ export interface PresetControllerOptions<TData extends Record<string, unknown>> 
     getActiveId: () => string;
     /** 将激活预设 ID 写回持久化存储的函数 */
     setActiveId: (id: string) => void;
-    /** 新建预设前的必填项校验，返回缺失字段名称列表 */
+    /** 保存或另存为预设前的必填项校验，返回缺失字段名称列表 */
     validateRequired?: (draft: TData) => string[];
     /** 执行新建、保存、另存为操作前的额外前置校验 */
     canPerformAction?: (action: PresetActionType, draft: TData) => { allowed: boolean; message?: string };
@@ -334,6 +334,13 @@ export class PresetController<TData extends Record<string, unknown>> {
             }
 
             case 'save': {
+                if (this.options.validateRequired) {
+                    const missing = this.options.validateRequired(this.draftConfig.value);
+                    if (missing.length > 0) {
+                        Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
+                        return;
+                    }
+                }
                 const cur = this.currentPreset.value;
                 if (!cur) {
                     // 当无激活预设时，弹窗询问新预设名称并将当前草稿直接保存为新预设，不丢失用户参数
@@ -385,6 +392,13 @@ export class PresetController<TData extends Record<string, unknown>> {
             }
 
             case 'saveAs': {
+                if (this.options.validateRequired) {
+                    const missing = this.options.validateRequired(this.draftConfig.value);
+                    if (missing.length > 0) {
+                        Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
+                        return;
+                    }
+                }
                 const cur = this.currentPreset.value;
                 if (!cur) return;
 

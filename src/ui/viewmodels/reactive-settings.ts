@@ -47,14 +47,6 @@ export class ReactiveSettingsBridge implements Disposable {
     }
 
     /**
-     * 批量合并顶层配置项并即时持久化到 SettingsStore。
-     */
-    public update(patch: Partial<DrawAssistantSettings>): void {
-        settingsStore.update(patch);
-        this.syncFromStore();
-    }
-
-    /**
      * 深度合并更新 ui 子配置项并即时持久化。
      */
     public updateUi(patch: Partial<NonNullable<DrawAssistantSettings['ui']>>): void {

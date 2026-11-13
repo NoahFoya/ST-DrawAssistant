@@ -281,10 +281,3 @@ export async function loadOfficialStaticPresets(
 
     return structuredClone(assembled);
 }
-
-/**
- * 清空静态预设内存缓存（供测试隔离使用）。
- */
-export function clearStaticPresetsCache(): void {
-    cachedOfficialPresets = null;
-}

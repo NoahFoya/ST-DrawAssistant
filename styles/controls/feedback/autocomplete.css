@@ -4,19 +4,21 @@
 
 .da-autocomplete-popup {
     position: fixed;
-    z-index: 10050;
+    z-index: var(--da-z-popover, 10035);
     display: none;
     flex-direction: column;
     gap: 2px;
-    min-width: 260px;
-    max-width: 480px;
-    max-height: 240px;
+    min-width: 180px;
+    max-width: min(480px, calc(var(--da-vvw, 100vw) - 16px));
+    max-height: min(240px, calc(var(--da-vvh, 100dvh) * 0.45));
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 4px;
     border-radius: var(--da-radius-card, 10px);
     background: var(--da-bg-modal, #1e293b);
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
     box-shadow: var(--da-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.45));
+    box-sizing: border-box;
 }
 
 .da-autocomplete-popup--open {

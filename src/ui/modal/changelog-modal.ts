@@ -35,9 +35,9 @@ export class ChangelogModal implements Disposable {
             return;
         }
 
-        // 1. 全屏遮罩外壳
+        // 1. 弹窗遮罩外壳（复用 .da-modal-backdrop 居中弹性层）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-changelog-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-changelog-backdrop st-da-root';
         this.backdropEl = backdrop;
 
         // 2. 居中面板容器

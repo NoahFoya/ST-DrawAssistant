@@ -70,7 +70,11 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 data={vm.connectionData.value}
                 onChange={(data) => vm.updateConnection(data)}
                 onTestPing={() => vm.testPing()}
-                onFetchAssets={() => vm.refreshServerAssets()}
+                onFetchAssets={
+                    vm.supportsAssetSync
+                        ? () => vm.refreshServerAssets(false, { skipHealthCheck: true })
+                        : undefined
+                }
             />
 
             {props.children}

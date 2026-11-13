@@ -18,7 +18,20 @@ import type {
     DrawingPresetData,
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
-import { base64ToBlob, imageInputToBase64 } from '../../util/http-client';
+import { base64ToBlob, ensureValidImageBlob, HttpError, imageInputToBase64 } from '../../util/http-client';
+
+/** 提取 SD-WebUI HttpError 详情文本 */
+function extractSdWebUiError(details: unknown): string | undefined {
+    if (!details) return undefined;
+    if (typeof details === 'string') return details.trim() || undefined;
+    if (typeof details === 'object') {
+        const rec = details as Record<string, unknown>;
+        if (typeof rec.error === 'string' && rec.error.trim()) return rec.error.trim();
+        if (typeof rec.detail === 'string' && rec.detail.trim()) return rec.detail.trim();
+        if (typeof rec.errors === 'string' && rec.errors.trim()) return rec.errors.trim();
+    }
+    return undefined;
+}
 
 /** SD-WebUI 提供方初始化配置项 */
 export interface SdWebUIProviderOptions extends BaseProviderOptions {}
@@ -36,11 +49,13 @@ export class SdWebUIProvider extends BaseGenerationProvider {
     private _modelsCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
     private _vaesCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
     private _samplersCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
+    private _schedulersCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
     private _lorasCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
 
     private _inFlightModels: Promise<string[]> | null = null;
     private _inFlightVaes: Promise<string[]> | null = null;
     private _inFlightSamplers: Promise<string[]> | null = null;
+    private _inFlightSchedulers: Promise<string[]> | null = null;
     private _inFlightLoras: Promise<string[]> | null = null;
 
     public constructor(options: SdWebUIProviderOptions = {}) {
@@ -54,10 +69,12 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         this._modelsCache = null;
         this._vaesCache = null;
         this._samplersCache = null;
+        this._schedulersCache = null;
         this._lorasCache = null;
         this._inFlightModels = null;
         this._inFlightVaes = null;
         this._inFlightSamplers = null;
+        this._inFlightSchedulers = null;
         this._inFlightLoras = null;
     }
 
@@ -277,6 +294,67 @@ export class SdWebUIProvider extends BaseGenerationProvider {
     }
 
     /**
+     * 获取 SD-WebUI 服务端支持的采样调度器列表。
+     *
+     * @remarks
+     * 现代 A1111 1.9+ / Forge / reForge 支持 `/sdapi/v1/schedulers`；
+     * 若旧版 WebUI 未实现该端点 (如返回 404)，静默降级返回空数组，不阻断资产拉取。
+     */
+    public async fetchSchedulers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        const serverUrl = this.getServerUrl();
+        const transport = this.getTransport();
+        const now = Date.now();
+
+        if (
+            !forceRefresh &&
+            this._schedulersCache &&
+            this._schedulersCache.serverUrl === serverUrl &&
+            now - this._schedulersCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
+        ) {
+            return this._schedulersCache.data;
+        }
+
+        if (this._inFlightSchedulers) {
+            return this._inFlightSchedulers;
+        }
+
+        const url = `${serverUrl}/sdapi/v1/schedulers`;
+        const fetchPromise = (async () => {
+            try {
+                const response = await this.fetchWithTransport(
+                    url,
+                    { method: 'GET', timeoutMs: 15000, signal },
+                    transport
+                );
+                if (!response.ok) {
+                    return [];
+                }
+                const data = (await response.json()) as Array<{ name?: string; label?: string }>;
+
+                if (!Array.isArray(data)) {
+                    return [];
+                }
+
+                const schedulers = data
+                    .map((s) => s.name ?? s.label ?? '')
+                    .filter((name) => name.trim().length > 0);
+                this._schedulersCache = { data: schedulers, timestamp: Date.now(), serverUrl };
+                return schedulers;
+            } catch (err: unknown) {
+                if (signal?.aborted) {
+                    throw err;
+                }
+                return [];
+            } finally {
+                this._inFlightSchedulers = null;
+            }
+        })();
+
+        this._inFlightSchedulers = fetchPromise;
+        return fetchPromise;
+    }
+
+    /**
      * 获取 SD-WebUI 服务端已加载的 LoRA 模型列表。
      *
      * @remarks
@@ -358,29 +436,21 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 1. 读取激活预设与常规绘图超参数
-        let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore) {
-            const config = this._settingsStore.getProviderConfig<SDWebUIProviderConfig>('sdwebui');
-            const activeDrawingId = config?.activeDrawingPresetId;
-            if (activeDrawingId) {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                    'drawing',
-                    activeDrawingId,
-                    'sdwebui'
-                )?.data;
-                if (!drawingPreset) {
-                    throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${activeDrawingId})，请重新选择预设`);
-                }
-            }
-        }
+        // 1. 读取激活预设与常规绘图超参数（优先使用队列快照固定的 drawingPresetId）
+        const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         const resolvedSteps = (params.steps ?? drawingPreset?.steps) as number | undefined;
         const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale) as number | undefined;
         const resolvedSamplerName = (params.samplerName ?? drawingPreset?.samplerName) as string | undefined;
         const resolvedScheduler = (params.scheduler ?? drawingPreset?.scheduler) as string | undefined;
-        const resolvedWidth = (params.width ?? drawingPreset?.width) as number | undefined;
-        const resolvedHeight = (params.height ?? drawingPreset?.height) as number | undefined;
+        const isInpaintMode = params.mode === 'inpaint';
+        // 局部重绘优先沿用底图自身尺寸，避免文生图预设分辨率把底图强行拉伸变形
+        const resolvedWidth = (
+            isInpaintMode ? params.width : (params.width ?? drawingPreset?.width)
+        ) as number | undefined;
+        const resolvedHeight = (
+            isInpaintMode ? params.height : (params.height ?? drawingPreset?.height)
+        ) as number | undefined;
         const resolvedSeed = (params.seed ?? drawingPreset?.seed ?? -1) as number;
         const resolvedBaseModel = (params.baseModel ?? drawingPreset?.baseModel) as string | undefined;
         const resolvedClipSkip = (params.clipSkip ?? drawingPreset?.clipSkip) as number | undefined;
@@ -397,8 +467,9 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         if (resolvedClipSkip !== undefined) {
             overrideSettings['CLIP_stop_at_last_layers'] = resolvedClipSkip;
         }
-        if (resolvedVae && resolvedVae !== 'automatic' && resolvedVae.trim().length > 0) {
-            overrideSettings['sd_vae'] = resolvedVae;
+        if (resolvedVae && resolvedVae.trim().length > 0) {
+            overrideSettings['sd_vae'] =
+                resolvedVae.trim().toLowerCase() === 'automatic' ? 'Automatic' : resolvedVae;
         }
 
         // 3. 装配 txt2img 请求体
@@ -411,23 +482,34 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             override_settings_restore_afterwards: true,
         };
 
+        const normalizedScheduler =
+            typeof resolvedScheduler === 'string' &&
+            resolvedScheduler.trim() &&
+            resolvedScheduler.trim().toLowerCase() !== 'automatic'
+                ? resolvedScheduler.trim()
+                : undefined;
+
         if (resolvedSteps !== undefined) requestBody['steps'] = resolvedSteps;
         if (resolvedCfgScale !== undefined) requestBody['cfg_scale'] = resolvedCfgScale;
         if (resolvedSamplerName !== undefined) requestBody['sampler_name'] = resolvedSamplerName;
-        if (resolvedScheduler !== undefined) requestBody['scheduler'] = resolvedScheduler;
+        if (normalizedScheduler !== undefined) requestBody['scheduler'] = normalizedScheduler;
         if (resolvedWidth !== undefined) requestBody['width'] = resolvedWidth;
         if (resolvedHeight !== undefined) requestBody['height'] = resolvedHeight;
         if (Object.keys(overrideSettings).length > 0) {
             requestBody['override_settings'] = overrideSettings;
         }
 
-        const isInpaintMode = params.mode === 'inpaint';
         let endpoint = `${serverUrl}/sdapi/v1/txt2img`;
+        let enableHires = false;
+        let resolvedHiresUpscaler: string | undefined;
+        let resolvedHiresScale: number | undefined;
+        let resolvedHiresSteps: number | undefined;
+        let resolvedHiresDenoise: number | undefined;
 
         if (isInpaintMode) {
             endpoint = `${serverUrl}/sdapi/v1/img2img`;
             const sourceImage = request.sourceImage;
-            const maskImage = request.maskImage ?? params.maskImage;
+            const maskImage = request.maskImage;
 
             if (!sourceImage) {
                 throw new Error('局部重绘模式下必须提供底图数据');
@@ -450,33 +532,45 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             requestBody['inpaint_full_res_padding'] = 32;
         } else {
             // 高清修复 (Hires. fix) 选配参数（仅在文生图模式生效）
-            const enableHires = Boolean(params.enableHires ?? drawingPreset?.enableHires);
+            enableHires = Boolean(params.enableHires ?? drawingPreset?.enableHires);
             if (enableHires) {
                 requestBody['enable_hr'] = true;
-                const hiresUpscaler = (params.hiresUpscaler ?? drawingPreset?.hiresUpscaler) as string | undefined;
-                if (hiresUpscaler) requestBody['hr_upscaler'] = hiresUpscaler;
+                resolvedHiresUpscaler = (params.hiresUpscaler ?? drawingPreset?.hiresUpscaler) as string | undefined;
+                if (resolvedHiresUpscaler) requestBody['hr_upscaler'] = resolvedHiresUpscaler;
                 const hiresScale = (params.hiresScale ?? drawingPreset?.hiresScale) as number | undefined;
-                if (hiresScale !== undefined) requestBody['hr_scale'] = hiresScale;
-                const hiresSteps = (params.hiresSteps ?? drawingPreset?.hiresSteps) as number | undefined;
-                if (hiresSteps !== undefined) requestBody['hr_second_pass_steps'] = hiresSteps;
-                const hiresDenoise = (params.hiresDenoise ?? drawingPreset?.hiresDenoise) as number | undefined;
-                if (hiresDenoise !== undefined) requestBody['denoising_strength'] = hiresDenoise;
+                if (hiresScale !== undefined) {
+                    resolvedHiresScale = hiresScale;
+                    requestBody['hr_scale'] = hiresScale;
+                }
+                resolvedHiresSteps = (params.hiresSteps ?? drawingPreset?.hiresSteps) as number | undefined;
+                if (resolvedHiresSteps !== undefined) requestBody['hr_second_pass_steps'] = resolvedHiresSteps;
+                resolvedHiresDenoise = (params.hiresDenoise ?? drawingPreset?.hiresDenoise) as number | undefined;
+                if (resolvedHiresDenoise !== undefined) requestBody['denoising_strength'] = resolvedHiresDenoise;
             }
         }
 
         // 4. 发起 HTTP 生图请求
-        const resp = await this.fetchWithTransport(
-            endpoint,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-                timeoutMs: maxTimeoutMs,
-                retries: 0,
-                signal,
-            },
-            transport
-        );
+        let resp: Response;
+        try {
+            resp = await this.fetchWithTransport(
+                endpoint,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                    timeoutMs: maxTimeoutMs,
+                    retries: 0,
+                    signal,
+                },
+                transport
+            );
+        } catch (err: unknown) {
+            if (err instanceof HttpError) {
+                const detail = extractSdWebUiError(err.details) ?? `HTTP ${err.status}`;
+                throw new Error(`SD-WebUI 服务响应错误 (${err.status}): ${detail}`);
+            }
+            throw err;
+        }
 
         if (!resp.ok) {
             const errBody = await resp.text().catch(() => '');
@@ -490,22 +584,44 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             throw new Error('SD-WebUI 返回结果中未包含图像数据');
         }
 
-        const imageBase64 = images[0] as string;
-        const blob = base64ToBlob(imageBase64, 'image/png');
+        const imageBase64 = images[0];
+        if (typeof imageBase64 !== 'string' || !imageBase64.trim()) {
+            throw new Error('SD-WebUI 返回结果中图像内容为空');
+        }
+        const blob = await ensureValidImageBlob(base64ToBlob(imageBase64, 'image/png'), 'SD-WebUI');
 
         const durationMs = Date.now() - startTime;
         const infoStr = generationResult['info'];
         let parsedSeed: number | undefined;
+        let parsedWidth: number | undefined;
+        let parsedHeight: number | undefined;
         if (typeof infoStr === 'string') {
             try {
                 const info = JSON.parse(infoStr) as Record<string, unknown>;
                 if (typeof info['seed'] === 'number') {
                     parsedSeed = info['seed'];
                 }
+                if (typeof info['width'] === 'number' && info['width'] > 0) {
+                    parsedWidth = info['width'];
+                }
+                if (typeof info['height'] === 'number' && info['height'] > 0) {
+                    parsedHeight = info['height'];
+                }
             } catch {
                 // info 字段解析失败时忽略，使用原始入参 seed
             }
         }
+
+        const effectiveWidth =
+            parsedWidth ??
+            (enableHires && resolvedWidth && resolvedHiresScale && resolvedHiresScale > 0
+                ? Math.round(resolvedWidth * resolvedHiresScale)
+                : resolvedWidth);
+        const effectiveHeight =
+            parsedHeight ??
+            (enableHires && resolvedHeight && resolvedHiresScale && resolvedHiresScale > 0
+                ? Math.round(resolvedHeight * resolvedHiresScale)
+                : resolvedHeight);
 
         // 6. 装配生成元数据
         const metadata: ImageGenerationMetadata = {
@@ -513,17 +629,25 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             negativePrompt: fullNegativePrompt || undefined,
             seed: parsedSeed ?? resolvedSeed,
             sampler: resolvedSamplerName,
+            scheduler: normalizedScheduler,
             steps: resolvedSteps,
             cfgScale: resolvedCfgScale,
             engine: 'sdwebui',
             durationMs,
             baseModel: resolvedBaseModel,
-            width: resolvedWidth,
-            height: resolvedHeight,
+            vaeName: resolvedVae?.trim() || undefined,
+            clipSkip: resolvedClipSkip,
+            width: effectiveWidth,
+            height: effectiveHeight,
             mode: isInpaintMode ? 'inpaint' : 'txt2img',
             denoiseStrength: isInpaintMode ? (params.denoiseStrength ?? 0.75) : undefined,
             maskBlur: isInpaintMode ? (params.maskBlur ?? 4) : undefined,
             parentImageId: (params as { parentImageId?: string }).parentImageId,
+            enableHires: enableHires || undefined,
+            hiresUpscaler: enableHires ? resolvedHiresUpscaler : undefined,
+            hiresScale: enableHires ? resolvedHiresScale : undefined,
+            hiresSteps: enableHires ? resolvedHiresSteps : undefined,
+            hiresDenoise: enableHires ? resolvedHiresDenoise : undefined,
         };
 
         return {

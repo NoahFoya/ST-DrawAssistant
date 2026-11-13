@@ -157,21 +157,32 @@
     --da-duration-base: 0.22s;
     --da-duration-slow: 0.35s;
 
-    /* 12. 遮罩模糊与层叠上下文 (z-index) */
+    /* 12. 动态可视视口变量默认回退（运行时由 ViewportService 写入根节点） */
+    --da-vvw: 100vw;
+    --da-vvh: 100dvh;
+    --da-vv-top: 0px;
+    --da-vv-left: 0px;
+    --da-vv-bottom-inset: 0px;
+
+    /* 13. 遮罩模糊与统一 7 级浮层堆叠阶梯 (z-index)
+       严格按业务层级递增分配，禁止使用未定义令牌回退或硬编码跨级数值 */
     --da-blur-modal: 20px;
     --da-blur-panel: 24px;
-    --da-z-fab: 9999;
-    --da-z-modal: 10000;
-    --da-z-overlay: 100040;
-    --da-z-dialog: 100050;
-    --da-z-toast: 100200;
-    --da-z-tooltip: 100300;
+    --da-z-fab: 9999;              /* 常驻悬浮入口球 */
+    --da-z-modal: 10000;           /* 主设置弹窗 */
+    --da-z-secondary-modal: 10020; /* 次级功能弹窗 (详情/操作面板/LoRA/蓝图/导入/日志/引导) */
+    --da-z-popover: 10035;         /* 浮层菜单、输入联想、下拉与移动端 Action Sheet */
+    --da-z-overlay: var(--da-z-secondary-modal);
+    --da-z-viewer: 10045;          /* 全屏媒体查看与涂鸦画板 (Lightbox/Inpaint/ImagePreview) */
+    --da-z-dialog: 10060;          /* 最高模态提示与确认对话框 */
+    --da-z-toast: 100200;          /* 全局轻量非阻塞通知 */
+    --da-z-tooltip: 100300;        /* 全局释义气泡门户 */
 
-    /* 13. 焦点指示环 */
+    /* 14. 焦点指示环 */
     --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35);
     --da-focus-visible-ring: 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color);
 
-    /* 14. 语义兼容别名与未绑定变量统一映射 */
+    /* 15. 语义兼容别名与未绑定变量统一映射 */
     --da-primary: var(--da-accent-color);
     --da-accent: var(--da-accent-color);
     --da-accent-primary: var(--da-accent-color);

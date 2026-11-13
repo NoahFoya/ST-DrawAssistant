@@ -401,7 +401,7 @@ export function resolvePromptMacros(
     const unresolvedMacros: string[] = [];
 
     const expandedText = text.replace(
-        /\$([^\s$,，;；:：!！?？]+?)\$/g,
+        /\$([^\r\n$,，;；:：!！?？]+?)\$/g,
         (fullMatch, innerToken: string) => {
             const trimmed = innerToken.trim();
             if (!trimmed) {
@@ -806,7 +806,7 @@ export function inspectPromptMacros(
 
     const diagnostics: MacroTokenDiagnostic[] = [];
 
-    const regex = /\$([^\s$,，;；:：!！?？]+?)\$/g;
+    const regex = /\$([^\r\n$,，;；:：!！?？]+?)\$/g;
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(text)) !== null) {

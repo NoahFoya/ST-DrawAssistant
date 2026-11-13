@@ -4,7 +4,7 @@
  * 负责在宿主消息中记录楼层图片索引，并在会话切换时清理临时资源与取消未完成任务：
  * 1. 消息索引：在 chat[messageId].extra.drawings[instructionIndex]（及 swipe_info[swipeId].extra.drawings[instructionIndex]）记录 imageId 与 imageUrl；
  * 2. 存储分工：宿主消息保存轻量索引，图片二进制数据由本地存储维护；
- * 3. 会话切换：根据 cancelOnChatChange 配置决定取消旧会话未决任务或平稳运行入库，并释放临时 Object URL。
+ * 3. 会话切换：默认取消旧会话未决任务（`cancelOnChatChange = true`）；关闭该选项后允许后台平稳生成并仅存入本地图库，不向已离开的会话楼层回写。
  */
 
 import type { SlotMountTarget, DrawingSlotEntry, ChatMessage, Disposable } from '@types';
@@ -20,10 +20,12 @@ export interface HostContextLike {
     chatId?: string;
     characterId?: string | number;
     characters?: Array<{ name?: string }>;
+    groupId?: string;
+    groups?: Array<{ id?: string; name?: string }>;
     eventSource?: {
-        on(event: string, handler: (...args: any[]) => void): void;
-        off?(event: string, handler: (...args: any[]) => void): void;
-        removeListener?(event: string, handler: (...args: any[]) => void): void;
+        on(event: string, handler: (...args: unknown[]) => void): void;
+        off?(event: string, handler: (...args: unknown[]) => void): void;
+        removeListener?(event: string, handler: (...args: unknown[]) => void): void;
         emit?(event: string, ...args: unknown[]): void;
     };
     eventTypes?: {
@@ -100,14 +102,19 @@ export class SessionLifecycleManager implements Disposable {
         this._lastChatId = context.chatId;
         const chatChangedEvent = context.eventTypes.CHAT_CHANGED ?? 'chat_id_changed';
 
-        const onChatChanged = (newChatId?: string) => {
+        const onChatChanged = (...args: unknown[]) => {
             const oldChatId = this._lastChatId;
+            const newChatId = typeof args[0] === 'string' ? args[0] : undefined;
             const targetChatId = newChatId ?? this._getContext()?.chatId;
+            if (oldChatId && targetChatId && oldChatId === targetChatId) {
+                return;
+            }
+
             logger.info(`检测到宿主会话变更 (${oldChatId ?? 'none'} -> ${targetChatId ?? 'none'})`);
             this._lastChatId = targetChatId;
 
-            // 1. 若配置开启了切换会话时自动取消任务 (cancelOnChatChange)，则中止旧会话未决任务
-            const shouldCancel = this._settingsStore.get('cancelOnChatChange') ?? false;
+            // 1. 默认开启切出会话取消未决任务 (cancelOnChatChange = true)；仅当用户主动关闭该开关时允许后台继续出图并仅存本地图库
+            const shouldCancel = this._settingsStore.get('cancelOnChatChange') ?? true;
             if (shouldCancel && oldChatId && typeof this._cancelTasksByChat === 'function') {
                 try {
                     this._cancelTasksByChat(oldChatId, '宿主会话已切换');
@@ -116,7 +123,7 @@ export class SessionLifecycleManager implements Disposable {
                 }
             }
 
-            // 2. 释放脱离视图的临时图片引用，避免内存泄漏
+            // 2. 释放脱离视图的临时楼层图片引用，避免内存泄漏
             this._urlPool.revokeAll();
         };
 
@@ -237,31 +244,6 @@ export class SessionLifecycleManager implements Disposable {
             targetSwipe.extra.drawings = targetSwipe.extra.drawings ?? {};
             targetSwipe.extra.drawings[instructionIndex] = { ...entry };
         }
-    }
-
-    /**
-     * 在宿主消息中直接记录图片条目并持久化保存。
-     *
-     * @param target 目标楼层位置坐标
-     * @param entry 图片记录数据
-     * @returns 是否成功写入宿主消息内存
-     */
-    public recordSlotEntry(target: SlotMountTarget, entry: DrawingSlotEntry): boolean {
-        const context = this._getContext();
-        if (!context || !Array.isArray(context.chat)) return false;
-        if (context.chatId && context.chatId !== target.chatId) return false;
-
-        const message = context.chat[target.messageId];
-        if (!message) return false;
-
-        const swipeId = target.swipeId ?? 0;
-        this.writeSlotToMessage(message, swipeId, target.instructionIndex, entry);
-
-        // 调用宿主持久化；不越权触发 MESSAGE_UPDATED 以避免自身监听器触发二次楼层重绘
-        if (typeof context.saveChat === 'function') {
-            void context.saveChat();
-        }
-        return true;
     }
 
     /**
@@ -440,25 +422,6 @@ export class SessionLifecycleManager implements Disposable {
     }
 
     /**
-     * 将图像上传至宿主服务器（后台非阻塞执行）。
-     * 无论宿主当前处于哪一个活跃会话，均可安全独立执行，不依赖或修改前台活跃 chat 数组。
-     *
-     * @param imageId 图像唯一标识符
-     * @param characterName 关联角色名称
-     * @returns 成功转存后的服务端静态相对路径
-     */
-    public async uploadImageToServer(imageId: string, characterName?: string): Promise<string | undefined> {
-        const saveToServer = this._settingsStore.get('saveToServer') ?? false;
-        if (!saveToServer) {
-            return undefined;
-        }
-
-        const resolvedCharName = characterName ?? this.getCurrentCharacterName(this._getContext());
-        const syncResult = await serverStorageService.syncSlotServerImage({ imageId }, resolvedCharName);
-        return syncResult.imageUrl;
-    }
-
-    /**
      * 释放生命周期资源，解绑宿主监听器。
      */
     public dispose(): void {
@@ -490,18 +453,32 @@ export class SessionLifecycleManager implements Disposable {
             const charId = context.characterId;
             const characters = context.characters;
             const index =
-               typeof charId === 'number'
-                   ? charId
-                   : typeof charId === 'string'
-                   ? parseInt(charId, 10)
-                   : NaN;
+                typeof charId === 'number'
+                    ? charId
+                    : typeof charId === 'string'
+                      ? parseInt(charId, 10)
+                      : NaN;
             if (!Number.isNaN(index) && Array.isArray(characters) && characters[index]) {
-                return characters[index].name;
+                const charName = characters[index].name?.trim();
+                if (charName) {
+                    return charName;
+                }
             }
+
+            if (context.groupId) {
+                const matchedGroup = Array.isArray(context.groups)
+                    ? context.groups.find((g) => g?.id === context.groupId)
+                    : undefined;
+                const groupName = matchedGroup?.name?.trim();
+                return groupName || 'group_chats';
+            }
+
+            // 无活跃单聊角色时（如群聊或无卡会话）统一保存至独立目录，避免上传请求缺失 ch_name
+            return 'group_chats';
         } catch (err) {
             logger.warn('解析当前角色名称异常:', err);
         }
-        return undefined;
+        return 'group_chats';
     }
 }
 

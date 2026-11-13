@@ -7,24 +7,16 @@
  * 3. 复制交互：参数单元格支持悬停与点击复制。
  */
 
-/* 1. 图像详情弹窗遮罩与外壳 */
-.da-inspect-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10001;
+/* 1. 图像详情弹窗遮罩与外壳（布局继承自 .da-modal-backdrop） */
+.da-modal-backdrop.da-inspect-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.72));
     backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    box-sizing: border-box;
 }
 
 .da-inspect-modal {
-    width: 95%;
-    max-width: 1060px;
-    max-height: 88vh;
+    width: min(1060px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     border-radius: var(--da-radius-large, 16px);
     background: var(--da-bg-modal, #1a1d26);
     backdrop-filter: blur(var(--da-blur-panel, 20px));
@@ -34,6 +26,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-sizing: border-box;
     animation: da-fadein 0.22s var(--da-ease);
 }
 
@@ -78,6 +71,12 @@
     background: var(--da-bg-input);
     color: var(--da-text-secondary);
     border: 1px solid var(--da-border-color);
+}
+
+.da-inspect-badge--accent {
+    color: var(--da-accent-color);
+    border-color: rgba(129, 140, 248, 0.35);
+    background: rgba(129, 140, 248, 0.12);
 }
 
 /* 3. 详情主体双列网格 (.da-inspect-body)
@@ -202,9 +201,26 @@
     }
 }
 
-/* 6. 生成参数双列网格与点击复制 (.da-inspect-params-matrix)
-   采用双列等宽网格（repeat(2, 1fr)）展示步数、CFG、种子、模型、采样器等核心元数据；
-   每个单元格支持鼠标悬停高亮与点击快速复制取值。 */
+/* 6. 分组参数卡与生成参数双列网格 (.da-inspect-param-section / .da-inspect-params-matrix)
+   按核心生成参数、模型与工作流、重绘与引擎扩展参数分层组织；
+   采用双列等宽网格（repeat(2, 1fr)），每个单元格支持悬停高亮与点击复制取值。 */
+.da-inspect-param-section {
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-card, 12px);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-inspect-section-header {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: var(--da-text-secondary);
+    letter-spacing: 0.3px;
+}
+
 .da-inspect-params-matrix {
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);
@@ -213,6 +229,13 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px 14px;
+}
+
+.da-inspect-param-section .da-inspect-params-matrix {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }
 
 .da-inspect-param-cell {
@@ -224,6 +247,10 @@
     border: 1px solid var(--da-border-subtle, rgba(255, 255, 255, 0.05));
     border-radius: 6px;
     min-width: 0;
+}
+
+.da-inspect-param-cell--wide {
+    grid-column: 1 / -1;
 }
 
 .da-inspect-param-label {

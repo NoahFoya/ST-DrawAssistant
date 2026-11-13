@@ -2,8 +2,10 @@
  * 全局模态浮层层叠栈管理服务 (OverlayStackManager)。
  *
  * @remarks
- * 采用后进先出（LIFO）栈统一管理多级模态弹窗（如主设置面板、二级编辑模态框、灯箱、图片详情与确认对话框）
- * 的 Escape 快捷键关闭顺序，确保单次按下 Escape 仅触发最顶层浮层关闭，不会联动关闭下层模态窗口。
+ * 1. 采用后进先出（LIFO）栈统一管理多级模态弹窗（如主设置面板、二级编辑模态框、灯箱、图片详情与确认对话框）
+ *    的 Escape 快捷键关闭顺序，确保单次按下 Escape 仅触发最顶层浮层关闭，不会联动关闭下层模态窗口。
+ * 2. 联动维护根文档的 `da-has-active-modal` 滚动锁定类名：当任一模态弹窗活跃时阻止底层宿主聊天页连带滚动，
+ *    栈归零或显式清空时同步恢复，避免多次开关导致滚动锁残留。
  */
 
 export interface OverlayStackEntry {
@@ -20,10 +22,10 @@ export class OverlayStackManager {
             return;
         }
 
-        // 若当前存在展开的标签补全下拉框或词库右键菜单，优先交由局部浮层处理
+        // 若当前存在展开的输入补全或下拉选择器（未入栈的非模态浮层），优先交由局部浮层处理 Escape
         if (
             typeof document !== 'undefined' &&
-            document.querySelector('.da-autocomplete-popup--open, .da-lexicon-context-menu')
+            document.querySelector('.da-autocomplete-popup--open, .da-lora-combobox__dropdown--open')
         ) {
             return;
         }
@@ -49,6 +51,7 @@ export class OverlayStackManager {
         this.remove(id);
         this.stack.push({ id, onEscape });
         this.ensureListener();
+        this.syncRootModalState();
         return () => {
             this.remove(id);
         };
@@ -67,6 +70,7 @@ export class OverlayStackManager {
         if (this.stack.length === 0) {
             this.unbindListener();
         }
+        this.syncRootModalState();
     }
 
     /**
@@ -94,6 +98,17 @@ export class OverlayStackManager {
     public clear(): void {
         this.stack.length = 0;
         this.unbindListener();
+        this.syncRootModalState();
+    }
+
+    /**
+     * 依据活跃模态栈深度同步根节点滚动隔离类名。
+     */
+    private syncRootModalState(): void {
+        if (typeof document === 'undefined' || !document.documentElement) {
+            return;
+        }
+        document.documentElement.classList.toggle('da-has-active-modal', this.stack.length > 0);
     }
 
     private ensureListener(): void {

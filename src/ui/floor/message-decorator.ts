@@ -94,6 +94,11 @@ export class MessageDecorator implements Disposable {
     /** 活跃楼层容器的临时生命周期清理回调（预载器与移动端手势定时器等） */
     private readonly activeSlotCleanups = new Map<string, () => void>();
 
+    /** 消息级异步装饰代次计数器：在清理、删除或切换分支时递增，阻断在途异步回写过期 DOM */
+    private readonly messageGenerations = new Map<number, number>();
+    /** 会话级全量清理代次，切出会话执行 clearCurrentButtons 时递增 */
+    private clearEpoch = 0;
+
     /** 防抖扫描定时器 */
     private scanTimer: ReturnType<typeof setTimeout> | null = null;
     private unbindEventListener: (() => void) | null = null;
@@ -114,6 +119,46 @@ export class MessageDecorator implements Disposable {
      */
     private buildSlotKey(chatId: string, messageId: number, swipeId: number, instructionIndex: number): string {
         return `${chatId}:${messageId}:${swipeId}:${instructionIndex}`;
+    }
+
+    private captureMessageToken(messageId: number): { clearEpoch: number; generation: number } {
+        return {
+            clearEpoch: this.clearEpoch,
+            generation: this.messageGenerations.get(messageId) ?? 0,
+        };
+    }
+
+    private isMessageTokenValid(
+        messageId: number,
+        token: { clearEpoch: number; generation: number }
+    ): boolean {
+        return (
+            this.clearEpoch === token.clearEpoch &&
+            (this.messageGenerations.get(messageId) ?? 0) === token.generation
+        );
+    }
+
+    private bumpMessageGeneration(messageId: number): void {
+        this.messageGenerations.set(messageId, (this.messageGenerations.get(messageId) ?? 0) + 1);
+    }
+
+    /**
+     * 清扫指定楼层 DOM 中可能残留的插件容器、按钮、图片与档案徽标节点。
+     * 即使状态 Map 未登记或新分支不含指令，也可彻底清除视觉残余。
+     */
+    private purgeMessageFloorDom(messageId: number): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+        if (!messageDom) {
+            return;
+        }
+        for (const node of messageDom.querySelectorAll(
+            '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot'
+        )) {
+            node.remove();
+        }
     }
 
     /**
@@ -215,11 +260,41 @@ export class MessageDecorator implements Disposable {
             this.handleImageDeleted(imageId);
         });
 
+        let lastHideOnDone = settingsStore.getSettings().ui?.floorButton?.hideOnDone ?? false;
+        const unbindSettingsUpdated = eventBus.on('settings:updated', () => {
+            const settings = settingsStore.getSettings();
+            if (!settings.enabled) {
+                return;
+            }
+            const displayCfg = settings.ui?.imageDisplay;
+            for (const container of this.activeImageContainers.values()) {
+                this.applyDisplaySettingsToContainer(container, displayCfg);
+            }
+
+            const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
+            for (const [slotKey, button] of this.activeButtons.entries()) {
+                const slotState = this.activeSlotStates.get(slotKey);
+                if (!slotState || !this.activeImageContainers.has(slotKey)) {
+                    continue;
+                }
+                const activeTask = generationOrchestrator.getActiveTaskByTarget(slotState.target);
+                if (!activeTask) {
+                    button.element.style.display = hideButtonOnDone ? 'none' : '';
+                }
+            }
+
+            if (lastHideOnDone && !hideButtonOnDone) {
+                this.scheduleScanAllMessages(50);
+            }
+            lastHideOnDone = hideButtonOnDone;
+        });
+
         this.unbindEventListener = () => {
             unbindImageReady();
             unbindTaskStatus();
             unbindFavChanged();
             unbindImageDeleted();
+            unbindSettingsUpdated();
         };
     }
 
@@ -443,10 +518,6 @@ export class MessageDecorator implements Disposable {
             // 2. 挂载轻量可点击胶囊徽标栏
             const badgeBar = document.createElement('div');
             badgeBar.className = 'da-floor-archive-badges';
-            badgeBar.style.display = 'flex';
-            badgeBar.style.flexWrap = 'wrap';
-            badgeBar.style.gap = '6px';
-            badgeBar.style.marginTop = '8px';
 
             for (const arch of archives) {
                 const firstAlias = arch.aliases.split('|')[0]?.trim() || '';
@@ -574,11 +645,15 @@ export class MessageDecorator implements Disposable {
             return inFlight;
         }
 
-        const decorationPromise = (async () => {
+        let decorationPromise!: Promise<void>;
+        decorationPromise = (async () => {
             try {
                 await this.performDecorateMessage(messageId);
             } finally {
-                this.inFlightDecorations.delete(messageId);
+                // 仅当表内仍是当前 Promise 实例时才删除，避免旧任务覆盖误删被清理后重启的新任务
+                if (this.inFlightDecorations.get(messageId) === decorationPromise) {
+                    this.inFlightDecorations.delete(messageId);
+                }
             }
         })();
 
@@ -592,7 +667,7 @@ export class MessageDecorator implements Disposable {
      * @param messageId 目标消息楼层 ID
      */
     private async performDecorateMessage(messageId: number): Promise<void> {
-        if (typeof document === 'undefined') {
+        if (typeof document === 'undefined' || !settingsStore.getSettings().enabled) {
             return;
         }
 
@@ -614,6 +689,7 @@ export class MessageDecorator implements Disposable {
         const targetContainer = (messageDom.querySelector('.mes_text') || messageDom) as HTMLElement;
         const chatId = hostContext.chatId || 'default_chat';
         const swipeId = message.swipe_id ?? 0;
+        const token = this.captureMessageToken(messageId);
 
         // 1. 检测并处理楼层中的角色与服装档案块（折叠胶囊）
         this.decorateArchiveBlocks(targetContainer, message.mes);
@@ -621,6 +697,11 @@ export class MessageDecorator implements Disposable {
         // 2. 提取消息正文中的生图指令标签
         const commands = promptPipeline.extractCommands(message.mes);
         if (commands.length === 0) {
+            for (const slot of targetContainer.querySelectorAll(
+                '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-slot'
+            )) {
+                slot.remove();
+            }
             return;
         }
 
@@ -667,6 +748,9 @@ export class MessageDecorator implements Disposable {
             if (hasSlotEntry) {
                 // 渲染楼层图片，若图片正在重新生成中则添加相应样式
                 await this.renderImageToFloor(messageId, entry!.imageId, cmd.instructionIndex, entry!.imageUrl, chatId, swipeId);
+                if (!this.isMessageTokenValid(messageId, token)) {
+                    return;
+                }
                 hasRenderedImage = this.activeImageContainers.has(slotKey);
                 if (hasRenderedImage && activeTask) {
                     const imgEl = slotElement.querySelector('.da-floor-image');
@@ -877,6 +961,22 @@ export class MessageDecorator implements Disposable {
         const effectiveChatId = chatId || hostContext?.chatId || 'default_chat';
         const effectiveSwipeId = swipeId ?? (hostContext?.chat?.[messageId]?.swipe_id ?? 0);
         const containerKey = this.buildSlotKey(effectiveChatId, messageId, effectiveSwipeId, instructionIndex);
+        const token = this.captureMessageToken(messageId);
+
+        const isStillActiveTarget = (): boolean => {
+            if (!this.isMessageTokenValid(messageId, token)) {
+                return false;
+            }
+            const latestCtx = window.SillyTavern?.getContext?.();
+            if (latestCtx?.chatId && latestCtx.chatId !== effectiveChatId) {
+                return false;
+            }
+            const latestMsg = latestCtx?.chat?.[messageId];
+            if (latestMsg && (latestMsg.swipe_id ?? 0) !== effectiveSwipeId) {
+                return false;
+            }
+            return true;
+        };
 
         const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
         if (!messageDom) {
@@ -891,7 +991,10 @@ export class MessageDecorator implements Disposable {
             displayUrl = urlPool.getUrl(imageId);
             if (!displayUrl) {
                 const blob = await imageStorage.getImageBlob(imageId);
-                if (blob) {
+                if (!isStillActiveTarget()) {
+                    return;
+                }
+                if (blob && blob.size > 0) {
                     displayUrl = urlPool.createUrl(imageId, blob);
                 }
             }
@@ -939,22 +1042,27 @@ export class MessageDecorator implements Disposable {
         const settings = settingsStore.getSettings();
         const displayCfg = settings.ui?.imageDisplay;
         const initialRecord = imageId ? await imageStorage.getImageRecord(imageId) : undefined;
+        if (!isStillActiveTarget()) {
+            return;
+        }
         const initialFavorited = Boolean(initialRecord?.favorited);
 
-        // 静态文件加载异常回退辅助函数：若服务端静态路径失效或返回 404，回退至本地 IndexedDB 缓存
+        // 异常回退辅助函数：若服务端静态路径或失效 Blob URL 加载异常，尝试从本地 IndexedDB 重建有效 URL
         const bindImageFallback = (img: HTMLImageElement) => {
             img.onerror = async () => {
                 if (imageId && !img.dataset.fallbackApplied) {
                     img.dataset.fallbackApplied = 'true';
                     let localUrl = urlPool.getUrl(imageId);
-                    if (!localUrl) {
+                    if (!localUrl || img.src === localUrl) {
                         const blob = await imageStorage.getImageBlob(imageId);
-                        if (blob) {
+                        if (blob && blob.size > 0) {
                             localUrl = urlPool.createUrl(imageId, blob);
+                        } else {
+                            localUrl = undefined;
                         }
                     }
                     if (localUrl && img.src !== localUrl) {
-                        logger.info(`服务端静态图像加载异常，已回退至本地数据库缓存 [${imageId}]`);
+                        logger.info(`图像展示异常，已从本地数据库重建展示地址 [${imageId}]`);
                         img.src = localUrl;
                         const state = this.activeSlotStates.get(containerKey);
                         if (state) {
@@ -1062,23 +1170,13 @@ export class MessageDecorator implements Disposable {
         };
         this.activeSlotStates.set(containerKey, slotState);
 
-        // 1. 构建外层容器
+        // 1. 构建外层容器并应用显示样式
         const imageContainer = document.createElement('div');
         imageContainer.className = 'da-floor-image-container';
-        if (displayCfg?.align === 'center') {
-            imageContainer.classList.add('da-floor-image-container--center');
-        } else if (displayCfg?.align === 'flex-start') {
-            imageContainer.classList.add('da-floor-image-container--left');
-        } else if (displayCfg?.align === 'flex-end') {
-            imageContainer.classList.add('da-floor-image-container--right');
-        }
 
         // 2. 构建图片包装盒与图片节点
         const imageBox = document.createElement('div');
         imageBox.className = 'da-floor-image-box';
-        if (displayCfg?.rounded === false) {
-            imageBox.style.borderRadius = '0px';
-        }
 
         const imgEl = document.createElement('img');
         imgEl.className = 'da-floor-image';
@@ -1090,7 +1188,7 @@ export class MessageDecorator implements Disposable {
         let justLongPressed = false;
 
         if (isLightboxEnabled) {
-            imgEl.style.cursor = 'zoom-in';
+            imgEl.classList.add('da-floor-image--zoomable');
             imgEl.title = '点击查看大图';
             // 左键/单触点击图片放大全屏预览
             imgEl.addEventListener('click', (e) => {
@@ -1121,27 +1219,17 @@ export class MessageDecorator implements Disposable {
             });
         }
 
-        if (displayCfg?.maxHeight) {
-            imgEl.style.maxHeight = `${displayCfg.maxHeight}px`;
-        }
-        if (displayCfg?.maxWidthPct) {
-            imgEl.style.maxWidth = `${displayCfg.maxWidthPct}%`;
-        }
-        if (displayCfg?.objectFit) {
-            imgEl.style.objectFit = displayCfg.objectFit;
-        }
-
-        // 防窥模糊处理
-        if (displayCfg?.autoBlur) {
-            imgEl.style.filter = 'blur(16px)';
-            imgEl.style.transition = 'filter 0.3s ease';
-            imageBox.addEventListener('mouseenter', () => {
+        // 防窥模糊交互（悬停解除模糊，移开恢复；动态读取实时配置以便热刷新生效）
+        imageBox.addEventListener('mouseenter', () => {
+            if (settingsStore.getSettings().ui?.imageDisplay?.autoBlur) {
                 imgEl.style.filter = 'none';
-            });
-            imageBox.addEventListener('mouseleave', () => {
+            }
+        });
+        imageBox.addEventListener('mouseleave', () => {
+            if (settingsStore.getSettings().ui?.imageDisplay?.autoBlur) {
                 imgEl.style.filter = 'blur(16px)';
-            });
-        }
+            }
+        });
 
         if (isImageActionPanelEnabled) {
             // 桌面端鼠标右键呼出图片操作面板
@@ -1270,6 +1358,26 @@ export class MessageDecorator implements Disposable {
                 record: currentRecord,
                 metadata: currentRecord?.metadata,
                 imageUrl: slotState.displayUrl,
+                onPreview: (url) => {
+                    lightboxModal.open(url, {
+                        imageId: slotState.imageId,
+                        favorited: slotState.favorited,
+                        onFavoriteChange: (newFav) => {
+                            slotState.favorited = newFav;
+                            slotState.syncFavUI(newFav);
+                        },
+                        onEdit: isImageActionPanelEnabled
+                            ? () => {
+                                  void this.openImageActionPanel(
+                                      messageId,
+                                      instructionIndex,
+                                      slotState.imageId,
+                                      slotState.displayUrl
+                                  );
+                              }
+                            : undefined,
+                    });
+                },
                 onEdit: isImageActionPanelEnabled
                     ? () => {
                           void this.openImageActionPanel(
@@ -1308,6 +1416,7 @@ export class MessageDecorator implements Disposable {
 
         imageBox.appendChild(actionsContainer);
         imageContainer.appendChild(imageBox);
+        this.applyDisplaySettingsToContainer(imageContainer, displayCfg);
 
         // 4. 定位对应的 .da-floor-slot 元素插入图片展示容器
         const slotElement = messageDom.querySelector(
@@ -1356,7 +1465,7 @@ export class MessageDecorator implements Disposable {
         const targetMessage = hostContext?.chat?.[messageId];
         const swipeId = targetMessage?.swipe_id ?? 0;
 
-        // 优先提取原始指令提示词，避免二次载入已包含预设前后缀与 LoRA 的最终生成词
+        // 优先使用记录的未合并预设原始提示词；旧记录退回从楼层指令文本提取，避免二次拼接预设前后缀与 LoRA
         let rawPrompt = '';
         if (targetMessage && typeof targetMessage.mes === 'string') {
             const commands = promptPipeline.extractCommands(targetMessage.mes);
@@ -1371,18 +1480,18 @@ export class MessageDecorator implements Disposable {
             instructionIndex,
             imageId,
             imageUrl: displayUrl,
-            prompt: rawPrompt || record?.metadata?.prompt || '',
-            negativePrompt: record?.metadata?.negativePrompt || '',
+            prompt: record?.metadata?.rawPrompt || rawPrompt || record?.metadata?.prompt || '',
+            negativePrompt: record?.metadata?.rawNegativePrompt ?? '',
             record,
             onRegenerate: async (newPrompt, newNegPrompt) => {
-                await this.regenerateSlot(
+                return await this.regenerateSlot(
                     { chatId: currentChatId, messageId, swipeId, instructionIndex },
                     newPrompt,
                     newNegPrompt
                 );
             },
             onInpaint: async (inpaintData) => {
-                await this.regenerateSlot(
+                return await this.regenerateSlot(
                     { chatId: currentChatId, messageId, swipeId, instructionIndex },
                     inpaintData.prompt,
                     inpaintData.negativePrompt,
@@ -1390,6 +1499,9 @@ export class MessageDecorator implements Disposable {
                         mode: 'inpaint',
                         sourceImage: inpaintData.initImage,
                         maskImage: inpaintData.maskImage,
+                        ...(inpaintData.width && inpaintData.height
+                            ? { width: inpaintData.width, height: inpaintData.height }
+                            : {}),
                         denoiseStrength: inpaintData.denoiseStrength,
                         maskBlur: inpaintData.maskBlur,
                         parentImageId: imageId,
@@ -1475,11 +1587,14 @@ export class MessageDecorator implements Disposable {
             return;
         }
 
+        // 1. 递增消息代次并清除在途 Promise 占位，阻断切分支前的异步装饰完成后反向写入
+        this.bumpMessageGeneration(messageId);
         this.inFlightDecorations.delete(messageId);
 
+        // key 尾部三段固定为 messageId:swipeId:instructionIndex，从尾部索引避免 chatId 含 ':' 时失配
         const isTargetSlot = (key: string): boolean => {
             const parts = key.split(':');
-            return parts.length === 4 && Number(parts[1]) === messageId;
+            return parts.length >= 4 && Number(parts[parts.length - 3]) === messageId;
         };
 
         for (const [key, btn] of this.activeButtons.entries()) {
@@ -1505,6 +1620,9 @@ export class MessageDecorator implements Disposable {
                 this.activeSkeletons.delete(key);
             }
         }
+
+        // 2. 清扫 DOM 中未登记或切到空白分支后遗留的按钮/容器/档案徽标
+        this.purgeMessageFloorDom(messageId);
     }
 
     /**
@@ -1580,6 +1698,8 @@ export class MessageDecorator implements Disposable {
      * 清理当前会话全部活跃的楼层按钮、展示容器与骨架占位。
      */
     public clearCurrentButtons(): void {
+        this.clearEpoch += 1;
+        this.messageGenerations.clear();
         this.inFlightDecorations.clear();
         if (this.intersectionObserver) {
             this.intersectionObserver.disconnect();
@@ -1623,6 +1743,54 @@ export class MessageDecorator implements Disposable {
         }
         this.activeSkeletons.clear();
         this.promptedArchiveKeys.clear();
+
+        if (typeof document !== 'undefined') {
+            for (const node of document.querySelectorAll(
+                '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot'
+            )) {
+                node.remove();
+            }
+        }
+    }
+
+    /**
+     * 将图片显示配置同步应用至已渲染的楼层容器 DOM。
+     */
+    private applyDisplaySettingsToContainer(
+        imageContainer: HTMLElement,
+        displayCfg: ReturnType<typeof settingsStore.getSettings>['ui']['imageDisplay']
+    ): void {
+        imageContainer.classList.remove(
+            'da-floor-image-container--center',
+            'da-floor-image-container--left',
+            'da-floor-image-container--right'
+        );
+        if (displayCfg?.align === 'center') {
+            imageContainer.classList.add('da-floor-image-container--center');
+        } else if (displayCfg?.align === 'flex-start') {
+            imageContainer.classList.add('da-floor-image-container--left');
+        } else if (displayCfg?.align === 'flex-end') {
+            imageContainer.classList.add('da-floor-image-container--right');
+        }
+
+        const imageBox = imageContainer.querySelector('.da-floor-image-box') as HTMLElement | null;
+        if (imageBox) {
+            imageBox.style.borderRadius = displayCfg?.rounded === false ? '0px' : '';
+        }
+
+        const imgEl = imageContainer.querySelector('.da-floor-image') as HTMLImageElement | null;
+        if (imgEl) {
+            imgEl.style.maxHeight = displayCfg?.maxHeight ? `${displayCfg.maxHeight}px` : '';
+            imgEl.style.maxWidth = displayCfg?.maxWidthPct ? `${displayCfg.maxWidthPct}%` : '';
+            imgEl.style.objectFit = displayCfg?.objectFit || '';
+            if (displayCfg?.autoBlur) {
+                imgEl.style.filter = 'blur(16px)';
+                imgEl.style.transition = 'filter 0.3s ease';
+            } else {
+                imgEl.style.filter = '';
+                imgEl.style.transition = '';
+            }
+        }
     }
 
     /**
@@ -1648,7 +1816,7 @@ export class MessageDecorator implements Disposable {
      * 否则执行同步扫描。
      */
     public async scanAllMessages(): Promise<void> {
-        if (typeof document === 'undefined') {
+        if (typeof document === 'undefined' || !settingsStore.getSettings().enabled) {
             return;
         }
 
@@ -1713,7 +1881,7 @@ export class MessageDecorator implements Disposable {
         newPrompt: string,
         newNegativePrompt?: string,
         extraParams?: Record<string, unknown>
-    ): Promise<void> {
+    ): Promise<boolean> {
         const currentSettings = settingsStore.getSettings();
         const check = validateCurrentPresetAssets(currentSettings.activeProvider as ProviderType);
         if (!check.valid) {
@@ -1724,7 +1892,7 @@ export class MessageDecorator implements Disposable {
                 cancelText: '取消',
             });
             if (!confirmed) {
-                return;
+                return false;
             }
         }
 
@@ -1754,6 +1922,7 @@ export class MessageDecorator implements Disposable {
 
         try {
             await generationOrchestrator.submitTask(submitOptions);
+            return true;
         } catch (err: unknown) {
             const errMessage = err instanceof Error ? err.message : String(err);
             logger.error(`[MessageDecorator] 重新生成任务提交失败: ${errMessage}`);

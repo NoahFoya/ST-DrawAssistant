@@ -229,25 +229,17 @@ export function openResetFactoryModal(options: ResetFactoryModalOptions = {}): D
 
     // 快捷操作工具条
     const toolbar = document.createElement('div');
-    toolbar.style.display = 'flex';
-    toolbar.style.alignItems = 'center';
-    toolbar.style.gap = '8px';
-    toolbar.style.flexWrap = 'wrap';
-    toolbar.style.paddingBottom = '10px';
-    toolbar.style.borderBottom = '1px solid var(--da-border-color, rgba(255, 255, 255, 0.08))';
+    toolbar.className = 'da-reset-factory-toolbar';
 
     const toolbarLabel = document.createElement('span');
-    toolbarLabel.style.fontSize = 'var(--da-font-size-xs, 0.78rem)';
-    toolbarLabel.style.color = 'var(--da-text-secondary, rgba(255, 255, 255, 0.5))';
+    toolbarLabel.className = 'da-reset-factory-toolbar__label';
     toolbarLabel.textContent = '快捷勾选:';
     toolbar.appendChild(toolbarLabel);
 
     const createQuickBtn = (label: string, onClick: () => void) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'da-btn da-btn--secondary da-btn--sm';
-        btn.style.padding = '2px 8px';
-        btn.style.fontSize = 'var(--da-font-size-xs, 0.78rem)';
+        btn.className = 'da-btn da-btn--secondary da-btn--sm da-reset-factory-quick-btn';
         btn.textContent = label;
         btn.onclick = onClick;
         return btn;
@@ -314,63 +306,34 @@ export function openResetFactoryModal(options: ResetFactoryModalOptions = {}): D
     // 分组渲染复选项目
     for (const group of RESET_GROUPS) {
         const groupCard = document.createElement('div');
-        groupCard.className = 'da-card';
-        groupCard.style.padding = '14px 16px';
-        groupCard.style.display = 'flex';
-        groupCard.style.flexDirection = 'column';
-        groupCard.style.gap = '10px';
-        groupCard.style.background = 'var(--da-bg-card, rgba(255, 255, 255, 0.03))';
-        groupCard.style.border = '1px solid var(--da-border-color, rgba(255, 255, 255, 0.07))';
-        groupCard.style.borderRadius = 'var(--da-radius-medium, 10px)';
+        groupCard.className = 'da-card da-reset-factory-group';
 
         const headerDiv = document.createElement('div');
-        headerDiv.style.display = 'flex';
-        headerDiv.style.flexDirection = 'column';
-        headerDiv.style.gap = '2px';
+        headerDiv.className = 'da-reset-factory-group__header';
 
         const groupTitle = document.createElement('div');
-        groupTitle.style.fontSize = 'var(--da-font-size-sm, 0.86rem)';
-        groupTitle.style.fontWeight = '600';
-        groupTitle.style.color = 'var(--da-text-primary, #ffffff)';
+        groupTitle.className = 'da-reset-factory-group__title';
         groupTitle.textContent = group.title;
         headerDiv.appendChild(groupTitle);
 
         const groupSubtitle = document.createElement('div');
-        groupSubtitle.style.fontSize = 'var(--da-font-size-xs, 0.74rem)';
-        groupSubtitle.style.color = 'var(--da-text-secondary, rgba(255, 255, 255, 0.5))';
+        groupSubtitle.className = 'da-reset-factory-group__subtitle';
         groupSubtitle.textContent = group.subtitle;
         headerDiv.appendChild(groupSubtitle);
 
         groupCard.appendChild(headerDiv);
 
         const optionsGrid = document.createElement('div');
-        optionsGrid.style.display = 'grid';
-        optionsGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
-        optionsGrid.style.gap = '8px';
+        optionsGrid.className = 'da-reset-factory-grid';
 
         for (const opt of group.options) {
             const rowLabel = document.createElement('label');
-            rowLabel.style.display = 'flex';
-            rowLabel.style.alignItems = 'flex-start';
-            rowLabel.style.gap = '8px';
-            rowLabel.style.padding = '6px 8px';
-            rowLabel.style.borderRadius = 'var(--da-radius-sm, 6px)';
-            rowLabel.style.cursor = 'pointer';
-            rowLabel.style.userSelect = 'none';
-            rowLabel.style.transition = 'background-color 0.15s ease';
-
-            rowLabel.onmouseenter = () => {
-                rowLabel.style.backgroundColor = 'var(--da-bg-hover, rgba(255, 255, 255, 0.05))';
-            };
-            rowLabel.onmouseleave = () => {
-                rowLabel.style.backgroundColor = 'transparent';
-            };
+            rowLabel.className = 'da-reset-factory-option';
 
             const cb = document.createElement('input');
             cb.type = 'checkbox';
+            cb.className = 'da-reset-factory-option__checkbox';
             cb.checked = stateMap.get(opt.key) ?? false;
-            cb.style.marginTop = '3px';
-            cb.style.cursor = 'pointer';
             cb.onchange = () => {
                 stateMap.set(opt.key, cb.checked);
                 updateFooterState();
@@ -379,23 +342,17 @@ export function openResetFactoryModal(options: ResetFactoryModalOptions = {}): D
             rowLabel.appendChild(cb);
 
             const textContainer = document.createElement('div');
-            textContainer.style.display = 'flex';
-            textContainer.style.flexDirection = 'column';
-            textContainer.style.gap = '2px';
+            textContainer.className = 'da-reset-factory-option__text';
 
             const optTitle = document.createElement('span');
-            optTitle.style.fontSize = 'var(--da-font-size-sm, 0.84rem)';
-            optTitle.style.fontWeight = '500';
-            optTitle.style.color = opt.isDanger
-                ? 'var(--da-text-danger, #f87171)'
-                : 'var(--da-text-primary, #ffffff)';
+            optTitle.className = opt.isDanger
+                ? 'da-reset-factory-option__title da-reset-factory-option__title--danger'
+                : 'da-reset-factory-option__title';
             optTitle.textContent = opt.label;
             textContainer.appendChild(optTitle);
 
             const optDesc = document.createElement('span');
-            optDesc.style.fontSize = 'var(--da-font-size-xs, 0.74rem)';
-            optDesc.style.color = 'var(--da-text-secondary, rgba(255, 255, 255, 0.5))';
-            optDesc.style.lineHeight = '1.35';
+            optDesc.className = 'da-reset-factory-option__desc';
             optDesc.textContent = opt.desc;
             textContainer.appendChild(optDesc);
 

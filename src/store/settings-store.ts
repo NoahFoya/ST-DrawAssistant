@@ -81,6 +81,14 @@ export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
 /** 图像存储格式与画质策略 */
 export type ImageStorageQuality = 'original' | 'webp-high' | 'webp-medium';
 
+/** 绘制预设解析选项 */
+export interface ResolveDrawingPresetOptions {
+    /** 显式指定的绘图预设 ID */
+    explicitPresetId?: string;
+    /** 隐式读取配置中的激活预设但未命中时是否抛出异常，默认 false（预处理阶段回退 undefined；实际后端执行传 true） */
+    throwOnMissingActive?: boolean;
+}
+
 /** 插件核心配置结构定义 */
 export interface DrawAssistantSettings {
     isInitialized: boolean;
@@ -581,6 +589,62 @@ export class SettingsStore {
     }
 
     /**
+     * 解析指定服务提供方当前生效的绘图预设。
+     *
+     * @remarks
+     * 解析优先级：显式传入 `explicitPresetId` > 服务配置 `activeDrawingPresetId`。
+     * 语义约束：
+     * - 显式指定非 `'default'` ID 缺失时固定抛出异常，防止携带无效参数快照继续生图；
+     * - 隐式读取配置激活项缺失时按 `throwOnMissingActive` 决定抛出异常或返回 `{ presetId: undefined, preset: undefined }`；
+     * - ID 为 `'default'` 且未显式持久化条目时允许 `preset` 为 `undefined`。
+     *
+     * @param provider 服务提供方类型
+     * @param options 解析选项
+     * @returns 解析得到的有效预设 ID 与预设数据
+     */
+    public resolveDrawingPreset<T = Record<string, unknown>>(
+        provider: ProviderType,
+        options: ResolveDrawingPresetOptions = {}
+    ): { presetId?: string; preset?: T } {
+        const explicitId =
+            typeof options.explicitPresetId === 'string' && options.explicitPresetId.trim()
+                ? options.explicitPresetId.trim()
+                : undefined;
+
+        let effectiveId = explicitId;
+        if (!effectiveId) {
+            const config = this.getProviderConfig<{ activeDrawingPresetId?: string }>(provider);
+            const activeId = config?.activeDrawingPresetId;
+            if (typeof activeId === 'string' && activeId.trim()) {
+                effectiveId = activeId.trim();
+            }
+        }
+
+        if (!effectiveId) {
+            return {};
+        }
+
+        const item = this.getPreset<T>('drawing', effectiveId, provider);
+        if (item?.data) {
+            return { presetId: effectiveId, preset: item.data };
+        }
+
+        if (effectiveId === 'default') {
+            return { presetId: 'default', preset: undefined };
+        }
+
+        if (explicitId) {
+            throw new Error(`关联的生图预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
+        }
+
+        if (options.throwOnMissingActive) {
+            throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
+        }
+
+        return {};
+    }
+
+    /**
      * 保存预设。
      *
      * @remarks
@@ -649,6 +713,55 @@ export class SettingsStore {
         this.saveToHost();
     }
 
+    /** 内部辅助：定位目标素材启用预设并将单条角色或服装规则合并写回配置 */
+    private applyMaterialActivationRulePatch(
+        kind: 'character' | 'outfit',
+        materialPresetId: string,
+        buildRule: (prev?: MaterialItemActivationRule) => MaterialItemActivationRule,
+        activationPresetId?: string
+    ): PresetItem<MaterialActivationPresetData> | null {
+        if (!materialPresetId.trim()) {
+            return null;
+        }
+        const actList = this._settings.presets.material_activations;
+        if (!Array.isArray(actList) || actList.length === 0) {
+            return null;
+        }
+        const targetId =
+            activationPresetId || this._settings.materialConfig?.activeActivationPresetId || '';
+        const targetIndex = actList.findIndex((p) => p.id === targetId);
+        const resolvedIndex = targetIndex >= 0 ? targetIndex : 0;
+        const targetPreset = actList[resolvedIndex];
+        if (!targetPreset?.data) {
+            return null;
+        }
+
+        const nextData = structuredClone(targetPreset.data);
+        const mapKey = kind === 'character' ? 'characterRules' : 'outfitRules';
+        const existingMap = nextData[mapKey] || {};
+        nextData[mapKey] = {
+            ...existingMap,
+            [materialPresetId]: buildRule(existingMap[materialPresetId]),
+        };
+
+        const nextPreset: PresetItem<MaterialActivationPresetData> = {
+            ...targetPreset,
+            data: nextData,
+            updatedAt: Date.now(),
+        };
+        const nextActList = [...actList];
+        nextActList[resolvedIndex] = nextPreset;
+
+        this._settings = {
+            ...this._settings,
+            presets: {
+                ...this._settings.presets,
+                material_activations: nextActList,
+            },
+        };
+        return nextPreset;
+    }
+
     /**
      * 在指定（或缺省当前激活）的素材启用预设中更新单条角色或服装的激活规则。
      */
@@ -658,50 +771,19 @@ export class SettingsStore {
         rule: MaterialItemActivationRule,
         activationPresetId?: string
     ): boolean {
-        if (!materialPresetId.trim()) {
+        const updatedPreset = this.applyMaterialActivationRulePatch(
+            kind,
+            materialPresetId,
+            () => ({ ...rule }),
+            activationPresetId
+        );
+        if (!updatedPreset) {
             return false;
         }
-        const actList = this.getPresets<MaterialActivationPresetData>('material_activations');
-        if (actList.length === 0) {
-            return false;
-        }
-        const targetId =
-            activationPresetId || this._settings.materialConfig?.activeActivationPresetId || '';
-        const targetIndex = actList.findIndex((p) => p.id === targetId);
-        const resolvedIndex = targetIndex >= 0 ? targetIndex : 0;
-        const targetPreset = actList[resolvedIndex];
-
-        const nextData = structuredClone(targetPreset.data);
-        if (kind === 'character') {
-            nextData.characterRules = {
-                ...(nextData.characterRules || {}),
-                [materialPresetId]: { ...rule },
-            };
-        } else {
-            nextData.outfitRules = {
-                ...(nextData.outfitRules || {}),
-                [materialPresetId]: { ...rule },
-            };
-        }
-
-        const nextActList = [...actList];
-        nextActList[resolvedIndex] = {
-            ...targetPreset,
-            data: nextData,
-            updatedAt: Date.now(),
-        };
-
-        this._settings = {
-            ...this._settings,
-            presets: {
-                ...this._settings.presets,
-                material_activations: nextActList,
-            },
-        };
 
         eventBus.emit('settings:updated', {
             key: 'presets.material_activations',
-            value: nextActList[resolvedIndex],
+            value: updatedPreset,
         });
         this.saveToHost();
         return true;
@@ -713,45 +795,10 @@ export class SettingsStore {
         materialPresetId: string,
         defaultTriggerMode: ActivationTriggerMode
     ): void {
-        const actList = this._settings.presets.material_activations;
-        if (!Array.isArray(actList) || actList.length === 0) {
-            return;
-        }
-        const activeActId = this._settings.materialConfig?.activeActivationPresetId || '';
-        const foundIdx = actList.findIndex((p) => p.id === activeActId);
-        const idx = foundIdx >= 0 ? foundIdx : 0;
-        const target = actList[idx];
-        if (!target?.data) {
-            return;
-        }
-
-        const nextData = structuredClone(target.data);
-        const mapKey = kind === 'character' ? 'characterRules' : 'outfitRules';
-        const existingMap = nextData[mapKey] || {};
-        const prevRule = existingMap[materialPresetId];
-
-        nextData[mapKey] = {
-            ...existingMap,
-            [materialPresetId]: {
-                enabled: true,
-                triggerMode: prevRule?.triggerMode || defaultTriggerMode,
-            },
-        };
-
-        const nextList = [...actList];
-        nextList[idx] = {
-            ...target,
-            data: nextData,
-            updatedAt: Date.now(),
-        };
-
-        this._settings = {
-            ...this._settings,
-            presets: {
-                ...this._settings.presets,
-                material_activations: nextList,
-            },
-        };
+        this.applyMaterialActivationRulePatch(kind, materialPresetId, (prevRule) => ({
+            enabled: true,
+            triggerMode: prevRule?.triggerMode || defaultTriggerMode,
+        }));
     }
 
     /**
@@ -1033,20 +1080,11 @@ export class SettingsStore {
      * @param includeSecrets 是否包含 API Key 等私密字段，默认 false 执行脱敏
      */
     public exportSettings(includeSecrets = false): string {
-        const cloned: DrawAssistantSettings = structuredClone(this._settings);
+        const snapshot = includeSecrets
+            ? this._settings
+            : this.stripSecretsFromSettings(this._settings);
 
-        if (!includeSecrets && cloned.providers && typeof cloned.providers === 'object') {
-            for (const [providerKey, providerCfg] of Object.entries(cloned.providers)) {
-                if (providerCfg && typeof providerCfg === 'object' && !Array.isArray(providerCfg)) {
-                    (cloned.providers as Record<string, unknown>)[providerKey] = stripSecretsDeep(
-                        providerCfg,
-                        SettingsStore.SECRET_FIELD_PATTERN
-                    );
-                }
-            }
-        }
-
-        return JSON.stringify(cloned, null, 2);
+        return JSON.stringify(snapshot, null, 2);
     }
 
     /**

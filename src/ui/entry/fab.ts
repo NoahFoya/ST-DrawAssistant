@@ -3,16 +3,17 @@
  *
  * @remarks
  * 提供快捷打开设置面板的常驻入口：
- * 1. 拖拽停靠：支持鼠标与触控拖拽，停留在用户设定位置并进行越界保护；
- * 2. 位置记忆：记录坐标并在页面加载时恢复，支持位置重置；
- * 3. 外观样式：支持调整透明度、预设图标与自定义图片；
- * 4. 状态徽标：支持呈现未读/完成状态徽标。
+ * 1. 相对比例定位：废弃固定像素 `left/top/right/bottom` 赋值，统一通过 CSS 自定义属性
+ *    `--da-fab-rx / --da-fab-ry`（归一化区间 0~1）结合 `ViewportService` 实时动态视口及安全区实现跨端自适应停靠；
+ * 2. 拖拽与越界隔离：支持鼠标与触控拖拽，在有效安全活动区间内同步映射比例，避开移动端宿主顶栏与底栏；
+ * 3. 外观样式与徽标：支持透明度、预设图标、自定义图片与完成/未读计数角标。
  */
 
 import type { UIComponent, Disposable } from '../types';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 import { FAB_BUILTIN_ICONS } from '../views/fab-tab';
+import { getViewportRect } from '../layout/viewport';
 
 export { FAB_BUILTIN_ICONS };
 
@@ -27,6 +28,12 @@ export interface FabPositionState {
 }
 
 const STORAGE_KEY_POSITION = 'st_draw_assistant_fab_position';
+const DEFAULT_FAB_RATIO: FabPositionState = { ratioX: 0.96, ratioY: 0.86 };
+
+function clampUnit(value: number): number {
+    if (!Number.isFinite(value)) return 1;
+    return Math.min(Math.max(0, value), 1);
+}
 
 export class FloatingActionButton implements UIComponent, Disposable {
     public readonly element: HTMLElement;
@@ -44,9 +51,8 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private cachedElemHeight = 48;
     private clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
 
-    private currentRatioX: number | null = null;
-    private currentRatioY: number | null = null;
-    private resizeRafId: number | null = null;
+    private currentRatioX: number = DEFAULT_FAB_RATIO.ratioX;
+    private currentRatioY: number = DEFAULT_FAB_RATIO.ratioY;
 
     private readonly onPointerDownBound: (e: PointerEvent) => void;
     private readonly onClickBound: (e: MouseEvent) => void;
@@ -54,7 +60,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private readonly onPointerUpBound: (e: PointerEvent) => void;
     private readonly onResetPositionBound: () => void;
     private readonly onSettingsUpdatedBound: () => void;
-    private readonly onWindowResizeBound: () => void;
 
     public constructor(options: FloatingActionButtonOptions = {}) {
         this.element = typeof document !== 'undefined'
@@ -86,7 +91,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.onPointerUpBound = this.onPointerUp.bind(this);
         this.onResetPositionBound = this.resetPosition.bind(this);
         this.onSettingsUpdatedBound = this.syncFromSettings.bind(this);
-        this.onWindowResizeBound = this.onWindowResize.bind(this);
 
         this.bindEvents();
         this.restoreSavedPosition();
@@ -97,13 +101,26 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.element.addEventListener?.('pointerdown', this.onPointerDownBound);
         this.element.addEventListener?.('click', this.onClickBound);
 
-        // 监听位置重置与配置更新事件
+        // 监听位置重置与配置更新事件（视口缩放由 CSS 变量 --da-fab-rx/ry 联动 --da-vvw/vvh 实时响应）
         eventBus.on('ui:reset-fab-position', this.onResetPositionBound);
         eventBus.on('settings:updated', this.onSettingsUpdatedBound);
+    }
 
-        if (typeof window !== 'undefined') {
-            window.addEventListener('resize', this.onWindowResizeBound);
-        }
+    /**
+     * 计算当前视口下悬浮球的可拖拽相对安全活动区间（与 fab.css 安全区表达式对称）。
+     */
+    private getSafeTravelBounds(width: number, height: number) {
+        const vp = getViewportRect();
+        const safeX = vp.isCompactMobile ? 12 : 16;
+        const safeTop = vp.isCompactMobile ? 52 : 16;
+        const safeBottom = vp.isCompactMobile ? 76 : 20;
+
+        const minLeft = vp.left + safeX;
+        const minTop = vp.top + safeTop;
+        const travelX = Math.max(0, vp.width - width - safeX * 2);
+        const travelY = Math.max(0, vp.height - height - safeTop - safeBottom);
+
+        return { minLeft, minTop, travelX, travelY };
     }
 
     private onPointerDown(e: PointerEvent): void {
@@ -114,13 +131,20 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.startPointerX = e.clientX;
         this.startPointerY = e.clientY;
 
-        const rect = this.element.getBoundingClientRect();
-        this.startElemX = rect.left;
-        this.startElemY = rect.top;
         this.cachedElemWidth = this.element.offsetWidth || 48;
         this.cachedElemHeight = this.element.offsetHeight || 48;
 
-        this.element.classList.add('is-dragging');
+        const bounds = this.getSafeTravelBounds(this.cachedElemWidth, this.cachedElemHeight);
+        const rect = this.element.getBoundingClientRect?.();
+        if (rect && (rect.width > 0 || rect.height > 0)) {
+            this.startElemX = rect.left;
+            this.startElemY = rect.top;
+        } else {
+            this.startElemX = bounds.minLeft + this.currentRatioX * bounds.travelX;
+            this.startElemY = bounds.minTop + this.currentRatioY * bounds.travelY;
+        }
+
+        this.element.classList?.add('is-dragging');
 
         if (typeof window !== 'undefined') {
             window.addEventListener('pointermove', this.onPointerMoveBound);
@@ -139,18 +163,14 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.hasMoved = true;
         }
 
-        if (typeof window === 'undefined') return;
+        const bounds = this.getSafeTravelBounds(this.cachedElemWidth, this.cachedElemHeight);
+        const nextLeft = Math.min(Math.max(bounds.minLeft, this.startElemX + dx), bounds.minLeft + bounds.travelX);
+        const nextTop = Math.min(Math.max(bounds.minTop, this.startElemY + dy), bounds.minTop + bounds.travelY);
 
-        const maxLeft = Math.max(0, window.innerWidth - this.cachedElemWidth);
-        const maxTop = Math.max(0, window.innerHeight - this.cachedElemHeight);
+        const nextRatioX = bounds.travelX > 0 ? clampUnit((nextLeft - bounds.minLeft) / bounds.travelX) : this.currentRatioX;
+        const nextRatioY = bounds.travelY > 0 ? clampUnit((nextTop - bounds.minTop) / bounds.travelY) : this.currentRatioY;
 
-        const newLeft = Math.min(Math.max(0, this.startElemX + dx), maxLeft);
-        const newTop = Math.min(Math.max(0, this.startElemY + dy), maxTop);
-
-        this.element.style.left = `${newLeft}px`;
-        this.element.style.top = `${newTop}px`;
-        this.element.style.right = 'auto';
-        this.element.style.bottom = 'auto';
+        this.applyRatioPosition(nextRatioX, nextRatioY);
     }
 
     private onPointerUp(): void {
@@ -187,53 +207,24 @@ export class FloatingActionButton implements UIComponent, Disposable {
     }
 
     private applyRatioPosition(ratioX: number, ratioY: number): void {
-        if (typeof window === 'undefined') return;
+        this.currentRatioX = clampUnit(ratioX);
+        this.currentRatioY = clampUnit(ratioY);
 
-        const width = this.element.offsetWidth || this.cachedElemWidth || 48;
-        const height = this.element.offsetHeight || this.cachedElemHeight || 48;
-        const maxLeft = Math.max(0, window.innerWidth - width);
-        const maxTop = Math.max(0, window.innerHeight - height);
-
-        const clampedRatioX = Math.min(Math.max(0, ratioX), 1);
-        const clampedRatioY = Math.min(Math.max(0, ratioY), 1);
-
-        const left = Math.round(clampedRatioX * maxLeft);
-        const top = Math.round(clampedRatioY * maxTop);
-
-        this.element.style.left = `${left}px`;
-        this.element.style.top = `${top}px`;
-        this.element.style.right = 'auto';
-        this.element.style.bottom = 'auto';
+        // 仅写入相对比例 CSS 变量，清除任何遗留像素内联偏移，让样式层响应式表达式完全接管
+        this.element.style?.setProperty?.('--da-fab-rx', this.currentRatioX.toFixed(4));
+        this.element.style?.setProperty?.('--da-fab-ry', this.currentRatioY.toFixed(4));
+        this.element.style?.removeProperty?.('left');
+        this.element.style?.removeProperty?.('top');
+        this.element.style?.removeProperty?.('right');
+        this.element.style?.removeProperty?.('bottom');
     }
 
     private clampAndSavePosition(): void {
-        if (typeof window === 'undefined') return;
-
-        const width = this.element.offsetWidth || this.cachedElemWidth || 48;
-        const height = this.element.offsetHeight || this.cachedElemHeight || 48;
-
-        const maxLeft = Math.max(0, window.innerWidth - width);
-        const maxTop = Math.max(0, window.innerHeight - height);
-
-        let left = parseInt(this.element.style.left, 10) || 0;
-        let top = parseInt(this.element.style.top, 10) || 0;
-
-        left = Math.min(Math.max(0, left), maxLeft);
-        top = Math.min(Math.max(0, top), maxTop);
-
-        const ratioX = maxLeft > 0 ? left / maxLeft : 1;
-        const ratioY = maxTop > 0 ? top / maxTop : 1;
-
-        this.currentRatioX = ratioX;
-        this.currentRatioY = ratioY;
-
-        this.element.style.left = `${left}px`;
-        this.element.style.top = `${top}px`;
-        this.element.style.right = 'auto';
-        this.element.style.bottom = 'auto';
-
         try {
-            const pos: FabPositionState = { ratioX, ratioY };
+            const pos: FabPositionState = {
+                ratioX: this.currentRatioX,
+                ratioY: this.currentRatioY,
+            };
             localStorage.setItem(STORAGE_KEY_POSITION, JSON.stringify(pos));
         } catch {
             // 忽略存储写入限制
@@ -241,40 +232,30 @@ export class FloatingActionButton implements UIComponent, Disposable {
     }
 
     private restoreSavedPosition(): void {
-        if (typeof window === 'undefined') return;
-
         try {
             const raw = localStorage.getItem(STORAGE_KEY_POSITION);
             if (raw) {
                 const pos = JSON.parse(raw);
-                // 标准相对比例模型
                 if (typeof pos.ratioX === 'number' && typeof pos.ratioY === 'number') {
-                    this.currentRatioX = Math.min(Math.max(0, pos.ratioX), 1);
-                    this.currentRatioY = Math.min(Math.max(0, pos.ratioY), 1);
-                    this.applyRatioPosition(this.currentRatioX, this.currentRatioY);
+                    this.applyRatioPosition(pos.ratioX, pos.ratioY);
                     return;
                 }
             }
         } catch {
-            // 恢复基准停靠位置
+            // 恢复基准停靠比例
         }
 
-        // 右下角基准位置停靠
+        // 默认右下角安全相对比例停靠
         this.resetPosition(false);
     }
 
     /**
-     * 重置悬浮球停靠位置至右下角基准位置。
+     * 重置悬浮球停靠位置至右下角默认相对比例基准。
      *
      * @param clearStorage 是否同时清除 localStorage 记录，默认为 true
      */
     public resetPosition(clearStorage = true): void {
-        this.currentRatioX = null;
-        this.currentRatioY = null;
-        this.element.style.left = 'auto';
-        this.element.style.top = 'auto';
-        this.element.style.right = '24px';
-        this.element.style.bottom = '80px';
+        this.applyRatioPosition(DEFAULT_FAB_RATIO.ratioX, DEFAULT_FAB_RATIO.ratioY);
 
         if (clearStorage && typeof localStorage !== 'undefined') {
             try {
@@ -283,21 +264,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
                 // 忽略异常
             }
         }
-    }
-
-    private onWindowResize(): void {
-        if (this.currentRatioX === null || this.currentRatioY === null) {
-            return;
-        }
-        if (this.resizeRafId !== null) return;
-        if (typeof window === 'undefined') return;
-
-        this.resizeRafId = window.requestAnimationFrame(() => {
-            this.resizeRafId = null;
-            if (this.currentRatioX !== null && this.currentRatioY !== null) {
-                this.applyRatioPosition(this.currentRatioX, this.currentRatioY);
-            }
-        });
     }
 
     /**
@@ -357,12 +323,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
             window.removeEventListener('pointermove', this.onPointerMoveBound);
             window.removeEventListener('pointerup', this.onPointerUpBound);
             window.removeEventListener('pointercancel', this.onPointerUpBound);
-            window.removeEventListener('resize', this.onWindowResizeBound);
-        }
-
-        if (this.resizeRafId !== null && typeof window !== 'undefined') {
-            window.cancelAnimationFrame(this.resizeRafId);
-            this.resizeRafId = null;
         }
 
         if (this.clickSuppressionTimer !== null) {

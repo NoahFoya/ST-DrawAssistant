@@ -49,6 +49,8 @@ export interface MediaCardOptions {
     onToggleFavorite?: (favorite: boolean, item: MediaCardItemData) => void;
     /** 失败卡片点击重试回调 */
     onRetry?: (item: MediaCardItemData) => void;
+    /** 图像加载异常时的自动恢复回调，由上层视图模型控制恢复次数并返回是否已调度替代地址 */
+    onImageError?: (item: MediaCardItemData) => Promise<boolean> | boolean;
     /** 删除媒体卡片回调 */
     onDelete?: (item: MediaCardItemData) => void;
     /** 附加 CSS 类名 */
@@ -78,6 +80,7 @@ export class MediaCard implements UIComponent {
     private readonly onInfoCallback?: (item: MediaCardItemData) => void;
     private readonly onToggleFavoriteCallback?: (favorite: boolean, item: MediaCardItemData) => void;
     private readonly onRetryCallback?: (item: MediaCardItemData) => void;
+    private readonly onImageErrorCallback?: (item: MediaCardItemData) => Promise<boolean> | boolean;
     private readonly onDeleteCallback?: (item: MediaCardItemData) => void;
 
     public constructor(options: MediaCardOptions) {
@@ -90,6 +93,7 @@ export class MediaCard implements UIComponent {
         this.onInfoCallback = options.onInfo;
         this.onToggleFavoriteCallback = options.onToggleFavorite;
         this.onRetryCallback = options.onRetry;
+        this.onImageErrorCallback = options.onImageError;
         this.onDeleteCallback = options.onDelete;
 
         // 1. 创建卡片根容器
@@ -314,8 +318,19 @@ export class MediaCard implements UIComponent {
         this.imgEl.alt = '生成图片';
         this.imgEl.loading = 'lazy';
 
-        // 图像加载异常时切换为加载失败重试状态
+        // 图像加载异常时委托上层视图模型尝试恢复，未恢复则切换为失败重试状态
         this.imgEl.addEventListener('error', () => {
+            if (this.onImageErrorCallback) {
+                void Promise.resolve(this.onImageErrorCallback(this.item)).then((recovered) => {
+                    if (!recovered) {
+                        this.update({
+                            status: 'failed',
+                            errorMessage: '图像资源无法载入',
+                        });
+                    }
+                });
+                return;
+            }
             this.update({
                 status: 'failed',
                 errorMessage: '图像资源无法载入',

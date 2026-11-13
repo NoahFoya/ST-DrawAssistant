@@ -2,19 +2,14 @@
  * 全屏大图灯箱视窗、手势交互舞台与浮动胶囊工具栏样式。
  *
  * @remarks
- * 1. 视窗层级：顶层固定遮罩 (z-index 100200)，高斯模糊虚化背景。
+ * 1. 视窗层级：顶层全屏查看遮罩 (z-index: var(--da-z-viewer))，布局定位继承 .da-modal-backdrop 动态可视视口 (--da-vv*)。
  * 2. 变换舞台：基于 transform 矩阵实现连续缩放、拖拽平移与顺时针旋转。
  * 3. 悬浮胶囊：底部居中浮动控制栏与两侧翻页箭头，支持平滑淡入。
  */
 
 /* 1. 全屏遮罩层 */
-.da-lightbox-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: var(--da-z-modal, 100100);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.da-modal-backdrop.da-lightbox-backdrop {
+    z-index: var(--da-z-viewer, 10045);
     background: var(--da-bg-overlay-heavy);
     backdrop-filter: blur(var(--da-blur-modal, 16px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 16px));
@@ -32,6 +27,7 @@
     align-items: center;
     justify-content: center;
     cursor: grab;
+    touch-action: none;
 }
 
 .da-lightbox-stage.is-dragging {
@@ -54,8 +50,8 @@
 }
 
 .da-lightbox-img {
-    max-width: 90vw;
-    max-height: 85vh;
+    max-width: min(92vw, calc(var(--da-vvw) - 24px));
+    max-height: min(85dvh, calc(var(--da-vvh) - 136px));
     object-fit: contain;
     border-radius: var(--da-radius-sm, 6px);
     box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.55));
@@ -67,9 +63,9 @@
 /* 4. 顶部信息栏 (页码计数与标题) */
 .da-lightbox-header {
     position: absolute;
-    top: 20px;
-    left: 24px;
-    right: 24px;
+    top: max(16px, env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -166,12 +162,15 @@
 /* 6. 底部悬浮胶囊工具栏 */
 .da-lightbox-toolbar {
     position: absolute;
-    bottom: 24px;
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 6px;
+    max-width: calc(var(--da-vvw) - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
     padding: 6px 10px;
     border-radius: 30px;
     background: var(--da-bg-overlay-modal);
@@ -227,4 +226,35 @@
     color: var(--da-text-secondary, #ccc);
     user-select: none;
     font-family: monospace;
+}
+
+/* 7. 移动端与小屏适配 */
+@media (max-width: 680px) {
+    .da-lightbox-title {
+        max-width: 44vw;
+        font-size: 0.84em;
+    }
+
+    .da-lightbox-nav {
+        width: 38px;
+        height: 38px;
+    }
+
+    .da-lightbox-prev {
+        left: 10px;
+    }
+
+    .da-lightbox-next {
+        right: 10px;
+    }
+
+    .da-lightbox-toolbar {
+        gap: 4px;
+        padding: 5px 8px;
+    }
+
+    .da-lightbox-btn {
+        width: 32px;
+        height: 32px;
+    }
 }

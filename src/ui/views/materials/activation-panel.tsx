@@ -160,7 +160,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                         width="w-toggle"
                     >
                         <SwitchControl
-                            value={materialConfigSignal.value?.autoSwitchByCard !== false}
+                            value={Boolean(materialConfigSignal.value?.autoSwitchByCard)}
                             onChange={(checked) => {
                                 const cur = settingsStore.get('materialConfig');
                                 const next = { ...cur, autoSwitchByCard: checked };

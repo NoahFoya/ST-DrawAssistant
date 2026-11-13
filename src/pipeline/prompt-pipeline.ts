@@ -361,7 +361,7 @@ export class PromptPipeline {
      * 4. 解析关联的提示词与生图预设；
      * 5. 应用预设前缀、后缀与通用负向词；
      * 6. 依据后端能力分流组装 LoRA 词条；
-     * 7. NovelAI 画质标签与权重括号语法转换；
+     * 7. NovelAI 权重括号语法转换；
      * 8. 剥离不支持后端的残留 LoRA 标签；
      * 9. 规整标点符号并按配置执行标签去重。
      *
@@ -388,6 +388,8 @@ export class PromptPipeline {
 
         // 合并正文提取的负向词与参数显式指定的负向词
         const combinedNegative = [rawNegative, paramNegative].filter(Boolean).join(', ');
+        const rawPositiveInput = rawPositive.trim();
+        const rawNegativeInput = combinedNegative.trim();
 
         // 3. 展开本地素材库宏 ($ID$ / $ID-key1-key2$)
         let positive = rawPositive;
@@ -414,16 +416,15 @@ export class PromptPipeline {
         let drawingPreset: DrawingPresetData | undefined;
         let promptPresetId = params.promptPresetId as string | undefined;
         if (provider) {
-            const drawingPresetId = params.drawingPresetId as string | undefined;
-            if (drawingPresetId && drawingPresetId !== 'default') {
-                const dp = this._settingsStore.getPreset<DrawingPresetData>('drawing', drawingPresetId, provider);
-                if (!dp) {
-                    throw new Error(`关联的生图预设已失效或不存在 (ID: ${drawingPresetId})，请重新选择预设`);
-                }
-                drawingPreset = dp.data;
-            } else if (drawingPresetId === 'default') {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>('drawing', 'default', provider)?.data;
-            }
+            const explicitDrawingId =
+                typeof params.drawingPresetId === 'string' && params.drawingPresetId.trim()
+                    ? params.drawingPresetId.trim()
+                    : undefined;
+            const resolved = this._settingsStore.resolveDrawingPreset<DrawingPresetData>(provider, {
+                explicitPresetId: explicitDrawingId,
+                throwOnMissingActive: false,
+            });
+            drawingPreset = resolved.preset;
             if (!promptPresetId) {
                 promptPresetId = drawingPreset?.promptPresetId;
             }
@@ -481,19 +482,9 @@ export class PromptPipeline {
             logger.warn(`未找到角色/服装宏定义：${uniqueUnresolved.map((m) => `$${m}$`).join(', ')}`);
         }
 
-        // 7. 若为 NovelAI，按需应用官方画质标签与权重括号转换
+        // 7. 若为 NovelAI，按需将圆括号权重语法 (tag:1.2) 转换为花括号/方括号语法
         if (provider === 'novelai') {
-            const enableQualityTags = Boolean(params.qualityTags ?? drawingPreset?.qualityTags);
-            if (enableQualityTags && !positive.includes('masterpiece')) {
-                const model = String(params.baseModel ?? drawingPreset?.baseModel ?? '');
-                const isV4 = model.includes('4-5') || model.includes('v4');
-                const qualityPrefix = isV4
-                    ? 'very aesthetic, masterpiece, absurdres'
-                    : 'masterpiece, best quality';
-                positive = positive ? `${qualityPrefix}, ${positive}` : qualityPrefix;
-            }
-
-            const enableConvertSyntax = Boolean(params.convertSyntax ?? drawingPreset?.convertSyntax);
+            const enableConvertSyntax = (params.convertSyntax ?? drawingPreset?.convertSyntax) !== false;
             if (enableConvertSyntax) {
                 positive = convertWeightToBrackets(positive);
                 if (negative) {
@@ -517,6 +508,8 @@ export class PromptPipeline {
         return {
             prompt: cleanPositive,
             negativePrompt: cleanNegative || undefined,
+            rawPrompt: rawPositiveInput,
+            rawNegativePrompt: rawNegativeInput || undefined,
             sourceImage: options.sourceImage ?? (params.sourceImage as Blob | string | undefined),
             maskImage: options.maskImage ?? (params.maskImage as Blob | string | undefined),
             parameters: options.parameters,

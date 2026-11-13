@@ -15,11 +15,13 @@ import { eventBus } from '../../util/event-bus';
 import { themeService } from '../theme/theme-service';
 import { providerRegistry } from '../../provider/registry';
 import { renderIcon } from '../components/icons';
+import { tooltipService } from '../feedback/tooltip-service';
 import { overlayStack } from '../framework/overlay-stack';
 import { logger } from '../../util/logger';
 import { updateService } from '../../pipeline/update-service';
 import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
+import { isCompactMobileViewport, viewportService } from '../layout/viewport';
 import { openOnboardingGuideModal, type OnboardingGuideModal } from './onboarding-guide-modal';
 import type { ProviderType } from '@types';
 
@@ -44,16 +46,12 @@ class PlaceholderTabView implements SettingsView {
         inner.className = 'da-tab-placeholder';
 
         const heading = document.createElement('h3');
+        heading.className = 'da-tab-placeholder__title';
         heading.textContent = title;
-        heading.style.margin = '0 0 8px 0';
-        heading.style.fontSize = '16px';
-        heading.style.fontWeight = '600';
 
         const desc = document.createElement('p');
+        desc.className = 'da-tab-placeholder__desc';
         desc.textContent = description;
-        desc.style.margin = '0';
-        desc.style.fontSize = '13px';
-        desc.style.opacity = '0.75';
 
         inner.appendChild(heading);
         inner.appendChild(desc);
@@ -130,6 +128,9 @@ export class SettingsModal implements Disposable {
     // DOM 元素引用
     private backdropElement: HTMLElement | null = null;
     private modalElement: HTMLElement | null = null;
+    private sidebarElement: HTMLElement | null = null;
+    private mobileSubHostElement: HTMLElement | null = null;
+    private providerSubAnchor: Comment | null = null;
     private contentAreaElement: HTMLElement | null = null;
     private statusDotElement: HTMLElement | null = null;
     private statusTextElement: HTMLElement | null = null;
@@ -153,6 +154,7 @@ export class SettingsModal implements Disposable {
     // 全局事件解绑函数与更新指示器
     private unlistenSettings: (() => void) | null = null;
     private unlistenUpdate: (() => void) | null = null;
+    private unlistenViewport: (() => void) | null = null;
     private removeOverlayEntry: (() => void) | null = null;
     private updateDotElement: HTMLElement | null = null;
     private activeGuideModal: OnboardingGuideModal | null = null;
@@ -231,6 +233,7 @@ export class SettingsModal implements Disposable {
         }
 
         this.isOpenState = true;
+        tooltipService.mount();
         this.buildDOM();
 
         const parent = this.options.parent ?? (typeof document !== 'undefined' ? document.body : null);
@@ -241,10 +244,14 @@ export class SettingsModal implements Disposable {
         // 注册全局浮层栈 Escape 响应
         this.bindKeyboardEvents();
 
-        // 注册页面可见性监听（失焦冻结轮询，切回前台唤醒）
+        // 注册页面可见性监听（失焦冻结轮询，切回前台唤醒；仅针对支持周期轮询的本地后端）
         if (typeof document !== 'undefined') {
             this.onVisibilityChangeHandler = () => {
-                if (document.visibilityState === 'visible' && this.isOpenState) {
+                if (
+                    document.visibilityState === 'visible' &&
+                    this.isOpenState &&
+                    this.shouldPollActiveProviderHealth()
+                ) {
                     void this.checkActiveProviderHealth();
                 } else if (document.visibilityState === 'hidden' && this.healthTimer !== null) {
                     clearTimeout(this.healthTimer);
@@ -280,6 +287,7 @@ export class SettingsModal implements Disposable {
         }
 
         this.closeOnboardingGuide();
+        tooltipService.hide();
         this.isOpenState = false;
 
         // 停用当前激活视图
@@ -337,6 +345,7 @@ export class SettingsModal implements Disposable {
      * @param tabId 目标选项卡 ID
      */
     public switchTab(tabId: string): void {
+        tooltipService.hide();
         // 若点击的是生图服务主条目，则重定向至当前生效的具体服务
         const resolvedTabId =
             tabId === 'provider-main' ? this.getActiveProviderType() : tabId;
@@ -398,9 +407,7 @@ export class SettingsModal implements Disposable {
             }
         }
 
-        if (this.providerSubItemsContainer) {
-            this.providerSubItemsContainer.style.display = this.isServiceExpanded ? 'flex' : 'none';
-        }
+        this.syncProviderSubItemsPlacement();
     }
 
     /**
@@ -432,18 +439,28 @@ export class SettingsModal implements Disposable {
     }
 
     /**
+     * 判断当前激活引擎是否需要启动后台周期健康轮询。
+     * 仅针对本地常驻进程（ComfyUI / SD-WebUI）持续轮询；云端 HTTP 服务仅在打开面板、切换引擎或手动测试时单次校验。
+     */
+    private shouldPollActiveProviderHealth(): boolean {
+        const activeProvider = this.getActiveProviderType();
+        return activeProvider !== 'novelai' && activeProvider !== 'openai';
+    }
+
+    /**
      * 调度下一次底栏服务健康检查。
      *
      * @remarks
-     * 1. 页面可见性感知：当浏览器标签页处于后台隐藏状态时，冻结轮询，切回前台时唤醒；
-     * 2. 连续失败动态退避：正常在线时维持 15 秒轮询；初次失败延长至 30 秒；持续失败延长至 60 秒；
+     * 1. 云端引擎不启动后台周期轮询；
+     * 2. 页面可见性感知：当浏览器标签页处于后台隐藏状态时，冻结轮询，切回前台时唤醒；
+     * 3. 连续失败动态退避：正常在线时维持 15 秒轮询；初次失败延长至 30 秒；持续失败延长至 60 秒；
      *    连续失败达 4 次后挂起自动轮询，避免在离线状态下向宿主中继终端产生持续报错噪音；
-     * 3. 用户交互即时唤醒：用户切换选项卡、变更激活服务或修改服务地址时重置计数器并立即唤醒。
+     * 4. 用户交互即时唤醒：用户切换选项卡、变更激活服务或修改服务地址时重置计数器并立即唤醒。
      *
      * @param delayMs 可选的指定延迟毫秒数
      */
     private scheduleNextHealthCheck(delayMs?: number): void {
-        if (!this.isOpenState) return;
+        if (!this.isOpenState || !this.shouldPollActiveProviderHealth()) return;
 
         if (this.healthTimer !== null) {
             clearTimeout(this.healthTimer);
@@ -552,6 +569,10 @@ export class SettingsModal implements Disposable {
             this.unlistenUpdate();
             this.unlistenUpdate = null;
         }
+        if (this.unlistenViewport) {
+            this.unlistenViewport();
+            this.unlistenViewport = null;
+        }
         this.updateDotElement = null;
 
         // 释放已缓存的 Tab 视图实例
@@ -571,6 +592,9 @@ export class SettingsModal implements Disposable {
             this.backdropElement = null;
         }
         this.modalElement = null;
+        this.sidebarElement = null;
+        this.mobileSubHostElement = null;
+        this.providerSubAnchor = null;
         this.contentAreaElement = null;
         this.statusDotElement = null;
         this.statusTextElement = null;
@@ -589,9 +613,9 @@ export class SettingsModal implements Disposable {
             return;
         }
 
-        // 1. 全屏毛玻璃遮罩层 (.da-modal-backdrop)
+        // 1. 全屏毛玻璃遮罩层 (.da-modal-backdrop--fullscreen)
         this.backdropElement = document.createElement('div');
-        this.backdropElement.className = 'da-modal-backdrop da-settings-modal-backdrop';
+        this.backdropElement.className = 'da-modal-backdrop da-modal-backdrop--fullscreen st-da-root da-settings-modal-backdrop';
 
         // 点击遮罩空白区关闭
         this.backdropElement.addEventListener('click', (e) => {
@@ -621,6 +645,12 @@ export class SettingsModal implements Disposable {
         this.modalElement.appendChild(body);
         this.modalElement.appendChild(footer);
         this.backdropElement.appendChild(this.modalElement);
+
+        this.unlistenViewport?.();
+        this.unlistenViewport = viewportService.subscribe(() => {
+            this.syncProviderSubItemsPlacement();
+        });
+        this.syncProviderSubItemsPlacement();
     }
 
     private buildHeaderBar(): HTMLElement {
@@ -633,7 +663,19 @@ export class SettingsModal implements Disposable {
 
         const title = document.createElement('h2');
         title.className = 'da-header-title';
-        title.textContent = EXTENSION_TITLE;
+        const brandPrefix = 'ST-DrawAssistant ';
+        if (EXTENSION_TITLE.startsWith(brandPrefix)) {
+            const prefixSpan = document.createElement('span');
+            prefixSpan.className = 'da-header-title__prefix';
+            prefixSpan.textContent = brandPrefix;
+            const mainSpan = document.createElement('span');
+            mainSpan.className = 'da-header-title__main';
+            mainSpan.textContent = EXTENSION_TITLE.slice(brandPrefix.length);
+            title.appendChild(prefixSpan);
+            title.appendChild(mainSpan);
+        } else {
+            title.textContent = EXTENSION_TITLE;
+        }
 
         const badgeWrapper = document.createElement('div');
         badgeWrapper.className = 'da-header-badge-wrapper';
@@ -722,14 +764,19 @@ export class SettingsModal implements Disposable {
         const body = document.createElement('div');
         body.className = 'da-modal-body';
 
-        // 左侧导航侧边栏 (190px)
+        // 左侧导航侧边栏 (桌面端 190px；移动端折叠为顶部横向胶囊条)
         const sidebar = this.buildSidebarTabs();
+
+        // 移动端生图引擎二级胶囊宿主，仅在紧凑竖屏且引擎组展开时显隐
+        this.mobileSubHostElement = document.createElement('div');
+        this.mobileSubHostElement.className = 'da-sidebar-mobile-sub-host';
 
         // 右侧内容滚动主区
         this.contentAreaElement = document.createElement('div');
         this.contentAreaElement.className = 'da-modal-content';
 
         body.appendChild(sidebar);
+        body.appendChild(this.mobileSubHostElement);
         body.appendChild(this.contentAreaElement);
         return body;
     }
@@ -738,6 +785,7 @@ export class SettingsModal implements Disposable {
         const sidebar = document.createElement('nav');
         sidebar.className = 'da-sidebar-tabs';
         sidebar.setAttribute('aria-label', '设置选项卡导航');
+        this.sidebarElement = sidebar;
 
         this.sidebarItems.clear();
 
@@ -794,10 +842,12 @@ export class SettingsModal implements Disposable {
         sidebar.appendChild(providerMainItem);
         this.sidebarItems.set('provider-main', providerMainItem);
 
-        // 3. 其余 3 大引擎子项容器（默认按需收拢）
+        // 3. 其余 3 大引擎子项容器（默认按需收拢；使用锚点保持桌面端与移动端移动宿主可逆切换）
+        this.providerSubAnchor = document.createComment('da-provider-sub-anchor');
+        sidebar.appendChild(this.providerSubAnchor);
+
         this.providerSubItemsContainer = document.createElement('div');
         this.providerSubItemsContainer.className = 'da-sidebar-sub-items';
-        this.providerSubItemsContainer.style.display = this.isServiceExpanded ? 'flex' : 'none';
 
         this.rebuildProviderSubItems();
         sidebar.appendChild(this.providerSubItemsContainer);
@@ -893,8 +943,42 @@ export class SettingsModal implements Disposable {
         return footer;
     }
 
+    private syncProviderSubItemsPlacement(): void {
+        if (!this.providerSubItemsContainer) {
+            return;
+        }
+
+        const isMobile =
+            typeof window !== 'undefined' && isCompactMobileViewport();
+
+        this.providerSubItemsContainer.classList.toggle('is-expanded', this.isServiceExpanded);
+
+        if (isMobile && this.mobileSubHostElement) {
+            if (this.providerSubItemsContainer.parentElement !== this.mobileSubHostElement) {
+                this.mobileSubHostElement.appendChild(this.providerSubItemsContainer);
+            }
+            this.mobileSubHostElement.classList.toggle('is-visible', this.isServiceExpanded);
+            return;
+        }
+
+        if (this.sidebarElement) {
+            if (this.providerSubAnchor && this.providerSubAnchor.parentNode === this.sidebarElement) {
+                if (this.providerSubItemsContainer.parentNode !== this.sidebarElement) {
+                    this.sidebarElement.insertBefore(
+                        this.providerSubItemsContainer,
+                        this.providerSubAnchor.nextSibling
+                    );
+                }
+            } else if (this.providerSubItemsContainer.parentNode !== this.sidebarElement) {
+                this.sidebarElement.appendChild(this.providerSubItemsContainer);
+            }
+        }
+        this.mobileSubHostElement?.classList.remove('is-visible');
+    }
+
     private updateSidebarHighlight(activeId: string): void {
         const activeProvider = this.getActiveProviderType();
+        let activeFocusEl: HTMLElement | null = null;
 
         for (const [id, el] of this.sidebarItems) {
             let shouldBeActive = false;
@@ -907,9 +991,24 @@ export class SettingsModal implements Disposable {
 
             if (shouldBeActive) {
                 el.classList.add('da-sidebar-item--active');
+                if (id === activeId || !activeFocusEl) {
+                    activeFocusEl = el;
+                }
             } else {
                 el.classList.remove('da-sidebar-item--active');
             }
+        }
+
+        if (
+            activeFocusEl &&
+            typeof window !== 'undefined' &&
+            isCompactMobileViewport()
+        ) {
+            activeFocusEl.scrollIntoView?.({
+                inline: 'center',
+                block: 'nearest',
+                behavior: 'smooth',
+            });
         }
     }
 

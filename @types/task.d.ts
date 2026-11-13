@@ -34,10 +34,18 @@ export interface DrawingTask {
     readonly prompt: string;
     /** 负向提示词文本 */
     readonly negativePrompt?: string;
+    /** 预设拼接与语法转换前的原始正向提示词 */
+    readonly rawPrompt?: string;
+    /** 预设合并与语法转换前的原始负向提示词 */
+    readonly rawNegativePrompt?: string;
     /** 选用的生图提供者标识符 */
     readonly providerType: ProviderType;
     /** 任务入队时的生成参数快照 */
     readonly parametersSnapshot?: Record<string, unknown>;
+    /** 源图像参考输入（图生图 / 局部重绘） */
+    sourceImage?: Blob | string;
+    /** 蒙版图像输入（局部重绘） */
+    maskImage?: Blob | string;
     /** 任务创建时间戳，单位毫秒 */
     readonly createdAt: number;
     /** 任务当前运行状态 */
@@ -48,6 +56,4 @@ export interface DrawingTask {
     imageId?: string;
     /** 生成完成的技术参数快照 */
     generationMetadata?: ImageGenerationMetadata;
-    /** 任务取消控制器 */
-    abortController?: AbortController;
 }

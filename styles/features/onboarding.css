@@ -5,24 +5,16 @@
  * 基于 --da-* 设计令牌构建，支持深/浅双模式主题与移动端窄屏响应式排布。
  */
 
-.da-onboarding-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: calc(var(--da-z-modal, 10000) + 15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+.da-modal-backdrop.da-onboarding-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
     backdrop-filter: blur(var(--da-blur-modal, 12px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 12px));
-    box-sizing: border-box;
-    animation: da-fadein 0.18s var(--da-ease);
 }
 
 .da-onboarding-panel {
-    width: min(720px, 94vw);
-    max-height: min(640px, 88vh);
+    width: min(720px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: min(640px, calc(var(--da-vvh, 100dvh) - 24px));
     display: flex;
     flex-direction: column;
     background: var(--da-bg-modal, #18191f);
@@ -309,9 +301,37 @@
 }
 
 @media (max-width: 640px) {
+    .da-onboarding-backdrop {
+        padding: 10px;
+    }
+
+    .da-onboarding-panel {
+        width: 100%;
+        max-height: calc(var(--da-vvh, 100dvh) - 20px);
+    }
+
+    .da-onboarding-header {
+        padding: 12px 14px 10px 14px;
+    }
+
+    .da-onboarding-title {
+        font-size: 15px;
+    }
+
     .da-onboarding-stepper {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         padding: 8px 14px;
+    }
+
+    .da-onboarding-body {
+        padding: 12px 14px;
+    }
+
+    .da-onboarding-footer {
+        padding: 10px 14px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .da-onboarding-flow {

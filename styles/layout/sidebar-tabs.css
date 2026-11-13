@@ -178,10 +178,14 @@
 
 /* 5. 生图服务子条目弹性容器与缩进样式 (.da-sidebar-sub-items / .da-sidebar-sub-item) */
 .da-sidebar-sub-items {
-    display: flex;
+    display: none;
     flex-direction: column;
     gap: var(--da-space-xs, 4px);
     margin: 2px 0 4px 0;
+}
+
+.da-sidebar-sub-items.is-expanded {
+    display: flex;
 }
 
 .da-sidebar-sub-item {
@@ -189,4 +193,102 @@
     font-size: var(--da-font-size-sm, 12px);
     height: 32px;
     min-height: 32px;
+}
+
+/* 6. 移动端双排胶囊子导航宿主与自适应降级 (max-width: 680px) */
+.da-sidebar-mobile-sub-host {
+    display: none;
+}
+
+@media (max-width: 680px) {
+    .da-sidebar-tabs {
+        width: 100%;
+        flex: 0 0 auto;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        scroll-snap-type: x proximity;
+        scroll-padding-inline: 16px;
+        padding: var(--da-space-xs, 4px) 22px var(--da-space-xs, 4px) var(--da-space-sm, 8px);
+        border-right: none;
+        border-bottom: 1px solid var(--da-border-color);
+        gap: var(--da-space-xs, 6px);
+        -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent 100%);
+        mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent 100%);
+    }
+
+    .da-sidebar-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-sidebar-item {
+        flex: 0 0 auto;
+        width: auto;
+        min-height: 34px;
+        height: 34px;
+        padding: 0 12px;
+        white-space: nowrap;
+        justify-content: center;
+        border-radius: var(--da-radius-pill, 999px);
+        scroll-snap-align: center;
+    }
+
+    .da-sidebar-item--active::before {
+        left: 16%;
+        right: 16%;
+        top: auto;
+        bottom: 0;
+        width: auto;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+    }
+
+    .da-sidebar-divider {
+        width: 1px;
+        height: 20px;
+        margin: 0 2px;
+        flex-shrink: 0;
+    }
+
+    .da-sidebar-mobile-sub-host.is-visible {
+        display: flex;
+        width: 100%;
+        flex: 0 0 auto;
+        padding: 6px 10px;
+        background: var(--da-bg-secondary);
+        border-bottom: 1px solid var(--da-border-color);
+        box-sizing: border-box;
+    }
+
+    .da-sidebar-mobile-sub-host .da-sidebar-sub-items.is-expanded {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .da-sidebar-mobile-sub-host .da-sidebar-sub-items::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-sidebar-mobile-sub-host .da-sidebar-sub-item {
+        flex: 0 0 auto;
+        width: auto;
+        height: 28px;
+        min-height: 28px;
+        padding: 0 12px;
+        border-radius: var(--da-radius-pill, 999px);
+        border: 1px solid var(--da-border-color);
+        background: var(--da-bg-card);
+        font-size: 12px;
+    }
 }

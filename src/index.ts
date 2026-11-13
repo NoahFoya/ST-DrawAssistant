@@ -20,11 +20,13 @@ import { themeService } from './ui/theme';
 import { SettingsModal } from './ui/modal/settings-modal';
 import { registerDefaultViews } from './ui/views/registry';
 import { FloatingActionButton, DrawerEntry } from './ui/entry';
-import { toastService } from './ui/feedback/toast';
+import { toastService, tooltipService } from './ui/feedback';
 import { messageDecorator } from './ui/floor/message-decorator';
 import { lightboxModal, imageInfoModal } from './ui/media';
 import { overlayStack } from './ui/framework/overlay-stack';
+import { viewportService } from './ui/layout';
 import { generationOrchestrator } from './pipeline/generation-orchestrator';
+import { lexiconIndexService } from './pipeline/lexicon-index-service';
 import { promptInjector } from './pipeline/prompt-injector';
 import { AssetSyncCoordinator } from './pipeline/asset-sync-coordinator';
 import { eventBus } from './util/event-bus';
@@ -46,27 +48,6 @@ let settingsModalInstance: SettingsModal | null = null;
 let fabInstance: FloatingActionButton | null = null;
 let drawerEntryInstance: DrawerEntry | null = null;
 const hostEventCleanups: Array<() => void> = [];
-
-/**
- * 获取当前全局设置弹窗实例
- */
-export function getSettingsModal(): SettingsModal | null {
-    return settingsModalInstance;
-}
-
-/**
- * 获取当前全局悬浮球实例
- */
-export function getFloatingActionButton(): FloatingActionButton | null {
-    return fabInstance;
-}
-
-/**
- * 获取当前宿主抽屉入口实例
- */
-export function getDrawerEntry(): DrawerEntry | null {
-    return drawerEntryInstance;
-}
 
 /**
  * 插件单例初始化函数。
@@ -106,10 +87,12 @@ export async function initOnce(): Promise<void> {
                 return;
             }
 
-            // 2. 初始化主题服务与视觉变量
+            // 2. 初始化视口同步、主题服务与全局浮动提示气泡服务
+            viewportService.mount();
             themeService.bindTarget();
             themeService.applyCurrentTheme();
             themeService.listenSettings();
+            tooltipService.mount();
 
             // 3. 实例化主设置弹窗、装配默认视图与常驻悬浮球
             settingsModalInstance = new SettingsModal();
@@ -131,10 +114,7 @@ export async function initOnce(): Promise<void> {
             });
             drawerEntryInstance.mount();
 
-            // 5. 绑定宿主会话生命周期监听器与任务取消委托
-            sessionLifecycle.setTaskCanceller((chatId, reason) => {
-                generationOrchestrator.cancelTasksByChat(chatId, reason);
-            });
+            // 5. 绑定宿主会话生命周期监听器
             sessionLifecycle.bindHostEvents();
 
             // 6. 绑定宿主消息渲染与全生命周期事件
@@ -144,14 +124,24 @@ export async function initOnce(): Promise<void> {
             if (eventSource) {
                 const eventTypesMap = eventTypes as Record<string, string | undefined>;
 
-                const extractMessageId = (data: unknown): number => {
-                    if (typeof data === 'number') return data;
+                const parseHostIndex = (val: unknown): number | undefined => {
+                    if (typeof val === 'number') {
+                        return Number.isInteger(val) && val >= 0 ? val : undefined;
+                    }
+                    if (typeof val === 'string' && /^\d+$/.test(val.trim())) {
+                        return Number(val.trim());
+                    }
+                    return undefined;
+                };
+
+                const extractMessageId = (data: unknown): number | undefined => {
+                    const direct = parseHostIndex(data);
+                    if (direct !== undefined) return direct;
                     if (data && typeof data === 'object') {
                         const rec = data as Record<string, unknown>;
-                        if (typeof rec.messageId === 'number') return rec.messageId;
-                        if (typeof rec.id === 'number') return rec.id;
+                        return parseHostIndex(rec.messageId) ?? parseHostIndex(rec.id);
                     }
-                    return 0;
+                    return undefined;
                 };
 
                 const bindHostEvent = (eventType: string, handler: (...args: unknown[]) => void) => {
@@ -174,6 +164,9 @@ export async function initOnce(): Promise<void> {
                     eventTypesMap.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered';
                 bindHostEvent(charRenderedEvent, async (data: unknown, type?: unknown) => {
                     const messageId = extractMessageId(data);
+                    if (messageId === undefined) {
+                        return;
+                    }
                     await messageDecorator.decorateMessage(messageId);
                     void promptInjector.scheduleSyncToHost();
 
@@ -206,6 +199,9 @@ export async function initOnce(): Promise<void> {
                     eventTypesMap.USER_MESSAGE_RENDERED || 'user_message_rendered';
                 bindHostEvent(userRenderedEvent, (data: unknown) => {
                     const messageId = extractMessageId(data);
+                    if (messageId === undefined) {
+                        return;
+                    }
                     void messageDecorator.decorateMessage(messageId);
                     void promptInjector.scheduleSyncToHost();
                 });
@@ -228,12 +224,12 @@ export async function initOnce(): Promise<void> {
                 const swipeEvent = eventTypesMap.MESSAGE_SWIPED || 'message_swiped';
                 bindHostEvent(swipeEvent, (data: unknown) => {
                     const messageId = extractMessageId(data);
+                    if (messageId === undefined) {
+                        return;
+                    }
                     const swipeId =
-                        data &&
-                        typeof data === 'object' &&
-                        'swipeId' in data &&
-                        typeof (data as { swipeId?: unknown }).swipeId === 'number'
-                            ? (data as { swipeId: number }).swipeId
+                        data && typeof data === 'object' && 'swipeId' in data
+                            ? parseHostIndex((data as { swipeId?: unknown }).swipeId)
                             : undefined;
                     void messageDecorator.handleMessageSwiped(messageId, swipeId);
                 });
@@ -244,23 +240,25 @@ export async function initOnce(): Promise<void> {
                 bindHostEvent(swipeDeletedEvent, (data: unknown) => {
                     if (data && typeof data === 'object') {
                         const payload = data as {
-                            messageId?: number;
-                            swipeId?: number;
-                            newSwipeId?: number;
+                            messageId?: unknown;
+                            swipeId?: unknown;
+                            newSwipeId?: unknown;
                         };
-                        const messageId =
-                            typeof payload.messageId === 'number' ? payload.messageId : 0;
-                        const deletedSwipeId =
-                            typeof payload.swipeId === 'number' ? payload.swipeId : undefined;
+                        const messageId = extractMessageId(payload);
+                        if (messageId === undefined) {
+                            return;
+                        }
+                        const deletedSwipeId = parseHostIndex(payload.swipeId);
+                        const newSwipeId = parseHostIndex(payload.newSwipeId);
                         const chatId = hostContext.chatId || 'default_chat';
-                        if (typeof deletedSwipeId === 'number') {
+                        if (deletedSwipeId !== undefined) {
                             generationOrchestrator.cancelTasksBySwipe(
                                 chatId,
                                 messageId,
                                 deletedSwipeId
                             );
                         }
-                        void messageDecorator.handleMessageSwiped(messageId, payload.newSwipeId);
+                        void messageDecorator.handleMessageSwiped(messageId, newSwipeId);
                     }
                 });
 
@@ -271,6 +269,9 @@ export async function initOnce(): Promise<void> {
                     'message_updated';
                 bindHostEvent(msgUpdatedEvent, (data: unknown) => {
                     const messageId = extractMessageId(data);
+                    if (messageId === undefined) {
+                        return;
+                    }
                     void messageDecorator.handleMessageEdited(messageId);
                 });
 
@@ -304,21 +305,29 @@ export async function initOnce(): Promise<void> {
                 });
 
                 // 监听宿主就绪事件，延迟重试挂载抽屉入口并触发全量楼层扫描
-                const appInitEvent = eventTypes.APP_INITIALIZED || 'app_initialized';
-                bindHostEvent(appInitEvent, () => {
-                    drawerEntryInstance?.mount();
-                    messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
-                });
-
-                const appReadyEvent = eventTypes.APP_READY || 'app_ready';
-                bindHostEvent(appReadyEvent, () => {
-                    drawerEntryInstance?.mount();
-                    messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
-                });
+                for (const readyEvt of [
+                    eventTypes.APP_INITIALIZED || 'app_initialized',
+                    eventTypes.APP_READY || 'app_ready',
+                ]) {
+                    bindHostEvent(readyEvt, () => {
+                        drawerEntryInstance?.mount();
+                        messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
+                    });
+                }
             }
 
-            // 监听设置变更，实时同步四通道提示词注入
+            // 监听设置变更：同步四通道提示词注入，并在总开关切换时及时挂载/清理楼层装饰
+            let lastPluginEnabled = settingsStore.getSettings().enabled;
             const unbindSettingsSync = eventBus.on('settings:updated', () => {
+                const nowEnabled = settingsStore.getSettings().enabled;
+                if (nowEnabled !== lastPluginEnabled) {
+                    lastPluginEnabled = nowEnabled;
+                    if (nowEnabled) {
+                        messageDecorator.scheduleScanAllMessages(50);
+                    } else {
+                        messageDecorator.clearCurrentButtons();
+                    }
+                }
                 void promptInjector.scheduleSyncToHost();
             });
             hostEventCleanups.push(unbindSettingsSync);
@@ -386,6 +395,7 @@ export function disposeExtension(): void {
     hostEventCleanups.length = 0;
 
     sessionLifecycle.unbindHostEvents();
+    lexiconIndexService.dispose();
 
     // 2. 销毁 UI 组件
     if (drawerEntryInstance) {
@@ -407,6 +417,8 @@ export function disposeExtension(): void {
     lightboxModal.dispose();
     imageInfoModal.dispose();
     overlayStack.clear();
+    tooltipService.dispose();
+    viewportService.dispose();
     toastService.dispose();
     themeService.dispose();
 

@@ -51,12 +51,12 @@
     transform: scale(0.94);
 }
 
-/* 3. 浮动释义气泡卡片 (.da-help-bubble)
-   固定最大宽度 260px，超小屏限制 calc(100vw - 20px) 避免越界；
+/* 2. 浮动释义气泡卡片 (.da-help-bubble)
+   基准宽度 260px，结合动态可视视口宽度约束；
    多层阴影搭配高斯模糊虚化底层内容，保障帮助文本的高可读性。 */
 .da-help-bubble {
     width: 260px;
-    max-width: calc(100vw - 20px);
+    max-width: calc(var(--da-vvw, 100vw) - 20px);
     background: var(--da-bg-card, #202430);
     color: var(--da-text-primary);
     border: 1px solid var(--da-border-color);
@@ -68,7 +68,7 @@
     box-shadow: var(--da-shadow-modal), var(--da-inset-top-light);
     backdrop-filter: blur(var(--da-blur-panel, 18px));
     -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px));
-    z-index: var(--da-z-dialog, 100090);
+    z-index: var(--da-z-tooltip, 100300);
     animation: da-fadein 0.14s var(--da-ease);
     box-sizing: border-box;
     white-space: normal;
@@ -77,6 +77,36 @@
 
 .da-help-bubble--top {
     transform: translateY(-6px);
+}
+
+/* 全局门户浮动提示气泡 (.da-tooltip-bubble)
+   固定挂载于 document.body，由 TooltipService 实时测量视口剩余空间并定位，避免被父容器 overflow: hidden 裁剪。 */
+.da-help-bubble.da-tooltip-bubble {
+    position: fixed;
+    width: max-content;
+    min-width: 140px;
+    max-width: min(340px, calc(var(--da-vvw, 100vw) - 20px));
+    max-height: min(calc(var(--da-vvh, 100dvh) * 0.55), 340px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--da-bg-card, #202430);
+    border-color: var(--da-border-highlight, rgba(129, 140, 248, 0.45));
+    z-index: var(--da-z-tooltip, 100300);
+    transform: none;
+    pointer-events: auto;
+}
+
+.da-help-bubble.da-tooltip-bubble.da-help-bubble--centered-mobile {
+    width: calc(var(--da-vvw, 100vw) - 24px);
+    max-width: 360px;
+}
+
+.da-help-bubble.da-tooltip-bubble .da-help-bubble-body {
+    color: var(--da-text-primary, #f8fafc);
+    font-size: var(--da-font-size-xs, 12px);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .da-help-bubble-header {

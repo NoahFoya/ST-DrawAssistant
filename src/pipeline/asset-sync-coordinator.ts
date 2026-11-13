@@ -16,6 +16,7 @@ import type {
     ProviderStoredConfig,
 } from '@types';
 import { providerRegistry } from '../provider/registry';
+import { hasProviderAssetSync } from '../provider/base-provider';
 import { settingsStore } from '../store/settings-store';
 import { validatePresetAssets } from '../util/asset-matcher';
 import { Toast } from '../ui/feedback/toast';
@@ -108,6 +109,16 @@ export class AssetSyncCoordinator {
         if (!provider) {
             if (options.isManual) {
                 Toast.error(`未注册 ${providerType} 服务提供方`, 3000);
+            }
+            return null;
+        }
+
+        if (!hasProviderAssetSync(provider)) {
+            if (options.isManual) {
+                Toast.show('当前服务使用预置模型目录，不支持同步服务端模型', {
+                    level: 'info',
+                    duration: 3000,
+                });
             }
             return null;
         }

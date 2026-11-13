@@ -2,13 +2,11 @@
  * NovelAI 生图服务专属设置选项卡视图 (NovelAITabView)。
  *
  * @remarks
- * 基于 Preact JSX、SchemaCard 与 ProviderTabViewModel 构建：
- * 1. 服务连接与状态检测卡片 (ConnectionCardView，支持 Bearer Token)；
- * 2. 预设主控工具栏 (PresetToolbarView)；
- * 3. 模型版本与提示词增强卡片 (SchemaCard)；
- * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView + CFG Rescale)；
- * 5. 渲染增强与高级特性卡片 (SchemaCard，SMEA 根据所选模型自动禁用/启用)；
- * 6. 提示词预设卡片 (PromptPresetCardView，showLora: false)。
+ * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
+ * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持官方/自定义预设切换与 Bearer Token)；
+ * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView)、采样控制 (SamplerCardView) 与 CFG Rescale；
+ * 3. V3 模型高级特性卡片 (SchemaCard，仅 V3 系列模型时渲染 SMEA 选项)；
+ * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false)。
  */
 
 import type { VNode } from 'preact';
@@ -50,12 +48,6 @@ const NOVELAI_PROVIDER_PRESETS: ProviderPreset[] = [
         defaultUrl: '',
         urlEditable: true,
     },
-];
-
-const UC_PRESET_OPTIONS = [
-    { label: 'Heavy (通用防崩)', value: 'Heavy' },
-    { label: 'Light (轻度过滤)', value: 'Light' },
-    { label: 'None (不使用)', value: 'None' },
 ];
 
 const SMEA_MODE_OPTIONS = [
@@ -108,18 +100,15 @@ export class NovelAITabView extends PreactSettingsView {
             idPrefix: 'novelai_',
             promptMessageForNew: '请输入新生图预设名称:',
             defaultNewName: '新建预设',
-            strictModelAssets: true,
-            emptyModelsLabel: '未获取到模型，请在下方输入自定义模型',
-            formatModelLabel: formatNovelAIModelLabel,
-            staticModelsByService: {
-                [NOVELAI_OFFICIAL_SERVICE_ID]: OFFICIAL_NOVELAI_MODELS,
-            },
+            defaultModels: OFFICIAL_NOVELAI_MODELS.map((id) => ({
+                label: formatNovelAIModelLabel(id),
+                value: id,
+            })),
             serviceProfiles: {
                 fixedUrls: {
                     [NOVELAI_OFFICIAL_SERVICE_ID]: NOVELAI_IMAGE_HOST,
                 },
             },
-            alwaysSyncOnActivate: true,
             defaultSamplers: NOVELAI_SAMPLER_OPTIONS,
             validateRequired: (cfg) => {
                 const missing: string[] = [];
@@ -166,34 +155,11 @@ export class NovelAITabView extends PreactSettingsView {
                 },
             },
             {
-                key: 'ucPreset',
-                label: '负向过滤 (UC)',
-                type: 'select',
-                options: UC_PRESET_OPTIONS,
-                tooltip:
-                    '官方负向过滤预设。Heavy 具备最强的人物结构防崩过滤；Light 仅过滤低质标签以最大限度保留独特画风；Human Focus 针对人物躯体结构优化；None 则完全由用户自定义负向词接管。',
-                transform: {
-                    toView: (v) => (v as string) || 'Heavy',
-                    fromView: (v) => String(v),
-                },
-            },
-            {
                 key: 'promptPresetId',
                 label: '提示词预设',
                 type: 'select',
                 placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
-            },
-            {
-                key: 'qualityTags',
-                label: '自动追加画质标签',
-                type: 'switch',
-                tooltip:
-                    '开启后自动在提示词最前方拼接 best quality, amazing quality 等官方推荐画质标头，提升画面精细度。',
-                transform: {
-                    toView: (v) => v !== false,
-                    fromView: (v) => Boolean(v),
-                },
             },
             {
                 key: 'convertSyntax',
@@ -322,8 +288,8 @@ export class NovelAITabView extends PreactSettingsView {
                         dirty={isSamplerDirty}
                         data={{
                             samplerName: draft.samplerName || 'k_euler',
-                            steps: draft.steps || 28,
-                            cfgScale: draft.cfgScale || 5.0,
+                            steps: draft.steps ?? 28,
+                            cfgScale: draft.cfgScale ?? 5.0,
                             seed: draft.seed ?? -1,
                         }}
                         onChange={(s) =>
@@ -340,7 +306,7 @@ export class NovelAITabView extends PreactSettingsView {
                         model={draft}
                         dirty={dirtyFields.has('cfgRescale')}
                         invalid={invalidFields.has('cfgRescale')}
-                        onChange={(val) => presetController.updateDraft('cfgRescale', val)}
+                        onChange={(val) => presetController.updateDraft('cfgRescale', val as number | undefined)}
                     />
                 </CardView>
 

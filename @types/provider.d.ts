@@ -18,6 +18,12 @@ export type TransportMode = 'direct' | 'relay';
  * 单次调用的可选覆盖参数。
  */
 export interface GenerationParameters {
+    /** 指定使用的绘图预设标识符 */
+    drawingPresetId?: string;
+    /** 指定使用的提示词预设标识符 */
+    promptPresetId?: string;
+    /** 源图像数据覆盖（局部重绘底图） */
+    sourceImage?: Blob | string;
     /** 生图模式：文生图 txt2img 或 局部重绘 inpaint */
     mode?: 'txt2img' | 'inpaint';
     /** 局部重绘遮罩蒙版（Blob 二进制流或 Base64 字符串，白色重绘，黑色保留） */
@@ -56,11 +62,15 @@ export interface GenerationParameters {
  * parameters 仅用于指令中极少数的单次覆盖项（如指定种子、局部重绘等），无需传递常规超参数字典。
  */
 export interface GenerationRequest {
-    /** 正向提示词文本 */
+    /** 正向提示词文本（已完成宏展开、预设拼接与语法转换） */
     readonly prompt: string;
-    /** 负向提示词文本 */
+    /** 负向提示词文本（已完成宏展开、预设合并与语法转换） */
     readonly negativePrompt?: string;
-    /** 图生图或局部重绘时的底图数据（Blob 二进制流或 Base64 字符串） */
+    /** 预设拼接与语法转换前的原始正向提示词 */
+    readonly rawPrompt?: string;
+    /** 预设合并与语法转换前的原始负向提示词 */
+    readonly rawNegativePrompt?: string;
+    /** 局部重绘时的底图数据（Blob 二进制流或 Base64 字符串） */
     readonly sourceImage?: Blob | string;
     /** 局部重绘遮罩蒙版（Blob 二进制流或 Base64 字符串，白色重绘，黑色保留） */
     readonly maskImage?: Blob | string;
@@ -79,8 +89,6 @@ export interface GenerationResult {
     readonly blob: Blob;
     /** 图像生成技术参数快照，用于写入资产记录与详情展示 */
     readonly metadata: ImageGenerationMetadata;
-    /** 图像 Base64 文本 */
-    readonly base64?: string;
 }
 
 /** 绘图服务提供方健康状态检查结果 */
@@ -111,8 +119,6 @@ export interface ProviderAssetCache {
     readonly schedulers?: string[];
     /** 缓存最后更新时间戳 (毫秒) */
     readonly updatedAt?: number;
-    /** 服务端指纹或特征版本 */
-    readonly serverSignature?: string;
 }
 
 /** 单个服务商/端点独立暂存的连接信息与资产缓存快照 */
@@ -152,6 +158,8 @@ export interface GenerationProvider {
     readonly providerType: ProviderType;
     /** 绘图服务提供方显示名称 */
     readonly name: string;
+    /** 是否支持负向提示词（缺省为 true；不支持的服务端如 OpenAI /v1/images/generations 设为 false） */
+    readonly supportsNegativePrompt?: boolean;
 
     /**
      * 执行图像生成

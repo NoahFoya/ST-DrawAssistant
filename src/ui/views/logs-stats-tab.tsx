@@ -31,13 +31,6 @@ export class LogsStatsTabView extends PreactSettingsView {
         this.mountPreact();
     }
 
-    /**
-     * 从本地 IndexedDB 汇总生图效能与存储占用指标。
-     */
-    public async refreshMetrics(): Promise<void> {
-        await this.vm.refreshMetrics();
-    }
-
     protected renderContent(): VNode {
         const statsData = this.vm.statsData.value;
         const storageData = this.vm.storageSummary.value;

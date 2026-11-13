@@ -38,9 +38,9 @@ export interface ImageActionContext {
     /** 完整的图像资产持久化记录快照 */
     readonly record?: StoredImageRecord;
     /** 触发整图重新生成回调 */
-    readonly onRegenerate?: (newPrompt: string, newNegativePrompt?: string) => Promise<void> | void;
+    readonly onRegenerate?: (newPrompt: string, newNegativePrompt?: string) => Promise<boolean | void> | boolean | void;
     /** 触发局部重绘 Inpaint 回调 */
-    readonly onInpaint?: (data: InpaintConfirmResult) => Promise<void> | void;
+    readonly onInpaint?: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
 }
 
 /**
@@ -54,12 +54,13 @@ export class ImageActionPanel implements Disposable {
     private backdropEl?: HTMLElement;
     private titleTextEl?: HTMLElement;
     private posTextarea?: HTMLTextAreaElement;
+    private negSectionEl?: HTMLElement;
     private negTextarea?: HTMLTextAreaElement;
+    private inpaintBtnEl?: HTMLButtonElement;
     private resetPosUndo?: () => void;
     private resetNegUndo?: () => void;
     private updatePosHighlight?: () => void;
     private updateNegHighlight?: () => void;
-    private metaBadgeContainer?: HTMLElement;
     private readonly autocompletes: TagAutocomplete[] = [];
 
     // 全局事件解绑器列表
@@ -77,9 +78,9 @@ export class ImageActionPanel implements Disposable {
             return;
         }
 
-        // 1. 全屏遮罩外壳
+        // 1. 遮罩外壳（移动端自动切换为底部抽屉对齐）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root da-action-panel-backdrop';
+        backdrop.className = 'da-modal-backdrop da-modal-backdrop--sheet st-da-root da-action-panel-backdrop';
         backdrop.style.display = 'none';
 
         // 2. 居中面板
@@ -127,6 +128,7 @@ export class ImageActionPanel implements Disposable {
 
         // 负向提示词卡片
         const negSection = this.createPromptSection('负向提示词 (Negative Prompt)', '输入负向过滤提示词...');
+        this.negSectionEl = negSection.container;
         this.negTextarea = negSection.textarea;
         this.resetNegUndo = negSection.resetUndo;
         this.updateNegHighlight = negSection.updateHighlight;
@@ -134,12 +136,6 @@ export class ImageActionPanel implements Disposable {
         this.autocompletes.push(negAc);
         this.disposers.push(() => negAc.dispose());
         body.appendChild(negSection.container);
-
-        // 技术参数摘要胶囊栏
-        const metaBadgeContainer = document.createElement('div');
-        metaBadgeContainer.className = 'da-action-panel__meta-badges';
-        body.appendChild(metaBadgeContainer);
-        this.metaBadgeContainer = metaBadgeContainer;
 
         panel.appendChild(body);
 
@@ -200,6 +196,7 @@ export class ImageActionPanel implements Disposable {
             e.stopPropagation();
             this.handleInpaint();
         });
+        this.inpaintBtnEl = inpaintBtn;
         footerRight.appendChild(inpaintBtn);
 
         // 重新生成按钮 (Primary)
@@ -218,9 +215,8 @@ export class ImageActionPanel implements Disposable {
         panel.appendChild(footer);
 
         backdrop.appendChild(panel);
-        document.body.appendChild(backdrop);
 
-        // 保存引用
+        // 保存引用（保持游离态，在 open() 打开时动态挂至 document.body 末位）
         this.backdropEl = backdrop;
         this.titleTextEl = titleText;
 
@@ -492,64 +488,47 @@ export class ImageActionPanel implements Disposable {
             this.posTextarea.value = context.prompt || '';
             this.updatePosHighlight?.();
         }
+        const activeProvider = this.resolveContextEngine(context);
+        const supportsNegative = activeProvider !== 'openai';
+        const supportsInpaint = activeProvider === 'comfyui' || activeProvider === 'sdwebui';
+
+        if (this.negSectionEl) {
+            this.negSectionEl.style.display = supportsNegative ? '' : 'none';
+        }
         if (this.negTextarea) {
-            this.negTextarea.value = context.negativePrompt || '';
+            this.negTextarea.value = supportsNegative ? context.negativePrompt || '' : '';
             this.updateNegHighlight?.();
+        }
+        if (this.inpaintBtnEl) {
+            this.inpaintBtnEl.disabled = !supportsInpaint;
+            this.inpaintBtnEl.title = supportsInpaint
+                ? '打开局部重绘画板涂抹修改本图局部细节'
+                : '当前生图引擎不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
         }
 
         for (const ac of this.autocompletes) {
             ac.refreshMacroStatus();
         }
 
-        this.renderMetaBadges(context.record);
-
-        if (this.backdropEl) {
-            if (!this.backdropEl.parentNode && typeof document !== 'undefined') {
-                document.body.appendChild(this.backdropEl);
-            }
+        if (this.backdropEl && typeof document !== 'undefined') {
+            // 打开时始终置入 body 末位，使后打开的次级弹窗/详情窗自然处于其上方
+            document.body.appendChild(this.backdropEl);
             this.backdropEl.style.display = 'flex';
         }
     }
 
     /**
-     * 渲染简明技术参数徽标。
+     * 解析当前图像所属的实际生图引擎（兼容历史元数据中的 provider 字段）。
      */
-    private renderMetaBadges(record?: StoredImageRecord): void {
-        if (!this.metaBadgeContainer) return;
-        this.metaBadgeContainer.innerHTML = '';
-
-        if (!record?.metadata) {
-            return;
-        }
-
-        const meta = record.metadata;
-        const badges: string[] = [];
-
-        if (meta.engine) {
-            badges.push(`引擎: ${meta.engine}`);
-        }
-        if (record.width && record.height) {
-            badges.push(`尺寸: ${record.width}×${record.height}`);
-        }
-        if (meta.steps) {
-            badges.push(`步数: ${meta.steps}`);
-        }
-        if (meta.cfgScale) {
-            badges.push(`CFG: ${meta.cfgScale}`);
-        }
-        if (meta.seed !== undefined) {
-            badges.push(`Seed: ${meta.seed}`);
-        }
-        if (meta.sampler) {
-            badges.push(`采样: ${meta.sampler}`);
-        }
-
-        for (const text of badges) {
-            const span = document.createElement('span');
-            span.className = 'da-action-panel__meta-chip';
-            span.textContent = text;
-            this.metaBadgeContainer.appendChild(span);
-        }
+    private resolveContextEngine(context: ImageActionContext): string {
+        const meta = context.record?.metadata as
+            | (Record<string, unknown> & { engine?: string; provider?: string })
+            | undefined;
+        return (
+            (typeof meta?.engine === 'string' && meta.engine) ||
+            (typeof meta?.provider === 'string' && meta.provider) ||
+            settingsStore.getSettings().activeProvider
+        );
     }
 
     /**
@@ -558,8 +537,10 @@ export class ImageActionPanel implements Disposable {
     private handleRegenerate(): void {
         if (!this.currentContext) return;
 
+        const activeProvider = this.resolveContextEngine(this.currentContext);
+        const supportsNegative = activeProvider !== 'openai';
         const newPrompt = this.posTextarea?.value.trim() ?? '';
-        const newNegativePrompt = this.negTextarea?.value.trim() ?? '';
+        const newNegativePrompt = supportsNegative ? (this.negTextarea?.value.trim() ?? '') : undefined;
 
         if (!newPrompt) {
             Toast.warning('正向提示词不能为空');
@@ -579,6 +560,12 @@ export class ImageActionPanel implements Disposable {
     private handleInpaint(): void {
         if (!this.currentContext) return;
 
+        const activeProvider = this.resolveContextEngine(this.currentContext);
+        if (activeProvider !== 'comfyui' && activeProvider !== 'sdwebui') {
+            Toast.warning('当前生图引擎不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
+            return;
+        }
+
         if (!this.currentContext.imageUrl) {
             Toast.warning('当前图片未就绪，无法打开局部重绘画板');
             return;
@@ -596,10 +583,12 @@ export class ImageActionPanel implements Disposable {
             initialNegativePrompt: initialNegPrompt,
             onConfirm: async (data) => {
                 if (typeof ctx.onInpaint === 'function') {
-                    await ctx.onInpaint(data);
-                } else if (typeof ctx.onRegenerate === 'function') {
-                    await ctx.onRegenerate(data.prompt, data.negativePrompt);
+                    return await ctx.onInpaint(data);
                 }
+                if (typeof ctx.onRegenerate === 'function') {
+                    return await ctx.onRegenerate(data.prompt, data.negativePrompt);
+                }
+                return false;
             },
         });
     }
@@ -650,6 +639,7 @@ export class ImageActionPanel implements Disposable {
         }
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';
+            this.backdropEl.remove();
         }
         this.currentContext = null;
     }
