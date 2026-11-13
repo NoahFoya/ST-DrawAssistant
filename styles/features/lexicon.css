@@ -1,0 +1,589 @@
+/**
+ * 本地词库模块专用样式 (Lexicon)。
+ * 涵盖：顶部全景统计横幅、词汇文件列表、格式徽标、Excel 级纯单元格数据网格、批量粘贴导入。
+ */
+
+.da-lexicon-view-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-card-gap, 14px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-lexicon-subtab-bar {
+    margin-bottom: 2px;
+}
+
+.da-lexicon-stat-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-radius: var(--da-radius-lg, 12px);
+    background: var(--da-bg-card, #22232b);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    box-shadow: var(--da-shadow-sm);
+}
+
+@media (max-width: 600px) {
+    .da-lexicon-stat-banner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 12px;
+    }
+    .da-lexicon-stat-group {
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .da-lexicon-stat-actions {
+        width: 100%;
+    }
+    .da-lexicon-reindex-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+.da-lexicon-stat-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.da-lexicon-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.da-lexicon-stat-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--da-color-success, #10b981);
+    box-shadow: 0 0 6px var(--da-color-success, #10b981);
+    display: inline-block;
+}
+
+.da-lexicon-stat-label {
+    opacity: 0.85;
+}
+
+.da-lexicon-stat-val {
+    color: var(--da-text-primary, #ffffff);
+    font-weight: 600;
+}
+
+.da-lexicon-stat-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.da-lexicon-reindex-btn {
+    border-radius: var(--da-radius-pill, 9999px);
+    font-size: 11.5px;
+}
+
+.da-lexicon-top-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 2px 0 6px 0;
+}
+
+
+
+.da-lexicon-summary-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.da-subsection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+}
+
+.da-subsection-title {
+    font-size: var(--da-font-size-xs, 12px);
+    font-weight: 600;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.72));
+}
+
+.da-extra-fields-editor,
+.da-lexicon-entries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+
+.da-lexicon-top-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+
+.da-empty-hint {
+    padding: 24px 16px;
+    border-radius: var(--da-radius-input, 8px);
+    background: var(--da-bg-surface-subtle);
+    border: 1px dashed var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 12px);
+    line-height: 1.6;
+    text-align: center;
+}
+
+
+.da-lexicon-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.da-lexicon-file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--da-radius-md, 8px);
+    background: var(--da-bg-surface-subtle);
+    border: 1px solid var(--da-border-subtle, var(--da-border-color));
+    transition: all 0.15s ease;
+}
+
+.da-lexicon-file-row:hover {
+    border-color: var(--da-border-highlight);
+    background: var(--da-bg-card-hover);
+}
+
+.da-lexicon-file-row__left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.da-lexicon-file-name {
+    font-size: var(--da-font-size-sm, 13px);
+    color: var(--da-text-primary);
+    word-break: break-all;
+}
+
+.da-lexicon-file-row__right {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.da-lexicon-filter-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.da-lexicon-filter-bar .da-lexicon-custom-search-input {
+    width: 100%;
+    height: 34px;
+    box-sizing: border-box;
+    padding-right: 28px;
+}
+
+.da-lexicon-search-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 4px;
+    line-height: 1;
+    border-radius: 50%;
+    transition: color 0.15s ease;
+}
+
+.da-lexicon-search-clear-btn:hover {
+    color: var(--da-text-primary);
+}
+
+.da-lexicon-batch-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--da-radius-input, 8px);
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+}
+
+/* 自生长数据网格表格体系 (Self-Expanding Lexicon Grid) */
+.da-lexicon-table-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border-radius: var(--da-radius-lg, 10px);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-card, #1e1f29);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+}
+
+[data-theme-mode="dark"] .da-lexicon-table-container {
+    background: var(--da-bg-card, #181922);
+}
+
+.da-lexicon-th-action {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 500;
+    padding-right: 6px;
+    opacity: 0.8;
+}
+
+.da-lexicon-custom-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 440px;
+    overflow-y: auto;
+    padding: 4px 6px 6px 6px;
+    gap: 3px;
+}
+
+/* 空状态卡片：温润优雅的引导层 */
+.da-lexicon-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 20px 20px 20px;
+    gap: 6px;
+    user-select: none;
+}
+
+.da-lexicon-empty-state__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    margin-bottom: 2px;
+}
+
+.da-lexicon-empty-state__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-lexicon-empty-state__subtitle {
+    font-size: 11.5px;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.55));
+    max-width: 360px;
+    line-height: 1.5;
+}
+
+.da-lexicon-custom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 64px;
+    gap: 12px;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--da-radius-md, 6px);
+    transition: background 0.12s ease;
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.02));
+}
+
+.da-lexicon-table-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 64px;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.65));
+    background: rgba(255, 255, 255, 0.025);
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    user-select: none;
+}
+
+.da-lexicon-custom-row:hover {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+/* 超窄屏手机移动端自适应 (max-width: 520px):
+   双列单元格转为双行卡片化流排布，Tag 满宽在上，释义与操作在下 */
+@media (max-width: 520px) {
+    .da-lexicon-table-header {
+        display: none;
+    }
+    .da-lexicon-custom-row {
+        grid-template-columns: 1fr 64px;
+        grid-template-areas:
+            "tag tag"
+            "cn actions";
+        gap: 5px 8px;
+        padding: 6px 8px;
+    }
+    .da-lexicon-custom-row .da-lexicon-cell-tag {
+        grid-area: tag;
+        width: 100%;
+    }
+    .da-lexicon-custom-row .da-lexicon-cell-cn {
+        grid-area: cn;
+        width: 100%;
+    }
+    .da-lexicon-custom-row .da-lexicon-row-actions,
+    .da-lexicon-custom-row .da-lexicon-row-placeholder-handle {
+        grid-area: actions;
+        margin-left: auto;
+    }
+    .da-lexicon-row-del-btn {
+        opacity: 0.7;
+    }
+}
+
+/* 单元格无缝网格体验 (Linear / Raycast 质感) */
+.da-lexicon-custom-row .da-lexicon-cell {
+    height: 32px;
+    line-height: 30px;
+    padding: 0 8px;
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--da-radius-sm, 5px);
+    color: var(--da-text-primary, #ffffff);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.da-lexicon-custom-row:hover .da-lexicon-cell {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.da-lexicon-custom-row .da-lexicon-cell:focus {
+    border-color: var(--da-accent-color);
+    background: var(--da-bg-input, #161720);
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.2);
+    outline: none;
+}
+
+.da-lexicon-custom-row .da-lexicon-cell-tag {
+    font-family: var(--da-font-mono, monospace);
+    font-weight: 500;
+}
+
+/* 操作按钮组 (快捷删除 + 菜单) */
+.da-lexicon-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    width: 64px;
+}
+
+.da-lexicon-row-del-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--da-radius-sm, 4px);
+    background: transparent;
+    border: none;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    cursor: pointer;
+    opacity: 0.15;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.da-lexicon-custom-row:hover .da-lexicon-row-del-btn {
+    opacity: 0.75;
+}
+
+.da-lexicon-row-del-btn:hover {
+    opacity: 1;
+    color: var(--da-color-error, #ef4444);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+/* 行操作把手 (⋮) */
+.da-lexicon-row-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    font-size: 15px;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    background: transparent;
+    border: none;
+    border-radius: var(--da-radius-sm, 4px);
+    cursor: pointer;
+    opacity: 0.25;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    user-select: none;
+}
+
+.da-lexicon-custom-row:hover .da-lexicon-row-more-btn {
+    opacity: 0.85;
+}
+
+.da-lexicon-row-more-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--da-text-primary, #ffffff);
+    opacity: 1;
+}
+
+.da-lexicon-row-placeholder-handle {
+    width: 64px;
+    height: 26px;
+    display: inline-block;
+}
+
+/* 尾部天然空白行 (Tail Blank Row) */
+.da-lexicon-tail-draft-row {
+    margin-top: 6px;
+    background: rgba(255, 255, 255, 0.015);
+    border-top: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-bottom: none;
+}
+
+[data-theme-mode="dark"] .da-lexicon-tail-draft-row {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.da-lexicon-tail-draft-row .da-lexicon-cell {
+    border-color: rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.da-lexicon-tail-draft-row .da-lexicon-cell:focus {
+    border-color: var(--da-accent-color);
+    background: var(--da-bg-input, #161720);
+}
+
+/* 中间无缝插入行 (Inserted Row) */
+.da-lexicon-inserted-row {
+    background: rgba(129, 140, 248, 0.05);
+    border: 1px dashed var(--da-accent-color);
+    animation: da-row-flash 0.22s ease-out;
+}
+
+@keyframes da-row-flash {
+    from {
+        opacity: 0.4;
+        transform: translateY(-2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 行操作右键 / 长按上下文菜单 (ContextMenu) */
+.da-lexicon-context-menu {
+    position: fixed;
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    min-width: 175px;
+    padding: 4px;
+    background: var(--da-bg-modal);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-md, 8px);
+    box-shadow: var(--da-shadow-md);
+    animation: da-context-pop 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes da-context-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.da-lexicon-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--da-text-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--da-radius-sm, 4px);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease, color 0.12s ease;
+    user-select: none;
+}
+
+.da-lexicon-menu-item:hover {
+    background: var(--da-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.da-lexicon-menu-item.is-danger {
+    color: var(--da-color-error, #ef4444);
+}
+
+.da-lexicon-menu-item.is-danger:hover {
+    background: var(--da-color-error-subtle);
+}
+
+.da-lexicon-menu-icon {
+    font-size: 13px;
+    width: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.da-lexicon-menu-divider {
+    height: 1px;
+    margin: 3px 0;
+    background: var(--da-border-color);
+    opacity: 0.5;
+}
+

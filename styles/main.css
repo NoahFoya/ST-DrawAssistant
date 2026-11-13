@@ -1,5 +1,5 @@
 /**
- * ST-DrawAssistant 样式系统入口（加入壳层布局与弹窗媒体样式）。
+ * ST-DrawAssistant 样式系统入口（加入配置工作台视图样式）。
  */
 
 /* 1. Core 核心基础与设计令牌 (Layer 1) */
@@ -46,11 +46,17 @@
 @import url('./controls/feedback/image-preview.css');
 @import url('./controls/feedback/autocomplete.css');
 
-/* 4. Features 媒体与弹窗样式 (Layer 4) */
+/* 4. Features 媒体与功能视图样式 (Layer 4) */
 @import url('./features/image-info.css');
 @import url('./features/lightbox.css');
 @import url('./features/inpaint.css');
 @import url('./features/update.css');
+@import url('./features/gallery.css');
+@import url('./features/prompts.css');
+@import url('./features/materials.css');
+@import url('./features/lexicon.css');
+@import url('./features/terminal.css');
+@import url('./features/workflow.css');
 @import url('./features/onboarding.css');
 
 /* 5. Skin 主题皮肤与设备响应式 (Layer 5) */
