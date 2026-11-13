@@ -1,0 +1,137 @@
+[
+  {
+    "id": "fmt_default",
+    "name": "默认变量与宏预设",
+    "description": "默认角色与服装多级列表模板及常用生图宏指令规则",
+    "data": {
+      "characterTemplate": "{{name}}:\n  - 别名: {{aliases}}\n  - 描述: {{description}}\n  - 专属服装:\n{{outfits}}",
+      "outfitTemplate": "[{{name}}]\n  - 别名: {{aliases}}\n  - 描述: {{description}}",
+      "macroTemplate": "- {{macro}}: {{description}}",
+      "characterMacros": [
+        {
+          "id": "char_macro_closeup",
+          "name": "closeup",
+          "description": "面部或头部近景特写时调用，包含发型发色、容貌五官与随身标志配饰；若画面需突出兽耳、犄角等特异生物特征可追加 -features 后缀。",
+          "targetParts": [
+            "hair",
+            "face",
+            "accessories"
+          ]
+        },
+        {
+          "id": "char_macro_upper",
+          "name": "upper",
+          "description": "胸腰以上半身景别时调用，包含头面部、肩颈上身、胸部特征、双手及随身配饰；需突显生物特质可追加 -features 后缀，战损解衣场景可按需叠加破损状态标签。",
+          "targetParts": [
+            "hair",
+            "face",
+            "chest",
+            "upper_body",
+            "hands",
+            "accessories"
+          ]
+        },
+        {
+          "id": "char_macro_cowboy",
+          "name": "cowboy",
+          "description": "膝上七分身构图（美式镜头）时调用，在半身基础上增加腰腹线条与臀胯轮廓；若需展现尾巴或翅膀等生物特征可追加 -features 后缀。",
+          "targetParts": [
+            "hair",
+            "face",
+            "chest",
+            "upper_body",
+            "waist",
+            "hips",
+            "hands",
+            "accessories"
+          ]
+        },
+        {
+          "id": "char_macro_full",
+          "name": "full",
+          "description": "全身站姿、动态走动或大取景构图时调用，包含整体身型体态、特异生物特质与全身各身体部位；需要表现私密性征或全裸亲密场景时可追加 -privates 或 -intimate 后缀。",
+          "targetParts": [
+            "appearance",
+            "hair",
+            "face",
+            "features",
+            "chest",
+            "upper_body",
+            "waist",
+            "hips",
+            "legs",
+            "feet",
+            "hands",
+            "accessories"
+          ]
+        },
+        {
+          "id": "char_macro_intimate",
+          "name": "intimate",
+          "description": "画面聚焦于胸部细节、亲密接触或生殖性征特写时调用，专注呈现胸部特征与生殖性征细节；可单独调用，亦可与全身等景别宏链式叠加（如 $角色名-full-intimate$）。",
+          "targetParts": [
+            "chest",
+            "privates"
+          ]
+        }
+      ],
+      "outfitMacros": [
+        {
+          "id": "outfit_macro_closeup",
+          "name": "closeup",
+          "description": "头部近景特写景别配合角色调用，包含头饰帽子与随身服饰配件；若角色已摘除头饰则无需调用此宏。",
+          "targetParts": [
+            "headwear",
+            "accessories"
+          ]
+        },
+        {
+          "id": "outfit_macro_upper",
+          "name": "upper",
+          "description": "胸腰以上半身景别配合角色调用，包含头饰、上装衣领与袖口、手套腕饰与服饰配件；若仅穿上衣或外套敞开可按需叠加状态标签。",
+          "targetParts": [
+            "headwear",
+            "top",
+            "handwear",
+            "accessories"
+          ]
+        },
+        {
+          "id": "outfit_macro_cowboy",
+          "name": "cowboy",
+          "description": "膝上七分身景别配合角色调用，包含头饰、上装、裙装裤装、手套腕饰与服饰配件；支持按需追加特定部位变量或破损状态词。",
+          "targetParts": [
+            "headwear",
+            "top",
+            "bottom",
+            "handwear",
+            "accessories"
+          ]
+        },
+        {
+          "id": "outfit_macro_full",
+          "name": "full",
+          "description": "整套外穿服饰全身景别配合角色调用，包含整体设计风格、头饰、上下装、手套、袜子、鞋靴与服饰配件；若脱鞋赤足可手写 barefoot 覆盖鞋靴。",
+          "targetParts": [
+            "style",
+            "headwear",
+            "top",
+            "bottom",
+            "handwear",
+            "socks",
+            "shoes",
+            "accessories"
+          ]
+        },
+        {
+          "id": "outfit_macro_intimate",
+          "name": "intimate",
+          "description": "外衣褪去仅穿贴身衣物或局部走光外露时调用，包含贴身内衣裤；常与角色宏灵活组合（如配合 $服装名-top-intimate$ 或单独调用）。",
+          "targetParts": [
+            "underwear"
+          ]
+        }
+      ]
+    }
+  }
+]

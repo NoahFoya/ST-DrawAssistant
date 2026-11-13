@@ -1,0 +1,128 @@
+{
+  "comfyui": [
+    {
+      "id": "comfyui_anime",
+      "name": "二次元插画 (动漫/推荐)",
+      "description": "二次元动漫插画预设，采用主流竖屏比例，搭配默认全量模型工作流（支持三权重动态 LoRA）",
+      "data": {
+        "baseModel": "",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 6,
+        "samplerName": "euler_ancestral",
+        "scheduler": "normal",
+        "txt2imgWorkflowId": "comfyui_checkpoint_default",
+        "img2imgWorkflowId": "comfyui_inpaint_default",
+        "inpaintPresetId": "comfyui_inpaint_default",
+        "promptPresetId": ""
+      }
+    },
+    {
+      "id": "comfyui_realistic",
+      "name": "写实摄影 (真人/风景)",
+      "description": "高画质写实摄影与真实人像预设，搭配默认全量模型工作流",
+      "data": {
+        "baseModel": "",
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "cfgScale": 5,
+        "samplerName": "dpmpp_2m_sde",
+        "scheduler": "karras",
+        "txt2imgWorkflowId": "comfyui_checkpoint_default",
+        "img2imgWorkflowId": "comfyui_inpaint_default",
+        "inpaintPresetId": "comfyui_inpaint_default",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "sdwebui": [
+    {
+      "id": "sdwebui_anime",
+      "name": "二次元插画 (动漫/推荐)",
+      "description": "主流二次元动漫精细生图预设，适配 Illustrious / Animagine 等主流动漫大模型",
+      "data": {
+        "baseModel": "",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 5.5,
+        "samplerName": "Euler a",
+        "promptPresetId": ""
+      }
+    },
+    {
+      "id": "sdwebui_realistic",
+      "name": "写实摄影 (真人/风景)",
+      "description": "SDXL 真人摄影、电影质感与高精人像出图预设",
+      "data": {
+        "baseModel": "",
+        "width": 896,
+        "height": 1152,
+        "steps": 30,
+        "cfgScale": 6,
+        "samplerName": "DPM++ 2M Karras",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "novelai": [
+    {
+      "id": "novelai_v45_curated",
+      "name": "NAI V4.5 动漫精选",
+      "description": "NovelAI V4.5 Curated 旗舰二次元模型，细节极高且人体结构精准",
+      "data": {
+        "baseModel": "nai-diffusion-4-5-curated",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 5,
+        "samplerName": "k_euler",
+        "promptPresetId": ""
+      }
+    },
+    {
+      "id": "novelai_v3_classic",
+      "name": "NAI V3 经典日系",
+      "description": "NovelAI V3 经典日系二次元动漫模型，色彩通透浓郁",
+      "data": {
+        "baseModel": "nai-diffusion-3",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 6,
+        "samplerName": "k_euler_ancestral",
+        "promptPresetId": ""
+      }
+    }
+  ],
+  "openai": [
+    {
+      "id": "openai_dalle3_vivid",
+      "name": "DALL-E 3 质感插画",
+      "description": "色彩绚丽饱满、层次生动富有戏剧张力的插画创作预设",
+      "data": {
+        "baseModel": "dall-e-3",
+        "width": 1024,
+        "height": 1024,
+        "quality": "standard",
+        "style": "vivid",
+        "promptPresetId": ""
+      }
+    },
+    {
+      "id": "openai_dalle3_natural",
+      "name": "DALL-E 3 真实摄影",
+      "description": "柔和自然光影、逼真细节的真实写实摄影预设",
+      "data": {
+        "baseModel": "dall-e-3",
+        "width": 1024,
+        "height": 1792,
+        "quality": "standard",
+        "style": "natural",
+        "promptPresetId": ""
+      }
+    }
+  ]
+}

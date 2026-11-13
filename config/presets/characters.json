@@ -1,0 +1,30 @@
+[
+  {
+    "id": "char_sample_alice",
+    "name": "爱丽丝",
+    "data": {
+      "name": "爱丽丝",
+      "aliases": "alice|爱丽丝",
+      "trigger": "alice",
+      "description": "金发碧眼的见习魔法使，性格温顺文雅",
+      "boundOutfitIds": [
+        "outfit_sample_school"
+      ],
+      "parts": {
+        "appearance": "fair_skin, slender",
+        "hair": "blonde_hair, long_hair",
+        "face": "blue_eyes, gentle_smile",
+        "features": "",
+        "chest": "medium_breasts",
+        "upper_body": "",
+        "waist": "",
+        "hips": "",
+        "legs": "slender_legs",
+        "feet": "",
+        "hands": "",
+        "accessories": "hair_ribbon",
+        "privates": ""
+      }
+    }
+  }
+]

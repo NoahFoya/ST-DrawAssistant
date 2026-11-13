@@ -1,0 +1,396 @@
+/**
+ * 本地图库检索工具栏、自适应媒体卡片网格、批量操作条与分页器样式。
+ *
+ * @remarks
+ * 1. 网格自适应：利用 repeat(auto-fill, minmax(130px, 1fr)) 实现多尺寸屏幕流式自适应。
+ * 2. 卡片比例：维持 1:1 等比视窗，悬停呼出快捷操作浮层。
+ * 3. 批量操作：支持底部粘性悬浮批处理条（position: sticky），支持批量导出与删除。
+ */
+
+/* 1. 本地图库检索与过滤工具栏卡片 (.da-gallery-toolbar-card)
+   纵向分层组织快筛胶囊、批量管理入口、关键词搜索与排序下拉框，内边距充足避免贴边。 */
+.da-gallery-manager-widget {
+    display: flex;
+    flex-direction: column;
+    gap: var(--da-space-card-gap, 14px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-gallery-toolbar-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-lg, 10px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-gallery-toolbar-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+}
+
+.da-gallery-filter-pills {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.da-gallery-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: var(--da-font-size-xs, 12px);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    background: var(--da-bg-input, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-pill, 999px);
+    cursor: pointer;
+    transition: all 0.15s var(--da-ease);
+}
+
+.da-gallery-pill:hover {
+    color: var(--da-text-primary);
+    border-color: rgba(var(--da-accent-rgb), 0.4);
+}
+
+.da-gallery-pill.is-active {
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.14);
+    border-color: var(--da-accent-color);
+    font-weight: 600;
+}
+
+.da-gallery-pill__count {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: var(--da-radius-pill, 999px);
+    background: var(--da-bg-input);
+    color: inherit;
+}
+
+.da-gallery-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.da-gallery-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-gallery-toolbar .da-input-wrapper,
+.da-gallery-toolbar .da-input-group {
+    flex: 2 1 220px;
+    min-width: 180px;
+}
+
+.da-gallery-toolbar .da-input-wrapper .da-input {
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    padding-left: 12px;
+}
+
+.da-gallery-toolbar .da-gallery-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 2 1 260px;
+    flex-wrap: wrap;
+}
+
+.da-gallery-toolbar .da-gallery-filter-row .da-select-wrapper {
+    flex: 1 1 130px;
+    min-width: 120px;
+    width: auto;
+}
+
+/* 批量操作工具条 (.da-gallery-batch-toolbar) */
+.da-gallery-batch-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(var(--da-accent-rgb), 0.08);
+    border: 1px solid rgba(var(--da-accent-rgb), 0.35);
+    border-radius: var(--da-radius-md, 8px);
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.da-gallery-batch-toolbar__left,
+.da-gallery-batch-toolbar__right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.da-gallery-batch-count {
+    font-size: var(--da-font-size-xs, 12px);
+    font-weight: 600;
+    color: var(--da-accent-color);
+    margin-right: 4px;
+}
+
+/* 空状态与底部分页栏 */
+.da-gallery-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 48px 20px;
+    text-align: center;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.02));
+    border: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.1));
+    border-radius: var(--da-radius-lg, 10px);
+    color: var(--da-text-secondary);
+    box-sizing: border-box;
+}
+
+.da-gallery-empty__icon {
+    font-size: 32px;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.da-gallery-empty__title {
+    font-size: var(--da-font-size-sm, 13.5px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-gallery-empty__sub {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    max-width: 420px;
+    line-height: 1.5;
+}
+
+.da-gallery-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 10px 16px;
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-md, 8px);
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.da-gallery-pagination__info {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    font-family: var(--da-font-mono, monospace);
+}
+
+
+/* 2. 自适应媒体流式卡片网格 (.da-media-grid)
+   利用 CSS Grid repeat(auto-fill, minmax(130px, 1fr)) 实现响应式卡片排布，
+   无需媒体查询即可在不同面板宽度下自动计算并排最佳列数。 */
+.da-gallery-stream-container {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+}
+
+.da-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 3. 媒体卡片与悬浮交互 (.da-media-card)
+   严格维持 1:1 正方形等比视窗（aspect-ratio: 1 / 1）；
+   内置悬浮遮罩浮层（.da-media-card__overlay）展示快速选择、收藏与详情触发入口；
+   多选态通过 .is-selected 呈现品牌色高亮边框。 */
+.da-media-card {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--da-radius-sm, 8px);
+    overflow: hidden;
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-separator);
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease), border-color 0.18s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-media-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-shadow-md);
+}
+
+.da-media-card.is-selectable {
+    cursor: pointer;
+}
+
+.da-media-card.is-selectable:hover {
+    border-color: var(--da-border-card-hover, rgba(var(--da-accent-rgb, 129, 140, 248), 0.38));
+}
+
+.da-media-card.is-selected {
+    border-color: var(--da-accent-color);
+    box-shadow: 0 0 0 2px var(--da-accent-color), 0 8px 20px -4px rgba(var(--da-accent-rgb, 129, 140, 248), 0.35);
+    transform: translateY(-2px);
+}
+
+/* 4. 媒体卡片内部元素：缩略图、收藏徽章与悬浮遮罩 */
+.da-media-card__thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    z-index: 1;
+    transition: filter 0.2s var(--da-ease);
+}
+
+.da-media-card:hover .da-media-card__thumb {
+    filter: brightness(1.06);
+}
+
+/* 顶部操作遮罩层：悬停时平滑显现统一快捷操作图标（收藏、元信息、下载图片） */
+.da-media-card__overlay {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 3px 5px;
+    gap: 4px;
+    background: var(--da-bg-overlay-modal, rgba(15, 18, 26, 0.78));
+    backdrop-filter: blur(6px);
+    border-radius: var(--da-radius-sm, 6px);
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.da-media-card:hover .da-media-card__overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.da-media-card__action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--da-text-primary);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.da-media-card__action-btn:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-accent-color);
+}
+
+.da-media-card__action-btn--fav.is-active {
+    color: var(--da-color-fav, #eab308);
+}
+
+.da-media-card__action-btn--danger:hover {
+    background: var(--da-color-error, #ef4444);
+    color: var(--da-text-on-accent, #ffffff);
+}
+
+/* 卡片状态辅助样式 (generating, ready, failed) */
+.da-media-card__state-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    text-align: center;
+    gap: 6px;
+    z-index: 2;
+}
+
+.da-media-card--generating .da-media-card__state-box {
+    background: linear-gradient(110deg, var(--da-bg-secondary) 8%, var(--da-separator) 18%, var(--da-bg-secondary) 33%);
+    background-size: 200% 100%;
+    animation: da-media-shimmer 1.5s infinite linear;
+}
+
+@keyframes da-media-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.da-media-card--failed .da-media-card__state-box {
+    background: rgba(var(--da-color-error-rgb), 0.08);
+    color: var(--da-color-error);
+}
+
+.da-media-card__state-text {
+    font-size: 11px;
+    color: var(--da-text-secondary);
+    line-height: 1.3;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.da-media-card__error-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.da-media-card__error-btn {
+    padding: 2px 8px !important;
+    font-size: 10px !important;
+}

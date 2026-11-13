@@ -1,0 +1,24 @@
+[
+  {
+    "id": "mat_act_default",
+    "name": "默认启用预设",
+    "description": "默认按关键词动态触发已启用的角色与服装档案，并连带激活角色绑定的关联服装",
+    "data": {
+      "characterRules": {
+        "char_sample_alice": {
+          "enabled": false,
+          "triggerMode": "keyword"
+        }
+      },
+      "outfitRules": {
+        "outfit_sample_casual": {
+          "enabled": false,
+          "triggerMode": "keyword"
+        }
+      },
+      "boundCardNames": [],
+      "scanDepth": 5,
+      "includeBoundOutfits": true
+    }
+  }
+]

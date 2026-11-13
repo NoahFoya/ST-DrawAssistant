@@ -1,0 +1,334 @@
+/**
+ * 初次使用引导弹窗样式 (.da-onboarding-*)
+ *
+ * @remarks
+ * 基于 --da-* 设计令牌构建，支持深/浅双模式主题与移动端窄屏响应式排布。
+ */
+
+.da-onboarding-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--da-z-modal, 10000) + 15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
+    backdrop-filter: blur(var(--da-blur-modal, 12px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 12px));
+    box-sizing: border-box;
+    animation: da-fadein 0.18s var(--da-ease);
+}
+
+.da-onboarding-panel {
+    width: min(720px, 94vw);
+    max-height: min(640px, 88vh);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, #18191f);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal, 0 18px 48px rgba(0, 0, 0, 0.55));
+    overflow: hidden;
+    box-sizing: border-box;
+    color: var(--da-text-primary);
+    animation: da-modal-slide-in 0.2s var(--da-ease);
+}
+
+/* 1. 顶部标题区与步骤导航栏 */
+.da-onboarding-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 12px 20px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+}
+
+.da-onboarding-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.da-onboarding-kicker {
+    font-size: var(--da-font-size-xs, 11.5px);
+    font-weight: 600;
+    color: var(--da-accent-color);
+    letter-spacing: 0.02em;
+}
+
+.da-onboarding-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.35;
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-subtitle {
+    margin: 0;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    line-height: 1.45;
+}
+
+/* 步骤选项卡横条 */
+.da-onboarding-stepper {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 10px 20px;
+    background: var(--da-bg-secondary);
+    border-bottom: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+}
+
+.da-onboarding-step-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: var(--da-radius-md, 8px);
+    border: 1px solid transparent;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    color: var(--da-text-muted);
+    font-size: var(--da-font-size-xs, 12px);
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.16s var(--da-ease), color 0.16s var(--da-ease), border-color 0.16s var(--da-ease);
+}
+
+.da-onboarding-step-pill:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-step-pill.is-active {
+    background: rgba(var(--da-accent-rgb), 0.14);
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    color: var(--da-text-primary);
+    font-weight: 600;
+}
+
+.da-onboarding-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--da-radius-pill, 999px);
+    background: var(--da-bg-input);
+    color: var(--da-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.da-onboarding-step-pill.is-active .da-onboarding-step-num {
+    background: var(--da-accent-color);
+    color: var(--da-text-on-accent, #ffffff);
+}
+
+.da-onboarding-step-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 2. 主内容滚动区 */
+.da-onboarding-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--da-bg-primary);
+    overscroll-behavior: contain;
+}
+
+/* 横向流程图示 */
+.da-onboarding-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--da-radius-lg, 10px);
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+}
+
+.da-onboarding-flow-node {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: var(--da-radius-md, 8px);
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+}
+
+.da-onboarding-flow-step {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--da-accent-color);
+}
+
+.da-onboarding-flow-title {
+    font-size: var(--da-font-size-sm, 13px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-flow-desc {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--da-text-secondary);
+}
+
+.da-onboarding-flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-text-muted);
+    flex-shrink: 0;
+}
+
+/* 说明卡片组 */
+.da-onboarding-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-onboarding-card {
+    padding: 12px 14px;
+    border-radius: var(--da-radius-lg, 10px);
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.da-onboarding-card--highlight {
+    border-color: rgba(var(--da-accent-rgb), 0.42);
+    background: rgba(var(--da-accent-rgb), 0.07);
+}
+
+.da-onboarding-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.da-onboarding-card__title {
+    margin: 0;
+    font-size: var(--da-font-size-sm, 13.5px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-card__badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 999px);
+    background: rgba(var(--da-accent-rgb), 0.16);
+    color: var(--da-accent-color);
+    flex-shrink: 0;
+}
+
+.da-onboarding-card__badge--muted {
+    background: var(--da-bg-subtle);
+    color: var(--da-text-secondary);
+}
+
+.da-onboarding-card__text {
+    margin: 0;
+    font-size: var(--da-font-size-sm, 12.8px);
+    line-height: 1.6;
+    color: var(--da-text-secondary);
+}
+
+.da-onboarding-card__list {
+    margin: 2px 0 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: var(--da-font-size-sm, 12.6px);
+    line-height: 1.55;
+    color: var(--da-text-secondary);
+}
+
+.da-onboarding-card__list strong {
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-inline-code {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 0.92em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--da-bg-input);
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-primary);
+}
+
+/* 3. 底部翻页操作栏 */
+.da-onboarding-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--da-bg-secondary);
+    border-top: 1px solid var(--da-border-color);
+    flex-shrink: 0;
+}
+
+.da-onboarding-footer__progress {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted);
+}
+
+.da-onboarding-footer__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 640px) {
+    .da-onboarding-stepper {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 8px 14px;
+    }
+
+    .da-onboarding-flow {
+        flex-direction: column;
+    }
+
+    .da-onboarding-flow-arrow {
+        transform: rotate(90deg);
+        padding: 2px 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .da-onboarding-backdrop,
+    .da-onboarding-panel,
+    .da-onboarding-step-pill {
+        animation: none;
+        transition: none;
+    }
+}

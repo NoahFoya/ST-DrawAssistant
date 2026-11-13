@@ -1,0 +1,44 @@
+[
+  {
+    "id": "outfit_sample_school",
+    "name": "学院制服",
+    "data": {
+      "name": "学院制服",
+      "aliases": "school_uniform|制服",
+      "trigger": "school_uniform",
+      "description": "经典日系深蓝水手服与百褶短裙",
+      "parts": {
+        "style": "sailor_uniform, navy_blue, pleated_skirt",
+        "headwear": "white_headband",
+        "top": "sailor_collar, short_sleeves, white_shirt",
+        "bottom": "pleated_skirt, navy_blue_skirt",
+        "handwear": "",
+        "socks": "white_socks",
+        "shoes": "loafers",
+        "accessories": "red_neckerchief",
+        "underwear": ""
+      }
+    }
+  },
+  {
+    "id": "outfit_sample_casual",
+    "name": "日常便服",
+    "data": {
+      "name": "日常便服",
+      "aliases": "casual|便服",
+      "trigger": "casual",
+      "description": "舒适宽松的连帽卫衣与牛仔裤",
+      "parts": {
+        "style": "casual, hoodie, denim_jeans",
+        "headwear": "",
+        "top": "oversized_hoodie, grey_hoodie",
+        "bottom": "blue_jeans, denim_pants",
+        "handwear": "",
+        "socks": "ankle_socks",
+        "shoes": "sneakers",
+        "accessories": "",
+        "underwear": ""
+      }
+    }
+  }
+]

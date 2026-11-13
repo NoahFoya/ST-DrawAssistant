@@ -1,0 +1,89 @@
+{
+  "prompt_story": [
+    {
+      "id": "prompt_story_default",
+      "name": "默认故事插画预设",
+      "description": "核心插图推演与输出规则：含 <imgthink> 四步视觉推演、多角色构图隔离规范及标准分镜范例",
+      "data": {
+        "entries": [
+          {
+            "id": "story_core_rule",
+            "name": "核心|插图规则",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 5,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 10,
+            "content": "<image_generation_instruction>\n在故事推进过程中，审视当前对话与剧情推演，捕捉最具视觉张力、情感高潮、动作转折或精彩对峙的瞬间（每轮回复挑选 1-3 个片段），并在对应段落下方插入插图。\n\n每张插图按以下两步完成：\n\n第一步：画面视觉推演 (<imgthink>)\n在 <imgthink> 分析块中，按顺序完成以下四步推演：\n1. 镜头人数、景别与视角：先确定画面人数（如 `1girl`、`2girls`、`1girl, 1boy`）、镜头取景（`close-up`、`upper_body`、`cowboy_shot`、`full_body`）与机位角度（如 `from_above`、`from_below`、`from_side`）。\n2. 人物外貌与衣着装扮：提炼画面中人物的发色发型、五官瞳色、体态与生物特质，以及当前所穿服装的款式、色调、鞋袜配饰与穿戴状态（如整洁穿戴、半脱解扣或战损破损）。\n3. 姿态动作与神情眼神：确定人物的肢体姿态、具体交互动作、面部表情及视线方向。\n4. 环境背景与道具光影：确定室内外场景背景、手持或交互道具，以及光影氛围与环境粒子。\n\n第二步：Tags 组装与输出 (<image>)\n在 </imgthink> 之后，将推演出的画面要素转换为标准 Danbooru Tags，组装并输出于 <image>image### ... ###</image> 容器中。\n\n【Danbooru 标签规范】\n- 全部手写标签统一采用小写英文下划线格式（如 `holding_book, gentle_smile`），标签之间使用英文逗号与空格分隔。\n- 多角色隔离：多角色同框场景下（如 `2girls` 或 `1girl, 1boy`），采用 `2girls, 1girl, [角色A外观与动作], 1girl, [角色B外观与动作], [全局环境与光影]` 的顺序组织，确保各角色特征互不串染。\n\n标准响应范本示例：\n\n范例一（单人日常中景 + 标志特征与道具互动）：\n爱丽丝穿着精致的深蓝学院制服迎面走来，身后的白色羽翼轻快舒展，双手端着书本向你躬身行礼。\n<image>image###1girl, solo, silver_hair, long_hair, blue_eyes, angel_wings, white_wings, school_uniform, navy_blue_jacket, white_shirt, red_ribbon, pleated_skirt, holding_book, bowing, gentle_smile, looking_at_viewer, cowboy_shot, indoor, hallway, warm_lighting###</image>\n\n范例二（双人同框对峙 + 多角色特征隔离）：\n密林深处，身穿深蓝警服的黑发少女手握长剑，与身着黑色长袍的银发角族女子隔空对峙。\n<image>image###2girls, 1girl, long_black_hair, double_bun, red_eyes, police_uniform, blue_jacket, holding_sword, serious, 1girl, silver_hair, long_hair, dragon_horns, black_robe, long_coat, flame_effects, confrontation, standing, full_body, forest, dramatic_lighting###</image>\n</image_generation_instruction>"
+          }
+        ]
+      }
+    }
+  ],
+  "prompt_character": [
+    {
+      "id": "prompt_character_default",
+      "name": "默认素材创作预设",
+      "description": "在 <talk> 中梳理设计灵感，并按预置部位结构输出 <角色> 与 <服装> 档案块，支持插件楼层提取器直接收录",
+      "data": {
+        "entries": [
+          {
+            "id": "char_creation_core",
+            "name": "核心|素材创作规范",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 5,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 20,
+            "content": "<character_design_instruction>\n当与用户探讨新角色构思、形象重塑、服装剪裁或梳理外观图纸时，遵循以下人物与服装设计规范：\n\n一、灵感探讨与呈现步骤\n1. 灵感梳理 (<talk>)：在 <talk> 标签内梳理设计思路、色彩搭配、性格气质与款式亮点。\n2. 标准图纸呈递：在 </talk> 之后，呈递标准的 <角色> 或 <服装> 档案块。角色与服装必须分离梳理（角色仅记录身体外貌与随身标志物，服装单独记录衣着剪裁与鞋袜配件）。\n\n二、档案排版规范（将被插件自动识别收录）：\n\n【角色设计排版】\n<角色>\nNAME: 角色唯一名称（如 爱丽丝）\nALIASES: 常用别名或英文名，以 | 分隔（如 alice|爱丽丝）\nTRIGGER: 角色与作品名英文标签，原创角色留空（如 hatsune_miku, vocaloid）\nDESCRIPTION: 简明气质与定位说明（如 金发碧眼见习魔法使，温顺文雅）\nOUTFITS: 专属服装名称（选填，如 学院制服）\nappearance: 整体体态、肤色、种族基底tags（严禁填入 1girl/solo 等构图词）\nhair: 发色发型tags（发色长短、发型质感、呆毛等）\nface: 面容五官tags（眼睛瞳色、眼神表情、面部特征）\nfeatures: 生物特质tags（兽耳、尾巴、翅膀、角等）\nchest: 胸部特征tags（胸围罩杯、胸型轮廓，如 medium_breasts）\nupper_body: 肩颈锁骨、上身躯干线条\nwaist: 腰线腹部tags（如 narrow_waist, flat_stomach, navel）\nhips: 臀部轮廓tags（如 curvy_hips, wide_hips）\nlegs: 腿部腿型tags（如 slender_legs）\nfeet: 足部脚踝tags（如 bare_feet, delicate_toes）\nhands: 手指手部tags（如 slender_fingers）\naccessories: 随身常驻配饰tags（如 glasses, hair_ribbon, choker）\nprivates: 私密身体特征与性征细节tags（按需）\n</角色>\n\n【服装设计排版】\n<服装>\nNAME: 服装唯一名称（如 学院制服）\nALIASES: 服装简称或英文名，以 | 分隔（如 school_uniform|制服）\nTRIGGER: 服装专属英文标签，通用搭配或自设服装留空（选填，如 school_uniform）\nDESCRIPTION: 服装款式、风格与适用场景说明（如 经典日系深蓝水手服与百褶短裙）\nstyle: 整体款式与风格主色调tags（如 sailor_uniform, navy_blue, pleated_skirt）\nheadwear: 头饰帽子tags（如 white_headband）\ntop: 上装tags（如 sailor_collar, short_sleeves, white_shirt）\nbottom: 下装tags（如 pleated_skirt, navy_blue_skirt）\nhandwear: 手套手饰tags（如 wrist_cuffs）\nsocks: 袜子长袜tags（如 white_socks）\nshoes: 鞋履靴子tags（如 loafers, leather_shoes）\naccessories: 服饰配件tags（如 red_neckerchief）\nunderwear: 贴身内衣裤tags（如 white_bra, white_panties）\n</服装>\n\n三、Danbooru 标签提炼规则\n- 外观特征统一采用标准 Danbooru 小写英文下划线 Tag，标签间用英文逗号与空格分隔。\n- 保持固有静态：严禁混入临时动作（如 running）、临时视线（如 looking_at_viewer）或人数构图词（如 1girl、upper_body）。\n- 结构分明：将身体特征、随身配饰与各层衣着分别填入对应部位字段。\n</character_design_instruction>"
+          }
+        ]
+      }
+    }
+  ],
+  "prompt_material": [
+    {
+      "id": "prompt_material_default",
+      "name": "默认素材注入预设",
+      "description": "独立注入已激活的角色与服装数据库，并提供基于一致性目标的宏指令与固定部位变量调用规范",
+      "data": {
+        "entries": [
+          {
+            "id": "mat_db_store",
+            "name": "核心|绘画素材库",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 5,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 1,
+            "skipWhenEmpty": true,
+            "content": "<image_database>\n  <character_database>\n    {{角色启用列表}}\n  </character_database>\n\n  <outfit_database>\n    {{服装启用列表}}\n  </outfit_database>\n</image_database>"
+          },
+          {
+            "id": "mat_db_macro",
+            "name": "核心|绘画宏指令",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 5,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 2,
+            "skipWhenEmpty": true,
+            "content": "<drawing_macro_instruction>\n在生成 <image> 提示词时，为保持人物与服装的外观一致性，若画面涉及上方素材库中已登记的人物或服装，必须使用生图宏代替手写外观标签。\n\n执行以下指令：\n\n一、宏优先与部位补充\n1. 优先调用宏：在组织画面时，优先选用下方可用宏列表中的宏（如 $角色名-景别$, $服装名-景别$），确保角色与服装比例协调且特征统一；\n2. 部位变量仅作补充：固定部位变量（如 -features、-hands、-underwear）仅在需要突出特殊生物特征、局部特写或衣物破损褪下时作为后缀追加（格式：$名称-宏-部位$），禁止在常规构图中全手写部位变量替代宏。\n\n二、依据实际着装事实独立调用\n角色宏专注身体外貌，服装宏专注衣着穿戴，两者相互独立，严格根据剧情中人物的实际着装状态分别调用：\n1. 正常穿着：依据当前镜头景别，角色与服装各自选用对应景别的宏（如 $爱丽丝-cowboy$, $学院制服-cowboy$）；\n2. 半裸或战损：角色宏选用对应景别，服装宏根据实际穿戴在身的衣物选用（例如上身微敞仅剩内衣，调用 $角色名-upper$, $服装名-underwear$）；\n3. 纯全裸或沐浴：画面人物处于完全裸体状态时，仅调用角色宏（如 $角色名-full-intimate$ 或配合手写 nude），切勿调用任何服装宏。\n\n三、可用生图宏清单\n1. 角色可用宏：\n{{角色可用宏列表}}\n2. 服装可用宏：\n{{服装可用宏列表}}\n\n四、固定部位变量速查（仅作后缀补充）\n- 角色部位（13项）：appearance(体态肤色), hair(发型发色), face(五官瞳色), features(生物特征), accessories(随身配饰), chest(胸部特征), upper_body(肩颈上躯), waist(腰腹), hips(臀胯), hands(双手), legs(双腿), feet(双足), privates(生殖性征)\n- 服装部位（9项）：style(整体风格), headwear(头饰), top(上装), bottom(裙裤), handwear(手套腕饰), socks(袜类), shoes(鞋靴), accessories(服饰配件), underwear(贴身内衣裤)\n\n五、标准宏调用响应范例\n\n范例一（单人日常中景：角色与服装同景别常规穿戴）：\n爱丽丝穿着精致的学院制服迎面走来，身后的白色羽翼轻快舒展，双手端着书本躬身行礼。\n<image>image###1girl, solo, $爱丽丝-cowboy-features$, $学院制服-cowboy$, holding_book, bowing, gentle_smile, looking_at_viewer, cowboy_shot, indoor, hallway, warm_lighting###</image>\n\n范例二（单人室内半身：解衣状态，服装宏仅调用贴身内衣）：\n深夜卧室中，爱丽丝解开了制服上衣扣子，文胸肩带滑落，脸颊泛红地轻咬下唇看向你。\n<image>image###1girl, solo, $爱丽丝-upper$, $学院制服-underwear$, clothes_unbuttoned, off_shoulder, bare_shoulders, blush, biting_lip, parted_lips, looking_at_viewer, upper_body, night, bedroom, dim_lighting###</image>\n\n范例三（单人纯全裸浴室特写：仅调用角色宏，绝不调用服装宏）：\n温泉雾气弥漫中，爱丽丝坐在池边轻抚长发，肌肤泛着温热的水汽。\n<image>image###1girl, solo, $爱丽丝-full-intimate$, nude, sitting, touching_hair, gentle_smile, looking_at_viewer, wet_skin, water_drops, steam, onsen, soft_lighting###</image>\n</drawing_macro_instruction>"
+          }
+        ]
+      }
+    }
+  ]
+}

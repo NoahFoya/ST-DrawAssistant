@@ -1,0 +1,138 @@
+/**
+ * 标签输入联想浮层与宏调用状态栏样式 (TagAutocomplete)。
+ */
+
+.da-autocomplete-popup {
+    position: fixed;
+    z-index: 10050;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 260px;
+    max-width: 480px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+    border-radius: var(--da-radius-card, 10px);
+    background: var(--da-bg-modal, #1e293b);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
+    box-shadow: var(--da-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.45));
+}
+
+.da-autocomplete-popup--open {
+    display: flex;
+}
+
+.da-autocomplete-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: var(--da-radius-input, 6px);
+    cursor: pointer;
+    font-size: var(--da-font-size-sm, 13px);
+    color: var(--da-text-primary, #f8fafc);
+    transition: background 0.12s ease;
+    user-select: none;
+}
+
+.da-autocomplete-item.is-active,
+.da-autocomplete-item:hover {
+    background: var(--da-bg-hover, rgba(99, 102, 241, 0.2));
+}
+
+.da-autocomplete-item__main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+
+.da-autocomplete-item__label {
+    font-family: var(--da-font-mono, monospace);
+    font-weight: 600;
+    color: var(--da-text-primary, #f8fafc);
+    flex-shrink: 0;
+}
+
+.da-autocomplete-item__sub {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary, #94a3b8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-autocomplete-item__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.da-autocomplete-item__count {
+    font-size: 11px;
+    color: var(--da-text-muted, #64748b);
+    font-family: var(--da-font-mono, monospace);
+}
+
+.da-autocomplete-item__badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.08));
+    color: var(--da-text-secondary, #cbd5e1);
+}
+
+.da-autocomplete-item--macro .da-autocomplete-item__badge {
+    background: var(--da-bg-subtle, rgba(99, 102, 241, 0.22));
+    color: var(--da-accent-color, #818cf8);
+}
+
+.da-macro-status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+.da-macro-status-bar__title {
+    color: var(--da-text-muted, #94a3b8);
+    font-size: 11px;
+}
+
+.da-macro-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: var(--da-font-mono, monospace);
+    border: 1px solid transparent;
+    cursor: help;
+}
+
+.da-macro-status-chip--valid,
+.da-macro-status-chip--active {
+    background: var(--da-color-success-subtle);
+    color: var(--da-color-success, #34d399);
+    border-color: rgba(var(--da-color-success-rgb), 0.35);
+}
+
+.da-macro-status-chip--inactive {
+    background: var(--da-color-warn-subtle);
+    color: var(--da-color-warn, #fbbf24);
+    border-color: rgba(var(--da-color-warn-rgb), 0.35);
+}
+
+.da-macro-status-chip--invalid {
+    background: var(--da-color-error-subtle);
+    color: var(--da-color-error, #f87171);
+    border-color: rgba(var(--da-color-error-rgb), 0.35);
+}

@@ -1,0 +1,87 @@
+/**
+ * SillyTavern 宿主抽屉入口样式 (Drawer Entry Layout)。
+ *
+ * @remarks
+ * 为宿主扩展设置区 (#extensions_settings) 中的插件抽屉卡片声明布局与样式：
+ * 1. 结构与主题继承：抽屉卡片、顶栏与按钮样式直接继承酒馆原生主题与配色规范，不施加侵入式底色；
+ * 2. 避免覆盖展开动画：.inline-drawer-content 保持原生结构，内部使用 .da-drawer-content-inner 承载纵向排列；
+ * 3. 原生两段式按钮：继承酒馆原生 .menu_button 样式类，通过 Flexbox 居中图标与文字，适配全宽布局。
+ */
+
+.st-da-root.da-drawer-settings,
+.da-drawer-settings {
+    width: 100%;
+    margin: 4px 0;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+/* 抽屉内容区内部垂直弹性约束层 */
+.da-drawer-content-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 2px 4px 2px;
+}
+
+/* 开关行 (Toggle Row) */
+.da-drawer-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.da-drawer-toggle-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.da-drawer-toggle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.da-drawer-toggle-title {
+    font-size: var(--da-font-size-sm, 0.84rem);
+    font-weight: 500;
+    color: inherit;
+}
+
+.da-drawer-toggle-desc {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    opacity: 0.65;
+    line-height: 1.35;
+}
+
+/* 酒馆原生 .menu_button 排版：全宽居中排列 */
+.da-drawer-settings .menu_button.interactable {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 2px 0;
+    white-space: nowrap;
+}
+
+/* 辅助操作按钮微调 */
+.da-drawer-settings .menu_button.da-drawer-sub-btn {
+    font-size: var(--da-font-size-xs, 0.8rem);
+    opacity: 0.85;
+    padding: 6px 12px;
+}
+
+.da-drawer-settings .menu_button.da-drawer-sub-btn:hover {
+    opacity: 1;
+}

@@ -1,0 +1,177 @@
+/**
+ * 模态弹窗背景遮罩与主视窗骨架容器样式。
+ *
+ * @remarks
+ * 1. 结构与尺寸：声明全屏遮罩层（.da-modal-backdrop）与主弹窗视窗骨架（.da-main-modal-inner，默认 960×740）。
+ * 2. 宿主样式隔离：通过 .st-da-root 作用域前缀与高 z-index 隔绝 SillyTavern 宿主全局样式的非预期干扰。
+ */
+
+/* 1. 全屏遮罩层 (.da-modal-backdrop)
+   覆盖整个浏览器视口的固定定位半透明背景，使用 backdrop-filter 提供毛玻璃半透明虚化，
+   高 z-index 确保隔离 SillyTavern 宿主界面；内部使用 flex 居中承载弹窗主体。 */
+.da-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--da-z-modal, 10000);
+    cursor: default;
+    box-sizing: border-box;
+    padding: 14px;
+    animation: da-fadein 0.18s var(--da-ease);
+    overscroll-behavior: contain;
+}
+
+/* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
+   桌面端严格保持 min(960px, 94vw) / min(740px, 88vh) 尺寸规范；
+   内部采用 flex 纵向排列组织 Header、Body 与 Footer 三段；
+   柔和环境光投影与主题半透明边框。 */
+.st-da-root.da-main-modal-inner,
+.st-da-root .da-main-modal-inner {
+    width: min(960px, 94vw);
+    height: min(740px, 88vh);
+    max-height: calc(100vh - 28px);
+    padding: 0;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--da-bg-modal);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal);
+    animation: da-modal-slide-in 0.22s var(--da-ease);
+    box-sizing: border-box;
+    position: relative;
+    transition: width 0.18s var(--da-ease), height 0.18s var(--da-ease), border-radius 0.18s var(--da-ease);
+}
+
+/* 3. 弹窗主体水平分栏容器 (.da-modal-body)
+   承载左侧导航侧边栏（.da-sidebar-tabs）与右侧内容滚动区（.da-modal-content）的水平弹性容器；
+   overflow: hidden 与 min-height: 0 保证内部各子容器建立局部独立滚动上下文，避免撑爆外壳。 */
+.st-da-root .da-modal-body {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    background: var(--da-bg-primary);
+}
+
+/* 4. 独立恢复出厂设置细分模态弹窗 (.da-reset-factory-panel) */
+.da-reset-factory-backdrop {
+    z-index: calc(var(--da-z-modal, 10000) + 10);
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
+}
+
+.da-reset-factory-panel {
+    width: 94vw;
+    max-width: 680px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, #18191f);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.6));
+    overflow: hidden;
+    box-sizing: border-box;
+    animation: da-modal-slide-in 0.2s var(--da-ease);
+}
+
+.da-reset-factory-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 14px 20px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-modal, #18191f);
+    flex-shrink: 0;
+}
+
+.da-reset-factory-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-reset-factory-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+    margin: 0;
+}
+
+.da-reset-factory-subtitle {
+    font-size: 0.8em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    line-height: 1.4;
+}
+
+.da-reset-factory-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--da-radius-small, 6px);
+    background: transparent;
+    border: none;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.da-reset-factory-close:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-reset-factory-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+
+.da-reset-factory-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-modal, #18191f);
+    flex-shrink: 0;
+}
+
+.da-reset-factory-footer__left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.da-reset-factory-footer__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

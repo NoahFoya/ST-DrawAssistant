@@ -1,0 +1,424 @@
+/**
+ * 通用卡片容器组件样式 (Card)。
+ *
+ * @remarks
+ * 为所有业务卡片提供标准统一的视觉外壳：
+ * 1. 头部标题区：主标题与副标题辅助说明；
+ * 2. 头部右上角操作区与状态徽标区；
+ * 3. 平滑折叠/展开动画与收起态隐藏；
+ * 4. 主体内容容器。
+ */
+
+.da-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: var(--da-surface-card, rgba(34, 35, 43, 0.85));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.07));
+    border-radius: var(--da-radius-lg, 12px);
+    box-sizing: border-box;
+    box-shadow: var(--da-shadow-sm);
+    transition: border-color 0.16s var(--da-ease), box-shadow 0.16s var(--da-ease);
+    overflow: hidden;
+}
+
+.da-card:hover {
+    border-color: var(--da-border-card-hover, rgba(var(--da-accent-rgb), 0.28));
+}
+
+/* 降级容错：在非 flex 容器中作为相邻卡片时维持标准间距 */
+.da-card + .da-card {
+    margin-top: var(--da-space-card-gap, 14px);
+}
+
+/* flex 弹性容器已由 gap 驱动，重置 margin-top 避免双倍间隙 */
+.da-tab-pane > .da-card + .da-card,
+.da-materials-view-container > .da-card + .da-card,
+.da-material-subpanel > .da-card + .da-card,
+.da-material-manage-workspace > .da-card + .da-card,
+.da-prompts-view-container > .da-card + .da-card,
+.da-prompts-channel-workspace > .da-card + .da-card,
+.da-prompts-preview-panel > .da-card + .da-card,
+.da-lexicon-view-container > .da-card + .da-card,
+.da-reset-factory-body > .da-card + .da-card {
+    margin-top: 0;
+}
+
+/* 仅带有明确可交互行为的卡片（如预设卡、模型卡）允许微悬浮 */
+.da-card--interactive {
+    cursor: pointer;
+    transition: transform 0.18s var(--da-ease-spring), border-color 0.16s var(--da-ease), box-shadow 0.18s var(--da-ease);
+}
+
+.da-card--interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--da-shadow-md);
+}
+
+/* 1. 头部标题与控制区 */
+.da-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 10px 16px;
+    cursor: default;
+    user-select: none;
+    gap: 12px;
+    box-sizing: border-box;
+}
+
+.da-card__header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.da-card__title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.da-card__title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-card__title-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+.da-card__title {
+    font-size: var(--da-font-size-md, 0.95rem);
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+    margin: 0;
+    line-height: 1.35;
+}
+
+.da-card__subtitle {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.6));
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* 2. 头部右侧操作区与徽标区 */
+.da-card__header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.da-card__badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 3. 主体内容容器 (默认清零内部 padding 与 gap，让表单行通栏贯通且边缘贴合) */
+.da-card__body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 非表单通栏的内容型卡片（统计看板、存储监控、终端、关于页面、词库工作台与列表型卡片等）统一赋予标准内边距与顶部分隔线 */
+.da-card--padded > .da-card__header,
+.da-stat-card-panel > .da-card__header,
+.da-storage-bar > .da-card__header,
+.da-lexicon-view-container .da-card > .da-card__header,
+.da-view-about .da-card > .da-card__header {
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+}
+
+.da-card--padded > .da-card__body,
+.da-card--padded.da-card__body,
+.da-stat-card-panel > .da-card__body,
+.da-storage-bar > .da-card__body,
+.da-lexicon-view-container .da-card > .da-card__body,
+.da-view-about .da-card > .da-card__body {
+    padding: 14px 16px 16px 16px;
+    gap: 12px;
+    box-sizing: border-box;
+}
+
+/* 内容型卡片内全宽子元素，避免贴边与边框重叠 */
+.da-card--padded .da-prompt-entry-filter,
+.da-card--padded .da-lexicon-custom-search-input,
+.da-card--padded .da-lexicon-table-container,
+.da-card--padded .da-injection-paragraphs-list {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 嵌入式复合组件在卡片内与卡片边缘平齐，内部表单行直接继承标准 6px 16px 内边距与对齐网格 */
+.da-card__body .da-dimension-picker--embedded,
+.da-card__body .da-sampler-card--embedded,
+.da-card__body .da-card-embedded-content {
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 5. 卡片与表单内语义分割线 (.da-settings-divider) */
+.da-settings-divider {
+    height: 1px;
+    margin: 6px 0;
+    background: var(--da-separator, rgba(139, 92, 246, 0.12));
+    width: 100%;
+    flex-shrink: 0;
+}
+
+/* 6. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
+.da-connection-card .da-card__header {
+    padding: 10px 16px;
+}
+
+.da-connection-card .da-card__body {
+    padding: 0;
+    gap: 0;
+}
+
+.da-connection-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 32px;
+    height: 32px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.da-connection-row .da-input-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    height: 32px;
+}
+
+.da-connection-row .da-input {
+    width: 100%;
+    max-width: none;
+    height: 32px;
+    text-align: center;
+}
+
+.da-connection-row .da-btn,
+.da-connection-btn--sync {
+    flex-shrink: 0;
+    height: 32px !important;
+    min-height: 32px !important;
+    line-height: 30px !important;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.da-connection-card .da-form-row {
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--da-separator);
+}
+
+.da-connection-card .da-form-row:last-child {
+    border-bottom: none;
+}
+
+.da-connection-card .da-form-row__control {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+}
+
+/* 7. 卡片内语义小标题分割栏 (.da-section-banner) */
+.da-section-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 4px 16px;
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.03));
+    border-top: none;
+    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+    width: 100%;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+.da-section-banner__title {
+    font-size: var(--da-font-size-xs, 0.8rem);
+    font-weight: 600;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.da-section-banner__title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 12px;
+    background: var(--da-accent-color, #6366f1);
+    border-radius: 2px;
+}
+
+/* 8. 关于与支持页面专属排版样式 (.da-about-*, .da-info-grid, .da-env-*) */
+.da-about-intro {
+    font-size: var(--da-font-size-sm, 13px);
+    line-height: 1.65;
+    color: var(--da-text-secondary);
+}
+
+.da-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px 16px;
+    padding: 12px 14px;
+    border-radius: var(--da-radius-md, 8px);
+    background: var(--da-bg-input, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    box-sizing: border-box;
+}
+
+.da-info-grid__item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.da-info-grid__label {
+    font-size: var(--da-font-size-xs, 11.5px);
+    color: var(--da-text-secondary);
+}
+
+.da-info-grid__val {
+    font-size: var(--da-font-size-sm, 13px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-about-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.da-env-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--da-radius-md, 8px);
+    background: var(--da-bg-input, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    box-sizing: border-box;
+}
+
+.da-env-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 16px;
+}
+
+.da-env-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.da-env-item__label {
+    font-size: var(--da-font-size-xs, 11.5px);
+    color: var(--da-text-secondary);
+}
+
+.da-env-item__val {
+    font-size: var(--da-font-size-sm, 12.5px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-mono, monospace);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.da-env-ua-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+}
+
+.da-env-ua-code {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--da-text-secondary);
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+/* 4. 移动端与窄屏卡片头部自适应 (@media (max-width: 600px))
+   当屏幕极窄时，允许卡片 Header 自适应换行，确保左侧标题与右侧多操作按钮不挤压变形 */
+@media (max-width: 600px) {
+    .da-card__header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    .da-card__header-left {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    .da-card__header-right {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .da-card__header-right .da-extra-fields-toolbar {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        width: 100%;
+        gap: 6px;
+    }
+}
+
+
+
+
