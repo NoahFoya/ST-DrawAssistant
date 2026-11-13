@@ -5,7 +5,7 @@
 import type { ThemePresetData } from '@types';
 
 export const EXTENSION_TITLE = 'ST-DrawAssistant 绘画助手';
-export const EXTENSION_VERSION = '1.0.0';
+export const EXTENSION_VERSION = '1.1.0';
 
 /** 插件 GitHub 仓库与更新检测配置 */
 export const GITHUB_REPO = 'NoahFoya/ST-DrawAssistant';
