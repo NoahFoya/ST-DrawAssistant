@@ -2,16 +2,41 @@
  * 常驻悬浮球控件 (FAB) 与图标选择器样式。
  *
  * @remarks
- * 声明屏幕边缘常驻的悬浮快速入口按钮（.da-fab-btn）与拖拽交互状态。
- * 使用 touch-action: none 阻止触控默认滚动，并支持徽标指示与主题图标切换。
+ * 1. 相对比例与安全区定位：统一使用 `--da-fab-rx / --da-fab-ry` 比例变量配合动态视口变量
+ *    `--da-vvw / --da-vvh / --da-vv-top / --da-vv-left` 计算停靠坐标，彻底废弃静态像素定位；
+ * 2. 移动端通过安全区变量避让 SillyTavern 顶部操作栏与底部输入栏；
+ * 3. 使用 touch-action: none 阻止触控默认滚动，并支持徽标指示与主题图标切换。
  */
 
-/* 1. 悬浮球基础结构与指针交互态 */
+/* 1. 悬浮球基础结构与相对安全定位 */
 .da-fab-btn,
 #da-fab-button {
     position: fixed;
-    width: 48px;
-    height: 48px;
+    --da-fab-size: 48px;
+    --da-fab-safe-x: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --da-fab-safe-top: max(16px, env(safe-area-inset-top));
+    --da-fab-safe-bottom: max(20px, env(safe-area-inset-bottom));
+    left: clamp(
+        calc(var(--da-vv-left, 0px) + var(--da-fab-safe-x)),
+        calc(
+            var(--da-vv-left, 0px) + var(--da-fab-safe-x) + var(--da-fab-rx, 0.96) *
+                max(0px, var(--da-vvw, 100vw) - var(--da-fab-size) - var(--da-fab-safe-x) * 2)
+        ),
+        calc(var(--da-vv-left, 0px) + var(--da-vvw, 100vw) - var(--da-fab-size) - var(--da-fab-safe-x))
+    );
+    top: clamp(
+        calc(var(--da-vv-top, 0px) + var(--da-fab-safe-top)),
+        calc(
+            var(--da-vv-top, 0px) + var(--da-fab-safe-top) + var(--da-fab-ry, 0.86) *
+                max(
+                    0px,
+                    var(--da-vvh, 100dvh) - var(--da-fab-size) - var(--da-fab-safe-top) - var(--da-fab-safe-bottom)
+                )
+        ),
+        calc(var(--da-vv-top, 0px) + var(--da-vvh, 100dvh) - var(--da-fab-size) - var(--da-fab-safe-bottom))
+    );
+    width: var(--da-fab-size);
+    height: var(--da-fab-size);
     border-radius: 50%;
     background: var(--da-bg-secondary, rgba(32, 36, 48, 0.9));
     backdrop-filter: blur(var(--da-blur-panel, 16px));
@@ -28,6 +53,15 @@
     box-sizing: border-box;
     overflow: visible;
     transition: box-shadow 0.2s var(--da-ease), border-color 0.2s var(--da-ease), background-color 0.15s var(--da-ease);
+}
+
+@media (max-width: 680px) {
+    .da-fab-btn,
+    #da-fab-button {
+        --da-fab-safe-x: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
+        --da-fab-safe-top: max(52px, calc(env(safe-area-inset-top) + 44px));
+        --da-fab-safe-bottom: max(76px, calc(env(safe-area-inset-bottom) + 64px));
+    }
 }
 
 .da-fab-btn:hover,

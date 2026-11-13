@@ -37,13 +37,45 @@
     font-weight: 700;
     font-family: var(--da-font-display);
     letter-spacing: -0.015em;
-    display: flex;
-    align-items: center;
-    gap: var(--da-space-xs, 6px);
+    display: block;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin: 0;
     background: linear-gradient(135deg, var(--da-text-primary) 0%, var(--da-accent-color) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+
+.da-header-title__prefix {
+    white-space: pre;
+}
+
+@media (max-width: 520px) {
+    .da-header-bar {
+        padding: 0 10px;
+        gap: 6px;
+    }
+
+    .da-header-left {
+        min-width: 0;
+        flex: 1 1 auto;
+        gap: 6px;
+    }
+
+    .da-header-right {
+        flex-shrink: 0;
+        gap: 4px;
+    }
+
+    .da-header-title {
+        font-size: var(--da-font-size-base, 13.5px);
+    }
+
+    .da-header-title__prefix {
+        display: none;
+    }
 }
 
 .da-header-icon {

@@ -19,6 +19,7 @@ import { NumberInput } from '../components/number-input';
 import { Button } from '../components/button';
 import { Badge } from '../components/badge';
 import { renderIcon } from '../components/icons';
+import { computeAnchoredPosition, viewportService } from '../layout/viewport';
 import { formatLoraTag, type FormatLoraTagInput } from '../../pipeline/prompt-pipeline';
 
 export type { LoraSyntaxMode, FormatLoraTagInput };
@@ -618,8 +619,8 @@ export class LoraManager implements UIComponent, Disposable {
         }
         if (typeof window !== 'undefined') {
             window.addEventListener('scroll', onScrollCapture, true);
-            window.addEventListener('resize', onResize);
         }
+        const unbindViewport = viewportService.subscribe(onResize);
 
         this.disposables.push({
             dispose: () => {
@@ -633,8 +634,8 @@ export class LoraManager implements UIComponent, Disposable {
                 }
                 if (typeof window !== 'undefined') {
                     window.removeEventListener('scroll', onScrollCapture, true);
-                    window.removeEventListener('resize', onResize);
                 }
+                unbindViewport();
             },
         });
     }
@@ -673,26 +674,27 @@ export class LoraManager implements UIComponent, Disposable {
         this.renderDropdownOptions();
     }
 
-    /** 动态计算并设置下拉浮层在视口中的 Fixed 绝对坐标 */
+    /** 动态计算下拉浮层相对于输入框及动态可视视口的自适应位置 */
     private positionDropdown(): void {
         if (!this.isDropdownOpen || typeof window === 'undefined') {
             return;
         }
         const rect = this.comboboxInput.getBoundingClientRect();
-        const viewportH = window.innerHeight || 800;
-        const viewportW = window.innerWidth || 1200;
+        const desiredWidth = Math.max(220, rect.width || 300);
+        const pos = computeAnchoredPosition({
+            anchorRect: rect,
+            floatingWidth: desiredWidth,
+            floatingHeight: 220,
+            preferredPlacement: 'bottom',
+            align: 'start',
+            gap: 4,
+            margin: 8,
+        });
 
-        const width = Math.max(260, rect.width || 300);
-        const left = Math.max(8, Math.min(rect.left, viewportW - width - 8));
-        let top = rect.bottom + 4;
-
-        if (top + 224 > viewportH && rect.top > 230) {
-            top = Math.max(8, rect.top - 228);
-        }
-
-        this.comboboxDropdown.style.width = `${width}px`;
-        this.comboboxDropdown.style.left = `${left}px`;
-        this.comboboxDropdown.style.top = `${top}px`;
+        this.comboboxDropdown.style.width = `${Math.min(desiredWidth, pos.maxWidth)}px`;
+        this.comboboxDropdown.style.maxHeight = `${Math.min(220, pos.maxHeight)}px`;
+        this.comboboxDropdown.style.left = `${pos.left}px`;
+        this.comboboxDropdown.style.top = `${pos.top}px`;
     }
 
     /** 打开候选列表下拉浮层 */
@@ -701,6 +703,7 @@ export class LoraManager implements UIComponent, Disposable {
         this.isDropdownOpen = true;
         this.positionDropdown();
         this.comboboxDropdown.style.display = 'block';
+        this.comboboxDropdown.classList.add('da-lora-combobox__dropdown--open');
         this.comboboxInput.setAttribute('aria-expanded', 'true');
         this.comboboxContainer.classList.add('is-open');
     }
@@ -709,6 +712,7 @@ export class LoraManager implements UIComponent, Disposable {
     private closeDropdown(): void {
         this.isDropdownOpen = false;
         this.comboboxDropdown.style.display = 'none';
+        this.comboboxDropdown.classList.remove('da-lora-combobox__dropdown--open');
         this.comboboxInput.setAttribute('aria-expanded', 'false');
         this.comboboxContainer.classList.remove('is-open');
     }

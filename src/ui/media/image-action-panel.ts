@@ -77,9 +77,9 @@ export class ImageActionPanel implements Disposable {
             return;
         }
 
-        // 1. 全屏遮罩外壳
+        // 1. 遮罩外壳（移动端自动切换为底部抽屉对齐）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop st-da-root da-action-panel-backdrop';
+        backdrop.className = 'da-modal-backdrop da-modal-backdrop--sheet st-da-root da-action-panel-backdrop';
         backdrop.style.display = 'none';
 
         // 2. 居中面板

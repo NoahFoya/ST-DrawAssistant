@@ -12,7 +12,7 @@
 .da-inpaint-backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--da-z-modal, 100095);
+    z-index: var(--da-z-viewer, 10045);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
     backdrop-filter: blur(var(--da-blur-modal, 14px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px));
@@ -26,9 +26,9 @@
 }
 
 .da-inpaint-modal-panel {
-    width: min(1040px, 95vw);
-    height: min(740px, 90vh);
-    max-height: calc(100vh - 28px);
+    width: min(1040px, calc(var(--da-vvw) - 24px));
+    height: min(740px, calc(var(--da-vvh) - 28px));
+    max-height: calc(var(--da-vvh) - 28px);
     display: flex;
     flex-direction: column;
     background: var(--da-bg-modal, #161820);
@@ -162,6 +162,7 @@
     overflow: hidden;
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.12));
     cursor: crosshair;
+    touch-action: none;
 }
 
 .da-inpaint-bg-canvas {
@@ -180,6 +181,7 @@
     max-height: 100%;
     object-fit: contain;
     pointer-events: auto;
+    touch-action: none;
 }
 
 /* 4.3 随动笔刷光标环 */
@@ -322,8 +324,8 @@
 @media (max-width: 820px) {
     .da-inpaint-modal-panel {
         width: 100%;
-        height: 96vh;
-        max-height: 96vh;
+        height: calc(var(--da-vvh) - 16px);
+        max-height: calc(var(--da-vvh) - 16px);
     }
 
     .da-inpaint-body {
@@ -338,8 +340,8 @@
     }
 
     .da-inpaint-stage {
-        min-height: 280px;
-        max-height: 42vh;
+        min-height: 240px;
+        max-height: min(42dvh, calc(var(--da-vvh) * 0.42));
     }
 
     .da-inpaint-inspector {
@@ -348,5 +350,15 @@
 
     .da-inpaint-toolbar {
         flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 680px) {
+    .da-inpaint-modal-panel {
+        width: 100%;
+        height: var(--da-vvh);
+        max-height: var(--da-vvh);
+        border-radius: 0;
+        border: none;
     }
 }

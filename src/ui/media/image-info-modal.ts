@@ -65,7 +65,7 @@ export class ImageInfoModal implements Disposable {
         const imageUrl = options.imageUrl || options.record?.remotePath;
         const record = options.record;
 
-        // 1. 构建全屏遮罩容器
+        // 1. 构建弹窗遮罩容器（居中弹性外层）
         const backdrop = document.createElement('div');
         backdrop.className = 'da-modal-backdrop st-da-root da-inspect-backdrop';
 

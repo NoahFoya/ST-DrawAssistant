@@ -5,26 +5,17 @@
  * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏更新提示小红点。
  */
 
-/* 1. 更新说明模态窗背景与外壳 */
+/* 1. 更新说明模态窗背景与外壳（布局定位继承自 .da-modal-backdrop） */
 .da-changelog-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: var(--da-z-dialog, 100095);
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.7));
     backdrop-filter: blur(var(--da-blur-modal, 8px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    box-sizing: border-box;
-    animation: da-fadein 0.2s var(--da-ease, ease-out);
 }
 
 .da-changelog-modal-panel {
-    width: 100%;
-    max-width: 680px;
-    max-height: 85vh;
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     padding: 18px 24px;
     border-radius: var(--da-radius-large, 16px);
     display: flex;
@@ -35,6 +26,14 @@
     box-shadow: var(--da-shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
     box-sizing: border-box;
     overflow: hidden;
+    animation: da-modal-slide-in 0.2s var(--da-ease);
+}
+
+@media (max-width: 680px) {
+    .da-changelog-modal-panel {
+        padding: 14px 16px;
+        gap: 10px;
+    }
 }
 
 /* 2. 模态窗顶栏 */

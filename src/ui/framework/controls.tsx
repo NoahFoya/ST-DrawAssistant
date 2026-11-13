@@ -50,6 +50,9 @@ export function CardView(props: CardViewProps) {
                                     <span
                                         className="da-help-icon da-card__help-icon"
                                         data-tooltip={props.tooltip}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={props.tooltip}
                                     >
                                         ?
                                     </span>
@@ -123,6 +126,9 @@ export function FormFieldView(props: FormFieldViewProps) {
                     <span
                         className="da-help-icon"
                         data-tooltip={props.tooltip}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={props.tooltip}
                     >
                         ?
                     </span>

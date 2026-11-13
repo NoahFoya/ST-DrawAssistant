@@ -96,7 +96,7 @@ export class LightboxModal implements Disposable {
 
         // 1. 全屏遮罩
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-lightbox-backdrop st-da-root';
+        backdrop.className = 'da-lightbox-backdrop da-modal-backdrop da-modal-backdrop--fullscreen st-da-root';
         backdrop.style.display = 'none';
 
         // 2. 图片展示区
@@ -347,33 +347,96 @@ export class LightboxModal implements Disposable {
             this.resetTransform();
         });
 
-        stage.addEventListener('mousedown', (e) => {
-            if (!this.isOpenState || e.button !== 0) return;
-            this.isDragging = true;
+        // 统一 PointerEvent 手势：放大态拖拽平移，常态水平轻扫切图，双击/双触复原
+        let activePointerId: number | null = null;
+        let pointerStartX = 0;
+        let pointerStartY = 0;
+        let pointerStartAt = 0;
+        let lastTouchTapAt = 0;
+
+        const finishPointerGesture = (e?: PointerEvent) => {
+            if (activePointerId === null) {
+                return;
+            }
+            if (e && e.pointerId !== activePointerId) {
+                return;
+            }
+
+            const startedAt = pointerStartAt;
+            const startX = pointerStartX;
+            const startY = pointerStartY;
+            const pid = activePointerId;
+            activePointerId = null;
+
+            if (this.isDragging) {
+                this.isDragging = false;
+                stage.classList.remove('is-dragging');
+            }
+            if (stage.hasPointerCapture?.(pid)) {
+                stage.releasePointerCapture?.(pid);
+            }
+
+            // 未放大状态下识别水平轻扫切图
+            if (e && e.type === 'pointerup' && this.zoom <= 1.05 && this.items.length > 1) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                const elapsed = Date.now() - startedAt;
+                if (Math.abs(dx) > 52 && Math.abs(dx) > Math.abs(dy) * 1.35 && elapsed < 500) {
+                    if (dx > 0) {
+                        this.prev();
+                    } else {
+                        this.next();
+                    }
+                }
+            }
+        };
+
+        stage.addEventListener('pointerdown', (e) => {
+            if (!this.isOpenState || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            if (e.pointerType === 'touch') {
+                const now = Date.now();
+                if (now - lastTouchTapAt < 280) {
+                    lastTouchTapAt = 0;
+                    this.resetTransform();
+                    return;
+                }
+                lastTouchTapAt = now;
+            }
+
+            activePointerId = e.pointerId;
+            pointerStartX = e.clientX;
+            pointerStartY = e.clientY;
+            pointerStartAt = Date.now();
+            this.isDragging = this.zoom > 1.05;
             this.dragStartX = e.clientX - this.translateX;
             this.dragStartY = e.clientY - this.translateY;
-            stage.classList.add('is-dragging');
+            stage.setPointerCapture?.(e.pointerId);
+            if (this.isDragging) {
+                stage.classList.add('is-dragging');
+            }
         });
 
-        const onMouseMove = (e: MouseEvent) => {
-            if (!this.isDragging) return;
+        const onPointerMove = (e: PointerEvent) => {
+            if (activePointerId === null || e.pointerId !== activePointerId) return;
+            if (!this.isDragging && this.zoom <= 1.05) return;
+            this.isDragging = true;
+            stage.classList.add('is-dragging');
             this.translateX = e.clientX - this.dragStartX;
             this.translateY = e.clientY - this.dragStartY;
             this.applyTransform();
         };
 
-        const onMouseUp = () => {
-            if (this.isDragging) {
-                this.isDragging = false;
-                stage.classList.remove('is-dragging');
-            }
+        const onPointerEnd = (e: PointerEvent) => {
+            finishPointerGesture(e);
         };
 
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerEnd);
+        window.addEventListener('pointercancel', onPointerEnd);
         this.disposers.push(() => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerEnd);
+            window.removeEventListener('pointercancel', onPointerEnd);
         });
     }
 

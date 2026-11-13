@@ -515,75 +515,9 @@
     }
 }
 
-/* 行操作右键 / 长按上下文菜单 (ContextMenu) */
+/* 词库上下文菜单语义标示（定位、圆角与响应式底部动作面板由 .da-floating-popover / .da-floating-sheet 接管） */
 .da-lexicon-context-menu {
-    position: fixed;
-    z-index: 10050;
-    display: flex;
-    flex-direction: column;
     min-width: 175px;
     padding: 4px;
-    background: var(--da-bg-modal);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-md, 8px);
-    box-shadow: var(--da-shadow-md);
-    animation: da-context-pop 0.12s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes da-context-pop {
-    from {
-        opacity: 0;
-        transform: scale(0.96) translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.da-lexicon-menu-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--da-text-primary);
-    background: transparent;
-    border: none;
-    border-radius: var(--da-radius-sm, 4px);
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.12s ease, color 0.12s ease;
-    user-select: none;
-}
-
-.da-lexicon-menu-item:hover {
-    background: var(--da-bg-hover, rgba(0, 0, 0, 0.05));
-}
-
-.da-lexicon-menu-item.is-danger {
-    color: var(--da-color-error, #ef4444);
-}
-
-.da-lexicon-menu-item.is-danger:hover {
-    background: var(--da-color-error-subtle);
-}
-
-.da-lexicon-menu-icon {
-    font-size: 13px;
-    width: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.da-lexicon-menu-divider {
-    height: 1px;
-    margin: 3px 0;
-    background: var(--da-border-color);
-    opacity: 0.5;
 }
 

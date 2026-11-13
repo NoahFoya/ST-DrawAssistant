@@ -181,26 +181,22 @@
     color: var(--da-accent-color, #818cf8);
 }
 
-/* 原生世界书导入与导出弹窗 */
+/* 原生世界书导入与导出弹窗（定位与安全区滚动继承自 .da-modal-backdrop） */
 .da-prompt-import-backdrop,
 .da-prompt-export-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10040;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-mask-medium);
     backdrop-filter: blur(4px);
 }
 
 .da-prompt-import-panel {
-    width: 92vw;
-    max-width: 720px;
-    max-height: 84vh;
+    width: min(720px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
+}
+
+.da-prompt-export-panel {
+    width: min(460px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
 }
 
 .da-prompt-import-body {
@@ -332,6 +328,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    flex-wrap: wrap;
     width: 100%;
     padding: 2px 0;
 }
@@ -932,14 +929,14 @@ select.da-wi-drawer-select {
     }
     .da-wi-row .da-wi-title-input {
         flex: 1 1 140px;
-        min-width: 120px;
+        min-width: 0;
     }
     .da-wi-row .da-wi-trigger-cell {
         flex: 0 0 auto;
     }
     .da-wi-row .da-wi-pos-select {
-        flex: 1 1 120px;
-        min-width: 100px;
+        flex: 1 1 110px;
+        min-width: 0;
     }
     .da-wi-row .da-wi-num-input {
         flex: 0 0 46px;
@@ -1083,14 +1080,18 @@ select.da-wi-drawer-select {
     .da-channel-controls {
         width: 100%;
         justify-content: space-between;
+        gap: 10px;
     }
 
     .da-channel-preset-select-wrap {
         flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
     }
 
     .da-channel-preset-select {
         width: 100%;
+        min-width: 0;
     }
 }
 

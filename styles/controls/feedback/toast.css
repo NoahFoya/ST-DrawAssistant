@@ -6,13 +6,14 @@
  */
 
 /* 非阻塞 Toast 提示气泡 (.da-toast)
-   固定定位在视口底部中央（bottom: 20px; left: 50%; transform: translateX(-50%)）；
-   高 z-index（50000）确保可见，pointer-events: none 保证消息呈现时不阻断用户操作底层的点击事件。 */
+   相对动态可视视口（--da-vv-*）定位在底部安全区上方，自动避让移动端虚拟键盘与底部输入栏；
+   pointer-events: none 保证消息呈现时不阻断底层点击交互。 */
 .da-toast {
     position: fixed;
-    bottom: 20px;
-    left: 50%;
+    bottom: calc(var(--da-vv-bottom-inset, 0px) + max(16px, env(safe-area-inset-bottom)));
+    left: calc(var(--da-vv-left, 0px) + var(--da-vvw, 100vw) / 2);
     transform: translateX(-50%);
+    max-width: calc(var(--da-vvw, 100vw) - 24px);
     padding: 7px 14px;
     border-radius: var(--da-radius-input, 6px);
     background: var(--da-bg-modal, rgba(24, 27, 34, 0.92));
@@ -26,9 +27,12 @@
     align-items: center;
     gap: 8px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     z-index: var(--da-z-toast, 100200);
     pointer-events: none;
     animation: da-fadein 0.15s ease;
+    box-sizing: border-box;
 }
 
 .da-toast--success {

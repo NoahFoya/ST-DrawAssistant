@@ -67,7 +67,9 @@ export class FormField implements UIComponent {
         if (options.tooltip) {
             this.tooltipIcon = document.createElement('span');
             this.tooltipIcon.classList.add('da-help-icon');
-            this.tooltipIcon.title = options.tooltip;
+            this.tooltipIcon.setAttribute('role', 'button');
+            this.tooltipIcon.tabIndex = 0;
+            this.tooltipIcon.setAttribute('aria-label', options.tooltip);
             this.tooltipIcon.setAttribute('data-tooltip', options.tooltip);
             this.tooltipIcon.textContent = '?';
             labelGroup.appendChild(this.tooltipIcon);
@@ -111,10 +113,11 @@ export class FormField implements UIComponent {
     public setTooltip(tooltip?: string): void {
         if (this.tooltipIcon) {
             if (tooltip) {
-                this.tooltipIcon.title = tooltip;
+                this.tooltipIcon.setAttribute('aria-label', tooltip);
                 this.tooltipIcon.setAttribute('data-tooltip', tooltip);
                 this.tooltipIcon.style.display = '';
             } else {
+                this.tooltipIcon.removeAttribute('aria-label');
                 this.tooltipIcon.removeAttribute('data-tooltip');
                 this.tooltipIcon.style.display = 'none';
             }

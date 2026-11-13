@@ -1,19 +1,36 @@
 /**
- * 模态弹窗背景遮罩与主视窗骨架容器样式。
+ * 模态弹窗背景遮罩、主视窗骨架与响应式门户浮层样式。
  *
  * @remarks
- * 1. 结构与尺寸：声明全屏遮罩层（.da-modal-backdrop）与主弹窗视窗骨架（.da-main-modal-inner，默认 960×740）。
- * 2. 宿主样式隔离：通过 .st-da-root 作用域前缀与高 z-index 隔绝 SillyTavern 宿主全局样式的非预期干扰。
+ * 1. 遮罩角色分离：
+ *    - `.da-modal-backdrop`：默认次级居中弹性遮罩，绑定动态可视视口（--da-vv*）并启用 `overflow-y: auto` 防止软键盘裁切；
+ *    - `.da-modal-backdrop--fullscreen`：主设置弹窗、蓝图与沉浸式媒体编辑专用，移动端切换为无边距贴边全屏；
+ *    - `.da-modal-backdrop--sheet`：移动端自动切换为贴底弹出 Action Sheet 容器；
+ * 2. 统一浮层门户与底部 Action Sheet（`.da-floating-popover` / `.da-floating-sheet`），脱离主弹窗包含块约束；
+ * 3. 根滚动隔离（`html.da-has-active-modal`）：与 OverlayStack 联动，阻止移动端连带滚动宿主对话区。
  */
 
-/* 1. 全屏遮罩层 (.da-modal-backdrop)
-   覆盖整个浏览器视口的固定定位半透明背景，使用 backdrop-filter 提供毛玻璃半透明虚化，
-   高 z-index 确保隔离 SillyTavern 宿主界面；内部使用 flex 居中承载弹窗主体。 */
+/* 0. 活跃模态栈联动根滚动隔离 */
+html.da-has-active-modal,
+html.da-has-active-modal body {
+    overscroll-behavior: none;
+}
+
+@media (max-width: 768px) {
+    html.da-has-active-modal,
+    html.da-has-active-modal body {
+        overflow: hidden;
+    }
+}
+
+/* 1. 统一遮罩层基类 (.da-modal-backdrop)
+   覆盖当前交互可视区域（适配 iOS/Android 地址栏伸缩与软键盘缩放），内部面板通过 margin: auto 防止短屏顶边裁切。 */
 .da-modal-backdrop {
     position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
+    top: var(--da-vv-top, 0px);
+    left: var(--da-vv-left, 0px);
+    width: var(--da-vvw, 100vw);
+    height: var(--da-vvh, 100dvh);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
     backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
@@ -23,22 +40,46 @@
     z-index: var(--da-z-modal, 10000);
     cursor: default;
     box-sizing: border-box;
-    padding: 14px;
-    animation: da-fadein 0.18s var(--da-ease);
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+        max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-y: auto;
     overscroll-behavior: contain;
+    animation: da-backdrop-fade 0.18s var(--da-ease);
+}
+
+.da-modal-backdrop > * {
+    margin: auto;
+}
+
+@media (max-width: 680px) {
+    .da-modal-backdrop.da-modal-backdrop--fullscreen {
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--fullscreen > * {
+        margin: 0;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--sheet {
+        align-items: flex-end;
+        padding: max(24px, env(safe-area-inset-top)) 0 0 0;
+        overflow: hidden;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--sheet > * {
+        margin: 0;
+    }
 }
 
 /* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
-   桌面端严格保持 min(960px, 94vw) / min(740px, 88vh) 尺寸规范；
-   内部采用 flex 纵向排列组织 Header、Body 与 Footer 三段；
-   柔和环境光投影与主题半透明边框。 */
+   桌面端保持 min(960px, 94vw) / min(740px, 88dvh)；内部 flex 纵向划分 Header、Body、Footer。 */
 .st-da-root.da-main-modal-inner,
 .st-da-root .da-main-modal-inner {
     width: min(960px, 94vw);
-    height: min(740px, 88vh);
-    max-height: calc(100vh - 28px);
+    height: min(740px, calc(var(--da-vvh, 100dvh) * 0.88));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     padding: 0;
-    margin: 0 auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -70,14 +111,13 @@
 
 /* 4. 独立恢复出厂设置细分模态弹窗 (.da-reset-factory-panel) */
 .da-reset-factory-backdrop {
-    z-index: calc(var(--da-z-modal, 10000) + 10);
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
 }
 
 .da-reset-factory-panel {
-    width: 94vw;
-    max-width: 680px;
-    max-height: 85vh;
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     display: flex;
     flex-direction: column;
     background: var(--da-bg-modal, #18191f);
@@ -174,4 +214,190 @@
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* 5. 统一门户浮动菜单 (.da-floating-popover) 与移动端底部 Action Sheet (.da-floating-sheet)
+   直接挂载至 document.body，隔离设置弹窗的 backdrop-filter 与局部滚动包含块限制 */
+.da-floating-popover-host {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: var(--da-z-popover, 10035);
+}
+
+.da-floating-popover {
+    position: fixed;
+    pointer-events: auto;
+    z-index: var(--da-z-popover, 10035);
+    min-width: 180px;
+    max-width: min(320px, calc(var(--da-vvw, 100vw) - 20px));
+    max-height: min(340px, calc(var(--da-vvh, 100dvh) - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px;
+    border-radius: var(--da-radius-card, 10px);
+    background: var(--da-bg-modal, #1a1e29);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
+    box-shadow: var(--da-shadow-modal, 0 12px 32px rgba(0, 0, 0, 0.55));
+    backdrop-filter: blur(var(--da-blur-panel, 18px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px));
+    box-sizing: border-box;
+    animation: da-fadein 0.14s var(--da-ease);
+}
+
+.da-floating-sheet-backdrop {
+    z-index: var(--da-z-popover, 10035);
+}
+
+.da-floating-sheet {
+    width: 100%;
+    max-height: calc(var(--da-vvh, 100dvh) - 36px);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, #18191f);
+    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
+    border-radius: var(--da-radius-modal, 14px) var(--da-radius-modal, 14px) 0 0;
+    box-shadow: var(--da-shadow-modal, 0 -10px 32px rgba(0, 0, 0, 0.55));
+    padding: 8px 12px max(14px, env(safe-area-inset-bottom)) 12px;
+    box-sizing: border-box;
+    overflow: hidden;
+    animation: da-sheet-slide-up 0.2s var(--da-ease);
+}
+
+.da-floating-sheet__handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--da-border-color, rgba(255, 255, 255, 0.22));
+    margin: 2px auto 8px auto;
+    flex-shrink: 0;
+}
+
+.da-floating-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 2px 4px 10px 4px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.da-floating-sheet__title {
+    font-size: var(--da-font-size-base, 13.5px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-floating-sheet__cancel {
+    flex-shrink: 0;
+}
+
+.da-floating-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
+}
+
+.da-floating-menu-divider {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--da-separator, rgba(255, 255, 255, 0.08));
+    flex-shrink: 0;
+}
+
+.da-floating-menu-group-title {
+    padding: 6px 10px 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    letter-spacing: 0.02em;
+}
+
+.da-floating-menu-group-title--highlighted {
+    color: var(--da-accent-color);
+}
+
+.da-floating-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 13px);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.da-floating-menu-item:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.da-floating-menu-item.is-highlighted {
+    background: rgba(var(--da-accent-rgb), 0.12);
+}
+
+.da-floating-menu-item.is-danger {
+    color: var(--da-color-error, #f87171);
+}
+
+.da-floating-menu-item.is-danger:hover {
+    background: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.14);
+}
+
+.da-floating-menu-item__icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.da-floating-menu-item__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.da-floating-menu-item__code {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    word-break: break-all;
+}
+
+.da-floating-menu-item__label {
+    font-size: var(--da-font-size-sm, 13px);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.da-floating-menu-item__desc {
+    font-size: var(--da-font-size-xs, 11.5px);
+    color: var(--da-text-secondary);
+}
+
+@media (max-width: 680px) {
+    .da-floating-menu-item {
+        min-height: 44px;
+        padding: 10px 12px;
+        border-radius: var(--da-radius-md, 8px);
+    }
 }

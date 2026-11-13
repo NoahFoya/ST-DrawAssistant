@@ -1150,13 +1150,13 @@
 /* 档案即时确认弹窗 (.da-archive-confirm-*) */
 .da-archive-confirm-backdrop {
     background: var(--da-bg-overlay-modal);
-    z-index: var(--da-z-overlay);
+    z-index: var(--da-z-secondary-modal, 10020);
 }
 
 .da-archive-confirm-panel {
-    max-width: 720px;
-    width: 92vw;
-    max-height: 84vh;
+    max-width: min(720px, calc(var(--da-vvw) - 24px));
+    width: calc(var(--da-vvw) - 24px);
+    max-height: calc(var(--da-vvh) - 24px);
 }
 
 .da-archive-confirm-body {
@@ -1615,6 +1615,47 @@
     color: var(--da-text-secondary);
     max-height: 200px;
     overflow-y: auto;
+}
+
+@media (max-width: 520px) {
+    .da-inline-pair,
+    .da-tag-affix-group {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .da-extra-field-row__top {
+        grid-template-columns: 1fr auto;
+    }
+
+    .da-extra-field-row__top > :first-child {
+        grid-column: 1 / -1;
+    }
+
+    .da-macro-accordion-header {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+
+    .da-macro-desc-wrap {
+        flex: 1 1 100%;
+        min-width: 0;
+        order: 3;
+    }
+
+    .da-macro-delete-btn {
+        margin-left: auto;
+    }
+
+    .da-macro-accordion-body {
+        padding: 10px 12px;
+    }
+
+    .da-macro-validation-error {
+        padding: 2px 12px 6px 12px;
+    }
 }
 
 

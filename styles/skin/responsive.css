@@ -11,11 +11,11 @@
    微调主弹窗与侧边栏宽度，为右侧核心配置/工作区留出足够阅读与操作空间；
    规格参数网格由 4 列自适应降级为 2 列。 */
 @media (max-width: 900px) {
-    /* 弹窗适当收缩，预留四周微弱边距以感知遮罩层 */
+    /* 弹窗适当收缩，预留四周边距以感知遮罩层 */
     .da-settings-panel,
     .da-main-modal-inner {
-        width: 96vw;
-        height: 92vh;
+        width: calc(var(--da-vvw) - 32px);
+        height: calc(var(--da-vvh) - 48px);
     }
 
     /* 侧边栏适度收缩，将空间让渡给右侧内容区 */
@@ -26,8 +26,8 @@
 
     /* 蓝图节点编辑器外壳弹性收缩 */
     .da-blueprint-container {
-        width: 96vw;
-        height: 92vh;
+        width: calc(var(--da-vvw) - 32px);
+        height: calc(var(--da-vvh) - 48px);
     }
 
     /* 右侧属性检视面板适度收窄，保障左侧节点画布的可视面积 */
@@ -47,11 +47,23 @@
 @media (max-width: 768px) {
     /* 蓝图节点编辑器小屏全屏展示，移除圆角与边框以最大化利用可视面积 */
     .da-blueprint-container {
-        width: 100vw !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        width: 100%;
+        max-width: var(--da-vvw);
+        height: var(--da-vvh);
+        max-height: var(--da-vvh);
+        border-radius: 0;
+        border: none;
+    }
+
+    .da-blueprint-header,
+    .da-blueprint-toolbar {
+        padding: 10px 12px !important;
+        gap: 8px !important;
+    }
+
+    .da-blueprint-search-wrapper {
+        max-width: none !important;
+        flex: 1 1 100% !important;
     }
 
     /* 工作区容器由横向双列转为纵向单列流式堆叠，解除横向固定尺寸限制 */
@@ -78,21 +90,14 @@
 
     /* 底部操作条应用 safe-area-inset-bottom 边距，避免触控按钮被移动端手势条遮挡 */
     .da-blueprint-footer {
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-    }
-
-    /* 宏变量快捷插入下拉面板限制最大宽度并右侧留出 12px 安全间距，防止溢出视口 */
-    .da-blueprint-var-dropdown {
-        width: calc(100vw - 24px) !important;
-        max-width: 360px !important;
-        right: 12px !important;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
     }
 
     /* 图像详情与元数据查看器弹窗自适应尺寸 */
     .da-inspect-modal {
-        width: 96vw !important;
-        max-height: 92vh !important;
-        border-radius: var(--da-radius-modal, 12px) !important;
+        width: calc(var(--da-vvw) - 24px);
+        max-height: calc(var(--da-vvh) - 24px);
+        border-radius: var(--da-radius-modal, 12px);
     }
 
     /* 详情主体网格由左右双列（1fr 340px）切换为纵向单列流式堆叠 */
@@ -137,98 +142,57 @@
         --da-font-size-lg: 16px !important;
     }
 
-    /* 移除背景遮罩内边距，弹窗全屏平铺无边距 */
-    .da-modal-backdrop {
-        padding: 0 !important;
-    }
-
-    /* 弹窗主体撑满整个视口，清除边框与圆角，最大化小屏显示利用率 */
+    /* 主弹窗主体撑满可视视口，清除边框与圆角，最大化小屏显示利用率 */
     .da-settings-panel,
     .da-main-modal-inner {
-        width: 100vw !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        width: 100%;
+        max-width: var(--da-vvw);
+        height: var(--da-vvh);
+        max-height: var(--da-vvh);
+        border-radius: 0;
+        border: none;
     }
 
-    /* 顶栏水平内边距压缩，为标题和右侧操作按钮释放横向空间 */
-    .da-header-bar {
-        padding: 0 var(--da-space-md, 10px) !important;
-    }
-
-    /* 顶栏标题限制最大宽度并启用省略截断，防止挤压右侧快捷工具与关闭按钮 */
-    .da-header-title {
-        font-size: var(--da-font-size-base, 0.88rem) !important;
-        max-width: 140px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    /* 弹窗主体容器由左右分栏转为上下纵向排列（顶部 Tab + 下方内容区） */
+    /* 弹窗主体容器由左右分栏转为上下纵向排列（顶部 Tab + 二级引擎胶囊 + 下方内容区） */
     .da-modal-body {
-        flex-direction: column !important;
-    }
-
-    /* 侧边栏转为顶部横向滚动的 Tab 导航条：
-       1. 清除右边框，改为底部边框区分下方内容；
-       2. 开启横向单行滚动并启用 touch 惯性滑动；
-       3. 隐藏原生滚动条保持界面简洁；
-       4. 右边缘应用微渐变蒙版，提供内容横向可滚动的直观视觉提示。 */
-    .da-sidebar-tabs {
-        width: 100% !important;
-        flex: 0 0 auto !important;
-        flex-direction: row !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding: var(--da-space-xs, 4px) 24px var(--da-space-xs, 4px) var(--da-space-sm, 8px) !important;
-        border-right: none !important;
-        border-bottom: 1px solid var(--da-border-color) !important;
-        gap: var(--da-space-xs, 6px) !important;
-        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
-        mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
-    }
-
-    .da-sidebar-tabs::-webkit-scrollbar {
-        display: none;
-    }
-
-    /* 选项卡按钮自适应内容宽度，不强制拉伸，保持横向流式排列 */
-    .da-sidebar-item {
-        flex: 0 0 auto !important;
-        width: auto !important;
-        min-height: 34px !important;
-        height: 34px !important;
-        padding: 0 12px !important;
-        white-space: nowrap !important;
-        font-size: 0.84rem !important;
-        border-radius: 6px !important;
-    }
-
-    /* 激活指示线：由左侧垂直竖条转为底部水平横条，对齐常规顶部 Tab 视觉规范 */
-    .da-sidebar-item--active::before {
-        left: 6px !important;
-        right: 6px !important;
-        top: auto !important;
-        bottom: 0 !important;
-        width: auto !important;
-        height: 2px !important;
-        border-radius: 2px 2px 0 0 !important;
+        flex-direction: column;
     }
 
     /* 内容滚动区域设置 contain 滚动行为，限制滚动外溢到外部页面 */
     .da-modal-content {
-        padding: var(--da-space-sm, 10px) var(--da-space-md, 12px) !important;
+        padding: var(--da-space-sm, 10px) var(--da-space-md, 12px);
         overscroll-behavior: contain;
     }
 
-    /* 底部操作栏应用安全区内边距，规避手机底部手势导航条遮挡 */
+    /* 底部操作栏应用安全区内边距与文本省略防护，规避手势条遮挡与长文案横向撑破 */
     .da-footer-bar {
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-        font-size: 0.78em !important;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        font-size: 0.78em;
+    }
+
+    .da-footer-bar .da-status-item {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .da-footer-bar .da-server-status-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* 次级弹窗在移动端限宽限高与页脚折行适配（外层保持居中与可视区域边距） */
+    .da-reset-factory-panel,
+    .da-workflow-format-modal,
+    .da-archive-confirm-panel {
+        width: calc(var(--da-vvw) - 24px);
+        max-height: calc(var(--da-vvh) - 24px);
+    }
+
+    .da-reset-factory-footer {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        padding: 10px 14px !important;
     }
 
     /* 统计看板指标网格双列等分排列 */
@@ -263,7 +227,7 @@
 
     /* 悬浮球头像正圆形裁剪面板限制宽度 */
     .da-cropper-panel {
-        width: 94vw !important;
+        width: calc(var(--da-vvw) - 24px);
     }
 
     /* 流式自适应控件强制满宽 */
@@ -302,9 +266,14 @@
 
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control-slot,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right {
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-240,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-200,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-160,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-120 {
         width: 100% !important;
         max-width: 100% !important;
+        min-width: 0 !important;
         flex: 1 1 auto !important;
         margin-left: 0 !important;
         justify-content: flex-start !important;
@@ -312,53 +281,98 @@
 
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select-wrapper,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-wrapper,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-composite,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-suffix-wrapper,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-unit-wrapper,
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-dimension-picker__size-group,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-number-input,
     .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-group {
         width: 100% !important;
+        min-width: 0 !important;
         max-width: 100% !important;
+        flex: 1 1 auto !important;
     }
 
-    /* 紧凑内联行维持水平单行居中两端对齐 */
+    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented__item {
+        flex: 1 1 0%;
+        padding: 3px 6px !important;
+    }
+
+    .da-form-row .da-field-label {
+        white-space: normal !important;
+        word-break: break-word;
+    }
+
+    /* 紧凑内联行维持水平单行居中两端对齐，标签组按需折行避免挤压右侧开关 */
     .da-form-row--inline,
     .da-row--keep-inline {
         flex-direction: row !important;
         align-items: center !important;
         justify-content: space-between !important;
+        gap: 10px !important;
+    }
+
+    .da-form-row--inline .da-field-label-group,
+    .da-row--keep-inline .da-field-label-group {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
     }
 
     .da-form-row--inline .da-form-row__control-slot,
     .da-row--keep-inline .da-slot--right {
         margin-left: auto !important;
         flex: 0 0 auto !important;
+        min-width: 0 !important;
+    }
+
+    /* 大号二级子页标签条在窄屏下支持流畅横向滑动且保留可触控宽度 */
+    .da-segmented--lg {
+        height: auto !important;
+        min-height: 36px !important;
+        overflow-x: auto !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .da-segmented--lg::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-segmented--lg .da-segmented__item {
+        flex: 1 0 auto !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+    }
+
+    /* 过滤栏、存储信息条与预设栏解除桌面最小宽度约束 */
+    .da-filter-bar__left,
+    .da-storage-bar--compact .da-storage-compact-info,
+    .da-preset-toolbar-left,
+    .da-preset-select-wrapper {
+        min-width: 0 !important;
     }
 }
 
 /* 4.1 超窄屏幕与小屏手机适配 (max-width: 520px) */
 @media (max-width: 520px) {
-
-    /* 超窄屏幕下顶栏标题最大宽度进一步限制为 110px */
-    .da-header-title {
-        max-width: 110px !important;
-    }
-
-    /* 统计指标与系统规格卡片网格降级为单列排布 */
+    /* 统计指标、存储容量格栅与系统规格卡片网格降级为单列排布 */
     .da-stat-grid,
-    .da-spec-grid {
+    .da-spec-grid,
+    .da-storage-stats-grid {
         grid-template-columns: 1fr !important;
     }
 
     .da-quick-theme-selector {
-        padding: 2px 6px !important;
+        padding: 2px 6px;
     }
 
     .da-quick-theme-select {
-        max-width: 80px !important;
-    }
-
-    /* 快捷操作浮动面板在超窄屏下微调宽度 */
-    .da-action-panel {
-        width: 96% !important;
-        max-width: 96% !important;
+        max-width: 72px;
     }
 }
 
@@ -370,7 +384,9 @@
      * 通过绝对定位伪元素向四周外延 6px，将可触控区域扩展至标准尺寸（>= 36px），
      * 解决关闭按钮、帮助提示、变量插入等小按钮在触控屏上容易点偏的问题。
      */
+    .da-help-icon,
     .da-help-btn,
+    .da-modal-help-btn,
     .da-modal-close-btn,
     .da-btn-var-inject,
     .da-icon-btn,
@@ -379,7 +395,9 @@
         position: relative;
     }
 
+    .da-help-icon::after,
     .da-help-btn::after,
+    .da-modal-help-btn::after,
     .da-modal-close-btn::after,
     .da-btn-var-inject::after,
     .da-icon-btn::after,
@@ -410,15 +428,10 @@
         pointer-events: auto !important;
     }
 
-    /* 词库网格行操作把手在触控设备常驻可见并扩大热区，长按菜单项间距更易触控 */
+    /* 词库网格行操作把手在触控设备常驻可见并扩大热区 */
     .da-lexicon-row-more-btn {
         width: 34px !important;
         height: 34px !important;
         opacity: 0.6 !important;
-    }
-
-    .da-lexicon-menu-item {
-        padding: 9px 12px !important;
-        font-size: 13px !important;
     }
 }

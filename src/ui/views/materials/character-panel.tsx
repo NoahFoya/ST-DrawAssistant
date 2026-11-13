@@ -229,6 +229,9 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                             <span
                                 className="da-help-icon"
                                 data-tooltip="官方角色收录规范：若为动漫/游戏等知名 IP 角色，请填写 Danbooru 标准角色标签与作品出处（例如 hatsune_miku, vocaloid）；若为原创自设角色 (Original Character)，因 Danbooru 官方不设专属角色名，此处留空即可，模型将依据下方外貌特征标签进行生成。"
+                                role="button"
+                                tabIndex={0}
+                                aria-label="查看角色触发词填写规范"
                             >
                                 ?
                             </span>

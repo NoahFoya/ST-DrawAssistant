@@ -14,7 +14,7 @@
 .da-image-preview-backdrop {
     position: fixed;
     inset: 0;
-    z-index: var(--da-z-modal, 100100);
+    z-index: var(--da-z-viewer, 10045);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -22,15 +22,15 @@
     cursor: zoom-out;
     backdrop-filter: blur(var(--da-blur-modal, 14px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px));
-    animation: da-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: da-backdrop-fade 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* 2. 预览图片承载容器 (.da-image-preview-img)
-   默认 92vw / 92vh 适屏展示；
+   默认基于动态可视视口适屏展示；
    支持点击/双击切换原始尺寸与平移浏览。 */
 .da-image-preview-img {
-    max-width: 92vw;
-    max-height: 92vh;
+    max-width: min(92vw, calc(var(--da-vvw) - 24px));
+    max-height: min(92dvh, calc(var(--da-vvh) - 24px));
     object-fit: contain;
     border-radius: var(--da-radius-md, 8px);
     box-shadow: var(--da-shadow-modal, 0 16px 36px rgba(0, 0, 0, 0.5));
@@ -61,12 +61,12 @@
 /* 3. 悬浮快捷操作栏 (.da-image-preview-toolbar) */
 .da-image-preview-toolbar {
     position: fixed;
-    top: 24px;
-    right: 28px;
+    top: max(16px, env(safe-area-inset-top, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
     display: flex;
     align-items: center;
     gap: 10px;
-    z-index: calc(var(--da-z-modal, 100100) + 1);
+    z-index: calc(var(--da-z-viewer, 10045) + 1);
 }
 
 .da-image-preview-btn {

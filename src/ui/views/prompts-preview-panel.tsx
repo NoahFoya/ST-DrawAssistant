@@ -149,6 +149,9 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                                     <span
                                         className="da-help-icon"
                                         data-tooltip={c.desc}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={c.desc}
                                     >
                                         ?
                                     </span>

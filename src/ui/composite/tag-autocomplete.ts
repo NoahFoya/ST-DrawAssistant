@@ -25,6 +25,7 @@ import {
     inspectPromptMacros,
 } from '../../pipeline/macro-resolver';
 import { eventBus } from '../../util/event-bus';
+import { computeAnchoredPosition, viewportService } from '../layout/viewport';
 
 /** 编辑框联想工作模式 */
 export type TagAutocompleteMode = 'lexicon-only' | 'prompt-with-macro';
@@ -429,11 +430,20 @@ export class TagAutocomplete implements Disposable {
             });
         }
 
-        const onScrollCapture = () => {
-            if (this._isOpen) {
-                this.closePopup();
+        const onScrollCapture = (e: Event) => {
+            if (!this._isOpen) return;
+            // 忽略浮层内部列表自身滚动，防止触控滑动选词时误收起
+            if (e.target === this._popupEl || this._popupEl?.contains(e.target as Node)) {
+                return;
             }
+            this._positionPopup();
         };
+
+        const unbindViewport = viewportService.subscribe(() => {
+            if (this._isOpen) {
+                this._positionPopup();
+            }
+        });
 
         if (typeof window !== 'undefined') {
             window.addEventListener('scroll', onScrollCapture, true);
@@ -441,6 +451,7 @@ export class TagAutocomplete implements Disposable {
                 window.removeEventListener('scroll', onScrollCapture, true);
             });
         }
+        this._disposers.push(unbindViewport);
 
         this._disposers.push(() => {
             this.target.removeEventListener('compositionstart', onCompositionStart);
@@ -521,20 +532,21 @@ export class TagAutocomplete implements Disposable {
             return;
         }
         const rect = this.target.getBoundingClientRect();
-        const viewportH = window.innerHeight || 800;
-        const viewportW = window.innerWidth || 1200;
+        const desiredWidth = Math.max(220, Math.min(460, rect.width || 300));
+        const pos = computeAnchoredPosition({
+            anchorRect: rect,
+            floatingWidth: desiredWidth,
+            floatingHeight: 220,
+            preferredPlacement: 'bottom',
+            align: 'start',
+            gap: 4,
+            margin: 8,
+        });
 
-        const width = Math.max(260, Math.min(460, rect.width || 300));
-        let left = Math.max(8, Math.min(rect.left, viewportW - width - 8));
-        let top = rect.bottom + 4;
-
-        if (top + 220 > viewportH && rect.top > 230) {
-            top = Math.max(8, rect.top - 224);
-        }
-
-        this._popupEl.style.width = `${width}px`;
-        this._popupEl.style.left = `${left}px`;
-        this._popupEl.style.top = `${top}px`;
+        this._popupEl.style.width = `${Math.min(desiredWidth, pos.maxWidth)}px`;
+        this._popupEl.style.maxHeight = `${Math.min(240, pos.maxHeight)}px`;
+        this._popupEl.style.left = `${pos.left}px`;
+        this._popupEl.style.top = `${pos.top}px`;
         this._popupEl.classList.add('da-autocomplete-popup--open');
     }
 

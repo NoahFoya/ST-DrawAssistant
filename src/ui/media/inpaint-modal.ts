@@ -144,7 +144,7 @@ export class InpaintModal implements Disposable {
 
         // 1. 全屏背景遮罩
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-inpaint-backdrop st-da-root';
+        backdrop.className = 'da-inpaint-backdrop da-modal-backdrop da-modal-backdrop--fullscreen st-da-root';
         this.backdropEl = backdrop;
 
         // 2. 居中面板容器

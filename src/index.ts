@@ -20,10 +20,11 @@ import { themeService } from './ui/theme';
 import { SettingsModal } from './ui/modal/settings-modal';
 import { registerDefaultViews } from './ui/views/registry';
 import { FloatingActionButton, DrawerEntry } from './ui/entry';
-import { toastService } from './ui/feedback/toast';
+import { toastService, tooltipService } from './ui/feedback';
 import { messageDecorator } from './ui/floor/message-decorator';
 import { lightboxModal, imageInfoModal } from './ui/media';
 import { overlayStack } from './ui/framework/overlay-stack';
+import { viewportService } from './ui/layout';
 import { generationOrchestrator } from './pipeline/generation-orchestrator';
 import { promptInjector } from './pipeline/prompt-injector';
 import { AssetSyncCoordinator } from './pipeline/asset-sync-coordinator';
@@ -106,10 +107,12 @@ export async function initOnce(): Promise<void> {
                 return;
             }
 
-            // 2. 初始化主题服务与视觉变量
+            // 2. 初始化视口同步、主题服务与全局浮动提示气泡服务
+            viewportService.mount();
             themeService.bindTarget();
             themeService.applyCurrentTheme();
             themeService.listenSettings();
+            tooltipService.mount();
 
             // 3. 实例化主设置弹窗、装配默认视图与常驻悬浮球
             settingsModalInstance = new SettingsModal();
@@ -407,6 +410,8 @@ export function disposeExtension(): void {
     lightboxModal.dispose();
     imageInfoModal.dispose();
     overlayStack.clear();
+    tooltipService.dispose();
+    viewportService.dispose();
     toastService.dispose();
     themeService.dispose();
 

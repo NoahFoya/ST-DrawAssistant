@@ -7,24 +7,16 @@
  * 3. 复制交互：参数单元格支持悬停与点击复制。
  */
 
-/* 1. 图像详情弹窗遮罩与外壳 */
+/* 1. 图像详情弹窗遮罩与外壳（布局继承自 .da-modal-backdrop） */
 .da-inspect-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10001;
+    z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.72));
     backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    box-sizing: border-box;
 }
 
 .da-inspect-modal {
-    width: 95%;
-    max-width: 1060px;
-    max-height: 88vh;
+    width: min(1060px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
     border-radius: var(--da-radius-large, 16px);
     background: var(--da-bg-modal, #1a1d26);
     backdrop-filter: blur(var(--da-blur-panel, 20px));
@@ -34,6 +26,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-sizing: border-box;
     animation: da-fadein 0.22s var(--da-ease);
 }
 

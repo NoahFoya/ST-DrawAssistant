@@ -205,9 +205,9 @@ export class OnboardingGuideModal implements Disposable {
             return;
         }
 
-        // 1. 全屏背景遮罩
+        // 1. 弹窗背景遮罩（复用 .da-modal-backdrop 居中弹性外层）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-onboarding-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-onboarding-backdrop st-da-root';
         backdrop.setAttribute('role', 'dialog');
         backdrop.setAttribute('aria-modal', 'true');
         backdrop.setAttribute('aria-label', 'ST-DrawAssistant 使用引导');
