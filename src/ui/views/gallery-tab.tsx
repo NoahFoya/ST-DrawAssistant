@@ -47,13 +47,6 @@ export class GalleryTabView extends PreactSettingsView {
         this.mountPreact();
     }
 
-    /**
-     * 重新从本地存储检索全量记录并刷新图库视图。
-     */
-    public async refresh(): Promise<void> {
-        await this.vm.refresh();
-    }
-
     protected renderContent(): VNode {
         const summary = this.vm.storageSummary.value;
         const pageRecords = this.vm.pageRecords.value;
@@ -189,14 +182,21 @@ export class GalleryTabView extends PreactSettingsView {
                                 const displayUrl =
                                     this.vm.getDisplayUrl(record) ??
                                     urlMap.get(record.imageId);
+                                const isLoadFailed = this.vm.loadFailedIds.value.has(
+                                    record.imageId
+                                );
+                                const effectiveStatus = isLoadFailed ? 'failed' : record.status;
                                 return (
                                     <MediaCardView
                                         key={record.imageId}
                                         item={{
                                             id: record.imageId,
-                                            status: record.status,
+                                            status: effectiveStatus,
                                             url: displayUrl,
                                             isFavorite: Boolean(record.favorited),
+                                            ...(isLoadFailed
+                                                ? { errorMessage: '图像资源无法载入' }
+                                                : {}),
                                         }}
                                         selectable={isBatchMode}
                                         selected={selectedIds.has(record.imageId)}
@@ -211,6 +211,10 @@ export class GalleryTabView extends PreactSettingsView {
                                                 record,
                                                 metadata: record.metadata,
                                                 imageUrl: displayUrl,
+                                                onPreview: () =>
+                                                    void this.vm.openLightboxForRecord(
+                                                        record.imageId
+                                                    ),
                                                 onDelete: () => {
                                                     void this.vm.deleteSingleRecord(record.imageId);
                                                 },
@@ -218,6 +222,12 @@ export class GalleryTabView extends PreactSettingsView {
                                         }}
                                         onToggleFavorite={(fav, item) =>
                                             void this.vm.toggleFavorite(item.id, fav)
+                                        }
+                                        onImageError={(item) =>
+                                            this.vm.retryLoadRecord(item.id, true)
+                                        }
+                                        onRetry={(item) =>
+                                            void this.vm.retryLoadRecord(item.id)
                                         }
                                         onDelete={(item) =>
                                             void this.vm.deleteSingleRecord(item.id)

@@ -38,9 +38,9 @@ export type SchemaFieldType =
     | 'custom';
 
 /** 自定义字段渲染上下文 */
-export interface FieldRenderContext<TModel extends Record<string, any>> {
+export interface FieldRenderContext<TModel extends object> {
     model: TModel;
-    value: any;
+    value: unknown;
     isDirty: boolean;
     isInvalid: boolean;
     disabled: boolean;
@@ -49,7 +49,7 @@ export interface FieldRenderContext<TModel extends Record<string, any>> {
 }
 
 /** 单个表单项的声明式 Schema 配置 */
-export interface FieldSchema<TModel extends Record<string, any> = Record<string, any>> {
+export interface FieldSchema<TModel extends object = Record<string, unknown>> {
     /** 字段唯一键名（对应 model 属性名，或用于 divider / custom 的唯一标识） */
     key: Extract<keyof TModel, string> | string;
     /** 字段控件类型 */
@@ -63,7 +63,7 @@ export interface FieldSchema<TModel extends Record<string, any> = Record<string,
     /** 右侧控件容器宽度规格 */
     width?: FormFieldControlWidth;
     /** 缺省默认值 */
-    defaultValue?: any;
+    defaultValue?: unknown;
     /** 附加在 FormFieldView 上的类名 */
     fieldClassName?: string;
     /** 是否不使用标准 FormFieldRow 包装而直接把自定义内容渲染到 Card body 中 */
@@ -86,8 +86,11 @@ export interface FieldSchema<TModel extends Record<string, any> = Record<string,
 
     /** 存储值与视图控件值之间的双向转换器 */
     transform?: {
-        toView: (rawVal: any, model: TModel) => any;
-        fromView: (viewVal: any, model: TModel) => any;
+        // 使用 any 参数以兼容具体字段回调的双变传参习惯
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        toView: (rawVal: any, model: TModel) => unknown;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fromView: (viewVal: any, model: TModel) => unknown;
     };
 
     /** 动态显隐条件：返回 false 时隐藏该字段 */
@@ -106,6 +109,7 @@ export interface FieldSchema<TModel extends Record<string, any> = Record<string,
     invalidTooltip?: string | ((model: TModel) => string | undefined);
 
     /** 值变更后的附加副作用回调 */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onAfterChange?: (value: any, model: TModel) => void;
 
     /** 当 type === 'custom' 时的自定义渲染函数 */
@@ -113,7 +117,7 @@ export interface FieldSchema<TModel extends Record<string, any> = Record<string,
 }
 
 /** 声明式卡片配置 Schema */
-export interface CardSchema<TModel extends Record<string, any> = Record<string, any>> {
+export interface CardSchema<TModel extends object = Record<string, unknown>> {
     /** 卡片唯一标识 */
     id?: string;
     /** 卡片主标题 */
@@ -132,22 +136,27 @@ export interface CardSchema<TModel extends Record<string, any> = Record<string, 
     fields: FieldSchema<TModel>[];
 }
 
-export interface SchemaFieldRendererProps<TModel extends Record<string, any> = any> {
+export type SchemaFieldChangeHandler<TModel extends object> = <K extends keyof TModel>(
+    key: K,
+    value: TModel[K]
+) => void;
+
+export interface SchemaFieldRendererProps<TModel extends object = Record<string, unknown>> {
     schema: FieldSchema<TModel>;
     model: TModel;
     dirty?: boolean;
     invalid?: boolean;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onChange?: (value: any) => void;
-    onFieldChange?: (key: any, value: any) => void;
+    onChange?: (value: unknown) => void;
+    onFieldChange?: SchemaFieldChangeHandler<TModel>;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
 
 /**
  * 渲染单个声明式字段。
  */
-export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
+export function SchemaFieldRenderer<TModel extends object = Record<string, unknown>>(
     props: SchemaFieldRendererProps<TModel>
 ) {
     const {
@@ -167,7 +176,7 @@ export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
             onChange(value);
         }
         if (onFieldChange) {
-            onFieldChange(key, value);
+            onFieldChange(key as keyof TModel, value as TModel[keyof TModel]);
         }
     };
 
@@ -196,7 +205,8 @@ export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
               ? schema.isInvalidWhen(invalidFields ?? new Set(), model)
               : Boolean(invalidFields?.has(schema.key));
 
-    const rawValue = model[schema.key] !== undefined ? model[schema.key] : schema.defaultValue;
+    const modelRecord = model as Record<string, unknown>;
+    const rawValue = modelRecord[schema.key] !== undefined ? modelRecord[schema.key] : schema.defaultValue;
     const viewValue = schema.transform ? schema.transform.toView(rawValue, model) : rawValue;
 
     const handleValueChange = (nextViewVal: unknown) => {
@@ -254,7 +264,7 @@ export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
                     min={schema.min}
                     max={schema.max}
                     step={schema.step}
-                    defaultValue={schema.defaultValue}
+                    defaultValue={typeof schema.defaultValue === 'number' ? schema.defaultValue : undefined}
                     precision={schema.precision}
                     unit={schema.unit}
                     disabled={isDisabled}
@@ -366,12 +376,12 @@ export function SchemaFieldRenderer<TModel extends Record<string, any> = any>(
     );
 }
 
-export interface SchemaCardProps<TModel extends Record<string, any> = any> {
+export interface SchemaCardProps<TModel extends object = Record<string, unknown>> {
     schema: CardSchema<TModel>;
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onFieldChange?: (key: any, value: any) => void;
+    onFieldChange?: SchemaFieldChangeHandler<TModel>;
     onChangeFields?: (partial: Partial<TModel>) => void;
     children?: ComponentChildren;
 }
@@ -379,7 +389,7 @@ export interface SchemaCardProps<TModel extends Record<string, any> = any> {
 /**
  * 渲染声明式配置卡片 (<SchemaCard>)。
  */
-export function SchemaCard<TModel extends Record<string, any> = any>(
+export function SchemaCard<TModel extends object = Record<string, unknown>>(
     props: SchemaCardProps<TModel>
 ) {
     const {
@@ -426,19 +436,19 @@ export function SchemaCard<TModel extends Record<string, any> = any>(
     );
 }
 
-export interface SchemaFieldsViewProps<TModel extends Record<string, any> = any> {
+export interface SchemaFieldsViewProps<TModel extends object = Record<string, unknown>> {
     fields: FieldSchema<TModel>[];
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onFieldChange?: (key: any, value: any) => void;
+    onFieldChange?: SchemaFieldChangeHandler<TModel>;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
 
 /**
  * 批量渲染一组声明式表单字段（无需 CardView 外壳）。
  */
-export function SchemaFieldsView<TModel extends Record<string, any> = any>(
+export function SchemaFieldsView<TModel extends object = Record<string, unknown>>(
     props: SchemaFieldsViewProps<TModel>
 ) {
     const {
@@ -467,19 +477,19 @@ export function SchemaFieldsView<TModel extends Record<string, any> = any>(
     );
 }
 
-export interface SchemaFormProps<TModel extends Record<string, any> = any> {
+export interface SchemaFormProps<TModel extends object = Record<string, unknown>> {
     cards: CardSchema<TModel>[];
     model: TModel;
     dirtyFields?: ReadonlySet<string>;
     invalidFields?: ReadonlySet<string>;
-    onFieldChange?: (key: any, value: any) => void;
+    onFieldChange?: SchemaFieldChangeHandler<TModel>;
     onChangeFields?: (partial: Partial<TModel>) => void;
 }
 
 /**
  * 批量渲染多张声明式配置卡片 (<SchemaForm>)。
  */
-export function SchemaForm<TModel extends Record<string, any> = any>(
+export function SchemaForm<TModel extends object = Record<string, unknown>>(
     props: SchemaFormProps<TModel>
 ) {
     return (

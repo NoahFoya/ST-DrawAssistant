@@ -202,15 +202,7 @@ export interface SelectControlProps {
 }
 
 export function SelectControl(props: SelectControlProps) {
-    const selectRef = useRef<HTMLSelectElement>(null);
     const val = props.value ?? '';
-
-    // 确保选项动态更新后原生 select 的选中值与受控 value 保持一致
-    useEffect(() => {
-        if (selectRef.current && selectRef.current.value !== val) {
-            selectRef.current.value = val;
-        }
-    }, [val, props.options]);
 
     const wrapperClasses = [
         'da-select-wrapper',
@@ -229,7 +221,6 @@ export function SelectControl(props: SelectControlProps) {
     return (
         <div className={wrapperClasses}>
             <select
-                ref={selectRef}
                 className={selectClasses}
                 value={val}
                 disabled={props.disabled}
@@ -239,7 +230,7 @@ export function SelectControl(props: SelectControlProps) {
                 }}
             >
                 {props.placeholder && (
-                    <option value="" disabled selected={!val}>
+                    <option value="" disabled>
                         {props.placeholder}
                     </option>
                 )}
@@ -252,7 +243,6 @@ export function SelectControl(props: SelectControlProps) {
                                         key={sub.value}
                                         value={sub.value}
                                         disabled={sub.disabled}
-                                        selected={sub.value === val}
                                     >
                                         {sub.label}
                                     </option>
@@ -265,7 +255,6 @@ export function SelectControl(props: SelectControlProps) {
                             key={`${item.value}_${idx}`}
                             value={item.value}
                             disabled={item.disabled}
-                            selected={item.value === val}
                         >
                             {item.label}
                         </option>
@@ -537,7 +526,7 @@ export function TextInputControl(props: TextInputControlProps) {
             )}
             <input
                 ref={inputRef}
-                type="text"
+                type={(props.type ?? 'text') as 'text'}
                 className={`da-input${props.invalid ? ' is-invalid' : ''}`}
                 value={val}
                 placeholder={props.placeholder}
@@ -590,6 +579,7 @@ export interface TextareaControlProps {
 export function TextareaControl(props: TextareaControlProps) {
     const classes = [
         'da-textarea',
+        props.monospace ? 'da-textarea--mono' : '',
         props.dirty ? 'is-dirty' : '',
         props.invalid ? 'is-invalid' : '',
         props.className || '',
@@ -604,11 +594,6 @@ export function TextareaControl(props: TextareaControlProps) {
             value={props.value ?? ''}
             placeholder={props.placeholder}
             disabled={props.disabled}
-            style={
-                props.monospace
-                    ? { width: '100%', fontFamily: 'var(--da-font-mono, monospace)', fontSize: '12px' }
-                    : { width: '100%' }
-            }
             onInput={(e) => {
                 props.onChange?.((e.currentTarget as HTMLTextAreaElement).value);
             }}

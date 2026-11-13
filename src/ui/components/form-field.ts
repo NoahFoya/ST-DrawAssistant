@@ -2,7 +2,7 @@
  * 标准表单行包装组件 (FormField)。
  *
  * @remarks
- * 为受控原子控件提供一致的 38px 标准表单行外壳：
+ * 为受控原子控件提供一致的 42px 标准表单行外壳：
  * 1. 标题与必填星号指示；
  * 2. 悬浮帮助提示问号图标 (Tooltip)；
  * 3. 字段级脏状态指示黄点；
@@ -41,7 +41,7 @@ export class FormField implements UIComponent {
     constructor(options: FormFieldOptions) {
         this.activeControl = options.control;
 
-        // 1. 创建 38px 表单行根容器
+        // 1. 创建 42px 表单行根容器
         this.element = document.createElement('div');
         this.element.classList.add('da-form-row');
         if (options.className) {

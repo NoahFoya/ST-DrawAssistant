@@ -5,7 +5,7 @@
  * 基于 --da-* 设计令牌构建，支持深/浅双模式主题与移动端窄屏响应式排布。
  */
 
-.da-onboarding-backdrop {
+.da-modal-backdrop.da-onboarding-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
     backdrop-filter: blur(var(--da-blur-modal, 12px));

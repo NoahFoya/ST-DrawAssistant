@@ -122,12 +122,6 @@
     .da-inspect-preview-box {
         max-height: 280px !important;
     }
-
-    /* 数据统计双列图表（分布占比与生成趋势）降级为单列纵向排列 */
-    .da-stat-analytics-row {
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-    }
 }
 
 /* 3. 移动端与紧凑手机屏幕适配 (max-width: 680px)
@@ -199,22 +193,6 @@
     .da-stat-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 8px !important;
-    }
-
-    /* 通用过滤工具栏自动折行，左右区域各占整行流动 */
-    .da-filter-bar {
-        flex-wrap: wrap !important;
-        gap: 8px !important;
-    }
-
-    .da-filter-bar__left,
-    .da-filter-bar__right {
-        width: 100% !important;
-        flex-wrap: wrap !important;
-    }
-
-    .da-filter-bar .da-input--search {
-        width: 100% !important;
     }
 
     /* 图库底部悬浮批量控制台居中折行排布 */
@@ -349,8 +327,7 @@
         min-height: 32px !important;
     }
 
-    /* 过滤栏、存储信息条与预设栏解除桌面最小宽度约束 */
-    .da-filter-bar__left,
+    /* 存储信息条与预设栏解除桌面最小宽度约束 */
     .da-storage-bar--compact .da-storage-compact-info,
     .da-preset-toolbar-left,
     .da-preset-select-wrapper {
@@ -360,9 +337,8 @@
 
 /* 4.1 超窄屏幕与小屏手机适配 (max-width: 520px) */
 @media (max-width: 520px) {
-    /* 统计指标、存储容量格栅与系统规格卡片网格降级为单列排布 */
+    /* 统计指标与存储容量格栅降级为单列排布 */
     .da-stat-grid,
-    .da-spec-grid,
     .da-storage-stats-grid {
         grid-template-columns: 1fr !important;
     }
@@ -382,27 +358,17 @@
     /*
      * 扩充小图标按钮的隐式触控命中区域：
      * 通过绝对定位伪元素向四周外延 6px，将可触控区域扩展至标准尺寸（>= 36px），
-     * 解决关闭按钮、帮助提示、变量插入等小按钮在触控屏上容易点偏的问题。
+     * 解决关闭按钮与帮助提示等小按钮在触控屏上容易点偏的问题。
      */
     .da-help-icon,
-    .da-help-btn,
     .da-modal-help-btn,
-    .da-modal-close-btn,
-    .da-btn-var-inject,
-    .da-icon-btn,
-    .da-icon-btn--ghost,
-    .da-number-btn {
+    .da-modal-close-btn {
         position: relative;
     }
 
     .da-help-icon::after,
-    .da-help-btn::after,
     .da-modal-help-btn::after,
-    .da-modal-close-btn::after,
-    .da-btn-var-inject::after,
-    .da-icon-btn::after,
-    .da-icon-btn--ghost::after,
-    .da-number-btn::after {
+    .da-modal-close-btn::after {
         content: '';
         position: absolute;
         inset: -6px;

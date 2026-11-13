@@ -11,7 +11,6 @@
 
 import type { Disposable } from '../types';
 import { imageStorage } from '../../store/image-storage';
-import { urlPool } from '../../store/url-pool';
 import { eventBus } from '../../util/event-bus';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
@@ -78,9 +77,10 @@ export class LightboxModal implements Disposable {
     private infoBtnEl?: HTMLButtonElement;
     private editBtnEl?: HTMLButtonElement;
 
-    // 全局事件解绑器列表
+    // 全局事件解绑器与灯箱自建回退 URL 管理列表（独立于楼层会话 urlPool）
     private readonly disposers: (() => void)[] = [];
     private readonly failedFallbackIds = new Set<string>();
+    private readonly allocatedFallbackUrls: string[] = [];
 
     public constructor() {
         this.initDom();
@@ -116,8 +116,9 @@ export class LightboxModal implements Disposable {
                 this.failedFallbackIds.add(currentItem.imageId);
                 try {
                     const blob = await imageStorage.getImageBlob(currentItem.imageId);
-                    if (blob) {
-                        const fallbackUrl = urlPool.createUrl(currentItem.imageId, blob);
+                    if (blob && blob.size > 0) {
+                        const fallbackUrl = URL.createObjectURL(blob);
+                        this.allocatedFallbackUrls.push(fallbackUrl);
                         img.src = fallbackUrl;
                         return;
                     }
@@ -293,10 +294,7 @@ export class LightboxModal implements Disposable {
 
         backdrop.appendChild(toolbar);
 
-        // 6. 挂载到 body
-        document.body.appendChild(backdrop);
-
-        // 保存 DOM 引用
+        // 6. 保存 DOM 引用（保持游离态，在 openItems() 打开时动态挂至 document.body 末位以保证置顶层级）
         this.backdropEl = backdrop;
         this.wrapperEl = wrapper;
         this.imgEl = img;
@@ -542,15 +540,16 @@ export class LightboxModal implements Disposable {
             return;
         }
 
+        this.revokeAllocatedFallbackUrls();
+        this.failedFallbackIds.clear();
         this.items = [...items];
         this.currentIndex = Math.max(0, Math.min(startIndex, this.items.length - 1));
         this.isOpenState = true;
         overlayStack.push('lightbox-modal', () => this.close());
 
-        if (this.backdropEl) {
-            if (!this.backdropEl.parentNode && typeof document !== 'undefined') {
-                document.body.appendChild(this.backdropEl);
-            }
+        if (this.backdropEl && typeof document !== 'undefined') {
+            // 每次打开均追加入 body 末位，与 SettingsModal / ImageInfoModal 同处正确绘制序
+            document.body.appendChild(this.backdropEl);
             this.backdropEl.style.display = 'flex';
         }
 
@@ -651,7 +650,9 @@ export class LightboxModal implements Disposable {
      * 打开当前图像的元信息弹窗。
      */
     private async openCurrentMetadata(): Promise<void> {
-        const item = this.items[this.currentIndex];
+        const snapshotItems = [...this.items];
+        const snapshotIndex = this.currentIndex;
+        const item = snapshotItems[snapshotIndex];
         if (!item) return;
 
         const record = item.imageId ? await imageStorage.getImageRecord(item.imageId) : undefined;
@@ -661,6 +662,7 @@ export class LightboxModal implements Disposable {
             metadata: record?.metadata,
             imageUrl: item.url,
             onEdit: item.onEdit,
+            onPreview: () => this.openItems(snapshotItems, snapshotIndex),
         });
     }
 
@@ -715,8 +717,22 @@ export class LightboxModal implements Disposable {
         overlayStack.remove('lightbox-modal');
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';
+            this.backdropEl.remove();
         }
+        this.revokeAllocatedFallbackUrls();
+        this.failedFallbackIds.clear();
         this.resetTransform();
+    }
+
+    private revokeAllocatedFallbackUrls(): void {
+        for (const url of this.allocatedFallbackUrls) {
+            try {
+                URL.revokeObjectURL(url);
+            } catch {
+                // 忽略释放异常
+            }
+        }
+        this.allocatedFallbackUrls.length = 0;
     }
 
     /**

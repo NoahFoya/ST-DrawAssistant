@@ -166,6 +166,17 @@
     -webkit-touch-callout: none;
 }
 
+.da-floor-image--zoomable {
+    cursor: zoom-in;
+}
+
+.da-floor-archive-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
 /* 防窥模糊遮罩 */
 .da-floor-image--blurred {
     filter: blur(16px);
@@ -258,11 +269,10 @@
 }
 
 /* 4. 图像提示词微调与重绘面板 (ImageActionPanel) */
-.da-action-panel-backdrop {
+.da-modal-backdrop.da-action-panel-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal);
     backdrop-filter: blur(4px);
-    display: none;
 }
 
 .da-action-panel {

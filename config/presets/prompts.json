@@ -52,9 +52,9 @@
       "id": "prompt_nai_anime",
       "name": "NAI 进阶动漫",
       "data": {
-        "positivePrefix": "masterpiece, best quality,",
+        "positivePrefix": "very aesthetic, masterpiece, no text,",
         "positiveSuffix": ", cinematic lighting, detailed background",
-        "negativePrompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, bad anatomy, bad hands, multiple views, logo, watermark, blurry",
         "loras": []
       }
     },
@@ -62,9 +62,9 @@
       "id": "prompt_nai_vivid",
       "name": "NAI 绚丽视觉",
       "data": {
-        "positivePrefix": "masterpiece, highly aesthetic,",
+        "positivePrefix": "very aesthetic, masterpiece, highly aesthetic,",
         "positiveSuffix": ", colorful, dynamic angle, beautiful detailed eyes",
-        "negativePrompt": "lowres, bad anatomy, bad hands, signature, watermark",
+        "negativePrompt": "lowres, artistic error, worst quality, bad quality, jpeg artifacts, very displeasing, bad anatomy, bad hands, signature, watermark",
         "loras": []
       }
     }

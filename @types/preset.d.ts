@@ -70,8 +70,6 @@ export interface DrawingPresetData {
     promptPresetId?: string;
     /** 关联的文生图工作流预设标识符 */
     txt2imgWorkflowId?: string;
-    /** 关联的图生图工作流预设标识符 */
-    img2imgWorkflowId?: string;
     /** 关联的局部重绘预设标识符 */
     inpaintPresetId?: string;
     /** 是否开启高清修复 (SD-WebUI) */
@@ -92,10 +90,6 @@ export interface DrawingPresetData {
     customModel?: string;
     /** OpenAI 兼容自定义请求体 JSON 字符串 */
     customBodyJson?: string;
-    /** NovelAI 官方负向模板预设 (Heavy / Light / None) */
-    ucPreset?: string | number;
-    /** NovelAI 是否自动追加官方画质标签 */
-    qualityTags?: boolean;
     /** NovelAI 是否将权重语法自动转换为花括号 */
     convertSyntax?: boolean;
     /** NovelAI SMEA 采样增强模式 (仅限 V3 经典模型，smea_dyn / smea / none) */
@@ -121,7 +115,6 @@ export interface LoraConfigItem {
     clipWeight?: number;
     /** 触发权重（仅用于三权重模式） */
     triggerWeight?: number;
-    trigger?: string;
     enabled?: boolean;
 }
 
@@ -143,7 +136,6 @@ export interface PromptPresetData {
 /** 工作流预设数据模型 (如 ComfyUI API 节点图) */
 export interface WorkflowPresetData {
     workflow: Record<string, unknown>;
-    inputMappings?: Record<string, unknown>;
     [key: string]: unknown;
 }
 
@@ -477,10 +469,6 @@ export interface PromptInjectionEntry {
     role: 0 | 1 | 2;
     /** 同位置/深度/角色分桶内的升序拼接权重 */
     order: number;
-    /** 触发概率百分比 (0~100，默认 100) */
-    probability?: number;
-    /** 对应的酒馆原生世界书位置项索引 */
-    wiPosition?: number;
     /** 当条目引用的素材列表变量全部为空时是否静默跳过 */
     skipWhenEmpty?: boolean;
     /** 条目提示词正文（支持素材启用列表变量与 {{//...}} 酒馆注释） */

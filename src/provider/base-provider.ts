@@ -10,6 +10,7 @@
  */
 
 import type {
+    DrawingPresetData,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -17,7 +18,7 @@ import type {
     ProviderType,
     TransportMode,
 } from '@types';
-import { httpClient, type HttpClient, type HttpRequestOptions } from '../util/http-client';
+import { httpClient, sleepWithSignal, type HttpClient, type HttpRequestOptions } from '../util/http-client';
 import { type SettingsStore, settingsStore, DEFAULT_TASK_TIMEOUT_MS } from '../store/settings-store';
 
 /** 提供方基础依赖配置项（主要用于测试隔离与依赖替换） */
@@ -34,6 +35,7 @@ export interface BaseProviderOptions {
 export abstract class BaseGenerationProvider implements GenerationProvider {
     public abstract readonly providerType: ProviderType;
     public abstract readonly name: string;
+    public readonly supportsNegativePrompt: boolean = true;
 
     protected readonly _httpClient: HttpClient;
     protected readonly _settingsStore?: SettingsStore;
@@ -158,26 +160,44 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
      * @param signal 中止信号
      */
     protected sleep(ms: number, signal?: AbortSignal): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (signal?.aborted) {
-                return reject(new DOMException('Aborted', 'AbortError'));
-            }
-
-            const timer = setTimeout(() => {
-                if (signal) {
-                    signal.removeEventListener('abort', onAbort);
-                }
-                resolve();
-            }, ms);
-
-            const onAbort = () => {
-                clearTimeout(timer);
-                reject(new DOMException('Aborted', 'AbortError'));
-            };
-
-            if (signal) {
-                signal.addEventListener('abort', onAbort, { once: true });
-            }
-        });
+        return sleepWithSignal(ms, signal);
     }
+
+    /**
+     * 解析当前任务生效的绘图预设。
+     *
+     * @remarks
+     * 优先使用请求参数快照 `params.drawingPresetId`；缺省时回退读取当前激活预设，
+     * 并委托 {@link SettingsStore.resolveDrawingPreset} 统一校验。
+     */
+    protected resolveDrawingPreset<T extends DrawingPresetData = DrawingPresetData>(
+        params?: Record<string, unknown>
+    ): T | undefined {
+        const paramPresetId =
+            typeof params?.drawingPresetId === 'string' && params.drawingPresetId.trim()
+                ? params.drawingPresetId.trim()
+                : undefined;
+
+        return this._settingsStore?.resolveDrawingPreset<T>(this.providerType, {
+            explicitPresetId: paramPresetId,
+            throwOnMissingActive: true,
+        }).preset;
+    }
+}
+
+/**
+ * 判断提供方是否具备从服务端同步模型/LoRA/采样器等资产的能力。
+ * 用于区分支持动态枚举的引擎与仅使用静态模型目录的服务（如 NovelAI）。
+ */
+export function hasProviderAssetSync(provider: GenerationProvider | null | undefined): boolean {
+    if (!provider) return false;
+    return (
+        typeof provider.fetchCategorizedModels === 'function' ||
+        typeof provider.fetchModels === 'function' ||
+        typeof provider.fetchVaes === 'function' ||
+        typeof provider.fetchClips === 'function' ||
+        typeof provider.fetchSamplers === 'function' ||
+        typeof provider.fetchSchedulers === 'function' ||
+        typeof provider.fetchLoras === 'function'
+    );
 }

@@ -48,7 +48,7 @@ export function hasMaterialListPlaceholder(content: string): boolean {
     if (!content) {
         return false;
     }
-    return /\{\{\s*(?:角色启用列表|通用角色启用列表|(?:通用)?服装启用列表)\s*\}\}/.test(content);
+    return /\{\{\s*(?:角色启用列表|服装启用列表)\s*\}\}/.test(content);
 }
 
 /**
@@ -144,6 +144,13 @@ export function normalizePromptInjectionEntry(
     const triggerMode: ActivationTriggerMode =
         raw.triggerMode === 'keyword' ? 'keyword' : 'always';
     const keywords = typeof raw.keywords === 'string' ? raw.keywords.trim() : '';
+    const secondaryKeywords =
+        typeof raw.secondaryKeywords === 'string' ? raw.secondaryKeywords.trim() : undefined;
+    const logicType: PromptInjectionEntry['logicType'] =
+        raw.logicType === 'and_all' || raw.logicType === 'not_any' || raw.logicType === 'and_any'
+            ? raw.logicType
+            : undefined;
+    const caseSensitive = typeof raw.caseSensitive === 'boolean' ? raw.caseSensitive : undefined;
     const scanDepth =
         typeof raw.scanDepth === 'number' && Number.isFinite(raw.scanDepth) && raw.scanDepth > 0
             ? Math.floor(raw.scanDepth)
@@ -171,6 +178,9 @@ export function normalizePromptInjectionEntry(
         enabled,
         triggerMode,
         keywords,
+        ...(secondaryKeywords ? { secondaryKeywords } : {}),
+        ...(logicType ? { logicType } : {}),
+        ...(caseSensitive !== undefined ? { caseSensitive } : {}),
         scanDepth,
         position,
         depth,
@@ -297,18 +307,33 @@ export function parseStWorldbookEntries(
             ? 'always'
             : 'keyword';
 
-        let keywords = '';
-        if (Array.isArray(rawEntry.key)) {
-            keywords = rawEntry.key
-                .map((k) => String(k ?? '').trim())
-                .filter(Boolean)
-                .join('|');
-        } else if (typeof rawEntry.key === 'string') {
-            keywords = rawEntry.key
-                .split(/[|,，]+/)
-                .map((k) => k.trim())
-                .filter(Boolean)
-                .join('|');
+        const parseRawKeyField = (val: unknown): string => {
+            if (Array.isArray(val)) {
+                return val
+                    .map((k) => String(k ?? '').trim())
+                    .filter(Boolean)
+                    .join('|');
+            }
+            if (typeof val === 'string') {
+                return val
+                    .split(/[|,，]+/)
+                    .map((k) => k.trim())
+                    .filter(Boolean)
+                    .join('|');
+            }
+            return '';
+        };
+
+        const keywords = parseRawKeyField(rawEntry.key);
+        const secondaryKeywords = parseRawKeyField(rawEntry.keysecondary);
+        // 酒馆 World Info selectiveLogic: 0=AND ANY, 1=NOT ALL(按 not_any 近似), 2=NOT ANY, 3=AND ALL
+        let logicType: PromptInjectionEntry['logicType'];
+        if (rawEntry.selectiveLogic === 3) {
+            logicType = 'and_all';
+        } else if (rawEntry.selectiveLogic === 1 || rawEntry.selectiveLogic === 2) {
+            logicType = 'not_any';
+        } else if (secondaryKeywords) {
+            logicType = 'and_any';
         }
 
         const scanDepth =
@@ -338,6 +363,8 @@ export function parseStWorldbookEntries(
             enabled,
             triggerMode,
             keywords,
+            ...(secondaryKeywords ? { secondaryKeywords } : {}),
+            ...(logicType ? { logicType } : {}),
             scanDepth,
             position,
             depth,
@@ -372,6 +399,12 @@ export function exportToStWorldbookJson(
             .split(/[|,，]+/)
             .map((k) => k.trim())
             .filter(Boolean);
+        const keysecondary = (entry.secondaryKeywords || '')
+            .split(/[|,，]+/)
+            .map((k) => k.trim())
+            .filter(Boolean);
+        const selectiveLogic =
+            entry.logicType === 'and_all' ? 3 : entry.logicType === 'not_any' ? 2 : 0;
         const title = (entry.name || '').trim() || `条目 #${idx}`;
         const stPosition = mapExtensionPositionToStPosition(entry.position ?? 1);
         const depth =
@@ -396,7 +429,7 @@ export function exportToStWorldbookJson(
             comment: title,
             constant: entry.triggerMode === 'always',
             selective: true,
-            selectiveLogic: 0,
+            selectiveLogic,
             addMemo: true,
             disable: !entry.enabled,
             order,
@@ -404,7 +437,7 @@ export function exportToStWorldbookJson(
             depth,
             role,
             key: keys,
-            keysecondary: [],
+            keysecondary,
             matchWholeWords: false,
             excludeRecursion: true,
             preventRecursion: true,

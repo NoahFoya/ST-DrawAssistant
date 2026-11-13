@@ -14,6 +14,7 @@ import type { UIComponent } from '../types';
 import { Select } from '../components/select';
 import { TextInput } from '../components/text-input';
 import { Button } from '../components/button';
+import { copyTextToClipboard } from '../../util/clipboard';
 import type { Logger, LogLevel, LogEntry } from '../../util/logger';
 
 /** 终端日志过滤模式 */
@@ -305,7 +306,7 @@ export class LogTerminal implements UIComponent {
         }
 
         const text = visibleItems.map((item) => this.formatItemText(item)).join('\n');
-        return this.writeClipboard(text);
+        return copyTextToClipboard(text);
     }
 
     /**
@@ -321,7 +322,7 @@ export class LogTerminal implements UIComponent {
         }
 
         const text = this.formatItemText(record.item, true);
-        const ok = await this.writeClipboard(text);
+        const ok = await copyTextToClipboard(text);
 
         if (record.copyBtn) {
             const originalText = record.copyBtn.textContent;
@@ -570,26 +571,5 @@ export class LogTerminal implements UIComponent {
         }
 
         return base;
-    }
-
-    private async writeClipboard(text: string): Promise<boolean> {
-        try {
-            if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                await navigator.clipboard.writeText(text);
-                return true;
-            }
-            // 备用机制：使用 textarea 复制
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            const success = document.execCommand('copy');
-            textarea.remove();
-            return success;
-        } catch {
-            return false;
-        }
     }
 }

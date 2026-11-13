@@ -105,11 +105,7 @@
     text-align: center;
 }
 
-/* 3. 通用卡片外壳结构已统一移交 controls/cards/card.css 统一定义，避免双重继承冲突 */
-
-
-
-/* 5. 布局原子工具类 */
+/* 3. 布局原子工具类 */
 .da-w-full { width: 100%; box-sizing: border-box; }
 .da-flex-center { display: flex; align-items: center; justify-content: center; }
 .da-flex-center-row { display: flex; flex-direction: row; align-items: center; justify-content: center; }
@@ -134,27 +130,6 @@
     min-width: 0;
 }
 
-/* 内嵌后缀单行输入控件容器 (如密码内嵌眼睛显隐切换按钮) */
-.da-input-suffix-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    width: 240px;
-    max-width: 100%;
-    flex: 0 0 240px;
-    flex-shrink: 0;
-    height: 32px;
-    box-sizing: border-box;
-}
-
-.da-input-suffix-wrapper .da-input {
-    width: 100% !important;
-    max-width: 100% !important;
-    flex: 1 1 100% !important;
-    height: 32px !important;
-    padding-right: 32px !important;
-}
-
 /* 卡片底部操作栏 (多按钮居右排列) */
 .da-card-action-row {
     display: flex;
@@ -168,7 +143,7 @@
     border-top: 1px solid var(--da-separator);
 }
 
-/* 间距工具类 */
+/* 4. 间距与文本状态工具类 */
 .da-gap-xs { gap: var(--da-space-xs, 4px); }
 .da-gap-sm { gap: var(--da-space-sm, 8px); }
 .da-gap-md { gap: var(--da-space-md, 12px); }
@@ -189,7 +164,18 @@
 .da-text-bold { font-weight: 600 !important; }
 .da-nowrap { white-space: nowrap !important; }
 
-/* 6. 空状态占位提示 (.da-empty-tip) */
+/* 5. 空状态占位提示 (.da-empty-tip / .da-empty-hint) */
+.da-empty-hint {
+    padding: 24px 16px;
+    border-radius: var(--da-radius-input, 8px);
+    background: var(--da-bg-surface-subtle);
+    border: 1px dashed var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 12px);
+    line-height: 1.6;
+    text-align: center;
+}
+
 .da-empty-tip {
     display: flex;
     flex-direction: column;
@@ -219,5 +205,17 @@
 
 .da-empty-tip__sub {
     font-size: 0.82em;
+    opacity: 0.75;
+}
+
+.da-tab-placeholder__title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.da-tab-placeholder__desc {
+    margin: 0;
+    font-size: 13px;
     opacity: 0.75;
 }

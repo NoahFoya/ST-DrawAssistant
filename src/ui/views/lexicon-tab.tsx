@@ -56,7 +56,6 @@ export class LexiconTabView extends PreactSettingsView {
     public readonly subTab = signal<LexiconSubTab>('files');
     public readonly filesMeta = signal<LocalLexiconFileMeta[]>([]);
     public readonly customWords = signal<LocalCustomWordItem[]>([]);
-    public readonly loading = signal<boolean>(false);
 
     // Excel 级纯单元格数据网格状态
     public readonly tailDraft = signal<{ tag: string; cn: string }>({

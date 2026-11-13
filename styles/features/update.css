@@ -6,7 +6,7 @@
  */
 
 /* 1. 更新说明模态窗背景与外壳（布局定位继承自 .da-modal-backdrop） */
-.da-changelog-backdrop {
+.da-modal-backdrop.da-changelog-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.7));
     backdrop-filter: blur(var(--da-blur-modal, 8px));
@@ -85,7 +85,7 @@
 .da-changelog-version-card {
     background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-medium, 10px);
+    border-radius: var(--da-radius-md, 10px);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -94,7 +94,7 @@
 }
 
 .da-changelog-version-card:hover {
-    border-color: var(--da-border-color-hover, rgba(255, 255, 255, 0.18));
+    border-color: var(--da-border-hover, rgba(255, 255, 255, 0.18));
 }
 
 .da-changelog-version-header {
@@ -216,41 +216,6 @@
     background: #f87171;
 }
 
-/* 兼容保留 .da-update-status-badge 类 */
-.da-update-status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 0.8em;
-    font-weight: 500;
-}
-
-.da-update-status-badge--success {
-    background: rgba(34, 197, 94, 0.12);
-    color: #4ade80;
-    border: 1px solid rgba(34, 197, 94, 0.28);
-}
-
-.da-update-status-badge--warn {
-    background: rgba(234, 179, 8, 0.12);
-    color: #facc15;
-    border: 1px solid rgba(234, 179, 8, 0.28);
-}
-
-.da-update-status-badge--info {
-    background: rgba(59, 130, 246, 0.12);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.28);
-}
-
-.da-update-status-badge--error {
-    background: rgba(239, 68, 68, 0.12);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.28);
-}
-
 /* 6. 顶栏品牌标识与独立操作工具行 */
 .da-about-header {
     display: flex;
@@ -315,7 +280,7 @@
 .da-settings-group {
     background: var(--da-bg-card, rgba(255, 255, 255, 0.025));
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.07));
-    border-radius: var(--da-radius-medium, 10px);
+    border-radius: var(--da-radius-md, 10px);
     overflow: hidden;
     display: flex;
     flex-direction: column;

@@ -149,7 +149,7 @@
 }
 
 /* 2. 独立 LoRA 管理模态框 (.da-lora-modal-panel) */
-.da-lora-modal-backdrop {
+.da-modal-backdrop.da-lora-modal-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
 }
 

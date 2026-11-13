@@ -24,6 +24,7 @@ const NUMERIC_PLACEHOLDERS = new Set([
     '%height%',
     '%denoise%',
     '%batch_size%',
+    '%mask_blur%',
 ]);
 
 /**

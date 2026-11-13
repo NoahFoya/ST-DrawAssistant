@@ -13,7 +13,6 @@ import type { Disposable } from '../types';
 import type { StorageSummaryData } from '../composite/storage-bar';
 import { StorageMaintenanceService } from './storage-maintenance';
 import { imageStorage } from '../../store/image-storage';
-import { urlPool } from '../../store/url-pool';
 import { eventBus } from '../../util/event-bus';
 import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
 import { Toast } from '../feedback/toast';
@@ -43,6 +42,8 @@ export class GalleryViewModel implements Disposable {
 
     /** 当前页已解析的图像 URL 映射表 (imageId -> url) */
     public readonly pageUrlMap: Signal<Map<string, string>>;
+    /** 已确认无法载入的图像 ID 集合（由视图模型统一收敛失败态，防止卡片死循环自动重试） */
+    public readonly loadFailedIds: Signal<Set<string>>;
 
     /** 经过关键词、引擎、收藏状态与排序后的记录列表 */
     public readonly filteredRecords: ReadonlySignal<StoredImageRecord[]>;
@@ -52,6 +53,7 @@ export class GalleryViewModel implements Disposable {
     public readonly pageRecords: ReadonlySignal<StoredImageRecord[]>;
 
     private readonly allocatedBlobUrls: string[] = [];
+    private readonly autoRecoveryAttemptedIds = new Set<string>();
     private readonly disposers: (() => void)[] = [];
     private renderSeq = 0;
 
@@ -78,6 +80,7 @@ export class GalleryViewModel implements Disposable {
         this.isBatchMode = signal<boolean>(false);
         this.selectedIds = signal<Set<string>>(new Set());
         this.pageUrlMap = signal<Map<string, string>>(new Map());
+        this.loadFailedIds = signal<Set<string>>(new Set());
 
         this.filteredRecords = computed(() => {
             let result = [...this.allRecords.value];
@@ -157,6 +160,10 @@ export class GalleryViewModel implements Disposable {
      */
     public async refresh(): Promise<void> {
         try {
+            this.autoRecoveryAttemptedIds.clear();
+            if (this.loadFailedIds.value.size > 0) {
+                this.loadFailedIds.value = new Set();
+            }
             const records = await imageStorage.listImages({ limit: 10000 });
             this.allRecords.value = records;
             this.storageSummary.value = await StorageMaintenanceService.computeStorageSummary(
@@ -173,7 +180,7 @@ export class GalleryViewModel implements Disposable {
     }
 
     /**
-     * 为当前页记录异步解析本地 Blob URL。
+     * 为当前页记录异步解析本地 Blob URL（独立于楼层会话 urlPool，防止切会话时误释放图库资源）。
      */
     public async resolveCurrentPageUrls(): Promise<void> {
         const seq = ++this.renderSeq;
@@ -182,14 +189,12 @@ export class GalleryViewModel implements Disposable {
         const newUrls: string[] = [];
 
         for (const record of items) {
-            let displayUrl = record.remotePath
-                ? record.remotePath
-                : urlPool.getUrl(record.imageId);
+            let displayUrl: string | undefined = record.remotePath || undefined;
 
             if (!displayUrl) {
                 try {
                     const blob = await imageStorage.getImageBlob(record.imageId);
-                    if (blob) {
+                    if (blob && blob.size > 0) {
                         displayUrl = URL.createObjectURL(blob);
                         newUrls.push(displayUrl);
                     }
@@ -220,14 +225,86 @@ export class GalleryViewModel implements Disposable {
     }
 
     /**
-     * 获取指定记录的展示 URL。
+     * 获取指定记录的展示 URL（优先使用页面已解析或回退生成的有效 URL，其次使用 remotePath）。
      */
     public getDisplayUrl(record: StoredImageRecord): string | undefined {
-        return (
-            record.remotePath ||
-            urlPool.getUrl(record.imageId) ||
-            this.pageUrlMap.value.get(record.imageId)
-        );
+        return this.pageUrlMap.value.get(record.imageId) || record.remotePath;
+    }
+
+    /**
+     * 当图库卡片加载异常或用户点击重试时，尝试从 IndexedDB 重新生成本地 Blob URL。
+     *
+     * @remarks
+     * 静默自动恢复在同一页面周期内对同一 `imageId` 仅允许执行一次：
+     * 若新 URL 仍触发 `error`（如存储中是非空但不可解码的损坏二进制），直接进入 `loadFailedIds`
+     * 终止进一步重试，仅当用户手动点击「重试」时清除拦截重新载入。
+     */
+    public async retryLoadRecord(imageId: string, silent = false): Promise<boolean> {
+        const markFailed = () => {
+            if (!this.loadFailedIds.value.has(imageId)) {
+                const nextFailed = new Set(this.loadFailedIds.value);
+                nextFailed.add(imageId);
+                this.loadFailedIds.value = nextFailed;
+            }
+        };
+
+        const clearFailed = () => {
+            if (this.loadFailedIds.value.has(imageId)) {
+                const nextFailed = new Set(this.loadFailedIds.value);
+                nextFailed.delete(imageId);
+                this.loadFailedIds.value = nextFailed;
+            }
+        };
+
+        if (silent) {
+            if (this.autoRecoveryAttemptedIds.has(imageId)) {
+                markFailed();
+                return false;
+            }
+            this.autoRecoveryAttemptedIds.add(imageId);
+        } else {
+            this.autoRecoveryAttemptedIds.delete(imageId);
+            clearFailed();
+        }
+
+        try {
+            const blob = await imageStorage.getImageBlob(imageId);
+            if (!blob || blob.size === 0) {
+                markFailed();
+                if (!silent) {
+                    Toast.warning('本地存储中未找到有效图像数据');
+                }
+                return false;
+            }
+
+            const prevUrl = this.pageUrlMap.value.get(imageId);
+            if (prevUrl && prevUrl.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(prevUrl);
+                } catch {
+                    // 忽略撤销异常
+                }
+                const idx = this.allocatedBlobUrls.indexOf(prevUrl);
+                if (idx !== -1) {
+                    this.allocatedBlobUrls.splice(idx, 1);
+                }
+            }
+
+            const freshUrl = URL.createObjectURL(blob);
+            this.allocatedBlobUrls.push(freshUrl);
+            clearFailed();
+            const nextMap = new Map(this.pageUrlMap.value);
+            nextMap.set(imageId, freshUrl);
+            this.pageUrlMap.value = nextMap;
+            return true;
+        } catch (err) {
+            logger.warn(`[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`, err);
+            markFailed();
+            if (!silent) {
+                Toast.error('重新载入图像失败');
+            }
+            return false;
+        }
     }
 
     public setKeyword(val: string): void {
@@ -464,7 +541,7 @@ export class GalleryViewModel implements Disposable {
             let url = this.getDisplayUrl(r);
             if (!url && r.imageId === focusedImageId) {
                 const blob = await imageStorage.getImageBlob(r.imageId);
-                if (blob) {
+                if (blob && blob.size > 0) {
                     url = URL.createObjectURL(blob);
                     this.allocatedBlobUrls.push(url);
                     const nextMap = new Map(this.pageUrlMap.value);

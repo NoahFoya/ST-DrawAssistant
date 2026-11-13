@@ -30,22 +30,6 @@ export interface ImageStorageService {
     saveImage(record: StoredImageRecord, blob: Blob): Promise<void>;
 
     /**
-     * 仅保存图像元数据记录（不含 Blob）。
-     * 用于在需要提前记录任务索引时建立元数据占位。
-     */
-    saveImageMeta(record: StoredImageRecord): Promise<void>;
-
-    /**
-     * 完成图像保存：写入 Blob 数据并更新元数据字段（mimeType、byteSize、status、metadata）。
-     * 配合 saveImageMeta 支持任务异步完成时的状态与 Blob 提交。
-     */
-    finalizeImage(
-        imageId: string,
-        blob: Blob,
-        updates: Pick<StoredImageRecord, 'mimeType' | 'byteSize' | 'status' | 'metadata'>
-    ): Promise<void>;
-
-    /**
      * 局部更新图像资产元数据字段（如 status、remotePath、favorited）。
      * 不触碰 Blob 数据。
      */
@@ -87,11 +71,3 @@ export interface ImageUrlPool {
     /** 释放管理池中记录的所有 Object URL */
     revokeAll(): void;
 }
-
-/**
- * 将展示索引记录解析为可渲染的图像 URL。
- *
- * @remarks
- * 解析优先级：imageUrl (服务端静态路径) > base64 (内嵌 Data URL) > imageId (读取本地 Blob 并生成临时 Object URL)。
- */
-export type ImageSourceResolver = (entry: DrawingSlotEntry) => Promise<string | undefined>;

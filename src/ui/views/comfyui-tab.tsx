@@ -2,12 +2,10 @@
  * ComfyUI 生图服务专属设置选项卡视图 (ComfyUITabView)。
  *
  * @remarks
- * 基于 Preact JSX、SchemaCard 与 ProviderTabViewModel 构建：
- * 1. 服务连接与状态检测卡片 (ConnectionCardView)；
- * 2. 预设主控工具栏 (PresetToolbarView)；
- * 3. 模型与工作流声明式表单卡片 (SchemaCard)；
- * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView)；
- * 5. 工作流管理器 (WorkflowCardView) 与提示词预设卡片 (PromptPresetCardView)。
+ * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
+ * 1. 顶部服务连接与状态检测卡片 (ProviderTabLayout 内置 ConnectionCardView)；
+ * 2. 生图预设工具栏 (PresetToolbarView) 与统一配置卡片 (CardView)：包含模型/工作流字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
+ * 3. 底部工作流管理器 (WorkflowCardView) 与提示词/LoRA 预设卡片 (PromptPresetCardView)。
  */
 
 import type { VNode } from 'preact';
@@ -92,13 +90,6 @@ export class ComfyUITabView extends PreactSettingsView {
                 placeholder: '选择文生图工作流',
                 options: () => this.vm.txt2imgWorkflowOptions.value,
                 invalidTooltip: (m) => `关联的文生图工作流不存在或已失效 (ID: ${m.txt2imgWorkflowId || ''})`,
-            },
-            {
-                key: 'img2imgWorkflowId',
-                label: '图生图工作流 (img2img)',
-                type: 'select',
-                options: () => this.vm.img2imgWorkflowOptions.value,
-                invalidTooltip: (m) => `关联的图生图工作流不存在或已失效 (ID: ${m.img2imgWorkflowId || ''})`,
             },
             {
                 key: 'inpaintPresetId',
@@ -233,8 +224,8 @@ export class ComfyUITabView extends PreactSettingsView {
                         data={{
                             samplerName: draft.samplerName || 'euler',
                             scheduler: draft.scheduler || 'normal',
-                            steps: draft.steps || 20,
-                            cfgScale: draft.cfgScale || 3.5,
+                            steps: draft.steps ?? 20,
+                            cfgScale: draft.cfgScale ?? 3.5,
                             seed: draft.seed ?? -1,
                         }}
                         onChange={(s) =>

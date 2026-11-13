@@ -12,6 +12,7 @@ import type { ImageGenerationMetadata, StoredImageRecord } from '@types';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { copyTextToClipboard } from '../../util/clipboard';
 import { logger } from '../../util/logger';
 
 export interface ImageInfoModalOpenOptions {
@@ -23,6 +24,8 @@ export interface ImageInfoModalOpenOptions {
     record?: StoredImageRecord;
     /** 可选的打开图片编辑面板回调（移动端可通过此入口唤出编辑面板） */
     onEdit?: () => void;
+    /** 可选的预览原图回调（未提供时回退至浏览器新标签页打开） */
+    onPreview?: (imageUrl: string) => void;
     /** 可选的删除当前图像记录回调 */
     onDelete?: () => void;
 }
@@ -183,7 +186,7 @@ export class ImageInfoModal implements Disposable {
         if (imageUrl) {
             const previewBox = document.createElement('div');
             previewBox.className = 'da-inspect-preview-box';
-            previewBox.title = '点击在新标签页打开原图';
+            previewBox.title = options.onPreview ? '点击放大预览原图' : '点击在新标签页打开原图';
 
             const imgEl = document.createElement('img');
             imgEl.className = 'da-inspect-preview-img';
@@ -193,10 +196,16 @@ export class ImageInfoModal implements Disposable {
 
             const zoomBadge = document.createElement('div');
             zoomBadge.className = 'da-inspect-zoom-badge';
-            zoomBadge.textContent = '打开原图';
+            zoomBadge.textContent = options.onPreview ? '放大预览' : '打开原图';
             previewBox.appendChild(zoomBadge);
 
             previewBox.addEventListener('click', () => {
+                if (options.onPreview) {
+                    const previewCallback = options.onPreview;
+                    this.close();
+                    previewCallback(imageUrl);
+                    return;
+                }
                 window.open(imageUrl, '_blank');
             });
             colVisual.appendChild(previewBox);
@@ -371,21 +380,10 @@ export class ImageInfoModal implements Disposable {
      * 复制文本到剪贴板。
      */
     private async copyText(content: string, successMessage: string): Promise<void> {
-        try {
-            if (navigator?.clipboard?.writeText) {
-                await navigator.clipboard.writeText(content);
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = content;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                textarea.remove();
-            }
+        const ok = await copyTextToClipboard(content);
+        if (ok) {
             Toast.success(successMessage);
-        } catch {
+        } else {
             Toast.error('复制失败，请手动选择复制');
         }
     }

@@ -112,7 +112,6 @@ export function FormatPanel(props: FormatPanelProps): VNode {
         const sample: Record<string, string> = {
             name: '爱丽丝',
             aliases: 'alice|爱丽丝',
-            trigger: 'girl, anime_style',
             description: '金发碧眼的见习魔法使，性格温顺文雅',
             outfits: '学院制服',
             appearance: 'fair_skin, slender, elf',
@@ -140,7 +139,6 @@ export function FormatPanel(props: FormatPanelProps): VNode {
         const sample: Record<string, string> = {
             name: '学院制服',
             aliases: 'school_uniform|制服',
-            trigger: 'school_uniform',
             description: '经典日系深蓝水手服与百褶短裙',
             style: 'sailor_uniform, navy_blue, pleated_skirt',
             headwear: 'white_headband',
@@ -499,220 +497,114 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     </div>
                 </div>
 
-                <div style={{ marginTop: '14px' }}>
-                    {activeTemplateKind.value === 'character' && (
-                        <div className="da-format-template-section">
-                            <div className="da-format-editor-box">
-                                <textarea
-                                    id="da-format-char-textarea"
-                                    className="da-textarea da-format-editor-textarea da-format-char-textarea"
-                                    rows={2}
-                                    value={fmt.characterTemplate}
-                                    placeholder="例如: - 角色: {{name}} (别名: {{aliases}})"
-                                    onInput={(e) =>
-                                        updateFormatConfig({
-                                            characterTemplate: (e.currentTarget as HTMLTextAreaElement).value,
-                                        })
-                                    }
-                                />
-                                {isVariablesDrawerOpen.value && (
-                                    <div className="da-format-editor-drawer">
-                                        <div className="da-format-var-bar">
-                                            <span className="da-format-var-bar__hint">基本属性:</span>
-                                            {CHAR_BASE_VARS.map((item) => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    className="da-format-pill-btn"
-                                                    title={`点击在光标处插入 {{${item.key}}}`}
-                                                    onClick={() =>
-                                                        insertVar('da-format-char-textarea', item.key, (val) =>
-                                                            updateFormatConfig({ characterTemplate: val })
-                                                        )
-                                                    }
-                                                >
-                                                    + {`{{${item.key}}}`} <span className="da-format-pill-btn__label">{item.label}</span>
-                                                </button>
+                <div className="da-format-templates-body">
+                    {(
+                        [
+                            {
+                                kind: 'character' as const,
+                                textareaId: 'da-format-char-textarea',
+                                textareaCls: 'da-format-char-textarea',
+                                value: fmt.characterTemplate,
+                                placeholder: '例如: - 角色: {{name}} (别名: {{aliases}})',
+                                updateValue: (v: string) => updateFormatConfig({ characterTemplate: v }),
+                                groups: [
+                                    { hint: '基本属性:', vars: CHAR_BASE_VARS, isPart: false },
+                                    { hint: '绘画标签:', vars: CHAR_PART_VARS, isPart: true },
+                                ],
+                                totalVars: CHAR_BASE_VARS.length + CHAR_PART_VARS.length,
+                            },
+                            {
+                                kind: 'outfit' as const,
+                                textareaId: 'da-format-outfit-textarea',
+                                textareaCls: 'da-format-outfit-textarea',
+                                value: fmt.outfitTemplate,
+                                placeholder: '例如: - 服装: {{name}} (别名: {{aliases}})',
+                                updateValue: (v: string) => updateFormatConfig({ outfitTemplate: v }),
+                                groups: [
+                                    { hint: '基本属性:', vars: OUTFIT_BASE_VARS, isPart: false },
+                                    { hint: '绘画标签:', vars: OUTFIT_PART_VARS, isPart: true },
+                                ],
+                                totalVars: OUTFIT_BASE_VARS.length + OUTFIT_PART_VARS.length,
+                            },
+                            {
+                                kind: 'macro' as const,
+                                textareaId: 'da-format-macro-textarea',
+                                textareaCls: 'da-format-macro-textarea',
+                                value: fmt.macroTemplate || DEFAULT_FORMAT_TEMPLATES.macroTemplate,
+                                placeholder: '例如: - {{macro}}: {{description}}',
+                                updateValue: (v: string) => updateFormatConfig({ macroTemplate: v }),
+                                groups: [
+                                    {
+                                        hint: '基础信息:',
+                                        vars: [
+                                            { key: 'macro', label: '宏指令' },
+                                            { key: 'description', label: '功能说明' },
+                                            { key: 'parts', label: '展开部位' },
+                                        ],
+                                        isPart: false,
+                                    },
+                                ],
+                                totalVars: 3,
+                            },
+                        ] as const
+                    )
+                        .filter((cfg) => cfg.kind === activeTemplateKind.value)
+                        .map((cfg) => (
+                            <div key={cfg.kind} className="da-format-template-section">
+                                <div className="da-format-editor-box">
+                                    <textarea
+                                        id={cfg.textareaId}
+                                        className={`da-textarea da-format-editor-textarea ${cfg.textareaCls}`}
+                                        rows={2}
+                                        value={cfg.value}
+                                        placeholder={cfg.placeholder}
+                                        onInput={(e) =>
+                                            cfg.updateValue((e.currentTarget as HTMLTextAreaElement).value)
+                                        }
+                                    />
+                                    {isVariablesDrawerOpen.value && (
+                                        <div className="da-format-editor-drawer">
+                                            {cfg.groups.map((grp) => (
+                                                <div key={grp.hint} className="da-format-var-bar">
+                                                    <span className="da-format-var-bar__hint">{grp.hint}</span>
+                                                    {grp.vars.map((item) => (
+                                                        <button
+                                                            key={item.key}
+                                                            type="button"
+                                                            className={`da-format-pill-btn${grp.isPart ? ' da-format-pill-btn--part' : ''}`}
+                                                            title={`点击在光标处插入 {{${item.key}}}`}
+                                                            onClick={() =>
+                                                                insertVar(cfg.textareaId, item.key, cfg.updateValue)
+                                                            }
+                                                        >
+                                                            + {`{{${item.key}}}`}{' '}
+                                                            <span className="da-format-pill-btn__label">{item.label}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             ))}
                                         </div>
-                                        <div className="da-format-var-bar" style={{ marginTop: '6px' }}>
-                                            <span className="da-format-var-bar__hint">绘画标签:</span>
-                                            {CHAR_PART_VARS.map((item) => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    className="da-format-pill-btn da-format-pill-btn--part"
-                                                    title={`点击在光标处插入 {{${item.key}}}`}
-                                                    onClick={() =>
-                                                        insertVar('da-format-char-textarea', item.key, (val) =>
-                                                            updateFormatConfig({ characterTemplate: val })
-                                                        )
-                                                    }
-                                                >
-                                                    + {`{{${item.key}}}`} <span className="da-format-pill-btn__label">{item.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
+                                    )}
+                                    <div className="da-format-editor-footer">
+                                        <button
+                                            type="button"
+                                            className="da-format-var-toggle-btn"
+                                            onClick={() => {
+                                                isVariablesDrawerOpen.value = !isVariablesDrawerOpen.value;
+                                            }}
+                                            title={isVariablesDrawerOpen.value ? '收起变量库' : '展开可用变量库'}
+                                        >
+                                            <span className="da-format-var-toggle-btn__text">
+                                                {isVariablesDrawerOpen.value ? '收起可用变量 ▴' : '展开可用变量 ▾'}
+                                            </span>
+                                            <span className="da-format-var-toggle-btn__count">
+                                                ({cfg.totalVars})
+                                            </span>
+                                        </button>
                                     </div>
-                                )}
-                                <div className="da-format-editor-footer">
-                                    <button
-                                        type="button"
-                                        className="da-format-var-toggle-btn"
-                                        onClick={() => {
-                                            isVariablesDrawerOpen.value = !isVariablesDrawerOpen.value;
-                                        }}
-                                        title={isVariablesDrawerOpen.value ? '收起变量库' : '展开可用变量库'}
-                                    >
-                                        <span className="da-format-var-toggle-btn__text">
-                                            {isVariablesDrawerOpen.value ? '收起可用变量 ▴' : '展开可用变量 ▾'}
-                                        </span>
-                                        <span className="da-format-var-toggle-btn__count">
-                                            ({CHAR_BASE_VARS.length + CHAR_PART_VARS.length})
-                                        </span>
-                                    </button>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {activeTemplateKind.value === 'outfit' && (
-                        <div className="da-format-template-section">
-                            <div className="da-format-editor-box">
-                                <textarea
-                                    id="da-format-outfit-textarea"
-                                    className="da-textarea da-format-editor-textarea da-format-outfit-textarea"
-                                    rows={2}
-                                    value={fmt.outfitTemplate}
-                                    placeholder="例如: - 服装: {{name}} (别名: {{aliases}})"
-                                    onInput={(e) =>
-                                        updateFormatConfig({
-                                            outfitTemplate: (e.currentTarget as HTMLTextAreaElement).value,
-                                        })
-                                    }
-                                />
-                                {isVariablesDrawerOpen.value && (
-                                    <div className="da-format-editor-drawer">
-                                        <div className="da-format-var-bar">
-                                            <span className="da-format-var-bar__hint">基本属性:</span>
-                                            {OUTFIT_BASE_VARS.map((item) => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    className="da-format-pill-btn"
-                                                    title={`点击在光标处插入 {{${item.key}}}`}
-                                                    onClick={() =>
-                                                        insertVar('da-format-outfit-textarea', item.key, (val) =>
-                                                            updateFormatConfig({ outfitTemplate: val })
-                                                        )
-                                                    }
-                                                >
-                                                    + {`{{${item.key}}}`} <span className="da-format-pill-btn__label">{item.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="da-format-var-bar" style={{ marginTop: '6px' }}>
-                                            <span className="da-format-var-bar__hint">绘画标签:</span>
-                                            {OUTFIT_PART_VARS.map((item) => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    className="da-format-pill-btn da-format-pill-btn--part"
-                                                    title={`点击在光标处插入 {{${item.key}}}`}
-                                                    onClick={() =>
-                                                        insertVar('da-format-outfit-textarea', item.key, (val) =>
-                                                            updateFormatConfig({ outfitTemplate: val })
-                                                        )
-                                                    }
-                                                >
-                                                    + {`{{${item.key}}}`} <span className="da-format-pill-btn__label">{item.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="da-format-editor-footer">
-                                    <button
-                                        type="button"
-                                        className="da-format-var-toggle-btn"
-                                        onClick={() => {
-                                            isVariablesDrawerOpen.value = !isVariablesDrawerOpen.value;
-                                        }}
-                                        title={isVariablesDrawerOpen.value ? '收起变量库' : '展开可用变量库'}
-                                    >
-                                        <span className="da-format-var-toggle-btn__text">
-                                            {isVariablesDrawerOpen.value ? '收起可用变量 ▴' : '展开可用变量 ▾'}
-                                        </span>
-                                        <span className="da-format-var-toggle-btn__count">
-                                            ({OUTFIT_BASE_VARS.length + OUTFIT_PART_VARS.length})
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTemplateKind.value === 'macro' && (
-                        <div className="da-format-template-section">
-                            <div className="da-format-editor-box">
-                                <textarea
-                                    id="da-format-macro-textarea"
-                                    className="da-textarea da-format-editor-textarea da-format-macro-textarea"
-                                    rows={2}
-                                    value={fmt.macroTemplate || DEFAULT_FORMAT_TEMPLATES.macroTemplate}
-                                    placeholder="例如: - {{macro}}: {{description}}"
-                                    onInput={(e) =>
-                                        updateFormatConfig({
-                                            macroTemplate: (e.currentTarget as HTMLTextAreaElement).value,
-                                        })
-                                    }
-                                />
-                                {isVariablesDrawerOpen.value && (
-                                    <div className="da-format-editor-drawer">
-                                        <div className="da-format-var-bar">
-                                            <span className="da-format-var-bar__hint">基础信息:</span>
-                                            {[
-                                                { key: 'macro', label: '宏指令' },
-                                                { key: 'description', label: '功能说明' },
-                                                { key: 'parts', label: '展开部位' },
-                                            ].map((item) => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    className="da-format-pill-btn"
-                                                    title={`点击在光标处插入 {{${item.key}}}`}
-                                                    onClick={() =>
-                                                        insertVar('da-format-macro-textarea', item.key, (val) =>
-                                                            updateFormatConfig({ macroTemplate: val })
-                                                        )
-                                                    }
-                                                >
-                                                    + {`{{${item.key}}}`} <span className="da-format-pill-btn__label">{item.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="da-format-editor-footer">
-                                    <button
-                                        type="button"
-                                        className="da-format-var-toggle-btn"
-                                        onClick={() => {
-                                            isVariablesDrawerOpen.value = !isVariablesDrawerOpen.value;
-                                        }}
-                                        title={isVariablesDrawerOpen.value ? '收起变量库' : '展开可用变量库'}
-                                    >
-                                        <span className="da-format-var-toggle-btn__text">
-                                            {isVariablesDrawerOpen.value ? '收起可用变量 ▴' : '展开可用变量 ▾'}
-                                        </span>
-                                        <span className="da-format-var-toggle-btn__count">
-                                            (3)
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                        ))}
                 </div>
             </CardView>
 

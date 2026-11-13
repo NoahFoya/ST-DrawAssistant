@@ -143,18 +143,6 @@
 }
 
 
-.da-empty-hint {
-    padding: 24px 16px;
-    border-radius: var(--da-radius-input, 8px);
-    background: var(--da-bg-surface-subtle);
-    border: 1px dashed var(--da-border-color);
-    color: var(--da-text-secondary);
-    font-size: var(--da-font-size-xs, 12px);
-    line-height: 1.6;
-    text-align: center;
-}
-
-
 .da-lexicon-files-list {
     display: flex;
     flex-direction: column;

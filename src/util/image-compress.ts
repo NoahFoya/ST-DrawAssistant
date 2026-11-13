@@ -37,7 +37,8 @@ export async function applyImageStorageQuality(
             if (ctx) {
                 ctx.drawImage(bitmap, 0, 0);
                 bitmap.close();
-                return await canvas.convertToBlob({ type: 'image/webp', quality: qualityValue });
+                const converted = await canvas.convertToBlob({ type: 'image/webp', quality: qualityValue });
+                return converted && converted.size > 0 ? converted : blob;
             }
             bitmap.close();
         } else if (typeof document !== 'undefined') {
@@ -57,7 +58,7 @@ export async function applyImageStorageQuality(
                     ctx.drawImage(img, 0, 0);
                     return await new Promise<Blob>((resolve) => {
                         canvas.toBlob(
-                            (b) => resolve(b || blob),
+                            (b) => resolve(b && b.size > 0 ? b : blob),
                             'image/webp',
                             qualityValue
                         );

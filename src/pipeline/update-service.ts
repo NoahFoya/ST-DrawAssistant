@@ -4,7 +4,7 @@
  * @remarks
  * 负责插件版本更新检测、更新说明拉取与宿主同步：
  * 1. 在线检测：请求 GitHub Commits API 进行提交 SHA 差异比对，支持官方端点与镜像加速端点自动容错；
- * 2. 状态通知：维护响应式 UpdateState 并在状态变更时广播事件与通知订阅者；
+ * 2. 状态通知：维护响应式 UpdateState 并在状态变更时广播事件；
  * 3. 宿主协同：调用 SillyTavern 服务端 `/api/extensions/update` 端点执行版本同步，并在完成后引导热重载；
  * 4. 更新说明：提供结构化更新日志数据源，保障离线与弱网环境下的可用性。
  */
@@ -38,7 +38,6 @@ export class UpdateService {
     }
 
     private _state: UpdateState;
-    private readonly _listeners = new Set<(state: Readonly<UpdateState>) => void>();
 
     private constructor() {
         const initialSha = this.getLocalInstalledCommitSha();
@@ -91,31 +90,10 @@ export class UpdateService {
     }
 
     /**
-     * 订阅状态变更通知。
-     *
-     * @param listener 状态回调函数
-     * @returns 解绑函数
-     */
-    public subscribe(listener: (state: Readonly<UpdateState>) => void): () => void {
-        this._listeners.add(listener);
-        listener(this._state);
-        return () => {
-            this._listeners.delete(listener);
-        };
-    }
-
-    /**
      * 内部更新状态并分发通知。
      */
     private setState(patch: Partial<UpdateState>): void {
         this._state = { ...this._state, ...patch };
-        for (const listener of this._listeners) {
-            try {
-                listener(this._state);
-            } catch (err) {
-                logger.error('[UpdateService] 监听器执行异常:', err);
-            }
-        }
         eventBus.emit('update:status-changed', this._state);
     }
 

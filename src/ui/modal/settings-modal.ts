@@ -46,16 +46,12 @@ class PlaceholderTabView implements SettingsView {
         inner.className = 'da-tab-placeholder';
 
         const heading = document.createElement('h3');
+        heading.className = 'da-tab-placeholder__title';
         heading.textContent = title;
-        heading.style.margin = '0 0 8px 0';
-        heading.style.fontSize = '16px';
-        heading.style.fontWeight = '600';
 
         const desc = document.createElement('p');
+        desc.className = 'da-tab-placeholder__desc';
         desc.textContent = description;
-        desc.style.margin = '0';
-        desc.style.fontSize = '13px';
-        desc.style.opacity = '0.75';
 
         inner.appendChild(heading);
         inner.appendChild(desc);
@@ -605,7 +601,7 @@ export class SettingsModal implements Disposable {
 
         // 1. 全屏毛玻璃遮罩层 (.da-modal-backdrop--fullscreen)
         this.backdropElement = document.createElement('div');
-        this.backdropElement.className = 'da-modal-backdrop da-modal-backdrop--fullscreen da-settings-modal-backdrop';
+        this.backdropElement.className = 'da-modal-backdrop da-modal-backdrop--fullscreen st-da-root da-settings-modal-backdrop';
 
         // 点击遮罩空白区关闭
         this.backdropElement.addEventListener('click', (e) => {

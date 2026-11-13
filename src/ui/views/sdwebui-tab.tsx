@@ -2,13 +2,11 @@
  * SD-WebUI / Forge 生图服务专属设置选项卡视图 (SDWebUITabView)。
  *
  * @remarks
- * 基于 Preact JSX、SchemaCard 与 ProviderTabViewModel 构建：
- * 1. 服务连接与状态检测卡片 (ConnectionCardView)；
- * 2. 预设主控工具栏 (PresetToolbarView)；
- * 3. 模型与网络架构卡片 (SchemaCard)；
- * 4. 画幅尺寸与采样控制卡片 (DimensionPickerView + SamplerCardView)；
- * 5. 高清修复 (Hires. fix) 级联声明式卡片 (SchemaCard，子项通过 disabledWhen 联动)；
- * 6. 底部提示词与通用 LoRA 预设卡片 (PromptPresetCardView)。
+ * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
+ * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView)；
+ * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与网络架构字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
+ * 3. 高清修复 (Hires. fix) 级联声明式卡片 (SchemaCard，子项通过 disabledWhen 联动)；
+ * 4. 底部提示词与通用 LoRA 预设卡片 (PromptPresetCardView)。
  */
 
 import type { VNode } from 'preact';
@@ -34,6 +32,14 @@ const SDWEBUI_DEFAULT_SAMPLERS = [
     { label: 'Euler', value: 'Euler' },
     { label: 'DDIM', value: 'DDIM' },
     { label: 'UniPC', value: 'UniPC' },
+];
+
+const SDWEBUI_DEFAULT_SCHEDULERS = [
+    { label: 'Automatic', value: 'Automatic' },
+    { label: 'Karras', value: 'Karras' },
+    { label: 'Exponential', value: 'Exponential' },
+    { label: 'Polyexponential', value: 'Polyexponential' },
+    { label: 'SGM Uniform', value: 'SGM Uniform' },
 ];
 
 const HIRES_UPSCALER_OPTIONS = [
@@ -64,6 +70,7 @@ export class SDWebUITabView extends PreactSettingsView {
             promptMessageForNew: '请输入新生图预设名称:',
             defaultNewName: '新建预设',
             defaultSamplers: SDWEBUI_DEFAULT_SAMPLERS,
+            defaultSchedulers: SDWEBUI_DEFAULT_SCHEDULERS,
             validateRequired: (cfg) => {
                 const missing: string[] = [];
                 if (!cfg.baseModel) missing.push('主模型');
@@ -213,6 +220,7 @@ export class SDWebUITabView extends PreactSettingsView {
         const isDimsDirty = dirtyFields.has('width') || dirtyFields.has('height');
         const isSamplerDirty =
             dirtyFields.has('samplerName') ||
+            dirtyFields.has('scheduler') ||
             dirtyFields.has('steps') ||
             dirtyFields.has('cfgScale') ||
             dirtyFields.has('seed');
@@ -271,18 +279,21 @@ export class SDWebUITabView extends PreactSettingsView {
 
                     <SamplerCardView
                         embedded={true}
-                        showScheduler={false}
+                        showScheduler={true}
                         samplers={this.vm.samplerOptions.value}
+                        schedulers={this.vm.schedulerOptions.value}
                         dirty={isSamplerDirty}
                         data={{
                             samplerName: draft.samplerName || 'DPM++ 2M Karras',
-                            steps: draft.steps || 28,
-                            cfgScale: draft.cfgScale || 7.0,
+                            scheduler: draft.scheduler || 'Automatic',
+                            steps: draft.steps ?? 28,
+                            cfgScale: draft.cfgScale ?? 7.0,
                             seed: draft.seed ?? -1,
                         }}
                         onChange={(s) =>
                             presetController.patchDraft({
                                 samplerName: s.samplerName,
+                                scheduler: s.scheduler,
                                 steps: s.steps,
                                 cfgScale: s.cfgScale,
                                 seed: s.seed,

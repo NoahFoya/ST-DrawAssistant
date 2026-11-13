@@ -12,6 +12,7 @@
 import type { DrawingSlotEntry } from '@types';
 import { settingsStore } from '../store/settings-store';
 import { imageStorage } from '../store/image-storage';
+import { blobToBase64 } from '../util/http-client';
 import { logger } from '../util/logger';
 
 /** 服务端存储同步检查与执行结果 */
@@ -41,55 +42,14 @@ export class ServerStorageService {
     /**
      * 将图像 Blob 对象转为 Base64 字符串。
      *
-     * @remarks
-     * 优先通过标准 arrayBuffer 异步读取二进制缓冲区并编码为 Base64。
-     *
      * @param blob 目标二进制数据
-     * @param withPrefix 是否包含 data:image/png;base64, 前缀
+     * @param withPrefix 是否包含 `data:<mime>;base64,` 前缀
      */
     public async convertBlobToBase64(blob?: Blob | null, withPrefix = true): Promise<string> {
         if (!blob) {
             return '';
         }
-
-        const mimeType = blob.type || 'image/png';
-
-        // 1. 优先使用标准 arrayBuffer 读取二进制缓冲区
-        if (typeof blob.arrayBuffer === 'function') {
-            const buffer = await blob.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            let binary = '';
-            const chunkSize = 8192;
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-            }
-            const base64 = btoa(binary);
-            return withPrefix ? `data:${mimeType};base64,${base64}` : base64;
-        }
-
-        // 2. 备用：原生 FileReader 异步读取
-        if (typeof FileReader !== 'undefined') {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    if (!result) {
-                        resolve('');
-                        return;
-                    }
-                    if (withPrefix) {
-                        resolve(result);
-                    } else {
-                        const commaIndex = result.indexOf(',');
-                        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
-                    }
-                };
-                reader.onerror = () => reject(reader.error ?? new Error('FileReader 转换 Base64 失败'));
-                reader.readAsDataURL(blob);
-            });
-        }
-
-        return '';
+        return blobToBase64(blob, withPrefix);
     }
 
     /**
@@ -171,8 +131,8 @@ export class ServerStorageService {
         let finalImageUrl = slot.imageUrl;
         let hasChanges = false;
 
-        // 若本地数据库已有 remotePath 记录，优先直接复用
-        if (slot.imageId && !finalImageUrl) {
+        // 仅在启用服务端转存时复用本地记录中的 remotePath，关闭该开关时不再绑定远程路径
+        if (settings.saveToServer && slot.imageId && !finalImageUrl) {
             try {
                 const localRecord = await imageStorage.getImageRecord(slot.imageId);
                 if (localRecord?.remotePath) {

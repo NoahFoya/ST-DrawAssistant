@@ -2,13 +2,11 @@
  * OpenAI 兼容生图服务专属设置选项卡视图 (OpenAITabView)。
  *
  * @remarks
- * 基于 Preact JSX、SchemaCard 与 ProviderTabViewModel 构建：
- * 1. 服务连接与状态检测卡片 (ConnectionCardView，支持服务商模板与 Bearer Token)；
- * 2. 预设主控工具栏 (PresetToolbarView)；
- * 3. 生图模型与提示词卡片 (SchemaCard)；
- * 4. 画幅规格与渲染档位卡片 (DimensionPickerView + quality/style)；
- * 5. 自定义请求体 JSON 扩展卡片（实时语法校验，非法时标红 .is-invalid 并拦截保存）；
- * 6. 提示词预设卡片 (PromptPresetCardView，showLora: false, showNegativePrompt: false)。
+ * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
+ * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持服务商模板与 Bearer Token)；
+ * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 专属 quality/style；
+ * 3. 自定义请求参数 JSON 扩展卡片（支持实时语法校验，非法时标红 .is-invalid 并拦截保存）；
+ * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false, showNegativeInPromptManager: false)。
  */
 
 import { signal, type Signal } from '@preact/signals';
@@ -20,6 +18,7 @@ import {
     CardView,
     SchemaFieldsView,
     SchemaFieldRenderer,
+    TextareaControl,
     type FieldSchema,
     DimensionPickerView,
     OPENAI_ASPECT_RATIOS,
@@ -31,6 +30,7 @@ import { ProviderTabLayout } from './provider-tab-layout';
 const OPENAI_MODEL_OPTIONS = [
     { label: 'dall-e-3', value: 'dall-e-3' },
     { label: 'dall-e-2', value: 'dall-e-2' },
+    { label: 'gpt-image-1', value: 'gpt-image-1' },
     { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
     { label: 'black-forest-labs/FLUX.1-schnell', value: 'black-forest-labs/FLUX.1-schnell' },
     { label: 'black-forest-labs/FLUX.1-dev', value: 'black-forest-labs/FLUX.1-dev' },
@@ -114,6 +114,14 @@ export class OpenAITabView extends PreactSettingsView {
             provider: 'openai',
             defaultServerUrl: 'https://api.openai.com/v1',
             defaultServiceId: 'openai-official',
+            serviceProfiles: {
+                defaultUrls: Object.fromEntries(
+                    OPENAI_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [
+                        p.id,
+                        p.defaultUrl,
+                    ])
+                ),
+            },
             idPrefix: 'openai_',
             promptMessageForNew: '请输入新生图预设名称:',
             defaultNewName: '新建预设',
@@ -195,10 +203,12 @@ export class OpenAITabView extends PreactSettingsView {
             return true;
         }
         try {
-            JSON.parse(trimmed);
-            this.isJsonValid.value = true;
-            this.vm.presetController.setFieldInvalid('customBodyJson', false);
-            return true;
+            const parsed: unknown = JSON.parse(trimmed);
+            const isPlainObject =
+                parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+            this.isJsonValid.value = isPlainObject;
+            this.vm.presetController.setFieldInvalid('customBodyJson', !isPlainObject);
+            return isPlainObject;
         } catch {
             this.isJsonValid.value = false;
             this.vm.presetController.setFieldInvalid('customBodyJson', true);
@@ -219,18 +229,13 @@ export class OpenAITabView extends PreactSettingsView {
         const dirtyFields = presetController.dirtyFields.value;
         const invalidFields = presetController.invalidFields.value;
 
+        const effectiveModel =
+            (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'dall-e-3';
+        const isDallE3 = effectiveModel.toLowerCase().includes('dall-e-3');
+
         const isDimsDirty = dirtyFields.has('width') || dirtyFields.has('height');
         const isJsonDirty = dirtyFields.has('customBodyJson');
         const isJsonInvalid = !this.isJsonValid.value || invalidFields.has('customBodyJson');
-
-        const textareaClasses = [
-            'da-textarea',
-            'da-custom-body-json',
-            isJsonDirty ? 'is-dirty' : '',
-            isJsonInvalid ? 'is-invalid' : '',
-        ]
-            .filter(Boolean)
-            .join(' ');
 
         return (
             <ProviderTabLayout
@@ -281,24 +286,32 @@ export class OpenAITabView extends PreactSettingsView {
                         }
                     />
 
-                    <div className="da-section-banner">
-                        <span className="da-section-banner__title">画质与风格 (DALL-E 3)</span>
-                    </div>
+                    {isDallE3 && (
+                        <>
+                            <div className="da-section-banner">
+                                <span className="da-section-banner__title">画质与风格 (DALL-E 3)</span>
+                            </div>
 
-                    <SchemaFieldRenderer
-                        schema={QUALITY_FIELD}
-                        model={draft}
-                        dirty={dirtyFields.has('quality')}
-                        invalid={invalidFields.has('quality')}
-                        onChange={(val) => presetController.updateDraft('quality', val)}
-                    />
-                    <SchemaFieldRenderer
-                        schema={STYLE_FIELD}
-                        model={draft}
-                        dirty={dirtyFields.has('style')}
-                        invalid={invalidFields.has('style')}
-                        onChange={(val) => presetController.updateDraft('style', val)}
-                    />
+                            <SchemaFieldRenderer
+                                schema={QUALITY_FIELD}
+                                model={draft}
+                                dirty={dirtyFields.has('quality')}
+                                invalid={invalidFields.has('quality')}
+                                onChange={(val) =>
+                                    presetController.updateDraft('quality', val as DrawingPresetData['quality'])
+                                }
+                            />
+                            <SchemaFieldRenderer
+                                schema={STYLE_FIELD}
+                                model={draft}
+                                dirty={dirtyFields.has('style')}
+                                invalid={invalidFields.has('style')}
+                                onChange={(val) =>
+                                    presetController.updateDraft('style', val as DrawingPresetData['style'])
+                                }
+                            />
+                        </>
+                    )}
                 </CardView>
 
                 <CardView title="自定义请求参数 (JSON)">
@@ -309,21 +322,16 @@ export class OpenAITabView extends PreactSettingsView {
                                 可选填入合法 JSON 对象，生图请求时将合并至请求体顶层
                             </span>
                         </div>
-                        <textarea
-                            className={textareaClasses}
+                        <TextareaControl
+                            className="da-custom-body-json"
+                            monospace
                             rows={4}
+                            dirty={isJsonDirty}
+                            invalid={isJsonInvalid}
                             placeholder={'{\n  "response_format": "b64_json"\n}'}
                             value={this.rawJsonInput.value}
-                            onInput={(e) =>
-                                this.handleJsonInput(
-                                    (e.currentTarget as HTMLTextAreaElement).value
-                                )
-                            }
-                            onBlur={(e) =>
-                                this.handleJsonInput(
-                                    (e.currentTarget as HTMLTextAreaElement).value
-                                )
-                            }
+                            onChange={(val) => this.handleJsonInput(val)}
+                            onBlur={(val) => this.handleJsonInput(val)}
                         />
                     </div>
                 </CardView>

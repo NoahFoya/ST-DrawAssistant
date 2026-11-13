@@ -45,7 +45,7 @@
 /* 2. 工作流变量格式化诊断弹窗 (.da-workflow-format-modal)
    用于呈现 ComfyUI 工作流中的宏变量替换诊断报告，
    展示变量匹配率、未匹配占位符警示以及格式化前后的 JSON 结构比对。 */
-.da-workflow-format-backdrop {
+.da-modal-backdrop.da-workflow-format-backdrop {
     background: var(--da-bg-overlay-modal);
     z-index: var(--da-z-secondary-modal, 10020);
 }
@@ -67,6 +67,10 @@
 }
 
 .da-workflow-format-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
     font-size: 0.9em;
     color: var(--da-text-secondary);
     line-height: 1.5;
@@ -74,6 +78,13 @@
     background: var(--da-bg-card);
     border-radius: var(--da-radius-sm, 4px);
     border: 1px solid var(--da-border-color);
+}
+
+.da-workflow-format-error {
+    color: var(--da-color-error);
+    padding: 12px;
+    background: rgba(var(--da-color-error-rgb), 0.08);
+    border-radius: var(--da-radius-md);
 }
 
 .da-workflow-format-section {
@@ -284,7 +295,7 @@
 }
 
 /* 5. ComfyUI 蓝图可视化节点编辑器 (.da-blueprint-*) */
-.da-blueprint-backdrop {
+.da-modal-backdrop.da-blueprint-backdrop {
     background: var(--da-bg-overlay-modal);
     z-index: var(--da-z-secondary-modal, 10020);
     backdrop-filter: blur(4px);
@@ -842,14 +853,6 @@
     font-size: 0.78rem;
     color: var(--da-accent-color);
     font-family: var(--da-font-mono, monospace);
-}
-
-.da-blueprint-textarea-field {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: var(--da-font-mono, monospace);
-    font-size: 0.78rem;
-    resize: vertical;
 }
 
 .da-blueprint-footer {

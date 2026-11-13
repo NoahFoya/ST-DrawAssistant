@@ -5,7 +5,7 @@
   "activeProvider": "comfyui",
   "transport": "direct",
   "taskTimeoutMs": 120000,
-  "cancelOnChatChange": false,
+  "cancelOnChatChange": true,
   "saveToServer": false,
   "imageQuality": "original",
   "autoGenerate": false,

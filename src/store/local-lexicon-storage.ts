@@ -357,11 +357,11 @@ export class LocalLexiconStorage {
     }
 
     private async _setItem<T>(key: string, value: T): Promise<void> {
-        this._memoryFallback.set(key, structuredClone(value));
         try {
             await this._store.setItem(key, value);
         } catch {
-            // 忽略非浏览器环境驱动缺失异常
+            // 非浏览器环境驱动缺失时回退到内存存储
+            this._memoryFallback.set(key, structuredClone(value));
         }
     }
 

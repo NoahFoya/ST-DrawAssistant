@@ -182,7 +182,7 @@
     --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35);
     --da-focus-visible-ring: 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color);
 
-    /* 14. 语义兼容别名与未绑定变量统一映射 */
+    /* 15. 语义兼容别名与未绑定变量统一映射 */
     --da-primary: var(--da-accent-color);
     --da-accent: var(--da-accent-color);
     --da-accent-primary: var(--da-accent-color);

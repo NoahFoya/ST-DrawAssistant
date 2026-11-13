@@ -8,17 +8,12 @@
  * 3. 移动端与小屏弹性适配，避免外层页面纵向撑高与视口溢出。
  */
 
-/* 1. 局部重绘模态背景与视窗 */
-.da-inpaint-backdrop {
-    position: fixed;
-    inset: 0;
+/* 1. 局部重绘模态背景与视窗（布局定位继承 .da-modal-backdrop 动态可视视口 --da-vv*） */
+.da-modal-backdrop.da-inpaint-backdrop {
     z-index: var(--da-z-viewer, 10045);
     background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
     backdrop-filter: blur(var(--da-blur-modal, 14px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px));
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 16px;
     box-sizing: border-box;
     animation: da-fadein 0.2s var(--da-ease, ease-out);
@@ -291,7 +286,7 @@
     font-size: 12px;
     line-height: 1.5;
     padding: 8px 10px;
-    border-radius: var(--da-radius-small, 6px);
+    border-radius: var(--da-radius-sm, 6px);
     background: var(--da-bg-input, #0a0c14);
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
     color: var(--da-text-primary, #ffffff);

@@ -42,8 +42,8 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
         settings.promptInjection || {
             story: { enabled: true, activePresetId: '' },
             character: { enabled: false, activePresetId: '' },
-            vocab: { enabled: true, activePresetId: '' },
-            material: { enabled: true, activePresetId: '' },
+            vocab: { enabled: false, activePresetId: '' },
+            material: { enabled: false, activePresetId: '' },
         };
 
     const handleCopyText = async (key: string, text: string) => {

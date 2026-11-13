@@ -44,48 +44,22 @@ function ColorPickerInput(props: {
     const validHex = /^#[0-9a-fA-F]{6}$/.test(rawVal) ? rawVal : '#818cf8';
 
     return (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+        <div className="da-color-picker">
             <label
-                style={{
-                    position: 'relative',
-                    width: '26px',
-                    height: '26px',
-                    borderRadius: '6px',
-                    backgroundColor: rawVal || 'transparent',
-                    border: '1px solid var(--da-border-color)',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--da-inset-top-light)',
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                }}
+                className="da-color-picker__swatch"
+                style={{ backgroundColor: rawVal || 'transparent' }}
                 title="点击打开拾色面板"
             >
                 <input
                     type="color"
+                    className="da-color-picker__native"
                     value={validHex}
                     onInput={(e) => props.onChange((e.target as HTMLInputElement).value)}
-                    style={{
-                        position: 'absolute',
-                        top: '-10px',
-                        left: '-10px',
-                        width: '46px',
-                        height: '46px',
-                        opacity: 0,
-                        cursor: 'pointer',
-                    }}
                 />
             </label>
             <input
                 type="text"
-                className="da-input"
-                style={{
-                    width: '130px',
-                    height: '28px',
-                    textAlign: 'left',
-                    padding: '0 8px',
-                    fontSize: '12px',
-                    fontFamily: 'var(--da-font-mono)',
-                }}
+                className="da-input da-color-picker__text"
                 value={rawVal}
                 placeholder={props.placeholder}
                 onInput={(e) => props.onChange((e.target as HTMLInputElement).value)}
@@ -148,6 +122,7 @@ export class ThemeTabView extends PreactSettingsView {
                     'radiusCard',
                     'radiusInput',
                     'blurModal',
+                    'blurPanel',
                 ];
                 for (const key of numKeys) {
                     if (draft[key] !== snap[key] && draft[key] !== undefined) {
@@ -171,10 +146,11 @@ export class ThemeTabView extends PreactSettingsView {
         const activeThemeId = this.presetController.activePresetId.value || themeService.getActiveThemeId();
         const draft = this.presetController.draftConfig.value;
         const isDirty = this.presetController.isDirty.value;
+        const dirtyFields = this.presetController.dirtyFields.value;
         const currentAccent = (draft.accent || '').toLowerCase();
 
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+            <div className="da-settings-stack">
                 {/* 1. 主题预设管理 */}
                 <CardView title="主题预设">
                     <PresetToolbarView
@@ -189,6 +165,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="常用配色"
                         tooltip="一键快速应用常用品牌主题色"
                         width="auto"
+                        dirty={dirtyFields.has('accent')}
                     >
                         <div className="da-color-palette-group">
                             {ACCENT_COLOR_PALETTE.map((item) => {
@@ -217,6 +194,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="主强调色"
                         tooltip="按钮与高亮元素的主题颜色 (accent)"
                         width="auto"
+                        dirty={dirtyFields.has('accent')}
                     >
                         <ColorPickerInput
                             value={draft.accent}
@@ -229,6 +207,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="辅助渐变色"
                         tooltip="主要按钮与边框的渐变辅助颜色 (accentSecondary)"
                         width="auto"
+                        dirty={dirtyFields.has('accentSecondary')}
                     >
                         <ColorPickerInput
                             value={draft.accentSecondary}
@@ -241,6 +220,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="主按钮文字颜色"
                         tooltip="主要操作按钮上的文字颜色 (深色背景填白色，浅色背景填深色)"
                         width="auto"
+                        dirty={dirtyFields.has('textOnAccent')}
                     >
                         <ColorPickerInput
                             value={draft.textOnAccent}
@@ -256,6 +236,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="窗口背景"
                         tooltip="弹窗主界面的背景颜色 (bgPrimary)"
                         width="auto"
+                        dirty={dirtyFields.has('bgPrimary')}
                     >
                         <ColorPickerInput
                             value={draft.bgPrimary}
@@ -268,6 +249,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="侧边栏背景"
                         tooltip="左侧导航栏的背景颜色 (bgSecondary)"
                         width="auto"
+                        dirty={dirtyFields.has('bgSecondary')}
                     >
                         <ColorPickerInput
                             value={draft.bgSecondary}
@@ -280,6 +262,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="卡片背景"
                         tooltip="内容卡片的背景颜色，比窗口背景稍亮可增强层次感 (bgCard)"
                         width="auto"
+                        dirty={dirtyFields.has('bgCard')}
                     >
                         <ColorPickerInput
                             value={draft.bgCard}
@@ -292,6 +275,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="卡片悬停背景"
                         tooltip="鼠标滑过卡片时的背景颜色 (bgCardHover)"
                         width="auto"
+                        dirty={dirtyFields.has('bgCardHover')}
                     >
                         <ColorPickerInput
                             value={draft.bgCardHover}
@@ -304,6 +288,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="输入框背景"
                         tooltip="文本框与选择框的底色 (bgInput)"
                         width="auto"
+                        dirty={dirtyFields.has('bgInput')}
                     >
                         <ColorPickerInput
                             value={draft.bgInput}
@@ -319,6 +304,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="边框颜色"
                         tooltip="卡片与控件的外围边框线颜色 (borderColor)"
                         width="auto"
+                        dirty={dirtyFields.has('borderColor')}
                     >
                         <ColorPickerInput
                             value={draft.borderColor}
@@ -331,6 +317,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="高亮边框颜色"
                         tooltip="卡片悬停与聚焦时的边框高亮颜色 (borderHighlight)"
                         width="auto"
+                        dirty={dirtyFields.has('borderHighlight')}
                     >
                         <ColorPickerInput
                             value={draft.borderHighlight}
@@ -343,6 +330,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="正文文字颜色"
                         tooltip="主标题与正文主要文字颜色 (textPrimary)"
                         width="auto"
+                        dirty={dirtyFields.has('textPrimary')}
                     >
                         <ColorPickerInput
                             value={draft.textPrimary}
@@ -355,6 +343,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="次要文字颜色"
                         tooltip="副标题与辅助说明文字颜色 (textSecondary)"
                         width="auto"
+                        dirty={dirtyFields.has('textSecondary')}
                     >
                         <ColorPickerInput
                             value={draft.textSecondary}
@@ -367,6 +356,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="提示文字颜色"
                         tooltip="输入框占位符与辅助说明文字颜色 (textMuted)"
                         width="auto"
+                        dirty={dirtyFields.has('textMuted')}
                     >
                         <ColorPickerInput
                             value={draft.textMuted}
@@ -382,6 +372,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="全局圆角"
                         tooltip="统一快速调节全界面的圆角大小 (0px ~ 20px)"
                         width="w-240"
+                        dirty={dirtyFields.has('borderRadius')}
                     >
                         <SliderControl
                             min={0}
@@ -404,6 +395,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="卡片圆角"
                         tooltip="独立调整卡片容器的圆角弧度 (radiusCard)"
                         width="w-240"
+                        dirty={dirtyFields.has('radiusCard')}
                     >
                         <SliderControl
                             min={0}
@@ -419,6 +411,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="按钮与输入框圆角"
                         tooltip="独立调整按钮与文本框的圆角弧度 (radiusInput)"
                         width="w-240"
+                        dirty={dirtyFields.has('radiusInput')}
                     >
                         <SliderControl
                             min={0}
@@ -434,6 +427,7 @@ export class ThemeTabView extends PreactSettingsView {
                         label="毛玻璃虚化"
                         tooltip="调整弹窗背景的高斯模糊程度 (blurModal)"
                         width="w-240"
+                        dirty={dirtyFields.has('blurModal')}
                     >
                         <SliderControl
                             min={0}

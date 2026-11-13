@@ -155,7 +155,7 @@ export function stripStTemplateComments(text: string): string {
 }
 
 /**
- * 提取最近 N 条聊天消息与当前角色卡名称的小写拼接文本。
+ * 提取最近 N 条聊天消息与当前角色卡名称的拼接文本（保留原始大小写）。
  */
 function extractRecentChatText(
     chatMessages: Array<{ mes?: string }> | undefined,
@@ -174,7 +174,7 @@ function extractRecentChatText(
             }
         }
     }
-    return parts.join('\n').toLowerCase();
+    return parts.join('\n');
 }
 
 /**
@@ -238,18 +238,6 @@ export function resolveBoundOutfitPresets(
         }
     }
     return resolved;
-}
-
-/**
- * 将角色绑定的服装标识列表（可为服装预设 id 或服装名称）解析为展示名称数组。
- */
-export function resolveBoundOutfitNames(
-    boundOutfitIds: readonly string[],
-    allOutfitPresets: ReadonlyArray<{ id: string; name: string; data: OutfitPresetData }>
-): string[] {
-    return resolveBoundOutfitPresets(boundOutfitIds, allOutfitPresets)
-        .map((o) => (o.name || '').trim())
-        .filter(Boolean);
 }
 
 /**
@@ -430,6 +418,25 @@ export function resolveActiveMaterialActivationPreset(
 }
 
 /**
+ * 校验启用规则是否匹配当前活跃角色卡。
+ * 开启绑定且指定目标卡名时，要求当前会话存在同名角色卡（大小写无关、前后空白规整）。
+ */
+function matchesBoundCharacterCard(
+    rule: { bindCharacterCard?: boolean; boundCharacterCardName?: string },
+    activeCardKey?: string
+): boolean {
+    if (!rule.bindCharacterCard) {
+        return true;
+    }
+    const target = (rule.boundCharacterCardName || '').trim().toLowerCase();
+    if (!target) {
+        return true;
+    }
+    const cardKey = (activeCardKey || '').trim().toLowerCase();
+    return Boolean(cardKey && cardKey === target);
+}
+
+/**
  * 根据当前启用预设、聊天上下文与单层行模板计算角色与服装启用列表文本。
  */
 export function computeMaterialRenderedLists(options: {
@@ -529,7 +536,7 @@ export function computeMaterialRenderedLists(options: {
             ? actData.scanDepth
             : 5;
     const includeBoundOutfits = actData.includeBoundOutfits !== false;
-    const recentText = extractRecentChatText(chatMessages, scanDepth, activeCardKey);
+    const recentText = extractRecentChatText(chatMessages, scanDepth, activeCardKey).toLowerCase();
 
     const triggeredCharacters: CharacterPresetData[] = [];
     const matchedCharacterNames: string[] = [];
@@ -546,12 +553,8 @@ export function computeMaterialRenderedLists(options: {
             continue;
         }
 
-        if (rule.bindCharacterCard && rule.boundCharacterCardName) {
-            const cardKey = (activeCardKey || '').trim().toLowerCase();
-            const target = rule.boundCharacterCardName.trim().toLowerCase();
-            if (cardKey && target && !cardKey.includes(target) && !target.includes(cardKey)) {
-                continue;
-            }
+        if (!matchesBoundCharacterCard(rule, activeCardKey)) {
+            continue;
         }
 
         const isTriggered =
@@ -604,12 +607,8 @@ export function computeMaterialRenderedLists(options: {
             continue;
         }
 
-        if (rule.bindCharacterCard && rule.boundCharacterCardName) {
-            const cardKey = (activeCardKey || '').trim().toLowerCase();
-            const target = rule.boundCharacterCardName.trim().toLowerCase();
-            if (cardKey && target && !cardKey.includes(target) && !target.includes(cardKey)) {
-                continue;
-            }
+        if (!matchesBoundCharacterCard(rule, activeCardKey)) {
+            continue;
         }
 
         const isTriggered =
@@ -674,7 +673,7 @@ function shouldSkipEntryForEmptyMaterials(
         return false;
     }
     const refsCharacters = /\{\{\s*角色(?:启用|可用宏)列表\s*\}\}/.test(strippedContent);
-    const refsOutfits = /\{\{\s*(?:通用)?服装(?:启用|可用宏)列表\s*\}\}/.test(strippedContent);
+    const refsOutfits = /\{\{\s*服装(?:启用|可用宏)列表\s*\}\}/.test(strippedContent);
 
     if (!refsCharacters && !refsOutfits) {
         return false;
@@ -747,7 +746,6 @@ function applyMaterialVariablesToEntryContent(
         materialLists.outfitMacrosText,
         '(当前无可用服装宏)'
     );
-    result = result.replace(/\{\{\s*通用角色启用列表\s*\}\}/g, '');
     return result;
 }
 
@@ -866,24 +864,31 @@ export function computePromptInjections(
                     continue;
                 }
 
-                const logic = entry.logicType || 'and_any';
-                let primaryMatched = false;
-                if (logic === 'and_all') {
-                    primaryMatched = primaryKws.every((kw) => recentText.includes(kw));
-                } else if (logic === 'not_any') {
-                    primaryMatched = !primaryKws.some((kw) => recentText.includes(kw));
-                } else {
-                    primaryMatched = primaryKws.some((kw) => recentText.includes(kw));
-                }
-
-                if (!primaryMatched) {
-                    continue;
-                }
-
                 const secondaryKws = parseKwList(entry.secondaryKeywords);
+                const logic = entry.logicType || 'and_any';
+
                 if (secondaryKws.length > 0) {
-                    const secondaryMatched = secondaryKws.some((kw) => recentText.includes(kw));
+                    const primaryMatched = primaryKws.some((kw) => recentText.includes(kw));
+                    if (!primaryMatched) {
+                        continue;
+                    }
+                    const secondaryMatched =
+                        logic === 'and_all'
+                            ? secondaryKws.every((kw) => recentText.includes(kw))
+                            : logic === 'not_any'
+                              ? !secondaryKws.some((kw) => recentText.includes(kw))
+                              : secondaryKws.some((kw) => recentText.includes(kw));
                     if (!secondaryMatched) {
+                        continue;
+                    }
+                } else {
+                    const primaryMatched =
+                        logic === 'and_all'
+                            ? primaryKws.every((kw) => recentText.includes(kw))
+                            : logic === 'not_any'
+                              ? !primaryKws.some((kw) => recentText.includes(kw))
+                              : primaryKws.some((kw) => recentText.includes(kw));
+                    if (!primaryMatched) {
                         continue;
                     }
                 }
@@ -1047,25 +1052,23 @@ export class PromptInjector {
 
         const nextActiveKeys = new Set<string>();
 
-        if (settings.enabled) {
-            for (const bucket of computed.buckets) {
-                nextActiveKeys.add(bucket.key);
-                staleCandidates.delete(bucket.key);
-                try {
-                    setPromptFn(
-                        bucket.key,
-                        bucket.content,
-                        bucket.position,
-                        bucket.depth,
-                        false,
-                        bucket.role
-                    );
-                } catch (err) {
-                    logger.warn(
-                        `[PromptInjector] 调用宿主 setExtensionPrompt(${bucket.key}) 异常:`,
-                        err
-                    );
-                }
+        for (const bucket of computed.buckets) {
+            nextActiveKeys.add(bucket.key);
+            staleCandidates.delete(bucket.key);
+            try {
+                setPromptFn(
+                    bucket.key,
+                    bucket.content,
+                    bucket.position,
+                    bucket.depth,
+                    false,
+                    bucket.role
+                );
+            } catch (err) {
+                logger.warn(
+                    `[PromptInjector] 调用宿主 setExtensionPrompt(${bucket.key}) 异常:`,
+                    err
+                );
             }
         }
 

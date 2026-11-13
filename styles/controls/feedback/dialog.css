@@ -7,7 +7,7 @@
 
 /* 1. 对话框全屏半透明遮罩层 (.da-dialog-backdrop)
    复用 .da-modal-backdrop 的动态可视视口与滚动防裁切能力，使用最高模态层 --da-z-dialog。 */
-.da-dialog-backdrop {
+.da-modal-backdrop.da-dialog-backdrop {
     z-index: var(--da-z-dialog, 10060);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
     backdrop-filter: blur(var(--da-blur-modal, 8px));

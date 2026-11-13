@@ -8,7 +8,7 @@
  */
 
 /* 1. 图像详情弹窗遮罩与外壳（布局继承自 .da-modal-backdrop） */
-.da-inspect-backdrop {
+.da-modal-backdrop.da-inspect-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
     background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.72));
     backdrop-filter: blur(6px);

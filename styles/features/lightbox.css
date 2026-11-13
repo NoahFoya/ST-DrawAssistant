@@ -2,19 +2,14 @@
  * 全屏大图灯箱视窗、手势交互舞台与浮动胶囊工具栏样式。
  *
  * @remarks
- * 1. 视窗层级：顶层固定遮罩 (z-index 100200)，高斯模糊虚化背景。
+ * 1. 视窗层级：顶层全屏查看遮罩 (z-index: var(--da-z-viewer))，布局定位继承 .da-modal-backdrop 动态可视视口 (--da-vv*)。
  * 2. 变换舞台：基于 transform 矩阵实现连续缩放、拖拽平移与顺时针旋转。
  * 3. 悬浮胶囊：底部居中浮动控制栏与两侧翻页箭头，支持平滑淡入。
  */
 
 /* 1. 全屏遮罩层 */
-.da-lightbox-backdrop {
-    position: fixed;
-    inset: 0;
+.da-modal-backdrop.da-lightbox-backdrop {
     z-index: var(--da-z-viewer, 10045);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: var(--da-bg-overlay-heavy);
     backdrop-filter: blur(var(--da-blur-modal, 16px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 16px));

@@ -188,20 +188,18 @@ export class FabTabView extends PreactSettingsView {
                     >
                         <div className="da-fab-custom-icon-wrapper">
                             <div className="da-fab-preview-avatar">
-                                <img
-                                    alt="自定义头像预览"
-                                    src={isCustom ? currentIcon : ''}
-                                    style={{ display: isCustom ? 'block' : 'none' }}
-                                />
-                                <div
-                                    className="da-fab-icon"
-                                    style={{ display: isCustom ? 'none' : 'flex' }}
-                                    dangerouslySetInnerHTML={{
-                                        __html:
-                                            FAB_BUILTIN_ICONS[currentIcon] ??
-                                            FAB_BUILTIN_ICONS.palette,
-                                    }}
-                                />
+                                {isCustom ? (
+                                    <img alt="自定义头像预览" src={currentIcon} />
+                                ) : (
+                                    <div
+                                        className="da-fab-icon"
+                                        dangerouslySetInnerHTML={{
+                                            __html:
+                                                FAB_BUILTIN_ICONS[currentIcon] ??
+                                                FAB_BUILTIN_ICONS.palette,
+                                        }}
+                                    />
+                                )}
                             </div>
 
                             <div className="da-fab-action-group">
@@ -230,7 +228,7 @@ export class FabTabView extends PreactSettingsView {
                                 ref={fileInputRef}
                                 type="file"
                                 accept="image/*"
-                                style={{ display: 'none' }}
+                                className="da-hidden"
                                 onChange={(e) =>
                                     this.handleFileChange(e.currentTarget as HTMLInputElement)
                                 }

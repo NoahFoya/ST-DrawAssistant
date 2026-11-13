@@ -49,7 +49,7 @@ import { logger } from '../../util/logger';
 /**
  * 通用复合组件同步挂载与生命周期托管 Hook。
  */
-export function useCompositeInstance<T extends UIComponent & Disposable>(
+function useCompositeInstance<T extends UIComponent & Disposable>(
     factory: () => T,
     sync?: (instance: T) => void
 ): VNode {
@@ -287,6 +287,9 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
     const prevPresetsJsonRef = useRef<string>(
         JSON.stringify({ presets: props.presets, activeId: props.activePresetId })
     );
+    const prevModelsJsonRef = useRef<string>(
+        props.availableModels ? JSON.stringify(props.availableModels) : ''
+    );
 
     return useCompositeInstance(
         () => {
@@ -314,7 +317,11 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
                 instance.setPresets(props.presets as PromptCardPresetItem[], props.activePresetId);
             }
             if (props.availableModels) {
-                instance.setAvailableModels(props.availableModels);
+                const nextModelsJson = JSON.stringify(props.availableModels);
+                if (nextModelsJson !== prevModelsJsonRef.current) {
+                    prevModelsJsonRef.current = nextModelsJson;
+                    instance.setAvailableModels(props.availableModels);
+                }
             }
         }
     );
@@ -430,9 +437,7 @@ export function StatCardView(props: StatCardViewProps): VNode {
 
 // 9. 本地图库单张媒体卡片 (MediaCardView)
 
-export interface MediaCardViewProps extends MediaCardOptions {
-    key?: string;
-}
+export interface MediaCardViewProps extends MediaCardOptions {}
 
 export function MediaCardView(props: MediaCardViewProps): VNode {
     const callbacksRef = useRef(props);
@@ -449,6 +454,7 @@ export function MediaCardView(props: MediaCardViewProps): VNode {
                 onToggleFavorite: (fav, item) =>
                     callbacksRef.current.onToggleFavorite?.(fav, item),
                 onRetry: (item) => callbacksRef.current.onRetry?.(item),
+                onImageError: (item) => callbacksRef.current.onImageError?.(item) ?? false,
                 onDelete: (item) => callbacksRef.current.onDelete?.(item),
             }),
         (instance) => {

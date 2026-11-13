@@ -29,6 +29,7 @@ import type { WorkflowCardData, WorkflowCardPresetItem } from '../composite/work
 import { PresetController } from './preset-controller';
 import { settingsStore } from '../../store/settings-store';
 import { providerRegistry } from '../../provider/registry';
+import { hasProviderAssetSync } from '../../provider/base-provider';
 import { eventBus } from '../../util/event-bus';
 import { matchAssetText } from '../../util/asset-matcher';
 import { Toast } from '../feedback/toast';
@@ -51,30 +52,21 @@ export interface ProviderTabViewModelOptions {
     /** 初始内置模型选项（如 NovelAI / OpenAI 预置模型列表） */
     defaultModels?: SelectOption[];
     /**
-     * 模型下拉严格以资产为准：不合并 defaultModels，没有任何资产时显示空状态。
-     * 适用于模型来源明确（固定表或服务端返回）、不应混入预置项的提供商。
-     */
-    strictModelAssets?: boolean;
-    /** 严格模式下无任何模型资产时的下拉空状态文案 */
-    emptyModelsLabel?: string;
-    /** 模型标识的下拉显示名格式化，缺省原样显示标识 */
-    formatModelLabel?: (modelId: string) => string;
-    /** 按服务商固定的模型表（键为 serviceId）。命中的服务商不依赖服务端枚举，直接以该表为模型资产 */
-    staticModelsByService?: Record<string, readonly string[]>;
-    /**
      * 启用按服务商独立保存的连接信息与资产缓存。
-     * fixedUrls 声明地址由服务商固定的服务商（键为 serviceId，值为固定地址）。
+     * - fixedUrls: 地址由服务商固定的服务商（键为 serviceId，值为固定地址）
+     * - defaultUrls: 目标服务商尚未保存自定义地址时预填的默认地址
      */
-    serviceProfiles?: { fixedUrls?: Record<string, string> };
-    /** 每次视图激活都静默同步服务端资产并比对差异，默认仅在本地缓存为空时同步 */
-    alwaysSyncOnActivate?: boolean;
+    serviceProfiles?: {
+        fixedUrls?: Record<string, string>;
+        defaultUrls?: Record<string, string>;
+    };
     /** 初始内置 VAE 选项 */
     defaultVaes?: SelectOption[];
     /** 初始内置采样器选项 */
     defaultSamplers?: SelectOption[];
     /** 初始内置调度器选项 */
     defaultSchedulers?: SelectOption[];
-    /** 是否校验 ComfyUI 工作流绑定 ID（txt2imgWorkflowId / img2imgWorkflowId） */
+    /** 是否校验 ComfyUI 工作流绑定 ID（txt2imgWorkflowId / inpaintPresetId） */
     checkWorkflowBindings?: boolean;
     /** 新建预设前的必填项校验 */
     validateRequired?: (draft: DrawingPresetData) => string[];
@@ -112,7 +104,6 @@ function completeAssetCache(cache?: ProviderAssetCache): ProviderAssetCache {
         loras: cache?.loras ? [...cache.loras] : [],
         samplers: cache?.samplers ? [...cache.samplers] : [],
         schedulers: cache?.schedulers ? [...cache.schedulers] : [],
-        serverSignature: cache?.serverSignature,
         updatedAt: cache?.updatedAt,
     };
 }
@@ -165,8 +156,6 @@ export class ProviderTabViewModel implements Disposable {
     public readonly promptPresetOptions: ReadonlySignal<SelectOption[]>;
     /** 文生图工作流下拉选项（自动追加失效项提示） */
     public readonly txt2imgWorkflowOptions: ReadonlySignal<SelectOption[]>;
-    /** 图生图工作流下拉选项（含不启用项与失效项提示） */
-    public readonly img2imgWorkflowOptions: ReadonlySignal<SelectOption[]>;
     /** 局部重绘预设下拉选项（含未绑定项与失效项提示） */
     public readonly inpaintPresetOptions: ReadonlySignal<SelectOption[]>;
 
@@ -184,6 +173,17 @@ export class ProviderTabViewModel implements Disposable {
         return Boolean(this.options.serviceProfiles);
     }
 
+    /** 当前提供方是否支持从服务端拉取模型/LoRA/采样器等资产 */
+    public get supportsAssetSync(): boolean {
+        return hasProviderAssetSync(providerRegistry.getProvider(this.provider));
+    }
+
+    /** 已注册且明确不支持服务端同步的提供方，不回填历史遗留的 checkpoints 缓存 */
+    private shouldIgnoreCachedServerModels(): boolean {
+        const provider = providerRegistry.getProvider(this.provider);
+        return Boolean(provider && !hasProviderAssetSync(provider));
+    }
+
     public constructor(options: ProviderTabViewModelOptions) {
         this.provider = options.provider;
         this.options = options;
@@ -197,8 +197,9 @@ export class ProviderTabViewModel implements Disposable {
 
         // 优先从本地持久化资产缓存秒开渲染，避免白屏与等待
         const cache = providerCfg.assetCache;
-        const cachedCheckpoints = cache?.checkpoints || [];
-        const cachedUnets = cache?.unets || [];
+        const ignoreCachedModels = this.shouldIgnoreCachedServerModels();
+        const cachedCheckpoints = ignoreCachedModels ? [] : cache?.checkpoints || [];
+        const cachedUnets = ignoreCachedModels ? [] : cache?.unets || [];
         if (cachedCheckpoints.length > 0 || cachedUnets.length > 0) {
             this.categorizedModels = signal<{ checkpoints: string[]; unets: string[] } | null>({
                 checkpoints: cachedCheckpoints,
@@ -237,9 +238,6 @@ export class ProviderTabViewModel implements Disposable {
                 ? cachedSchedulers.map((s) => ({ label: s, value: s }))
                 : options.defaultSchedulers ?? []
         );
-
-        // 固定模型表的服务商不依赖本地缓存
-        this.seedStaticModels();
 
         // 提示词预设按当前生图引擎物理隔离载入
         this.promptPresets = signal<PresetItem<PromptPresetData>[]>(
@@ -284,22 +282,6 @@ export class ProviderTabViewModel implements Disposable {
             const fetched = this.serverModels.value;
             const hasFetched = this.hasFetchedModels.value;
             const defaults = this.options.defaultModels ?? [];
-
-            // 严格以资产为准：只展示固定表或服务端返回的模型，不混入预置项
-            if (this.options.strictModelAssets) {
-                const formatLabel = this.options.formatModelLabel ?? ((id: string) => id);
-                const assets = hasFetched ? fetched : [];
-                const strictOptions: SelectOption[] = assets.map((m) => ({
-                    label: formatLabel(m),
-                    value: m,
-                }));
-                if (currentModel && !assets.includes(currentModel)) {
-                    strictOptions.unshift({ label: currentModel, value: currentModel });
-                }
-                return strictOptions.length > 0
-                    ? strictOptions
-                    : [{ label: this.options.emptyModelsLabel ?? '未获取到模型', value: '' }];
-            }
 
             // 若返回分类模型数据（如 ComfyUI），按照 Checkpoint 与 UNet / 扩散模型分组展示
             if (hasFetched && cat && (cat.checkpoints.length > 0 || cat.unets.length > 0)) {
@@ -419,7 +401,7 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 3. 派生提示词预设下拉选项
+        // 4. 派生提示词预设下拉选项
         this.promptPresetOptions = computed(() => {
             const prompts = this.promptPresets.value;
             const boundId = this.presetController.draftConfig.value.promptPresetId || '';
@@ -442,7 +424,7 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 4. 派生文生图工作流下拉选项
+        // 5. 派生文生图工作流下拉选项
         this.txt2imgWorkflowOptions = computed(() => {
             const workflows = this.workflowPresets.value;
             const boundId = this.presetController.draftConfig.value.txt2imgWorkflowId || '';
@@ -459,27 +441,7 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 5. 派生图生图工作流下拉选项
-        this.img2imgWorkflowOptions = computed(() => {
-            const workflows = this.workflowPresets.value;
-            const boundId = this.presetController.draftConfig.value.img2imgWorkflowId || '';
-            const opts: SelectOption[] = [
-                { label: '未启用图生图工作流', value: '' },
-                ...workflows.map((w) => ({
-                    label: w.name,
-                    value: w.id,
-                })),
-            ];
-            if (boundId && !workflows.some((w) => w.id === boundId)) {
-                opts.unshift({
-                    label: boundId,
-                    value: boundId,
-                });
-            }
-            return opts;
-        });
-
-        // 5.5 派生局部重绘预设下拉选项
+        // 6. 派生局部重绘预设下拉选项
         this.inpaintPresetOptions = computed(() => {
             const workflows = this.workflowPresets.value;
             const boundId = this.presetController.draftConfig.value.inpaintPresetId || '';
@@ -499,7 +461,7 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 6. 派生 PromptPresetCard 条目列表
+        // 7. 派生 PromptPresetCard 条目列表
         this.promptCardPresets = computed(() =>
             this.promptPresets.value.map((p) => ({
                 id: p.id,
@@ -521,7 +483,7 @@ export class ProviderTabViewModel implements Disposable {
             }))
         );
 
-        // 7. 派生 WorkflowCard 条目列表
+        // 8. 派生 WorkflowCard 条目列表
         this.workflowCardPresets = computed(() =>
             this.workflowPresets.value.map((w) => ({
                 id: w.id,
@@ -607,10 +569,10 @@ export class ProviderTabViewModel implements Disposable {
                 invalid.add('txt2imgWorkflowId');
             }
             if (
-                draft.img2imgWorkflowId &&
-                !workflows.some((w) => w.id === draft.img2imgWorkflowId)
+                draft.inpaintPresetId &&
+                !workflows.some((w) => w.id === draft.inpaintPresetId)
             ) {
-                invalid.add('img2imgWorkflowId');
+                invalid.add('inpaintPresetId');
             }
         }
         return invalid;
@@ -637,12 +599,12 @@ export class ProviderTabViewModel implements Disposable {
         }
 
         const urlChanged = this.hasServiceProfiles && data.serverUrl !== prevUrl;
-        if (urlChanged) {
+        if (urlChanged && this.supportsAssetSync) {
             patch.assetCache = EMPTY_ASSET_CACHE;
         }
         settingsStore.setProviderConfig(this.provider, patch);
 
-        if (urlChanged) {
+        if (urlChanged && this.supportsAssetSync) {
             this.loadAssetSignals(undefined);
             this.scheduleAssetSync();
         }
@@ -654,7 +616,7 @@ export class ProviderTabViewModel implements Disposable {
      * @remarks
      * 1. 把当前服务商的地址、密钥与资产缓存暂存到 serviceProfiles；
      * 2. 载入目标服务商此前保存的连接信息与缓存（地址固定的服务商使用固定地址）；
-     * 3. 重置内存中的资产信号，并在目标服务商依赖服务端枚举时触发静默同步。
+     * 3. 支持服务端资产同步的提供方，重置内存资产信号并在有变化时触发静默同步。
      */
     public switchService(nextId: string): void {
         const prevId = this.connectionData.value.activePresetId || this.options.defaultServiceId;
@@ -665,7 +627,8 @@ export class ProviderTabViewModel implements Disposable {
         const cfg = this.readProviderStoreConfig();
         const next = cfg.serviceProfiles?.[nextId];
         const fixedUrl = this.options.serviceProfiles?.fixedUrls?.[nextId];
-        const nextUrl = fixedUrl ?? next?.serverUrl ?? '';
+        const defaultUrl = this.options.serviceProfiles?.defaultUrls?.[nextId];
+        const nextUrl = fixedUrl ?? (next?.serverUrl || defaultUrl) ?? '';
         const nextApiKey = next?.apiKey ?? '';
 
         settingsStore.setProviderConfig(this.provider, {
@@ -687,8 +650,10 @@ export class ProviderTabViewModel implements Disposable {
             apiKey: nextApiKey,
             activePresetId: nextId,
         };
-        this.loadAssetSignals(next?.assetCache);
-        this.scheduleAssetSync(0);
+        if (this.supportsAssetSync) {
+            this.loadAssetSignals(next?.assetCache);
+            this.scheduleAssetSync(0);
+        }
     }
 
     /** 延迟触发一次后台资产同步，合并短时间内的连续触发 */
@@ -702,26 +667,11 @@ export class ProviderTabViewModel implements Disposable {
         }, delayMs);
     }
 
-    /** 当前服务商的固定模型表；当前服务商依赖服务端枚举时返回 undefined */
-    private getStaticModels(): readonly string[] | undefined {
-        const serviceId = this.connectionData.value.activePresetId || this.options.defaultServiceId;
-        return serviceId ? this.options.staticModelsByService?.[serviceId] : undefined;
-    }
-
-    /** 当前服务商有固定模型表时，以其作为模型资产 */
-    private seedStaticModels(): void {
-        const staticModels = this.getStaticModels();
-        if (staticModels) {
-            this.categorizedModels.value = null;
-            this.serverModels.value = [...staticModels];
-            this.hasFetchedModels.value = true;
-        }
-    }
-
     /** 以指定缓存重置内存中的全部资产信号；缓存为空时回到未拉取状态 */
     private loadAssetSignals(cache: ProviderAssetCache | undefined): void {
-        const checkpoints = cache?.checkpoints ?? [];
-        const unets = cache?.unets ?? [];
+        const ignoreCachedModels = this.shouldIgnoreCachedServerModels();
+        const checkpoints = ignoreCachedModels ? [] : cache?.checkpoints ?? [];
+        const unets = ignoreCachedModels ? [] : cache?.unets ?? [];
         const hasModels = checkpoints.length > 0 || unets.length > 0;
         this.categorizedModels.value = hasModels ? { checkpoints, unets } : null;
         this.serverModels.value = [...checkpoints, ...unets];
@@ -740,8 +690,6 @@ export class ProviderTabViewModel implements Disposable {
         this.schedulerOptions.value = cache?.schedulers?.length
             ? cache.schedulers.map((s) => ({ label: s, value: s }))
             : this.options.defaultSchedulers ?? [];
-
-        this.seedStaticModels();
     }
 
     /**
@@ -773,6 +721,13 @@ export class ProviderTabViewModel implements Disposable {
 
         if (!provider) {
             throw new Error(`未注册 ${this.provider} 服务提供方`);
+        }
+
+        if (!hasProviderAssetSync(provider)) {
+            return {
+                count: 0,
+                message: '当前服务不支持模型列表拉取',
+            };
         }
 
         // 0. 前置连通性快速检查，离线时立即退出，避免产生冗余请求
@@ -808,6 +763,10 @@ export class ProviderTabViewModel implements Disposable {
                 this.serverModels.value = all;
                 this.hasFetchedModels.value = true;
                 totalCount += all.length;
+            } else if (cat) {
+                this.categorizedModels.value = cat;
+                this.serverModels.value = [];
+                this.hasFetchedModels.value = true;
             }
         } else if (typeof provider.fetchModels === 'function') {
             const models = await provider.fetchModels();
@@ -825,7 +784,7 @@ export class ProviderTabViewModel implements Disposable {
         // 2. 拉取外置 VAE 列表
         if (typeof provider.fetchVaes === 'function') {
             const vaes = await provider.fetchVaes();
-            if (Array.isArray(vaes) && vaes.length > 0) {
+            if (Array.isArray(vaes)) {
                 totalCount += vaes.length;
                 this.serverVaes.value = vaes;
                 this.hasFetchedVaes.value = true;
@@ -835,7 +794,7 @@ export class ProviderTabViewModel implements Disposable {
         // 3. 拉取 CLIP 编码器列表
         if (typeof provider.fetchClips === 'function') {
             const clips = await provider.fetchClips();
-            if (Array.isArray(clips) && clips.length > 0) {
+            if (Array.isArray(clips)) {
                 totalCount += clips.length;
                 this.serverClips.value = clips;
                 this.hasFetchedClips.value = true;
@@ -845,7 +804,7 @@ export class ProviderTabViewModel implements Disposable {
         // 4. 拉取采样器列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchSamplers === 'function') {
             const samplers = await provider.fetchSamplers();
-            if (Array.isArray(samplers) && samplers.length > 0) {
+            if (Array.isArray(samplers)) {
                 totalCount += samplers.length;
                 this.samplerOptions.value = samplers.map((s) => ({ label: s, value: s }));
             }
@@ -854,7 +813,7 @@ export class ProviderTabViewModel implements Disposable {
         // 5. 拉取调度器列表 (如 ComfyUI)
         if (typeof (provider as { fetchSchedulers?: () => Promise<string[]> }).fetchSchedulers === 'function') {
             const schedulers = await (provider as { fetchSchedulers: () => Promise<string[]> }).fetchSchedulers();
-            if (Array.isArray(schedulers) && schedulers.length > 0) {
+            if (Array.isArray(schedulers)) {
                 totalCount += schedulers.length;
                 this.schedulerOptions.value = schedulers.map((s) => ({ label: s, value: s }));
             }
@@ -863,7 +822,7 @@ export class ProviderTabViewModel implements Disposable {
         // 6. 拉取 LoRA 模型列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchLoras === 'function') {
             const loras = await provider.fetchLoras();
-            if (Array.isArray(loras) && loras.length > 0) {
+            if (Array.isArray(loras)) {
                 totalCount += loras.length;
                 this.serverLoras.value = loras;
                 this.hasFetchedLoras.value = true;
@@ -939,177 +898,122 @@ export class ProviderTabViewModel implements Disposable {
         this.workflowPresets.value = settingsStore.getPresets<WorkflowPresetData>('workflows');
     }
 
-    /**
-     * 响应内嵌 PromptPresetCard 的操作动作。
-     */
-    public async handlePromptAssetAction(
-        action: PresetActionType,
-        pId: string,
-        data?: PromptCardData
-    ): Promise<void> {
+    /** 内部统一辅助：处理内嵌提示词预设与工作流预设的增删改查及导出 */
+    private async runAssetPresetAction<TData>(cfg: {
+        category: 'prompts' | 'workflows';
+        providerScope?: string;
+        draftField: 'promptPresetId' | 'txt2imgWorkflowId';
+        idPrefix: string;
+        label: string;
+        filePrefix: string;
+        buildSaveData: (existing: TData) => TData | null;
+        buildNewData: () => TData;
+        buildCloneData: () => TData;
+    }, action: PresetActionType, id: string): Promise<void> {
+        const { category, providerScope, draftField, idPrefix, label, filePrefix } = cfg;
+
         if (action === 'select') {
-            this.presetController.updateDraft('promptPresetId', pId);
-        } else if (action === 'save' && data) {
-            const pr = settingsStore.getPreset<PromptPresetData>('prompts', pId, this.provider);
-            if (pr) {
-                pr.data = {
-                    ...pr.data,
-                    positivePrefix: data.positivePrefix,
-                    positiveSuffix: data.positiveSuffix,
-                    negativePrompt: data.negativePrompt,
-                    loraSyntaxMode: data.loraSyntaxMode || (this.provider === 'comfyui' ? 'weilin' : 'standard'),
-                    loras: (data.loras || [])
-                        .filter((l) => Boolean(l.modelName?.trim()))
-                        .map((l) => ({
-                            modelName: l.modelName.trim(),
-                            modelWeight: l.modelWeight,
-                            clipWeight: l.clipWeight,
-                            triggerWeight: l.triggerWeight,
-                            enabled: l.enabled,
-                        })),
-                };
-                settingsStore.savePreset('prompts', pr, this.provider);
-                Toast.show(`提示词预设 "${pr.name}" 已保存`, { level: 'success' });
+            this.presetController.updateDraft(draftField, id);
+        } else if (action === 'save') {
+            const cur = settingsStore.getPreset<TData>(category, id, providerScope);
+            if (cur) {
+                const nextData = cfg.buildSaveData(cur.data);
+                if (nextData === null) return;
+                cur.data = nextData;
+                settingsStore.savePreset(category, cur, providerScope);
+                Toast.show(`${label} "${cur.name}" 已保存`, { level: 'success' });
             }
-        } else if (action === 'new') {
-            const list = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
+        } else if (action === 'new' || action === 'saveAs') {
+            const list = settingsStore.getPresets<TData>(category, providerScope);
             const existingNames = new Set(list.map((p) => p.name));
+            const cur = action === 'saveAs' ? settingsStore.getPreset<TData>(category, id, providerScope) : undefined;
+            const defaultName =
+                action === 'saveAs'
+                    ? (cur ? `${cur.name} (副本)` : `${label} (副本)`)
+                    : `新建${label}`;
+
             const newName = await ConfirmDialog.prompt({
-                title: '新建提示词预设',
-                message: '请输入新提示词预设名称:',
-                defaultValue: '新建提示词预设',
-                placeholder: '请输入提示词预设名称',
-                validator: (val) => {
-                    if (existingNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
-                    return null;
-                },
+                title: action === 'saveAs' ? `另存为新${label}` : `新建${label}`,
+                message: action === 'saveAs' ? `请输入另存${label}的新名称:` : `请输入新${label}名称:`,
+                defaultValue: defaultName,
+                placeholder: `请输入${label}名称`,
+                validator: (val) => (existingNames.has(val) ? '预设名称已存在，请换一个名称' : null),
             });
             if (!newName || !newName.trim()) return;
 
-            const newId = `prompt_${Date.now()}`;
-            const newPr: PresetItem<PromptPresetData> = {
+            const newId = `${idPrefix}${Date.now()}`;
+            const item: PresetItem<TData> = {
                 id: newId,
                 name: newName.trim(),
-                data: {
-                    positivePrefix: '',
-                    positiveSuffix: '',
-                    negativePrompt: '',
-                    loraSyntaxMode: this.provider === 'comfyui' ? 'weilin' : 'standard',
-                    loras: [],
-                },
+                data: action === 'saveAs' ? cfg.buildCloneData() : cfg.buildNewData(),
                 updatedAt: Date.now(),
             };
-            settingsStore.savePreset('prompts', newPr, this.provider);
-            this.presetController.updateDraft('promptPresetId', newId);
-            Toast.show(`已新建提示词预设: ${newPr.name}`, { level: 'success' });
-        } else if (action === 'saveAs') {
-            const curPr = settingsStore.getPreset<PromptPresetData>('prompts', pId, this.provider);
-            const defaultCloneName = curPr ? `${curPr.name} (副本)` : '提示词预设 (副本)';
-            const list = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
-            const existingNames = new Set(list.map((p) => p.name));
-
-            const targetName = await ConfirmDialog.prompt({
-                title: '另存为新提示词预设',
-                message: '请输入另存提示词预设的新名称:',
-                defaultValue: defaultCloneName,
-                placeholder: '请输入提示词预设名称',
-                validator: (val) => {
-                    if (existingNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
-                    return null;
-                },
-            });
-            if (!targetName || !targetName.trim()) return;
-
-            const newId = `prompt_${Date.now()}`;
-            const clonedPr: PresetItem<PromptPresetData> = {
-                id: newId,
-                name: targetName.trim(),
-                data: {
-                    positivePrefix: data?.positivePrefix || '',
-                    positiveSuffix: data?.positiveSuffix || '',
-                    negativePrompt: data?.negativePrompt || '',
-                    loraSyntaxMode: data?.loraSyntaxMode || (this.provider === 'comfyui' ? 'weilin' : 'standard'),
-                    loras: (data?.loras || [])
-                        .filter((l) => Boolean(l.modelName?.trim()))
-                        .map((l) => ({
-                            modelName: l.modelName.trim(),
-                            modelWeight: l.modelWeight,
-                            clipWeight: l.clipWeight,
-                            triggerWeight: l.triggerWeight,
-                            enabled: l.enabled,
-                        })),
-                },
-                updatedAt: Date.now(),
-            };
-            settingsStore.savePreset('prompts', clonedPr, this.provider);
-            this.presetController.updateDraft('promptPresetId', newId);
-            Toast.show(`已另存提示词预设: ${clonedPr.name}`, { level: 'success' });
+            settingsStore.savePreset(category, item, providerScope);
+            this.presetController.updateDraft(draftField, newId);
+            Toast.show(`已${action === 'saveAs' ? '另存' : '新建'}${label}: ${item.name}`, { level: 'success' });
         } else if (action === 'rename') {
-            const curPr = settingsStore.getPreset<PromptPresetData>('prompts', pId, this.provider);
-            if (!curPr) return;
+            const cur = settingsStore.getPreset<TData>(category, id, providerScope);
+            if (!cur) return;
 
-            const list = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
-            const otherNames = new Set(list.filter((p) => p.id !== pId).map((p) => p.name));
+            const list = settingsStore.getPresets<TData>(category, providerScope);
+            const otherNames = new Set(list.filter((p) => p.id !== id).map((p) => p.name));
             const newName = await ConfirmDialog.prompt({
-                title: '重命名提示词预设',
-                message: '请输入提示词预设新名称:',
-                defaultValue: curPr.name,
-                placeholder: '请输入提示词预设新名称',
+                title: `重命名${label}`,
+                message: `请输入${label}新名称:`,
+                defaultValue: cur.name,
+                placeholder: `请输入${label}新名称`,
                 validator: (val) => {
-                    if (val === curPr.name) {
-                        return '新名称不能与当前名称相同';
-                    }
-                    if (otherNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
+                    if (val === cur.name) return '新名称不能与当前名称相同';
+                    if (otherNames.has(val)) return '预设名称已存在，请换一个名称';
                     return null;
                 },
             });
-            if (!newName || !newName.trim() || newName.trim() === curPr.name) return;
+            if (!newName || !newName.trim() || newName.trim() === cur.name) return;
 
-            curPr.name = newName.trim();
-            curPr.updatedAt = Date.now();
-            settingsStore.savePreset('prompts', curPr, this.provider);
-            Toast.show(`已重命名提示词预设为 "${curPr.name}"`, { level: 'success' });
+            cur.name = newName.trim();
+            cur.updatedAt = Date.now();
+            settingsStore.savePreset(category, cur, providerScope);
+            Toast.show(`已重命名${label}为 "${cur.name}"`, { level: 'success' });
         } else if (action === 'export') {
-            const curPr = settingsStore.getPreset<PromptPresetData>('prompts', pId, this.provider);
-            if (!curPr) return;
-            const safeName = (curPr.name || curPr.id).replace(/\s+/g, '_');
-            const blob = new Blob([JSON.stringify(curPr, null, 2)], {
-                type: 'application/json',
-            });
+            const cur = settingsStore.getPreset<TData>(category, id, providerScope);
+            if (!cur) return;
+            const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
+            const blob = new Blob([JSON.stringify(cur, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `prompt_preset_${safeName}.json`;
+            a.download = `${filePrefix}${safeName}.json`;
             a.click();
             URL.revokeObjectURL(url);
         } else if (action === 'delete') {
-            const list = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
+            const list = settingsStore.getPresets<TData>(category, providerScope);
             if (list.length <= 1) {
-                Toast.show('至少保留一套提示词预设，无法删除', { level: 'warning' });
+                Toast.show(`至少保留一套${label}，无法删除`, { level: 'warning' });
                 return;
             }
-            settingsStore.deletePreset('prompts', pId, this.provider);
-            const remaining = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
+            settingsStore.deletePreset(category, id, providerScope);
+            const remaining = settingsStore.getPresets<TData>(category, providerScope);
             if (remaining.length > 0) {
-                this.presetController.updateDraft('promptPresetId', remaining[0].id);
+                this.presetController.updateDraft(draftField, remaining[0].id);
             }
-            Toast.show('提示词预设已删除', { level: 'info' });
+            Toast.show(`${label}已删除`, { level: 'info' });
         } else if (action === 'reset') {
             Toast.show('已放弃未保存修改', { level: 'info' });
         }
         this.refreshAssetPools();
     }
 
-    /**
-     * 解析并导入外部提示词预设 JSON 文件。
-     */
-    public handlePromptImportFile(file: File): void {
+    /** 内部统一辅助：读取并导入外部提示词预设或工作流预设 JSON 文件 */
+    private runAssetPresetImportFile<TData>(
+        file: File,
+        cfg: {
+            category: 'prompts' | 'workflows';
+            providerScope?: string;
+            draftField: 'promptPresetId' | 'txt2imgWorkflowId';
+            idPrefix: string;
+            label: string;
+        }
+    ): void {
         const reader = new FileReader();
         reader.onload = async () => {
             try {
@@ -1117,9 +1021,9 @@ export class ProviderTabViewModel implements Disposable {
                 if (!parsed || typeof parsed !== 'object' || !parsed.data) {
                     throw new Error('预设文件格式错误：未包含有效的 data 配置项');
                 }
-                const list = settingsStore.getPresets<PromptPresetData>('prompts', this.provider);
+                const list = settingsStore.getPresets<TData>(cfg.category, cfg.providerScope);
                 const existingNames = new Set(list.map((p) => p.name));
-                const baseName = parsed.name || '导入的提示词预设';
+                const baseName = parsed.name || `导入的${cfg.label}`;
 
                 let finalName = baseName;
                 if (existingNames.has(baseName)) {
@@ -1128,37 +1032,97 @@ export class ProviderTabViewModel implements Disposable {
                         message: `已存在同名预设「${baseName}」，请为导入预设指定一个新名称:`,
                         defaultValue: `${baseName} (导入)`,
                         placeholder: '请输入唯一的预设名称',
-                        validator: (val) => {
-                            if (existingNames.has(val)) {
-                                return '预设名称已存在，请换一个名称';
-                            }
-                            return null;
-                        },
+                        validator: (val) => (existingNames.has(val) ? '预设名称已存在，请换一个名称' : null),
                     });
                     if (!negotiated || !negotiated.trim()) return;
                     finalName = negotiated.trim();
                 }
 
-                const newId = `prompt_${Date.now()}`;
-                const importedItem: PresetItem<PromptPresetData> = {
+                const newId = `${cfg.idPrefix}${Date.now()}`;
+                const importedItem: PresetItem<TData> = {
                     id: newId,
                     name: finalName,
-                    data: parsed.data as PromptPresetData,
+                    data: parsed.data as TData,
                     updatedAt: Date.now(),
                 };
-                settingsStore.savePreset('prompts', importedItem, this.provider);
-                this.presetController.updateDraft('promptPresetId', newId);
+                settingsStore.savePreset(cfg.category, importedItem, cfg.providerScope);
+                this.presetController.updateDraft(cfg.draftField, newId);
                 this.refreshAssetPools();
-                Toast.show(`已成功导入提示词预设: ${importedItem.name}`, { level: 'success' });
+                Toast.show(`已成功导入${cfg.label}: ${importedItem.name}`, { level: 'success' });
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : String(err);
-                Toast.show(`导入提示词预设失败: ${msg}`, { level: 'error' });
+                Toast.show(`导入${cfg.label}失败: ${msg}`, { level: 'error' });
             }
         };
         reader.onerror = () => {
             Toast.show('读取预设文件失败', { level: 'error' });
         };
         reader.readAsText(file);
+    }
+
+    /**
+     * 响应内嵌 PromptPresetCard 的操作动作。
+     */
+    public async handlePromptAssetAction(
+        action: PresetActionType,
+        pId: string,
+        data?: PromptCardData
+    ): Promise<void> {
+        if (action === 'save' && !data) {
+            this.refreshAssetPools();
+            return;
+        }
+        const buildPromptData = (src?: PromptCardData, existing?: PromptPresetData): PromptPresetData => ({
+            ...existing,
+            positivePrefix: src?.positivePrefix || '',
+            positiveSuffix: src?.positiveSuffix || '',
+            negativePrompt: src?.negativePrompt || '',
+            loraSyntaxMode: src?.loraSyntaxMode || (this.provider === 'comfyui' ? 'weilin' : 'standard'),
+            loras: (src?.loras || [])
+                .filter((l) => Boolean(l.modelName?.trim()))
+                .map((l) => ({
+                    modelName: l.modelName.trim(),
+                    modelWeight: l.modelWeight,
+                    clipWeight: l.clipWeight,
+                    triggerWeight: l.triggerWeight,
+                    enabled: l.enabled,
+                })),
+        });
+
+        await this.runAssetPresetAction<PromptPresetData>(
+            {
+                category: 'prompts',
+                providerScope: this.provider,
+                draftField: 'promptPresetId',
+                idPrefix: 'prompt_',
+                label: '提示词预设',
+                filePrefix: 'prompt_preset_',
+                buildSaveData: (existing) => buildPromptData(data, existing),
+                buildNewData: () => ({
+                    positivePrefix: '',
+                    positiveSuffix: '',
+                    negativePrompt: '',
+                    loraSyntaxMode: this.provider === 'comfyui' ? 'weilin' : 'standard',
+                    loras: [],
+                }),
+                buildCloneData: () => buildPromptData(data),
+            },
+            action,
+            pId
+        );
+    }
+
+    /**
+     * 解析并导入外部提示词预设 JSON 文件。
+     */
+    public handlePromptImportFile(file: File): void {
+        this.runAssetPresetImportFile<PromptPresetData>(file, {
+            category: 'prompts',
+            providerScope: this.provider,
+            draftField: 'promptPresetId',
+            idPrefix: 'prompt_',
+            label: '提示词预设',
+        });
     }
 
     /**
@@ -1169,220 +1133,62 @@ export class ProviderTabViewModel implements Disposable {
         wfId: string,
         data?: WorkflowCardData
     ): Promise<void> {
-        if (action === 'select') {
-            this.presetController.updateDraft('txt2imgWorkflowId', wfId);
-        } else if (action === 'save' && data?.json) {
-            try {
-                const parsed = JSON.parse(data.json);
-                const wf = settingsStore.getPreset<WorkflowPresetData>('workflows', wfId);
-                if (wf) {
-                    wf.data = { ...wf.data, workflow: parsed };
-                    settingsStore.savePreset('workflows', wf);
-                    Toast.show(`工作流 "${wf.name}" 已保存`, { level: 'success' });
-                }
-            } catch {
-                Toast.show('工作流保存失败：JSON 语法错误', { level: 'error' });
-            }
-        } else if (action === 'new') {
-            const list = settingsStore.getPresets<WorkflowPresetData>('workflows');
-            const existingNames = new Set(list.map((p) => p.name));
-            const newName = await ConfirmDialog.prompt({
-                title: '新建工作流预设',
-                message: '请输入新工作流预设名称:',
-                defaultValue: '新建工作流预设',
-                placeholder: '请输入工作流预设名称',
-                validator: (val) => {
-                    if (existingNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
-                    return null;
-                },
-            });
-            if (!newName || !newName.trim()) return;
-
-            const newId = `workflow_${Date.now()}`;
-            const newWf: PresetItem<WorkflowPresetData> = {
-                id: newId,
-                name: newName.trim(),
-                data: {
-                    workflow: {},
-                },
-                updatedAt: Date.now(),
-            };
-            settingsStore.savePreset('workflows', newWf);
-            this.presetController.updateDraft('txt2imgWorkflowId', newId);
-            Toast.show(`已新建工作流预设: ${newWf.name}`, { level: 'success' });
-        } else if (action === 'saveAs') {
-            const curWf = settingsStore.getPreset<WorkflowPresetData>('workflows', wfId);
-            const defaultCloneName = curWf ? `${curWf.name} (副本)` : '工作流预设 (副本)';
-            const list = settingsStore.getPresets<WorkflowPresetData>('workflows');
-            const existingNames = new Set(list.map((p) => p.name));
-
-            const targetName = await ConfirmDialog.prompt({
-                title: '另存为新工作流预设',
-                message: '请输入另存工作流预设的新名称:',
-                defaultValue: defaultCloneName,
-                placeholder: '请输入工作流预设名称',
-                validator: (val) => {
-                    if (existingNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
-                    return null;
-                },
-            });
-            if (!targetName || !targetName.trim()) return;
-
-            let parsedData: Record<string, unknown> = {};
-            try {
-                if (data?.json) parsedData = JSON.parse(data.json);
-            } catch {
-                parsedData = {};
-            }
-
-            const newId = `workflow_${Date.now()}`;
-            const clonedWf: PresetItem<WorkflowPresetData> = {
-                id: newId,
-                name: targetName.trim(),
-                data: {
-                    workflow: parsedData,
-                },
-                updatedAt: Date.now(),
-            };
-            settingsStore.savePreset('workflows', clonedWf);
-            this.presetController.updateDraft('txt2imgWorkflowId', newId);
-            Toast.show(`已另存工作流预设: ${clonedWf.name}`, { level: 'success' });
-        } else if (action === 'rename') {
-            const curWf = settingsStore.getPreset<WorkflowPresetData>('workflows', wfId);
-            if (!curWf) return;
-
-            const list = settingsStore.getPresets<WorkflowPresetData>('workflows');
-            const otherNames = new Set(list.filter((p) => p.id !== wfId).map((p) => p.name));
-            const newName = await ConfirmDialog.prompt({
-                title: '重命名工作流预设',
-                message: '请输入工作流预设新名称:',
-                defaultValue: curWf.name,
-                placeholder: '请输入工作流预设新名称',
-                validator: (val) => {
-                    if (val === curWf.name) {
-                        return '新名称不能与当前名称相同';
-                    }
-                    if (otherNames.has(val)) {
-                        return '预设名称已存在，请换一个名称';
-                    }
-                    return null;
-                },
-            });
-            if (!newName || !newName.trim() || newName.trim() === curWf.name) return;
-
-            curWf.name = newName.trim();
-            curWf.updatedAt = Date.now();
-            settingsStore.savePreset('workflows', curWf);
-            Toast.show(`已重命名工作流预设为 "${curWf.name}"`, { level: 'success' });
-        } else if (action === 'export') {
-            const curWf = settingsStore.getPreset<WorkflowPresetData>('workflows', wfId);
-            if (!curWf) return;
-            const safeName = (curWf.name || curWf.id).replace(/\s+/g, '_');
-            const blob = new Blob([JSON.stringify(curWf, null, 2)], {
-                type: 'application/json',
-            });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `workflow_preset_${safeName}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } else if (action === 'delete') {
-            const list = settingsStore.getPresets<WorkflowPresetData>('workflows');
-            if (list.length <= 1) {
-                Toast.show('至少保留一套工作流预设，无法删除', { level: 'warning' });
-                return;
-            }
-            settingsStore.deletePreset('workflows', wfId);
-            const remaining = settingsStore.getPresets<WorkflowPresetData>('workflows');
-            if (remaining.length > 0) {
-                this.presetController.updateDraft('txt2imgWorkflowId', remaining[0].id);
-            }
-            Toast.show('工作流预设已删除', { level: 'info' });
-        } else if (action === 'reset') {
-            Toast.show('已放弃未保存修改', { level: 'info' });
+        if (action === 'save' && !data?.json) {
+            this.refreshAssetPools();
+            return;
         }
-        this.refreshAssetPools();
+        await this.runAssetPresetAction<WorkflowPresetData>(
+            {
+                category: 'workflows',
+                draftField: 'txt2imgWorkflowId',
+                idPrefix: 'workflow_',
+                label: '工作流预设',
+                filePrefix: 'workflow_preset_',
+                buildSaveData: (existing) => {
+                    try {
+                        const parsed = JSON.parse(data!.json);
+                        return { ...existing, workflow: parsed };
+                    } catch {
+                        Toast.show('工作流保存失败：JSON 语法错误', { level: 'error' });
+                        return null;
+                    }
+                },
+                buildNewData: () => ({ workflow: {} }),
+                buildCloneData: () => {
+                    try {
+                        return { workflow: data?.json ? JSON.parse(data.json) : {} };
+                    } catch {
+                        return { workflow: {} };
+                    }
+                },
+            },
+            action,
+            wfId
+        );
     }
 
     /**
      * 解析并导入外部工作流预设 JSON 文件。
      */
     public handleWorkflowImportFile(file: File): void {
-        const reader = new FileReader();
-        reader.onload = async () => {
-            try {
-                const parsed = JSON.parse(reader.result as string);
-                if (!parsed || typeof parsed !== 'object' || !parsed.data) {
-                    throw new Error('预设文件格式错误：未包含有效的 data 配置项');
-                }
-                const list = settingsStore.getPresets<WorkflowPresetData>('workflows');
-                const existingNames = new Set(list.map((p) => p.name));
-                const baseName = parsed.name || '导入的工作流预设';
-
-                let finalName = baseName;
-                if (existingNames.has(baseName)) {
-                    const negotiated = await ConfirmDialog.prompt({
-                        title: '导入预设名称冲突',
-                        message: `已存在同名预设「${baseName}」，请为导入预设指定一个新名称:`,
-                        defaultValue: `${baseName} (导入)`,
-                        placeholder: '请输入唯一的预设名称',
-                        validator: (val) => {
-                            if (existingNames.has(val)) {
-                                return '预设名称已存在，请换一个名称';
-                            }
-                            return null;
-                        },
-                    });
-                    if (!negotiated || !negotiated.trim()) return;
-                    finalName = negotiated.trim();
-                }
-
-                const newId = `workflow_${Date.now()}`;
-                const importedItem: PresetItem<WorkflowPresetData> = {
-                    id: newId,
-                    name: finalName,
-                    data: parsed.data as WorkflowPresetData,
-                    updatedAt: Date.now(),
-                };
-                settingsStore.savePreset('workflows', importedItem);
-                this.presetController.updateDraft('txt2imgWorkflowId', newId);
-                this.refreshAssetPools();
-                Toast.show(`已成功导入工作流预设: ${importedItem.name}`, { level: 'success' });
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : String(err);
-                Toast.show(`导入工作流预设失败: ${msg}`, { level: 'error' });
-            }
-        };
-        reader.onerror = () => {
-            Toast.show('读取预设文件失败', { level: 'error' });
-        };
-        reader.readAsText(file);
+        this.runAssetPresetImportFile<WorkflowPresetData>(file, {
+            category: 'workflows',
+            draftField: 'txt2imgWorkflowId',
+            idPrefix: 'workflow_',
+            label: '工作流预设',
+        });
     }
 
     private isSyncingAssets = false;
 
     /**
-     * 切入视图时执行后台轻量检测并在满足条件时静默同步。
+     * 服务地址或服务商切换后执行后台轻量检测并在满足条件时静默同步。
      */
     private async runBackgroundAssetSync(): Promise<void> {
         if (this.isSyncingAssets) return;
-        // 固定模型表服务商无需也不应发起网络资产拉取
-        if (this.getStaticModels()) return;
 
         const provider = providerRegistry.getProvider(this.provider);
-        if (!provider) return;
-
-        // 仅对具备健康检测与模型查询能力的本地或兼容后端执行
-        if (
-            typeof provider.checkHealth !== 'function' ||
-            (typeof provider.fetchModels !== 'function' &&
-                typeof provider.fetchCategorizedModels !== 'function')
-        ) {
+        if (!provider || typeof provider.checkHealth !== 'function' || !hasProviderAssetSync(provider)) {
             return;
         }
 
@@ -1397,11 +1203,8 @@ export class ProviderTabViewModel implements Disposable {
             const cache = cfg.assetCache;
             const needsInitialFetch =
                 !cache || !cache.updatedAt || !cache.checkpoints || cache.checkpoints.length === 0;
-            const signatureChanged = Boolean(
-                cache?.serverSignature && health.message && cache.serverSignature !== health.message
-            );
 
-            if (this.options.alwaysSyncOnActivate || needsInitialFetch || signatureChanged) {
+            if (needsInitialFetch) {
                 await this.refreshServerAssets(true, { skipHealthCheck: true });
             }
         } catch (err) {
@@ -1450,6 +1253,10 @@ export class ProviderTabViewModel implements Disposable {
      * 视图切出时解绑事件监听。
      */
     public deactivate(): void {
+        if (this.urlSyncTimer) {
+            clearTimeout(this.urlSyncTimer);
+            this.urlSyncTimer = null;
+        }
         if (this.unlistenSettings) {
             this.unlistenSettings();
             this.unlistenSettings = null;

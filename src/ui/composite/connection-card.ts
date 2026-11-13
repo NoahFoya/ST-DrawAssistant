@@ -309,13 +309,13 @@ export class ConnectionCard implements UIComponent, Disposable {
                 } else {
                     this.statusBadge.element.removeAttribute('title');
                 }
-                this.statusBadge.element.style.cursor = 'default';
+                this.statusBadge.element.classList.remove('is-clickable');
             } else {
                 const rawMsg = result.message || '网络连接异常';
                 this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
                 this.updateBadge('danger', '连接失败');
                 this.statusBadge.element.title = '点击查看排查指引与详细错误';
-                this.statusBadge.element.style.cursor = 'pointer';
+                this.statusBadge.element.classList.add('is-clickable');
                 const briefMsg = rawMsg.length > 50 ? `${rawMsg.slice(0, 50)}...` : rawMsg;
                 Toast.error(`服务连接失败: ${briefMsg}`);
             }
@@ -325,7 +325,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
             this.updateBadge('danger', '连接异常');
             this.statusBadge.element.title = '点击查看排查指引与详细错误';
-            this.statusBadge.element.style.cursor = 'pointer';
+            this.statusBadge.element.classList.add('is-clickable');
             Toast.error(`服务连接异常: ${msg}`);
             return { status: 'error', message: msg };
         } finally {
@@ -390,7 +390,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
             this.updateBadge('danger', '连接异常');
             this.statusBadge.element.title = '点击查看排查指引与详细错误';
-            this.statusBadge.element.style.cursor = 'pointer';
+            this.statusBadge.element.classList.add('is-clickable');
             logger.error('[ConnectionCard] 拉取模型列表失败:', msg);
             return null;
         } finally {
@@ -429,7 +429,7 @@ export class ConnectionCard implements UIComponent, Disposable {
     private resetStatusToIdle(): void {
         this.lastErrorDetails = null;
         this.statusBadge.element.removeAttribute('title');
-        this.statusBadge.element.style.cursor = 'default';
+        this.statusBadge.element.classList.remove('is-clickable');
         this.updateBadge('neutral', '未检测');
     }
 

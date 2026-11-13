@@ -441,8 +441,7 @@ export function openWorkflowFormatModal(
 
     if (!analysis.success) {
         const errDiv = document.createElement('div');
-        errDiv.style.cssText =
-            'color: var(--da-color-error); padding: 12px; background: rgba(var(--da-color-error-rgb), 0.08); border-radius: var(--da-radius-md);';
+        errDiv.className = 'da-workflow-format-error';
         errDiv.textContent = analysis.error || '解析失败';
         message.appendChild(errDiv);
     } else {
@@ -450,7 +449,7 @@ export function openWorkflowFormatModal(
         const unrepCount = analysis.unmatched.length;
 
         let html = `
-            <div class="da-workflow-format-summary" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="da-workflow-format-summary">
                 <span>扫描完成：共识别并自动绑定 <strong>${repCount}</strong> 处模板变量，另有 <strong>${unrepCount}</strong> 项变量未自动匹配。</span>
                 <span class="da-workflow-status-badge ${unrepCount === 0 ? 'da-workflow-status-badge--matched' : 'da-workflow-status-badge--unmatched'}">
                     ${unrepCount === 0 ? '全部匹配' : '部分未匹配'}

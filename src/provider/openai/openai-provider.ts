@@ -19,7 +19,7 @@ import type {
 } from '@types';
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import { logger } from '../../util/logger';
-import { base64ToBlob, HttpError } from '../../util/http-client';
+import { base64ToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
 
 /** OpenAI 兼容提供方初始化配置项 */
 export interface OpenAIProviderOptions extends BaseProviderOptions {}
@@ -54,7 +54,7 @@ export function buildSizeString(width?: number, height?: number): string | undef
  * @returns 过滤并规整后的图像模型标识数组
  */
 export function filterImageModels(models: Array<{ id: string }>): string[] {
-    const IMAGE_KEYWORDS = ['image', 'dall-e', 'dalle', 'flux', 'kolors', 'stable-diffusion', 'grok-2-image', 'imagine', 'vision'];
+    const IMAGE_KEYWORDS = ['image', 'dall-e', 'dalle', 'flux', 'kolors', 'stable-diffusion', 'grok-2-image', 'imagine'];
     return models
         .map((m) => m.id.replace(/^models\//, ''))
         .filter((id) =>
@@ -77,13 +77,15 @@ export function resolveOpenAIModel(
     parameters?: Record<string, unknown>,
     preset?: DrawingPresetData
 ): string {
-    const raw = (
-        (parameters?.model as string | undefined) ??
-        (parameters?.customModel as string | undefined) ??
-        (preset?.customModel as string | undefined) ??
-        (preset?.baseModel as string | undefined) ??
-        'dall-e-3'
-    );
+    const readTrimmed = (val: unknown): string =>
+        typeof val === 'string' ? val.trim() : '';
+
+    const raw =
+        readTrimmed(parameters?.model) ||
+        readTrimmed(parameters?.customModel) ||
+        readTrimmed(preset?.customModel) ||
+        readTrimmed(preset?.baseModel) ||
+        'dall-e-3';
     return raw.replace(/^models\//, '');
 }
 
@@ -93,6 +95,7 @@ export function resolveOpenAIModel(
 export class OpenAIProvider extends BaseGenerationProvider {
     public readonly providerType: ProviderType = 'openai';
     public readonly name: string = 'OpenAI Compatible';
+    public override readonly supportsNegativePrompt = false;
 
     /** 资产短时内存缓存过期时间 (60 秒) */
     public static readonly ASSET_CACHE_TTL_MS = 60_000;
@@ -288,46 +291,77 @@ export class OpenAIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 1. 读取激活预设与调用参数
-        let drawingPreset: DrawingPresetData | undefined;
-        if (this._settingsStore) {
-            const activeDrawingId = config?.activeDrawingPresetId;
-            if (activeDrawingId) {
-                drawingPreset = this._settingsStore.getPreset<DrawingPresetData>(
-                    'drawing',
-                    activeDrawingId,
-                    'openai'
-                )?.data;
-                if (!drawingPreset) {
-                    throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${activeDrawingId})，请重新选择预设`);
-                }
-            }
-        }
+        // 1. 读取激活预设与调用参数（优先使用队列快照固定的 drawingPresetId）
+        const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         const resolvedPrompt = request.prompt;
         const resolvedModel = resolveOpenAIModel(params, drawingPreset);
+        const lowerModel = resolvedModel.toLowerCase();
+        const isDalle3 = lowerModel.includes('dall-e-3');
+        const isGptImage = lowerModel.includes('gpt-image');
+        const isSiliconFlow =
+            config?.serviceId === 'siliconflow' ||
+            /(?:^|[./])siliconflow\.cn(?:[:/]|$)/i.test(v1Base);
 
         const resolvedWidth = (params.width ?? drawingPreset?.width) as number | undefined;
         const resolvedHeight = (params.height ?? drawingPreset?.height) as number | undefined;
-        const sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
 
-        const resolvedQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
-        const resolvedStyle = (params.style ?? drawingPreset?.style) as string | undefined;
+        let sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
+        if (!isSiliconFlow && isGptImage && resolvedWidth && resolvedHeight) {
+            // gpt-image-* 仅接受 1024x1024 / 1536x1024 / 1024x1536，按宽高比规整以免 DALL-E 3 尺寸触发 400
+            if (resolvedWidth > resolvedHeight) {
+                sizeStr = '1536x1024';
+            } else if (resolvedHeight > resolvedWidth) {
+                sizeStr = '1024x1536';
+            } else {
+                sizeStr = '1024x1024';
+            }
+        }
+
+        // 按模型家族映射或门控 quality / style，避免 DALL-E 3 预设残留字段触发兼容端点 400
+        let resolvedQuality = (params.quality ?? (isDalle3 ? drawingPreset?.quality : undefined)) as
+            | string
+            | undefined;
+        if (isGptImage) {
+            const rawGptQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
+            if (rawGptQuality === 'hd') {
+                resolvedQuality = 'high';
+            } else if (rawGptQuality === 'standard') {
+                resolvedQuality = 'medium';
+            } else if (rawGptQuality) {
+                resolvedQuality = rawGptQuality;
+            }
+        }
+        const resolvedStyle = isGptImage
+            ? undefined
+            : ((params.style ?? (isDalle3 ? drawingPreset?.style : undefined)) as
+                  | string
+                  | undefined);
 
         // 2. 装配标准生成请求体 (云端接口原生不支持负向提示词，严格保持纯净正向词请求)
         const requestBody: Record<string, unknown> = {
             prompt: resolvedPrompt,
-            n: 1,
         };
+        if (isSiliconFlow) {
+            requestBody['batch_size'] = 1;
+        } else {
+            requestBody['n'] = 1;
+        }
 
-        // 仅在明确为 DALL-E 系列模型时默认携带 response_format: 'b64_json'，
+        // 仅在 DALL-E 与 Google Gemini OpenAI 兼容模型上默认携带 response_format: 'b64_json'，
         // 避免 gpt-image 或第三方兼容服务商因未知参数返回 400 Bad Request
-        if (!resolvedModel || resolvedModel.toLowerCase().startsWith('dall-e')) {
+        if (!lowerModel || lowerModel.startsWith('dall-e') || lowerModel.startsWith('gemini')) {
             requestBody['response_format'] = 'b64_json';
         }
 
         if (resolvedModel) requestBody['model'] = resolvedModel;
-        if (sizeStr) requestBody['size'] = sizeStr;
+        if (sizeStr) {
+            if (isSiliconFlow) {
+                requestBody['image_size'] = sizeStr;
+            } else {
+                requestBody['size'] = sizeStr;
+            }
+        }
         if (resolvedQuality) requestBody['quality'] = resolvedQuality;
         if (resolvedStyle) requestBody['style'] = resolvedStyle;
 
@@ -340,7 +374,11 @@ export class OpenAIProvider extends BaseGenerationProvider {
                     Object.assign(requestBody, customObj);
                     // 确保核心必要参数优先级
                     requestBody['prompt'] = resolvedPrompt;
-                    requestBody['n'] = 1;
+                    if (isSiliconFlow) {
+                        requestBody['batch_size'] = 1;
+                    } else {
+                        requestBody['n'] = 1;
+                    }
                 }
             } catch (err) {
                 logger.warn('[OpenAIProvider] 自定义请求体 JSON 解析失败，跳过附加参数:', err);
@@ -422,14 +460,22 @@ export class OpenAIProvider extends BaseGenerationProvider {
         let blob: Blob;
 
         // 优先解析 b64_json 避免 URL 过期；无 b64_json 时拉取 url 字段指向的图像
-        if (firstImage.b64_json) {
+        if (typeof firstImage.b64_json === 'string' && firstImage.b64_json.trim()) {
             blob = base64ToBlob(firstImage.b64_json, 'image/png');
         } else if (firstImage.url) {
-            const imgResponse = await this.fetchWithTransport(
-                firstImage.url,
-                { method: 'GET', timeoutMs: 30000, signal },
-                transport
-            );
+            let imgResponse: Response;
+            try {
+                imgResponse = await this.fetchWithTransport(
+                    firstImage.url,
+                    { method: 'GET', timeoutMs: maxTimeoutMs, signal, retries: 0 },
+                    transport
+                );
+            } catch (err: unknown) {
+                if (err instanceof HttpError) {
+                    throw new Error(`图像 URL 下载失败: HTTP ${err.status}`);
+                }
+                throw err;
+            }
             if (!imgResponse.ok) {
                 throw new Error(`图像 URL 下载失败: HTTP ${imgResponse.status}`);
             }
@@ -438,7 +484,27 @@ export class OpenAIProvider extends BaseGenerationProvider {
             throw new Error('OpenAI 兼容服务响应中不含有效图像字段（b64_json 或 url）');
         }
 
-        // 6. 装配生成元数据
+        blob = await ensureValidImageBlob(blob, 'OpenAI 兼容服务');
+
+        // 6. 装配生成元数据（若 customBodyJson 覆写了 model 或 size，则同步到最终元数据）
+        const finalModel =
+            typeof requestBody['model'] === 'string' && requestBody['model'].trim()
+                ? requestBody['model'].trim()
+                : resolvedModel;
+        let finalWidth = resolvedWidth;
+        let finalHeight = resolvedHeight;
+        const effectiveSizeStr =
+            typeof requestBody['image_size'] === 'string'
+                ? requestBody['image_size']
+                : requestBody['size'];
+        if (typeof effectiveSizeStr === 'string') {
+            const sizeMatch = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(effectiveSizeStr.trim());
+            if (sizeMatch) {
+                finalWidth = Number(sizeMatch[1]);
+                finalHeight = Number(sizeMatch[2]);
+            }
+        }
+
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
             prompt: resolvedPrompt,
@@ -446,9 +512,9 @@ export class OpenAIProvider extends BaseGenerationProvider {
             negativePrompt: undefined,
             engine: 'openai',
             durationMs,
-            baseModel: resolvedModel,
-            width: resolvedWidth,
-            height: resolvedHeight,
+            baseModel: finalModel,
+            width: finalWidth,
+            height: finalHeight,
         };
 
         return {
