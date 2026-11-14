@@ -2,6 +2,9 @@
  * 插件在线更新与版本演进相关类型定义。
  */
 
+/** 更新检测数据来源 */
+export type UpdateCheckSource = 'host-git' | 'github-api' | 'manifest';
+
 /** 更新日志单条版本结构 */
 export interface ChangelogItem {
     /** 语义版本号 (如 2.0.0-dev, 0.5.0) */
@@ -32,6 +35,12 @@ export interface UpdateState {
     readonly remoteCommitSha: string | null;
     /** 远程最新提交信息摘要 */
     readonly remoteCommitMessage: string | null;
+    /** 本次检测来源渠道 */
+    readonly checkSource?: UpdateCheckSource | null;
+    /** 通过清单回退通道解析到的远端语义版本 */
+    readonly remoteVersion?: string | null;
+    /** GitHub API 限流解除时间戳 (毫秒) */
+    readonly rateLimitedUntil?: number | null;
     /** 异常描述信息，无异常时为 null */
     readonly error: string | null;
     /** 上次成功检测时间戳 (毫秒) */
@@ -50,6 +59,12 @@ export interface CheckUpdateResult {
     readonly remoteSha: string | null;
     /** 远程提交信息 */
     readonly remoteMessage: string | null;
+    /** 本次检测来源渠道 */
+    readonly checkSource?: UpdateCheckSource | null;
+    /** 通过清单回退通道解析到的远端语义版本 */
+    readonly remoteVersion?: string | null;
+    /** GitHub API 限流解除时间戳 (毫秒) */
+    readonly rateLimitedUntil?: number | null;
     /** 状态与反馈提示文案 */
     readonly message: string;
 }

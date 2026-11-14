@@ -99,7 +99,11 @@ export class AboutTabView extends PreactSettingsView {
         return [
             `### ${EXTENSION_TITLE} 系统诊断报告`,
             `- **插件版本**: v${EXTENSION_VERSION}`,
-            `- **代码提交**: ${this.updateState.value.currentCommitSha || '本地构建'}`,
+            `- **代码提交**: ${
+                this.updateState.value.currentCommitSha
+                    ? `${this.updateState.value.currentBranch}@${this.updateState.value.currentCommitSha}`
+                    : '本地构建'
+            }`,
             `- **生成时间**: ${new Date().toISOString()}`,
             `- **SillyTavern 宿主**: ${env.hasST ? '已集成' : '未检测到宿主'}`,
             `- **生图引擎**: ${env.activeProvider}`,
@@ -132,10 +136,11 @@ export class AboutTabView extends PreactSettingsView {
     }
 
     private async handleCheckUpdate(silent = false): Promise<void> {
-        const res = await updateService.checkUpdate();
+        const res = await updateService.checkUpdate({ force: !silent, silent });
         if (!silent) {
             if (res.hasUpdate) {
-                Toast.show(`发现新版本提交 (${res.remoteSha || '最新'})，可点击一键更新`, {
+                const versionHint = res.remoteSha || (res.remoteVersion ? `v${res.remoteVersion}` : '最新');
+                Toast.show(`发现新版本提交 (${versionHint})，可点击一键更新`, {
                     level: 'info',
                 });
             } else if (!res.success) {
@@ -148,10 +153,12 @@ export class AboutTabView extends PreactSettingsView {
 
     private async handleApplyUpdate(): Promise<void> {
         const state = this.updateState.value;
-        const targetSha = state.remoteCommitSha || '最新提交';
+        const targetLabel =
+            state.remoteCommitSha ||
+            (state.remoteVersion ? `v${state.remoteVersion}` : `${state.currentBranch || '最新'}提交`);
         const confirmed = await ConfirmDialog.confirm({
             title: '确认一键更新',
-            message: `即将从远程仓库拉取最新代码 (${targetSha}) 并更新当前插件。更新完成后将自动刷新页面，确定继续吗？`,
+            message: `即将从远程仓库拉取最新代码 (${targetLabel}) 并更新当前插件。更新完成后将自动刷新页面，确定继续吗？`,
             confirmText: '立即更新',
             cancelText: '取消',
         });
@@ -243,10 +250,13 @@ export class AboutTabView extends PreactSettingsView {
                 </span>
             );
         } else if (update.hasUpdate) {
+            const targetHint =
+                update.remoteCommitSha ||
+                (update.remoteVersion ? `v${update.remoteVersion}` : update.currentBranch || '可用');
             statusPill = (
                 <span
                     className="da-version-pill da-version-pill--warn"
-                    title={`发现新提交: ${update.remoteCommitSha || ''}`}
+                    title={`发现可用更新: ${targetHint}`}
                 >
                     <span className="da-version-pill__dot" />
                     <span>可更新</span>
@@ -261,7 +271,9 @@ export class AboutTabView extends PreactSettingsView {
             );
         } else if (update.lastCheckedAt) {
             const timeStr = new Date(update.lastCheckedAt).toLocaleTimeString();
-            const commitDetail = update.currentCommitSha ? ` (${update.currentCommitSha.slice(0, 7)})` : '';
+            const commitDetail = update.currentCommitSha
+                ? ` (${update.currentBranch || 'dev'}@${update.currentCommitSha.slice(0, 7)})`
+                : '';
             statusPill = (
                 <span
                     className="da-version-pill da-version-pill--success"
@@ -281,7 +293,11 @@ export class AboutTabView extends PreactSettingsView {
                         <h2 className="da-about-header__title">{EXTENSION_TITLE}</h2>
                         <span
                             className="da-tag-chip"
-                            title={update.currentCommitSha ? `本地提交: ${update.currentCommitSha}` : undefined}
+                            title={
+                                update.currentCommitSha
+                                    ? `当前分支与提交: ${update.currentBranch}@${update.currentCommitSha}`
+                                    : undefined
+                            }
                         >
                             v{EXTENSION_VERSION}
                         </span>
@@ -296,7 +312,11 @@ export class AboutTabView extends PreactSettingsView {
                                 label={
                                     update.isUpdating
                                         ? '正在更新...'
-                                        : `一键更新至 ${update.remoteCommitSha || '最新'}`
+                                        : update.remoteCommitSha
+                                          ? `一键更新至 ${update.remoteCommitSha}`
+                                          : update.remoteVersion
+                                            ? `一键更新至 v${update.remoteVersion}`
+                                            : `一键更新 (${update.currentBranch || '最新'})`
                                 }
                                 variant="primary"
                                 size="sm"
@@ -529,7 +549,7 @@ export class AboutTabView extends PreactSettingsView {
     public override activate(): void {
         super.activate();
         void this.refreshEnvState();
-        void updateService.checkUpdate();
+        void updateService.checkUpdate({ force: false, silent: true });
     }
 
     public override dispose(): void {

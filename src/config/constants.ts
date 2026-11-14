@@ -11,7 +11,9 @@ export const EXTENSION_VERSION = '1.1.2';
 export const GITHUB_REPO = 'NoahFoya/ST-DrawAssistant';
 export const GITHUB_DEFAULT_BRANCH = 'dev';
 export const GITHUB_API_BASE = 'https://api.github.com';
-export const GITHUB_MIRROR_API_BASE = 'https://ghproxy.net/https://api.github.com';
+export const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com';
+export const GITHUB_CDN_BASE = 'https://cdn.jsdelivr.net/gh';
+export const UPDATE_CHECK_COOLDOWN_MS = 5 * 60 * 1000;
 export const INSTALLED_COMMIT_SHA_KEY = 'st_da_installed_sha';
 
 /**
