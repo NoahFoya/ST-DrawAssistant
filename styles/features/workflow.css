@@ -269,8 +269,8 @@
     margin: 0 16px 12px 16px;
     padding: 8px 12px;
     border-radius: var(--da-radius-md, 8px);
-    background: rgba(129, 140, 248, 0.08);
-    border: 1px solid rgba(129, 140, 248, 0.2);
+    background: var(--da-color-info-subtle, rgba(var(--da-accent-rgb), 0.12));
+    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
     box-sizing: border-box;
 }
 
@@ -797,13 +797,13 @@
 }
 
 .da-blueprint-var-item--recommended {
-    background: rgba(234, 179, 8, 0.12); /* 预设收藏高亮微色相 */
-    border-color: rgba(234, 179, 8, 0.35);
+    background: var(--da-color-warn-subtle, rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.12)); /* 预设收藏高亮微色相 */
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.35);
 }
 
 .da-blueprint-var-item--recommended:hover {
-    background: rgba(234, 179, 8, 0.22);
-    border-color: rgba(234, 179, 8, 0.6);
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.22);
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.6);
 }
 
 .da-blueprint-var-item-name {

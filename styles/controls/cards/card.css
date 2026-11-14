@@ -5,8 +5,7 @@
  * 为所有业务卡片提供标准统一的视觉外壳：
  * 1. 头部标题区：主标题与副标题辅助说明；
  * 2. 头部右上角操作区与状态徽标区；
- * 3. 平滑折叠/展开动画与收起态隐藏；
- * 4. 主体内容容器。
+ * 3. 主体内容容器。
  */
 
 .da-card {
@@ -182,7 +181,7 @@
     box-sizing: border-box;
 }
 
-/* 5. 卡片与表单内语义分割线 (.da-settings-divider) */
+/* 4. 卡片与表单内语义分割线 (.da-settings-divider) */
 .da-settings-divider {
     height: 1px;
     margin: 6px 0;
@@ -191,7 +190,7 @@
     flex-shrink: 0;
 }
 
-/* 6. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
+/* 5. 服务连接专用卡片样式 (.da-connection-card 与 .da-connection-row) */
 .da-connection-card .da-card__header {
     padding: 10px 16px;
 }
@@ -253,7 +252,7 @@
     max-width: none;
 }
 
-/* 7. 卡片内语义小标题分割栏 (.da-section-banner) */
+/* 6. 卡片内语义小标题分割栏 (.da-section-banner) */
 .da-section-banner {
     display: flex;
     align-items: center;
@@ -288,9 +287,9 @@
     border-radius: 2px;
 }
 
-/* 4. 移动端与窄屏卡片头部自适应 (@media (max-width: 600px))
+/* 7. 移动端与窄屏卡片头部自适应 (@media (max-width: 640px))
    当屏幕极窄时，允许卡片 Header 自适应换行，确保左侧标题与右侧多操作按钮不挤压变形 */
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .da-card__header {
         flex-wrap: wrap;
         gap: 8px;

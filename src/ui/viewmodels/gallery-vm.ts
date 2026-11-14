@@ -11,7 +11,7 @@ import { signal, computed, type Signal, type ReadonlySignal } from '@preact/sign
 import type { StoredImageRecord } from '@types';
 import type { Disposable } from '../types';
 import type { StorageSummaryData } from '../composite/storage-bar';
-import { StorageMaintenanceService } from './storage-maintenance';
+import { StorageMaintenanceService, GALLERY_QUERY_LIMIT } from './storage-maintenance';
 import { imageStorage } from '../../store/image-storage';
 import { eventBus } from '../../util/event-bus';
 import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
@@ -93,12 +93,7 @@ export class GalleryViewModel implements Disposable {
                 result = result.filter((r) => {
                     const prompt = String(r.metadata?.prompt || '').toLowerCase();
                     const neg = String(r.metadata?.negativePrompt || '').toLowerCase();
-                    const model = String(
-                        r.metadata?.baseModel ??
-                            r.metadata?.modelName ??
-                            (r.metadata as Record<string, unknown> | undefined)?.model ??
-                            ''
-                    ).toLowerCase();
+                    const model = String(r.metadata?.baseModel ?? '').toLowerCase();
                     const seed = String(r.metadata?.seed ?? '');
                     return (
                         prompt.includes(kw) ||
@@ -164,7 +159,7 @@ export class GalleryViewModel implements Disposable {
             if (this.loadFailedIds.value.size > 0) {
                 this.loadFailedIds.value = new Set();
             }
-            const records = await imageStorage.listImages({ limit: 10000 });
+            const records = await imageStorage.listImages({ limit: GALLERY_QUERY_LIMIT });
             this.allRecords.value = records;
             this.storageSummary.value = await StorageMaintenanceService.computeStorageSummary(
                 this.allRecords.value
@@ -384,15 +379,24 @@ export class GalleryViewModel implements Disposable {
      * @param imageId 目标图片唯一标识符
      * @param fav 目标标星状态
      */
-    public async toggleFavorite(imageId: string, fav: boolean): Promise<void> {
-        await imageStorage.toggleFavorite(imageId);
-        this.allRecords.value = this.allRecords.value.map((r) =>
-            r.imageId === imageId ? { ...r, favorited: fav } : r
-        );
-        this.storageSummary.value = await StorageMaintenanceService.computeStorageSummary(
-            this.allRecords.value
-        );
-        Toast.success(fav ? '已加入收藏' : '已取消收藏');
+    public async toggleFavorite(imageId: string, _fav?: boolean): Promise<void> {
+        let changed = false;
+        const off = eventBus.on('image:favorite-changed', (payload) => {
+            if (payload.imageId === imageId) {
+                changed = true;
+            }
+        });
+        let nextFav = false;
+        try {
+            nextFav = await imageStorage.toggleFavorite(imageId);
+        } finally {
+            off();
+        }
+        if (!changed) {
+            Toast.error('操作失败：本地图像记录不存在');
+            return;
+        }
+        Toast.success(nextFav ? '已加入收藏' : '已取消收藏');
     }
 
     /**

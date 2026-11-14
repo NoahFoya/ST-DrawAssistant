@@ -110,8 +110,8 @@
     min-height: 0;
 }
 
-/* 4. 移动端内容区域收紧边距 (@media (max-width: 680px)) */
-@media (max-width: 680px) {
+/* 4. 移动端内容区域收紧边距 (@media (max-width: 640px)) */
+@media (max-width: 640px) {
     .st-da-root .da-modal-content {
         padding: 10px 10px 20px 10px;
     }

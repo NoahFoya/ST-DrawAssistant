@@ -31,10 +31,17 @@ export interface ExtractionPanelProps {
     charController: PresetController<CharacterPresetData>;
     outfitController: PresetController<OutfitPresetData>;
     sandboxText: Signal<string>;
+    onArchivesApplied?: () => void;
 }
 
 export function ExtractionPanel(props: ExtractionPanelProps): VNode {
-    const { extractionController, charController, outfitController, sandboxText } = props;
+    const {
+        extractionController,
+        charController,
+        outfitController,
+        sandboxText,
+        onArchivesApplied,
+    } = props;
 
     const ext = {
         ...DEFAULT_EXTRACTION_CONFIG,
@@ -53,6 +60,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                 activePresetId={extractionController.activePresetId.value}
                 dirty={extractionController.isDirty.value}
                 onAction={(action, id) => extractionController.handleAction(action, id)}
+                onImportFile={(file) => extractionController.handleImportFile(file)}
             />
 
             {/* 卡片 1: 楼层档案提取设置 */}
@@ -183,7 +191,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                 tooltip={`可在此处输入或粘贴包含 <角色> 与 <服装> 标签的酒馆 AI 回复文本，实时校验正文正则提取与部位拆解是否符合预期。`}
                 className="da-card--padded"
                 actions={
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div className="da-sandbox-actions">
                         <ButtonControl
                             label="载入示例"
                             variant="ghost"
@@ -212,6 +220,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                                     onConfirmed: () => {
                                         charController.reloadFromStore();
                                         outfitController.reloadFromStore();
+                                        onArchivesApplied?.();
                                     },
                                 });
                             }}
@@ -233,7 +242,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
 
                 <div className="da-sandbox-preview">
                     {previewItems.length === 0 ? (
-                        <div className="da-empty-hint" style={{ padding: '8px 12px' }}>
+                        <div className="da-empty-hint da-empty-hint--compact">
                             未匹配到有效档案块（需包含起止符以及 NAME 名称行）
                         </div>
                     ) : (

@@ -15,6 +15,7 @@ import type {
     PromptInjectionEntry,
     PromptChannelPresetData,
 } from '@types';
+import { splitKeywordTokens } from './prompt-injector';
 
 /** 导入 JSON 文件结构识别结果 */
 export type PromptImportFormat = 'plugin-preset' | 'st-worldbook' | 'invalid';
@@ -48,7 +49,7 @@ export function hasMaterialListPlaceholder(content: string): boolean {
     if (!content) {
         return false;
     }
-    return /\{\{\s*(?:角色启用列表|服装启用列表)\s*\}\}/.test(content);
+    return /\{\{\s*(?:角色启用列表|服装启用列表|角色可用宏列表|服装可用宏列表)\s*\}\}/.test(content);
 }
 
 /**
@@ -95,31 +96,9 @@ export function detectPromptImportFormat(raw: unknown): PromptImportFormat {
         return 'plugin-preset';
     }
 
-    // 2. 酒馆原生世界书标准字典结构：{ name?, entries: { "0": { uid, ... } } }
-    if (isPlainObject(raw.entries)) {
+    // 2. 酒馆原生世界书字典结构：{ name?, entries: { "0": { uid, ... } } } 或带 originalData 的数组结构
+    if (isPlainObject(raw.entries) || (Array.isArray(raw.entries) && 'originalData' in raw)) {
         return 'st-worldbook';
-    }
-
-    // 3. 数组形式 entries：根据内部元素特征区分酒馆条目与插件条目
-    if (Array.isArray(raw.entries)) {
-        const firstObj = raw.entries.find((item) => isPlainObject(item)) as
-            | Record<string, unknown>
-            | undefined;
-        if (!firstObj) {
-            return 'originalData' in raw ? 'st-worldbook' : 'plugin-preset';
-        }
-        if (firstObj.triggerMode === 'always' || firstObj.triggerMode === 'keyword') {
-            return 'plugin-preset';
-        }
-        if (
-            'uid' in firstObj ||
-            'constant' in firstObj ||
-            'disable' in firstObj ||
-            Array.isArray(firstObj.key)
-        ) {
-            return 'st-worldbook';
-        }
-        return 'plugin-preset';
     }
 
     return 'invalid';
@@ -151,10 +130,12 @@ export function normalizePromptInjectionEntry(
             ? raw.logicType
             : undefined;
     const caseSensitive = typeof raw.caseSensitive === 'boolean' ? raw.caseSensitive : undefined;
+    const matchWholeWords =
+        typeof raw.matchWholeWords === 'boolean' ? raw.matchWholeWords : undefined;
     const scanDepth =
-        typeof raw.scanDepth === 'number' && Number.isFinite(raw.scanDepth) && raw.scanDepth > 0
+        typeof raw.scanDepth === 'number' && Number.isFinite(raw.scanDepth) && raw.scanDepth >= 0
             ? Math.floor(raw.scanDepth)
-            : 5;
+            : 2;
     const position: 0 | 1 | 2 =
         raw.position === 0 || raw.position === 1 || raw.position === 2 ? raw.position : 1;
     const depth =
@@ -181,6 +162,7 @@ export function normalizePromptInjectionEntry(
         ...(secondaryKeywords ? { secondaryKeywords } : {}),
         ...(logicType ? { logicType } : {}),
         ...(caseSensitive !== undefined ? { caseSensitive } : {}),
+        ...(matchWholeWords !== undefined ? { matchWholeWords } : {}),
         scanDepth,
         position,
         depth,
@@ -192,7 +174,7 @@ export function normalizePromptInjectionEntry(
 }
 
 /**
- * 解析并规范化插件自身的提示词预设 JSON（支持包装态 PresetItem 或直接的 `{ entries }`）。
+ * 解析并规范化标准 `{ data: { entries } }` 结构的插件提示词预设 JSON。
  */
 export function normalizePluginPromptChannelPreset(
     raw: Record<string, unknown>,
@@ -201,9 +183,7 @@ export function normalizePluginPromptChannelPreset(
     const rawEntries =
         isPlainObject(raw.data) && Array.isArray(raw.data.entries)
             ? raw.data.entries
-            : Array.isArray(raw.entries)
-              ? raw.entries
-              : null;
+            : null;
 
     if (!rawEntries) {
         return null;
@@ -315,11 +295,7 @@ export function parseStWorldbookEntries(
                     .join('|');
             }
             if (typeof val === 'string') {
-                return val
-                    .split(/[|,，]+/)
-                    .map((k) => k.trim())
-                    .filter(Boolean)
-                    .join('|');
+                return splitKeywordTokens(val).join('|');
             }
             return '';
         };
@@ -327,21 +303,24 @@ export function parseStWorldbookEntries(
         const keywords = parseRawKeyField(rawEntry.key);
         const secondaryKeywords = parseRawKeyField(rawEntry.keysecondary);
         // 酒馆 World Info selectiveLogic: 0=AND ANY, 1=NOT ALL(按 not_any 近似), 2=NOT ANY, 3=AND ALL
-        let logicType: PromptInjectionEntry['logicType'];
+        let logicType: PromptInjectionEntry['logicType'] = 'and_any';
         if (rawEntry.selectiveLogic === 3) {
             logicType = 'and_all';
         } else if (rawEntry.selectiveLogic === 1 || rawEntry.selectiveLogic === 2) {
             logicType = 'not_any';
-        } else if (secondaryKeywords) {
-            logicType = 'and_any';
         }
+
+        const caseSensitive =
+            typeof rawEntry.caseSensitive === 'boolean' ? rawEntry.caseSensitive : undefined;
+        const matchWholeWords =
+            typeof rawEntry.matchWholeWords === 'boolean' ? rawEntry.matchWholeWords : undefined;
 
         const scanDepth =
             typeof rawEntry.scanDepth === 'number' &&
             Number.isFinite(rawEntry.scanDepth) &&
-            rawEntry.scanDepth > 0
+            rawEntry.scanDepth >= 0
                 ? Math.floor(rawEntry.scanDepth)
-                : 5;
+                : 2;
 
         const position = mapStPositionToExtensionPosition(rawEntry.position);
         const depth =
@@ -365,6 +344,8 @@ export function parseStWorldbookEntries(
             keywords,
             ...(secondaryKeywords ? { secondaryKeywords } : {}),
             ...(logicType ? { logicType } : {}),
+            ...(caseSensitive !== undefined ? { caseSensitive } : {}),
+            ...(matchWholeWords !== undefined ? { matchWholeWords } : {}),
             scanDepth,
             position,
             depth,
@@ -395,16 +376,16 @@ export function exportToStWorldbookJson(
     const entriesMap: Record<string, Record<string, unknown>> = {};
 
     (entries || []).forEach((entry, idx) => {
-        const keys = (entry.keywords || '')
-            .split(/[|,，]+/)
-            .map((k) => k.trim())
-            .filter(Boolean);
-        const keysecondary = (entry.secondaryKeywords || '')
-            .split(/[|,，]+/)
-            .map((k) => k.trim())
-            .filter(Boolean);
+        const keys = splitKeywordTokens(entry.keywords);
+        const keysecondary = splitKeywordTokens(entry.secondaryKeywords);
         const selectiveLogic =
-            entry.logicType === 'and_all' ? 3 : entry.logicType === 'not_any' ? 2 : 0;
+            keysecondary.length === 0
+                ? 0
+                : entry.logicType === 'and_all'
+                  ? 3
+                  : entry.logicType === 'not_any'
+                    ? 2
+                    : 0;
         const title = (entry.name || '').trim() || `条目 #${idx}`;
         const stPosition = mapExtensionPositionToStPosition(entry.position ?? 1);
         const depth =
@@ -419,7 +400,8 @@ export function exportToStWorldbookJson(
         const scanDepth =
             entry.triggerMode === 'keyword' &&
             typeof entry.scanDepth === 'number' &&
-            entry.scanDepth > 0
+            Number.isFinite(entry.scanDepth) &&
+            entry.scanDepth >= 0
                 ? Math.floor(entry.scanDepth)
                 : null;
 
@@ -438,7 +420,7 @@ export function exportToStWorldbookJson(
             role,
             key: keys,
             keysecondary,
-            matchWholeWords: false,
+            matchWholeWords: Boolean(entry.matchWholeWords),
             excludeRecursion: true,
             preventRecursion: true,
             delayUntilRecursion: false,
@@ -459,7 +441,7 @@ export function exportToStWorldbookJson(
             groupOverride: false,
             groupWeight: 100,
             scanDepth,
-            caseSensitive: null,
+            caseSensitive: typeof entry.caseSensitive === 'boolean' ? entry.caseSensitive : null,
             useGroupScoring: null,
             automationId: '',
             sticky: 0,

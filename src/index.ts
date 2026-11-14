@@ -20,7 +20,7 @@ import { themeService } from './ui/theme';
 import { SettingsModal } from './ui/modal/settings-modal';
 import { registerDefaultViews } from './ui/views/registry';
 import { FloatingActionButton, DrawerEntry } from './ui/entry';
-import { toastService, tooltipService } from './ui/feedback';
+import { toastService, Toast, tooltipService } from './ui/feedback';
 import { messageDecorator } from './ui/floor/message-decorator';
 import { lightboxModal, imageInfoModal } from './ui/media';
 import { overlayStack } from './ui/framework/overlay-stack';
@@ -80,12 +80,23 @@ export async function initOnce(): Promise<void> {
     initPromise = (async () => {
         try {
             // 1. 从宿主异步初始化配置存储（首次启用时载入静态预设文件）
-            await settingsStore.initializeFromHost();
+            try {
+                await settingsStore.initializeFromHost();
+            } catch (err) {
+                logger.error('ST-DrawAssistant 预设初始化失败，已中止挂载:', err);
+                Toast.error('默认预设初始化失败，请检查静态预设资源后重试');
+                return;
+            }
 
             // 若在异步载入期间插件已被停用卸载，终止后续 UI 与事件挂载
             if (currentGen !== lifecycleGeneration) {
                 return;
             }
+
+            // 恢复全局服务实例监听与调度状态（兼容停用后重新激活）
+            generationOrchestrator.restore();
+            lexiconIndexService.bind();
+            messageDecorator.bind();
 
             // 2. 初始化视口同步、主题服务与全局浮动提示气泡服务
             viewportService.mount();
@@ -177,10 +188,17 @@ export async function initOnce(): Promise<void> {
                     );
 
                     let modalOpened = false;
+                    const initialChatId = hostContext.chatId;
+                    const initialMessageObj = hostContext.chat?.[messageId];
                     if (type !== 'first_message') {
                         modalOpened = messageDecorator.inspectAndShowArchiveModal(messageId, {
                             onFinished: () => {
-                                if (canAutoGenerate) {
+                                const latestCtx = window.SillyTavern?.getContext?.();
+                                if (
+                                    canAutoGenerate &&
+                                    latestCtx?.chatId === initialChatId &&
+                                    latestCtx?.chat?.[messageId] === initialMessageObj
+                                ) {
                                     void promptInjector.scheduleSyncToHost();
                                     messageDecorator.triggerReadyButtons(messageId);
                                 }
@@ -212,12 +230,18 @@ export async function initOnce(): Promise<void> {
                     void promptInjector.scheduleSyncToHost();
                 });
 
-                // 监听宿主提示词组合前事件 (GENERATE_BEFORE_COMBINED_PROMPTS)，确保重新生成、重 roll 与续写场景下注入最新提示词
+                // 监听宿主生成启动与提示词组合前事件，在提示词装配前同步写入最新注入内容
+                const genStartedEvent =
+                    eventTypesMap.GENERATION_STARTED || 'generation_started';
+                bindHostEvent(genStartedEvent, () => {
+                    promptInjector.syncToHost();
+                });
+
                 const beforeCombinedEvent =
                     eventTypesMap.GENERATE_BEFORE_COMBINED_PROMPTS ||
                     'generate_before_combined_prompts';
                 bindHostEvent(beforeCombinedEvent, () => {
-                    void promptInjector.scheduleSyncToHost();
+                    promptInjector.syncToHost();
                 });
 
                 // 监听候选分支左右滑动切换 (MESSAGE_SWIPED)
@@ -232,6 +256,7 @@ export async function initOnce(): Promise<void> {
                             ? parseHostIndex((data as { swipeId?: unknown }).swipeId)
                             : undefined;
                     void messageDecorator.handleMessageSwiped(messageId, swipeId);
+                    void promptInjector.scheduleSyncToHost();
                 });
 
                 // 监听候选分支被删除 (MESSAGE_SWIPE_DELETED)
@@ -259,21 +284,25 @@ export async function initOnce(): Promise<void> {
                             );
                         }
                         void messageDecorator.handleMessageSwiped(messageId, newSwipeId);
+                        void promptInjector.scheduleSyncToHost();
                     }
                 });
 
-                // 监听消息正文编辑完成 (MESSAGE_UPDATED / MESSAGE_EDITED)
-                const msgUpdatedEvent =
-                    eventTypesMap.MESSAGE_UPDATED ||
-                    eventTypesMap.MESSAGE_EDITED ||
-                    'message_updated';
-                bindHostEvent(msgUpdatedEvent, (data: unknown) => {
-                    const messageId = extractMessageId(data);
-                    if (messageId === undefined) {
-                        return;
-                    }
-                    void messageDecorator.handleMessageEdited(messageId);
-                });
+                // 监听消息正文编辑完成 (MESSAGE_UPDATED / MESSAGE_EDITED 去重同时绑定，防止短路漏绑)
+                const msgEditEvents = new Set<string>([
+                    eventTypesMap.MESSAGE_UPDATED || 'message_updated',
+                    eventTypesMap.MESSAGE_EDITED || 'message_edited',
+                ]);
+                for (const evtName of msgEditEvents) {
+                    bindHostEvent(evtName, (data: unknown) => {
+                        const messageId = extractMessageId(data);
+                        if (messageId === undefined) {
+                            return;
+                        }
+                        void messageDecorator.handleMessageEdited(messageId);
+                        void promptInjector.scheduleSyncToHost();
+                    });
+                }
 
                 // 监听消息删除 (MESSAGE_DELETED) - 宿主传递删除后消息总数 (newChatLength)，并在 DOM 中同步更新 mesid
                 const msgDeletedEvent = eventTypesMap.MESSAGE_DELETED || 'message_deleted';
@@ -283,6 +312,7 @@ export async function initOnce(): Promise<void> {
                         generationOrchestrator.cancelTasksOutOfRange(chatId, data);
                     }
                     void messageDecorator.resyncAfterMessageDeleted();
+                    void promptInjector.scheduleSyncToHost();
                 });
 
                 // 监听会话变更与初次载入
@@ -396,6 +426,7 @@ export function disposeExtension(): void {
 
     sessionLifecycle.unbindHostEvents();
     lexiconIndexService.dispose();
+    generationOrchestrator.dispose();
 
     // 2. 销毁 UI 组件
     if (drawerEntryInstance) {

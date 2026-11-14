@@ -241,10 +241,12 @@ export class FabTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
+        super.activate();
         this.bridge.activate();
     }
 
     public override deactivate(): void {
+        super.deactivate();
         this.bridge.deactivate();
     }
 

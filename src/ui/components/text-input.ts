@@ -202,9 +202,9 @@ export class TextInput implements ControlHandle<string> {
     public setDirty(isDirty: boolean): void {
         this.isDirtyState = isDirty;
         if (isDirty) {
-            this.element.classList.add('da-input-wrapper--dirty');
+            this.element.classList.add('da-input-wrapper--dirty', 'is-dirty');
         } else {
-            this.element.classList.remove('da-input-wrapper--dirty');
+            this.element.classList.remove('da-input-wrapper--dirty', 'is-dirty');
         }
     }
 

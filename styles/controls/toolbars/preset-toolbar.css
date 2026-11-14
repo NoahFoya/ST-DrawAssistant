@@ -77,7 +77,7 @@
     height: 32px;
 }
 
-/* 右侧区域：8 键快捷操作按钮组（新建、保存、复制、重命名、导入、导出、重置、删除） */
+/* 右侧区域：8 键快捷操作按钮组（新建、保存、另存为、重命名、导入、导出、重置、删除） */
 .da-preset-toolbar-right {
     display: inline-flex;
     align-items: center;

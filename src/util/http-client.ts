@@ -66,6 +66,76 @@ export interface PingResult {
 const TRANSIENT_STATUSES = new Set([408, 429, 502, 503, 504]);
 
 /**
+ * 关联已返回 Response 与当次请求 AbortSignal 的解绑回调。
+ * 当调用方仅读取状态码（如 ping）而不读取响应体时，可在释放环节触发清理。
+ */
+const RESPONSE_CLEANUPS = new WeakMap<Response, () => void>();
+
+/**
+ * 在 AbortSignal 触发时立即以 AbortError 拒绝等待中的响应读取 Promise。
+ */
+function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) {
+        return promise;
+    }
+    if (signal.aborted) {
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    }
+    return new Promise<T>((resolve, reject) => {
+        const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(
+            (val) => {
+                signal.removeEventListener('abort', onAbort);
+                resolve(val);
+            },
+            (err) => {
+                signal.removeEventListener('abort', onAbort);
+                reject(err);
+            }
+        );
+    });
+}
+
+/**
+ * 为 Response 的正文读取方法绑定 AbortSignal 监听与幂等清理逻辑，
+ * 保证响应头已返回后，在读取或下载大型二进制正文期间依然可即时响应中止并释放监听器。
+ */
+function attachResponseAbortCleanup(response: Response, signal: AbortSignal, cleanup: () => void): Response {
+    let cleaned = false;
+    const cleanupOnce = () => {
+        if (cleaned) return;
+        cleaned = true;
+        RESPONSE_CLEANUPS.delete(response);
+        cleanup();
+    };
+    RESPONSE_CLEANUPS.set(response, cleanupOnce);
+
+    const methods = ['text', 'json', 'blob', 'arrayBuffer'] as const;
+    for (const method of methods) {
+        const original = (response as unknown as Record<string, unknown>)[method];
+        if (typeof original !== 'function') {
+            continue;
+        }
+        const wrapped = function (this: Response) {
+            const inner = (original as (this: Response) => Promise<unknown>).call(this);
+            return raceWithAbort(inner, signal).finally(cleanupOnce);
+        };
+        try {
+            Object.defineProperty(response, method, {
+                value: wrapped,
+                configurable: true,
+                writable: true,
+            });
+        } catch {
+            // 部分测试替身对象若被冻结则保持原方法
+        }
+    }
+
+    return response;
+}
+
+/**
  * 获取 SillyTavern 宿主环境的认证凭据与 CSRF Token 请求头。
  */
 export function getHostRequestHeaders(): Record<string, string> {
@@ -220,6 +290,7 @@ export class HttpClient {
                 : undefined;
 
             const { signal, cleanup } = composeAbortSignal([userSignal, timeoutSignal]);
+            let handoffToResponse = false;
 
             try {
                 const response = await fetch(url, { ...init, signal });
@@ -228,13 +299,16 @@ export class HttpClient {
                     let details: unknown;
                     let rawText = '';
                     try {
-                        rawText = await response.text();
+                        rawText = await raceWithAbort(response.text(), signal);
                         try {
                             details = JSON.parse(rawText);
                         } catch {
                             details = rawText || undefined;
                         }
-                    } catch {
+                    } catch (readErr: unknown) {
+                        if (userSignal?.aborted || timeoutSignal?.aborted) {
+                            throw readErr;
+                        }
                         details = undefined;
                     }
 
@@ -274,7 +348,8 @@ export class HttpClient {
                     throw error;
                 }
 
-                return response;
+                handoffToResponse = true;
+                return attachResponseAbortCleanup(response, signal, cleanup);
             } catch (err: unknown) {
                 lastError = err;
                 // 若用户已主动取消或本次请求已达到超时阈值，不执行重试
@@ -300,17 +375,15 @@ export class HttpClient {
 
                 if (attempt < maxAttempts - 1) {
                     const backoffMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 200, 5000);
-                    try {
-                        await sleepWithSignal(backoffMs, userSignal);
-                        continue;
-                    } catch {
-                        throw lastError;
-                    }
+                    await sleepWithSignal(backoffMs, userSignal);
+                    continue;
                 }
 
                 throw lastError;
             } finally {
-                cleanup();
+                if (!handoffToResponse) {
+                    cleanup();
+                }
             }
         }
 
@@ -377,6 +450,7 @@ export class HttpClient {
                 signal,
                 transport,
             });
+            RESPONSE_CLEANUPS.get(response)?.();
 
             return {
                 ok: response.ok,
@@ -457,15 +531,30 @@ export async function blobToBase64(blob: Blob, withPrefix = false): Promise<stri
 }
 
 /**
- * 将 Blob 二进制或 Base64 图像输入规范化为标准纯净 Base64 字符串。
+ * 图像输入转换配置项
+ */
+export interface ImageInputOptions {
+    /** 中止信号 */
+    signal?: AbortSignal;
+    /** 超时时间（毫秒），默认 60000 */
+    timeoutMs?: number;
+    /** 传输通道（direct | relay） */
+    transport?: TransportMode;
+    /** 指定转换 MIME 类型，默认为 'image/png' */
+    mimeType?: string;
+}
+
+/**
+ * 将 Blob 二进制或 Base64 / URL 图像输入规范化为标准纯净 Base64 字符串。
  *
- * @param input Blob 二进制或 Base64 字符串（支持 data URI）
+ * @param input Blob 二进制或 Base64 / URL 字符串（支持 data URI）
+ * @param options 转换与拉取选项（AbortSignal、超时与通道）
  * @returns 纯净 Base64 编码字符串（不含 data URI 前缀）
  */
-export async function imageInputToBase64(input: Blob | string): Promise<string> {
+export async function imageInputToBase64(input: Blob | string, options?: ImageInputOptions): Promise<string> {
     if (typeof input === 'string') {
         if (input.startsWith('blob:') || input.startsWith('http:') || input.startsWith('https:')) {
-            const fetchedBlob = await imageInputToBlob(input);
+            const fetchedBlob = await imageInputToBlob(input, options);
             return blobToBase64(fetchedBlob);
         }
         return input.includes(',') ? input.split(',')[1] : input;
@@ -477,16 +566,37 @@ export async function imageInputToBase64(input: Blob | string): Promise<string> 
  * 将 Blob 或 Base64 / URL 图像输入转换为二进制 Blob 对象。
  *
  * @param input Blob 二进制或 Base64 / URL 字符串
- * @param mimeType 转换后的图像 MIME 类型，默认为 'image/png'
+ * @param mimeTypeOrOptions 图像 MIME 类型或完整转换选项对象
+ * @param extraOptions 附加转换选项对象
  * @returns 二进制 Blob 对象
  */
-export async function imageInputToBlob(input: Blob | string, mimeType = 'image/png'): Promise<Blob> {
+export async function imageInputToBlob(
+    input: Blob | string,
+    mimeTypeOrOptions: string | ImageInputOptions = 'image/png',
+    extraOptions?: ImageInputOptions
+): Promise<Blob> {
     if (input instanceof Blob) {
         return input;
     }
+    const opts: ImageInputOptions =
+        typeof mimeTypeOrOptions === 'string'
+            ? { ...extraOptions, mimeType: mimeTypeOrOptions }
+            : mimeTypeOrOptions;
+    const mimeType = opts.mimeType ?? 'image/png';
+
     if (typeof input === 'string') {
-        if (input.startsWith('blob:') || input.startsWith('http:') || input.startsWith('https:')) {
-            const resp = await fetch(input);
+        if (input.startsWith('http:') || input.startsWith('https:')) {
+            const resp = await httpClient.fetch(input, {
+                method: 'GET',
+                signal: opts.signal,
+                timeoutMs: opts.timeoutMs ?? 60000,
+                transport: opts.transport,
+                retries: 0,
+            });
+            return await resp.blob();
+        }
+        if (input.startsWith('blob:')) {
+            const resp = await fetch(input, { signal: opts.signal });
             if (!resp.ok) {
                 throw new Error(`图像资源拉取失败: HTTP ${resp.status}`);
             }

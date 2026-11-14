@@ -70,6 +70,8 @@
     --da-color-warn: #f59e0b;
     --da-color-warn-rgb: 245, 158, 11;
     --da-color-warn-subtle: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.12);
+    --da-color-info: #38bdf8;
+    --da-color-info-rgb: 56, 189, 248;
     --da-color-info-subtle: rgba(var(--da-accent-rgb, 129, 140, 248), 0.12);
     --da-color-fav: #eab308;
     --da-bg-surface-subtle: rgba(255, 255, 255, 0.02);
@@ -164,10 +166,13 @@
     --da-vv-left: 0px;
     --da-vv-bottom-inset: 0px;
 
-    /* 13. 遮罩模糊与统一 7 级浮层堆叠阶梯 (z-index)
+    /* 13. 遮罩模糊与统一浮层堆叠阶梯 (z-index)
        严格按业务层级递增分配，禁止使用未定义令牌回退或硬编码跨级数值 */
     --da-blur-modal: 20px;
     --da-blur-panel: 24px;
+    --da-z-base: 1;
+    --da-z-raised: 10;
+    --da-z-sticky: 20;
     --da-z-fab: 9999;              /* 常驻悬浮入口球 */
     --da-z-modal: 10000;           /* 主设置弹窗 */
     --da-z-secondary-modal: 10020; /* 次级功能弹窗 (详情/操作面板/LoRA/蓝图/导入/日志/引导) */
@@ -181,41 +186,14 @@
     /* 14. 焦点指示环 */
     --da-focus-ring: 0 0 0 2px rgba(var(--da-accent-rgb), 0.35);
     --da-focus-visible-ring: 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color);
-
-    /* 15. 语义兼容别名与未绑定变量统一映射 */
-    --da-primary: var(--da-accent-color);
-    --da-accent: var(--da-accent-color);
-    --da-accent-primary: var(--da-accent-color);
-    --da-text-accent: var(--da-accent-color);
-    --da-accent-subtle: var(--da-bg-subtle);
-    --da-bg-surface: var(--da-bg-card);
-    --da-bg-elevated: var(--da-bg-card);
-    --da-border-strong: var(--da-border-card);
-    --da-border-hover: var(--da-border-highlight);
-    --da-bg-overlay-backdrop: var(--da-bg-overlay-modal);
-    --da-color-danger: var(--da-color-error);
-    --da-danger: var(--da-color-error);
-    --da-danger-color: var(--da-color-error);
-    --da-danger-rgb: var(--da-color-error-rgb);
-    --da-warning: var(--da-color-warn);
-    --da-warning-color: var(--da-color-warn);
-    --da-color-warning: var(--da-color-warn);
-    --da-success: var(--da-color-success);
-    --da-info: var(--da-accent-color);
-    --da-transition-fast: var(--da-duration-fast) var(--da-ease);
-    --da-shadow-xl: var(--da-shadow-modal);
-    --da-bg-base: var(--da-bg-primary);
-    --da-bg-secondary-rgba: var(--da-bg-secondary);
-    --da-radius: var(--da-radius-card);
 }
 
 /* 15. 浅色主题模式专用设计令牌 (data-theme-mode="light") */
 [data-theme-mode="light"] {
+    --da-color-info: #0284c7;
+    --da-color-info-rgb: 2, 132, 199;
     --da-bg-surface-subtle: rgba(0, 0, 0, 0.02);
-    --da-bg-surface: var(--da-bg-card);
-    --da-bg-elevated: var(--da-bg-card);
     --da-bg-tertiary: var(--da-bg-secondary);
-    --da-bg-secondary-rgba: var(--da-bg-secondary);
     --da-border-color: rgba(0, 0, 0, 0.08);
     --da-border-subtle: rgba(0, 0, 0, 0.04);
     --da-border-card: rgba(0, 0, 0, 0.08);

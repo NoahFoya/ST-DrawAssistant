@@ -667,15 +667,29 @@ export class LightboxModal implements Disposable {
     }
 
     /**
-     * 触发下载当前大图。
+     * 触发下载当前大图（优先从 IDB 读取原始 Blob，避免已释放的 blob: URL 失效）。
      */
-    private downloadCurrent(): void {
+    private async downloadCurrent(): Promise<void> {
         const item = this.items[this.currentIndex];
-        if (!item || !item.url) return;
+        if (!item || (!item.url && !item.imageId)) return;
 
+        let tempObjectUrl: string | undefined;
         try {
+            let downloadUrl = item.url;
+            if (item.imageId) {
+                const blob = await imageStorage.getImageBlob(item.imageId);
+                if (blob && blob.size > 0) {
+                    tempObjectUrl = URL.createObjectURL(blob);
+                    downloadUrl = tempObjectUrl;
+                }
+            }
+            if (!downloadUrl) {
+                Toast.error('下载失败，未找到可用图像资源');
+                return;
+            }
+
             const a = document.createElement('a');
-            a.href = item.url;
+            a.href = downloadUrl;
             a.download = `st_draw_${item.imageId || Date.now()}.png`;
             document.body.appendChild(a);
             a.click();
@@ -684,6 +698,11 @@ export class LightboxModal implements Disposable {
         } catch (err) {
             logger.error('下载大图异常:', err);
             Toast.error('下载失败，请检查网络或图片资源');
+        } finally {
+            if (tempObjectUrl) {
+                const revokeTarget = tempObjectUrl;
+                setTimeout(() => URL.revokeObjectURL(revokeTarget), 1500);
+            }
         }
     }
 

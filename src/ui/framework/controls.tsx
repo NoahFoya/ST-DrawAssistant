@@ -198,7 +198,7 @@ export interface SelectControlProps {
     invalid?: boolean;
     tooltip?: string;
     className?: string;
-    onChange?: (value: string) => void;
+    onChange?: (value: string) => boolean | void | Promise<boolean | void>;
 }
 
 export function SelectControl(props: SelectControlProps) {
@@ -226,7 +226,17 @@ export function SelectControl(props: SelectControlProps) {
                 disabled={props.disabled}
                 title={props.tooltip || ''}
                 onChange={(e) => {
-                    props.onChange?.((e.currentTarget as HTMLSelectElement).value);
+                    const selectEl = e.currentTarget as HTMLSelectElement;
+                    const res = props.onChange?.(selectEl.value);
+                    if (res === false) {
+                        selectEl.value = val;
+                    } else if (res && typeof (res as Promise<boolean | void>).then === 'function') {
+                        void (res as Promise<boolean | void>).then((ok) => {
+                            if (ok === false && selectEl.isConnected) {
+                                selectEl.value = val;
+                            }
+                        });
+                    }
                 }}
             >
                 {props.placeholder && (
@@ -373,6 +383,8 @@ export function NumberInputControl(props: NumberInputControlProps) {
     const precision = props.precision ?? inferStepPrecision(step);
     const min = props.min;
     const max = props.max;
+    const [rawInput, setRawInput] = useState<string | null>(null);
+    const [isInvalid, setIsInvalid] = useState(false);
 
     const clampNum = (v: number): number => {
         if (Number.isNaN(v)) return min ?? 0;
@@ -382,12 +394,19 @@ export function NumberInputControl(props: NumberInputControlProps) {
         return Number(res.toFixed(precision));
     };
 
+    const isWithinBounds = (v: number): boolean =>
+        !Number.isNaN(v) &&
+        Number.isFinite(v) &&
+        (min === undefined || v >= min) &&
+        (max === undefined || v <= max);
+
     const currentValue = clampNum(props.value ?? min ?? 0);
 
     const wrapperClasses = [
         'da-number-input',
         props.disabled ? 'da-number-input--disabled' : '',
         props.dirty ? 'da-number-input--dirty is-dirty' : '',
+        isInvalid ? 'is-invalid' : '',
         props.className || '',
     ]
         .filter(Boolean)
@@ -404,6 +423,8 @@ export function NumberInputControl(props: NumberInputControlProps) {
                 disabled={minusDisabled}
                 onClick={() => {
                     if (!minusDisabled) {
+                        setRawInput(null);
+                        setIsInvalid(false);
                         props.onChange?.(clampNum(currentValue - step));
                     }
                 }}
@@ -413,28 +434,39 @@ export function NumberInputControl(props: NumberInputControlProps) {
             />
             <input
                 type="number"
-                className="da-input da-number-input__field"
+                className={`da-input da-number-input__field${isInvalid ? ' is-invalid' : ''}`}
                 min={min !== undefined ? String(min) : undefined}
                 max={max !== undefined ? String(max) : undefined}
                 step={String(step)}
-                value={currentValue.toFixed(precision)}
+                value={rawInput !== null ? rawInput : currentValue.toFixed(precision)}
                 disabled={props.disabled}
                 onInput={(e) => {
-                    const parsed = parseFloat((e.currentTarget as HTMLInputElement).value);
-                    if (!Number.isNaN(parsed)) {
-                        props.onChange?.(clampNum(parsed));
+                    const nextRaw = (e.currentTarget as HTMLInputElement).value;
+                    setRawInput(nextRaw);
+                    const trimmed = nextRaw.trim();
+                    const parsed = parseFloat(trimmed);
+                    const valid = trimmed !== '' && isWithinBounds(parsed);
+                    setIsInvalid(!valid);
+                    if (valid) {
+                        props.onChange?.(Number(parsed.toFixed(precision)));
                     }
                 }}
                 onChange={(e) => {
-                    const parsed = parseFloat((e.currentTarget as HTMLInputElement).value);
-                    if (!Number.isNaN(parsed)) {
-                        props.onChange?.(clampNum(parsed));
+                    const nextRaw = (e.currentTarget as HTMLInputElement).value;
+                    const trimmed = nextRaw.trim();
+                    const parsed = parseFloat(trimmed);
+                    const valid = trimmed !== '' && isWithinBounds(parsed);
+                    setIsInvalid(!valid);
+                    if (valid) {
+                        props.onChange?.(Number(parsed.toFixed(precision)));
                     }
                 }}
                 onBlur={(e) => {
                     const inputEl = e.currentTarget as HTMLInputElement;
                     const parsed = parseFloat(inputEl.value);
                     const clamped = clampNum(parsed);
+                    setRawInput(null);
+                    setIsInvalid(false);
                     inputEl.value = clamped.toFixed(precision);
                     if (clamped !== currentValue) {
                         props.onChange?.(clamped);
@@ -447,6 +479,8 @@ export function NumberInputControl(props: NumberInputControlProps) {
                 disabled={plusDisabled}
                 onClick={() => {
                     if (!plusDisabled) {
+                        setRawInput(null);
+                        setIsInvalid(false);
                         props.onChange?.(clampNum(currentValue + step));
                     }
                 }}
@@ -508,6 +542,10 @@ export function TextInputControl(props: TextInputControlProps) {
 
     const wrapperClasses = [
         'da-input-wrapper',
+        props.clearable ? 'has-clear' : '',
+        props.clearable && val.length > 0 && !props.disabled && !props.readonly
+            ? 'has-clear-visible'
+            : '',
         props.disabled ? 'da-input-wrapper--disabled' : '',
         props.dirty ? 'da-input-wrapper--dirty is-dirty' : '',
         props.invalid ? 'is-invalid' : '',
@@ -542,12 +580,19 @@ export function TextInputControl(props: TextInputControlProps) {
                 }}
             />
             {props.clearable && (
-                <span
+                <button
+                    type="button"
                     className="da-input__clear"
+                    title="清空内容"
+                    aria-label="清空内容"
                     style={{ display: val.length > 0 && !props.disabled && !props.readonly ? '' : 'none' }}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!props.disabled && !props.readonly) {
+                            if (timerRef.current) {
+                                clearTimeout(timerRef.current);
+                                timerRef.current = null;
+                            }
                             if (inputRef.current) inputRef.current.value = '';
                             props.onChange?.('');
                         }

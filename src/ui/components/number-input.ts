@@ -86,15 +86,24 @@ export class NumberInput implements ControlHandle<number> {
         this.inputElement.value = this.currentValue.toFixed(this.precision);
 
         this.changeListener = () => {
-            const parsed = parseFloat(this.inputElement.value);
-            if (!isNaN(parsed)) {
-                this.updateValue(parsed, true);
+            const raw = this.inputElement.value.trim();
+            const parsed = parseFloat(raw);
+            const valid = raw !== '' && this.isWithinBounds(parsed);
+            this.setInvalidState(!valid);
+            if (valid) {
+                const formatted = parseFloat(parsed.toFixed(this.precision));
+                if (formatted !== this.currentValue) {
+                    this.currentValue = formatted;
+                    this.updateBtnStates();
+                    this.dispatchChange(formatted);
+                }
             }
         };
         this.blurListener = () => {
             const parsed = parseFloat(this.inputElement.value);
-            const clamped = isNaN(parsed) ? (this.min ?? 0) : parsed;
-            this.updateValue(clamped, false);
+            const fallback = isNaN(parsed) ? (this.min ?? 0) : parsed;
+            this.setInvalidState(false);
+            this.updateValue(fallback, true);
             this.inputElement.value = this.currentValue.toFixed(this.precision);
         };
 
@@ -137,6 +146,7 @@ export class NumberInput implements ControlHandle<number> {
         const nextValue = this.clampAndFormat(value);
         this.currentValue = nextValue;
         this.inputElement.value = nextValue.toFixed(this.precision);
+        this.setInvalidState(false);
         this.updateBtnStates();
 
         const shouldTrigger = typeof options === 'boolean'
@@ -173,15 +183,26 @@ export class NumberInput implements ControlHandle<number> {
     }
 
     public setDirty(isDirty: boolean): void {
-        if (isDirty) {
-            this.element.classList.add('da-number-input--dirty');
-        } else {
-            this.element.classList.remove('da-number-input--dirty');
-        }
+        this.element.classList.toggle('da-number-input--dirty', isDirty);
+        this.element.classList.toggle('is-dirty', isDirty);
     }
 
     public onChange(callback: ControlChangeCallback<number>): void {
         this.changeCallbacks.add(callback);
+    }
+
+    private isWithinBounds(val: number): boolean {
+        return (
+            !isNaN(val) &&
+            isFinite(val) &&
+            (this.min === undefined || val >= this.min) &&
+            (this.max === undefined || val <= this.max)
+        );
+    }
+
+    private setInvalidState(invalid: boolean): void {
+        this.element.classList.toggle('is-invalid', invalid);
+        this.inputElement.classList.toggle('is-invalid', invalid);
     }
 
     private inferPrecision(step: number): number {
@@ -202,6 +223,7 @@ export class NumberInput implements ControlHandle<number> {
         const hasChanged = clamped !== this.currentValue;
         this.currentValue = clamped;
         this.inputElement.value = clamped.toFixed(this.precision);
+        this.setInvalidState(false);
         this.updateBtnStates();
 
         if (trigger && hasChanged) {

@@ -19,14 +19,18 @@ import type {
     PresetCategory,
     PresetItem,
     PresetSettings,
+    DrawingPresetData,
     MaterialLibraryConfig,
     MaterialActivationPresetData,
+    MaterialExtractionPresetData,
+    MaterialFormatPresetData,
     MaterialItemActivationRule,
     ActivationTriggerMode,
     PromptInjectionConfig,
 } from '@types';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
+import { materialImageStorage } from './material-image-storage';
 import defaultSettingsData from '../../config/default-settings.json';
 import {
     createEmptyPresetSettings,
@@ -252,6 +256,11 @@ interface UpsertPresetResult<P> {
     readonly savedId: string;
 }
 
+/** 预设名称归一化键（用于 UI 判重与存储写入保持一致） */
+export function normalizePresetNameKey(name: string): string {
+    return name.trim().toLowerCase();
+}
+
 /** 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步保证名称唯一性与 ID 稳定） */
 function upsertPresetItem<P>(
     list: PresetItem<P>[],
@@ -263,15 +272,15 @@ function upsertPresetItem<P>(
         enforceUniqueName &&
         isPlainObject(item.data) &&
         typeof (item.data as Record<string, unknown>).name === 'string'
-            ? ((item.data as Record<string, unknown>).name as string).trim().toLowerCase()
+            ? normalizePresetNameKey((item.data as Record<string, unknown>).name as string)
             : '';
 
     const index = nextList.findIndex((p) => {
         if (p.id === item.id) return true;
         if (incomingName && isPlainObject(p.data)) {
-            const existingName = String((p.data as Record<string, unknown>).name || '')
-                .trim()
-                .toLowerCase();
+            const existingName = normalizePresetNameKey(
+                String((p.data as Record<string, unknown>).name || '')
+            );
             if (existingName && existingName === incomingName) {
                 return true;
             }
@@ -417,7 +426,7 @@ export class SettingsStore {
                 const resolvedThemePreset =
                     this._settings.activeThemePresetId ||
                     mergedPresets.themes[0]?.id ||
-                    'default_glass';
+                    '';
 
                 this._settings = {
                     ...this._settings,
@@ -431,6 +440,7 @@ export class SettingsStore {
                 });
             } catch (err) {
                 logger.error('[SettingsStore] 初始化加载默认静态预设失败:', err);
+                throw err;
             }
         }
     }
@@ -441,7 +451,7 @@ export class SettingsStore {
     public async importOfficialPresets(loaderOptions?: LoadStaticPresetsOptions): Promise<void> {
         const officialPresets = await loadOfficialStaticPresets(loaderOptions);
         const resolvedThemePreset =
-            this._settings.activeThemePresetId || officialPresets.themes[0]?.id || 'default_glass';
+            this._settings.activeThemePresetId || officialPresets.themes[0]?.id || '';
         const updateKeys = ['presets', 'isInitialized'];
         if (resolvedThemePreset !== this._settings.activeThemePresetId) {
             updateKeys.push('activeThemePresetId');
@@ -830,6 +840,7 @@ export class SettingsStore {
             const safeMap = isPlainObject(existingMap) ? { ...existingMap } : {};
 
             let updatedDrawingPresets = this._settings.presets.drawing;
+            let updatedProviders = this._settings.providers;
             // 若删除的是提示词预设，且当前后端的绘图预设关联了该预设，则自动对齐为剩余预设首项
             if (category === 'prompts' && updatedDrawingPresets?.[providerKey]) {
                 const fallbackPromptId = nextList[0]?.id || '';
@@ -850,10 +861,24 @@ export class SettingsStore {
                     ...updatedDrawingPresets,
                     [providerKey]: patchedDrawings,
                 };
+            } else if (
+                category === 'drawing' &&
+                updatedProviders?.[providerKey] &&
+                (updatedProviders[providerKey] as { activeDrawingPresetId?: string })
+                    .activeDrawingPresetId === id
+            ) {
+                updatedProviders = {
+                    ...updatedProviders,
+                    [providerKey]: {
+                        ...(updatedProviders[providerKey] as Record<string, unknown>),
+                        activeDrawingPresetId: nextList[0]?.id || '',
+                    },
+                } as DrawAssistantSettings['providers'];
             }
 
             this._settings = {
                 ...this._settings,
+                providers: updatedProviders,
                 presets: {
                     ...this._settings.presets,
                     [category]: {
@@ -872,12 +897,47 @@ export class SettingsStore {
         }
 
         const currentList = this.getPresets(category);
-        const nextList = currentList.filter((p) => p.id !== id);
-        if (nextList.length === currentList.length) {
+        const targetItem = currentList.find((p) => p.id === id);
+        if (!targetItem) {
             return false;
         }
+        const nextList = currentList.filter((p) => p.id !== id);
+        const removedAvatarId =
+            (category === 'characters' || category === 'outfits') &&
+            isPlainObject(targetItem.data) &&
+            typeof (targetItem.data as Record<string, unknown>).avatarId === 'string'
+                ? ((targetItem.data as Record<string, unknown>).avatarId as string)
+                : '';
 
-        // 1. 同步清理素材启用预设中的激活规则引用
+        // 1. 删除工作流时，清理绘图预设内的 txt2imgWorkflowId / inpaintPresetId 失效引用
+        let nextDrawingPresets = this._settings.presets.drawing;
+        if (category === 'workflows' && isPlainObject(nextDrawingPresets)) {
+            const patchedDrawingMap: Record<string, PresetItem<DrawingPresetData>[]> = {};
+            let drawingChanged = false;
+            for (const [provKey, dpList] of Object.entries(nextDrawingPresets)) {
+                if (!Array.isArray(dpList)) continue;
+                patchedDrawingMap[provKey] = dpList.map((dp) => {
+                    if (!dp?.data) return dp;
+                    const clearTxt2Img = dp.data.txt2imgWorkflowId === id;
+                    const clearInpaint = dp.data.inpaintPresetId === id;
+                    if (!clearTxt2Img && !clearInpaint) return dp;
+                    drawingChanged = true;
+                    return {
+                        ...dp,
+                        data: {
+                            ...dp.data,
+                            ...(clearTxt2Img ? { txt2imgWorkflowId: '' } : {}),
+                            ...(clearInpaint ? { inpaintPresetId: '' } : {}),
+                        },
+                    };
+                });
+            }
+            if (drawingChanged) {
+                nextDrawingPresets = patchedDrawingMap as PresetSettings['drawing'];
+            }
+        }
+
+        // 2. 同步清理素材启用预设中的激活规则引用
         let nextActivations = this._settings.presets.material_activations;
         if (
             (category === 'characters' || category === 'outfits') &&
@@ -901,7 +961,7 @@ export class SettingsStore {
             });
         }
 
-        // 2. 删除服装时，同步清理角色预设中的专属服装绑定引用
+        // 3. 删除服装时，同步清理角色预设中的专属服装绑定引用
         let nextCharacters = this._settings.presets.characters;
         if (category === 'outfits' && Array.isArray(nextCharacters)) {
             nextCharacters = nextCharacters.map((char) => {
@@ -922,7 +982,70 @@ export class SettingsStore {
             });
         }
 
-        // 3. 提示词通道激活项对齐：若删除项为激活预设，自动对齐为剩余列表首项
+        // 4. 素材类激活项回退：角色 / 服装 / 启用 / 解析 / 格式
+        let nextMaterialConfig = this._settings.materialConfig;
+        if (
+            category === 'characters' &&
+            nextMaterialConfig.activeCharacterPresetId === id
+        ) {
+            nextMaterialConfig = {
+                ...nextMaterialConfig,
+                activeCharacterPresetId: nextList[0]?.id || '',
+            };
+        } else if (
+            category === 'outfits' &&
+            nextMaterialConfig.activeOutfitPresetId === id
+        ) {
+            nextMaterialConfig = {
+                ...nextMaterialConfig,
+                activeOutfitPresetId: nextList[0]?.id || '',
+            };
+        } else if (
+            category === 'material_activations' &&
+            nextMaterialConfig.activeActivationPresetId === id
+        ) {
+            nextMaterialConfig = {
+                ...nextMaterialConfig,
+                activeActivationPresetId: nextList[0]?.id || '',
+            };
+        } else if (
+            category === 'material_extractions' &&
+            nextMaterialConfig.activeExtractionPresetId === id
+        ) {
+            const fallbackExt = nextList[0] as PresetItem<MaterialExtractionPresetData> | undefined;
+            nextMaterialConfig = {
+                ...nextMaterialConfig,
+                activeExtractionPresetId: fallbackExt?.id || '',
+                extraction: fallbackExt?.data
+                    ? structuredClone(fallbackExt.data)
+                    : structuredClone(buildDefaultSettings().materialConfig.extraction),
+            };
+        } else if (
+            category === 'material_formats' &&
+            nextMaterialConfig.activeFormatPresetId === id
+        ) {
+            const fallbackFmt = nextList[0] as PresetItem<MaterialFormatPresetData> | undefined;
+            const fallbackDefaults = buildDefaultSettings().materialConfig;
+            nextMaterialConfig = {
+                ...nextMaterialConfig,
+                activeFormatPresetId: fallbackFmt?.id || '',
+                format: fallbackFmt?.data
+                    ? {
+                          characterTemplate: fallbackFmt.data.characterTemplate,
+                          outfitTemplate: fallbackFmt.data.outfitTemplate,
+                          macroTemplate: fallbackFmt.data.macroTemplate,
+                      }
+                    : structuredClone(fallbackDefaults.format),
+                characterMacros: fallbackFmt?.data
+                    ? structuredClone(fallbackFmt.data.characterMacros)
+                    : structuredClone(fallbackDefaults.characterMacros),
+                outfitMacros: fallbackFmt?.data
+                    ? structuredClone(fallbackFmt.data.outfitMacros)
+                    : structuredClone(fallbackDefaults.outfitMacros),
+            };
+        }
+
+        // 5. 提示词通道激活项对齐：若删除项为激活预设，自动对齐为剩余列表首项
         const channelKeyMap: Record<string, keyof PromptInjectionConfig> = {
             prompt_story: 'story',
             prompt_character: 'character',
@@ -944,19 +1067,23 @@ export class SettingsStore {
             }
         }
 
-        // 4. 主题预设激活项对齐：若删除项为当前激活主题，自动对齐为默认主题
+        // 6. 主题预设激活项对齐：若删除项为当前激活主题，自动对齐为剩余主题首项
         let nextThemePreset = this._settings.activeThemePresetId;
         if (category === 'themes' && nextThemePreset === id) {
-            nextThemePreset = nextList[0]?.id || 'default_glass';
+            nextThemePreset = nextList[0]?.id || '';
         }
 
         this._settings = {
             ...this._settings,
             activeThemePresetId: nextThemePreset,
             promptInjection: nextPromptInjection,
+            materialConfig: nextMaterialConfig,
             presets: {
                 ...this._settings.presets,
                 [category]: nextList,
+                ...(nextDrawingPresets !== this._settings.presets.drawing
+                    ? { drawing: nextDrawingPresets }
+                    : {}),
                 ...(category === 'outfits' && nextCharacters !== this._settings.presets.characters
                     ? { characters: nextCharacters }
                     : {}),
@@ -966,12 +1093,42 @@ export class SettingsStore {
             },
         };
 
+        if (removedAvatarId) {
+            this.cleanupUnusedMaterialAvatars([removedAvatarId]);
+        }
+
         eventBus.emit('settings:updated', {
             key: `presets.${category}`,
             value: { deletedId: id },
         });
         this.saveToHost();
         return true;
+    }
+
+    /** 清理已不再被任何角色或服装预设引用的素材头像 Blob */
+    private cleanupUnusedMaterialAvatars(candidateAvatarIds: Iterable<string>): void {
+        const candidates = new Set<string>();
+        for (const id of candidateAvatarIds) {
+            const clean = (id || '').trim();
+            if (clean) candidates.add(clean);
+        }
+        if (candidates.size === 0) return;
+
+        const inUse = new Set<string>();
+        for (const item of this._settings.presets.characters || []) {
+            const avatarId = item?.data?.avatarId?.trim();
+            if (avatarId) inUse.add(avatarId);
+        }
+        for (const item of this._settings.presets.outfits || []) {
+            const avatarId = item?.data?.avatarId?.trim();
+            if (avatarId) inUse.add(avatarId);
+        }
+
+        for (const id of candidates) {
+            if (!inUse.has(id)) {
+                void materialImageStorage.deleteAvatar(id);
+            }
+        }
     }
 
     /**
@@ -1190,12 +1347,23 @@ export class SettingsStore {
         // 4. 主题预设
         if (options.themePresets && officialPresets) {
             this._settings.presets.themes = structuredClone(officialPresets.themes);
-            this._settings.activeThemePresetId = officialPresets.themes[0]?.id || 'default_glass';
+            this._settings.activeThemePresetId = officialPresets.themes[0]?.id || '';
         }
 
         // 5. 绘图参数预设
         if (options.drawingPresets && officialPresets) {
             this._settings.presets.drawing = structuredClone(officialPresets.drawing);
+            for (const provKey of Object.keys(officialPresets.drawing)) {
+                const provCfg = this._settings.providers[provKey];
+                if (isPlainObject(provCfg)) {
+                    const defaultActive =
+                        (baseDefaults.providers[provKey] as { activeDrawingPresetId?: string } | undefined)
+                            ?.activeDrawingPresetId ||
+                        officialPresets.drawing[provKey]?.[0]?.id ||
+                        '';
+                    provCfg.activeDrawingPresetId = defaultActive;
+                }
+            }
         }
 
         // 6. 提示词预设
@@ -1208,8 +1376,13 @@ export class SettingsStore {
             this._settings.presets.workflows = structuredClone(officialPresets.workflows);
         }
 
+        const candidateRecycleAvatars: string[] = [];
+
         // 8. 角色档案
         if (options.characterPresets && officialPresets) {
+            for (const oldChar of this._settings.presets.characters || []) {
+                if (oldChar?.data?.avatarId) candidateRecycleAvatars.push(oldChar.data.avatarId);
+            }
             this._settings.presets.characters = structuredClone(officialPresets.characters);
             this._settings.materialConfig.activeCharacterPresetId =
                 officialPresets.characters[0]?.id || '';
@@ -1217,9 +1390,16 @@ export class SettingsStore {
 
         // 9. 服装档案
         if (options.outfitPresets && officialPresets) {
+            for (const oldOutfit of this._settings.presets.outfits || []) {
+                if (oldOutfit?.data?.avatarId) candidateRecycleAvatars.push(oldOutfit.data.avatarId);
+            }
             this._settings.presets.outfits = structuredClone(officialPresets.outfits);
             this._settings.materialConfig.activeOutfitPresetId =
                 officialPresets.outfits[0]?.id || '';
+        }
+
+        if (candidateRecycleAvatars.length > 0) {
+            this.cleanupUnusedMaterialAvatars(candidateRecycleAvatars);
         }
 
         // 10. 素材启用预设

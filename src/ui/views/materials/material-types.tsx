@@ -2,7 +2,9 @@
  * 素材库视图共享类型与公共辅助渲染方法。
  */
 
+import { useEffect, useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
+import type { Signal } from '@preact/signals';
 import type {
     CharacterPartKey,
     OutfitPartKey,
@@ -10,7 +12,7 @@ import type {
     CharacterPresetData,
     OutfitPresetData,
 } from '@types';
-import { estimateTagTokens } from '../../../pipeline/material-definitions';
+import { estimateTagTokens, type MaterialPartDef } from '../../../pipeline/material-definitions';
 import { settingsStore } from '../../../store/settings-store';
 import { lightboxModal } from '../../media/lightbox-modal';
 import { Toast } from '../../feedback/toast';
@@ -146,7 +148,7 @@ export function createEmptyActivationTemplate(): MaterialActivationPresetData {
     }
     return {
         boundCardNames: [],
-        scanDepth: 5,
+        scanDepth: 2,
         includeBoundOutfits: true,
         characterRules: charRules,
         outfitRules,
@@ -154,10 +156,37 @@ export function createEmptyActivationTemplate(): MaterialActivationPresetData {
 }
 
 /**
+ * 规范化深比较两个 JSON 值（忽略对象键顺序，将 undefined 视作缺失）。
+ */
+function isDeepEqualCanonical(a: unknown, b: unknown): boolean {
+    if (Object.is(a, b)) return true;
+    if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') {
+        return false;
+    }
+    if (Array.isArray(a) || Array.isArray(b)) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!isDeepEqualCanonical(a[i], b[i])) return false;
+        }
+        return true;
+    }
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA).filter((k) => objA[k] !== undefined);
+    const keysB = Object.keys(objB).filter((k) => objB[k] !== undefined);
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+        if (!Object.prototype.hasOwnProperty.call(objB, k)) return false;
+        if (!isDeepEqualCanonical(objA[k], objB[k])) return false;
+    }
+    return true;
+}
+
+/**
  * 比较预设草稿与基线快照的脏字段。
  *
  * @remarks
- * 角色与服装预设包含嵌套对象（parts）与数组（boundOutfitIds），采用序列化比对感知深层变更。
+ * 采用键序无关的深比较算法，避免对象字段序列化顺序差异造成误报。
  */
 export function evaluatePresetDataDirty(
     draft: Record<string, unknown>,
@@ -166,7 +195,7 @@ export function evaluatePresetDataDirty(
     const dirty = new Set<string>();
     const keys = new Set([...Object.keys(draft || {}), ...Object.keys(base || {})]);
     for (const k of keys) {
-        if (JSON.stringify(draft?.[k]) !== JSON.stringify(base?.[k])) {
+        if (!isDeepEqualCanonical(draft?.[k], base?.[k])) {
             dirty.add(k);
         }
     }
@@ -235,14 +264,25 @@ export interface RenderAvatarBoxOptions {
 }
 
 /**
- * 渲染居中紧凑 3:4 比例参考图上传与预览框。
+ * 居中紧凑 3:4 比例参考图上传与预览组件。
  */
-export function renderAvatarBox(options: RenderAvatarBoxOptions): VNode {
-    const { kind, avatarId, displayTitle, avatarUrl, onUploadAvatar, onRemoveAvatar, onEnsureAvatarLoaded } = options;
-    if (avatarId && onEnsureAvatarLoaded) {
-        onEnsureAvatarLoaded(avatarId);
-    }
-    let fileInputEl: HTMLInputElement | null = null;
+export function AvatarBox(options: RenderAvatarBoxOptions): VNode {
+    const {
+        kind,
+        avatarId,
+        displayTitle,
+        avatarUrl,
+        onUploadAvatar,
+        onRemoveAvatar,
+        onEnsureAvatarLoaded,
+    } = options;
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (avatarId && onEnsureAvatarLoaded) {
+            onEnsureAvatarLoaded(avatarId);
+        }
+    }, [avatarId, onEnsureAvatarLoaded]);
 
     const handleFileSelect = (e: Event) => {
         const input = e.currentTarget as HTMLInputElement;
@@ -258,13 +298,10 @@ export function renderAvatarBox(options: RenderAvatarBoxOptions): VNode {
     return (
         <div className="da-material-avatar-box">
             <input
-                ref={(el) => {
-                    fileInputEl = el;
-                }}
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                className="da-material-avatar-file-input"
-                style={{ display: 'none' }}
+                className="da-material-avatar-file-input da-hidden"
                 onChange={handleFileSelect}
             />
 
@@ -290,7 +327,7 @@ export function renderAvatarBox(options: RenderAvatarBoxOptions): VNode {
                         <button
                             type="button"
                             className="da-material-avatar-btn"
-                            onClick={() => fileInputEl?.click()}
+                            onClick={() => fileInputRef.current?.click()}
                         >
                             更换
                         </button>
@@ -307,7 +344,7 @@ export function renderAvatarBox(options: RenderAvatarBoxOptions): VNode {
                 <button
                     type="button"
                     className="da-material-avatar-placeholder"
-                    onClick={() => fileInputEl?.click()}
+                    onClick={() => fileInputRef.current?.click()}
                 >
                     <span className="da-material-avatar-placeholder__icon">🖼️</span>
                     <span className="da-material-avatar-placeholder__title">
@@ -319,5 +356,82 @@ export function renderAvatarBox(options: RenderAvatarBoxOptions): VNode {
                 </button>
             )}
         </div>
+    );
+}
+
+/**
+ * 共享素材细分部位折叠分组组件（复用于角色与服装面板）。
+ */
+export function MaterialPartGroups<K extends string>(props: {
+    groups: ReadonlyArray<{
+        readonly id: string;
+        readonly label: string;
+        readonly keys: readonly K[];
+    }>;
+    defs: ReadonlyArray<MaterialPartDef<K>>;
+    parts: Record<K, string>;
+    expandedSignal: Signal<Record<string, boolean>>;
+    dirtySet: Set<string>;
+    onChangePart: (key: K, value: string) => void;
+}): VNode {
+    const { groups, defs, parts, expandedSignal, dirtySet, onChangePart } = props;
+    const isWholePartsDirty = dirtySet.has('parts');
+
+    return (
+        <>
+            {groups.map((grp) => {
+                const isExpanded = Boolean(expandedSignal.value[grp.id]);
+                const groupDefs = grp.keys
+                    .map((k) => defs.find((d) => d.key === k))
+                    .filter((d): d is MaterialPartDef<K> => Boolean(d));
+                const filledCount = groupDefs.filter((d) =>
+                    Boolean((parts[d.key] || '').trim())
+                ).length;
+
+                return (
+                    <div key={grp.id} className="da-shot-group-accordion">
+                        <button
+                            type="button"
+                            className="da-shot-group-accordion__header"
+                            aria-expanded={isExpanded}
+                            onClick={() => {
+                                expandedSignal.value = {
+                                    ...expandedSignal.value,
+                                    [grp.id]: !isExpanded,
+                                };
+                            }}
+                        >
+                            <div className="da-shot-group-accordion__title">
+                                <span>{isExpanded ? '▾' : '▸'}</span>
+                                <span>{grp.label}</span>
+                            </div>
+                            <span className="da-shot-group-accordion__badge">
+                                已填 {filledCount}/{groupDefs.length} 项
+                            </span>
+                        </button>
+
+                        {isExpanded && (
+                            <div className="da-shot-group-accordion__body">
+                                {groupDefs.map((def) =>
+                                    renderFullWidthTagField({
+                                        fieldKey: def.key,
+                                        label: def.label,
+                                        hint: def.hint,
+                                        value: parts[def.key],
+                                        placeholder: def.placeholder,
+                                        rows: 2,
+                                        dirty:
+                                            isWholePartsDirty ||
+                                            dirtySet.has(`parts.${def.key}`) ||
+                                            dirtySet.has(def.key),
+                                        onChange: (val) => onChangePart(def.key, val),
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </>
     );
 }

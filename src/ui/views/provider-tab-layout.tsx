@@ -11,12 +11,48 @@
 import type { ComponentChildren, VNode } from 'preact';
 import type { ProviderPreset } from '../composite/connection-card';
 import {
+    PreactSettingsView,
     ConnectionCardView,
     PromptPresetCardView,
     WorkflowCardView,
-} from '../framework/composite-views';
+} from '../framework';
 import { openBlueprintModal } from '../modal/blueprint-modal';
 import type { ProviderTabViewModel } from '../viewmodels/provider-tab-vm';
+
+/**
+ * 生图服务选项卡公共视图基类。
+ * 统一封装 ProviderTabViewModel 的激活、切出、未保存草稿校验与销毁生命周期。
+ */
+export abstract class ProviderTabView extends PreactSettingsView {
+    public abstract readonly vm: ProviderTabViewModel;
+
+    public override activate(): void {
+        super.activate();
+        this.vm.activate();
+    }
+
+    public override deactivate(): void {
+        super.deactivate();
+        this.vm.deactivate();
+    }
+
+    public hasUnsavedChanges(): boolean {
+        return this.vm.hasUnsavedChanges();
+    }
+
+    public saveUnsavedChanges(): Promise<boolean> {
+        return this.vm.saveUnsavedChanges();
+    }
+
+    public discardUnsavedChanges(): void {
+        this.vm.discardUnsavedChanges();
+    }
+
+    public override dispose(): void {
+        this.vm.dispose();
+        super.dispose();
+    }
+}
 
 export interface ProviderTabLayoutProps {
     /** 视图绑定的提供商状态模型 */
@@ -69,10 +105,11 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 }
                 data={vm.connectionData.value}
                 onChange={(data) => vm.updateConnection(data)}
-                onTestPing={() => vm.testPing()}
+                onTestPing={(_url, _key, signal) => vm.testPing(signal)}
                 onFetchAssets={
                     vm.supportsAssetSync
-                        ? () => vm.refreshServerAssets(false, { skipHealthCheck: true })
+                        ? (_url, _key, signal) =>
+                              vm.refreshServerAssets(false, { skipHealthCheck: true, signal })
                         : undefined
                 }
             />
@@ -83,13 +120,24 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 <WorkflowCardView
                     presets={workflowPresets}
                     activePresetId={activeWorkflowId}
+                    onInstanceChange={(inst) => vm.registerWorkflowCard(inst)}
                     onAction={(action, wfId, data) =>
                         vm.handleWorkflowAssetAction(action, wfId, data)
                     }
                     onImportFile={(file) => vm.handleWorkflowImportFile(file)}
-                    onOpenBlueprint={(currentJson) => {
+                    onOpenBlueprint={(currentJson, resolvedWorkflowId) => {
+                        const targetWorkflowId =
+                            resolvedWorkflowId || activeWorkflowId || workflowPresets[0]?.id || '';
                         openBlueprintModal(currentJson, (updatedJson) => {
-                            vm.handleWorkflowAssetAction('save', activeWorkflowId, { json: updatedJson });
+                            if (!targetWorkflowId) {
+                                void vm.handleWorkflowAssetAction('saveAs', '', {
+                                    json: updatedJson,
+                                });
+                            } else {
+                                void vm.handleWorkflowAssetAction('save', targetWorkflowId, {
+                                    json: updatedJson,
+                                });
+                            }
                         });
                     }}
                 />
@@ -98,6 +146,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
             <PromptPresetCardView
                 presets={promptPresets}
                 activePresetId={activePromptId}
+                onInstanceChange={(inst) => vm.registerPromptCard(inst)}
                 showLora={props.showLoraInPromptManager !== false}
                 showNegativePrompt={props.showNegativeInPromptManager !== false}
                 mode={vm.provider === 'comfyui' ? 'weilin' : 'standard'}

@@ -96,8 +96,13 @@ export class Select implements ControlHandle<string> {
         }
 
         this.changeListener = () => {
-            this.currentValue = this.selectElement.value;
-            this.dispatchChange(this.currentValue);
+            const prevValue = this.currentValue;
+            const nextValue = this.selectElement.value;
+            this.currentValue = nextValue;
+            if (this.dispatchChange(nextValue) === false) {
+                this.currentValue = prevValue;
+                this.selectElement.value = prevValue;
+            }
         };
         this.selectElement.addEventListener('change', this.changeListener);
 
@@ -205,14 +210,18 @@ export class Select implements ControlHandle<string> {
         return opt;
     }
 
-    private dispatchChange(value: string): void {
+    private dispatchChange(value: string): boolean {
+        let accepted = true;
         for (const cb of this.changeCallbacks) {
             try {
-                cb(value);
+                if (cb(value) === false) {
+                    accepted = false;
+                }
             } catch (err) {
                 logger.error('[Select] onChange 回调执行异常:', err instanceof Error ? err.message : String(err));
             }
         }
+        return accepted;
     }
 
     public dispose(): void {

@@ -5,10 +5,10 @@
  * 图像资产持久化存储实现：
  * 1. 分表存储：
  *    - metadata 表：存储轻量索引记录（imageId、taskId、chatId、status、byteSize、prompt 等）；
- *    - blobs 表：存储原始高清图片二进制（Blob）；
+ *    - blobs 表：存储图像二进制数据（按 imageQuality 配置可能为原始格式或压缩后的 WebP Blob）；
  *    - 列表查询与筛选仅反序列化 metadata，避免非必要二进制加载；
  * 2. 状态写入：
- *    - 任务生图成功后调用 saveImage 原子写入元数据索引与高清二进制 Blob；
+ *    - 任务生图成功后调用 saveImage 分表顺序写入图像 Blob 与元数据索引（任一步失败时尝试回滚清理）；
  *    - 支持局部状态更新（updateImageRecord）与标星收藏切换（toggleFavorite）；
  * 3. 存储配额：配合 navigator.storage.estimate 查询浏览器存储使用情况。
  */

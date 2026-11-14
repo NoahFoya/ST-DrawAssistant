@@ -119,6 +119,7 @@ export type ComfyObjectInfoMap = Record<string, ComfyNodeDef>;
 export class ComfyUIProvider extends BaseGenerationProvider {
     public readonly providerType: ProviderType = 'comfyui';
     public readonly name: string = 'ComfyUI';
+    public override readonly supportsInpaint = true;
 
     private _clientId: string;
 
@@ -129,7 +130,12 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         transport: string;
         timestamp: number;
     } | null = null;
-    private _inFlightObjectInfo: Promise<ComfyObjectInfoMap> | null = null;
+    private _inFlightObjectInfo: {
+        promise: Promise<ComfyObjectInfoMap>;
+        cacheKey: string;
+        signal?: AbortSignal;
+    } | null = null;
+    private _assetCacheGen = 0;
 
     /** /object_info 节点元数据缓存有效期 (60 秒) */
     private static readonly OBJECT_INFO_CACHE_TTL_MS = 60_000;
@@ -189,6 +195,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
      * 清空当前提供方内存中的资产缓存。
      */
     public clearAssetCache(): void {
+        this._assetCacheGen += 1;
         this._objectInfoCache = null;
         this._inFlightObjectInfo = null;
     }
@@ -197,9 +204,9 @@ export class ComfyUIProvider extends BaseGenerationProvider {
      * 获取 ComfyUI 服务端的 /object_info 节点元数据字典。
      *
      * @remarks
-     * 1. 单飞并发去重 (Single-flight)：并发请求共享同一个进行中的 Promise，避免瞬间并发打满连接池；
+     * 1. 单飞并发去重 (Single-flight)：并发请求在缓存键与信号一致时共享同一个进行中的 Promise；
      * 2. 60 秒短时 TTL 缓存：减少大体积 JSON 重复网络传输与 JSON.parse 性能损耗；
-     * 3. 显式刷新与环境失效：支持 forceRefresh 直接请求服务端，并在服务地址或连接方式变更时自动失效旧缓存。
+     * 3. 显式刷新与环境失效：支持 forceRefresh 直接请求服务端，并在服务地址、连接方式变更或清空缓存时自动失效旧缓存。
      *
      * @param signal 中止信号
      * @param forceRefresh 是否强制忽略缓存拉取最新数据
@@ -210,6 +217,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     ): Promise<ComfyObjectInfoMap> {
         const serverUrl = this.getServerUrl();
         const transport = this.getTransport();
+        const cacheKey = `${serverUrl}::${transport}`;
         const now = Date.now();
 
         // 1. 检查有效缓存（地址和协议一致，且未过期）
@@ -223,35 +231,58 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             return this._objectInfoCache.data;
         }
 
-        // 2. 正在进行中的请求直接合并复用
-        if (this._inFlightObjectInfo) {
-            return this._inFlightObjectInfo;
+        // 2. 仅在环境键、AbortSignal 相容且非强制刷新时合并进行中的单飞请求，避免跨调用方信号耦合
+        if (
+            !forceRefresh &&
+            this._inFlightObjectInfo &&
+            this._inFlightObjectInfo.cacheKey === cacheKey &&
+            this._inFlightObjectInfo.signal === signal
+        ) {
+            return this._inFlightObjectInfo.promise;
         }
 
         // 3. 发起真实网络请求
+        const reqGen = this._assetCacheGen;
         const url = `${serverUrl}/object_info`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 30000, signal },
-                    transport
-                );
-                const data = (await response.json()) as ComfyObjectInfoMap;
-                this._objectInfoCache = {
-                    data,
-                    serverUrl,
-                    transport,
-                    timestamp: Date.now(),
-                };
-                return data;
-            } finally {
-                this._inFlightObjectInfo = null;
-            }
-        })();
+        let entry!: {
+            promise: Promise<ComfyObjectInfoMap>;
+            cacheKey: string;
+            signal?: AbortSignal;
+        };
+        entry = {
+            cacheKey,
+            signal,
+            promise: (async () => {
+                try {
+                    const response = await this.fetchWithTransport(
+                        url,
+                        { method: 'GET', timeoutMs: 30000, signal },
+                        transport
+                    );
+                    const data = (await response.json()) as ComfyObjectInfoMap;
+                    if (
+                        reqGen === this._assetCacheGen &&
+                        this.getServerUrl() === serverUrl &&
+                        this.getTransport() === transport
+                    ) {
+                        this._objectInfoCache = {
+                            data,
+                            serverUrl,
+                            transport,
+                            timestamp: Date.now(),
+                        };
+                    }
+                    return data;
+                } finally {
+                    if (this._inFlightObjectInfo === entry) {
+                        this._inFlightObjectInfo = null;
+                    }
+                }
+            })(),
+        };
 
-        this._inFlightObjectInfo = fetchPromise;
-        return fetchPromise;
+        this._inFlightObjectInfo = entry;
+        return entry.promise;
     }
 
     /**
@@ -496,11 +527,6 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             transport
         );
 
-        if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            throw new Error(`ComfyUI 图像上传失败 (${response.status}): ${errText || response.statusText}`);
-        }
-
         const data = (await response.json()) as { name?: string };
         return data.name || fileName;
     }
@@ -600,8 +626,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             }
 
             const [sourceBlob, maskBlob] = await Promise.all([
-                imageInputToBlob(sourceImage),
-                imageInputToBlob(maskImage),
+                imageInputToBlob(sourceImage, { signal, timeoutMs: maxTimeoutMs, transport }),
+                imageInputToBlob(maskImage, { signal, timeoutMs: maxTimeoutMs, transport }),
             ]);
 
             const timestamp = Date.now();
@@ -625,15 +651,19 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             negative_prompt: negativePromptText,
 
             seed: resolvedSeed,
-            steps: (params.steps ?? drawingPreset?.steps) as number | undefined,
-            cfg: (params.cfgScale ?? drawingPreset?.cfgScale) as number | undefined,
-            sampler_name: (params.samplerName ?? drawingPreset?.samplerName) as string | undefined,
-            scheduler: (params.scheduler ?? drawingPreset?.scheduler) as string | undefined,
+            steps: (params.steps ?? drawingPreset?.steps ?? 28) as number,
+            cfg: (params.cfgScale ?? drawingPreset?.cfgScale ?? 6) as number,
+            sampler_name: (params.samplerName ?? drawingPreset?.samplerName ?? 'euler_ancestral') as string,
+            scheduler: (params.scheduler ?? drawingPreset?.scheduler ?? 'normal') as string,
             denoise: isInpaintMode
                 ? ((params.denoiseStrength ?? 0.75) as number)
                 : ((params.denoise ?? 1.0) as number),
-            width: (params.width ?? drawingPreset?.width) as number | undefined,
-            height: (params.height ?? drawingPreset?.height) as number | undefined,
+            width: isInpaintMode
+                ? (params.width as number | undefined)
+                : ((params.width ?? drawingPreset?.width ?? 832) as number),
+            height: isInpaintMode
+                ? (params.height as number | undefined)
+                : ((params.height ?? drawingPreset?.height ?? 1216) as number),
             batch_size: (params.batchSize ?? 1) as number | undefined,
         };
 
@@ -838,13 +868,18 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         });
         const viewUrl = `${serverUrl}/view?${viewParams.toString()}`;
 
-        const viewResponse = await this.fetchWithTransport(
-            viewUrl,
-            { method: 'GET', timeoutMs: maxTimeoutMs, signal },
-            transport
-        );
-        if (!viewResponse.ok) {
-            throw new Error(`ComfyUI 图像下载失败 (/view HTTP ${viewResponse.status})`);
+        let viewResponse: Response;
+        try {
+            viewResponse = await this.fetchWithTransport(
+                viewUrl,
+                { method: 'GET', timeoutMs: maxTimeoutMs, signal },
+                transport
+            );
+        } catch (err: unknown) {
+            if (err instanceof HttpError) {
+                throw new Error(`ComfyUI 图像下载失败 (/view HTTP ${err.status})`);
+            }
+            throw err;
         }
         const blob = await ensureValidImageBlob(await viewResponse.blob(), 'ComfyUI');
 
@@ -864,6 +899,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             promptId,
             filename: chosenImage.filename,
             baseModel: resolvedBaseModel,
+            clipName: (variables.clip_name as string | undefined) || undefined,
+            vaeName: (variables.vae_name as string | undefined) || undefined,
             extraModels: extraModels.length > 0 ? extraModels : undefined,
             width: variables.width as number | undefined,
             height: variables.height as number | undefined,

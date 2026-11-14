@@ -7,11 +7,12 @@
  * `SillyTavern.getContext().setExtensionPrompt` 写入生成上下文：
  * 1. 素材单层列表渲染：根据当前启用预设与 `materialConfig.format` 行模板生成
  *    `{{角色启用列表}}` 与 `{{服装启用列表}}`；
- * 2. 空素材跳过与注释剥离：投递前剥离 `{{//...}}` 酒馆注释，开启 `skipWhenEmpty` 且引用的素材列表均为空时静默跳过整条条目；
+ * 2. 空素材置空与注释剥离：投递前剥离 `{{//...}}` 酒馆注释，开启 `skipWhenEmpty` 时将空素材变量置换为空文本（若整条条目因此为空则自动跳过）；
  * 3. 失效注入项自动清理：追踪已注册的 `st_da_inj_*` 键集合，当预设关闭或条目深度变更时自动清空旧项。
  */
 
 import type {
+    ActivationTriggerMode,
     PresetCategory,
     PromptChannelId,
     PromptInjectionEntry,
@@ -19,7 +20,6 @@ import type {
     CharacterPresetData,
     OutfitPresetData,
     MaterialActivationPresetData,
-    MaterialItemActivationRule,
     MaterialFormatConfig,
     MaterialMacroRule,
     PresetItem,
@@ -32,11 +32,76 @@ import {
 import {
     normalizeCharacterData,
     normalizeOutfitData,
+    splitKeywordTokens,
+    matchesOutfitId,
 } from './material-definitions';
+export { splitKeywordTokens };
 import { logger } from '../util/logger';
 
 /** 宿主扩展提示词注入键名前缀 */
 export const PROMPT_EXTENSION_KEY_PREFIX = 'st_da_inj_';
+
+/** 宿主聊天上下文中用于识别当前角色卡的最小字段 */
+export interface HostCardContextLike {
+    readonly name2?: string;
+    readonly characterId?: string | number;
+    readonly characters?: Array<{ name?: string } | undefined>;
+    readonly groupId?: string;
+    readonly groups?: Array<{ id?: string; name?: string } | undefined>;
+}
+
+/**
+ * 统一收集当前活跃角色卡候选名称列表（涵盖单聊角色卡名、群聊名与 name2，去重）。
+ */
+export function resolveHostCardCandidates(
+    hostContext?: HostCardContextLike,
+    explicitCardKey?: string | readonly string[]
+): string[] {
+    const rawList: string[] = [];
+    if (explicitCardKey !== undefined) {
+        if (Array.isArray(explicitCardKey)) {
+            rawList.push(...explicitCardKey);
+        } else if (typeof explicitCardKey === 'string') {
+            rawList.push(explicitCardKey);
+        }
+    } else if (hostContext) {
+        const charId = hostContext.characterId;
+        const idx =
+            typeof charId === 'number'
+                ? charId
+                : typeof charId === 'string'
+                  ? parseInt(charId, 10)
+                  : NaN;
+        if (!Number.isNaN(idx) && Array.isArray(hostContext.characters)) {
+            const cardName = hostContext.characters[idx]?.name;
+            if (typeof cardName === 'string' && cardName.trim()) {
+                rawList.push(cardName);
+            }
+        }
+        if (hostContext.groupId && Array.isArray(hostContext.groups)) {
+            const groupName = hostContext.groups.find((g) => g?.id === hostContext.groupId)?.name;
+            if (typeof groupName === 'string' && groupName.trim()) {
+                rawList.push(groupName);
+            }
+        }
+        if (typeof hostContext.name2 === 'string' && hostContext.name2.trim()) {
+            rawList.push(hostContext.name2);
+        }
+    }
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of rawList) {
+        const trimmed = (item || '').trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            out.push(trimmed);
+        }
+    }
+    return out;
+}
 
 const PROMPT_CHANNEL_DEFS: ReadonlyArray<{
     readonly id: PromptChannelId;
@@ -48,7 +113,7 @@ const PROMPT_CHANNEL_DEFS: ReadonlyArray<{
     { id: 'material', category: 'prompt_material' },
 ];
 
-/** 默认多层角色、服装与宏单项渲染模板 */
+/** 默认单层角色、服装与宏单项渲染模板 */
 export const DEFAULT_FORMAT_TEMPLATES: MaterialFormatConfig = {
     characterTemplate:
         '{{name}}:\n  - 别名: {{aliases}}\n  - 描述: {{description}}\n  - 专属服装:\n{{outfits}}',
@@ -91,6 +156,8 @@ export interface MaterialRenderedListsResult {
     readonly charactersCount: number;
     /** 命中的服装条数 */
     readonly outfitsCount: number;
+    /** 命中的角色是否实际携带至少一套有效专属服装 */
+    readonly hasBoundOutfits?: boolean;
     /** 命中的角色展示名列表 */
     readonly matchedCharacterNames: string[];
     /** 命中的服装展示名列表 */
@@ -102,6 +169,8 @@ export interface MatchedPromptEntrySummary {
     readonly channelId: PromptChannelId;
     readonly entryId: string;
     readonly entryName: string;
+    readonly triggerMode: ActivationTriggerMode;
+    readonly matchedKeywords?: readonly string[];
     readonly position: 0 | 1 | 2;
     readonly depth: number;
     readonly role: 0 | 1 | 2;
@@ -155,22 +224,143 @@ export function stripStTemplateComments(text: string): string {
 }
 
 /**
- * 提取最近 N 条聊天消息与当前角色卡名称的拼接文本（保留原始大小写）。
+ * 剥离 HTML 注释与标准推理思考块（`<think>` / `<thinking>`），供提示词处理流程与关键词扫描共用。
+ */
+export function stripThinkingAndComments(text: string): string {
+    if (!text) {
+        return '';
+    }
+    return text
+        .replace(/<!--[\s\S]*?-->/g, ' ')
+        .replace(/<(think|thinking)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+        .replace(/<(think|thinking)\b[^>]*>[\s\S]*$/gi, ' ');
+}
+
+/**
+ * 剥离历史消息中的插件思考/生图/对话/档案块，防止上轮 AI 输出的 Tags 连带触发关键词条目。
+ */
+export function stripAiMarkupForKeywordScan(text: string): string {
+    if (!text) {
+        return '';
+    }
+    return stripThinkingAndComments(text)
+        .replace(/<(imgthink|image|talk|角色|服装)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+        .replace(/<imgthink\b[^>]*>[\s\S]*$/gi, ' ')
+        .replace(/<\/?(?:image|talk|角色|服装)\b[^>]*>/gi, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+const REGEX_LITERAL_RE = /^\/((?:\\.|[^/\\])+)\/([dgimsuvy]*)$/;
+const PURE_ASCII_TOKEN_RE = /^[A-Za-z0-9_\s-]+$/;
+const VALID_REGEX_FLAGS_RE = /^[dgimsuvy]*$/;
+
+function hasValidUniqueRegexFlags(flags: string): boolean {
+    if (!VALID_REGEX_FLAGS_RE.test(flags)) {
+        return false;
+    }
+    const seen = new Set<string>();
+    for (const ch of flags) {
+        if (seen.has(ch)) {
+            return false;
+        }
+        seen.add(ch);
+    }
+    return !(seen.has('u') && seen.has('v'));
+}
+
+function escapeRegExpLiteral(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 校验关键词是否为合法 `/pattern/flags` 正则字面量；非法时返回错误信息。
+ */
+export function validateKeywordRegexToken(rawToken: string): string | null {
+    const token = rawToken.trim();
+    if (!token.startsWith('/')) {
+        return null;
+    }
+    const match = REGEX_LITERAL_RE.exec(token);
+    if (!match) {
+        return `正则字面量格式无效: ${token}`;
+    }
+    const pattern = match[1];
+    const flags = match[2];
+    if (!hasValidUniqueRegexFlags(flags)) {
+        return `正则标志无效或重复: ${token}`;
+    }
+    try {
+        new RegExp(pattern, flags.replace(/[gy]/g, ''));
+        return null;
+    } catch (err: unknown) {
+        return err instanceof Error ? err.message : `无效正则: ${token}`;
+    }
+}
+
+export function matchKeywordToken(
+    rawToken: string,
+    rawText: string,
+    lowerText: string,
+    caseSensitive: boolean,
+    matchWholeWords = false
+): boolean {
+    const token = rawToken.trim();
+    if (!token) {
+        return false;
+    }
+
+    const regexMatch = REGEX_LITERAL_RE.exec(token);
+    if (regexMatch) {
+        const pattern = regexMatch[1];
+        // 剥离 g/y 有状态标志，确保多次 .test() 结果幂等
+        let flags = regexMatch[2].replace(/[gy]/g, '');
+        if (!caseSensitive && !flags.includes('i')) {
+            flags += 'i';
+        }
+        if (hasValidUniqueRegexFlags(flags)) {
+            try {
+                const re = new RegExp(pattern, flags);
+                return re.test(rawText);
+            } catch {
+                // 非法正则时降级为字面文本包含匹配
+            }
+        }
+    }
+
+    if (matchWholeWords && PURE_ASCII_TOKEN_RE.test(token)) {
+        const boundaryFlags = caseSensitive ? '' : 'i';
+        const boundaryRe = new RegExp(
+            `(?:^|[^A-Za-z0-9_])${escapeRegExpLiteral(token)}(?=$|[^A-Za-z0-9_])`,
+            boundaryFlags
+        );
+        return boundaryRe.test(rawText);
+    }
+
+    return caseSensitive
+        ? rawText.includes(token)
+        : lowerText.includes(token.toLowerCase());
+}
+
+/**
+ * 提取最近 N 条聊天消息的净化拼接文本（自动剥离插件与 AI 思考标签）。
+ * 当 `scanDepth === 0` 时返回空字符串（禁止扫描消息记录）。
  */
 function extractRecentChatText(
     chatMessages: Array<{ mes?: string }> | undefined,
-    scanDepth: number,
-    activeCardKey?: string
+    scanDepth: number
 ): string {
-    const parts: string[] = [];
-    if (activeCardKey?.trim()) {
-        parts.push(activeCardKey.trim());
+    if (!Array.isArray(chatMessages) || chatMessages.length === 0 || scanDepth <= 0) {
+        return '';
     }
-    if (Array.isArray(chatMessages) && chatMessages.length > 0 && scanDepth > 0) {
-        const slice = chatMessages.slice(-Math.max(1, scanDepth));
-        for (const msg of slice) {
-            if (typeof msg?.mes === 'string' && msg.mes.trim()) {
-                parts.push(msg.mes);
+    const parts: string[] = [];
+    const slice = chatMessages.slice(-Math.floor(scanDepth));
+    for (const msg of slice) {
+        if (typeof msg?.mes === 'string' && msg.mes.trim()) {
+            const cleaned = stripAiMarkupForKeywordScan(msg.mes);
+            if (cleaned) {
+                parts.push(cleaned);
             }
         }
     }
@@ -183,22 +373,24 @@ function extractRecentChatText(
 function isArchiveNameMatchedInText(
     name: string,
     aliases: string,
+    rawContextText: string,
     lowerContextText: string
 ): boolean {
     if (!lowerContextText) {
         return false;
     }
 
-    const candidates = [
-        (name || '').trim(),
-        ...(aliases || '')
-            .split('|')
-            .map((s) => s.trim())
-            .filter(Boolean),
-    ].filter(Boolean);
+    const candidateTokens: string[] = [];
+    const primary = (name || '').trim();
+    if (primary) {
+        candidateTokens.push(primary);
+    }
+    for (const token of splitKeywordTokens(aliases)) {
+        candidateTokens.push(token);
+    }
 
-    for (const token of candidates) {
-        if (lowerContextText.includes(token.toLowerCase())) {
+    for (const token of candidateTokens) {
+        if (matchKeywordToken(token, rawContextText, lowerContextText, false)) {
             return true;
         }
     }
@@ -206,7 +398,7 @@ function isArchiveNameMatchedInText(
 }
 
 /**
- * 将角色绑定的服装标识列表（可为服装预设 id 或服装名称）解析为服装预设数据数组。
+ * 将角色绑定的服装预设 ID 列表精确解析为服装预设数据数组。
  */
 export function resolveBoundOutfitPresets(
     boundOutfitIds: readonly string[],
@@ -219,20 +411,11 @@ export function resolveBoundOutfitPresets(
     const resolved: OutfitPresetData[] = [];
     const seenIds = new Set<string>();
 
-    for (const rawRef of boundOutfitIds) {
-        const ref = (rawRef || '').trim();
-        if (!ref) continue;
-        const lowerRef = ref.toLowerCase();
-        const hit = allOutfitPresets.find((o) => {
-            if (o.id.toLowerCase() === lowerRef) return true;
-            if ((o.data?.name || o.name || '').trim().toLowerCase() === lowerRef) return true;
-            const aliasList = (o.data?.aliases || '')
-                .split('|')
-                .map((s) => s.trim().toLowerCase())
-                .filter(Boolean);
-            return aliasList.includes(lowerRef);
-        });
-        if (hit && !seenIds.has(hit.id)) {
+    for (const rawId of boundOutfitIds) {
+        const id = (rawId || '').trim();
+        if (!id || seenIds.has(id)) continue;
+        const hit = allOutfitPresets.find((o) => o.id === id);
+        if (hit) {
             seenIds.add(hit.id);
             resolved.push(hit.data);
         }
@@ -241,13 +424,13 @@ export function resolveBoundOutfitPresets(
 }
 
 /**
- * 渲染单条角色或服装行模板，支持全字段与景别变量展开。
+ * 渲染单条角色或服装行模板，支持名称、别名、描述、专属服装与各部位变量展开。
  *
  * @remarks
  * 服装启用列表展示通用服装；角色绑定的服装为角色专属服装，
  * 在角色模板中通过 {{outfits}} 展开时使用相同的服装行模板渲染。
  */
-function renderArchiveRowTemplate(
+export function renderArchiveRowTemplate(
     template: string,
     data: CharacterPresetData | OutfitPresetData,
     allOutfitPresets: ReadonlyArray<{ id: string; name: string; data: OutfitPresetData }>,
@@ -278,19 +461,16 @@ function renderArchiveRowTemplate(
 
         const rowTpl = outfitTemplate || DEFAULT_FORMAT_TEMPLATES.outfitTemplate;
 
-        // 格式化专属服装子树：严格遵循 4 格相对缩进，确保与角色属性对齐且不产生同行错位
+        // 格式化专属服装子树：严格遵循 4 格相对缩进，同时保留模板原有的属性引导词
         if (boundOutfits.length === 0) {
-            // 无专属服装时，将专属服装引导词收拢为单行呈现（如 "- 专属服装: 无"）
-            const emptyLabelRegex = /(\r?\n)([ \t]*)(?:-\s*)?(?:专属服装列表|专属服装|绑定服装):\s*(?:\r?\n[ \t]*)?\{\{\s*outfits\s*\}\}/g;
-            if (emptyLabelRegex.test(result)) {
-                result = result.replace(emptyLabelRegex, '$1$2- 专属服装: 无');
-            } else {
-                result = result
-                    .replace(/(?:专属服装列表|专属服装|绑定服装):\s*\{\{\s*outfits\s*\}\}/g, '- 专属服装: 无')
-                    .replace(/\{\{\s*outfits\s*\}\}/g, '无');
-            }
+            result = result
+                .replace(
+                    /(\r?\n)([ \t]*(?:-\s*)?[^:\r\n|]+:)\s*(?:\r?\n[ \t]*)?\{\{\s*outfits\s*\}\}/g,
+                    '$1$2 无'
+                )
+                .replace(/([^:\r\n|]+:)\s*\{\{\s*outfits\s*\}\}/g, '$1 无')
+                .replace(/\{\{\s*outfits\s*\}\}/g, '无');
         } else {
-            // 每套专属服装整体逐行追加 4 格缩进，形成标准的 Markdown/YAML 子列表树
             const renderedOutfits = boundOutfits
                 .map((bo) => {
                     const single = renderArchiveRowTemplate(rowTpl, bo, allOutfitPresets);
@@ -301,23 +481,13 @@ function renderArchiveRowTemplate(
                 })
                 .join('\n');
 
-            const labeledRegex = /(\r?\n)([ \t]*)(?:-\s*)?(?:专属服装列表|专属服装|绑定服装):\s*(?:\r?\n[ \t]*)?\{\{\s*outfits\s*\}\}/g;
-            if (labeledRegex.test(result)) {
-                result = result.replace(
-                    labeledRegex,
-                    (_match, newline, indent) => `${newline}${indent}- 专属服装:\n${renderedOutfits}`
-                );
-            } else {
-                const multilineRegex = /(\r?\n)([ \t]*)\{\{\s*outfits\s*\}\}/g;
-                if (multilineRegex.test(result)) {
-                    result = result.replace(
-                        multilineRegex,
-                        (_match, _newline, _indent) => `\n${renderedOutfits}`
-                    );
-                } else {
-                    result = result.replace(/\{\{\s*outfits\s*\}\}/g, `\n${renderedOutfits}`);
-                }
-            }
+            result = result
+                .replace(
+                    /(\r?\n)([ \t]*(?:-\s*)?[^:\r\n|]+:)\s*(?:\r?\n[ \t]*)?\{\{\s*outfits\s*\}\}/g,
+                    (_match, newline, header) => `${newline}${header}\n${renderedOutfits}`
+                )
+                .replace(/(\r?\n)[ \t]*\{\{\s*outfits\s*\}\}/g, () => `\n${renderedOutfits}`)
+                .replace(/\{\{\s*outfits\s*\}\}/g, () => `\n${renderedOutfits}`);
         }
 
         result = result
@@ -358,37 +528,11 @@ function renderArchiveRowTemplate(
 }
 
 /**
- * 在激活规则字典中按预设 `id` 优先查找，未命中时按素材 `name` 不区分大小写匹配。
- */
-function lookupActivationRule(
-    rulesMap: Record<string, MaterialItemActivationRule> | undefined,
-    presetId: string,
-    materialName: string
-): MaterialItemActivationRule | undefined {
-    if (!rulesMap) {
-        return undefined;
-    }
-    if (rulesMap[presetId]) {
-        return rulesMap[presetId];
-    }
-    const lowerName = (materialName || '').trim().toLowerCase();
-    if (!lowerName) {
-        return undefined;
-    }
-    for (const [k, rule] of Object.entries(rulesMap)) {
-        if (k.trim().toLowerCase() === lowerName) {
-            return rule;
-        }
-    }
-    return undefined;
-}
-
-/**
  * 解析当前生效的素材启用预设（支持跟随酒馆角色卡自动匹配切换）。
  */
 export function resolveActiveMaterialActivationPreset(
     settings: DrawAssistantSettings,
-    activeCardKey?: string
+    activeCardKey?: string | readonly string[]
 ): PresetItem<MaterialActivationPresetData> | undefined {
     const actList = settings.presets.material_activations || [];
     if (actList.length === 0) {
@@ -396,14 +540,18 @@ export function resolveActiveMaterialActivationPreset(
     }
 
     const matCfg = settings.materialConfig;
-    const trimmedCard = (activeCardKey || '').trim().toLowerCase();
+    const cardSet = new Set(
+        (Array.isArray(activeCardKey) ? activeCardKey : activeCardKey ? [activeCardKey] : [])
+            .map((k) => (k || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
 
-    if (matCfg?.autoSwitchByCard && trimmedCard) {
+    if (matCfg?.autoSwitchByCard && cardSet.size > 0) {
         const cardMatched = actList.find((preset) => {
             const names = preset.data?.boundCardNames;
             return (
                 Array.isArray(names) &&
-                names.some((n) => (n || '').trim().toLowerCase() === trimmedCard)
+                names.some((n) => cardSet.has((n || '').trim().toLowerCase()))
             );
         });
         if (cardMatched) {
@@ -423,7 +571,7 @@ export function resolveActiveMaterialActivationPreset(
  */
 function matchesBoundCharacterCard(
     rule: { bindCharacterCard?: boolean; boundCharacterCardName?: string },
-    activeCardKey?: string
+    activeCardCandidates?: string | readonly string[]
 ): boolean {
     if (!rule.bindCharacterCard) {
         return true;
@@ -432,8 +580,12 @@ function matchesBoundCharacterCard(
     if (!target) {
         return true;
     }
-    const cardKey = (activeCardKey || '').trim().toLowerCase();
-    return Boolean(cardKey && cardKey === target);
+    const candidates = Array.isArray(activeCardCandidates)
+        ? activeCardCandidates
+        : activeCardCandidates
+          ? [activeCardCandidates]
+          : [];
+    return candidates.some((k) => (k || '').trim().toLowerCase() === target);
 }
 
 /**
@@ -452,30 +604,36 @@ export function computeMaterialRenderedLists(options: {
         options.chatMessages ??
         (hostContext?.chat as Array<{ mes?: string }> | undefined) ??
         [];
-    const activeCardKey =
-        options.activeCardKey ??
-        (typeof hostContext?.name2 === 'string' ? hostContext.name2 : '');
+    const cardCandidates = resolveHostCardCandidates(hostContext, options.activeCardKey);
 
     const activeActivationPreset = resolveActiveMaterialActivationPreset(
         settings,
-        activeCardKey
+        cardCandidates
     );
     const actData = activeActivationPreset?.data;
 
     const allCharPresets = (settings.presets.characters || [])
-        .map((p) => ({
-            id: p.id,
-            name: p.name,
-            data: normalizeCharacterData(p.data),
-        }))
+        .map((p) => {
+            const normalized = normalizeCharacterData(p.data);
+            const fallbackName = normalized.name.trim() || (p.name || '').trim();
+            return {
+                id: p.id,
+                name: p.name,
+                data: fallbackName === normalized.name ? normalized : { ...normalized, name: fallbackName },
+            };
+        })
         .filter((p) => Boolean(p.data.name.trim()));
 
     const allOutfitPresets = (settings.presets.outfits || [])
-        .map((p) => ({
-            id: p.id,
-            name: p.name,
-            data: normalizeOutfitData(p.data),
-        }))
+        .map((p) => {
+            const normalized = normalizeOutfitData(p.data);
+            const fallbackName = normalized.name.trim() || (p.name || '').trim();
+            return {
+                id: p.id,
+                name: p.name,
+                data: fallbackName === normalized.name ? normalized : { ...normalized, name: fallbackName },
+            };
+        })
         .filter((p) => Boolean(p.data.name.trim()));
 
     const fmtPresets = settings.presets?.material_formats || [];
@@ -532,11 +690,12 @@ export function computeMaterialRenderedLists(options: {
     }
 
     const scanDepth =
-        typeof actData.scanDepth === 'number' && actData.scanDepth > 0
-            ? actData.scanDepth
-            : 5;
+        typeof actData.scanDepth === 'number' && Number.isFinite(actData.scanDepth) && actData.scanDepth >= 0
+            ? Math.floor(actData.scanDepth)
+            : 2;
     const includeBoundOutfits = actData.includeBoundOutfits !== false;
-    const recentText = extractRecentChatText(chatMessages, scanDepth, activeCardKey).toLowerCase();
+    const rawRecentText = extractRecentChatText(chatMessages, scanDepth);
+    const lowerRecentText = rawRecentText.toLowerCase();
 
     const triggeredCharacters: CharacterPresetData[] = [];
     const matchedCharacterNames: string[] = [];
@@ -544,22 +703,23 @@ export function computeMaterialRenderedLists(options: {
 
     for (const charPreset of allCharPresets) {
         const charData = charPreset.data;
-        const rule = lookupActivationRule(
-            actData.characterRules,
-            charPreset.id,
-            charData.name
-        );
+        const rule = actData.characterRules?.[charPreset.id];
         if (!rule?.enabled) {
             continue;
         }
 
-        if (!matchesBoundCharacterCard(rule, activeCardKey)) {
+        if (!matchesBoundCharacterCard(rule, cardCandidates)) {
             continue;
         }
 
         const isTriggered =
             rule.triggerMode === 'always' ||
-            isArchiveNameMatchedInText(charData.name, charData.aliases, recentText);
+            isArchiveNameMatchedInText(
+                charData.name,
+                charData.aliases,
+                rawRecentText,
+                lowerRecentText
+            );
 
         if (isTriggered) {
             triggeredCharacters.push(charData);
@@ -567,7 +727,7 @@ export function computeMaterialRenderedLists(options: {
         }
     }
 
-    // 角色专属服装列表和通用服装列表不共享服装池：收集所有已被角色绑定的专属服装 ID 与名称
+    // 角色专属服装列表和通用服装列表不共享服装池：按预设 ID 收集所有已被角色绑定的专属服装
     const boundOutfitIdSet = new Set<string>();
     for (const charPreset of allCharPresets) {
         if (Array.isArray(charPreset.data.boundOutfitIds)) {
@@ -575,13 +735,6 @@ export function computeMaterialRenderedLists(options: {
                 const id = (rawId || '').trim();
                 if (id) {
                     boundOutfitIdSet.add(id);
-                    // 允许按服装名称或 ID 比对已绑定的专属服装
-                    const matchedByName = allOutfitPresets.find(
-                        (o) => o.name.trim().toLowerCase() === id.toLowerCase()
-                    );
-                    if (matchedByName) {
-                        boundOutfitIdSet.add(matchedByName.id);
-                    }
                 }
             }
         }
@@ -597,23 +750,24 @@ export function computeMaterialRenderedLists(options: {
 
         const outfitData = outfitPreset.data;
 
-        const rule = lookupActivationRule(
-            actData.outfitRules,
-            outfitPreset.id,
-            outfitData.name
-        );
+        const rule = actData.outfitRules?.[outfitPreset.id];
 
         if (!rule?.enabled) {
             continue;
         }
 
-        if (!matchesBoundCharacterCard(rule, activeCardKey)) {
+        if (!matchesBoundCharacterCard(rule, cardCandidates)) {
             continue;
         }
 
         const isTriggered =
             rule.triggerMode === 'always' ||
-            isArchiveNameMatchedInText(outfitData.name, outfitData.aliases, recentText);
+            isArchiveNameMatchedInText(
+                outfitData.name,
+                outfitData.aliases,
+                rawRecentText,
+                lowerRecentText
+            );
 
         if (isTriggered) {
             triggeredOutfits.push(outfitData);
@@ -625,6 +779,12 @@ export function computeMaterialRenderedLists(options: {
         format.outfitTemplate || DEFAULT_FORMAT_TEMPLATES.outfitTemplate;
     const effectiveCharTemplate =
         format.characterTemplate || DEFAULT_FORMAT_TEMPLATES.characterTemplate;
+
+    const hasBoundOutfits =
+        includeBoundOutfits &&
+        triggeredCharacters.some((charData) =>
+            allOutfitPresets.some((o) => matchesOutfitId(charData.boundOutfitIds, o.id))
+        );
 
     const charactersText = triggeredCharacters
         .map((c) =>
@@ -656,34 +816,10 @@ export function computeMaterialRenderedLists(options: {
         outfitMacrosText,
         charactersCount: triggeredCharacters.length,
         outfitsCount: triggeredOutfits.length,
+        hasBoundOutfits,
         matchedCharacterNames,
         matchedOutfitNames,
     };
-}
-
-/**
- * 判断包含素材列表变量的条目是否因所引用的素材列表全部为空而应当静默跳过。
- */
-function shouldSkipEntryForEmptyMaterials(
-    strippedContent: string,
-    materialLists: MaterialRenderedListsResult,
-    skipWhenEmpty?: boolean
-): boolean {
-    if (!skipWhenEmpty) {
-        return false;
-    }
-    const refsCharacters = /\{\{\s*角色(?:启用|可用宏)列表\s*\}\}/.test(strippedContent);
-    const refsOutfits = /\{\{\s*服装(?:启用|可用宏)列表\s*\}\}/.test(strippedContent);
-
-    if (!refsCharacters && !refsOutfits) {
-        return false;
-    }
-
-    const hasAnyNonEmptyList =
-        (refsCharacters && materialLists.charactersCount > 0) ||
-        (refsOutfits && materialLists.outfitsCount > 0);
-
-    return !hasAnyNonEmptyList;
 }
 
 /**
@@ -695,7 +831,19 @@ function replaceMaterialPlaceholderWithIndent(
     replacementText: string,
     emptyFallback: string
 ): string {
-    const valueToInsert = replacementText.trim() ? replacementText : emptyFallback;
+    const hasValue = Boolean(replacementText.trim());
+    const valueToInsert = hasValue ? replacementText : emptyFallback;
+
+    if (!valueToInsert) {
+        // 当为空占位符且整行仅包含该占位符时，一并清理空白行及多余空格
+        const wholeLineRegex = new RegExp(
+            `^[ \\t]*\\{\\{\\s*${placeholderNamePattern}\\s*\\}\\}[ \\t]*(?:\\r?\\n|$)`,
+            'gm'
+        );
+        const inlineRegex = new RegExp(`\\{\\{\\s*${placeholderNamePattern}\\s*\\}\\}`, 'g');
+        return source.replace(wholeLineRegex, '').replace(inlineRegex, '');
+    }
+
     const lineRegex = new RegExp(
         `^([ \\t]*)\\{\\{\\s*${placeholderNamePattern}\\s*\\}\\}`,
         'gm'
@@ -714,38 +862,75 @@ function replaceMaterialPlaceholderWithIndent(
 
 /**
  * 在条目正文中注入角色与服装启用列表变量。
+ *
+ * @remarks
+ * 当 `skipWhenEmpty` 开启时，仅将空素材列表占位符置换为空字符串并收紧多余空行，
+ * 保留条目内其余提示词文本；仅当整条正文置换后仍为空白时才跳过注入。
  */
+const MATERIAL_LIST_PLACEHOLDER_RE =
+    /\{\{\s*(?:角色启用列表|服装启用列表|角色可用宏列表|服装可用宏列表)\s*\}\}/;
+
 function applyMaterialVariablesToEntryContent(
     strippedContent: string,
-    materialLists: MaterialRenderedListsResult
+    materialLists: MaterialRenderedListsResult,
+    skipWhenEmpty = false
 ): string {
     if (!strippedContent.includes('{{')) {
         return strippedContent;
     }
+
+    const hasCharacters = materialLists.charactersCount > 0;
+    const hasOutfits = materialLists.outfitsCount > 0;
+    const hasAnyOutfitMacros = hasOutfits || Boolean(materialLists.hasBoundOutfits);
+    if (
+        skipWhenEmpty &&
+        !hasCharacters &&
+        !hasOutfits &&
+        !hasAnyOutfitMacros &&
+        MATERIAL_LIST_PLACEHOLDER_RE.test(strippedContent)
+    ) {
+        return '';
+    }
+
     let result = replaceMaterialPlaceholderWithIndent(
         strippedContent,
         '角色启用列表',
         materialLists.charactersText,
-        '(当前无激活角色)'
+        skipWhenEmpty ? '' : '(当前无激活角色)'
     );
     result = replaceMaterialPlaceholderWithIndent(
         result,
         '服装启用列表',
         materialLists.outfitsText,
-        '(当前无激活服装)'
+        skipWhenEmpty ? '' : '(当前无激活服装)'
     );
     result = replaceMaterialPlaceholderWithIndent(
         result,
         '角色可用宏列表',
-        materialLists.characterMacrosText,
-        '(当前无可用角色宏)'
+        skipWhenEmpty && !hasCharacters ? '' : materialLists.characterMacrosText,
+        skipWhenEmpty ? '' : '(当前无可用角色宏)'
     );
     result = replaceMaterialPlaceholderWithIndent(
         result,
         '服装可用宏列表',
-        materialLists.outfitMacrosText,
-        '(当前无可用服装宏)'
+        skipWhenEmpty && !hasAnyOutfitMacros ? '' : materialLists.outfitMacrosText,
+        skipWhenEmpty ? '' : '(当前无可用服装宏)'
     );
+
+    if (skipWhenEmpty) {
+        if (!hasCharacters) {
+            result = result
+                .replace(/<character_database\b[^>]*>\s*<\/character_database>/gi, '')
+                .replace(/^[ \t]*\d+\.\s*角色可用宏[：:]\s*$/gm, '');
+        }
+        if (!hasOutfits) {
+            result = result.replace(/<outfit_database\b[^>]*>\s*<\/outfit_database>/gi, '');
+        }
+        if (!hasAnyOutfitMacros) {
+            result = result.replace(/^[ \t]*\d+\.\s*服装可用宏[：:]\s*$/gm, '');
+        }
+        result = result.replace(/\n{3,}/g, '\n\n');
+    }
     return result;
 }
 
@@ -773,32 +958,65 @@ export function computePromptInjections(
         options.chatMessages ??
         (hostContext?.chat as Array<{ mes?: string }> | undefined) ??
         [];
-    const activeCardKey =
-        options.activeCardKey ??
-        (typeof hostContext?.name2 === 'string' ? hostContext.name2 : '');
     const ignoreChannelEnabled = Boolean(options.ignoreChannelEnabled);
-
-    const materialLists = computeMaterialRenderedLists({
-        settings,
-        chatMessages,
-        activeCardKey,
-    });
 
     if (!ignoreChannelEnabled && !settings.enabled) {
         return {
             buckets: [],
             matchedEntries: [],
-            materialLists,
+            materialLists: {
+                activeActivationPresetId: '',
+                charactersText: '',
+                outfitsText: '',
+                characterMacrosText: '',
+                outfitMacrosText: '',
+                charactersCount: 0,
+                outfitsCount: 0,
+                matchedCharacterNames: [],
+                matchedOutfitNames: [],
+            },
         };
     }
 
+    const materialLists = computeMaterialRenderedLists({
+        settings,
+        chatMessages,
+        activeCardKey: options.activeCardKey,
+    });
+
     const allowedChannels = options.channels ? new Set(options.channels) : null;
-    const recentTextCache = new Map<number, string>();
-    const getRecentText = (depth: number): string => {
-        const normalizedDepth = depth > 0 ? Math.floor(depth) : 5;
+    // 在单次计算内按消息索引缓存清洗结果，避免不同 scanDepth 重复正则清洗
+    const cleanedMessagesCache = new Map<number, string>();
+    const recentTextCache = new Map<number, { raw: string; lower: string }>();
+    const getRecentText = (depth: number): { raw: string; lower: string } => {
+        const normalizedDepth =
+            typeof depth === 'number' && Number.isFinite(depth) && depth >= 0
+                ? Math.floor(depth)
+                : 2;
         let cached = recentTextCache.get(normalizedDepth);
         if (cached === undefined) {
-            cached = extractRecentChatText(chatMessages, normalizedDepth, activeCardKey);
+            if (normalizedDepth <= 0 || !Array.isArray(chatMessages) || chatMessages.length === 0) {
+                cached = { raw: '', lower: '' };
+            } else {
+                const startIdx = Math.max(0, chatMessages.length - normalizedDepth);
+                const parts: string[] = [];
+                for (let idx = startIdx; idx < chatMessages.length; idx++) {
+                    let cleaned = cleanedMessagesCache.get(idx);
+                    if (cleaned === undefined) {
+                        const mes = chatMessages[idx]?.mes;
+                        cleaned =
+                            typeof mes === 'string' && mes.trim()
+                                ? stripAiMarkupForKeywordScan(mes)
+                                : '';
+                        cleanedMessagesCache.set(idx, cleaned);
+                    }
+                    if (cleaned) {
+                        parts.push(cleaned);
+                    }
+                }
+                const raw = parts.join('\n');
+                cached = { raw, lower: raw.toLowerCase() };
+            }
             recentTextCache.set(normalizedDepth, cached);
         }
         return cached;
@@ -847,49 +1065,77 @@ export function computePromptInjections(
                 continue;
             }
 
-            let isTriggered = entry.triggerMode === 'always';
+            const triggerMode: ActivationTriggerMode =
+                entry.triggerMode === 'always' ? 'always' : 'keyword';
+            let isTriggered = triggerMode === 'always';
+            let matchedKeywords: string[] | undefined;
+
             if (!isTriggered) {
                 const caseSensitive = Boolean(entry.caseSensitive);
-                const rawText = getRecentText(entry.scanDepth || 5);
-                const recentText = caseSensitive ? rawText : rawText.toLowerCase();
+                const matchWholeWords = Boolean(entry.matchWholeWords);
+                const { raw: rawText, lower: lowerText } = getRecentText(entry.scanDepth ?? 2);
 
-                const parseKwList = (str?: string) =>
-                    (str || '')
-                        .split(/[|,，]+/)
-                        .map((k) => (caseSensitive ? k.trim() : k.trim().toLowerCase()))
-                        .filter(Boolean);
-
-                const primaryKws = parseKwList(entry.keywords);
+                const primaryKws = splitKeywordTokens(entry.keywords);
                 if (primaryKws.length === 0) {
                     continue;
                 }
 
-                const secondaryKws = parseKwList(entry.secondaryKeywords);
+                const secondaryKws = splitKeywordTokens(entry.secondaryKeywords);
                 const logic = entry.logicType || 'and_any';
+                const hitPrimary = primaryKws.filter((kw) =>
+                    matchKeywordToken(kw, rawText, lowerText, caseSensitive, matchWholeWords)
+                );
 
                 if (secondaryKws.length > 0) {
-                    const primaryMatched = primaryKws.some((kw) => recentText.includes(kw));
-                    if (!primaryMatched) {
+                    if (hitPrimary.length === 0) {
                         continue;
                     }
                     const secondaryMatched =
                         logic === 'and_all'
-                            ? secondaryKws.every((kw) => recentText.includes(kw))
+                            ? secondaryKws.every((kw) =>
+                                  matchKeywordToken(
+                                      kw,
+                                      rawText,
+                                      lowerText,
+                                      caseSensitive,
+                                      matchWholeWords
+                                  )
+                              )
                             : logic === 'not_any'
-                              ? !secondaryKws.some((kw) => recentText.includes(kw))
-                              : secondaryKws.some((kw) => recentText.includes(kw));
+                              ? !secondaryKws.some((kw) =>
+                                    matchKeywordToken(
+                                        kw,
+                                        rawText,
+                                        lowerText,
+                                        caseSensitive,
+                                        matchWholeWords
+                                    )
+                                )
+                              : secondaryKws.some((kw) =>
+                                    matchKeywordToken(
+                                        kw,
+                                        rawText,
+                                        lowerText,
+                                        caseSensitive,
+                                        matchWholeWords
+                                    )
+                                );
                     if (!secondaryMatched) {
                         continue;
                     }
+                    matchedKeywords = hitPrimary;
                 } else {
                     const primaryMatched =
                         logic === 'and_all'
-                            ? primaryKws.every((kw) => recentText.includes(kw))
+                            ? hitPrimary.length === primaryKws.length
                             : logic === 'not_any'
-                              ? !primaryKws.some((kw) => recentText.includes(kw))
-                              : primaryKws.some((kw) => recentText.includes(kw));
+                              ? hitPrimary.length === 0
+                              : hitPrimary.length > 0;
                     if (!primaryMatched) {
                         continue;
+                    }
+                    if (hitPrimary.length > 0) {
+                        matchedKeywords = hitPrimary;
                     }
                 }
 
@@ -905,19 +1151,10 @@ export function computePromptInjections(
                 continue;
             }
 
-            if (
-                shouldSkipEntryForEmptyMaterials(
-                    stripped,
-                    materialLists,
-                    entry.skipWhenEmpty
-                )
-            ) {
-                continue;
-            }
-
             const rendered = applyMaterialVariablesToEntryContent(
                 stripped,
-                materialLists
+                materialLists,
+                Boolean(entry.skipWhenEmpty)
             ).trim();
 
             if (!rendered) {
@@ -942,6 +1179,8 @@ export function computePromptInjections(
                 channelId: channelDef.id,
                 entryId: entry.id,
                 entryName: entry.name,
+                triggerMode,
+                ...(matchedKeywords && matchedKeywords.length > 0 ? { matchedKeywords } : {}),
                 position,
                 depth,
                 role,
@@ -999,8 +1238,12 @@ export function computePromptInjections(
  */
 export class PromptInjector {
     private readonly _store: SettingsStore;
-    private readonly _registeredKeys = new Set<string>();
+    private readonly _registeredMeta = new Map<
+        string,
+        { position: 0 | 1 | 2; depth: number; role: 0 | 1 | 2 }
+    >();
     private _pendingMicrotaskPromise: Promise<PromptComputedResult> | null = null;
+    private _syncEpoch = 0;
 
     public constructor(storeInstance?: SettingsStore) {
         this._store = storeInstance ?? settingsStore;
@@ -1012,13 +1255,21 @@ export class PromptInjector {
      * @remarks
      * 在同一个事件循环/宏任务周期内多次调用时自动合批为微任务末尾的单次全量计算与注入，
      * 消除短时间内的密集重复正则与素材匹配计算。
+     * 若调度期间发生清理或停用 (`_syncEpoch` 递增)，则放弃该微任务回写。
      *
      * @returns 最终合批执行的计算结果 Promise
      */
     public scheduleSyncToHost(): Promise<PromptComputedResult> {
         if (!this._pendingMicrotaskPromise) {
+            const scheduledEpoch = this._syncEpoch;
             this._pendingMicrotaskPromise = Promise.resolve().then(() => {
                 this._pendingMicrotaskPromise = null;
+                if (scheduledEpoch !== this._syncEpoch) {
+                    return computePromptInjections({
+                        settings: this._store.getSettings(),
+                        channels: [],
+                    });
+                }
                 return this.syncToHost();
             });
         }
@@ -1029,6 +1280,11 @@ export class PromptInjector {
      * 计算当前激活的所有提示词段落并同步写入 SillyTavern 宿主 `setExtensionPrompt`。
      */
     public syncToHost(): PromptComputedResult {
+        // 若存在尚待触发的合批微任务，直接废弃旧占位并立即计算最新态，防止同 Tick 重复刷新
+        if (this._pendingMicrotaskPromise) {
+            this._syncEpoch += 1;
+            this._pendingMicrotaskPromise = null;
+        }
         const settings = this._store.getSettings();
         const hostContext =
             typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
@@ -1040,7 +1296,7 @@ export class PromptInjector {
             return computed;
         }
 
-        const staleCandidates = new Set<string>(this._registeredKeys);
+        const staleCandidates = new Set<string>(this._registeredMeta.keys());
         const hostPrompts = hostContext?.extensionPrompts;
         if (isPlainObject(hostPrompts)) {
             for (const existingKey of Object.keys(hostPrompts)) {
@@ -1050,10 +1306,14 @@ export class PromptInjector {
             }
         }
 
-        const nextActiveKeys = new Set<string>();
+        const nextMeta = new Map<string, { position: 0 | 1 | 2; depth: number; role: 0 | 1 | 2 }>();
 
         for (const bucket of computed.buckets) {
-            nextActiveKeys.add(bucket.key);
+            nextMeta.set(bucket.key, {
+                position: bucket.position,
+                depth: bucket.depth,
+                role: bucket.role,
+            });
             staleCandidates.delete(bucket.key);
             try {
                 setPromptFn(
@@ -1073,8 +1333,16 @@ export class PromptInjector {
         }
 
         for (const staleKey of staleCandidates) {
+            const prevMeta = this._registeredMeta.get(staleKey);
             try {
-                setPromptFn(staleKey, '', 1, 0, false, 0);
+                setPromptFn(
+                    staleKey,
+                    '',
+                    prevMeta?.position ?? 1,
+                    prevMeta?.depth ?? 0,
+                    false,
+                    prevMeta?.role ?? 0
+                );
             } catch (err) {
                 logger.warn(
                     `[PromptInjector] 清理宿主失效提示词注入项 (${staleKey}) 异常:`,
@@ -1083,9 +1351,9 @@ export class PromptInjector {
             }
         }
 
-        this._registeredKeys.clear();
-        for (const k of nextActiveKeys) {
-            this._registeredKeys.add(k);
+        this._registeredMeta.clear();
+        for (const [k, meta] of nextMeta.entries()) {
+            this._registeredMeta.set(k, meta);
         }
 
         return computed;
@@ -1095,16 +1363,17 @@ export class PromptInjector {
      * 主动清空本扩展在宿主中注册的全部提示词注入项（供插件停用卸载时调用）。
      */
     public clearAllFromHost(): void {
+        this._syncEpoch += 1;
         this._pendingMicrotaskPromise = null;
         const hostContext =
             typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
         const setPromptFn = hostContext?.setExtensionPrompt;
         if (typeof setPromptFn !== 'function') {
-            this._registeredKeys.clear();
+            this._registeredMeta.clear();
             return;
         }
 
-        const keysToClear = new Set<string>(this._registeredKeys);
+        const keysToClear = new Set<string>(this._registeredMeta.keys());
         const hostPrompts = hostContext?.extensionPrompts;
         if (isPlainObject(hostPrompts)) {
             for (const existingKey of Object.keys(hostPrompts)) {
@@ -1115,13 +1384,21 @@ export class PromptInjector {
         }
 
         for (const key of keysToClear) {
+            const prevMeta = this._registeredMeta.get(key);
             try {
-                setPromptFn(key, '', 1, 0, false, 0);
+                setPromptFn(
+                    key,
+                    '',
+                    prevMeta?.position ?? 1,
+                    prevMeta?.depth ?? 0,
+                    false,
+                    prevMeta?.role ?? 0
+                );
             } catch {
                 // 忽略卸载阶段异常
             }
         }
-        this._registeredKeys.clear();
+        this._registeredMeta.clear();
     }
 }
 

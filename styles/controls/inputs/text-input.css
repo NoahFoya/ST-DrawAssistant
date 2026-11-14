@@ -154,18 +154,27 @@
 /* 5. 表单状态联动 (未保存修改 / 校验错误) */
 /* 未保存修改态：琥珀色高亮微光 */
 .da-input.is-dirty,
-.da-input-unit-wrapper.is-dirty .da-input {
+.da-input-unit-wrapper.is-dirty .da-input,
+.da-input-wrapper.is-dirty .da-input,
+.da-input-wrapper.da-input-wrapper--dirty .da-input {
     border-color: var(--da-color-warn) !important;
     box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.25) !important;
 }
 
 /* 错误校验态：红色高亮提示格式异常 */
 .da-input.is-invalid,
-.da-input-unit-wrapper.is-invalid .da-input {
+.da-input-unit-wrapper.is-invalid .da-input,
+.da-input-wrapper.is-invalid .da-input,
+.da-number-input.is-invalid {
     border-color: var(--da-color-error) !important;
     background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08) !important;
     color: var(--da-color-error);
     box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
+}
+
+.da-input-wrapper.da-input-wrapper--disabled .da-input {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 /* 6. 紧凑尺寸与搜索变体 */

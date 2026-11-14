@@ -14,8 +14,10 @@ import type { Disposable } from '../types';
 import type { PromptInjectionEntry, PromptChannelPresetData, PresetItem } from '@types';
 import type { ParsedStWorldbookResult } from '../../pipeline/worldbook-converter';
 import { exportToStWorldbookJson } from '../../pipeline/worldbook-converter';
+import { splitKeywordTokens } from '../../pipeline/prompt-injector';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
+import { downloadJsonFile } from '../../util/download';
 
 /** 原生世界书导入模式 */
 export type WorldbookImportApplyMode = 'create_preset' | 'append_current';
@@ -86,17 +88,7 @@ export function triggerJsonFileDownload(
     filename: string,
     payload: Record<string, unknown>
 ): void {
-    if (typeof document === 'undefined' || typeof Blob === 'undefined') {
-        return;
-    }
-    const jsonText = JSON.stringify(payload, null, 2);
-    const blob = new Blob([jsonText], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJsonFile(filename, payload);
 }
 
 /**
@@ -274,9 +266,7 @@ export function openWorldbookImportModal(options: WorldbookImportModalOptions): 
             entry.triggerMode === 'always'
                 ? 'da-badge da-badge--primary'
                 : 'da-badge da-badge--warning';
-        const kwCount = entry.keywords
-            ? entry.keywords.split('|').filter(Boolean).length
-            : 0;
+        const kwCount = splitKeywordTokens(entry.keywords).length;
         trigBadge.textContent =
             entry.triggerMode === 'always' ? '常驻' : `关键词 (${kwCount})`;
         metaGroup.appendChild(trigBadge);

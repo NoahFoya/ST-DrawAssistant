@@ -31,6 +31,7 @@ import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { createPointAnchorRect, openFloatingSurface } from '../layout/floating-sheet';
+import { downloadTextFile } from '../../util/download';
 
 export type LexiconSubTab = 'files' | 'custom';
 
@@ -501,23 +502,11 @@ export class LexiconTabView extends PreactSettingsView {
             format === 'json'
                 ? await this._storage.exportCustomWordsAsJson()
                 : await this._storage.exportCustomWordsAsCsv();
-        if (
-            typeof document === 'undefined' ||
-            typeof Blob === 'undefined' ||
-            typeof URL === 'undefined' ||
-            typeof URL.createObjectURL !== 'function'
-        ) {
-            return;
-        }
-        const blob = new Blob([text], {
-            type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8',
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `st-draw-custom-lexicon.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadTextFile(
+            `st-draw-custom-lexicon.${format}`,
+            text,
+            format === 'json' ? 'application/json' : 'text/csv;charset=utf-8'
+        );
     }
 
     private renderFilesSubPanel(): VNode {

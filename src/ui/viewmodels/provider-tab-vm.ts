@@ -24,14 +24,15 @@ import type { Disposable } from '../types';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { AssetFetchResult, ConnectionCardData } from '../composite/connection-card';
 import type { PresetActionType } from '../composite/preset-toolbar';
-import type { PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-card';
-import type { WorkflowCardData, WorkflowCardPresetItem } from '../composite/workflow-card';
+import type { PromptPresetCard, PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-card';
+import type { WorkflowCard, WorkflowCardData, WorkflowCardPresetItem } from '../composite/workflow-card';
 import { PresetController } from './preset-controller';
 import { settingsStore } from '../../store/settings-store';
 import { providerRegistry } from '../../provider/registry';
 import { hasProviderAssetSync } from '../../provider/base-provider';
 import { eventBus } from '../../util/event-bus';
 import { matchAssetText } from '../../util/asset-matcher';
+import { downloadJsonFile } from '../../util/download';
 import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { logger } from '../../util/logger';
@@ -167,6 +168,53 @@ export class ProviderTabViewModel implements Disposable {
     private unlistenSettings: (() => void) | null = null;
     /** 第三方地址变更后延迟触发资产同步的计时器 */
     private urlSyncTimer: ReturnType<typeof setTimeout> | null = null;
+    /** 资产同步代际递增标识，防止旧请求覆盖新上下文 */
+    private assetSyncGen = 0;
+    /** 内嵌子预设卡片实例引用，用于跨选项卡脏状态汇聚与保存 */
+    private promptCardRef: PromptPresetCard | null = null;
+    private workflowCardRef: WorkflowCard | null = null;
+
+    /** 注册内嵌提示词预设卡片实例 */
+    public registerPromptCard(card: PromptPresetCard | null): void {
+        this.promptCardRef = card;
+    }
+
+    /** 注册内嵌工作流预设卡片实例 */
+    public registerWorkflowCard(card: WorkflowCard | null): void {
+        this.workflowCardRef = card;
+    }
+
+    /** 查询主预设及内嵌提示词/工作流卡片是否存在未保存草稿 */
+    public hasUnsavedChanges(): boolean {
+        return (
+            this.presetController.isDirty.value ||
+            Boolean(this.promptCardRef?.isDirty()) ||
+            Boolean(this.workflowCardRef?.isDirty())
+        );
+    }
+
+    /** 依次保存主预设与内嵌提示词/工作流卡片的未保存修改 */
+    public async saveUnsavedChanges(): Promise<boolean> {
+        if (this.workflowCardRef?.isDirty()) {
+            const ok = await this.workflowCardRef.saveDraft();
+            if (!ok) return false;
+        }
+        if (this.promptCardRef?.isDirty()) {
+            const ok = await this.promptCardRef.saveDraft();
+            if (!ok) return false;
+        }
+        if (this.presetController.isDirty.value) {
+            return await this.presetController.handleAction('save');
+        }
+        return true;
+    }
+
+    /** 放弃主预设及内嵌卡片全部未保存草稿 */
+    public discardUnsavedChanges(): void {
+        this.workflowCardRef?.discardDraft();
+        this.promptCardRef?.discardDraft();
+        this.presetController.discardDraft();
+    }
 
     /** 是否按服务商独立保存连接信息与资产缓存 */
     public get hasServiceProfiles(): boolean {
@@ -178,12 +226,6 @@ export class ProviderTabViewModel implements Disposable {
         return hasProviderAssetSync(providerRegistry.getProvider(this.provider));
     }
 
-    /** 已注册且明确不支持服务端同步的提供方，不回填历史遗留的 checkpoints 缓存 */
-    private shouldIgnoreCachedServerModels(): boolean {
-        const provider = providerRegistry.getProvider(this.provider);
-        return Boolean(provider && !hasProviderAssetSync(provider));
-    }
-
     public constructor(options: ProviderTabViewModelOptions) {
         this.provider = options.provider;
         this.options = options;
@@ -193,9 +235,8 @@ export class ProviderTabViewModel implements Disposable {
 
         // 优先从本地持久化资产缓存秒开渲染，避免白屏与等待
         const cache = providerCfg.assetCache;
-        const ignoreCachedModels = this.shouldIgnoreCachedServerModels();
-        const cachedCheckpoints = ignoreCachedModels ? [] : cache?.checkpoints || [];
-        const cachedUnets = ignoreCachedModels ? [] : cache?.unets || [];
+        const cachedCheckpoints = !this.supportsAssetSync ? [] : cache?.checkpoints || [];
+        const cachedUnets = !this.supportsAssetSync ? [] : cache?.unets || [];
         if (cachedCheckpoints.length > 0 || cachedUnets.length > 0) {
             this.categorizedModels = signal<{ checkpoints: string[]; unets: string[] } | null>({
                 checkpoints: cachedCheckpoints,
@@ -430,7 +471,7 @@ export class ProviderTabViewModel implements Disposable {
             }));
             if (boundId && !workflows.some((w) => w.id === boundId)) {
                 opts.unshift({
-                    label: boundId,
+                    label: `${boundId} (已失效)`,
                     value: boundId,
                 });
             }
@@ -450,7 +491,7 @@ export class ProviderTabViewModel implements Disposable {
             ];
             if (boundId && !workflows.some((w) => w.id === boundId)) {
                 opts.unshift({
-                    label: boundId,
+                    label: `${boundId} (已失效)`,
                     value: boundId,
                 });
             }
@@ -499,42 +540,13 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
-     * 解析有效的服务商预设标识，兼容仅保存了自定义 serverUrl 但缺失 serviceId 的配置。
-     */
-    private resolveServiceId(cfg: ProviderStoredConfig): string | undefined {
-        if (cfg.serviceId) {
-            return cfg.serviceId;
-        }
-        const profiles = this.options.serviceProfiles;
-        if (!profiles) {
-            return this.options.defaultServiceId;
-        }
-        const normalizeUrl = (url: string): string => url.trim().replace(/\/+$/, '');
-        const normalizedUrl = normalizeUrl(cfg.serverUrl ?? '');
-        if (!normalizedUrl) {
-            return this.options.defaultServiceId;
-        }
-        for (const [id, url] of Object.entries(profiles.fixedUrls || {})) {
-            if (normalizeUrl(url) === normalizedUrl) {
-                return id;
-            }
-        }
-        for (const [id, url] of Object.entries(profiles.defaultUrls || {})) {
-            if (normalizeUrl(url) === normalizedUrl) {
-                return id;
-            }
-        }
-        return 'custom';
-    }
-
-    /**
      * 根据持久化的提供商配置构建前端连接卡片数据。
      */
     private buildConnectionData(cfg: ProviderStoredConfig): ConnectionCardData {
         return {
             serverUrl: cfg.serverUrl !== undefined ? cfg.serverUrl : this.options.defaultServerUrl,
             apiKey: cfg.apiKey || '',
-            activePresetId: this.resolveServiceId(cfg),
+            activePresetId: cfg.serviceId || this.options.defaultServiceId,
         };
     }
 
@@ -636,6 +648,7 @@ export class ProviderTabViewModel implements Disposable {
 
         const urlChanged = this.hasServiceProfiles && data.serverUrl !== prevUrl;
         if (urlChanged && this.supportsAssetSync) {
+            this.assetSyncGen += 1;
             patch.assetCache = EMPTY_ASSET_CACHE;
         }
         settingsStore.setProviderConfig(this.provider, patch);
@@ -659,6 +672,7 @@ export class ProviderTabViewModel implements Disposable {
         if (!this.hasServiceProfiles || !prevId || nextId === prevId) {
             return;
         }
+        this.assetSyncGen += 1;
 
         const cfg = this.readProviderStoreConfig();
         const next = cfg.serviceProfiles?.[nextId];
@@ -705,9 +719,8 @@ export class ProviderTabViewModel implements Disposable {
 
     /** 以指定缓存重置内存中的全部资产信号；缓存为空时回到未拉取状态 */
     private loadAssetSignals(cache: ProviderAssetCache | undefined): void {
-        const ignoreCachedModels = this.shouldIgnoreCachedServerModels();
-        const checkpoints = ignoreCachedModels ? [] : cache?.checkpoints ?? [];
-        const unets = ignoreCachedModels ? [] : cache?.unets ?? [];
+        const checkpoints = !this.supportsAssetSync ? [] : cache?.checkpoints ?? [];
+        const unets = !this.supportsAssetSync ? [] : cache?.unets ?? [];
         const hasModels = checkpoints.length > 0 || unets.length > 0;
         this.categorizedModels.value = hasModels ? { checkpoints, unets } : null;
         this.serverModels.value = [...checkpoints, ...unets];
@@ -729,29 +742,25 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
-     * 执行提供商连通性健康检测。
+     * 执行提供商连通性健康检测（统一返回 ProviderHealthResult）。
      */
-    public async testPing(): Promise<ProviderHealthResult> {
+    public async testPing(signal?: AbortSignal): Promise<ProviderHealthResult> {
         const provider = providerRegistry.getProvider(this.provider);
         if (!provider?.checkHealth) {
             throw new Error(`未注册 ${this.provider} 服务提供方`);
         }
-        const res = await provider.checkHealth();
-        if (this.provider === 'openai' && res.status !== 'ok') {
-            throw new Error(res.message || '连接失败');
-        }
-        return res;
+        return await provider.checkHealth(signal);
     }
 
     /**
      * 从服务端拉取模型、VAE、LoRA 与采样器列表，持久化至本地资产缓存并合并到响应式信号中。
      *
      * @param silent 是否以静默模式运行（静默模式下仅在资产发生增删变动或当前预设资产失效时提示用户）
-     * @param options 可选调用控制参数，如已完成连通性校验时可跳过前置健康检查
+     * @param options 可选调用控制参数，如已完成连通性校验时可跳过前置健康检查与传入中止信号
      */
     public async refreshServerAssets(
         silent = false,
-        options?: { skipHealthCheck?: boolean }
+        options?: { skipHealthCheck?: boolean; signal?: AbortSignal }
     ): Promise<AssetFetchResult> {
         const provider = providerRegistry.getProvider(this.provider);
 
@@ -766,9 +775,34 @@ export class ProviderTabViewModel implements Disposable {
             };
         }
 
+        const signal = options?.signal;
+        const reqGen = ++this.assetSyncGen;
+        const prevCfg = this.readProviderStoreConfig();
+        const reqServiceId = prevCfg.serviceId;
+        const reqServerUrl = prevCfg.serverUrl;
+        const reqTransport = settingsStore.getSettings().transport;
+
+        const isStaleRequest = (): boolean => {
+            if (signal?.aborted || reqGen !== this.assetSyncGen) {
+                return true;
+            }
+            const curCfg = this.readProviderStoreConfig();
+            return (
+                curCfg.serviceId !== reqServiceId ||
+                curCfg.serverUrl !== reqServerUrl ||
+                settingsStore.getSettings().transport !== reqTransport
+            );
+        };
+
         // 0. 前置连通性快速检查，离线时立即退出，避免产生冗余请求
         if (!options?.skipHealthCheck && typeof provider.checkHealth === 'function') {
-            const health = await provider.checkHealth();
+            const health = await provider.checkHealth(signal);
+            if (isStaleRequest()) {
+                if (signal?.aborted) {
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+                return { count: 0, message: '请求已过期' };
+            }
             if (health.status !== 'ok') {
                 const errMsg = health.message || '服务未启动或无法连接';
                 if (!silent) {
@@ -783,86 +817,122 @@ export class ProviderTabViewModel implements Disposable {
             provider.clearAssetCache();
         }
 
-        const prevCfg = this.readProviderStoreConfig();
         const prevCache = prevCfg.assetCache;
         const prevCheckpoints = prevCache?.checkpoints || [];
         const prevLoras = prevCache?.loras || [];
 
         let totalCount = 0;
+        let nextCat: { checkpoints: string[]; unets: string[] } | null = null;
+        let nextModels: string[] | null = null;
+        let hasFetchedModelsResult = false;
+        let nextVaes: string[] | null = null;
+        let nextClips: string[] | null = null;
+        let nextSamplers: string[] | null = null;
+        let nextSchedulers: string[] | null = null;
+        let nextLoras: string[] | null = null;
 
         // 1. 拉取主模型列表 (优先检查分类获取接口)
         if (typeof provider.fetchCategorizedModels === 'function') {
-            const cat = await provider.fetchCategorizedModels();
-            if (cat && (cat.checkpoints?.length > 0 || cat.unets?.length > 0)) {
-                this.categorizedModels.value = cat;
+            const cat = await provider.fetchCategorizedModels(signal);
+            if (cat) {
+                nextCat = cat;
                 const all = [...(cat.checkpoints || []), ...(cat.unets || [])];
-                this.serverModels.value = all;
-                this.hasFetchedModels.value = true;
+                nextModels = all;
+                hasFetchedModelsResult = true;
                 totalCount += all.length;
-            } else if (cat) {
-                this.categorizedModels.value = cat;
-                this.serverModels.value = [];
-                this.hasFetchedModels.value = true;
             }
         } else if (typeof provider.fetchModels === 'function') {
-            const models = await provider.fetchModels();
-            if (Array.isArray(models) && models.length > 0) {
+            const models = await provider.fetchModels(signal);
+            if (Array.isArray(models)) {
                 totalCount += models.length;
-                this.serverModels.value = models;
-                this.hasFetchedModels.value = true;
-            } else if (Array.isArray(models)) {
-                this.serverModels.value = [];
-                this.categorizedModels.value = null;
-                this.hasFetchedModels.value = true;
+                nextModels = models;
+                hasFetchedModelsResult = true;
             }
         }
 
         // 2. 拉取外置 VAE 列表
         if (typeof provider.fetchVaes === 'function') {
-            const vaes = await provider.fetchVaes();
+            const vaes = await provider.fetchVaes(signal);
             if (Array.isArray(vaes)) {
                 totalCount += vaes.length;
-                this.serverVaes.value = vaes;
-                this.hasFetchedVaes.value = true;
+                nextVaes = vaes;
             }
         }
 
         // 3. 拉取 CLIP 编码器列表
         if (typeof provider.fetchClips === 'function') {
-            const clips = await provider.fetchClips();
+            const clips = await provider.fetchClips(signal);
             if (Array.isArray(clips)) {
                 totalCount += clips.length;
-                this.serverClips.value = clips;
-                this.hasFetchedClips.value = true;
+                nextClips = clips;
             }
         }
 
         // 4. 拉取采样器列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchSamplers === 'function') {
-            const samplers = await provider.fetchSamplers();
+            const samplers = await provider.fetchSamplers(signal);
             if (Array.isArray(samplers)) {
                 totalCount += samplers.length;
-                this.samplerOptions.value = samplers.map((s) => ({ label: s, value: s }));
+                nextSamplers = samplers;
             }
         }
 
         // 5. 拉取调度器列表 (如 ComfyUI)
-        if (typeof (provider as { fetchSchedulers?: () => Promise<string[]> }).fetchSchedulers === 'function') {
-            const schedulers = await (provider as { fetchSchedulers: () => Promise<string[]> }).fetchSchedulers();
+        const schedProvider = provider as { fetchSchedulers?: (sig?: AbortSignal) => Promise<string[]> };
+        if (typeof schedProvider.fetchSchedulers === 'function') {
+            const schedulers = await schedProvider.fetchSchedulers(signal);
             if (Array.isArray(schedulers)) {
                 totalCount += schedulers.length;
-                this.schedulerOptions.value = schedulers.map((s) => ({ label: s, value: s }));
+                nextSchedulers = schedulers;
             }
         }
 
         // 6. 拉取 LoRA 模型列表 (如 SD-WebUI, ComfyUI)
         if (typeof provider.fetchLoras === 'function') {
-            const loras = await provider.fetchLoras();
+            const loras = await provider.fetchLoras(signal);
             if (Array.isArray(loras)) {
                 totalCount += loras.length;
-                this.serverLoras.value = loras;
-                this.hasFetchedLoras.value = true;
+                nextLoras = loras;
             }
+        }
+
+        // 若等待期间上下文（URL/服务商/传输通道/中止信号）已变更，丢弃旧响应
+        if (isStaleRequest()) {
+            if (signal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
+            return { count: 0, message: '请求已过期' };
+        }
+
+        // 原子写入内存信号与 SettingsStore 缓存
+        if (nextCat !== null) {
+            this.categorizedModels.value = nextCat;
+        } else if (nextModels !== null && nextModels.length === 0) {
+            this.categorizedModels.value = null;
+        }
+        if (nextModels !== null) {
+            this.serverModels.value = nextModels;
+        }
+        if (hasFetchedModelsResult) {
+            this.hasFetchedModels.value = true;
+        }
+        if (nextVaes !== null) {
+            this.serverVaes.value = nextVaes;
+            this.hasFetchedVaes.value = true;
+        }
+        if (nextClips !== null) {
+            this.serverClips.value = nextClips;
+            this.hasFetchedClips.value = true;
+        }
+        if (nextSamplers !== null) {
+            this.samplerOptions.value = nextSamplers.map((s) => ({ label: s, value: s }));
+        }
+        if (nextSchedulers !== null) {
+            this.schedulerOptions.value = nextSchedulers.map((s) => ({ label: s, value: s }));
+        }
+        if (nextLoras !== null) {
+            this.serverLoras.value = nextLoras;
+            this.hasFetchedLoras.value = true;
         }
 
         // 7. 持久化本地资产缓存至 SettingsStore
@@ -934,6 +1004,23 @@ export class ProviderTabViewModel implements Disposable {
         this.workflowPresets.value = settingsStore.getPresets<WorkflowPresetData>('workflows');
     }
 
+    private generateAssetUniqueId(
+        category: 'prompts' | 'workflows',
+        idPrefix: string,
+        providerScope?: string
+    ): string {
+        const existingIds = new Set(
+            settingsStore.getPresets(category, providerScope).map((p) => p.id)
+        );
+        const now = Date.now();
+        let candidate = `${idPrefix}${now}`;
+        let seq = 1;
+        while (existingIds.has(candidate)) {
+            candidate = `${idPrefix}${now}_${seq++}`;
+        }
+        return candidate;
+    }
+
     /** 内部统一辅助：处理内嵌提示词预设与工作流预设的增删改查及导出 */
     private async runAssetPresetAction<TData>(cfg: {
         category: 'prompts' | 'workflows';
@@ -945,20 +1032,23 @@ export class ProviderTabViewModel implements Disposable {
         buildSaveData: (existing: TData) => TData | null;
         buildNewData: () => TData;
         buildCloneData: () => TData;
-    }, action: PresetActionType, id: string): Promise<void> {
+    }, action: PresetActionType, id: string): Promise<boolean> {
         const { category, providerScope, draftField, idPrefix, label, filePrefix } = cfg;
 
         if (action === 'select') {
             this.presetController.updateDraft(draftField, id);
         } else if (action === 'save') {
             const cur = settingsStore.getPreset<TData>(category, id, providerScope);
-            if (cur) {
-                const nextData = cfg.buildSaveData(cur.data);
-                if (nextData === null) return;
-                cur.data = nextData;
-                settingsStore.savePreset(category, cur, providerScope);
-                Toast.show(`${label} "${cur.name}" 已保存`, { level: 'success' });
-            }
+            if (!cur) return false;
+            const nextData = cfg.buildSaveData(cur.data);
+            if (nextData === null) return false;
+            const updated: PresetItem<TData> = {
+                ...cur,
+                data: nextData,
+                updatedAt: Date.now(),
+            };
+            settingsStore.savePreset(category, updated, providerScope);
+            Toast.show(`${label} "${updated.name}" 已保存`, { level: 'success' });
         } else if (action === 'new' || action === 'saveAs') {
             const list = settingsStore.getPresets<TData>(category, providerScope);
             const existingNames = new Set(list.map((p) => p.name));
@@ -975,9 +1065,9 @@ export class ProviderTabViewModel implements Disposable {
                 placeholder: `请输入${label}名称`,
                 validator: (val) => (existingNames.has(val) ? '预设名称已存在，请换一个名称' : null),
             });
-            if (!newName || !newName.trim()) return;
+            if (!newName || !newName.trim()) return false;
 
-            const newId = `${idPrefix}${Date.now()}`;
+            const newId = this.generateAssetUniqueId(category, idPrefix, providerScope);
             const item: PresetItem<TData> = {
                 id: newId,
                 name: newName.trim(),
@@ -989,7 +1079,7 @@ export class ProviderTabViewModel implements Disposable {
             Toast.show(`已${action === 'saveAs' ? '另存' : '新建'}${label}: ${item.name}`, { level: 'success' });
         } else if (action === 'rename') {
             const cur = settingsStore.getPreset<TData>(category, id, providerScope);
-            if (!cur) return;
+            if (!cur) return false;
 
             const list = settingsStore.getPresets<TData>(category, providerScope);
             const otherNames = new Set(list.filter((p) => p.id !== id).map((p) => p.name));
@@ -1004,32 +1094,37 @@ export class ProviderTabViewModel implements Disposable {
                     return null;
                 },
             });
-            if (!newName || !newName.trim() || newName.trim() === cur.name) return;
+            if (!newName || !newName.trim() || newName.trim() === cur.name) return false;
 
-            cur.name = newName.trim();
-            cur.updatedAt = Date.now();
-            settingsStore.savePreset(category, cur, providerScope);
-            Toast.show(`已重命名${label}为 "${cur.name}"`, { level: 'success' });
+            const updated: PresetItem<TData> = {
+                ...cur,
+                name: newName.trim(),
+                updatedAt: Date.now(),
+            };
+            settingsStore.savePreset(category, updated, providerScope);
+            Toast.show(`已重命名${label}为 "${updated.name}"`, { level: 'success' });
         } else if (action === 'export') {
             const cur = settingsStore.getPreset<TData>(category, id, providerScope);
-            if (!cur) return;
+            if (!cur) return false;
             const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
-            const blob = new Blob([JSON.stringify(cur, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${filePrefix}${safeName}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadJsonFile(`${filePrefix}${safeName}.json`, cur);
         } else if (action === 'delete') {
             const list = settingsStore.getPresets<TData>(category, providerScope);
             if (list.length <= 1) {
                 Toast.show(`至少保留一套${label}，无法删除`, { level: 'warning' });
-                return;
+                return false;
             }
+            const targetItem = list.find((p) => p.id === id);
+            const confirmed = await ConfirmDialog.confirm({
+                title: `删除${label}确认`,
+                message: `确定要删除${label}「${targetItem?.name || id}」吗？此操作无法撤销。`,
+                isDanger: true,
+                confirmText: '删除',
+            });
+            if (!confirmed) return false;
             settingsStore.deletePreset(category, id, providerScope);
             const remaining = settingsStore.getPresets<TData>(category, providerScope);
-            if (remaining.length > 0) {
+            if (this.presetController.draftConfig.value[draftField] === id && remaining.length > 0) {
                 this.presetController.updateDraft(draftField, remaining[0].id);
             }
             Toast.show(`${label}已删除`, { level: 'info' });
@@ -1037,6 +1132,7 @@ export class ProviderTabViewModel implements Disposable {
             Toast.show('已放弃未保存修改', { level: 'info' });
         }
         this.refreshAssetPools();
+        return true;
     }
 
     /** 内部统一辅助：读取并导入外部提示词预设或工作流预设 JSON 文件 */
@@ -1074,7 +1170,11 @@ export class ProviderTabViewModel implements Disposable {
                     finalName = negotiated.trim();
                 }
 
-                const newId = `${cfg.idPrefix}${Date.now()}`;
+                const newId = this.generateAssetUniqueId(
+                    cfg.category,
+                    cfg.idPrefix,
+                    cfg.providerScope
+                );
                 const importedItem: PresetItem<TData> = {
                     id: newId,
                     name: finalName,
@@ -1103,10 +1203,10 @@ export class ProviderTabViewModel implements Disposable {
         action: PresetActionType,
         pId: string,
         data?: PromptCardData
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (action === 'save' && !data) {
             this.refreshAssetPools();
-            return;
+            return true;
         }
         const buildPromptData = (src?: PromptCardData, existing?: PromptPresetData): PromptPresetData => ({
             ...existing,
@@ -1125,7 +1225,7 @@ export class ProviderTabViewModel implements Disposable {
                 })),
         });
 
-        await this.runAssetPresetAction<PromptPresetData>(
+        return await this.runAssetPresetAction<PromptPresetData>(
             {
                 category: 'prompts',
                 providerScope: this.provider,
@@ -1168,12 +1268,12 @@ export class ProviderTabViewModel implements Disposable {
         action: PresetActionType,
         wfId: string,
         data?: WorkflowCardData
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (action === 'save' && !data?.json) {
             this.refreshAssetPools();
-            return;
+            return true;
         }
-        await this.runAssetPresetAction<WorkflowPresetData>(
+        return await this.runAssetPresetAction<WorkflowPresetData>(
             {
                 category: 'workflows',
                 draftField: 'txt2imgWorkflowId',
@@ -1257,7 +1357,12 @@ export class ProviderTabViewModel implements Disposable {
         const cfg = this.readProviderStoreConfig();
         this.connectionData.value = this.buildConnectionData(cfg);
         this.refreshAssetPools();
-        this.presetController.applyActivePreset(cfg.activeDrawingPresetId || '');
+        if (!this.presetController.isDirty.value) {
+            this.presetController.applyActivePreset(cfg.activeDrawingPresetId || '', {
+                persist: false,
+                silent: true,
+            });
+        }
         // 选项卡切换时严格遵循单次缓存原则：仅读取本地持久化资产渲染下拉列表，不发起网络请求
 
         if (!this.unlistenSettings) {
@@ -1266,7 +1371,11 @@ export class ProviderTabViewModel implements Disposable {
                 this.connectionData.value = this.buildConnectionData(freshCfg);
 
                 const freshActiveId = freshCfg.activeDrawingPresetId;
-                if (freshActiveId && freshActiveId !== this.presetController.activePresetId.value) {
+                if (
+                    !this.presetController.isDirty.value &&
+                    freshActiveId &&
+                    freshActiveId !== this.presetController.activePresetId.value
+                ) {
                     this.presetController.applyActivePreset(freshActiveId, { persist: false });
                 }
 
@@ -1281,6 +1390,7 @@ export class ProviderTabViewModel implements Disposable {
      * 视图切出时解绑事件监听。
      */
     public deactivate(): void {
+        this.assetSyncGen += 1;
         if (this.urlSyncTimer) {
             clearTimeout(this.urlSyncTimer);
             this.urlSyncTimer = null;

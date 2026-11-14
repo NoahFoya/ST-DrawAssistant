@@ -3,7 +3,7 @@
  *
  * @remarks
  * 1. 基础变体：声明通用按钮基类（.da-btn）及语义化变体（Primary/Secondary/Danger/Success）。
- * 2. 楼层生图按钮：替换消息正文中的生图指令文本，包含就绪、生成中、完成与失败等样式状态。
+ * 2. 尺寸与交互状态：提供 .da-btn--sm / --xs / --icon 尺寸变体，以及加载态、禁用态与图标按钮组样式。
  */
 
 /* 1. 核心通用按钮基类 */
@@ -127,6 +127,8 @@
 
 /* 加载中与禁用状态 */
 .da-btn.is-loading,
+.da-btn.da-btn--loading,
+.da-btn.da-btn--disabled,
 .da-btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;

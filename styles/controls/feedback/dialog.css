@@ -111,3 +111,14 @@
     background: var(--da-bg-input-hover, rgba(255, 255, 255, 0.15));
     border-color: var(--da-border-highlight, rgba(255, 255, 255, 0.3));
 }
+
+@media (max-width: 768px) {
+    .da-dialog-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .da-dialog-actions .da-btn {
+        flex: 1 1 auto;
+    }
+}

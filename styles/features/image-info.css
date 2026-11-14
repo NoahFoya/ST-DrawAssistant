@@ -75,8 +75,8 @@
 
 .da-inspect-badge--accent {
     color: var(--da-accent-color);
-    border-color: rgba(129, 140, 248, 0.35);
-    background: rgba(129, 140, 248, 0.12);
+    border-color: rgba(var(--da-accent-rgb), 0.35);
+    background: var(--da-color-info-subtle, rgba(var(--da-accent-rgb), 0.12));
 }
 
 /* 3. 详情主体双列网格 (.da-inspect-body)
@@ -195,7 +195,7 @@
     color: var(--da-text-primary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
     .da-inspect-body {
         grid-template-columns: 1fr;
     }

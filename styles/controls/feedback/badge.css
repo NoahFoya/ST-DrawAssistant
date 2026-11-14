@@ -37,8 +37,20 @@
 }
 
 .da-badge--accent .da-badge__dot {
+.da-badge--accent .da-badge__dot,
+.da-badge--primary .da-badge__dot {
     background-color: var(--da-accent-color);
     box-shadow: 0 0 4px var(--da-accent-color);
+}
+
+.da-badge--info .da-badge__dot {
+    background-color: var(--da-color-info);
+    box-shadow: 0 0 4px var(--da-color-info);
+}
+
+.da-badge--muted .da-badge__dot,
+.da-badge--neutral .da-badge__dot {
+    background-color: var(--da-text-muted);
 }
 
 .da-badge--warn .da-badge__dot,
@@ -66,14 +78,23 @@
 }
 
 /* 品牌强调 / 活跃状态 */
-.da-badge--accent {
+.da-badge--accent,
+.da-badge--primary {
     background: rgba(var(--da-accent-rgb), 0.15) !important;
     border-color: rgba(var(--da-accent-rgb), 0.35) !important;
     color: var(--da-accent-color) !important;
 }
 
+/* 信息提示状态 */
+.da-badge--info {
+    background: rgba(var(--da-color-info-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-info-rgb), 0.35) !important;
+    color: var(--da-color-info) !important;
+}
+
 /* 次级弱化 / 离线 / 默认状态 */
-.da-badge--muted {
+.da-badge--muted,
+.da-badge--neutral {
     background: var(--da-bg-input);
     border-color: var(--da-border-color);
     color: var(--da-text-muted);

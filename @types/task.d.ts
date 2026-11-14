@@ -26,7 +26,7 @@ export type DrawingTaskStatus = 'pending' | 'generating' | 'completed' | 'failed
 
 /** 生图任务数据模型 */
 export interface DrawingTask {
-    /** 任务全局唯一标识符 UUID */
+    /** 任务全局唯一标识符 */
     readonly taskId: string;
     /** 容器挂载目标定位坐标 */
     readonly target: SlotMountTarget;
@@ -52,7 +52,7 @@ export interface DrawingTask {
     status: DrawingTaskStatus;
     /** 错误信息，任务失败时存在 */
     error?: string;
-    /** 生成成功关联的图像标识符 UUID */
+    /** 关联的图像资产唯一标识符（任务入队时预分配） */
     imageId?: string;
     /** 生成完成的技术参数快照 */
     generationMetadata?: ImageGenerationMetadata;

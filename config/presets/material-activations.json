@@ -17,7 +17,7 @@
         }
       },
       "boundCardNames": [],
-      "scanDepth": 5,
+      "scanDepth": 2,
       "includeBoundOutfits": true
     }
   }

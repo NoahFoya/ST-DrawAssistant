@@ -3,7 +3,7 @@
  *
  * @remarks
  * 基于 Promise 异步等待用户点击确认或取消决策，替代原生阻塞式 window.confirm。
- * 支持键盘 Enter 确认、Escape 取消与遮罩点击退出；在单测环境中支持代理至被 mock 的 window.confirm。
+ * 支持键盘 Enter 确认、Escape 取消与遮罩点击退出；非 DOM 环境下安全回退返回取消结果（false / null）。
  */
 
 import type { Disposable } from '../types';
@@ -41,8 +41,192 @@ export interface PromptDialogOptions {
     validator?: (value: string) => string | null;
 }
 
+export interface ChooseDialogOptions {
+    /** 对话框主标题，默认 '操作确认' */
+    title?: string;
+    /** 提示正文内容 */
+    message: string;
+    /** 主确认按钮文案（例如「保存并关闭」） */
+    primaryText: string;
+    /** 次要动作按钮文案（例如「放弃修改」） */
+    secondaryText: string;
+    /** 取消按钮文案，默认 '取消' */
+    cancelText?: string;
+    /** 次要动作按钮是否为危险样式 */
+    isSecondaryDanger?: boolean;
+}
+
 export class ConfirmDialogService implements Disposable {
     private activeCleanup: (() => void) | null = null;
+    private dialogCounter = 0;
+
+    private mountDialogShell<T>(config: {
+        role: 'alertdialog' | 'dialog';
+        title: string;
+        message?: string;
+        panelClass?: string;
+        onCancel: () => T;
+        renderBody: (ctx: {
+            panel: HTMLElement;
+            actionsEl: HTMLElement;
+            finish: (value: T) => void;
+            registerTimer: (timer: ReturnType<typeof setTimeout>) => void;
+        }) => {
+            initialFocus: HTMLElement | null;
+            onEnter?: () => void;
+        };
+    }): Promise<T> {
+        this.dispose();
+
+        return new Promise<T>((resolve) => {
+            let settled = false;
+            const previousActive =
+                document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const timers = new Set<ReturnType<typeof setTimeout>>();
+
+            const seq = ++this.dialogCounter;
+            const titleId = `da-dialog-title-${seq}`;
+            const messageId = `da-dialog-message-${seq}`;
+
+            const backdrop = document.createElement('div');
+            backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
+
+            const panel = document.createElement('div');
+            panel.className = config.panelClass
+                ? `da-dialog-panel ${config.panelClass}`
+                : 'da-dialog-panel';
+            panel.setAttribute('role', config.role);
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-labelledby', titleId);
+
+            const titleEl = document.createElement('h3');
+            titleEl.id = titleId;
+            titleEl.className = 'da-dialog-title';
+            titleEl.textContent = config.title;
+            panel.appendChild(titleEl);
+
+            if (config.message) {
+                const messageEl = document.createElement('div');
+                messageEl.id = messageId;
+                messageEl.className = 'da-dialog-message';
+                messageEl.textContent = config.message;
+                panel.setAttribute('aria-describedby', messageId);
+                panel.appendChild(messageEl);
+            }
+
+            const actionsEl = document.createElement('div');
+            actionsEl.className = 'da-dialog-actions';
+
+            const cleanup = (result: T) => {
+                if (settled) return;
+                settled = true;
+                for (const timer of timers) {
+                    clearTimeout(timer);
+                }
+                timers.clear();
+                overlayStack.remove('confirm-dialog');
+                window.removeEventListener('keydown', onKeyDown, true);
+                backdrop.remove();
+                if (this.activeCleanup) {
+                    this.activeCleanup = null;
+                }
+                if (previousActive && previousActive.isConnected) {
+                    previousActive.focus();
+                }
+                resolve(result);
+            };
+
+            const cancelValue = () => cleanup(config.onCancel());
+            this.activeCleanup = cancelValue;
+
+            const bodySetup = config.renderBody({
+                panel,
+                actionsEl,
+                finish: cleanup,
+                registerTimer: (timer) => {
+                    timers.add(timer);
+                },
+            });
+
+            panel.appendChild(actionsEl);
+            backdrop.appendChild(panel);
+
+            let pointerDownOnBackdrop = false;
+            backdrop.addEventListener('pointerdown', (e) => {
+                pointerDownOnBackdrop = e.target === backdrop;
+            });
+            backdrop.addEventListener('click', (e) => {
+                const shouldClose = pointerDownOnBackdrop && e.target === backdrop;
+                pointerDownOnBackdrop = false;
+                if (shouldClose) {
+                    cancelValue();
+                }
+            });
+
+            const getFocusable = (): HTMLElement[] =>
+                Array.from(
+                    panel.querySelectorAll<HTMLElement>(
+                        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                    )
+                ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+
+            const onKeyDown = (e: KeyboardEvent) => {
+                if (!overlayStack.isTop('confirm-dialog')) return;
+                if (e.key === 'Tab') {
+                    const focusable = getFocusable();
+                    if (focusable.length === 0) return;
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    const active = document.activeElement as HTMLElement | null;
+                    if (e.shiftKey) {
+                        if (!active || active === first || !panel.contains(active)) {
+                            e.preventDefault();
+                            last.focus();
+                        }
+                    } else if (!active || active === last || !panel.contains(active)) {
+                        e.preventDefault();
+                        first.focus();
+                    }
+                    return;
+                }
+                if (e.key === 'Enter' && bodySetup.onEnter) {
+                    const active = document.activeElement;
+                    if (active instanceof HTMLButtonElement && panel.contains(active)) {
+                        // 允许焦点在其它按钮上时由浏览器触发该按钮自身点击
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    bodySetup.onEnter();
+                }
+            };
+
+            overlayStack.push('confirm-dialog', cancelValue);
+            window.addEventListener('keydown', onKeyDown, true);
+            document.body.appendChild(backdrop);
+
+            bodySetup.initialFocus?.focus();
+            if (bodySetup.initialFocus instanceof HTMLInputElement) {
+                bodySetup.initialFocus.select();
+            }
+        });
+    }
+
+    private createDialogButton(
+        text: string,
+        variantClass: string,
+        onClick: () => void
+    ): HTMLButtonElement {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `da-btn ${variantClass} da-btn--sm`;
+        btn.textContent = text;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        return btn;
+    }
 
     /**
      * 调起模态单按钮信息/排查详情对话框。
@@ -86,133 +270,94 @@ export class ConfirmDialogService implements Disposable {
             return Promise.resolve(false);
         }
 
-        // 若已有活跃对话框，先清理关闭旧对话框
-        this.dispose();
+        return this.mountDialogShell<boolean>({
+            role: 'alertdialog',
+            title,
+            message,
+            onCancel: () => false,
+            renderBody: ({ actionsEl, finish, registerTimer }) => {
+                if (opts.copyText) {
+                    const copyBtn = this.createDialogButton(
+                        '复制日志',
+                        'da-btn--secondary da-dialog-btn--copy',
+                        async () => {
+                            try {
+                                await navigator.clipboard.writeText(opts.copyText!);
+                                copyBtn.textContent = '已复制';
+                                const timer = setTimeout(() => {
+                                    copyBtn.textContent = '复制日志';
+                                }, 2000);
+                                registerTimer(timer);
+                            } catch {
+                                // 剪贴板异常降级
+                            }
+                        }
+                    );
+                    actionsEl.appendChild(copyBtn);
+                }
 
-        return new Promise<boolean>((resolve) => {
-            let settled = false;
+                let cancelBtn: HTMLButtonElement | null = null;
+                if (cancelText !== '') {
+                    cancelBtn = this.createDialogButton(cancelText, 'da-btn--secondary', () =>
+                        finish(false)
+                    );
+                    actionsEl.appendChild(cancelBtn);
+                }
 
-            const backdrop = document.createElement('div');
-            backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
+                const confirmBtn = this.createDialogButton(
+                    confirmText,
+                    isDanger ? 'da-btn--danger' : 'da-btn--primary',
+                    () => finish(true)
+                );
+                actionsEl.appendChild(confirmBtn);
 
-            const panel = document.createElement('div');
-            panel.className = 'da-dialog-panel';
-            panel.setAttribute('role', 'alertdialog');
-            panel.setAttribute('aria-modal', 'true');
+                return {
+                    // 高危破坏性操作默认聚焦取消按钮以防误触
+                    initialFocus: isDanger && cancelBtn ? cancelBtn : confirmBtn,
+                    onEnter: () => finish(true),
+                };
+            },
+        });
+    }
 
-            // 1. 标题区
-            const titleEl = document.createElement('h3');
-            titleEl.className = 'da-dialog-title';
-            titleEl.textContent = title;
-            panel.appendChild(titleEl);
+    /**
+     * 调起三选一模态对话框（主动作 / 次要动作 / 取消）。
+     */
+    public choose(options: ChooseDialogOptions): Promise<'primary' | 'secondary' | 'cancel'> {
+        if (typeof document === 'undefined' || !document.body) {
+            return Promise.resolve('cancel');
+        }
 
-            // 2. 说明正文区
-            const messageEl = document.createElement('div');
-            messageEl.className = 'da-dialog-message';
-            messageEl.textContent = message;
-            panel.appendChild(messageEl);
-
-            // 3. 底部操作按钮栏
-            const actionsEl = document.createElement('div');
-            actionsEl.className = 'da-dialog-actions';
-
-            if (opts.copyText) {
-                const copyBtn = document.createElement('button');
-                copyBtn.type = 'button';
-                copyBtn.className = 'da-btn da-btn--secondary da-btn--sm da-dialog-btn--copy';
-                copyBtn.textContent = '复制日志';
-                copyBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    try {
-                        await navigator.clipboard.writeText(opts.copyText!);
-                        copyBtn.textContent = '已复制';
-                        setTimeout(() => {
-                            copyBtn.textContent = '复制日志';
-                        }, 2000);
-                    } catch {
-                        // 剪贴板异常降级
-                    }
-                });
-                actionsEl.appendChild(copyBtn);
-            }
-
-            let cancelBtn: HTMLButtonElement | null = null;
-            if (cancelText !== '') {
-                cancelBtn = document.createElement('button');
-                cancelBtn.type = 'button';
-                cancelBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-                cancelBtn.textContent = cancelText;
+        return this.mountDialogShell<'primary' | 'secondary' | 'cancel'>({
+            role: 'alertdialog',
+            title: options.title ?? '操作确认',
+            message: options.message,
+            onCancel: () => 'cancel',
+            renderBody: ({ actionsEl, finish }) => {
+                const cancelBtn = this.createDialogButton(
+                    options.cancelText ?? '取消',
+                    'da-btn--secondary',
+                    () => finish('cancel')
+                );
+                const secondaryBtn = this.createDialogButton(
+                    options.secondaryText,
+                    options.isSecondaryDanger ? 'da-btn--danger' : 'da-btn--secondary',
+                    () => finish('secondary')
+                );
+                const primaryBtn = this.createDialogButton(
+                    options.primaryText,
+                    'da-btn--primary',
+                    () => finish('primary')
+                );
                 actionsEl.appendChild(cancelBtn);
-            }
+                actionsEl.appendChild(secondaryBtn);
+                actionsEl.appendChild(primaryBtn);
 
-            const confirmBtn = document.createElement('button');
-            confirmBtn.type = 'button';
-            confirmBtn.className = `da-btn ${isDanger ? 'da-btn--danger' : 'da-btn--primary'} da-btn--sm`;
-            confirmBtn.textContent = confirmText;
-            actionsEl.appendChild(confirmBtn);
-
-            panel.appendChild(actionsEl);
-            backdrop.appendChild(panel);
-
-            // 4. 清理注销逻辑
-            const cleanup = (accepted: boolean) => {
-                if (settled) return;
-                settled = true;
-                overlayStack.remove('confirm-dialog');
-                window.removeEventListener('keydown', onKeyDown, true);
-                backdrop.remove();
-                if (this.activeCleanup) {
-                    this.activeCleanup = null;
-                }
-                resolve(accepted);
-            };
-            this.activeCleanup = () => cleanup(false);
-
-            const handleDecision = (accepted: boolean) => {
-                cleanup(accepted);
-            };
-
-            // 5. 事件交互绑定
-            confirmBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleDecision(true);
-            });
-
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    handleDecision(false);
-                });
-            }
-
-            backdrop.addEventListener('click', (e) => {
-                if (e.target === backdrop) {
-                    handleDecision(false);
-                }
-            });
-
-            const onKeyDown = (e: KeyboardEvent) => {
-                if (!overlayStack.isTop('confirm-dialog')) return;
-                if (e.key === 'Enter') {
-                    // 若焦点不在取消按钮上，回车默认触发确认
-                    if (!cancelBtn || document.activeElement !== cancelBtn) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDecision(true);
-                    }
-                }
-            };
-            overlayStack.push('confirm-dialog', () => handleDecision(false));
-            window.addEventListener('keydown', onKeyDown, true);
-
-            // 6. 挂载 DOM 并聚焦按钮
-            document.body.appendChild(backdrop);
-            if (isDanger && cancelBtn) {
-                // 高危破坏性操作默认聚焦取消按钮以防误触
-                cancelBtn.focus();
-            } else {
-                confirmBtn.focus();
-            }
+                return {
+                    initialFocus: primaryBtn,
+                    onEnter: () => finish('primary'),
+                };
+            },
         });
     }
 
@@ -240,153 +385,82 @@ export class ConfirmDialogService implements Disposable {
             return Promise.resolve(defaultValue ? defaultValue.trim() : null);
         }
 
-        // 若已有活跃对话框，先清理关闭旧对话框
-        this.dispose();
+        return this.mountDialogShell<string | null>({
+            role: 'dialog',
+            title,
+            message: message || undefined,
+            panelClass: 'da-dialog-panel--prompt',
+            onCancel: () => null,
+            renderBody: ({ panel, actionsEl, finish }) => {
+                const inputWrapper = document.createElement('div');
+                inputWrapper.className = 'da-dialog-input-wrapper';
 
-        return new Promise<string | null>((resolve) => {
-            let settled = false;
-
-            const backdrop = document.createElement('div');
-            backdrop.className = 'da-modal-backdrop da-dialog-backdrop st-da-root';
-
-            const panel = document.createElement('div');
-            panel.className = 'da-dialog-panel da-dialog-panel--prompt';
-            panel.setAttribute('role', 'dialog');
-            panel.setAttribute('aria-modal', 'true');
-
-            // 1. 标题区
-            const titleEl = document.createElement('h3');
-            titleEl.className = 'da-dialog-title';
-            titleEl.textContent = title;
-            panel.appendChild(titleEl);
-
-            // 2. 说明正文区
-            if (message) {
-                const messageEl = document.createElement('div');
-                messageEl.className = 'da-dialog-message';
-                messageEl.textContent = message;
-                panel.appendChild(messageEl);
-            }
-
-            // 3. 输入框区与即时校验提示
-            const inputWrapper = document.createElement('div');
-            inputWrapper.className = 'da-dialog-input-wrapper';
-
-            const inputEl = document.createElement('input');
-            inputEl.type = 'text';
-            inputEl.className = 'da-input da-dialog-input';
-            inputEl.value = defaultValue;
-            if (placeholder) {
-                inputEl.placeholder = placeholder;
-            }
-
-            const errorEl = document.createElement('div');
-            errorEl.className = 'da-dialog-error';
-            errorEl.style.display = 'none';
-
-            inputWrapper.appendChild(inputEl);
-            inputWrapper.appendChild(errorEl);
-            panel.appendChild(inputWrapper);
-
-            // 4. 底部操作按钮栏
-            const actionsEl = document.createElement('div');
-            actionsEl.className = 'da-dialog-actions';
-
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-            cancelBtn.textContent = cancelText;
-
-            const confirmBtn = document.createElement('button');
-            confirmBtn.type = 'button';
-            confirmBtn.className = 'da-btn da-btn--primary da-btn--sm';
-            confirmBtn.textContent = confirmText;
-
-            actionsEl.appendChild(cancelBtn);
-            actionsEl.appendChild(confirmBtn);
-            panel.appendChild(actionsEl);
-            backdrop.appendChild(panel);
-
-            // 5. 校验函数
-            const validate = (val: string): boolean => {
-                const trimmed = val.trim();
-                let errMsg: string | null = null;
-                if (!trimmed) {
-                    errMsg = '名称不能为空';
-                } else if (validator) {
-                    errMsg = validator(trimmed);
+                const inputEl = document.createElement('input');
+                inputEl.type = 'text';
+                inputEl.className = 'da-input da-dialog-input';
+                inputEl.value = defaultValue;
+                if (placeholder) {
+                    inputEl.placeholder = placeholder;
                 }
 
-                if (errMsg) {
-                    errorEl.textContent = errMsg;
-                    errorEl.style.display = 'block';
-                    inputEl.classList.add('is-invalid');
-                    confirmBtn.disabled = true;
-                    return false;
-                } else {
+                const errorEl = document.createElement('div');
+                errorEl.className = 'da-dialog-error';
+                errorEl.setAttribute('role', 'alert');
+                errorEl.style.display = 'none';
+
+                inputWrapper.appendChild(inputEl);
+                inputWrapper.appendChild(errorEl);
+                panel.appendChild(inputWrapper);
+
+                const confirmBtn = this.createDialogButton(confirmText, 'da-btn--primary', () => {
+                    if (validate(inputEl.value)) {
+                        finish(inputEl.value.trim());
+                    }
+                });
+                const cancelBtn = this.createDialogButton(cancelText, 'da-btn--secondary', () =>
+                    finish(null)
+                );
+
+                const validate = (val: string): boolean => {
+                    const trimmed = val.trim();
+                    let errMsg: string | null = null;
+                    if (!trimmed) {
+                        errMsg = '名称不能为空';
+                    } else if (validator) {
+                        errMsg = validator(trimmed);
+                    }
+
+                    if (errMsg) {
+                        errorEl.textContent = errMsg;
+                        errorEl.style.display = 'block';
+                        inputEl.classList.add('is-invalid');
+                        confirmBtn.disabled = true;
+                        return false;
+                    }
                     errorEl.textContent = '';
                     errorEl.style.display = 'none';
                     inputEl.classList.remove('is-invalid');
                     confirmBtn.disabled = false;
                     return true;
-                }
-            };
+                };
 
-            // 6. 清理注销逻辑
-            const cleanup = (result: string | null) => {
-                if (settled) return;
-                settled = true;
-                overlayStack.remove('confirm-dialog');
-                window.removeEventListener('keydown', onKeyDown, true);
-                backdrop.remove();
-                if (this.activeCleanup) {
-                    this.activeCleanup = null;
-                }
-                resolve(result);
-            };
-            this.activeCleanup = () => cleanup(null);
+                inputEl.addEventListener('input', () => {
+                    validate(inputEl.value);
+                });
 
-            // 7. 事件交互绑定
-            inputEl.addEventListener('input', () => {
+                actionsEl.appendChild(cancelBtn);
+                actionsEl.appendChild(confirmBtn);
                 validate(inputEl.value);
-            });
 
-            confirmBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (validate(inputEl.value)) {
-                    cleanup(inputEl.value.trim());
-                }
-            });
-
-            cancelBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                cleanup(null);
-            });
-
-            backdrop.addEventListener('click', (e) => {
-                if (e.target === backdrop) {
-                    cleanup(null);
-                }
-            });
-
-            const onKeyDown = (e: KeyboardEvent) => {
-                if (!overlayStack.isTop('confirm-dialog')) return;
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (validate(inputEl.value)) {
-                        cleanup(inputEl.value.trim());
-                    }
-                }
-            };
-            overlayStack.push('confirm-dialog', () => cleanup(null));
-            window.addEventListener('keydown', onKeyDown, true);
-
-            // 8. 挂载 DOM 并聚焦选中输入框
-            document.body.appendChild(backdrop);
-            validate(inputEl.value);
-            inputEl.focus();
-            inputEl.select();
+                return {
+                    initialFocus: inputEl,
+                    onEnter: () => {
+                        if (validate(inputEl.value)) {
+                            finish(inputEl.value.trim());
+                        }
+                    },
+                };
+            },
         });
     }
 

@@ -11,7 +11,6 @@
 import type { VNode } from 'preact';
 import type { DrawingPresetData } from '@types';
 import {
-    PreactSettingsView,
     CardView,
     SchemaFieldsView,
     type FieldSchema,
@@ -20,7 +19,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-layout';
+import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 
 const COMFY_SAMPLER_OPTIONS = [
     { label: 'euler', value: 'euler' },
@@ -42,7 +41,7 @@ const COMFY_SCHEDULER_OPTIONS = [
     { label: 'beta', value: 'beta' },
 ];
 
-export class ComfyUITabView extends PreactSettingsView {
+export class ComfyUITabView extends ProviderTabView {
     public readonly id = 'comfyui';
     public readonly title = 'ComfyUI';
 
@@ -241,18 +240,5 @@ export class ComfyUITabView extends PreactSettingsView {
                 </CardView>
             </ProviderTabLayout>
         );
-    }
-
-    public override activate(): void {
-        this.vm.activate();
-    }
-
-    public override deactivate(): void {
-        this.vm.deactivate();
-    }
-
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
     }
 }

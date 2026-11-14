@@ -4,8 +4,8 @@
  * @remarks
  * 组织四大提示词注入通道与启用设置面板：
  * 1. 故事插画 (`story`)：场景捕捉、视觉推演与标签组装规范条目；
- * 2. 素材创作 (`character`)：角色设定扩写与服装/档案排版规范条目；
- * 3. 词汇指导 (`vocab`)：常驻基础词汇与条件触发标签条目；
+ * 2. 词汇指导 (`vocab`)：常驻基础词汇与条件触发标签条目；
+ * 3. 素材创作 (`character`)：角色设定扩写与服装/档案排版规范条目；
  * 4. 素材注入 (`material`)：承载外部 <image_database> 容器并引用素材启用列表变量；
  * 5. 启用设置 (`preview`)：统一管理四大通道启用开关与激活预设，并提供实时分桶注入预览。
  */
@@ -28,9 +28,14 @@ import {
 } from '../framework';
 import type { PresetActionType } from '../composite';
 import { PromptEntriesManager } from '../composite/prompt-entries-manager';
-import { PromptsPreviewPanel } from './prompts-preview-panel';
+import {
+    PromptsPreviewPanel,
+    PROMPT_CHANNELS,
+    type PromptChannelMeta,
+} from './prompts-preview-panel';
 import { PresetController } from '../viewmodels';
 import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
+import { getCachedOfficialPresets } from '../../store/static-preset-loader';
 import { eventBus } from '../../util/event-bus';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import {
@@ -49,64 +54,32 @@ import { evaluatePresetDataDirty } from './materials/material-types';
 
 export type PromptsSubTabId = PromptChannelId | 'preview';
 
-interface ChannelMeta {
-    readonly id: PromptChannelId;
-    readonly category: PresetCategory;
-    readonly label: string;
-    readonly defaultDepth: number;
-    readonly defaultOrder: number;
-}
-
-const PROMPT_CHANNELS: readonly ChannelMeta[] = [
-    {
-        id: 'story',
-        category: 'prompt_story',
-        label: '故事插画',
-        defaultDepth: 0,
-        defaultOrder: 10,
-    },
-    {
-        id: 'vocab',
-        category: 'prompt_vocab',
-        label: '词汇指导',
-        defaultDepth: 7,
-        defaultOrder: 200,
-    },
-    {
-        id: 'character',
-        category: 'prompt_character',
-        label: '素材创作',
-        defaultDepth: 0,
-        defaultOrder: 20,
-    },
-    {
-        id: 'material',
-        category: 'prompt_material',
-        label: '素材注入',
-        defaultDepth: 0,
-        defaultOrder: 1,
-    },
-];
-
 function createDefaultEntryForChannel(
     channelId: PromptChannelId,
     index: number
 ): PromptInjectionEntry {
     const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
-    let entryName = `${meta.label}条目 #${index + 1}`;
-    let content = '';
 
+    // 素材注入通道新建空白预设时，优先与官方静态预设保持同源模板
     if (channelId === 'material') {
-        if (index === 0) {
-            entryName = '核心|生图素材库';
-            content =
-                '<image_database>\n  <character_database>\n    {{角色启用列表}}\n  </character_database>\n\n  <outfit_database>\n    {{服装启用列表}}\n  </outfit_database>\n</image_database>';
-        } else {
-            entryName = '核心|生图宏指令';
-            content =
-                '<drawing_macro_instruction>\n在生成 <image> 提示词时，为保持人物与服装的外观一致性，若画面涉及上方 <image_database> 中已登记的人物或服装，必须使用生图宏代替手写外观标签。\n\n执行以下指令：\n\n一、宏优先与部位补充\n1. 优先调用宏：在组织画面时，优先选用下方可用宏列表中的宏（如 $角色名-景别$, $服装名-景别$），确保角色与服装比例协调且特征统一；\n2. 部位变量仅作补充：固定部位变量（如 -features、-hands、-underwear）仅在需要突出特殊生物特征、局部特写或衣物破损褪下时作为后缀追加（格式：$名称-宏-部位$），禁止在常规构图中全手写部位变量替代宏。\n\n二、依据实际着装事实独立调用\n角色宏专注身体外貌，服装宏专注衣着穿戴，两者相互独立，严格根据剧情中人物的实际着装状态分别调用：\n1. 正常穿着：依据当前镜头景别，角色与服装各自选用对应景别的宏（如 $爱丽丝-cowboy$, $学院制服-cowboy$）；\n2. 半裸或战损：角色宏选用对应景别，服装宏根据实际穿戴在身的衣物选用（例如上身微敞仅剩内衣，调用 $角色名-upper$, $服装名-underwear$）；\n3. 纯全裸或沐浴：画面人物处于完全裸体状态时，仅调用角色宏（如 $角色名-full-intimate$ 或配合手写 nude），切勿调用任何服装宏。\n\n三、可用生图宏清单\n1. 角色可用宏：\n{{角色可用宏列表}}\n2. 服装可用宏：\n{{服装可用宏列表}}\n\n四、固定部位变量速查（仅作后缀补充）\n- 角色部位（13项）：appearance(体态肤色), hair(发型发色), face(五官瞳色), features(生物特征), accessories(随身配饰), chest(胸部特征), upper_body(肩颈上躯), waist(腰腹), hips(臀胯), hands(双手), legs(双腿), feet(双足), privates(生殖性征)\n- 服装部位（9项）：style(整体风格), headwear(头饰), top(上装), bottom(裙裤), handwear(手套腕饰), socks(袜类), shoes(鞋靴), accessories(服饰配件), underwear(贴身内衣裤)\n\n五、标准宏调用响应范例\n\n范例一（单人日常中景：角色与服装同景别常规穿戴）：\n爱丽丝穿着精致的学院制服迎面走来，身后的白色羽翼轻快舒展，双手端着书本躬身行礼。\n<image>image###1girl, solo, $爱丽丝-cowboy-features$, $学院制服-cowboy$, holding_book, bowing, gentle_smile, looking_at_viewer, cowboy_shot, indoor, hallway, warm_lighting###</image>\n\n范例二（单人室内半身：解衣状态，服装宏仅调用贴身内衣）：\n深夜卧室中，爱丽丝解开了制服上衣扣子，文胸肩带滑落，脸颊泛红地轻咬下唇看向你。\n<image>image###1girl, solo, $爱丽丝-upper$, $学院制服-underwear$, clothes_unbuttoned, off_shoulder, bare_shoulders, blush, biting_lip, parted_lips, looking_at_viewer, upper_body, night, bedroom, dim_lighting###</image>\n\n范例三（单人纯全裸浴室特写：仅调用角色宏，绝不调用服装宏）：\n温泉雾气弥漫中，爱丽丝坐在池边轻抚长发，肌肤泛着温热的水汽。\n<image>image###1girl, solo, $爱丽丝-full-intimate$, nude, sitting, touching_hair, gentle_smile, looking_at_viewer, wet_skin, water_drops, steam, onsen, soft_lighting###</image>\n</drawing_macro_instruction>';
+        const officialEntry =
+            getCachedOfficialPresets()?.prompt_material?.[0]?.data?.entries?.[index];
+        if (officialEntry) {
+            return {
+                ...structuredClone(officialEntry),
+                id: `${channelId}_entry_${Date.now().toString(36)}_${index}`,
+            };
         }
     }
+
+    const entryName =
+        channelId === 'material' && index === 0
+            ? '核心|绘画素材库'
+            : `${meta.label}条目 #${index + 1}`;
+    const content =
+        channelId === 'material' && index === 0
+            ? '<image_database>\n  <character_database>\n    {{角色启用列表}}\n  </character_database>\n\n  <outfit_database>\n    {{服装启用列表}}\n  </outfit_database>\n</image_database>'
+            : '';
 
     return {
         id: `${channelId}_entry_${Date.now().toString(36)}_${index}`,
@@ -114,7 +87,7 @@ function createDefaultEntryForChannel(
         enabled: true,
         triggerMode: 'always',
         keywords: '',
-        scanDepth: 5,
+        scanDepth: 2,
         position: 1,
         depth: meta.defaultDepth,
         role: 0,
@@ -144,7 +117,7 @@ export class PromptsTabView extends PreactSettingsView {
         super('da-tab-pane da-view-prompts');
 
         const buildController = (
-            meta: ChannelMeta
+            meta: PromptChannelMeta
         ): PresetController<PromptChannelPresetData> =>
             new PresetController<PromptChannelPresetData>({
                 category: meta.category,
@@ -203,10 +176,34 @@ export class PromptsTabView extends PreactSettingsView {
 
     public override activate(): void {
         for (const meta of PROMPT_CHANNELS) {
-            this.controllers[meta.id].reloadFromStore();
+            if (!this.controllers[meta.id].isDirty.value) {
+                this.controllers[meta.id].reloadFromStore();
+            }
         }
         this.promptInjectionSignal.value = settingsStore.get('promptInjection');
         super.activate();
+    }
+
+    public hasUnsavedChanges(): boolean {
+        return PROMPT_CHANNELS.some((meta) => this.controllers[meta.id].isDirty.value);
+    }
+
+    public async saveUnsavedChanges(): Promise<boolean> {
+        for (const meta of PROMPT_CHANNELS) {
+            const ctrl = this.controllers[meta.id];
+            if (ctrl.isDirty.value) {
+                const ok = await ctrl.handleAction('save');
+                if (!ok) return false;
+            }
+        }
+        void promptInjector.scheduleSyncToHost();
+        return true;
+    }
+
+    public discardUnsavedChanges(): void {
+        for (const meta of PROMPT_CHANNELS) {
+            this.controllers[meta.id].discardDraft();
+        }
     }
 
     public override dispose(): void {
@@ -243,11 +240,11 @@ export class PromptsTabView extends PreactSettingsView {
             payload: Record<string, unknown>,
             filename: string
         ) => void
-    ): Promise<void> {
+    ): Promise<boolean> {
         const controller = this.controllers[channelId];
         if (action === 'export') {
             const cur = controller.currentPreset.value;
-            if (!cur) return;
+            if (!cur) return false;
             const entries = controller.draftConfig.value?.entries || cur.data?.entries || [];
             openPromptExportFormatModal({
                 preset: cur,
@@ -255,9 +252,9 @@ export class PromptsTabView extends PreactSettingsView {
                 filenamePrefix: `st-draw-${channelId}-`,
                 onExported: onExportedCallback,
             });
-            return;
+            return true;
         }
-        await controller.handleAction(action, targetId);
+        return await controller.handleAction(action, targetId);
     }
 
     /**
@@ -373,7 +370,11 @@ export class PromptsTabView extends PreactSettingsView {
             finalName = negotiated.trim();
         }
 
-        const newId = `${meta.category}_${Date.now().toString(36)}`;
+        const existingIds = new Set(list.map((p) => p.id));
+        let newId = `${meta.category}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        while (existingIds.has(newId)) {
+            newId = `${meta.category}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        }
         const newPreset: PresetItem<PromptChannelPresetData> = {
             id: newId,
             name: finalName,
@@ -445,29 +446,45 @@ export class PromptsTabView extends PreactSettingsView {
         };
     }
 
-    private renderChannelPanel(meta: ChannelMeta): VNode {
+    private renderChannelPanel(meta: PromptChannelMeta): VNode {
         const controller = this.controllers[meta.id];
         const entries: PromptInjectionEntry[] = Array.isArray(
             controller.draftConfig.value?.entries
         )
             ? controller.draftConfig.value.entries
             : [];
+        const isChannelEnabled = Boolean(this.promptInjectionSignal.value?.[meta.id]?.enabled);
 
         return (
             <div className="da-prompts-channel-workspace">
+                {!isChannelEnabled && (
+                    <div className="da-channel-disabled-banner">
+                        <span>
+                            当前「{meta.label}」通道未开启注入（可在「启用设置」或此处直接开启）
+                        </span>
+                        <button
+                            type="button"
+                            className="da-btn da-btn--sm da-btn--secondary"
+                            onClick={() => this.toggleChannelEnabled(meta.id, true)}
+                        >
+                            立即开启
+                        </button>
+                    </div>
+                )}
                 <div className="da-prompts-preset-bar">
                     <PresetToolbarView
                         presets={controller.toolbarItems.value}
                         activePresetId={controller.activePresetId.value}
                         dirty={controller.isDirty.value}
                         onAction={(action, id) =>
-                            void this.handleToolbarAction(meta.id, action, id)
+                            this.handleToolbarAction(meta.id, action, id)
                         }
                         onImportFile={(file) => this.handleImportFile(meta.id, file)}
                     />
                 </div>
                 <CardView className="da-prompt-channel-card">
                     <PromptEntriesManager
+                        key={meta.id}
                         entries={entries}
                         channelId={meta.id}
                         onChange={(next) => this.updateChannelEntries(meta.id, next)}
@@ -488,10 +505,7 @@ export class PromptsTabView extends PreactSettingsView {
                         size="lg"
                         value={currentTab}
                         options={[
-                            { label: '故事插画', value: 'story' },
-                            { label: '词汇指导', value: 'vocab' },
-                            { label: '素材创作', value: 'character' },
-                            { label: '素材注入', value: 'material' },
+                            ...PROMPT_CHANNELS.map((c) => ({ label: c.label, value: c.id })),
                             { label: '启用设置', value: 'preview' },
                         ]}
                         onChange={(val) => {
@@ -507,10 +521,9 @@ export class PromptsTabView extends PreactSettingsView {
                         onToggleChannel={(channelId, enabled) => {
                             this.toggleChannelEnabled(channelId, enabled);
                         }}
-                        onSelectChannelPreset={(channelId, presetId) => {
-                            const controller = this.controllers[channelId];
-                            controller.applyActivePreset(presetId);
-                        }}
+                        onSelectChannelPreset={(channelId, presetId) =>
+                            this.controllers[channelId].handleAction('select', presetId)
+                        }
                     />
                 ) : (
                     this.renderChannelPanel(

@@ -449,7 +449,30 @@ export class ThemeTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
-        const storedId = themeService.getActiveThemeId();
-        this.presetController.applyActivePreset(storedId, { persist: false, silent: true });
+        super.activate();
+        if (!this.presetController.isDirty.value) {
+            const storedId = themeService.getActiveThemeId();
+            this.presetController.applyActivePreset(storedId, { persist: false, silent: true });
+        } else {
+            themeService.applyCurrentTheme(this.presetController.draftConfig.value);
+        }
+    }
+
+    public override deactivate(): void {
+        super.deactivate();
+        // 切出主题选项卡时恢复已持久化主题，保留内存草稿待切回时继续预览
+        themeService.applyCurrentTheme();
+    }
+
+    public hasUnsavedChanges(): boolean {
+        return this.presetController.isDirty.value;
+    }
+
+    public saveUnsavedChanges(): Promise<boolean> {
+        return this.presetController.handleAction('save');
+    }
+
+    public discardUnsavedChanges(): void {
+        this.presetController.discardDraft();
     }
 }

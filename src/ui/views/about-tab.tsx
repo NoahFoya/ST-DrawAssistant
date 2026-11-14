@@ -22,6 +22,7 @@ import { openChangelogModal } from '../modal/changelog-modal';
 import { updateService } from '../../pipeline/update-service';
 import { eventBus } from '../../util/event-bus';
 import { copyTextToClipboard } from '../../util/clipboard';
+import { downloadJsonFile } from '../../util/download';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 import type { UpdateState } from '@types';
 
@@ -174,13 +175,11 @@ export class AboutTabView extends PreactSettingsView {
     private handleExportFullSettings(): void {
         try {
             const jsonStr = settingsStore.exportSettings(true);
-            const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `st_draw_assistant_backup_${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadJsonFile(
+                `st_draw_assistant_backup_${Date.now()}.json`,
+                jsonStr,
+                'application/json;charset=utf-8'
+            );
             logger.info('[AboutTabView] 完整配置备份已导出');
         } catch (err) {
             Toast.show('导出配置失败: ' + String(err), { level: 'error' });
@@ -528,6 +527,7 @@ export class AboutTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
+        super.activate();
         void this.refreshEnvState();
         void updateService.checkUpdate();
     }

@@ -51,11 +51,14 @@ import { logger } from '../../util/logger';
  */
 function useCompositeInstance<T extends UIComponent & Disposable>(
     factory: () => T,
-    sync?: (instance: T) => void
+    sync?: (instance: T) => void,
+    onInstanceChange?: (instance: T | null) => void
 ): VNode {
     const instanceRef = useRef<T | null>(null);
     const factoryRef = useRef(factory);
     factoryRef.current = factory;
+    const onInstanceChangeRef = useRef(onInstanceChange);
+    onInstanceChangeRef.current = onInstanceChange;
 
     if (!instanceRef.current) {
         instanceRef.current = factoryRef.current();
@@ -72,9 +75,11 @@ function useCompositeInstance<T extends UIComponent & Disposable>(
             if (inst && inst.element.parentNode !== hostEl) {
                 hostEl.appendChild(inst.element);
             }
+            onInstanceChangeRef.current?.(inst);
         } else {
             const inst = instanceRef.current;
             if (inst) {
+                onInstanceChangeRef.current?.(null);
                 instanceRef.current = null;
                 try {
                     inst.dispose();
@@ -112,17 +117,17 @@ export function ConnectionCardView(props: ConnectionCardViewProps): VNode {
                 onPresetChange: props.onPresetChange
                     ? (presetId) => {
                           prevDataJsonRef.current = '';
-                          callbacksRef.current.onPresetChange?.(presetId);
+                          return callbacksRef.current.onPresetChange?.(presetId);
                       }
                     : undefined,
-                onTestPing: (url, key) => {
+                onTestPing: (url, key, signal) => {
                     if (!callbacksRef.current.onTestPing) {
                         throw new Error('未配置连通性检测回调');
                     }
-                    return callbacksRef.current.onTestPing(url, key);
+                    return callbacksRef.current.onTestPing(url, key, signal);
                 },
                 onFetchAssets: props.onFetchAssets
-                    ? (url, key) => callbacksRef.current.onFetchAssets!(url, key)
+                    ? (url, key, signal) => callbacksRef.current.onFetchAssets!(url, key, signal)
                     : undefined,
             }),
         (instance) => {
@@ -141,9 +146,11 @@ export interface PresetToolbarViewProps {
     presets: PresetToolbarItem[];
     activePresetId: string;
     dirty?: boolean;
-    onAction: (action: PresetActionType, presetId: string) => void;
+    onAction: (
+        action: PresetActionType,
+        presetId: string
+    ) => void | boolean | Promise<void | boolean>;
     onImportFile?: (file: File) => void;
-    confirmHandler?: (message: string) => Promise<boolean> | boolean;
     className?: string;
 }
 
@@ -159,9 +166,9 @@ export function PresetToolbarView(props: PresetToolbarViewProps): VNode {
             new PresetToolbar({
                 presets: props.presets,
                 activePresetId: props.activePresetId,
-                confirmHandler: props.confirmHandler,
                 className: props.className,
-                onAction: (action, presetId) => callbacksRef.current.onAction(action, presetId),
+                onAction: (action, presetId) =>
+                    callbacksRef.current.onAction(action, presetId),
                 onImportFile: (file) => callbacksRef.current.onImportFile?.(file),
             }),
         (instance) => {
@@ -279,7 +286,9 @@ export function SamplerCardView(props: SamplerCardViewProps): VNode {
 
 // 5. 提示词预设卡片 (PromptPresetCardView)
 
-export interface PromptPresetCardViewProps extends PromptPresetCardOptions {}
+export interface PromptPresetCardViewProps extends PromptPresetCardOptions {
+    onInstanceChange?: (instance: PromptPresetCard | null) => void;
+}
 
 export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
     const callbacksRef = useRef(props);
@@ -295,9 +304,8 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
         () => {
             const inst = new PromptPresetCard({
                 ...props,
-                onAction: (action, presetId, data) => {
-                    callbacksRef.current.onAction?.(action, presetId, data);
-                },
+                onAction: (action, presetId, data) =>
+                    callbacksRef.current.onAction?.(action, presetId, data),
                 onImportFile: (file) => {
                     callbacksRef.current.onImportFile?.(file);
                 },
@@ -323,13 +331,16 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
                     instance.setAvailableModels(props.availableModels);
                 }
             }
-        }
+        },
+        props.onInstanceChange
     );
 }
 
 // 6. ComfyUI 工作流预设管理卡片 (WorkflowCardView)
 
-export interface WorkflowCardViewProps extends WorkflowCardOptions {}
+export interface WorkflowCardViewProps extends WorkflowCardOptions {
+    onInstanceChange?: (instance: WorkflowCard | null) => void;
+}
 
 export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
     const callbacksRef = useRef(props);
@@ -342,17 +353,16 @@ export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
         () => {
             const inst = new WorkflowCard({
                 ...props,
-                onAction: (action, presetId, data) => {
-                    callbacksRef.current.onAction?.(action, presetId, data);
-                },
+                onAction: (action, presetId, data) =>
+                    callbacksRef.current.onAction?.(action, presetId, data),
                 onImportFile: (file) => {
                     callbacksRef.current.onImportFile?.(file);
                 },
                 onChange: (data) => {
                     callbacksRef.current.onChange?.(data);
                 },
-                onOpenBlueprint: (currentJson) => {
-                    callbacksRef.current.onOpenBlueprint?.(currentJson);
+                onOpenBlueprint: (currentJson, presetId) => {
+                    callbacksRef.current.onOpenBlueprint?.(currentJson, presetId);
                 },
             });
             return inst;
@@ -369,7 +379,8 @@ export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
                     props.activePresetId
                 );
             }
-        }
+        },
+        props.onInstanceChange
     );
 }
 

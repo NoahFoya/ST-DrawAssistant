@@ -144,6 +144,8 @@ export class SamplerCard implements UIComponent, Disposable {
     private readonly stepsFormField: FormField;
     private readonly cfgScaleFormField: FormField;
     private readonly seedFormField: FormField;
+    private capabilityGen = 0;
+    private isDisposed = false;
 
     constructor(options: SamplerCardOptions = {}) {
         this.options = options;
@@ -393,35 +395,24 @@ export class SamplerCard implements UIComponent, Disposable {
     }
 
     /**
-     * 动态更新采样算法候选项列表。
+     * 动态更新采样算法候选项列表（保持现有选中值，不篡改数据或触发脏标记）。
      *
      * @param samplers 采样算法选项数组
      */
     public setSamplers(samplers: Array<{ value: string; label: string }>): void {
+        this.capabilityGen += 1;
         this.samplerSelect.setOptions(samplers);
-        // 若当前选中的采样器不在新列表中，自动选定第一个可用项
-        if (samplers.length > 0 && !samplers.some((s) => s.value === this.data.samplerName)) {
-            const fallback = samplers[0].value;
-            this.data.samplerName = fallback;
-            this.samplerSelect.setValue(fallback, { silent: true });
-            this.notifyChange();
-        }
     }
 
     /**
-     * 动态更新调度规则候选项列表。
+     * 动态更新调度规则候选项列表（保持现有选中值，不篡改数据或触发脏标记）。
      *
      * @param schedulers 调度规则选项数组
      */
     public setSchedulers(schedulers: Array<{ value: string; label: string }>): void {
+        this.capabilityGen += 1;
         if (!this.schedulerSelect) return;
         this.schedulerSelect.setOptions(schedulers);
-        if (schedulers.length > 0 && this.data.scheduler && !schedulers.some((s) => s.value === this.data.scheduler)) {
-            const fallback = schedulers[0].value;
-            this.data.scheduler = fallback;
-            this.schedulerSelect.setValue(fallback, { silent: true });
-            this.notifyChange();
-        }
     }
 
     /**
@@ -452,25 +443,36 @@ export class SamplerCard implements UIComponent, Disposable {
      * 触发异步能力拉取并动态更新候选项。
      */
     public async refreshCapabilities(): Promise<void> {
+        if (this.isDisposed) return;
         const executor = typeof this.fetchCapabilities === 'function'
             ? this.fetchCapabilities.bind(this)
             : this.options.onFetchCapabilities;
 
         if (!executor) return;
 
+        const reqGen = ++this.capabilityGen;
+        const reqInitialData = this.getData();
         this.refreshButton?.setLoading(true);
         try {
             const result: SamplerCapabilities = await executor();
+            if (this.isDisposed || reqGen !== this.capabilityGen) {
+                return;
+            }
             if (result.samplers && result.samplers.length > 0) {
-                this.setSamplers(result.samplers);
+                this.samplerSelect.setOptions(result.samplers);
             }
-            if (result.schedulers && result.schedulers.length > 0) {
-                this.setSchedulers(result.schedulers);
+            if (result.schedulers && result.schedulers.length > 0 && this.schedulerSelect) {
+                this.schedulerSelect.setOptions(result.schedulers);
             }
+            void reqInitialData;
         } catch (err) {
-            logger.error('[SamplerCard] 刷新采样能力失败:', err instanceof Error ? err.message : String(err));
+            if (!this.isDisposed && reqGen === this.capabilityGen) {
+                logger.error('[SamplerCard] 刷新采样能力失败:', err instanceof Error ? err.message : String(err));
+            }
         } finally {
-            this.refreshButton?.setLoading(false);
+            if (!this.isDisposed && reqGen === this.capabilityGen) {
+                this.refreshButton?.setLoading(false);
+            }
         }
     }
 
@@ -513,6 +515,8 @@ export class SamplerCard implements UIComponent, Disposable {
      * 释放卡片内所有子控件与事件监听。
      */
     public dispose(): void {
+        this.isDisposed = true;
+        this.capabilityGen += 1;
         for (const item of this.disposables) {
             try {
                 item.dispose();

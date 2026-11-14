@@ -5,8 +5,8 @@
  * 1. 脱离父级包含块限制：所有上下文菜单与变量选择列表统一挂载至 `document.body`，避免受设置弹窗内的
  *    `backdrop-filter`、`overflow: hidden` 或局部滚动容器影响导致 `position: fixed` 坐标漂移与裁剪。
  * 2. 双形态自适应：
- *    - 桌面端（`> 680px`）：基于 `ViewportService.computeAnchoredPosition()` 相对触发锚点展开，自动翻转与夹紧；
- *    - 移动端（`<= 680px`）：自动切换为底部 Action Sheet（带半透遮罩、标题栏、大触控行及底边安全区）。
+ *    - 桌面端（`> 640px`）：基于 `ViewportService.computeAnchoredPosition()` 相对触发锚点展开，自动翻转与夹紧；
+ *    - 移动端（`<= 640px`）：自动切换为底部 Action Sheet（带半透遮罩、标题栏、大触控行及底边安全区）。
  * 3. 层叠栈联动：接入 `overlayStack` 管理 `Escape` 关闭优先级，防止误关底层主弹窗。
  */
 

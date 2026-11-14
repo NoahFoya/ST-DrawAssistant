@@ -13,6 +13,8 @@ import { Card } from '../components/card';
 import { Button } from '../components/button';
 import { renderIcon } from '../components/icons';
 import { PresetToolbar, type PresetToolbarItem, type PresetActionType } from './preset-toolbar';
+import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { Toast } from '../feedback/toast';
 
 /** 替换变量信息 */
 export interface VariableReplacementInfo {
@@ -70,15 +72,17 @@ export interface WorkflowCardOptions {
     /** 初始工作流数据 */
     value?: Partial<WorkflowCardData>;
     /** 预设操作动作回调 */
-    onAction?: (action: PresetActionType, presetId: string, data?: WorkflowCardData) => void;
+    onAction?: (
+        action: PresetActionType,
+        presetId: string,
+        data?: WorkflowCardData
+    ) => void | boolean | Promise<void | boolean>;
     /** 导入文件自定义解析回调 */
     onImportFile?: (file: File) => void;
     /** 工作流内容变更回调 */
     onChange?: (data: WorkflowCardData) => void;
     /** 打开蓝图编辑器回调 */
-    onOpenBlueprint?: (currentJson: string) => void;
-    /** 操作确认回调。未传入时由 PresetToolbar 委托全局确认对话框 ConfirmDialog.confirm */
-    confirmHandler?: (message: string) => Promise<boolean> | boolean;
+    onOpenBlueprint?: (currentJson: string, activePresetId?: string) => void;
     /** 附加 CSS 类名 */
     className?: string;
 }
@@ -562,8 +566,12 @@ export class WorkflowCard implements UIComponent {
     private activePresetId = '';
     private baselineJson = '';
     private readonly onChangeCallback?: (data: WorkflowCardData) => void;
-    private readonly onActionCallback?: (action: PresetActionType, presetId: string, data?: WorkflowCardData) => void;
-    private readonly onOpenBlueprintCallback?: (currentJson: string) => void;
+    private readonly onActionCallback?: (
+        action: PresetActionType,
+        presetId: string,
+        data?: WorkflowCardData
+    ) => void | boolean | Promise<void | boolean>;
+    private readonly onOpenBlueprintCallback?: (currentJson: string, activePresetId?: string) => void;
     private readonly textareaInputListener: () => void;
 
     constructor(options: WorkflowCardOptions) {
@@ -599,7 +607,6 @@ export class WorkflowCard implements UIComponent {
         this.toolbar = new PresetToolbar({
             presets: this.buildToolbarItems(this.rawPresets),
             activePresetId: this.activePresetId,
-            confirmHandler: options.confirmHandler,
             onAction: (action, presetId) => this.handlePresetAction(action, presetId),
             onImportFile: options.onImportFile
         });
@@ -632,6 +639,8 @@ export class WorkflowCard implements UIComponent {
                         this.onChangeCallback?.(this.currentData);
                     },
                     this.onOpenBlueprintCallback
+                        ? (json) => this.onOpenBlueprintCallback?.(json, this.activePresetId)
+                        : undefined
                 );
             }
         });
@@ -642,7 +651,7 @@ export class WorkflowCard implements UIComponent {
             variant: 'secondary',
             size: 'sm',
             onClick: () => {
-                this.onOpenBlueprintCallback?.(this.currentData.json);
+                this.onOpenBlueprintCallback?.(this.currentData.json, this.activePresetId);
             }
         });
 
@@ -718,6 +727,8 @@ export class WorkflowCard implements UIComponent {
      * @param activeId 可选的激活工作流预设 ID
      */
     public setPresets(presets: WorkflowCardPresetItem[], activeId?: string): void {
+        const prevActiveId = this.activePresetId;
+        const wasDirty = this.isDirty();
         this.rawPresets = [...presets];
         let targetId = activeId !== undefined ? activeId : this.activePresetId;
         let found = this.rawPresets.find((p) => p.id === targetId);
@@ -729,6 +740,11 @@ export class WorkflowCard implements UIComponent {
         this.activePresetId = targetId || '';
 
         this.toolbar.setPresets(this.buildToolbarItems(this.rawPresets), this.activePresetId);
+        if (found?.data?.json !== undefined && wasDirty && this.activePresetId === prevActiveId) {
+            // 同 preset 池刷新时保留用户未保存草稿
+            this.toolbar.setDirty(true);
+            return;
+        }
         if (found?.data?.json !== undefined) {
             this.currentData.json = found.data.json;
             this.baselineJson = found.data.json;
@@ -747,6 +763,13 @@ export class WorkflowCard implements UIComponent {
     }
 
     /**
+     * 获取当前激活的工作流预设 ID。
+     */
+    public getActivePresetId(): string {
+        return this.activePresetId;
+    }
+
+    /**
      * 更新基准快照并重置脏状态。
      */
     public setBaseline(data: WorkflowCardData): void {
@@ -762,7 +785,28 @@ export class WorkflowCard implements UIComponent {
      * 查询当前是否处于脏状态。
      */
     public isDirty(): boolean {
-        return this.toolbar.isDirty();
+        return this.currentData.json !== this.baselineJson;
+    }
+
+    /**
+     * 保存当前未保存的工作流草稿。
+     */
+    public async saveDraft(): Promise<boolean> {
+        if (!this.isDirty()) return true;
+        if (!this.activePresetId) {
+            return await this.handlePresetAction('saveAs', '');
+        }
+        return await this.handlePresetAction('save', this.activePresetId);
+    }
+
+    /**
+     * 静默放弃当前未保存的工作流修改并恢复基线快照。
+     */
+    public discardDraft(): void {
+        const base = this.rawPresets.find((p) => p.id === this.activePresetId);
+        const resetJson = base?.data?.json ?? this.baselineJson;
+        this.setBaseline({ json: resetJson });
+        this.onChangeCallback?.(this.currentData);
     }
 
     /**
@@ -777,38 +821,63 @@ export class WorkflowCard implements UIComponent {
     }
 
     /** 预设工具栏动作事件分发 */
-    private handlePresetAction(action: PresetActionType, presetId: string): void {
-        if (action === 'select') {
+    private async handlePresetAction(action: PresetActionType, presetId: string): Promise<boolean> {
+        if (action === 'new') {
+            if (this.isDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '新建工作流确认',
+                    message: '当前工作流存在未保存的修改，新建将放弃未保存的修改。是否确定继续新建？',
+                });
+                if (!confirmed) return false;
+            }
+        } else if (action === 'select') {
+            if (presetId !== this.activePresetId && this.isDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '切换工作流确认',
+                    message: '当前工作流存在未保存的修改，切换将放弃未保存的修改。是否确定继续切换？',
+                });
+                if (!confirmed) return false;
+            }
             this.activePresetId = presetId;
             const found = this.rawPresets.find((p) => p.id === presetId);
             const newJson = found?.data?.json ?? '{}';
-            this.currentData = { json: newJson };
-            this.baselineJson = newJson;
-            this.textareaElement.value = newJson;
-            this.checkJsonState(newJson);
-            this.updateWeilinNotice(newJson);
-            this.toolbar.setDirty(false);
+            this.setBaseline({ json: newJson });
             this.onChangeCallback?.(this.currentData);
-        } else if (action === 'save') {
+        } else if (action === 'save' || action === 'saveAs') {
+            try {
+                JSON.parse((this.currentData.json || '').trim() || '{}');
+            } catch {
+                Toast.show(
+                    `工作流${action === 'saveAs' ? '另存为' : '保存'}失败：JSON 语法错误`,
+                    { level: 'error' }
+                );
+                return false;
+            }
+        } else if (action === 'reset') {
+            if (this.isDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '重置修改确认',
+                    message: '确定要放弃当前未保存的工作流修改并恢复初始状态吗？',
+                });
+                if (!confirmed) return false;
+            }
+            this.discardDraft();
+        }
+
+        const result = await this.onActionCallback?.(action, presetId, this.currentData);
+        if (result === false) {
+            return false;
+        }
+
+        if (action === 'save') {
             const target = this.rawPresets.find((p) => p.id === presetId);
             if (target) {
                 target.data = { json: this.currentData.json };
             }
             this.baselineJson = this.currentData.json;
             this.toolbar.setDirty(false);
-        } else if (action === 'reset') {
-            const base = this.rawPresets.find((p) => p.id === presetId);
-            const resetJson = base?.data?.json ?? this.baselineJson;
-            this.currentData = { json: resetJson };
-            this.baselineJson = resetJson;
-            this.textareaElement.value = resetJson;
-            this.checkJsonState(resetJson);
-            this.updateWeilinNotice(resetJson);
-            this.toolbar.setDirty(false);
-            this.onChangeCallback?.(this.currentData);
         }
-
-        this.onActionCallback?.(action, presetId, this.currentData);
+        return true;
     }
 
     /** 根据当前工作流是否包含 WeiLin 节点动态切换提示条显隐 */

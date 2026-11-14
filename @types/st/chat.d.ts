@@ -14,7 +14,7 @@
  * 展示图源解析优先级：imageUrl > 通过 imageId 读取本地 Blob。
  */
 export interface DrawingSlotEntry {
-    /** 插件本地 IndexedDB 图像资产唯一标识符 UUID */
+    /** 插件本地 IndexedDB 图像资产唯一标识符 */
     readonly imageId: string;
     /** 宿主静态资源相对路径，在成功保存至服务端时存在 */
     readonly imageUrl?: string;
@@ -60,6 +60,8 @@ export interface ImageGenerationMetadata {
     readonly extraModels?: string[];
     /** 外置 VAE 模型名称 */
     readonly vaeName?: string;
+    /** 独立文本编码器 (CLIP) 名称 */
+    readonly clipName?: string;
     /** CLIP 跳过层数 */
     readonly clipSkip?: number;
     /** 最终发送给后端的正向提示词文本 (已处理完毕) */
@@ -88,8 +90,6 @@ export interface ImageGenerationMetadata {
     readonly engine?: string;
     /** 生成耗时，单位毫秒 */
     readonly durationMs?: number;
-    /** 模型显示名称 */
-    readonly modelName?: string;
     /** 图像宽度，单位像素 */
     readonly width?: number;
     /** 图像高度，单位像素 */
@@ -167,7 +167,7 @@ export interface StoredImageRecord {
  * SillyTavern 宿主聊天消息结构。
  *
  * @remarks
- * `swipe_id` 为当前激活的候选分支序号，与 `extra.drawings` 的第一维索引对应。
+ * `swipe_id` 为当前激活的候选分支序号；切换分支时，`message.extra.drawings` 与对应 `swipe_info[swipe_id].extra.drawings` 同步（均以 `instructionIndex` 为键）。
  * `extra` 为宿主开放字典，扩展写入时应通过独立子键隔离，避免覆盖其他扩展数据。
  */
 export interface ChatMessage {

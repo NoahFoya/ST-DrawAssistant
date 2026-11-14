@@ -4,7 +4,7 @@
  * @remarks
  * 1. 网格自适应：利用 repeat(auto-fill, minmax(130px, 1fr)) 实现多尺寸屏幕流式自适应。
  * 2. 卡片比例：维持 1:1 等比视窗，悬停呼出快捷操作浮层。
- * 3. 批量操作：支持底部粘性悬浮批处理条（position: sticky），支持批量导出与删除。
+ * 3. 批量操作：支持列表顶部内联批处理工具栏（.da-gallery-batch-toolbar），支持全选、反选与批量导出/删除。
  */
 
 /* 1. 本地图库检索与过滤工具栏卡片 (.da-gallery-toolbar-card)
@@ -277,7 +277,7 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    z-index: 1;
+    z-index: var(--da-z-base, 1);
     transition: filter 0.2s var(--da-ease);
 }
 
@@ -301,7 +301,7 @@
     opacity: 0;
     transition: opacity 0.18s ease;
     pointer-events: none;
-    z-index: 5;
+    z-index: var(--da-z-raised, 10);
 }
 
 .da-media-card:hover .da-media-card__overlay {
@@ -353,7 +353,7 @@
     box-sizing: border-box;
     text-align: center;
     gap: 6px;
-    z-index: 2;
+    z-index: var(--da-z-base, 1);
 }
 
 .da-media-card--generating .da-media-card__state-box {

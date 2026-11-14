@@ -21,7 +21,9 @@ import {
     normalizeCharacterData,
     normalizeOutfitData,
     dedupeCommaTags,
+    resolveOutfitIdsFromRefs,
 } from './material-definitions';
+import { sanitizeMessageText } from './prompt-pipeline';
 
 /** 提取出的单条原始档案结构 */
 export interface ExtractedArchiveItem {
@@ -95,7 +97,7 @@ export type ArchiveImportStrategy = 'import_new' | 'overwrite' | 'fill_empty' | 
 /** 针对持久化预设执行数据合并的有效策略（排除跳过） */
 export type ArchiveMergeStrategy = Exclude<ArchiveImportStrategy, 'skip'>;
 
-/** 默认提取配置 */
+/** 默认提取配置（与 config/default-settings.json 对齐，并保留“触发标签”别称） */
 export const DEFAULT_EXTRACTION_CONFIG: CharacterExtractionConfig = {
     enabled: true,
     autoDetect: true,
@@ -107,9 +109,9 @@ export const DEFAULT_EXTRACTION_CONFIG: CharacterExtractionConfig = {
     nameKeys: 'NAME|名称|角色名|服装名|CN_NAME|中文名',
     aliasesKeys: 'ALIASES|ALIAS|别名|EN_NAME|英文名',
     triggerKeys: 'TRIGGER|IDENTITY|IDENTITY_TAG|TAGS|触发词|触发标签|身份标识|身份标签|服装标识|服饰标识',
-    descriptionKeys: 'DESCRIPTION|DESC|SUMMARY|角色描述|说明|简介',
-    baseTraitKeys: 'APPEARANCE|STYLE|OVERALL|体貌|风格|整体|整体基调|BASE|固有',
-    outfitKeys: 'OUTFITS|OUTFIT|服装|绑定服装',
+    descriptionKeys: 'DESCRIPTION|DESC|SUMMARY|角色描述|服装描述|说明|简介',
+    baseTraitKeys: 'APPEARANCE|STYLE|OVERALL|体貌|外貌|样式|风格|整体|整体基调|BASE|固有',
+    outfitKeys: 'OUTFITS|OUTFIT|服装|绑定服装|专属服装|专属服饰|专属服装列表',
 };
 
 /** 预编译的大写属性键名集合容器 */
@@ -338,6 +340,11 @@ export function extractArchivesFromText(
         return [];
     }
 
+    const sanitizedText = sanitizeMessageText(text);
+    if (!sanitizedText) {
+        return [];
+    }
+
     const cfg: CharacterExtractionConfig = {
         ...DEFAULT_EXTRACTION_CONFIG,
         ...(config || {}),
@@ -361,7 +368,7 @@ export function extractArchivesFromText(
         );
 
         let match: RegExpExecArray | null;
-        while ((match = regex.exec(text)) !== null) {
+        while ((match = regex.exec(sanitizedText)) !== null) {
             if (match.index === regex.lastIndex) {
                 regex.lastIndex++;
             }
@@ -556,9 +563,13 @@ export function computeArchiveDiff(
 export function buildMergedArchivePreset(
     extracted: ExtractedArchiveItem,
     existingPreset: PresetItem<CharacterPresetData | OutfitPresetData> | undefined,
-    strategy: ArchiveMergeStrategy
+    strategy: ArchiveMergeStrategy,
+    existingOutfits?: ReadonlyArray<PresetItem<OutfitPresetData>>
 ): PresetItem<CharacterPresetData | OutfitPresetData> {
     const cleanName = extracted.name.trim();
+    const resolvedIncomingOutfitIds = existingOutfits
+        ? resolveOutfitIdsFromRefs(extracted.boundOutfitIds, existingOutfits)
+        : [...extracted.boundOutfitIds];
 
     if (!existingPreset || strategy === 'import_new') {
         const idPrefix = extracted.kind === 'character' ? 'char_' : 'outfit_';
@@ -575,9 +586,11 @@ export function buildMergedArchivePreset(
                 trigger: incomingTrigger,
                 description: extracted.description,
                 avatarId: '',
-                boundOutfitIds: [...extracted.boundOutfitIds],
-                appearance: incomingBaseTrait,
-                parts: extracted.parts,
+                boundOutfitIds: resolvedIncomingOutfitIds,
+                parts: {
+                    ...extracted.parts,
+                    appearance: incomingBaseTrait || extracted.parts.appearance || '',
+                },
             });
             return {
                 id: safeId,
@@ -594,8 +607,10 @@ export function buildMergedArchivePreset(
             description: extracted.description,
             trigger: incomingTrigger,
             avatarId: '',
-            style: incomingBaseTrait,
-            parts: extracted.parts,
+            parts: {
+                ...extracted.parts,
+                style: incomingBaseTrait || extracted.parts.style || '',
+            },
         });
         return {
             id: safeId,
@@ -661,8 +676,11 @@ export function buildMergedArchivePreset(
                   ? oldChar.trigger
                   : incomingTrigger;
 
+        const baseOutfits = existingOutfits
+            ? resolveOutfitIdsFromRefs(oldChar.boundOutfitIds, existingOutfits)
+            : oldChar.boundOutfitIds;
         const mergedOutfits = Array.from(
-            new Set([...oldChar.boundOutfitIds, ...extracted.boundOutfitIds])
+            new Set([...baseOutfits, ...resolvedIncomingOutfitIds])
         );
 
         const nextCharData = normalizeCharacterData({

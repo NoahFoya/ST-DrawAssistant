@@ -263,6 +263,7 @@ export class GalleryTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
+        super.activate();
         void this.vm.refresh();
     }
 

@@ -20,9 +20,15 @@ import type { PresetController } from '../../viewmodels';
 import {
     CHARACTER_PART_DEFS,
     OUTFIT_PART_DEFS,
+    normalizeCharacterData,
+    normalizeOutfitData,
     validateMacroKey,
 } from '../../../pipeline/material-definitions';
-import { DEFAULT_FORMAT_TEMPLATES } from '../../../pipeline/prompt-injector';
+import {
+    DEFAULT_FORMAT_TEMPLATES,
+    renderArchiveRowTemplate,
+    renderMacroRowTemplate,
+} from '../../../pipeline/prompt-injector';
 import { Toast } from '../../feedback/toast';
 import { ICONS } from '../../components/icons';
 
@@ -108,12 +114,33 @@ export function FormatPanel(props: FormatPanelProps): VNode {
         label: d.label,
     }));
 
-    const renderCharPreview = (template: string) => {
-        const sample: Record<string, string> = {
-            name: '爱丽丝',
-            aliases: 'alice|爱丽丝',
-            description: '金发碧眼的见习魔法使，性格温顺文雅',
-            outfits: '学院制服',
+    const sampleOutfitPreset = {
+        id: 'preview_outfit_1',
+        name: '学院制服',
+        data: normalizeOutfitData({
+            name: '学院制服',
+            aliases: 'school_uniform|制服',
+            description: '经典日系深蓝水手服与百褶短裙',
+            parts: {
+                style: 'sailor_uniform, navy_blue, pleated_skirt',
+                headwear: 'white_headband',
+                top: 'sailor_collar, short_sleeves, white_shirt',
+                bottom: 'pleated_skirt, navy_blue_skirt',
+                handwear: 'wrist_cuffs',
+                socks: 'white_socks',
+                shoes: 'loafers',
+                accessories: 'red_neckerchief',
+                underwear: 'white_bra, white_panties',
+            },
+        }),
+    };
+
+    const sampleCharData = normalizeCharacterData({
+        name: '爱丽丝',
+        aliases: 'alice|爱丽丝',
+        description: '金发碧眼的见习魔法使，性格温顺文雅',
+        boundOutfitIds: [sampleOutfitPreset.id],
+        parts: {
             appearance: 'fair_skin, slender, elf',
             hair: 'blonde_hair, long_hair, twintails, bangs',
             face: 'blue_eyes, gentle_smile, delicate_face',
@@ -127,49 +154,30 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             hands: 'slender_fingers',
             accessories: 'hair_ribbon, pendant',
             privates: '',
-        };
-        let res = template || '';
-        for (const [k, v] of Object.entries(sample)) {
-            res = res.split(`{{${k}}}`).join(v);
-        }
-        return res;
-    };
+        },
+    });
 
-    const renderOutfitPreview = (template: string) => {
-        const sample: Record<string, string> = {
-            name: '学院制服',
-            aliases: 'school_uniform|制服',
-            description: '经典日系深蓝水手服与百褶短裙',
-            style: 'sailor_uniform, navy_blue, pleated_skirt',
-            headwear: 'white_headband',
-            top: 'sailor_collar, short_sleeves, white_shirt',
-            bottom: 'pleated_skirt, navy_blue_skirt',
-            handwear: 'wrist_cuffs',
-            socks: 'white_socks',
-            shoes: 'loafers',
-            accessories: 'red_neckerchief',
-            underwear: 'white_bra, white_panties',
-        };
-        let res = template || '';
-        for (const [k, v] of Object.entries(sample)) {
-            res = res.split(`{{${k}}}`).join(v);
-        }
-        return res;
-    };
+    const renderCharPreview = (template: string) =>
+        renderArchiveRowTemplate(
+            template || '',
+            sampleCharData,
+            [sampleOutfitPreset],
+            fmt.outfitTemplate,
+            true
+        );
+
+    const renderOutfitPreview = (template: string) =>
+        renderArchiveRowTemplate(template || '', sampleOutfitPreset.data, []);
 
     const sampleCharRules = draft?.characterMacros || [];
     const sampleOutfitRules = draft?.outfitMacros || [];
 
     const renderMacrosPreview = (rules: MaterialMacroRule[], template?: string) => {
-        const tpl = template || DEFAULT_FORMAT_TEMPLATES.macroTemplate || '- {{macro}}: {{description}}';
-        return rules
-            .map((r) =>
-                tpl
-                    .replace(/\{\{(?:macro|key)\}\}/g, r.name)
-                    .replace(/\{\{description\}\}/g, r.description || '')
-                    .replace(/\{\{parts\}\}/g, (r.targetParts || []).join(', '))
-            )
-            .join('\n');
+        const tpl =
+            template ||
+            DEFAULT_FORMAT_TEMPLATES.macroTemplate ||
+            '- {{macro}}: {{description}}';
+        return rules.map((r) => renderMacroRowTemplate(tpl, r)).join('\n');
     };
 
     const renderUnifiedMacroRulesCard = (): VNode => {
@@ -256,7 +264,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     </div>
                 </div>
 
-                <div className="da-macro-accordion-list" style={{ marginTop: '12px' }}>
+                <div className="da-macro-accordion-list">
                     {customRules.map((rule, idx) => {
                         const ruleId = rule.id || `macro_${kind}_${idx}`;
                         const isExpanded = Boolean(expandedMacroRuleIds.value[ruleId]);
@@ -398,6 +406,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                 activePresetId={formatController.activePresetId.value}
                 dirty={formatController.isDirty.value}
                 onAction={(action, id) => formatController.handleAction(action, id)}
+                onImportFile={(file) => formatController.handleImportFile(file)}
             />
 
             {/* 卡片 1: 独立实时渲染效果预览 (优先预览) */}

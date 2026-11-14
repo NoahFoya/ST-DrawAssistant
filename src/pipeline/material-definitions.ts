@@ -213,7 +213,7 @@ export const OUTFIT_PART_DEFS: readonly MaterialPartDef<OutfitPartKey>[] = [
  * @remarks
  * 1. 必须符合 ^[a-z0-9_]+$ 格式；
  * 2. 严禁与同分类下其他宏规则重名；
- * 3. 严禁与该类别已有的原生保留部位键或内置别名冲突。
+ * 3. 严禁与该类别已有的原生保留部位键冲突。
  */
 export function validateMacroKey(
     key: string,
@@ -381,28 +381,223 @@ export function normalizeOutfitData(
     };
 }
 
+const VALID_REGEX_FLAGS_RE = /^[dgimsuvy]*$/;
+
+function hasValidUniqueRegexFlags(flags: string): boolean {
+    if (!VALID_REGEX_FLAGS_RE.test(flags)) {
+        return false;
+    }
+    const seen = new Set<string>();
+    for (const ch of flags) {
+        if (seen.has(ch)) {
+            return false;
+        }
+        seen.add(ch);
+    }
+    return !(seen.has('u') && seen.has('v'));
+}
+
+function isKeywordSeparatorChar(ch: string | undefined): boolean {
+    return (
+        ch === undefined ||
+        ch === '|' ||
+        ch === ',' ||
+        ch === '，' ||
+        ch === '\n' ||
+        ch === '\r' ||
+        /\s/.test(ch)
+    );
+}
+
+/**
+ * 解析以 `|` / `,` / `，` / 换行分隔的关键词或别名列表，完整保留合法 `/pattern/flags` 正则字面量。
+ */
+export function splitKeywordTokens(rawKeywords?: string): string[] {
+    const src = (rawKeywords || '').trim();
+    if (!src) {
+        return [];
+    }
+
+    const tokens: string[] = [];
+    let current = '';
+    let i = 0;
+
+    while (i < src.length) {
+        const ch = src[i];
+        // 仅当闭合 `/` 后到分隔符之间全为合法且不重复的标志时，才按 /pattern/flags 整体提取
+        if (ch === '/' && !current.trim()) {
+            let j = i + 1;
+            let escaped = false;
+            let closedAt = -1;
+            while (j < src.length) {
+                const inner = src[j];
+                if (escaped) {
+                    escaped = false;
+                } else if (inner === '\\') {
+                    escaped = true;
+                } else if (inner === '/') {
+                    closedAt = j;
+                    break;
+                }
+                j++;
+            }
+            if (closedAt > i + 1) {
+                let flagEnd = closedAt + 1;
+                while (
+                    flagEnd < src.length &&
+                    src[flagEnd] !== '|' &&
+                    src[flagEnd] !== ',' &&
+                    src[flagEnd] !== '，' &&
+                    src[flagEnd] !== '\n' &&
+                    src[flagEnd] !== '\r' &&
+                    !/\s/.test(src[flagEnd])
+                ) {
+                    flagEnd++;
+                }
+                const flagsPart = src.slice(closedAt + 1, flagEnd);
+                if (hasValidUniqueRegexFlags(flagsPart) && isKeywordSeparatorChar(src[flagEnd])) {
+                    tokens.push(src.slice(i, flagEnd).trim());
+                    current = '';
+                    i = flagEnd;
+                    while (
+                        i < src.length &&
+                        (src[i] === '|' || src[i] === ',' || src[i] === '，' || /\s/.test(src[i]))
+                    ) {
+                        i++;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        if (ch === '|' || ch === ',' || ch === '，' || ch === '\n' || ch === '\r') {
+            const trimmed = current.trim();
+            if (trimmed) {
+                tokens.push(trimmed);
+            }
+            current = '';
+            i++;
+            continue;
+        }
+
+        current += ch;
+        i++;
+    }
+
+    const tail = current.trim();
+    if (tail) {
+        tokens.push(tail);
+    }
+    return tokens;
+}
+
+/**
+ * 严格按预设 ID 判断服装是否被角色 boundOutfitIds 绑定。
+ */
+export function matchesOutfitId(
+    boundIds: readonly string[] | undefined,
+    outfitId: string
+): boolean {
+    const cleanTarget = (outfitId || '').trim();
+    if (!cleanTarget || !Array.isArray(boundIds) || boundIds.length === 0) {
+        return false;
+    }
+    return boundIds.some((id) => (id || '').trim() === cleanTarget);
+}
+
+/**
+ * 在档案导入/提取保存阶段，将服装引用（预设 id、服装名称或别名）解析映射为标准服装预设 id。
+ * 未匹配到既有服装时保留原修剪后引用值，确保数据不丢失。
+ */
+export function resolveOutfitIdsFromRefs(
+    refs: readonly string[] | undefined,
+    allOutfits: ReadonlyArray<{
+        id: string;
+        name?: string;
+        data?: { name?: string; aliases?: string };
+    }>
+): string[] {
+    if (!Array.isArray(refs) || refs.length === 0) {
+        return [];
+    }
+
+    const out: string[] = [];
+    const seen = new Set<string>();
+
+    for (const rawRef of refs) {
+        const clean = (rawRef || '').trim();
+        if (!clean) continue;
+        const lower = clean.toLowerCase();
+
+        const matched = allOutfits.find((o) => {
+            if (o.id === clean) return true;
+            const oName = (o.data?.name || o.name || '').trim().toLowerCase();
+            if (oName && oName === lower) return true;
+            return splitKeywordTokens(o.data?.aliases).some(
+                (alias) => alias.trim().toLowerCase() === lower
+            );
+        });
+
+        const resolvedId = matched ? matched.id : clean;
+        if (!seen.has(resolvedId)) {
+            seen.add(resolvedId);
+            out.push(resolvedId);
+        }
+    }
+
+    return out;
+}
+
+/**
+ * 规范化标签文本：统一中文逗号与顿号为半角逗号，拆分换行与逗号分隔词条并支持保序去重（保留 `<...>` 语法标签大小写）。
+ */
+export function cleanTagSegments(
+    rawText: string,
+    options?: { readonly deduplicate?: boolean }
+): string {
+    if (!rawText || typeof rawText !== 'string') {
+        return '';
+    }
+
+    const deduplicate = Boolean(options?.deduplicate);
+    const normalized = rawText.replace(/[，、]/g, ',');
+    const segments = normalized
+        .split(/[\r\n]+/)
+        .map((seg) => seg.trim())
+        .filter(Boolean);
+
+    const tags: string[] = [];
+    const seenTags = new Set<string>();
+
+    for (const seg of segments) {
+        for (const part of seg.split(',')) {
+            const trimmed = part.trim();
+            if (!trimmed) continue;
+
+            if (deduplicate) {
+                const isSpecialTag = trimmed.startsWith('<') && trimmed.endsWith('>');
+                const lookupKey = isSpecialTag ? trimmed : trimmed.toLowerCase();
+                if (seenTags.has(lookupKey)) {
+                    continue;
+                }
+                seenTags.add(lookupKey);
+            }
+
+            tags.push(trimmed);
+        }
+    }
+
+    return tags.join(', ');
+}
+
 /**
  * 合并多段逗号分隔的标签字符串，按首次出现顺序不区分大小写去重。
  */
 export function dedupeCommaTags(segments: readonly string[]): string {
-    const seen = new Set<string>();
-    const out: string[] = [];
-
-    for (const seg of segments) {
-        if (!seg || typeof seg !== 'string') continue;
-        const items = seg.split(/[,，]+/);
-        for (const rawItem of items) {
-            const trimmed = rawItem.trim();
-            if (!trimmed) continue;
-            const normKey = trimmed.toLowerCase();
-            if (!seen.has(normKey)) {
-                seen.add(normKey);
-                out.push(trimmed);
-            }
-        }
-    }
-
-    return out.join(', ');
+    const joined = segments
+        .filter((seg): seg is string => typeof seg === 'string' && Boolean(seg.trim()))
+        .join(',');
+    return cleanTagSegments(joined, { deduplicate: true });
 }
 
 /**

@@ -65,13 +65,13 @@ export interface ConnectionCardOptions {
     presetTooltip?: string;
     /**
      * 服务商切换回调。提供后由外部接管地址与密钥的切换（卡片不再用模板默认地址覆盖地址框），
-     * 外部通过 setData 回写新服务商保存的连接信息。
+     * 返回 false 时自动回滚下拉选中值；外部通过 setData 回写新服务商保存的连接信息。
      */
-    onPresetChange?: (presetId: string) => void;
+    onPresetChange?: (presetId: string) => void | boolean;
     /** 连通性检测处理函数 */
-    onTestPing?: (serverUrl: string, apiKey?: string) => Promise<ProviderHealthResult>;
+    onTestPing?: (serverUrl: string, apiKey?: string, signal?: AbortSignal) => Promise<ProviderHealthResult>;
     /** 模型列表拉取处理函数（若不提供且未重载 fetchAssetList 则不渲染同步按钮） */
-    onFetchAssets?: (serverUrl: string, apiKey?: string) => Promise<AssetFetchResult>;
+    onFetchAssets?: (serverUrl: string, apiKey?: string, signal?: AbortSignal) => Promise<AssetFetchResult>;
     /** 数据变更回调 */
     onChange?: (data: ConnectionCardData) => void;
 }
@@ -92,6 +92,7 @@ export class ConnectionCard implements UIComponent, Disposable {
     private apiKeyFormField?: FormField;
 
     private readonly actionButton: Button;
+    private isDisposed = false;
 
     private pingAbortController: AbortController | null = null;
     private assetAbortController: AbortController | null = null;
@@ -158,17 +159,24 @@ export class ConnectionCard implements UIComponent, Disposable {
                 value: initialPreset,
                 options: presetOptions,
                 onChange: (presetId: string) => {
+                    const prevPresetId = this.data.activePresetId;
                     this.data.activePresetId = presetId;
                     this.applyPresetState();
                     if (options.onPresetChange) {
-                        options.onPresetChange(presetId);
-                        return;
+                        const accepted = options.onPresetChange(presetId);
+                        if (accepted === false) {
+                            this.data.activePresetId = prevPresetId;
+                            this.applyPresetState();
+                            return false;
+                        }
+                        return undefined;
                     }
                     const matched = options.providerPresets?.find((p) => p.id === presetId);
                     if (matched) {
                         this.urlInput.setValue(matched.defaultUrl, { triggerChange: true });
                     }
                     this.notifyChange();
+                    return undefined;
                 },
             });
             const presetField = new FormField({
@@ -286,20 +294,28 @@ export class ConnectionCard implements UIComponent, Disposable {
      * 触发单次连通性检测。
      */
     public async triggerPing(): Promise<ProviderHealthResult | null> {
-        if (!this.options.onTestPing) {
+        if (!this.options.onTestPing || this.isDisposed) {
             return null;
         }
 
         if (this.pingAbortController) {
             this.pingAbortController.abort();
         }
-        this.pingAbortController = new AbortController();
+        const controller = new AbortController();
+        this.pingAbortController = controller;
 
         this.updateBadge('info', '检测中...');
         this.actionButton.setLoading(true);
 
         try {
-            const result = await this.options.onTestPing(this.data.serverUrl, this.data.apiKey);
+            const result = await this.options.onTestPing(
+                this.data.serverUrl,
+                this.data.apiKey,
+                controller.signal
+            );
+            if (this.isDisposed || this.pingAbortController !== controller || controller.signal.aborted) {
+                return null;
+            }
             if (result.status === 'ok') {
                 const latencyText = result.latencyMs !== undefined ? ` (${result.latencyMs}ms)` : '';
                 this.lastErrorDetails = null;
@@ -321,6 +337,14 @@ export class ConnectionCard implements UIComponent, Disposable {
             }
             return result;
         } catch (err) {
+            if (
+                this.isDisposed ||
+                this.pingAbortController !== controller ||
+                controller.signal.aborted ||
+                (err instanceof DOMException && err.name === 'AbortError')
+            ) {
+                return null;
+            }
             const msg = err instanceof Error ? err.message : String(err || '网络异常');
             this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
             this.updateBadge('danger', '连接异常');
@@ -329,8 +353,10 @@ export class ConnectionCard implements UIComponent, Disposable {
             Toast.error(`服务连接异常: ${msg}`);
             return { status: 'error', message: msg };
         } finally {
-            this.actionButton.setLoading(false);
-            this.pingAbortController = null;
+            if (!this.isDisposed && this.pingAbortController === controller) {
+                this.actionButton.setLoading(false);
+                this.pingAbortController = null;
+            }
         }
     }
 
@@ -368,6 +394,9 @@ export class ConnectionCard implements UIComponent, Disposable {
      * 优先调用子类重载的 fetchAssetList 方法，未重载时调用 options.onFetchAssets。
      */
     public async triggerFetchAssets(): Promise<AssetFetchResult | null> {
+        if (this.isDisposed) {
+            return null;
+        }
         const executor = this.hasCustomFetchAssetList()
             ? this.fetchAssetList!.bind(this)
             : this.options.onFetchAssets;
@@ -379,23 +408,39 @@ export class ConnectionCard implements UIComponent, Disposable {
         if (this.assetAbortController) {
             this.assetAbortController.abort();
         }
-        this.assetAbortController = new AbortController();
+        const controller = new AbortController();
+        this.assetAbortController = controller;
 
         this.actionButton.setLoading(true);
 
         try {
-            return await executor(this.data.serverUrl, this.data.apiKey);
+            const res = await executor(this.data.serverUrl, this.data.apiKey, controller.signal);
+            if (this.isDisposed || this.assetAbortController !== controller || controller.signal.aborted) {
+                return null;
+            }
+            return res;
         } catch (err) {
+            if (
+                this.isDisposed ||
+                this.assetAbortController !== controller ||
+                controller.signal.aborted ||
+                (err instanceof DOMException && err.name === 'AbortError')
+            ) {
+                return null;
+            }
             const msg = err instanceof Error ? err.message : String(err || '网络异常');
             this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
             this.updateBadge('danger', '连接异常');
             this.statusBadge.element.title = '点击查看排查指引与详细错误';
             this.statusBadge.element.classList.add('is-clickable');
             logger.error('[ConnectionCard] 拉取模型列表失败:', msg);
+            Toast.error(`获取模型列表失败: ${msg}`);
             return null;
         } finally {
-            this.actionButton.setLoading(false);
-            this.assetAbortController = null;
+            if (!this.isDisposed && this.assetAbortController === controller) {
+                this.actionButton.setLoading(false);
+                this.assetAbortController = null;
+            }
         }
     }
 
@@ -410,7 +455,11 @@ export class ConnectionCard implements UIComponent, Disposable {
         assets: AssetFetchResult | null;
     }> {
         const pingResult = await this.triggerPing();
-        if (pingResult?.status === 'ok' && (this.options.onFetchAssets || this.hasCustomFetchAssetList())) {
+        if (
+            !this.isDisposed &&
+            pingResult?.status === 'ok' &&
+            (this.options.onFetchAssets || this.hasCustomFetchAssetList())
+        ) {
             const assetResult = await this.triggerFetchAssets();
             return { ping: pingResult, assets: assetResult };
         }
@@ -420,7 +469,11 @@ export class ConnectionCard implements UIComponent, Disposable {
     /**
      * 可重载的模型拉取扩展函数（子类可重载定制具体后端模型解析协议）。
      */
-    public async fetchAssetList?(serverUrl: string, apiKey?: string): Promise<AssetFetchResult>;
+    public async fetchAssetList?(
+        serverUrl: string,
+        apiKey?: string,
+        signal?: AbortSignal
+    ): Promise<AssetFetchResult>;
 
     private hasCustomFetchAssetList(): boolean {
         return typeof this.fetchAssetList === 'function';
@@ -446,6 +499,7 @@ export class ConnectionCard implements UIComponent, Disposable {
      * 释放所有子控件与未完成的异步任务。
      */
     public dispose(): void {
+        this.isDisposed = true;
         if (this.pingAbortController) {
             this.pingAbortController.abort();
             this.pingAbortController = null;

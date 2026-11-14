@@ -12,7 +12,6 @@ import type { UIComponent } from '../types';
 import { Select, type SelectOption } from '../components/select';
 import { Button } from '../components/button';
 import { ICONS } from '../components/icons';
-import { ConfirmDialog } from '../feedback/confirm-dialog';
 
 /** 预设操作动作类型 */
 export type PresetActionType =
@@ -40,12 +39,13 @@ export interface PresetToolbarOptions {
     presets: PresetToolbarItem[];
     /** 当前激活的预设 ID */
     activePresetId: string;
-    /** 操作事件回调函数 */
-    onAction: (action: PresetActionType, presetId: string) => void;
+    /** 操作事件回调函数（返回 false 或 Promise<false> 可阻止 select 等状态提交并回退） */
+    onAction: (
+        action: PresetActionType,
+        presetId: string
+    ) => void | boolean | Promise<void | boolean>;
     /** 导入文件自定义解析回调（未提供时触发 onAction('import', presetId)） */
     onImportFile?: (file: File) => void;
-    /** 操作确认回调。未传入时使用全局确认对话框 ConfirmDialog.confirm */
-    confirmHandler?: (message: string) => Promise<boolean> | boolean;
     /** 附加 CSS 类名 */
     className?: string;
 }
@@ -68,9 +68,11 @@ export class PresetToolbar implements UIComponent {
     private currentPresets: PresetToolbarItem[] = [];
     private activeId = '';
     private isCurrentlyDirty = false;
-    private readonly onActionCallback: (action: PresetActionType, presetId: string) => void;
+    private readonly onActionCallback: (
+        action: PresetActionType,
+        presetId: string
+    ) => void | boolean | Promise<void | boolean>;
     private readonly onImportFileCallback?: (file: File) => void;
-    private readonly confirmHandler?: (message: string) => Promise<boolean> | boolean;
     private readonly fileChangeListener: () => void;
 
     constructor(options: PresetToolbarOptions) {
@@ -78,7 +80,6 @@ export class PresetToolbar implements UIComponent {
         this.activeId = options.activePresetId;
         this.onActionCallback = options.onAction;
         this.onImportFileCallback = options.onImportFile;
-        this.confirmHandler = options.confirmHandler;
 
         // 1. 根容器
         this.element = document.createElement('div');
@@ -112,7 +113,9 @@ export class PresetToolbar implements UIComponent {
             variant: 'icon',
             tooltip: '新建预设',
             icon: ICONS.plus,
-            onClick: () => this.onActionCallback('new', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('new', this.activeId);
+            }
         });
 
         this.saveButton = new Button({
@@ -120,21 +123,27 @@ export class PresetToolbar implements UIComponent {
             tooltip: '保存预设修改',
             className: 'da-preset-btn--save',
             icon: ICONS.save,
-            onClick: () => this.onActionCallback('save', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('save', this.activeId);
+            }
         });
 
         this.saveAsButton = new Button({
             variant: 'icon',
             tooltip: '另存为新预设',
             icon: ICONS.copy,
-            onClick: () => this.onActionCallback('saveAs', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('saveAs', this.activeId);
+            }
         });
 
         this.renameButton = new Button({
             variant: 'icon',
             tooltip: '重命名当前预设',
             icon: ICONS.edit,
-            onClick: () => this.onActionCallback('rename', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('rename', this.activeId);
+            }
         });
 
         // 隐藏文件选择器用于导入 JSON 预设
@@ -149,7 +158,7 @@ export class PresetToolbar implements UIComponent {
                 if (this.onImportFileCallback) {
                     this.onImportFileCallback(file);
                 } else {
-                    this.onActionCallback('import', this.activeId);
+                    void this.onActionCallback('import', this.activeId);
                 }
                 this.fileInput.value = '';
             }
@@ -167,7 +176,9 @@ export class PresetToolbar implements UIComponent {
             variant: 'icon',
             tooltip: '导出当前预设 (JSON)',
             icon: ICONS.export,
-            onClick: () => this.onActionCallback('export', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('export', this.activeId);
+            }
         });
 
         this.resetButton = new Button({
@@ -175,7 +186,9 @@ export class PresetToolbar implements UIComponent {
             tooltip: '重置修改 (放弃草稿并恢复为当前预设初始值)',
             icon: ICONS.refresh,
             disabled: true,
-            onClick: () => this.onActionCallback('reset', this.activeId)
+            onClick: () => {
+                void this.onActionCallback('reset', this.activeId);
+            }
         });
 
         this.deleteButton = new Button({
@@ -183,7 +196,9 @@ export class PresetToolbar implements UIComponent {
             tooltip: '删除当前预设',
             className: 'da-preset-btn--danger',
             icon: ICONS.trash,
-            onClick: () => this.handleDelete()
+            onClick: () => {
+                void this.onActionCallback('delete', this.activeId);
+            }
         });
 
         rightSlot.appendChild(this.newButton.element);
@@ -295,59 +310,30 @@ export class PresetToolbar implements UIComponent {
         this.element.parentElement?.removeChild(this.element);
     }
 
-    /** 下拉框切换事件处理，并在脏状态下进行阻断拦截 */
+    /** 下拉框切换事件处理；若调用方返回 false / Promise<false> 则回退至原激活项 */
     private handleSelectChange(newId: string): void {
-        if (this.isCurrentlyDirty) {
-            const promptMsg = '当前预设存在未保存的修改，切换将放弃未保存的修改。是否确定继续切换？';
-            const result = this.requestConfirm(promptMsg);
-            if (result instanceof Promise) {
-                result.then((confirmed) => {
-                    if (!confirmed) {
-                        this.selectComponent.setValue(this.activeId, { silent: true });
-                        return;
-                    }
-                    this.activeId = newId;
-                    this.onActionCallback('select', newId);
-                });
-                return;
-            }
-            if (!result) {
-                this.selectComponent.setValue(this.activeId, { silent: true });
-                return;
-            }
-        }
-        this.activeId = newId;
-        this.onActionCallback('select', newId);
-    }
-
-    /** 删除预设时弹出二次确认 */
-    private handleDelete(): void {
-        const current = this.currentPresets.find((p) => p.id === this.activeId);
-        const promptMsg = `确定要删除预设「${current?.name || this.activeId}」吗？此操作无法撤销。`;
-        const result = this.requestConfirm(promptMsg);
+        const result = this.onActionCallback('select', newId);
         if (result instanceof Promise) {
-            result.then((confirmed) => {
-                if (confirmed) {
-                    this.onActionCallback('delete', this.activeId);
+            void result.then((accepted) => {
+                if (accepted === false) {
+                    if (this.selectComponent.getValue() === newId) {
+                        this.selectComponent.setValue(this.activeId, { silent: true });
+                    }
+                    return;
+                }
+                if (this.selectComponent.getValue() === newId) {
+                    this.activeId = newId;
+                    this.updateActionButtonsState();
                 }
             });
             return;
         }
-        if (result) {
-            this.onActionCallback('delete', this.activeId);
+        if (result === false) {
+            this.selectComponent.setValue(this.activeId, { silent: true });
+            return;
         }
-    }
-
-    /** 请求用户二次确认；无可用确认方式时返回 false 阻止操作 */
-    private requestConfirm(message: string): boolean | Promise<boolean> {
-        if (this.confirmHandler) {
-            try {
-                return this.confirmHandler(message);
-            } catch {
-                return false;
-            }
-        }
-        return ConfirmDialog.confirm({ title: '预设操作确认', message });
+        this.activeId = newId;
+        this.updateActionButtonsState();
     }
 
     /** 将内部预设列表映射为 Select 控件所需的选项列表 */

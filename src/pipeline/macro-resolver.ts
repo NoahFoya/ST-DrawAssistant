@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责在提示词清洗前单层解析 `$名称$` 与 `$名称-后缀1-后缀2$` 格式的宏引用：
- * 1. 无后缀调用 (`$名称$`)：展开固定基底标签（角色展开 trigger + parts.appearance；服装展开 trigger + parts.style）；
+ * 1. 无后缀调用 (`$名称$`)：仅展开常驻触发词标签 (`data.trigger`)；
  * 2. 带后缀调用 (`$名称-特写-feet$` / `$名称-upper_body-socks$`）：
  *    - 支持调用素材库配置中的宏规则（如 '特写' / 'closeup' / '半身' / '全身' / 'nude' 等）；
  *    - 支持直接调用原生部位变量名（如 'head', 'upper_body', 'feet', 'socks', 'shoes' 等）；
@@ -16,7 +16,6 @@
 import type {
     CharacterPresetData,
     OutfitPresetData,
-    MaterialActivationPresetData,
     MaterialMacroRule,
 } from '@types';
 import { settingsStore, type DrawAssistantSettings } from '../store/settings-store';
@@ -26,7 +25,12 @@ import {
     normalizeCharacterData,
     normalizeOutfitData,
     dedupeCommaTags,
+    splitKeywordTokens,
 } from './material-definitions';
+import {
+    resolveActiveMaterialActivationPreset,
+    resolveHostCardCandidates,
+} from './prompt-injector';
 import { logger } from '../util/logger';
 
 /** 统一的可展开宏预设条目结构（角色或服装） */
@@ -69,16 +73,17 @@ const CHAR_PART_KEY_SET = new Set<string>(CHARACTER_PART_DEFS.map((d) => d.key))
 const OUTFIT_PART_KEY_SET = new Set<string>(OUTFIT_PART_DEFS.map((d) => d.key));
 
 /**
- * 剥离素材标签文本中可能混入的 `$...$` 宏标记，确保素材词条单层展开不产生嵌套引用。
+ * 剥离素材标签文本中可能混入的 `$...$` 宏标记（与主解析保持一致的边界定义），确保单层展开不产生循环引用。
  */
 export function stripNestedMacroTokens(rawTags: string): string {
     if (!rawTags || typeof rawTags !== 'string' || !rawTags.includes('$')) {
         return (rawTags || '').trim();
     }
     return rawTags
-        .replace(/\$[^$\r\n]*\$/g, '')
-        .replace(/\$/g, '')
-        .split(',')
+        .replace(/\$([^\r\n$,，;；:：!！?？]+?)\$/g, (full, inner: string) =>
+            /^\d+(\.\d+)?$/.test(inner.trim()) ? full : ''
+        )
+        .split(/[,，]+/)
         .map((part) => part.trim())
         .filter(Boolean)
         .join(', ');
@@ -197,7 +202,8 @@ export function analyzeMaterialSuffixes(
  * 从配置快照构建角色与服装的统一宏条目检索表。
  */
 export function buildMacroPresetEntries(
-    settings?: Partial<DrawAssistantSettings>
+    settings?: Partial<DrawAssistantSettings>,
+    activeCardKey?: string
 ): MacroPresetEntry[] {
     if (!settings?.presets) {
         return [];
@@ -207,12 +213,14 @@ export function buildMacroPresetEntries(
     const charPresets = settings.presets.characters || [];
     const outfitPresets = settings.presets.outfits || [];
 
-    const activeActId = settings.materialConfig?.activeActivationPresetId;
-    const actList = (settings.presets.material_activations || []) as Array<{
-        id: string;
-        data: MaterialActivationPresetData;
-    }>;
-    const currentActPreset = actList.find((p) => p.id === activeActId) || actList[0];
+    const hostContext =
+        typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+    const cardCandidates = resolveHostCardCandidates(hostContext, activeCardKey);
+    const currentActPreset = resolveActiveMaterialActivationPreset(
+        settings as DrawAssistantSettings,
+        cardCandidates
+    );
+    const hasActivationPreset = Boolean(currentActPreset);
     const charRules = currentActPreset?.data?.characterRules || {};
     const outfitRules = currentActPreset?.data?.outfitRules || {};
 
@@ -222,14 +230,12 @@ export function buildMacroPresetEntries(
         const primaryName = data.name.trim() || (item?.name || '').trim();
         if (!primaryName) continue;
 
-        const aliasList = data.aliases
-            .split('|')
-            .map((s) => s.trim())
-            .filter(Boolean);
+        const aliasList = splitKeywordTokens(data.aliases);
         const matchNames = Array.from(new Set([primaryName, ...aliasList]));
 
-        const rule = charRules[item.id] || charRules[primaryName];
-        const isEnabled = rule ? Boolean(rule.enabled) : true;
+        const rule = charRules[item.id];
+        // 存在启用预设时缺失规则默认禁用，无任何启用预设时回退启用以便纯工具场景直接展开
+        const isEnabled = hasActivationPreset ? Boolean(rule?.enabled) : true;
 
         const triggerSegs: string[] = [];
         if (data.trigger?.trim()) {
@@ -260,14 +266,11 @@ export function buildMacroPresetEntries(
         const primaryName = data.name.trim() || (item?.name || '').trim();
         if (!primaryName) continue;
 
-        const aliasList = data.aliases
-            .split('|')
-            .map((s) => s.trim())
-            .filter(Boolean);
+        const aliasList = splitKeywordTokens(data.aliases);
         const matchNames = Array.from(new Set([primaryName, ...aliasList]));
 
-        const rule = outfitRules[item.id] || outfitRules[primaryName];
-        const isEnabled = rule ? Boolean(rule.enabled) : true;
+        const rule = outfitRules[item.id];
+        const isEnabled = hasActivationPreset ? Boolean(rule?.enabled) : true;
 
         const triggerSegs: string[] = [];
         if (data.trigger?.trim()) {

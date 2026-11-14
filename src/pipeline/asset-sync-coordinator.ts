@@ -94,6 +94,8 @@ export function computeAssetDiff(
  * 资产同步协同器。
  */
 export class AssetSyncCoordinator {
+    private static _syncGenByProvider = new Map<ProviderType, number>();
+
     /**
      * 对指定生图服务提供方执行资产同步、持久化并计算差异与预设可用性。
      *
@@ -105,6 +107,9 @@ export class AssetSyncCoordinator {
         providerType: ProviderType,
         options: AssetSyncOptions = {}
     ): Promise<AssetDiffResult | null> {
+        const reqGen = (AssetSyncCoordinator._syncGenByProvider.get(providerType) ?? 0) + 1;
+        AssetSyncCoordinator._syncGenByProvider.set(providerType, reqGen);
+
         const provider = providerRegistry.getProvider(providerType);
         if (!provider) {
             if (options.isManual) {
@@ -122,6 +127,22 @@ export class AssetSyncCoordinator {
             }
             return null;
         }
+
+        const startCfg = settingsStore.getProviderConfig<ProviderStoredConfig>(providerType);
+        const startServiceId = startCfg?.serviceId;
+        const startServerUrl = startCfg?.serverUrl;
+        const startTransport = settingsStore.getSettings().transport;
+        const isStaleSync = (): boolean => {
+            if (AssetSyncCoordinator._syncGenByProvider.get(providerType) !== reqGen) {
+                return true;
+            }
+            const curCfg = settingsStore.getProviderConfig<ProviderStoredConfig>(providerType);
+            return (
+                curCfg?.serviceId !== startServiceId ||
+                curCfg?.serverUrl !== startServerUrl ||
+                settingsStore.getSettings().transport !== startTransport
+            );
+        };
 
         // 1. 连通性前置检查：离线时直接退出或提示，避免发送无效拉取请求
         if (!options.skipHealthCheck && typeof provider.checkHealth === 'function') {
@@ -191,6 +212,11 @@ export class AssetSyncCoordinator {
             // 3.6 LoRA 模型拉取
             if (typeof provider.fetchLoras === 'function') {
                 loras = await provider.fetchLoras();
+            }
+
+            if (isStaleSync()) {
+                logger.debug(`[AssetSyncCoordinator] [${providerType}] 上下文已变更或被新请求取代，丢弃过期同步结果`);
+                return null;
             }
 
             // 4. 读取上一次持久化缓存以比对差异

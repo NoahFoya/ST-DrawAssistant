@@ -12,7 +12,6 @@
 import type { VNode } from 'preact';
 import type { DrawingPresetData } from '@types';
 import {
-    PreactSettingsView,
     CardView,
     SchemaCard,
     SchemaFieldsView,
@@ -25,7 +24,7 @@ import {
 } from '../framework';
 import type { ProviderPreset } from '../composite/connection-card';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-layout';
+import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import {
     NOVELAI_OFFICIAL_SERVICE_ID,
     NOVELAI_CUSTOM_SERVICE_ID,
@@ -82,7 +81,7 @@ const CFG_RESCALE_FIELD: FieldSchema<DrawingPresetData> = {
     },
 };
 
-export class NovelAITabView extends PreactSettingsView {
+export class NovelAITabView extends ProviderTabView {
     public readonly id = 'novelai';
     public readonly title = 'NovelAI';
 
@@ -160,6 +159,7 @@ export class NovelAITabView extends PreactSettingsView {
                 type: 'select',
                 placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
+                invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
             {
                 key: 'convertSyntax',
@@ -325,18 +325,5 @@ export class NovelAITabView extends PreactSettingsView {
                 )}
             </ProviderTabLayout>
         );
-    }
-
-    public override activate(): void {
-        this.vm.activate();
-    }
-
-    public override deactivate(): void {
-        this.vm.deactivate();
-    }
-
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
     }
 }

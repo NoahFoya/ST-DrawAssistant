@@ -22,13 +22,13 @@ import {
     CHARACTER_PART_DEFS,
     normalizeCharacterData,
     computeCharacterTokenStats,
-    type MaterialPartDef,
+    matchesOutfitId,
 } from '../../../pipeline/material-definitions';
 import { ICONS } from '../../components/icons';
 import {
     CHAR_PART_GROUPS,
-    renderAvatarBox,
-    renderFullWidthTagField,
+    AvatarBox,
+    MaterialPartGroups,
 } from './material-types';
 
 export interface CharacterPanelProps {
@@ -37,7 +37,7 @@ export interface CharacterPanelProps {
     avatarUrlsSignal: Signal<Record<string, string>>;
     charGroupExpanded: Signal<Record<string, boolean>>;
     selectedOutfitToBind: Signal<string>;
-    onAction: (action: PresetActionType, id?: string) => Promise<void>;
+    onAction: (action: PresetActionType, id?: string) => Promise<boolean>;
     onImportFile: (file: File) => void;
     onUploadAvatar: (file: File) => Promise<string>;
     onRemoveAvatar: () => void;
@@ -67,13 +67,8 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
     const allOutfits = outfitController.presets.value;
     const boundIds = draft.boundOutfitIds;
 
-    const isOutfitBound = (outfit: PresetItem<OutfitPresetData>): boolean => {
-        if (boundIds.includes(outfit.id)) return true;
-        const outfitName = (outfit.data?.name || outfit.name || '').trim().toLowerCase();
-        return Boolean(
-            outfitName && boundIds.some((b) => b.trim().toLowerCase() === outfitName)
-        );
-    };
+    const isOutfitBound = (outfit: PresetItem<OutfitPresetData>): boolean =>
+        matchesOutfitId(boundIds, outfit.id);
 
     const unboundOutfits = allOutfits.filter((o) => !isOutfitBound(o));
     const effectiveOutfitToAdd = unboundOutfits.some(
@@ -98,17 +93,13 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
         );
     };
 
-    const invalidBoundCount = boundIds.filter((refId) => {
-        return !allOutfits.some(
-            (o) => o.id === refId || (o.data?.name && o.data.name === refId)
-        );
-    }).length;
+    const invalidBoundCount = boundIds.filter(
+        (refId) => !allOutfits.some((o) => o.id === refId.trim())
+    ).length;
 
     const handleCleanInvalidBoundOutfits = () => {
         const validBoundIds = boundIds.filter((refId) =>
-            allOutfits.some(
-                (o) => o.id === refId || (o.data?.name && o.data.name === refId)
-            )
+            allOutfits.some((o) => o.id === refId.trim())
         );
         charController.updateDraft('boundOutfitIds', validBoundIds);
     };
@@ -129,7 +120,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                     presets={charController.toolbarItems.value}
                     activePresetId={activeId}
                     dirty={isDirty}
-                    onAction={(action, id) => void onAction(action, id)}
+                    onAction={(action, id) => onAction(action, id)}
                     onImportFile={onImportFile}
                 />
             </div>
@@ -139,15 +130,15 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                 <div className="da-material-identity-layout">
                     {/* 第一行：居中紧凑参考图 (3:4 比例，缩小尺寸居顶居中) */}
                     <div className="da-material-avatar-center-wrap">
-                        {renderAvatarBox({
-                            kind: 'character',
-                            avatarId: draft.avatarId,
-                            displayTitle: draft.name,
-                            avatarUrl: draft.avatarId ? avatarUrlsSignal.value[draft.avatarId] || '' : '',
-                            onUploadAvatar,
-                            onRemoveAvatar,
-                            onEnsureAvatarLoaded,
-                        })}
+                        <AvatarBox
+                            kind="character"
+                            avatarId={draft.avatarId}
+                            displayTitle={draft.name}
+                            avatarUrl={draft.avatarId ? avatarUrlsSignal.value[draft.avatarId] || '' : ''}
+                            onUploadAvatar={onUploadAvatar}
+                            onRemoveAvatar={onRemoveAvatar}
+                            onEnsureAvatarLoaded={onEnsureAvatarLoaded}
+                        />
                     </div>
 
                     {/* 第二行：名称与别名并排 */}
@@ -251,55 +242,14 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                     </div>
 
                     {/* 人体生理结构 5 组折叠分组面板 */}
-                    {CHAR_PART_GROUPS.map((grp) => {
-                        const isExpanded = Boolean(charGroupExpanded.value[grp.id]);
-                        const groupDefs = grp.keys
-                            .map((k) => CHARACTER_PART_DEFS.find((d) => d.key === k))
-                            .filter((d): d is MaterialPartDef<CharacterPartKey> => Boolean(d));
-                        const filledCount = groupDefs.filter((d) =>
-                            Boolean((draft.parts[d.key] || '').trim())
-                        ).length;
-
-                        return (
-                            <div key={grp.id} className="da-shot-group-accordion">
-                                <button
-                                    type="button"
-                                    className="da-shot-group-accordion__header"
-                                    onClick={() => {
-                                        charGroupExpanded.value = {
-                                            ...charGroupExpanded.value,
-                                            [grp.id]: !isExpanded,
-                                        };
-                                    }}
-                                >
-                                    <div className="da-shot-group-accordion__title">
-                                        <span>{isExpanded ? '▾' : '▸'}</span>
-                                        <span>{grp.label}</span>
-                                    </div>
-                                    <span className="da-shot-group-accordion__badge">
-                                        已填 {filledCount}/{groupDefs.length} 项
-                                    </span>
-                                </button>
-
-                                {isExpanded && (
-                                    <div className="da-shot-group-accordion__body">
-                                        {groupDefs.map((def) =>
-                                            renderFullWidthTagField({
-                                                fieldKey: def.key,
-                                                label: def.label,
-                                                hint: def.hint,
-                                                value: draft.parts[def.key],
-                                                placeholder: def.placeholder,
-                                                rows: 2,
-                                                dirty: dirtySet.has(`parts.${def.key}`) || dirtySet.has(def.key),
-                                                onChange: (val) => updatePart(def.key, val),
-                                            })
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                    <MaterialPartGroups
+                        groups={CHAR_PART_GROUPS}
+                        defs={CHARACTER_PART_DEFS}
+                        parts={draft.parts}
+                        expandedSignal={charGroupExpanded}
+                        dirtySet={dirtySet}
+                        onChangePart={updatePart}
+                    />
                 </div>
             </CardView>
 
@@ -356,9 +306,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                         ) : (
                             boundIds.map((refId) => {
                                 const outfitPreset = allOutfits.find(
-                                    (o) =>
-                                        o.id === refId ||
-                                        (o.data?.name && o.data.name === refId)
+                                    (o) => o.id === refId.trim()
                                 );
                                 const isValid = Boolean(outfitPreset);
                                 const displayName = outfitPreset

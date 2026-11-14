@@ -8,11 +8,9 @@
  */
 
 /* 1. 平板与中等屏幕适配 (max-width: 900px)
-   微调主弹窗与侧边栏宽度，为右侧核心配置/工作区留出足够阅读与操作空间；
-   规格参数网格由 4 列自适应降级为 2 列。 */
+   微调主弹窗与侧边栏宽度，为右侧核心配置/工作区留出足够阅读与操作空间。 */
 @media (max-width: 900px) {
     /* 弹窗适当收缩，预留四周边距以感知遮罩层 */
-    .da-settings-panel,
     .da-main-modal-inner {
         width: calc(var(--da-vvw) - 32px);
         height: calc(var(--da-vvh) - 48px);
@@ -33,11 +31,6 @@
     /* 右侧属性检视面板适度收窄，保障左侧节点画布的可视面积 */
     .da-blueprint-inspector-panel {
         width: 320px;
-    }
-
-    /* 系统规格指标卡片网格降级为双列并排 */
-    .da-spec-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
@@ -124,9 +117,10 @@
     }
 }
 
-/* 3. 移动端与紧凑手机屏幕适配 (max-width: 680px)
-   主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；基础字阶微调收缩。 */
-@media (max-width: 680px) {
+/* 3. 移动端与紧凑手机屏幕适配 (max-width: 640px)
+   主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；基础字阶微调收缩；
+   表单行由水平两端对齐转为垂直列布局，标签置顶，控件撑满整行。 */
+@media (max-width: 640px) {
     /* 移动端基础字阶微调，保障触控屏舒适阅读密度 */
     :root, .st-da-root {
         --da-font-size-xs: 11px !important;
@@ -137,7 +131,6 @@
     }
 
     /* 主弹窗主体撑满可视视口，清除边框与圆角，最大化小屏显示利用率 */
-    .da-settings-panel,
     .da-main-modal-inner {
         width: 100%;
         max-width: var(--da-vvw);
@@ -195,60 +188,37 @@
         gap: 8px !important;
     }
 
-    /* 图库底部悬浮批量控制台居中折行排布 */
-    .da-batch-floating-bar {
-        flex-wrap: wrap !important;
-        justify-content: center !important;
-        gap: 8px !important;
-        padding: 8px 12px !important;
-    }
-
-    /* 悬浮球头像正圆形裁剪面板限制宽度 */
-    .da-cropper-panel {
-        width: calc(var(--da-vvw) - 24px);
-    }
-
-    /* 流式自适应控件强制满宽 */
-    .da-control--fluid {
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-}
-
-/* 4. 平板小屏与移动端适配 (max-width: 640px)
-   表单行由水平两端对齐转为垂直列布局，标签置顶，控件撑满整行，解决 520px~640px 灰色区间的挤压问题。 */
-@media (max-width: 640px) {
     /*
      * 标准表单行自适应流式重排：
      * 1. 容器转为纵向列排布，两端间距统一；
      * 2. 标签与控件均占满 100% 宽度；
      * 3. 控件区域清除 margin-left: auto，改为靠左自然流动并撑满整行；
      * 4. 内部输入框、下拉框、滑块与分段器统一满宽；
-     * 5. 带有 .da-form-row--inline 或 .da-row--keep-inline 的开关行显式维持单行两端对齐。
+     * 5. 带有 .da-form-row--inline 的开关行显式维持单行两端对齐。
      */
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline),
-    .da-row:not(.da-form-row--inline):not(.da-row--keep-inline) {
+    .da-form-row:not(.da-form-row--inline),
+    .da-row:not(.da-form-row--inline) {
         flex-direction: column !important;
         align-items: stretch !important;
         gap: var(--da-space-xs, 4px) !important;
     }
 
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__label-slot,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--left,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-field-label-group {
+    .da-form-row:not(.da-form-row--inline) .da-form-row__label-slot,
+    .da-form-row:not(.da-form-row--inline) .da-slot--left,
+    .da-form-row:not(.da-form-row--inline) .da-field-label-group {
         width: 100% !important;
         max-width: 100% !important;
         flex: 0 0 auto !important;
         min-width: 0 !important;
     }
 
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-form-row__control-slot,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--right,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-240,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-200,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-160,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slot--w-120 {
+    .da-form-row:not(.da-form-row--inline) .da-form-row__control,
+    .da-form-row:not(.da-form-row--inline) .da-form-row__control-slot,
+    .da-form-row:not(.da-form-row--inline) .da-slot--right,
+    .da-form-row:not(.da-form-row--inline) .da-slot--w-240,
+    .da-form-row:not(.da-form-row--inline) .da-slot--w-200,
+    .da-form-row:not(.da-form-row--inline) .da-slot--w-160,
+    .da-form-row:not(.da-form-row--inline) .da-slot--w-120 {
         width: 100% !important;
         max-width: 100% !important;
         min-width: 0 !important;
@@ -257,24 +227,24 @@
         justify-content: flex-start !important;
     }
 
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-select-wrapper,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-wrapper,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-slider-composite,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-suffix-wrapper,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-unit-wrapper,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-dimension-picker__size-group,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-number-input,
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-input-group {
+    .da-form-row:not(.da-form-row--inline) .da-input,
+    .da-form-row:not(.da-form-row--inline) .da-select,
+    .da-form-row:not(.da-form-row--inline) .da-select-wrapper,
+    .da-form-row:not(.da-form-row--inline) .da-slider-wrapper,
+    .da-form-row:not(.da-form-row--inline) .da-slider-composite,
+    .da-form-row:not(.da-form-row--inline) .da-segmented,
+    .da-form-row:not(.da-form-row--inline) .da-input-suffix-wrapper,
+    .da-form-row:not(.da-form-row--inline) .da-input-unit-wrapper,
+    .da-form-row:not(.da-form-row--inline) .da-dimension-picker__size-group,
+    .da-form-row:not(.da-form-row--inline) .da-number-input,
+    .da-form-row:not(.da-form-row--inline) .da-input-group {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
         flex: 1 1 auto !important;
     }
 
-    .da-form-row:not(.da-form-row--inline):not(.da-row--keep-inline) .da-segmented__item {
+    .da-form-row:not(.da-form-row--inline) .da-segmented__item {
         flex: 1 1 0%;
         padding: 3px 6px !important;
     }
@@ -285,22 +255,19 @@
     }
 
     /* 紧凑内联行维持水平单行居中两端对齐，标签组按需折行避免挤压右侧开关 */
-    .da-form-row--inline,
-    .da-row--keep-inline {
+    .da-form-row--inline {
         flex-direction: row !important;
         align-items: center !important;
         justify-content: space-between !important;
         gap: 10px !important;
     }
 
-    .da-form-row--inline .da-field-label-group,
-    .da-row--keep-inline .da-field-label-group {
+    .da-form-row--inline .da-field-label-group {
         min-width: 0 !important;
         flex: 1 1 auto !important;
     }
 
-    .da-form-row--inline .da-form-row__control-slot,
-    .da-row--keep-inline .da-slot--right {
+    .da-form-row--inline .da-form-row__control-slot {
         margin-left: auto !important;
         flex: 0 0 auto !important;
         min-width: 0 !important;

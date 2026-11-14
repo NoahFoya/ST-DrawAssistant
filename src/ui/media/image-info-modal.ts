@@ -12,6 +12,7 @@ import type { ImageGenerationMetadata, StoredImageRecord } from '@types';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { imageStorage } from '../../store/image-storage';
 import { copyTextToClipboard } from '../../util/clipboard';
 import { logger } from '../../util/logger';
 
@@ -50,7 +51,6 @@ const NON_REUSABLE_META_KEYS = new Set([
     'filename',
     'parentImageId',
     'durationMs',
-    'provider',
     'taskId',
     'imageId',
     'chatId',
@@ -71,7 +71,7 @@ const KNOWN_REUSABLE_META_KEYS = new Set([
     'cfgScale',
     'seed',
     'baseModel',
-    'modelName',
+    'clipName',
     'vaeName',
     'clipSkip',
     'extraModels',
@@ -130,6 +130,7 @@ function hasDisplayValue(val: unknown): boolean {
 export class ImageInfoModal implements Disposable {
     private isOpenState = false;
     private backdropEl?: HTMLElement;
+    private allocatedFallbackUrls: string[] = [];
 
     /**
      * 打开并呈现图像元数据检视弹窗。
@@ -185,7 +186,7 @@ export class ImageInfoModal implements Disposable {
         titleEl.textContent = '生图信息与参数';
         headerLeft.appendChild(titleEl);
 
-        const rawEngine = (metadata.engine as string | undefined) || (metadata.provider as string | undefined);
+        const rawEngine = metadata.engine as string | undefined;
         const engineLabel = formatEngineDisplay(rawEngine) || 'Standard';
         const badgeEl = document.createElement('span');
         badgeEl.className = 'da-inspect-badge';
@@ -242,16 +243,39 @@ export class ImageInfoModal implements Disposable {
         const colVisual = document.createElement('div');
         colVisual.className = 'da-inspect-col-visual';
 
+        const imageId = record?.imageId ?? (typeof metadata.imageId === 'string' ? metadata.imageId : undefined);
+        let activeImageUrl = imageUrl || '';
+
         // 1. 图像预览
-        if (imageUrl) {
+        if (activeImageUrl || imageId) {
             const previewBox = document.createElement('div');
             previewBox.className = 'da-inspect-preview-box';
             previewBox.title = options.onPreview ? '点击放大预览原图' : '点击在新标签页打开原图';
 
             const imgEl = document.createElement('img');
             imgEl.className = 'da-inspect-preview-img';
-            imgEl.src = imageUrl;
             imgEl.alt = '图像预览';
+
+            let fallbackTried = false;
+            imgEl.addEventListener('error', async () => {
+                if (!this.isOpenState || fallbackTried || !imageId) {
+                    return;
+                }
+                fallbackTried = true;
+                try {
+                    const blob = await imageStorage.getImageBlob(imageId);
+                    if (!this.isOpenState || !blob || blob.size === 0) {
+                        return;
+                    }
+                    const fallbackUrl = URL.createObjectURL(blob);
+                    this.allocatedFallbackUrls.push(fallbackUrl);
+                    activeImageUrl = fallbackUrl;
+                    imgEl.src = fallbackUrl;
+                } catch (err) {
+                    logger.warn(`[ImageInfoModal] 本地 Blob 回退载入失败 (imageId: ${imageId})`, err);
+                }
+            });
+            imgEl.src = activeImageUrl || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
             previewBox.appendChild(imgEl);
 
             const zoomBadge = document.createElement('div');
@@ -260,18 +284,19 @@ export class ImageInfoModal implements Disposable {
             previewBox.appendChild(zoomBadge);
 
             previewBox.addEventListener('click', () => {
+                if (!activeImageUrl) return;
                 if (options.onPreview) {
                     const previewCallback = options.onPreview;
                     this.close();
-                    previewCallback(imageUrl);
+                    previewCallback(activeImageUrl);
                     return;
                 }
-                window.open(imageUrl, '_blank');
+                window.open(activeImageUrl, '_blank');
             });
             colVisual.appendChild(previewBox);
         }
 
-        // 2. 规格指标（文件信息与耗时，即使未传入 record 也能展示 generationMs/durationMs）
+        // 2. 规格指标（文件信息与耗时，即使未传入 record 也能展示 durationMs）
         const specsBox = this.createSpecsCard(metadata, record);
         if (specsBox) {
             colVisual.appendChild(specsBox);
@@ -294,13 +319,13 @@ export class ImageInfoModal implements Disposable {
             actionsCard.appendChild(editBtn);
         }
 
-        if (imageUrl) {
+        if (activeImageUrl || imageId) {
             const downloadBtn = document.createElement('button');
             downloadBtn.type = 'button';
             downloadBtn.className = 'da-btn da-btn--secondary da-btn--sm';
             downloadBtn.textContent = '下载图片';
             downloadBtn.addEventListener('click', () => {
-                this.downloadImage(imageUrl, record?.imageId);
+                void this.downloadImage(activeImageUrl, imageId);
             });
             actionsCard.appendChild(downloadBtn);
         }
@@ -382,7 +407,7 @@ export class ImageInfoModal implements Disposable {
 
         // 1. 核心生成参数（采样与画幅）
         const coreEntries: ParamEntry[] = [];
-        const rawEngine = (metadata.engine as string | undefined) || (metadata.provider as string | undefined);
+        const rawEngine = metadata.engine as string | undefined;
         pushIfPresent(coreEntries, '服务引擎', rawEngine, {
             display: formatEngineDisplay(rawEngine),
             copyValue: rawEngine,
@@ -410,12 +435,8 @@ export class ImageInfoModal implements Disposable {
         // 2. 模型与工作流
         const modelEntries: ParamEntry[] = [];
         const baseModel = metadata.baseModel as string | undefined;
-        const modelName = metadata.modelName as string | undefined;
-        const primaryModel = baseModel || modelName;
-        pushIfPresent(modelEntries, '主模型', primaryModel, { wide: Boolean(primaryModel && primaryModel.length > 36) });
-        if (baseModel && modelName && modelName !== baseModel) {
-            pushIfPresent(modelEntries, '模型名称', modelName);
-        }
+        pushIfPresent(modelEntries, '主模型', baseModel, { wide: Boolean(baseModel && baseModel.length > 36) });
+        pushIfPresent(modelEntries, 'CLIP 模型', metadata.clipName);
         pushIfPresent(modelEntries, 'VAE 模型', metadata.vaeName);
         pushIfPresent(modelEntries, 'CLIP 跳过层', metadata.clipSkip);
         if (Array.isArray(metadata.extraModels) && metadata.extraModels.length > 0) {
@@ -576,9 +597,6 @@ export class ImageInfoModal implements Disposable {
      */
     private buildReusableMetadataPayload(metadata: Record<string, unknown>): Record<string, unknown> {
         const result: Record<string, unknown> = {};
-        if (!metadata.engine && typeof metadata.provider === 'string' && metadata.provider) {
-            result.engine = metadata.provider;
-        }
         for (const [key, val] of Object.entries(metadata)) {
             if (NON_REUSABLE_META_KEYS.has(key) || val === undefined) {
                 continue;
@@ -622,12 +640,26 @@ export class ImageInfoModal implements Disposable {
     }
 
     /**
-     * 下载原图到本地。
+     * 下载原图到本地（优先从 IDB 读取原始 Blob，避免已释放的 blob: URL 下载失败）。
      */
-    private downloadImage(url: string, imageId?: string): void {
+    private async downloadImage(url: string, imageId?: string): Promise<void> {
+        let tempObjectUrl: string | undefined;
         try {
+            let downloadUrl = url;
+            if (imageId) {
+                const blob = await imageStorage.getImageBlob(imageId);
+                if (blob && blob.size > 0) {
+                    tempObjectUrl = URL.createObjectURL(blob);
+                    downloadUrl = tempObjectUrl;
+                }
+            }
+            if (!downloadUrl) {
+                Toast.error('下载失败，未找到可用图像资源');
+                return;
+            }
+
             const a = document.createElement('a');
-            a.href = url;
+            a.href = downloadUrl;
             a.download = `st_draw_${imageId || Date.now()}.png`;
             document.body.appendChild(a);
             a.click();
@@ -636,6 +668,11 @@ export class ImageInfoModal implements Disposable {
         } catch (err) {
             logger.error('下载图片异常:', err);
             Toast.error('下载失败，请检查图像资源');
+        } finally {
+            if (tempObjectUrl) {
+                const revokeTarget = tempObjectUrl;
+                setTimeout(() => URL.revokeObjectURL(revokeTarget), 1500);
+            }
         }
     }
 
@@ -668,6 +705,14 @@ export class ImageInfoModal implements Disposable {
     public close(): void {
         this.isOpenState = false;
         overlayStack.remove('image-info-modal');
+        for (const fallbackUrl of this.allocatedFallbackUrls) {
+            try {
+                URL.revokeObjectURL(fallbackUrl);
+            } catch {
+                // 忽略回收异常
+            }
+        }
+        this.allocatedFallbackUrls = [];
         if (this.backdropEl && this.backdropEl.parentNode) {
             this.backdropEl.parentNode.removeChild(this.backdropEl);
         }

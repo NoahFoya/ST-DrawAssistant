@@ -55,6 +55,8 @@ export interface SillyTavernEventTypes {
     readonly MESSAGE_DELETED: 'message_deleted';
     /** AI 文本生成开始 */
     readonly GENERATION_STARTED: 'generation_started';
+    /** 组合扩展提示词注入就绪前（生图/生成组装提示词前） */
+    readonly GENERATE_BEFORE_COMBINED_PROMPTS: 'generate_before_combined_prompts';
     /** AI 文本生成被手动中止 */
     readonly GENERATION_STOPPED: 'generation_stopped';
     /** AI 文本生成定稿结束，传递当前数组长度，用于自动生图定位最新消息 */
@@ -85,6 +87,7 @@ export interface SillyTavernEventPayloadMap {
     'message_updated': [messageId: number];
     'message_deleted': [newChatLength: number];
     'generation_started': [];
+    'generate_before_combined_prompts': [data?: unknown];
     'generation_stopped': [];
     'generation_ended': [chatLength: number];
     'settings_updated': [];

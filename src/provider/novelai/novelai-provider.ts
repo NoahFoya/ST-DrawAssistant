@@ -438,21 +438,10 @@ export class NovelAIProvider extends BaseGenerationProvider {
     }
 
     /**
-     * 获取当前服务商标识。
-     *
-     * @remarks
-     * 1. 显式配置了 serviceId 时直接采用；
-     * 2. 未显式配置时：若配置了非官方自填地址，推断为第三方端点；否则默认为官方服务。
+     * 获取 NovelAI 当前服务商标识，未配置时固定回退为官方服务商。
      */
     public getServiceId(): string {
-        const cfg = this._getConfig();
-        if (cfg?.serviceId) {
-            return cfg.serviceId;
-        }
-        if (cfg?.serverUrl && this.normalizeUrl(cfg.serverUrl) !== NOVELAI_IMAGE_HOST) {
-            return NOVELAI_CUSTOM_SERVICE_ID;
-        }
-        return NOVELAI_OFFICIAL_SERVICE_ID;
+        return this._getConfig()?.serviceId || NOVELAI_OFFICIAL_SERVICE_ID;
     }
 
     private _isOfficial(): boolean {
@@ -784,19 +773,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             throw err;
         }
 
-        if (!response.ok) {
-            let errorDetail = `HTTP ${response.status}`;
-            try {
-                const errJson = await response.json();
-                const extracted = extractGatewayErrorMessage(errJson);
-                if (extracted) errorDetail = extracted;
-            } catch {
-                // 忽略响应体解析失败
-            }
-            throw new Error(`NovelAI 生图请求失败: ${errorDetail}`);
-        }
-
-        // 7. 解包多模态响应（支持官方未压缩 ZIP 流与第三方中转 JSON 图片外链）
+        // 7. 解包响应数据（支持官方/Deflate ZIP 流、JSON Base64/图片外链及直出图像二进制流）
         const arrayBuffer = await response.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
         const contentTypeHeader = response.headers?.get ? response.headers.get('content-type') : '';
@@ -835,13 +812,18 @@ export class NovelAIProvider extends BaseGenerationProvider {
                     if (signal?.aborted) {
                         throw new DOMException('Aborted', 'AbortError');
                     }
-                    const imgRes = await this.fetchWithTransport(
-                        imageUrl,
-                        { method: 'GET', timeoutMs: maxTimeoutMs, signal },
-                        transport
-                    );
-                    if (!imgRes.ok) {
-                        throw new Error(`下载中转图片失败: HTTP ${imgRes.status}`);
+                    let imgRes: Response;
+                    try {
+                        imgRes = await this.fetchWithTransport(
+                            imageUrl,
+                            { method: 'GET', timeoutMs: maxTimeoutMs, signal },
+                            transport
+                        );
+                    } catch (err: unknown) {
+                        if (err instanceof HttpError) {
+                            throw new Error(`下载中转图片失败: HTTP ${err.status}`);
+                        }
+                        throw err;
                     }
                     blob = await imgRes.blob();
                 } else {
@@ -884,6 +866,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             smeaMode: resolvedSmeaMode,
             decrisper: resolvedDecrisper,
             engine: 'novelai',
+            mode: 'txt2img',
             durationMs,
             baseModel: resolvedModel,
             width: resolvedWidth,

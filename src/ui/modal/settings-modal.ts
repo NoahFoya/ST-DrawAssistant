@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责主设置面板的布局渲染、选项卡切换与生命周期管理：
- * 1. 顶栏：标题、版本号、主题切换与关闭按钮；
+ * 1. 顶栏：标题、版本号、使用引导帮助按钮、主题切换与关闭按钮；
  * 2. 侧边栏：常规设置、各生图服务选项卡及扩展功能导航；
  * 3. 内容区：按需加载并缓存各选项卡视图；
  * 4. 底栏：当前生效生图服务的连通性状态与延迟检测。
@@ -16,6 +16,7 @@ import { themeService } from '../theme/theme-service';
 import { providerRegistry } from '../../provider/registry';
 import { renderIcon } from '../components/icons';
 import { tooltipService } from '../feedback/tooltip-service';
+import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { overlayStack } from '../framework/overlay-stack';
 import { logger } from '../../util/logger';
 import { updateService } from '../../pipeline/update-service';
@@ -158,6 +159,7 @@ export class SettingsModal implements Disposable {
     private removeOverlayEntry: (() => void) | null = null;
     private updateDotElement: HTMLElement | null = null;
     private activeGuideModal: OnboardingGuideModal | null = null;
+    private isPromptingClose = false;
 
     constructor(private readonly options: SettingsModalOptions = {}) {
         if (options.defaultTab) {
@@ -201,7 +203,7 @@ export class SettingsModal implements Disposable {
                     if (tabId !== this.activeTabId) {
                         view.dispose?.();
                         this.viewsCache.delete(tabId);
-                    } else if ('activate' in view && typeof view.activate === 'function') {
+                    } else if (this.isOpenState && 'activate' in view && typeof view.activate === 'function') {
                         view.activate();
                     }
                 }
@@ -279,6 +281,74 @@ export class SettingsModal implements Disposable {
     }
 
     /**
+     * 交互式关闭入口：若存在未保存的草稿修改，弹窗询问保存、放弃或继续编辑。
+     */
+    public async requestClose(): Promise<void> {
+        if (!this.isOpenState || this.isPromptingClose) {
+            return;
+        }
+
+        const dirtyViews: Array<{ tabId: string; title: string; view: SettingsView }> = [];
+        for (const [tabId, view] of this.viewsCache.entries()) {
+            const sv = view as SettingsView;
+            if (typeof sv.hasUnsavedChanges === 'function' && sv.hasUnsavedChanges()) {
+                dirtyViews.push({
+                    tabId,
+                    title: sv.title || this.getTabTitle(tabId),
+                    view: sv,
+                });
+            }
+        }
+
+        if (dirtyViews.length === 0) {
+            this.close();
+            return;
+        }
+
+        this.isPromptingClose = true;
+        try {
+            const tabNames = dirtyViews.map((item) => `「${item.title}」`).join('、');
+            const choice = await ConfirmDialog.choose({
+                title: '存在未保存修改',
+                message: `${tabNames}存在未保存的预设修改，是否在关闭前保存？`,
+                primaryText: '保存并关闭',
+                secondaryText: '放弃修改',
+                cancelText: '继续编辑',
+                isSecondaryDanger: true,
+            });
+
+            if (choice === 'cancel') {
+                return;
+            }
+
+            if (choice === 'primary') {
+                for (const item of dirtyViews) {
+                    if (typeof item.view.saveUnsavedChanges === 'function') {
+                        const ok = await item.view.saveUnsavedChanges();
+                        if (ok === false) {
+                            if (this.activeTabId !== item.tabId) {
+                                this.switchTab(item.tabId);
+                            }
+                            return;
+                        }
+                    }
+                }
+                this.close();
+                return;
+            }
+
+            if (choice === 'secondary') {
+                for (const item of dirtyViews) {
+                    item.view.discardUnsavedChanges?.();
+                }
+                this.close();
+            }
+        } finally {
+            this.isPromptingClose = false;
+        }
+    }
+
+    /**
      * 关闭主设置弹窗。
      */
     public close(): void {
@@ -287,8 +357,10 @@ export class SettingsModal implements Disposable {
         }
 
         this.closeOnboardingGuide();
+        ConfirmDialog.dispose();
         tooltipService.hide();
         this.isOpenState = false;
+        this.isPromptingClose = false;
 
         // 停用当前激活视图
         this.safeDeactivate(this.activeView);
@@ -502,7 +574,8 @@ export class SettingsModal implements Disposable {
         if (this.abortController) {
             this.abortController.abort();
         }
-        this.abortController = new AbortController();
+        const currentController = new AbortController();
+        this.abortController = currentController;
 
         const activeProvider = this.getActiveProviderType();
         const providerName = this.getProviderDisplayName(activeProvider);
@@ -518,8 +591,14 @@ export class SettingsModal implements Disposable {
                 return;
             }
 
-            const result = await provider.checkHealth(this.abortController.signal);
-            if (!this.isOpenState || !this.statusDotElement || !this.statusTextElement) {
+            const result = await provider.checkHealth(currentController.signal);
+            if (
+                currentController.signal.aborted ||
+                this.abortController !== currentController ||
+                !this.isOpenState ||
+                !this.statusDotElement ||
+                !this.statusTextElement
+            ) {
                 return;
             }
 
@@ -539,7 +618,14 @@ export class SettingsModal implements Disposable {
             }
         } catch (err: unknown) {
             const isAbort = err instanceof Error && err.name === 'AbortError';
-            if (isAbort || !this.isOpenState || !this.statusDotElement || !this.statusTextElement) {
+            if (
+                isAbort ||
+                currentController.signal.aborted ||
+                this.abortController !== currentController ||
+                !this.isOpenState ||
+                !this.statusDotElement ||
+                !this.statusTextElement
+            ) {
                 return;
             }
             this.consecutiveHealthFailures++;
@@ -548,7 +634,11 @@ export class SettingsModal implements Disposable {
             this.statusTextElement.textContent = `${providerName}: 连接异常`;
             this.statusTextElement.title = `${providerName}: ${String(err)}`;
         } finally {
-            if (this.isOpenState) {
+            if (
+                this.isOpenState &&
+                this.abortController === currentController &&
+                !currentController.signal.aborted
+            ) {
                 this.scheduleNextHealthCheck();
             }
         }
@@ -617,10 +707,16 @@ export class SettingsModal implements Disposable {
         this.backdropElement = document.createElement('div');
         this.backdropElement.className = 'da-modal-backdrop da-modal-backdrop--fullscreen st-da-root da-settings-modal-backdrop';
 
-        // 点击遮罩空白区关闭
+        // 同源按下后抬起方视为遮罩空白区点击关闭，防止框选拖拽误关弹窗
+        let pointerDownOnBackdrop = false;
+        this.backdropElement.addEventListener('pointerdown', (e) => {
+            pointerDownOnBackdrop = e.target === this.backdropElement;
+        });
         this.backdropElement.addEventListener('click', (e) => {
-            if (e.target === this.backdropElement) {
-                this.close();
+            const shouldClose = pointerDownOnBackdrop && e.target === this.backdropElement;
+            pointerDownOnBackdrop = false;
+            if (shouldClose) {
+                void this.requestClose();
             }
         });
 
@@ -724,10 +820,29 @@ export class SettingsModal implements Disposable {
 
         this.refreshThemeSelector();
 
-        themeSelect.addEventListener('change', () => {
+        themeSelect.addEventListener('change', async () => {
             const newTheme = themeSelect.value;
+            const prevTheme = themeService.getActiveThemeId();
+            const themeView = this.viewsCache.get('theme') as SettingsView | undefined;
+            if (themeView?.hasUnsavedChanges?.()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '存在未保存的主题修改',
+                    message: '「主题设置」中有未保存的修改。快捷切换主题将放弃这些修改，是否继续？',
+                    confirmText: '放弃并切换',
+                    cancelText: '取消',
+                    isDanger: true,
+                });
+                if (!confirmed) {
+                    themeSelect.value = prevTheme;
+                    return;
+                }
+                themeView.discardUnsavedChanges?.();
+            }
             settingsStore.set('activeThemePresetId', newTheme);
             themeService.applyCurrentTheme();
+            if (this.activeView === themeView) {
+                themeView?.activate?.();
+            }
         });
 
         themeSelectorWrap.appendChild(themeSelect);
@@ -748,7 +863,7 @@ export class SettingsModal implements Disposable {
         closeBtn.setAttribute('aria-label', '关闭设置面板');
         closeBtn.innerHTML = renderIcon('close', 16);
         closeBtn.addEventListener('click', () => {
-            this.close();
+            void this.requestClose();
         });
 
         right.appendChild(themeSelectorWrap);
@@ -1087,7 +1202,7 @@ export class SettingsModal implements Disposable {
         this.unbindKeyboardEvents();
         this.removeOverlayEntry = overlayStack.push('settings-modal', () => {
             if (this.isOpenState) {
-                this.close();
+                void this.requestClose();
             }
         });
     }

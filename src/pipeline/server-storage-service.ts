@@ -58,14 +58,16 @@ export class ServerStorageService {
      * @param blob 目标二进制数据
      * @param filename 目标文件名
      * @param characterName 关联角色名称
+     * @param signal 可选中止信号
      * @returns 成功返回相对路径（如 /User Avatars/...），失败返回 null
      */
     public async uploadToServer(
         blob: Blob,
         filename: string,
-        characterName?: string
+        characterName?: string,
+        signal?: AbortSignal
     ): Promise<string | null> {
-        if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+        if (typeof window === 'undefined' || typeof fetch === 'undefined' || signal?.aborted) {
             return null;
         }
 
@@ -84,9 +86,13 @@ export class ServerStorageService {
                   : 'png';
 
             const rawBase64 = await this.convertBlobToBase64(blob, false);
+            if (signal?.aborted) {
+                return null;
+            }
             const response = await fetch('/api/images/upload', {
                 method: 'POST',
                 headers,
+                signal,
                 body: JSON.stringify({
                     image: rawBase64,
                     filename,
@@ -106,6 +112,9 @@ export class ServerStorageService {
             logger.warn(`上传图片至 SillyTavern 宿主服务端响应状态异常: ${response.status}`);
             return null;
         } catch (err) {
+            if (signal?.aborted) {
+                return null;
+            }
             logger.warn('上传图片至 SillyTavern 宿主服务端发生网络或解析异常:', err);
             return null;
         }
@@ -121,15 +130,24 @@ export class ServerStorageService {
      *
      * @param slot 目标图像元数据
      * @param characterName 当前角色名称
+     * @param signal 可选中止信号
      * @returns 包含可用静态相对路径与变更标识的同步结果结构
      */
     public async syncSlotServerImage(
         slot: DrawingSlotEntry,
-        characterName?: string
+        characterName?: string,
+        signal?: AbortSignal
     ): Promise<ServerStorageSyncResult> {
         const settings = settingsStore.getSettings();
         let finalImageUrl = slot.imageUrl;
         let hasChanges = false;
+
+        if (signal?.aborted) {
+            return {
+                imageUrl: finalImageUrl,
+                hasChanges,
+            };
+        }
 
         // 仅在启用服务端转存时复用本地记录中的 remotePath，关闭该开关时不再绑定远程路径
         if (settings.saveToServer && slot.imageId && !finalImageUrl) {
@@ -145,17 +163,22 @@ export class ServerStorageService {
         }
 
         // 服务端上传检查与执行
-        if (settings.saveToServer && !finalImageUrl && slot.imageId) {
+        if (settings.saveToServer && !finalImageUrl && slot.imageId && !signal?.aborted) {
             const blob = await imageStorage.getImageBlob(slot.imageId);
-            if (blob) {
+            if (blob && !signal?.aborted) {
                 const mimeType = (blob.type || 'image/png').toLowerCase();
                 const ext = mimeType.includes('webp')
                     ? 'webp'
                     : mimeType.includes('jpeg') || mimeType.includes('jpg')
                       ? 'jpg'
                       : 'png';
-                const uploaded = await this.uploadToServer(blob, `${slot.imageId}.${ext}`, characterName);
-                if (uploaded) {
+                const uploaded = await this.uploadToServer(
+                    blob,
+                    `${slot.imageId}.${ext}`,
+                    characterName,
+                    signal
+                );
+                if (uploaded && !signal?.aborted) {
                     finalImageUrl = uploaded;
                     hasChanges = true;
 

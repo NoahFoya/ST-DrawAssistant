@@ -36,6 +36,7 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
     public abstract readonly providerType: ProviderType;
     public abstract readonly name: string;
     public readonly supportsNegativePrompt: boolean = true;
+    public readonly supportsInpaint: boolean = false;
 
     protected readonly _httpClient: HttpClient;
     protected readonly _settingsStore?: SettingsStore;

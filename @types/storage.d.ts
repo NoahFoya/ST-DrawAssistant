@@ -47,7 +47,7 @@ export interface ImageStorageService {
     /** 根据 imageId 获取图像资产记录 */
     getImageRecord(imageId: string): Promise<StoredImageRecord | undefined>;
 
-    /** 更新或标记删除指定图像资产 */
+    /** 物理删除指定图像资产（同步移除元数据、Blob 与缓存 URL） */
     deleteImage(imageId: string): Promise<void>;
 
     /** 查询本地图像资产记录列表，支持按条件筛选与分页 */
@@ -65,8 +65,8 @@ export interface ImageUrlPool {
     /** 根据 key 获取已缓存的 Object URL */
     getUrl(key: string): string | undefined;
 
-    /** 释放指定 key 对应的 Object URL */
-    revokeUrl(key: string): void;
+    /** 释放指定 key 对应的 Object URL；若存在映射并已释放则返回 true */
+    revokeUrl(key: string): boolean;
 
     /** 释放管理池中记录的所有 Object URL */
     revokeAll(): void;

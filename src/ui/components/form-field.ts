@@ -104,9 +104,9 @@ export class FormField implements UIComponent {
     public setDirty(isDirty: boolean): void {
         this.dirtyDot.style.display = isDirty ? 'inline-block' : 'none';
         if (isDirty) {
-            this.element.classList.add('da-form-row--dirty');
+            this.element.classList.add('da-form-row--dirty', 'is-dirty');
         } else {
-            this.element.classList.remove('da-form-row--dirty');
+            this.element.classList.remove('da-form-row--dirty', 'is-dirty');
         }
     }
 

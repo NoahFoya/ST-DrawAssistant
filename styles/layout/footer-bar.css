@@ -24,7 +24,7 @@
     box-sizing: border-box;
     font-family: var(--da-font-mono);
     position: relative;
-    z-index: 20;
+    z-index: var(--da-z-sticky, 20);
 }
 
 /* 2. 状态指示项 (.da-status-item)

@@ -195,12 +195,12 @@
     min-height: 32px;
 }
 
-/* 6. 移动端双排胶囊子导航宿主与自适应降级 (max-width: 680px) */
+/* 6. 移动端双排胶囊子导航宿主与自适应降级 (max-width: 640px) */
 .da-sidebar-mobile-sub-host {
     display: none;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-sidebar-tabs {
         width: 100%;
         flex: 0 0 auto;

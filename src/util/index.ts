@@ -11,3 +11,4 @@ export * from './http-client';
 export * from './image-compress';
 export * from './asset-matcher';
 export * from './clipboard';
+export * from './download';

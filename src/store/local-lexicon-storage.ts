@@ -272,7 +272,7 @@ export function parseLocalLexiconFileContent(
             continue;
         }
 
-        // 检测 Tagcomplete CSV 结构：col[1] 为分类数字 (0..9)，col[2] 为词频数字
+        // 检测 Tagcomplete CSV 结构：col[1] 为分类数字 (0..15)，col[2] 为词频数字
         const catNum = cols.length >= 3 ? Number(cols[1]) : NaN;
         const countNum = cols.length >= 3 ? Number(cols[2]) : NaN;
         if (

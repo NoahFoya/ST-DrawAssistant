@@ -1,7 +1,7 @@
 {
   "comfyui": [
     {
-      "id": "prompt_anime_general",
+      "id": "prompt_comfyui_anime",
       "name": "日系二次元插画",
       "data": {
         "positivePrefix": "masterpiece, best quality, absurdres,",
@@ -12,7 +12,7 @@
       }
     },
     {
-      "id": "prompt_photo_realistic",
+      "id": "prompt_comfyui_photo",
       "name": "通用写实摄影",
       "data": {
         "positivePrefix": "photo of, masterpiece, realistic, photorealistic, 8k uhd, dslr, high quality, film grain,",
@@ -25,7 +25,7 @@
   ],
   "sdwebui": [
     {
-      "id": "prompt_anime_general",
+      "id": "prompt_sdwebui_anime",
       "name": "日系二次元插画",
       "data": {
         "positivePrefix": "masterpiece, best quality, absurdres,",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "prompt_photo_realistic",
+      "id": "prompt_sdwebui_photo",
       "name": "通用写实摄影",
       "data": {
         "positivePrefix": "photo of, masterpiece, realistic, photorealistic, 8k uhd, dslr, high quality, film grain,",

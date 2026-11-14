@@ -14,7 +14,6 @@ import type { VNode } from 'preact';
 import type { DrawingPresetData } from '@types';
 import type { ProviderPreset } from '../composite/connection-card';
 import {
-    PreactSettingsView,
     CardView,
     SchemaFieldsView,
     SchemaFieldRenderer,
@@ -24,8 +23,9 @@ import {
     OPENAI_ASPECT_RATIOS,
     PresetToolbarView,
 } from '../framework';
+import { Toast } from '../feedback/toast';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-layout';
+import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 
 const OPENAI_MODEL_OPTIONS = [
     { label: 'dall-e-3', value: 'dall-e-3' },
@@ -92,7 +92,7 @@ const STYLE_FIELD: FieldSchema<DrawingPresetData> = {
     },
 };
 
-export class OpenAITabView extends PreactSettingsView {
+export class OpenAITabView extends ProviderTabView {
     public readonly id = 'openai';
     public readonly title = 'OpenAI 兼容';
 
@@ -189,6 +189,7 @@ export class OpenAITabView extends PreactSettingsView {
                 type: 'select',
                 placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
+                invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
         ];
 
@@ -218,9 +219,8 @@ export class OpenAITabView extends PreactSettingsView {
 
     private handleJsonInput(raw: string): void {
         this.rawJsonInput.value = raw;
-        if (this.checkJsonValidity(raw)) {
-            this.vm.presetController.updateDraft('customBodyJson', raw.trim());
-        }
+        this.checkJsonValidity(raw);
+        this.vm.presetController.updateDraft('customBodyJson', raw.trim());
     }
 
     protected renderContent(): VNode {
@@ -339,16 +339,22 @@ export class OpenAITabView extends PreactSettingsView {
         );
     }
 
-    public override activate(): void {
-        this.vm.activate();
+    public override hasUnsavedChanges(): boolean {
+        return super.hasUnsavedChanges() || !this.isJsonValid.value;
     }
 
-    public override deactivate(): void {
-        this.vm.deactivate();
+    public override async saveUnsavedChanges(): Promise<boolean> {
+        if (!this.isJsonValid.value) {
+            Toast.show('自定义请求参数 (JSON) 语法无效，请修正后再保存', { level: 'error' });
+            return false;
+        }
+        return await super.saveUnsavedChanges();
     }
 
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
+    public override discardUnsavedChanges(): void {
+        super.discardUnsavedChanges();
+        const restored = this.vm.presetController.draftConfig.value.customBodyJson || '';
+        this.rawJsonInput.value = restored;
+        this.checkJsonValidity(restored);
     }
 }

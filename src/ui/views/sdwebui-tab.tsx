@@ -12,7 +12,6 @@
 import type { VNode } from 'preact';
 import type { DrawingPresetData } from '@types';
 import {
-    PreactSettingsView,
     CardView,
     SchemaCard,
     SchemaFieldsView,
@@ -22,7 +21,7 @@ import {
     PresetToolbarView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout } from './provider-tab-layout';
+import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 
 const SDWEBUI_DEFAULT_SAMPLERS = [
     { label: 'DPM++ 2M Karras', value: 'DPM++ 2M Karras' },
@@ -52,7 +51,7 @@ const HIRES_UPSCALER_OPTIONS = [
     { label: 'ESRGAN_4x', value: 'ESRGAN_4x' },
 ];
 
-export class SDWebUITabView extends PreactSettingsView {
+export class SDWebUITabView extends ProviderTabView {
     public readonly id = 'sdwebui';
     public readonly title = 'SD-WebUI / Forge';
 
@@ -134,6 +133,7 @@ export class SDWebUITabView extends PreactSettingsView {
                 type: 'select',
                 placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
+                invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
         ];
 
@@ -315,18 +315,5 @@ export class SDWebUITabView extends PreactSettingsView {
                 />
             </ProviderTabLayout>
         );
-    }
-
-    public override activate(): void {
-        this.vm.activate();
-    }
-
-    public override deactivate(): void {
-        this.vm.deactivate();
-    }
-
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
     }
 }

@@ -3,7 +3,7 @@
  *
  * @remarks
  * 支持 .da-slider-wrapper / .da-slider / .da-slider__value 与复合规范：
- * 1. 轨道与滑纽：6px 凹槽轨道、发光渐变填充与 16px 圆形滑纽；
+ * 1. 轨道与滑纽：6px 凹槽轨道与 16px 圆形滑纽；
  * 2. 数值指示：等宽字体右对齐呈现当前数值；
  * 3. 状态联动：支持 .is-dirty / .da-slider-wrapper--dirty 变更提示与禁用态。
  */

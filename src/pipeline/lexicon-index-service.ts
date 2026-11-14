@@ -45,10 +45,21 @@ export class LexiconIndexService {
     private _words: IndexedLexiconWord[] = [];
     private _loaded = false;
     private _loadPromise: Promise<void> | null = null;
+    private _loadSeq = 0;
     private _unlisten: (() => void) | null = null;
 
     public constructor(storage: LocalLexiconStorage = localLexiconStorage) {
         this._storage = storage;
+        this.bind();
+    }
+
+    /**
+     * 绑定或恢复词库更新事件监听（幂等，用于插件重新激活）。
+     */
+    public bind(): void {
+        if (this._unlisten) {
+            return;
+        }
         this._unlisten = eventBus.on('lexicon:local-updated', () => {
             void this.reload();
         });
@@ -71,11 +82,16 @@ export class LexiconIndexService {
      * 重新从 LocalLexiconStorage 读取「自定义词汇」与「已启用词汇文件」并构建去重索引。
      */
     public async reload(): Promise<void> {
+        const seq = ++this._loadSeq;
         const task = (async () => {
             const [customWords, enabledFiles] = await Promise.all([
                 this._storage.listCustomWords(),
                 this._storage.getEnabledFilesEntries(),
             ]);
+
+            if (seq !== this._loadSeq) {
+                return;
+            }
 
             const byLowerTag = new Map<string, IndexedLexiconWord>();
 

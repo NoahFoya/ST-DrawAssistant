@@ -30,7 +30,7 @@ export interface SetValueOptions {
 /**
  * 控件值变更回调函数签名。
  */
-export type ControlChangeCallback<T> = (value: T) => void;
+export type ControlChangeCallback<T> = (value: T) => void | boolean;
 
 /**
  * 纯受控原子控件通用操作句柄接口。
@@ -91,4 +91,13 @@ export interface SettingsView extends Disposable {
      * 用于保存草稿、解除局部监听或释放临时展示资源。
      */
     deactivate(): void;
+
+    /** 可选：判断当前视图是否存在尚未保存的预设/配置草稿 */
+    hasUnsavedChanges?(): boolean;
+
+    /** 可选：触发保存未保存草稿（返回 true 表示保存成功或无需保存） */
+    saveUnsavedChanges?(): Promise<boolean> | boolean;
+
+    /** 可选：放弃当前视图全部未保存草稿并恢复持久化快照 */
+    discardUnsavedChanges?(): void;
 }

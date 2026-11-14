@@ -51,7 +51,7 @@ html.da-has-active-modal body {
     margin: auto;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-modal-backdrop.da-modal-backdrop--fullscreen {
         padding: 0;
         overflow: hidden;
@@ -276,7 +276,7 @@ html.da-has-active-modal body {
 }
 
 .da-reset-factory-option__title--danger {
-    color: var(--da-color-danger, #f87171);
+    color: var(--da-color-error);
 }
 
 .da-reset-factory-option__desc {
@@ -488,7 +488,7 @@ html.da-has-active-modal body {
     color: var(--da-text-secondary);
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-floating-menu-item {
         min-height: 44px;
         padding: 10px 12px;

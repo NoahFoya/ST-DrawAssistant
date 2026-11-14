@@ -5,7 +5,7 @@
  * 1. 请求头携带 Authorization: Bearer 鉴权；
  * 2. 仅发送正向提示词（该接口不支持 negative_prompt）；
  * 3. 支持解析 b64_json 与下载 url 图片数据；
- * 4. 通过 GET /v1/models 发现图像相关模型。
+ * 4. 通过 GET ${v1Base}/models 发现图像相关模型。
  */
 
 import type {
@@ -43,7 +43,7 @@ export function buildSizeString(width?: number, height?: number): string | undef
 }
 
 /**
- * 从 GET /v1/models 响应中过滤图像相关模型标识。
+ * 从 GET ${v1Base}/models 响应中过滤图像相关模型标识。
  *
  * @remarks
  * 按常见图像模型 ID 关键词过滤（不区分大小写）。
@@ -89,6 +89,16 @@ export function resolveOpenAIModel(
     return raw.replace(/^models\//, '');
 }
 
+function hashKeyFingerprint(apiKey?: string): string {
+    if (!apiKey) return 'anon';
+    let hash = 2166136261;
+    for (let i = 0; i < apiKey.length; i++) {
+        hash ^= apiKey.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `${apiKey.length}:${(hash >>> 0).toString(16)}`;
+}
+
 /**
  * OpenAI 兼容绘图服务提供方实现类。
  */
@@ -100,8 +110,13 @@ export class OpenAIProvider extends BaseGenerationProvider {
     /** 资产短时内存缓存过期时间 (60 秒) */
     public static readonly ASSET_CACHE_TTL_MS = 60_000;
 
-    private _modelsCache: { data: string[]; timestamp: number; v1Base: string } | null = null;
-    private _inFlightModels: Promise<string[]> | null = null;
+    private _modelsCache: { data: string[]; timestamp: number; cacheKey: string } | null = null;
+    private _inFlightModels: {
+        promise: Promise<string[]>;
+        cacheKey: string;
+        signal?: AbortSignal;
+    } | null = null;
+    private _assetCacheGen = 0;
 
     public constructor(options: OpenAIProviderOptions = {}) {
         super(options);
@@ -111,6 +126,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 清空当前提供方内存中的资产缓存与进行中的请求单飞状态。
      */
     public clearAssetCache(): void {
+        this._assetCacheGen += 1;
         this._modelsCache = null;
         this._inFlightModels = null;
     }
@@ -123,7 +139,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务基础地址。
      *
      * @remarks
-     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com/v1)。
+     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com)。
      * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -165,7 +181,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 检查 OpenAI 兼容服务连通性。
      *
      * @remarks
-     * 请求 GET /models 验证服务可达性；该端点在大多数兼容实现中均存在。
+     * 请求 GET ${v1Base}/models 验证服务可达性；该端点在大多数兼容实现中均存在。
      *
      * @param signal 中止信号
      */
@@ -201,7 +217,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务的图像相关模型列表。
      *
      * @remarks
-     * 请求 GET /models，过滤 id 含图像关键词的条目。
+     * 请求 GET ${v1Base}/models，过滤 id 含图像关键词的条目。
      * 支持单飞并发合并与 60 秒短时内存缓存，避免频繁拉取或与连通性检查产生双重请求。
      * 若后端不支持该端点则静默返回空数组。
      *
@@ -213,56 +229,79 @@ export class OpenAIProvider extends BaseGenerationProvider {
         const v1Base = this.getV1BaseUrl();
         const config = this._getConfig();
         const transport = this.getTransport();
+        const keyFingerprint = hashKeyFingerprint(config?.apiKey);
+        const cacheKey = `${v1Base}::${transport}::${keyFingerprint}`;
         const now = Date.now();
 
         if (
             !forceRefresh &&
             this._modelsCache &&
-            this._modelsCache.v1Base === v1Base &&
+            this._modelsCache.cacheKey === cacheKey &&
             now - this._modelsCache.timestamp < OpenAIProvider.ASSET_CACHE_TTL_MS
         ) {
             return this._modelsCache.data;
         }
 
-        if (this._inFlightModels) {
-            return this._inFlightModels;
+        if (
+            !forceRefresh &&
+            this._inFlightModels &&
+            this._inFlightModels.cacheKey === cacheKey &&
+            this._inFlightModels.signal === signal
+        ) {
+            return this._inFlightModels.promise;
         }
 
+        const reqGen = this._assetCacheGen;
         const url = `${v1Base}/models`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    {
-                        method: 'GET',
-                        headers: this._buildHeaders(config?.apiKey),
-                        timeoutMs: 10000,
-                        signal,
-                    },
-                    transport
-                );
+        let entry!: {
+            promise: Promise<string[]>;
+            cacheKey: string;
+            signal?: AbortSignal;
+        };
+        entry = {
+            cacheKey,
+            signal,
+            promise: (async () => {
+                try {
+                    const response = await this.fetchWithTransport(
+                        url,
+                        {
+                            method: 'GET',
+                            headers: this._buildHeaders(config?.apiKey),
+                            timeoutMs: 10000,
+                            signal,
+                        },
+                        transport
+                    );
 
-                if (!response.ok) {
+                    const data = (await response.json()) as { data?: Array<{ id: string }> } | Array<{ id: string }>;
+
+                    // 支持 { data: [...] } 与扁平数组两种响应格式
+                    const rawModels = Array.isArray(data)
+                        ? data
+                        : (data as { data?: Array<{ id: string }> }).data ?? [];
+                    const filtered = filterImageModels(rawModels);
+                    const latestKey = `${this.getV1BaseUrl()}::${this.getTransport()}::${hashKeyFingerprint(this._getConfig()?.apiKey)}`;
+                    if (reqGen === this._assetCacheGen && latestKey === cacheKey) {
+                        this._modelsCache = { data: filtered, timestamp: Date.now(), cacheKey };
+                    }
+                    return filtered;
+                } catch (err: unknown) {
+                    if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+                        throw err;
+                    }
+                    // 后端不支持 /v1/models 时静默返回空数组
                     return [];
+                } finally {
+                    if (this._inFlightModels === entry) {
+                        this._inFlightModels = null;
+                    }
                 }
+            })(),
+        };
 
-                const data = (await response.json()) as { data?: Array<{ id: string }> } | Array<{ id: string }>;
-
-                // 支持 { data: [...] } 与扁平数组两种响应格式
-                const rawModels = Array.isArray(data) ? data : (data as { data?: Array<{ id: string }> }).data ?? [];
-                const filtered = filterImageModels(rawModels);
-                this._modelsCache = { data: filtered, timestamp: Date.now(), v1Base };
-                return filtered;
-            } catch {
-                // 后端不支持 /v1/models 时静默返回空数组
-                return [];
-            } finally {
-                this._inFlightModels = null;
-            }
-        })();
-
-        this._inFlightModels = fetchPromise;
-        return fetchPromise;
+        this._inFlightModels = entry;
+        return entry.promise;
     }
 
     /**
@@ -431,22 +470,6 @@ export class OpenAIProvider extends BaseGenerationProvider {
             throw err;
         }
 
-        if (!response.ok) {
-            let errorDetail = `HTTP ${response.status}`;
-            try {
-                const errJson = (await response.json()) as { error?: { message?: string }; message?: string };
-                errorDetail = errJson.error?.message ?? errJson.message ?? errorDetail;
-            } catch {
-                // 忽略响应体解析失败
-            }
-
-            // 429 速率限制与安全拒绝区分处理
-            if (response.status === 429) {
-                throw new Error(`请求被限速，请稍后重试: ${errorDetail}`);
-            }
-            throw new Error(`OpenAI 兼容服务生图失败: ${errorDetail}`);
-        }
-
         const responseData = (await response.json()) as {
             data?: Array<{ b64_json?: string; url?: string }>;
         };
@@ -476,9 +499,6 @@ export class OpenAIProvider extends BaseGenerationProvider {
                 }
                 throw err;
             }
-            if (!imgResponse.ok) {
-                throw new Error(`图像 URL 下载失败: HTTP ${imgResponse.status}`);
-            }
             blob = await imgResponse.blob();
         } else {
             throw new Error('OpenAI 兼容服务响应中不含有效图像字段（b64_json 或 url）');
@@ -486,7 +506,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
         blob = await ensureValidImageBlob(blob, 'OpenAI 兼容服务');
 
-        // 6. 装配生成元数据（若 customBodyJson 覆写了 model 或 size，则同步到最终元数据）
+        // 6. 装配生成元数据（若 customBodyJson 覆写了 model、size、quality 或 style，则同步到最终元数据）
         const finalModel =
             typeof requestBody['model'] === 'string' && requestBody['model'].trim()
                 ? requestBody['model'].trim()
@@ -504,6 +524,14 @@ export class OpenAIProvider extends BaseGenerationProvider {
                 finalHeight = Number(sizeMatch[2]);
             }
         }
+        const finalQuality =
+            typeof requestBody['quality'] === 'string' && requestBody['quality'].trim()
+                ? requestBody['quality'].trim()
+                : resolvedQuality || undefined;
+        const finalStyle =
+            typeof requestBody['style'] === 'string' && requestBody['style'].trim()
+                ? requestBody['style'].trim()
+                : resolvedStyle || undefined;
 
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
@@ -511,12 +539,13 @@ export class OpenAIProvider extends BaseGenerationProvider {
             // OpenAI /v1/images/generations 协议无负向提示词字段，执行元数据如实记录为 undefined
             negativePrompt: undefined,
             engine: 'openai',
+            mode: 'txt2img',
             durationMs,
             baseModel: finalModel,
             width: finalWidth,
             height: finalHeight,
-            quality: resolvedQuality || undefined,
-            style: resolvedStyle || undefined,
+            quality: finalQuality,
+            style: finalStyle,
         };
 
         return {

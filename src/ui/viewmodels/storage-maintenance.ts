@@ -11,6 +11,9 @@ import type { StorageSummaryData } from '../composite/storage-bar';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
 
+/** 图库与存储统计单次扫描上限，与 GalleryViewModel 保持一致 */
+export const GALLERY_QUERY_LIMIT = 10000;
+
 export class StorageMaintenanceService {
     /**
      * 基于给定的图像记录列表与浏览器配额估算，计算 StorageBar 所需的统计摘要。
@@ -60,7 +63,7 @@ export class StorageMaintenanceService {
      */
     public static async cleanFailedRecords(records?: StoredImageRecord[]): Promise<number> {
         const list =
-            records ?? (await imageStorage.listImages({ status: 'failed', limit: 5000 }));
+            records ?? (await imageStorage.listImages({ status: 'failed', limit: GALLERY_QUERY_LIMIT }));
         let count = 0;
         for (const r of list) {
             if (r.status === 'failed') {
@@ -80,7 +83,7 @@ export class StorageMaintenanceService {
      */
     public static async cleanUnfavoritedRecords(records?: StoredImageRecord[]): Promise<number> {
         const list =
-            records ?? (await imageStorage.listImages({ status: 'ready', limit: 5000 }));
+            records ?? (await imageStorage.listImages({ status: 'ready', limit: GALLERY_QUERY_LIMIT }));
         let count = 0;
         for (const r of list) {
             if (r.status === 'ready' && !r.favorited) {
@@ -103,7 +106,7 @@ export class StorageMaintenanceService {
         protectFavorited = false,
         records?: StoredImageRecord[]
     ): Promise<number> {
-        const list = records ?? (await imageStorage.listImages({ limit: 10000 }));
+        const list = records ?? (await imageStorage.listImages({ limit: GALLERY_QUERY_LIMIT }));
         let count = 0;
         for (const r of list) {
             if (protectFavorited && r.favorited) {

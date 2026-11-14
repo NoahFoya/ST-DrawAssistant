@@ -12,19 +12,18 @@ import {
     OUTFIT_PART_DEFS,
     normalizeOutfitData,
     computeOutfitTokenStats,
-    type MaterialPartDef,
 } from '../../../pipeline/material-definitions';
 import {
     OUTFIT_PART_GROUPS,
-    renderAvatarBox,
-    renderFullWidthTagField,
+    AvatarBox,
+    MaterialPartGroups,
 } from './material-types';
 
 export interface OutfitPanelProps {
     outfitController: PresetController<OutfitPresetData>;
     avatarUrlsSignal: Signal<Record<string, string>>;
     outfitGroupExpanded: Signal<Record<string, boolean>>;
-    onAction: (action: PresetActionType, id?: string) => Promise<void>;
+    onAction: (action: PresetActionType, id?: string) => Promise<boolean>;
     onImportFile: (file: File) => void;
     onUploadAvatar: (file: File) => Promise<string>;
     onRemoveAvatar: () => void;
@@ -65,7 +64,7 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                     presets={outfitController.toolbarItems.value}
                     activePresetId={activeId}
                     dirty={isDirty}
-                    onAction={(action, id) => void onAction(action, id)}
+                    onAction={(action, id) => onAction(action, id)}
                     onImportFile={onImportFile}
                 />
             </div>
@@ -75,15 +74,15 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                 <div className="da-material-identity-layout">
                     {/* 第一行：居中紧凑参考图 (3:4 比例，缩小尺寸居顶居中) */}
                     <div className="da-material-avatar-center-wrap">
-                        {renderAvatarBox({
-                            kind: 'outfit',
-                            avatarId: draft.avatarId,
-                            displayTitle: draft.name,
-                            avatarUrl: draft.avatarId ? avatarUrlsSignal.value[draft.avatarId] || '' : '',
-                            onUploadAvatar,
-                            onRemoveAvatar,
-                            onEnsureAvatarLoaded,
-                        })}
+                        <AvatarBox
+                            kind="outfit"
+                            avatarId={draft.avatarId}
+                            displayTitle={draft.name}
+                            avatarUrl={draft.avatarId ? avatarUrlsSignal.value[draft.avatarId] || '' : ''}
+                            onUploadAvatar={onUploadAvatar}
+                            onRemoveAvatar={onRemoveAvatar}
+                            onEnsureAvatarLoaded={onEnsureAvatarLoaded}
+                        />
                     </div>
 
                     {/* 第二行：名称与别名并排 */}
@@ -186,55 +185,14 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                         />
                     </div>
 
-                    {OUTFIT_PART_GROUPS.map((grp) => {
-                        const isExpanded = Boolean(outfitGroupExpanded.value[grp.id]);
-                        const groupDefs = grp.keys
-                            .map((k) => OUTFIT_PART_DEFS.find((d) => d.key === k))
-                            .filter((d): d is MaterialPartDef<OutfitPartKey> => Boolean(d));
-                        const filledCount = groupDefs.filter((d) =>
-                            Boolean((draft.parts[d.key] || '').trim())
-                        ).length;
-
-                        return (
-                            <div key={grp.id} className="da-shot-group-accordion">
-                                <button
-                                    type="button"
-                                    className="da-shot-group-accordion__header"
-                                    onClick={() => {
-                                        outfitGroupExpanded.value = {
-                                            ...outfitGroupExpanded.value,
-                                            [grp.id]: !isExpanded,
-                                        };
-                                    }}
-                                >
-                                    <div className="da-shot-group-accordion__title">
-                                        <span>{isExpanded ? '▾' : '▸'}</span>
-                                        <span>{grp.label}</span>
-                                    </div>
-                                    <span className="da-shot-group-accordion__badge">
-                                        已填 {filledCount}/{groupDefs.length} 项
-                                    </span>
-                                </button>
-
-                                {isExpanded && (
-                                    <div className="da-shot-group-accordion__body">
-                                        {groupDefs.map((def) =>
-                                            renderFullWidthTagField({
-                                                fieldKey: def.key,
-                                                label: def.label,
-                                                hint: def.hint,
-                                                value: draft.parts[def.key],
-                                                placeholder: def.placeholder,
-                                                rows: 2,
-                                                dirty: dirtySet.has(`parts.${def.key}`) || dirtySet.has(def.key),
-                                                onChange: (val) => updatePart(def.key, val),
-                                            })
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                    <MaterialPartGroups
+                        groups={OUTFIT_PART_GROUPS}
+                        defs={OUTFIT_PART_DEFS}
+                        parts={draft.parts}
+                        expandedSignal={outfitGroupExpanded}
+                        dirtySet={dirtySet}
+                        onChangePart={updatePart}
+                    />
                 </div>
             </CardView>
         </div>

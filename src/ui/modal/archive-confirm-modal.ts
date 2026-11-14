@@ -413,10 +413,18 @@ export function openArchiveConfirmModal(options: ArchiveConfirmModalOptions): Di
     confirmBtn.onclick = () => {
         let savedCount = 0;
 
-        workingItems.forEach((item, idx) => {
+        // 优先处理服装条目，确保后续角色保存时 OUTFITS 名称能即时映射为新建服装的预设 ID
+        const ordered = workingItems
+            .map((item, idx) => ({ item, idx }))
+            .sort((a, b) => {
+                if (a.item.kind === b.item.kind) return a.idx - b.idx;
+                return a.item.kind === 'outfit' ? -1 : 1;
+            });
+
+        for (const { item, idx } of ordered) {
             const strategy = strategies[idx];
             if (strategy === 'skip' || !item.name.trim()) {
-                return;
+                continue;
             }
 
             const category = item.kind === 'character' ? 'characters' : 'outfits';
@@ -430,12 +438,21 @@ export function openArchiveConfirmModal(options: ArchiveConfirmModalOptions): Di
                 ? existingList.find((p) => p.id === diff.existingPresetId)
                 : undefined;
 
-            const merged = buildMergedArchivePreset(item, existingPreset, strategy);
+            const existingOutfits =
+                item.kind === 'character'
+                    ? store.getPresets<OutfitPresetData>('outfits')
+                    : undefined;
+            const merged = buildMergedArchivePreset(
+                item,
+                existingPreset,
+                strategy,
+                existingOutfits
+            );
             store.savePreset(category, merged, undefined, {
                 autoActivateMaterial: autoActivateCheckbox.checked,
             });
             savedCount++;
-        });
+        }
 
         if (savedCount > 0) {
             void promptInjector.scheduleSyncToHost();

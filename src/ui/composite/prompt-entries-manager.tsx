@@ -5,8 +5,8 @@
  * 负责各提示词通道条目的增删改查、排序与展开编辑：
  * 1. 预设管理：卡片顶部挂载预设工具栏；
  * 2. 工作台容器：嵌入具备深色微内凹的独立工作区，提供无分页纵向列表；
- * 3. 紧凑工具栏：单一展开/折叠切换、单一全开/全关切换、按注入时序重排、搜索与类型筛选；
- * 4. 水平条目行：左侧展开箭头与启停微胶囊、标题备注、纯图标触发策略、插入位置下拉、深度 @D、顺序 Order 与右侧复制删除操作；
+ * 3. 紧凑工具栏：新建条目、单一展开/折叠切换、单一全开/全关切换、搜索与类型筛选；
+ * 4. 水平条目行（按注入时序自动排序）：左侧展开箭头与启停微胶囊、标题备注、纯图标触发策略、插入位置下拉、深度 @D、顺序 Order 与右侧复制删除操作；
  * 5. 精简抽屉：第一排关键字与匹配逻辑；第二排正文文本域（支持联想补全与 Token 统计）。
  */
 
@@ -18,8 +18,12 @@ import type {
     ActivationTriggerMode,
 } from '@types';
 import { bindDelegatedTagAutocomplete } from './tag-autocomplete';
+import {
+    splitKeywordTokens,
+    validateKeywordRegexToken,
+} from '../../pipeline/prompt-injector';
 import { ICONS } from '../components/icons';
-import { SelectControl } from '../framework/controls';
+import { SelectControl, SwitchControl } from '../framework/controls';
 
 export interface WiPositionOption {
     readonly value: number;
@@ -97,8 +101,27 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [filterMode, setFilterMode] = useState<'all' | 'always' | 'keyword' | 'enabled' | 'disabled'>('all');
+    const [numDrafts, setNumDrafts] = useState<Record<string, string>>({});
 
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // 切换预设或外部删除条目后，同步修剪无效展开 ID 与数字草稿
+    useEffect(() => {
+        const validIds = new Set(entries.map((e) => e.id));
+        setExpandedIds((prev) => {
+            if (Array.from(prev).every((id) => validIds.has(id))) return prev;
+            return new Set(Array.from(prev).filter((id) => validIds.has(id)));
+        });
+        setNumDrafts((prev) => {
+            const keys = Object.keys(prev);
+            if (keys.every((k) => validIds.has(k.split(':')[0]))) return prev;
+            const next: Record<string, string> = {};
+            for (const k of keys) {
+                if (validIds.has(k.split(':')[0])) next[k] = prev[k];
+            }
+            return next;
+        });
+    }, [entries]);
 
     // 自动接入输入联想委托绑定
     useEffect(() => {
@@ -178,8 +201,70 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
         onChange(next);
     };
 
+    const createUniqueEntryId = (): string => {
+        const existing = new Set(entries.map((e) => e.id));
+        let candidate = `entry_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        while (existing.has(candidate)) {
+            candidate = `entry_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        }
+        return candidate;
+    };
+
+    const handleNumericInput = (
+        entryId: string,
+        field: 'depth' | 'order' | 'scanDepth',
+        rawValue: string,
+        min: number,
+        max: number
+    ) => {
+        const draftKey = `${entryId}:${field}`;
+        setNumDrafts((prev) => ({ ...prev, [draftKey]: rawValue }));
+        const trimmed = rawValue.trim();
+        if (trimmed === '' || !/^-?\d+$/.test(trimmed)) return;
+        const parsed = parseInt(trimmed, 10);
+        if (Number.isNaN(parsed)) return;
+        const clamped = Math.max(min, Math.min(max, parsed));
+        handlePatchEntry(entryId, { [field]: clamped } as Partial<PromptInjectionEntry>);
+    };
+
+    const handleNumericBlur = (
+        entryId: string,
+        field: 'depth' | 'order' | 'scanDepth',
+        rawValue: string,
+        min: number,
+        max: number,
+        fallback: number
+    ) => {
+        const draftKey = `${entryId}:${field}`;
+        setNumDrafts((prev) => {
+            if (!(draftKey in prev)) return prev;
+            const next = { ...prev };
+            delete next[draftKey];
+            return next;
+        });
+        const trimmed = rawValue.trim();
+        if (trimmed === '') {
+            handlePatchEntry(entryId, { [field]: fallback } as Partial<PromptInjectionEntry>);
+            return;
+        }
+        const parsed = parseInt(trimmed, 10);
+        const clamped = Number.isNaN(parsed) ? fallback : Math.max(min, Math.min(max, parsed));
+        handlePatchEntry(entryId, { [field]: clamped } as Partial<PromptInjectionEntry>);
+    };
+
+    const collectRegexErrors = (rawKeywords?: string): string[] => {
+        if (!rawKeywords) return [];
+        const errors: string[] = [];
+        for (const token of splitKeywordTokens(rawKeywords)) {
+            if (!token.startsWith('/')) continue;
+            const err = validateKeywordRegexToken(token);
+            if (err) errors.push(`${token}: ${err}`);
+        }
+        return errors;
+    };
+
     const handleAddEntry = () => {
-        const id = 'entry_' + Math.random().toString(36).slice(2, 9);
+        const id = createUniqueEntryId();
         const defaultDepth = channelId === 'vocab' ? 7 : 0;
         const defaultOrder = (entries.length + 1) * 10;
         const newEntry: PromptInjectionEntry = {
@@ -191,12 +276,13 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
             secondaryKeywords: '',
             logicType: 'and_any',
             caseSensitive: false,
-            scanDepth: 5,
+            matchWholeWords: false,
+            scanDepth: 2,
             position: 1,
             depth: defaultDepth,
             role: 0,
             order: defaultOrder,
-            skipWhenEmpty: false,
+            skipWhenEmpty: channelId === 'material',
             content: '',
         };
         const next = [...entries, newEntry];
@@ -207,7 +293,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
     };
 
     const handleCloneEntry = (entry: PromptInjectionEntry) => {
-        const newId = 'entry_' + Math.random().toString(36).slice(2, 9);
+        const newId = createUniqueEntryId();
         const cloned: PromptInjectionEntry = {
             ...entry,
             id: newId,
@@ -328,6 +414,23 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                             const wiPosVal = resolveWiPositionValue(entry);
                             const matchedWiOpt = WI_POSITION_OPTIONS.find((o) => o.value === wiPosVal);
                             const isDepthActive = matchedWiOpt?.isDepthEnabled ?? entry.position === 1;
+                            const isAlwaysMode = entry.triggerMode === 'always';
+                            const alwaysModeHint =
+                                '当前为常驻触发模式，切换为「条件」触发后可配置';
+                            const depthVal =
+                                numDrafts[`${entry.id}:depth`] ??
+                                String(isDepthActive ? entry.depth ?? 0 : 0);
+                            const orderVal =
+                                numDrafts[`${entry.id}:order`] ?? String(entry.order ?? 100);
+                            const scanDepthVal =
+                                numDrafts[`${entry.id}:scanDepth`] ??
+                                String(entry.scanDepth ?? 2);
+                            const mainKwErrors = !isAlwaysMode
+                                ? collectRegexErrors(entry.keywords)
+                                : [];
+                            const filterKwErrors = !isAlwaysMode
+                                ? collectRegexErrors(entry.secondaryKeywords)
+                                : [];
 
                             return (
                                 <div
@@ -375,30 +478,28 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                             }
                                         />
 
-                                        {/* 触发策略纯图标圆点下拉 */}
+                                        {/* 触发策略下拉 */}
                                         <div className="da-wi-trigger-cell">
-                                            <select
-                                                className={`da-wi-trigger-icon-select ${
-                                                    entry.triggerMode === 'always'
-                                                        ? 'mode--always'
-                                                        : 'mode--keyword'
+                                            <SelectControl
+                                                className={`da-wi-trigger-select ${
+                                                    isAlwaysMode ? 'mode--always' : 'mode--keyword'
                                                 }`}
-                                                title={
-                                                    entry.triggerMode === 'always'
+                                                tooltip={
+                                                    isAlwaysMode
                                                         ? '常驻注入 (每轮生效)'
                                                         : '条件触发 (关键词命中时生效)'
                                                 }
                                                 value={entry.triggerMode}
-                                                onChange={(e) =>
+                                                onChange={(val) =>
                                                     handlePatchEntry(entry.id, {
-                                                        triggerMode: (e.currentTarget as HTMLSelectElement)
-                                                            .value as ActivationTriggerMode,
+                                                        triggerMode: val as ActivationTriggerMode,
                                                     })
                                                 }
-                                            >
-                                                <option value="always">常驻</option>
-                                                <option value="keyword">条件</option>
-                                            </select>
+                                                options={[
+                                                    { value: 'always', label: '常驻' },
+                                                    { value: 'keyword', label: '条件' },
+                                                ]}
+                                            />
                                         </div>
 
                                         {/* 插入位置下拉 */}
@@ -438,23 +539,31 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                             min={0}
                                             max={9999}
                                             disabled={!isDepthActive}
-                                            value={isDepthActive ? entry.depth ?? 0 : 0}
+                                            value={depthVal}
                                             title={
                                                 isDepthActive
                                                     ? '聊天上下文插入深度 @D'
                                                     : '仅在插入深度 @D 模式下可用'
                                             }
-                                            onInput={(e) => {
-                                                const val = Math.max(
+                                            onInput={(e) =>
+                                                handleNumericInput(
+                                                    entry.id,
+                                                    'depth',
+                                                    (e.currentTarget as HTMLInputElement).value,
                                                     0,
-                                                    Math.floor(
-                                                        Number(
-                                                            (e.currentTarget as HTMLInputElement).value
-                                                        )
-                                                    )
-                                                );
-                                                handlePatchEntry(entry.id, { depth: val });
-                                            }}
+                                                    9999
+                                                )
+                                            }
+                                            onBlur={(e) =>
+                                                handleNumericBlur(
+                                                    entry.id,
+                                                    'depth',
+                                                    (e.currentTarget as HTMLInputElement).value,
+                                                    0,
+                                                    9999,
+                                                    entry.depth ?? 0
+                                                )
+                                            }
                                         />
 
                                         {/* 顺序输入框 */}
@@ -463,16 +572,27 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                             className="da-wi-num-input"
                                             min={0}
                                             max={9999}
-                                            value={entry.order ?? 100}
+                                            value={orderVal}
                                             title="同位置/深度排序权重 Order（数值越小越靠前）"
-                                            onInput={(e) => {
-                                                const val = Math.floor(
-                                                    Number(
-                                                        (e.currentTarget as HTMLInputElement).value
-                                                    )
-                                                );
-                                                handlePatchEntry(entry.id, { order: val });
-                                            }}
+                                            onInput={(e) =>
+                                                handleNumericInput(
+                                                    entry.id,
+                                                    'order',
+                                                    (e.currentTarget as HTMLInputElement).value,
+                                                    0,
+                                                    9999
+                                                )
+                                            }
+                                            onBlur={(e) =>
+                                                handleNumericBlur(
+                                                    entry.id,
+                                                    'order',
+                                                    (e.currentTarget as HTMLInputElement).value,
+                                                    0,
+                                                    9999,
+                                                    entry.order ?? 100
+                                                )
+                                            }
                                         />
 
                                         {/* 行操作按钮 (矢量 SVG 图标) */}
@@ -503,9 +623,12 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                     <label className="da-wi-label">主关键词</label>
                                                     <input
                                                         type="text"
-                                                        className="da-wi-drawer-input"
-                                                        placeholder="关键词或正则表达式"
+                                                        className={`da-wi-drawer-input ${mainKwErrors.length > 0 ? 'is-invalid' : ''}`}
+                                                        placeholder="关键词或 /正则/i（可用 | 或 , 分隔）"
                                                         value={entry.keywords || ''}
+                                                        disabled={isAlwaysMode}
+                                                        title={isAlwaysMode ? alwaysModeHint : undefined}
+                                                        aria-invalid={mainKwErrors.length > 0}
                                                         onInput={(e) =>
                                                             handlePatchEntry(entry.id, {
                                                                 keywords: (
@@ -514,6 +637,11 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                             })
                                                         }
                                                     />
+                                                    {mainKwErrors.length > 0 && (
+                                                        <div className="da-wi-field-error">
+                                                            {mainKwErrors[0]}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="da-wi-field da-wi-field--logic">
@@ -521,6 +649,8 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                     <SelectControl
                                                         className="da-wi-drawer-select"
                                                         value={entry.logicType || 'and_any'}
+                                                        disabled={isAlwaysMode}
+                                                        tooltip={isAlwaysMode ? alwaysModeHint : undefined}
                                                         onChange={(val) =>
                                                             handlePatchEntry(entry.id, {
                                                                 logicType: val as PromptInjectionEntry['logicType'],
@@ -538,9 +668,12 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                     <label className="da-wi-label">次要关键词 (过滤)</label>
                                                     <input
                                                         type="text"
-                                                        className="da-wi-drawer-input"
-                                                        placeholder="次要关键词或正则表达式（留空则不限制）"
+                                                        className={`da-wi-drawer-input ${filterKwErrors.length > 0 ? 'is-invalid' : ''}`}
+                                                        placeholder="次要关键词或 /正则/i（留空则不限制）"
                                                         value={entry.secondaryKeywords || ''}
+                                                        disabled={isAlwaysMode}
+                                                        title={isAlwaysMode ? alwaysModeHint : undefined}
+                                                        aria-invalid={filterKwErrors.length > 0}
                                                         onInput={(e) =>
                                                             handlePatchEntry(entry.id, {
                                                                 secondaryKeywords: (
@@ -549,7 +682,111 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                             })
                                                         }
                                                     />
+                                                    {filterKwErrors.length > 0 && (
+                                                        <div className="da-wi-field-error">
+                                                            {filterKwErrors[0]}
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            </div>
+
+                                            {/* 触发微调栏：扫描深度、大小写敏感、全词匹配、空素材占位符置空 */}
+                                            <div className="da-wi-drawer__options-row">
+                                                <div
+                                                    className={`da-wi-option-item ${isAlwaysMode ? 'is-disabled' : ''}`}
+                                                    title={
+                                                        isAlwaysMode
+                                                            ? alwaysModeHint
+                                                            : '关键词模式下向前扫描最近几条聊天消息（0 表示不扫描聊天消息，默认 2 条）'
+                                                    }
+                                                >
+                                                    <span className="da-wi-label">扫描深度</span>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={50}
+                                                        className="da-wi-drawer-input da-wi-drawer-input--num"
+                                                        value={scanDepthVal}
+                                                        disabled={isAlwaysMode}
+                                                        onInput={(e) =>
+                                                            handleNumericInput(
+                                                                entry.id,
+                                                                'scanDepth',
+                                                                (
+                                                                    e.currentTarget as HTMLInputElement
+                                                                ).value,
+                                                                0,
+                                                                50
+                                                            )
+                                                        }
+                                                        onBlur={(e) =>
+                                                            handleNumericBlur(
+                                                                entry.id,
+                                                                'scanDepth',
+                                                                (
+                                                                    e.currentTarget as HTMLInputElement
+                                                                ).value,
+                                                                0,
+                                                                50,
+                                                                entry.scanDepth ?? 2
+                                                            )
+                                                        }
+                                                    />
+                                                    <span className="da-wi-option-unit">条</span>
+                                                </div>
+
+                                                <label
+                                                    className={`da-wi-option-switch ${isAlwaysMode ? 'is-disabled' : ''}`}
+                                                    title={isAlwaysMode ? alwaysModeHint : undefined}
+                                                >
+                                                    <SwitchControl
+                                                        value={Boolean(entry.caseSensitive)}
+                                                        disabled={isAlwaysMode}
+                                                        onChange={(checked) =>
+                                                            handlePatchEntry(entry.id, {
+                                                                caseSensitive: checked,
+                                                            })
+                                                        }
+                                                    />
+                                                    <span className="da-wi-label">区分大小写</span>
+                                                </label>
+
+                                                <label
+                                                    className={`da-wi-option-switch ${isAlwaysMode ? 'is-disabled' : ''}`}
+                                                    title={
+                                                        isAlwaysMode
+                                                            ? alwaysModeHint
+                                                            : '开启后，纯 ASCII/英文关键词仅在完整词边界处命中，避免短词误触发'
+                                                    }
+                                                >
+                                                    <SwitchControl
+                                                        value={Boolean(entry.matchWholeWords)}
+                                                        disabled={isAlwaysMode}
+                                                        onChange={(checked) =>
+                                                            handlePatchEntry(entry.id, {
+                                                                matchWholeWords: checked,
+                                                            })
+                                                        }
+                                                    />
+                                                    <span className="da-wi-label">全词匹配</span>
+                                                </label>
+
+                                                {channelId === 'material' && (
+                                                    <label
+                                                        className="da-wi-option-switch"
+                                                        title="开启后，若条目引用的角色/服装素材列表为空，仅将对应占位符替换为空文本，保留其余正文；仅当整条正文为空时才跳过"
+                                                    >
+                                                        <SwitchControl
+                                                            value={Boolean(entry.skipWhenEmpty)}
+                                                            onChange={(checked) =>
+                                                                handlePatchEntry(entry.id, {
+                                                                    skipWhenEmpty: checked,
+                                                                })
+                                                            }
+                                                        />
+                                                        <span className="da-wi-label">无素材时置空占位符</span>
+                                                    </label>
+                                                )}
                                             </div>
 
                                             {/* 第二排：正文编辑区 + Token 与字符数实时统计 */}

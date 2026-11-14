@@ -3,8 +3,8 @@
  *
  * @remarks
  * 基于顶部分段导航划分为五个子面板：
- * 1. 角色管理：预设工具栏、居中紧凑参考图、基础信息卡片、Token 统计条、体貌特征与 13 细分生理部位全宽文本域、服装绑定列表；
- * 2. 服装管理：预设工具栏、居中紧凑参考图、基础信息卡片、Token 统计条、服饰风格与 9 细分服饰部位全宽文本域；
+ * 1. 角色管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 13 项标准部位全宽文本域）、服装绑定列表；
+ * 2. 服装管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 9 项服饰部位全宽文本域）；
  * 3. 启用设置：独立启用预设工具栏、酒馆角色卡自动联动开关、角色启用规则列表、通用服装启用规则列表；
  * 4. 解析设置：楼层档案提取配置、起止标记与提取测试沙盒；
  * 5. 变量与宏管理：单行格式展现模板设计、一体化生图宏规则维护、独立实时渲染效果预览。
@@ -26,8 +26,9 @@ import type { PresetActionType } from '../composite';
 import { PresetController } from '../viewmodels';
 import { bindDelegatedTagAutocomplete } from '../composite/tag-autocomplete';
 import type { Disposable } from '../types';
-import { settingsStore } from '../../store/settings-store';
+import { settingsStore, normalizePresetNameKey } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
+import { downloadJsonFile } from '../../util/download';
 import {
     materialImageStorage,
     EMBEDDED_AVATAR_FIELD,
@@ -38,6 +39,7 @@ import {
     normalizeCharacterData,
     normalizeOutfitData,
     validateMacroKey,
+    resolveOutfitIdsFromRefs,
 } from '../../pipeline/material-definitions';
 import { DEFAULT_EXTRACTION_CONFIG } from '../../pipeline/archive-extractor';
 import {
@@ -138,7 +140,6 @@ export class MaterialsTabView extends PreactSettingsView {
             },
             evaluateDirtyFields: evaluatePresetDataDirty,
             onPresetApplied: () => {
-                this.activationController?.reloadFromStore();
                 this.syncVisibleAvatars();
                 void promptInjector.scheduleSyncToHost();
             },
@@ -167,7 +168,6 @@ export class MaterialsTabView extends PreactSettingsView {
             },
             evaluateDirtyFields: evaluatePresetDataDirty,
             onPresetApplied: () => {
-                this.activationController?.reloadFromStore();
                 this.syncVisibleAvatars();
                 void promptInjector.scheduleSyncToHost();
             },
@@ -366,14 +366,80 @@ export class MaterialsTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
-        this.charController.reloadFromStore();
-        this.outfitController.reloadFromStore();
-        this.activationController.reloadFromStore();
-        this.extractionController.reloadFromStore();
-        this.formatController.reloadFromStore();
+        if (!this.charController.isDirty.value) {
+            this.charController.reloadFromStore();
+        }
+        if (!this.outfitController.isDirty.value) {
+            this.outfitController.reloadFromStore();
+        }
+        if (!this.activationController.isDirty.value) {
+            this.activationController.reloadFromStore();
+        }
+        if (!this.extractionController.isDirty.value) {
+            this.extractionController.reloadFromStore();
+        }
+        if (!this.formatController.isDirty.value) {
+            this.formatController.reloadFromStore();
+        }
         this.materialConfigSignal.value = settingsStore.get('materialConfig');
         this.syncVisibleAvatars();
         super.activate();
+    }
+
+    public hasUnsavedChanges(): boolean {
+        return (
+            this.charController.isDirty.value ||
+            this.outfitController.isDirty.value ||
+            this.activationController.isDirty.value ||
+            this.extractionController.isDirty.value ||
+            this.formatController.isDirty.value
+        );
+    }
+
+    public async saveUnsavedChanges(): Promise<boolean> {
+        const controllers = [
+            this.charController,
+            this.outfitController,
+            this.activationController,
+            this.extractionController,
+            this.formatController,
+        ];
+        for (const ctrl of controllers) {
+            if (ctrl.isDirty.value) {
+                let ok = true;
+                if (ctrl === this.charController) {
+                    ok = await this.handleMaterialToolbarAction('character', 'save');
+                } else if (ctrl === this.outfitController) {
+                    ok = await this.handleMaterialToolbarAction('outfit', 'save');
+                } else {
+                    ok = await ctrl.handleAction('save');
+                }
+                if (!ok) return false;
+            }
+        }
+        this.materialConfigSignal.value = { ...settingsStore.get('materialConfig') };
+        void promptInjector.scheduleSyncToHost();
+        return true;
+    }
+
+    public discardUnsavedChanges(): void {
+        const unsavedCharAvatar = this.charController.draftConfig.value?.avatarId || '';
+        const baseCharAvatar = this.charController.baselineSnapshot.value?.avatarId || '';
+        this.charController.discardDraft();
+        if (unsavedCharAvatar && unsavedCharAvatar !== baseCharAvatar) {
+            this.releaseAvatarIfUnused(unsavedCharAvatar);
+        }
+
+        const unsavedOutfitAvatar = this.outfitController.draftConfig.value?.avatarId || '';
+        const baseOutfitAvatar = this.outfitController.baselineSnapshot.value?.avatarId || '';
+        this.outfitController.discardDraft();
+        if (unsavedOutfitAvatar && unsavedOutfitAvatar !== baseOutfitAvatar) {
+            this.releaseAvatarIfUnused(unsavedOutfitAvatar);
+        }
+
+        this.activationController.discardDraft();
+        this.extractionController.discardDraft();
+        this.formatController.discardDraft();
     }
 
     public override dispose(): void {
@@ -394,6 +460,7 @@ export class MaterialsTabView extends PreactSettingsView {
             }
         }
         this.avatarObjectUrls.clear();
+        this.pendingAvatarLoads.clear();
         this.avatarUrlsSignal.value = {};
         super.dispose();
     }
@@ -421,6 +488,19 @@ export class MaterialsTabView extends PreactSettingsView {
         }
     }
 
+    private hasAvatarReference(cleanId: string): boolean {
+        const inCharPresets = settingsStore
+            .getPresets<CharacterPresetData>('characters')
+            .some((p) => p.data?.avatarId === cleanId);
+        const inOutfitPresets = settingsStore
+            .getPresets<OutfitPresetData>('outfits')
+            .some((p) => p.data?.avatarId === cleanId);
+        const inDrafts =
+            this.charController.draftConfig.value?.avatarId === cleanId ||
+            this.outfitController.draftConfig.value?.avatarId === cleanId;
+        return inCharPresets || inOutfitPresets || inDrafts;
+    }
+
     public ensureAvatarLoaded(avatarId: string): void {
         const cleanId = (avatarId || '').trim();
         if (
@@ -438,6 +518,7 @@ export class MaterialsTabView extends PreactSettingsView {
                 if (
                     this.isDisposedView ||
                     !blob ||
+                    !this.hasAvatarReference(cleanId) ||
                     typeof URL === 'undefined' ||
                     typeof URL.createObjectURL !== 'function'
                 ) {
@@ -453,6 +534,7 @@ export class MaterialsTabView extends PreactSettingsView {
                     [cleanId]: objUrl,
                 };
             })
+            .catch(() => undefined)
             .finally(() => {
                 this.pendingAvatarLoads.delete(cleanId);
             });
@@ -465,17 +547,7 @@ export class MaterialsTabView extends PreactSettingsView {
         const cleanId = (avatarId || '').trim();
         if (!cleanId) return;
 
-        const inCharPresets = settingsStore
-            .getPresets<CharacterPresetData>('characters')
-            .some((p) => p.data?.avatarId === cleanId);
-        const inOutfitPresets = settingsStore
-            .getPresets<OutfitPresetData>('outfits')
-            .some((p) => p.data?.avatarId === cleanId);
-        const inDrafts =
-            this.charController.draftConfig.value?.avatarId === cleanId ||
-            this.outfitController.draftConfig.value?.avatarId === cleanId;
-
-        if (inCharPresets || inOutfitPresets || inDrafts) {
+        if (this.hasAvatarReference(cleanId)) {
             return;
         }
 
@@ -526,6 +598,54 @@ export class MaterialsTabView extends PreactSettingsView {
         }
     }
 
+    private generateUniqueMaterialId(kind: 'character' | 'outfit'): string {
+        const category = kind === 'character' ? 'characters' : 'outfits';
+        const prefix = kind === 'character' ? 'char_' : 'outfit_';
+        const existingIds = new Set(settingsStore.getPresets(category).map((p) => p.id));
+        const stamp = Date.now().toString(36);
+        let candidate = `${prefix}${stamp}`;
+        let seq = 1;
+        while (existingIds.has(candidate)) {
+            candidate = `${prefix}${stamp}_${seq++}`;
+        }
+        return candidate;
+    }
+
+    /**
+     * 当角色/服装增删时同步启用控制器快照：未编辑时整表重载，正在编辑草稿时仅做增量 ID 增删以保留未保存修改。
+     */
+    private syncActivationRuleSnapshot(
+        kind: 'character' | 'outfit',
+        materialId: string,
+        mode: 'add' | 'remove'
+    ): void {
+        if (!materialId || !this.activationController) return;
+        if (!this.activationController.isDirty.value) {
+            this.activationController.reloadFromStore();
+            return;
+        }
+        const ruleGroup = kind === 'character' ? 'characterRules' : 'outfitRules';
+        const patchRulesMap = (
+            snap: MaterialActivationPresetData
+        ): MaterialActivationPresetData => {
+            const nextMap = { ...(snap[ruleGroup] || {}) };
+            if (mode === 'add') {
+                if (!nextMap[materialId]) {
+                    nextMap[materialId] = { enabled: true, triggerMode: 'keyword' };
+                }
+            } else {
+                delete nextMap[materialId];
+            }
+            return { ...snap, [ruleGroup]: nextMap };
+        };
+        this.activationController.baselineSnapshot.value = patchRulesMap(
+            this.activationController.baselineSnapshot.value
+        );
+        this.activationController.draftConfig.value = patchRulesMap(
+            this.activationController.draftConfig.value
+        );
+    }
+
     /**
      * 处理角色/服装/启用预设工具栏动作（保持预设名与 data.name 一致，并支持连图导出与孤立图片回收）。
      */
@@ -534,12 +654,12 @@ export class MaterialsTabView extends PreactSettingsView {
         action: PresetActionType,
         targetId?: string,
         onExportPayload?: (payload: Record<string, unknown>, filename: string) => void
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (kind === 'activation') {
-            await this.activationController.handleAction(action, targetId);
+            const ok = await this.activationController.handleAction(action, targetId);
             this.materialConfigSignal.value = { ...settingsStore.get('materialConfig') };
             void promptInjector.scheduleSyncToHost();
-            return;
+            return ok;
         }
 
         const category = kind === 'character' ? 'characters' : 'outfits';
@@ -547,7 +667,7 @@ export class MaterialsTabView extends PreactSettingsView {
 
         if (action === 'export') {
             const cur = ctrl.currentPreset.value;
-            if (!cur) return;
+            if (!cur) return false;
             const exportItem = structuredClone(cur) as unknown as Record<string, unknown>;
             const exportData = structuredClone(ctrl.draftConfig.value) as unknown as Record<
                 string,
@@ -568,23 +688,15 @@ export class MaterialsTabView extends PreactSettingsView {
 
             onExportPayload?.(exportItem, filename);
 
-            const blob = new Blob([JSON.stringify(exportItem, null, 2)], {
-                type: 'application/json',
-            });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-            return;
+            downloadJsonFile(filename, exportItem);
+            return true;
         }
 
         if (action === 'saveAs') {
             const cur = ctrl.currentPreset.value;
-            if (!cur) return;
+            if (!cur) return false;
             const list = ctrl.fetchPresetsList();
-            const existingNames = new Set(list.map((p) => p.name));
+            const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
             const targetName = await ConfirmDialog.prompt({
                 title: '另存为新预设',
                 message:
@@ -594,9 +706,11 @@ export class MaterialsTabView extends PreactSettingsView {
                 defaultValue: `${cur.name || '档案'} (副本)`,
                 placeholder: '请输入唯一的预设名称',
                 validator: (val) =>
-                    existingNames.has(val) ? '预设名称已存在，请换一个名称' : null,
+                    existingNames.has(normalizePresetNameKey(val))
+                        ? '预设名称已存在，请换一个名称'
+                        : null,
             });
-            if (!targetName || !targetName.trim()) return;
+            if (!targetName || !targetName.trim()) return false;
 
             const cleanName = targetName.trim();
             const clonedData = structuredClone(ctrl.draftConfig.value);
@@ -611,7 +725,7 @@ export class MaterialsTabView extends PreactSettingsView {
                 }
             }
 
-            const newId = `${kind === 'character' ? 'char_' : 'outfit_'}${Date.now().toString(36)}`;
+            const newId = this.generateUniqueMaterialId(kind);
             if (kind === 'character') {
                 const charData = clonedData as CharacterPresetData;
                 settingsStore.savePreset('characters', {
@@ -632,31 +746,38 @@ export class MaterialsTabView extends PreactSettingsView {
                 });
             }
             ctrl.applyActivePreset(newId);
+            this.syncActivationRuleSnapshot(kind, newId, 'add');
             Toast.show(`已另存预设: ${cleanName}`, { level: 'success' });
-            return;
+            return true;
         }
 
         if (action === 'save') {
             const oldBaselineAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
+            const prevCurrentPreset = ctrl.currentPreset.value;
             const trimmedDraftName = (ctrl.draftConfig.value?.name || '').trim();
-            if (ctrl.currentPreset.value && trimmedDraftName) {
+            if (prevCurrentPreset && trimmedDraftName) {
                 ctrl.currentPreset.value = {
-                    ...ctrl.currentPreset.value,
+                    ...prevCurrentPreset,
                     name: trimmedDraftName,
                 };
             }
-            await ctrl.handleAction('save', targetId);
+            const ok = await ctrl.handleAction('save', targetId);
+            if (!ok) {
+                ctrl.currentPreset.value = prevCurrentPreset;
+                return false;
+            }
             const currentAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
             if (oldBaselineAvatar && oldBaselineAvatar !== currentAvatar) {
                 this.releaseAvatarIfUnused(oldBaselineAvatar);
             }
-            return;
+            return true;
         }
 
         if (action === 'new') {
             const unsavedAvatar = ctrl.draftConfig.value?.avatarId || '';
             const baseAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
-            await ctrl.handleAction('new', targetId);
+            const ok = await ctrl.handleAction('new', targetId);
+            if (!ok) return false;
             if (unsavedAvatar && unsavedAvatar !== baseAvatar) {
                 this.releaseAvatarIfUnused(unsavedAvatar);
             }
@@ -679,11 +800,16 @@ export class MaterialsTabView extends PreactSettingsView {
                 }
                 ctrl.reloadFromStore();
             }
-            return;
+            if (created) {
+                this.syncActivationRuleSnapshot(kind, created.id, 'add');
+            }
+            return true;
         }
 
         if (action === 'rename') {
-            await ctrl.handleAction('rename', targetId);
+            const wasDirty = ctrl.isDirty.value;
+            const ok = await ctrl.handleAction('rename', targetId);
+            if (!ok) return false;
             const renamed = ctrl.currentPreset.value;
             if (renamed && renamed.data?.name !== renamed.name) {
                 if (kind === 'character') {
@@ -697,19 +823,43 @@ export class MaterialsTabView extends PreactSettingsView {
                         data: { ...(renamed.data as OutfitPresetData), name: renamed.name },
                     });
                 }
-                ctrl.reloadFromStore();
+                if (wasDirty) {
+                    ctrl.baselineSnapshot.value = {
+                        ...ctrl.baselineSnapshot.value,
+                        name: renamed.name,
+                    };
+                    ctrl.draftConfig.value = {
+                        ...ctrl.draftConfig.value,
+                        name: renamed.name,
+                    };
+                } else {
+                    ctrl.reloadFromStore();
+                }
             }
-            return;
+            return true;
+        }
+
+        if (action === 'select') {
+            const unsavedAvatar = ctrl.draftConfig.value?.avatarId || '';
+            const baseAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
+            const ok = await ctrl.handleAction('select', targetId);
+            if (!ok) return false;
+            if (unsavedAvatar && unsavedAvatar !== baseAvatar) {
+                this.releaseAvatarIfUnused(unsavedAvatar);
+            }
+            this.syncVisibleAvatars();
+            return true;
         }
 
         if (action === 'reset') {
             const unsavedAvatar = ctrl.draftConfig.value?.avatarId || '';
             const baseAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
-            await ctrl.handleAction('reset', targetId);
+            const ok = await ctrl.handleAction('reset', targetId);
+            if (!ok) return false;
             if (unsavedAvatar && unsavedAvatar !== baseAvatar) {
                 this.releaseAvatarIfUnused(unsavedAvatar);
             }
-            return;
+            return true;
         }
 
         if (action === 'delete') {
@@ -717,17 +867,21 @@ export class MaterialsTabView extends PreactSettingsView {
             const targetPreset = targetId
                 ? ctrl.fetchPresetsList().find((p) => p.id === targetId) ?? cur
                 : cur;
+            const deletedId = targetPreset?.id || '';
             const deletedAvatar = targetPreset?.data?.avatarId || '';
-            await ctrl.handleAction('delete', targetId);
+            const ok = await ctrl.handleAction('delete', targetId);
+            if (!ok) return false;
             if (deletedAvatar) {
                 this.releaseAvatarIfUnused(deletedAvatar);
             }
-            this.activationController.reloadFromStore();
+            if (deletedId) {
+                this.syncActivationRuleSnapshot(kind, deletedId, 'remove');
+            }
             void promptInjector.scheduleSyncToHost();
-            return;
+            return true;
         }
 
-        await ctrl.handleAction(action, targetId);
+        return await ctrl.handleAction(action, targetId);
     }
 
     /**
@@ -756,21 +910,23 @@ export class MaterialsTabView extends PreactSettingsView {
 
         const ctrl = kind === 'character' ? this.charController : this.outfitController;
         const list = ctrl.fetchPresetsList();
-        const existingNames = new Set(list.map((p) => p.name));
+        const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
         const baseName =
             (typeof parsed.name === 'string' && parsed.name.trim()) ||
             (typeof rawData.name === 'string' && rawData.name.trim()) ||
             (kind === 'character' ? '导入角色' : '导入服装');
 
         let finalName = baseName;
-        if (existingNames.has(baseName)) {
+        if (existingNames.has(normalizePresetNameKey(baseName))) {
             const negotiated = await ConfirmDialog.prompt({
                 title: '导入预设名称冲突',
                 message: `已存在同名预设「${baseName}」，请指定一个新名称:`,
                 defaultValue: `${baseName} (导入)`,
                 placeholder: '请输入唯一的预设名称',
                 validator: (val) =>
-                    existingNames.has(val) ? '预设名称已存在，请换一个名称' : null,
+                    existingNames.has(normalizePresetNameKey(val))
+                        ? '预设名称已存在，请换一个名称'
+                        : null,
             });
             if (!negotiated || !negotiated.trim()) return;
             finalName = negotiated.trim();
@@ -782,13 +938,21 @@ export class MaterialsTabView extends PreactSettingsView {
                 (await materialImageStorage.importAvatarFromDataUrl(embeddedDataUrl)) ?? '';
         }
 
-        const newId = `${kind === 'character' ? 'char_' : 'outfit_'}${Date.now().toString(36)}`;
+        const newId = this.generateUniqueMaterialId(kind);
         if (kind === 'character') {
-            const charData = normalizeCharacterData({
+            const baseCharData = normalizeCharacterData({
                 ...rawData,
                 name: finalName,
                 avatarId: resolvedAvatarId,
             });
+            const existingOutfits = settingsStore.getPresets<OutfitPresetData>('outfits');
+            const charData: CharacterPresetData = {
+                ...baseCharData,
+                boundOutfitIds: resolveOutfitIdsFromRefs(
+                    baseCharData.boundOutfitIds,
+                    existingOutfits
+                ),
+            };
             settingsStore.savePreset('characters', {
                 id: newId,
                 name: finalName,
@@ -816,7 +980,7 @@ export class MaterialsTabView extends PreactSettingsView {
         if (resolvedAvatarId) {
             this.ensureAvatarLoaded(resolvedAvatarId);
         }
-        this.activationController.reloadFromStore();
+        this.syncActivationRuleSnapshot(kind, newId, 'add');
         void promptInjector.scheduleSyncToHost();
         Toast.show(`已成功导入预设: ${finalName}`, { level: 'success' });
     }
@@ -931,6 +1095,13 @@ export class MaterialsTabView extends PreactSettingsView {
                         charController={this.charController}
                         outfitController={this.outfitController}
                         sandboxText={this.sandboxText}
+                        onArchivesApplied={() => {
+                            if (!this.activationController.isDirty.value) {
+                                this.activationController.reloadFromStore();
+                            }
+                            this.syncVisibleAvatars();
+                            void promptInjector.scheduleSyncToHost();
+                        }}
                     />
                 )}
                 {currentTab === 'format' && (

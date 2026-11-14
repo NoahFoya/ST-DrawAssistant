@@ -160,6 +160,8 @@ export interface GenerationProvider {
     readonly name: string;
     /** 是否支持负向提示词（缺省为 true；不支持的服务端如 OpenAI /v1/images/generations 设为 false） */
     readonly supportsNegativePrompt?: boolean;
+    /** 是否支持局部重绘 (Inpaint)（缺省为 false；仅 ComfyUI / SdWebUI 为 true） */
+    readonly supportsInpaint?: boolean;
 
     /**
      * 执行图像生成

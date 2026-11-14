@@ -74,10 +74,12 @@ export class LogsStatsTabView extends PreactSettingsView {
     }
 
     public override activate(): void {
+        super.activate();
         this.vm.activate();
     }
 
     public override deactivate(): void {
+        super.deactivate();
         this.vm.deactivate();
     }
 

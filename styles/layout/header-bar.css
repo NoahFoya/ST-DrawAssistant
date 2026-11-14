@@ -21,7 +21,7 @@
     flex-shrink: 0;
     box-sizing: border-box;
     position: relative;
-    z-index: 20;
+    z-index: var(--da-z-sticky, 20);
 }
 
 /* 2. 左侧品牌标题与版本区 (.da-header-left) */

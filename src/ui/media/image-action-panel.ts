@@ -18,6 +18,7 @@ import { imageInfoModal } from './image-info-modal';
 import { openInpaintModal, type InpaintConfirmResult } from './inpaint-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from '../composite/tag-autocomplete';
 import { resolvePromptMacros } from '../../pipeline/macro-resolver';
+import { providerRegistry } from '../../provider/registry';
 import { settingsStore } from '../../store/settings-store';
 import { logger } from '../../util/logger';
 
@@ -488,9 +489,7 @@ export class ImageActionPanel implements Disposable {
             this.posTextarea.value = context.prompt || '';
             this.updatePosHighlight?.();
         }
-        const activeProvider = this.resolveContextEngine(context);
-        const supportsNegative = activeProvider !== 'openai';
-        const supportsInpaint = activeProvider === 'comfyui' || activeProvider === 'sdwebui';
+        const { supportsNegative, supportsInpaint } = this.getActiveProviderCapabilities();
 
         if (this.negSectionEl) {
             this.negSectionEl.style.display = supportsNegative ? '' : 'none';
@@ -518,17 +517,15 @@ export class ImageActionPanel implements Disposable {
     }
 
     /**
-     * 解析当前图像所属的实际生图引擎（兼容历史元数据中的 provider 字段）。
+     * 统一按当前全局激活后端查询负向词与局部重绘能力。
      */
-    private resolveContextEngine(context: ImageActionContext): string {
-        const meta = context.record?.metadata as
-            | (Record<string, unknown> & { engine?: string; provider?: string })
-            | undefined;
-        return (
-            (typeof meta?.engine === 'string' && meta.engine) ||
-            (typeof meta?.provider === 'string' && meta.provider) ||
-            settingsStore.getSettings().activeProvider
-        );
+    private getActiveProviderCapabilities(): { supportsNegative: boolean; supportsInpaint: boolean } {
+        const activeProvider = settingsStore.getSettings().activeProvider;
+        const provider = providerRegistry.getProvider(activeProvider);
+        return {
+            supportsNegative: provider?.supportsNegativePrompt !== false,
+            supportsInpaint: provider?.supportsInpaint === true,
+        };
     }
 
     /**
@@ -537,8 +534,7 @@ export class ImageActionPanel implements Disposable {
     private handleRegenerate(): void {
         if (!this.currentContext) return;
 
-        const activeProvider = this.resolveContextEngine(this.currentContext);
-        const supportsNegative = activeProvider !== 'openai';
+        const { supportsNegative } = this.getActiveProviderCapabilities();
         const newPrompt = this.posTextarea?.value.trim() ?? '';
         const newNegativePrompt = supportsNegative ? (this.negTextarea?.value.trim() ?? '') : undefined;
 
@@ -560,8 +556,8 @@ export class ImageActionPanel implements Disposable {
     private handleInpaint(): void {
         if (!this.currentContext) return;
 
-        const activeProvider = this.resolveContextEngine(this.currentContext);
-        if (activeProvider !== 'comfyui' && activeProvider !== 'sdwebui') {
+        const { supportsInpaint } = this.getActiveProviderCapabilities();
+        if (!supportsInpaint) {
             Toast.warning('当前生图引擎不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
             return;
         }
@@ -579,6 +575,7 @@ export class ImageActionPanel implements Disposable {
 
         openInpaintModal({
             imageSrc: ctx.imageUrl!,
+            imageId: ctx.imageId ?? ctx.record?.imageId,
             initialPrompt,
             initialNegativePrompt: initialNegPrompt,
             onConfirm: async (data) => {

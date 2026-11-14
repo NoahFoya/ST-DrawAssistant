@@ -158,9 +158,9 @@ export class LogsStatsViewModel implements Disposable {
                 const dimText = isInpaint ? `${baseDim} [重绘]` : baseDim;
                 const durMs = r.metadata?.durationMs;
                 const durSec = typeof durMs === 'number' && durMs > 0 ? Number((durMs / 1000).toFixed(1)) : 0;
-                const rawEngine = (r.metadata?.engine || r.metadata?.provider || '默认') as string;
+                const rawEngine = (r.metadata?.engine || '默认') as string;
                 const backend = formatBackendLabel(rawEngine);
-                const model = (r.metadata?.modelName || r.metadata?.baseModel || '--') as string;
+                const model = (r.metadata?.baseModel || '--') as string;
                 const status = r.status === 'ready' ? 'ready' : 'failed';
                 const errorMsg =
                     typeof r.metadata?.errorMessage === 'string'

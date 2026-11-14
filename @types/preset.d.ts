@@ -330,13 +330,13 @@ export interface MaterialItemActivationRule {
 
 /** 素材启用规则配置数据模型 */
 export interface MaterialActivationPresetData {
-    /** 角色激活规则字典（键优先使用角色预设 id，同时兼容角色名称匹配） */
+    /** 角色激活规则字典（严格使用角色预设 id 作为键） */
     characterRules: Record<string, MaterialItemActivationRule>;
-    /** 服装激活规则字典（键优先使用服装预设 id，同时兼容服装名称匹配） */
+    /** 服装激活规则字典（严格使用服装预设 id 作为键） */
     outfitRules: Record<string, MaterialItemActivationRule>;
     /** 绑定的酒馆角色卡名称列表 */
     boundCardNames: string[];
-    /** 关键词动态匹配时扫描最近聊天消息条数（默认 5） */
+    /** 关键词动态匹配时扫描最近聊天消息条数（默认 2；设为 0 表示不扫描聊天消息） */
     scanDepth: number;
     /** 角色触发时是否自动连带激活其绑定的关联服装 */
     includeBoundOutfits: boolean;
@@ -379,13 +379,13 @@ export interface CharacterExtractionConfig {
     nameKeys: string;
     /** 别名键列表，默认 "ALIASES|ALIAS|别名|EN_NAME|英文名" */
     aliasesKeys: string;
-    /** 触发词/专属标识键列表（角色与服装通用），默认 "TRIGGER|IDENTITY|IDENTITY_TAG|TAGS|触发词|身份标识|身份标签|服装标识|服饰标识" */
+    /** 触发词/专属标识键列表（角色与服装通用），例如 "TRIGGER|IDENTITY|TAGS|触发词|身份标识|服装标识" */
     triggerKeys: string;
-    /** 角色描述或服装描述键列表，默认 "DESCRIPTION|DESC|SUMMARY|角色描述|服装描述|说明|简介" */
+    /** 角色描述或服装描述键列表，例如 "DESCRIPTION|DESC|SUMMARY|角色描述|服装描述|说明|简介" */
     descriptionKeys: string;
-    /** 基础特征键列表（角色对应 appearance 体貌特征，服装对应 style 服饰风格），默认 "APPEARANCE|STYLE|OVERALL|体貌|风格|整体|整体基调|BASE|固有" */
+    /** 基础特征键列表（角色对应 appearance 体貌特征，服装对应 style 服饰风格），例如 "APPEARANCE|STYLE|OVERALL|体貌|外貌|样式|风格" */
     baseTraitKeys: string;
-    /** 专属服装键列表（仅角色有效），默认 "OUTFITS|OUTFIT|服装|绑定服装|专属服装" */
+    /** 专属服装键列表（仅角色有效），例如 "OUTFITS|OUTFIT|服装|绑定服装|专属服装" */
     outfitKeys: string;
     [key: string]: unknown;
 }
@@ -459,7 +459,9 @@ export interface PromptInjectionEntry {
     logicType?: 'and_any' | 'and_all' | 'not_any';
     /** 是否区分大小写匹配 */
     caseSensitive?: boolean;
-    /** 关键词模式下的最近消息扫描条数（默认 5） */
+    /** 英文/ASCII 关键词是否启用整词边界匹配 */
+    matchWholeWords?: boolean;
+    /** 关键词模式下的最近消息扫描条数（默认 2） */
     scanDepth: number;
     /** 注入位置：0 = IN_PROMPT, 1 = IN_CHAT (@D), 2 = BEFORE_PROMPT */
     position: 0 | 1 | 2;
@@ -469,7 +471,7 @@ export interface PromptInjectionEntry {
     role: 0 | 1 | 2;
     /** 同位置/深度/角色分桶内的升序拼接权重 */
     order: number;
-    /** 当条目引用的素材列表变量全部为空时是否静默跳过 */
+    /** 当条目引用的素材列表变量为空时，将空变量替换为空文本（若整条正文因此为空则跳过注入） */
     skipWhenEmpty?: boolean;
     /** 条目提示词正文（支持素材启用列表变量与 {{//...}} 酒馆注释） */
     content: string;

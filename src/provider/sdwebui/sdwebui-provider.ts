@@ -4,7 +4,7 @@
  * 基于 A1111 HTTP API 对接 SD-WebUI / Forge / SD.Next 服务端：
  * 1. 直接转发提示词与负向提示词；
  * 2. 通过 override_settings 设置任务模型并在出图后自动还原；
- * 3. 提交 txt2img 请求并等待出图；
+ * 3. 提交 txt2img 或 img2img（局部重绘）请求并等待出图；
  * 4. 取消时中止本地网络等待，不触发服务端全局中断。
  */
 
@@ -42,21 +42,17 @@ export interface SdWebUIProviderOptions extends BaseProviderOptions {}
 export class SdWebUIProvider extends BaseGenerationProvider {
     public readonly providerType: ProviderType = 'sdwebui';
     public readonly name: string = 'SD-WebUI';
+    public override readonly supportsInpaint = true;
 
     /** 资产短时内存缓存过期时间 (60 秒) */
     public static readonly ASSET_CACHE_TTL_MS = 60_000;
 
-    private _modelsCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-    private _vaesCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-    private _samplersCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-    private _schedulersCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-    private _lorasCache: { data: string[]; timestamp: number; serverUrl: string } | null = null;
-
-    private _inFlightModels: Promise<string[]> | null = null;
-    private _inFlightVaes: Promise<string[]> | null = null;
-    private _inFlightSamplers: Promise<string[]> | null = null;
-    private _inFlightSchedulers: Promise<string[]> | null = null;
-    private _inFlightLoras: Promise<string[]> | null = null;
+    private _assetCaches = new Map<string, { data: string[]; timestamp: number; cacheKey: string }>();
+    private _inFlightAssets = new Map<
+        string,
+        { promise: Promise<string[]>; cacheKey: string; signal?: AbortSignal }
+    >();
+    private _assetCacheGen = 0;
 
     public constructor(options: SdWebUIProviderOptions = {}) {
         super(options);
@@ -66,16 +62,9 @@ export class SdWebUIProvider extends BaseGenerationProvider {
      * 清空当前提供方内存中的资产缓存与进行中的请求单飞状态。
      */
     public clearAssetCache(): void {
-        this._modelsCache = null;
-        this._vaesCache = null;
-        this._samplersCache = null;
-        this._schedulersCache = null;
-        this._lorasCache = null;
-        this._inFlightModels = null;
-        this._inFlightVaes = null;
-        this._inFlightSamplers = null;
-        this._inFlightSchedulers = null;
-        this._inFlightLoras = null;
+        this._assetCacheGen += 1;
+        this._assetCaches.clear();
+        this._inFlightAssets.clear();
     }
 
     /**
@@ -126,171 +115,132 @@ export class SdWebUIProvider extends BaseGenerationProvider {
     }
 
     /**
-     * 获取 SD-WebUI 服务端已加载的模型列表。
+     * 按资产类型获取并缓存 SD-WebUI 服务端资产列表（模型、VAE、采样器、调度器或 LoRA）。
      *
      * @remarks
-     * 支持单飞并发合并与 60 秒短时内存缓存，避免频繁拉取模型造成网络冗余与宿主代理拥塞。
+     * 支持单飞并发合并与 60 秒短时内存缓存，避免频繁拉取造成网络冗余与宿主代理拥塞。
      *
-     * @param signal 中止信号
-     * @param forceRefresh 是否强制忽略缓存拉取最新数据
-     * @returns 可用模型名称数组
+     * @param assetType 资产缓存分类
+     * @param endpointPath 服务端 API 相对路径
+     * @param mapItems 原始响应数组到名称列表的映射函数
+     * @param options 可选请求控制项（中止信号、强制刷新、失败时返回空列表）
+     * @returns 可用资产名称数组
      */
-    public async fetchModels(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+    private async fetchCachedAsset(
+        assetType: 'models' | 'vaes' | 'samplers' | 'schedulers' | 'loras',
+        endpointPath: string,
+        mapItems: (data: unknown[]) => string[],
+        options: { signal?: AbortSignal; forceRefresh?: boolean; degradeOnError?: boolean } = {}
+    ): Promise<string[]> {
+        const { signal, forceRefresh = false, degradeOnError = false } = options;
         const serverUrl = this.getServerUrl();
         const transport = this.getTransport();
+        const cacheKey = `${serverUrl}::${transport}`;
         const now = Date.now();
 
+        const cached = this._assetCaches.get(assetType);
         if (
             !forceRefresh &&
-            this._modelsCache &&
-            this._modelsCache.serverUrl === serverUrl &&
-            now - this._modelsCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
+            cached &&
+            cached.cacheKey === cacheKey &&
+            now - cached.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
         ) {
-            return this._modelsCache.data;
+            return cached.data;
         }
 
-        if (this._inFlightModels) {
-            return this._inFlightModels;
+        const existing = this._inFlightAssets.get(assetType);
+        if (!forceRefresh && existing && existing.cacheKey === cacheKey && existing.signal === signal) {
+            return existing.promise;
         }
 
-        const url = `${serverUrl}/sdapi/v1/sd-models`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 15000, signal },
-                    transport
-                );
-                const data = (await response.json()) as Array<{ title?: string; model_name?: string }>;
-
-                if (!Array.isArray(data)) {
-                    return [];
+        const reqGen = this._assetCacheGen;
+        const url = `${serverUrl}${endpointPath}`;
+        let entry!: {
+            promise: Promise<string[]>;
+            cacheKey: string;
+            signal?: AbortSignal;
+        };
+        entry = {
+            cacheKey,
+            signal,
+            promise: (async () => {
+                try {
+                    const response = await this.fetchWithTransport(
+                        url,
+                        { method: 'GET', timeoutMs: 15000, signal },
+                        transport
+                    );
+                    const data = (await response.json()) as unknown;
+                    if (!Array.isArray(data)) {
+                        return [];
+                    }
+                    const items = mapItems(data).filter((name) => name.trim().length > 0);
+                    if (
+                        reqGen === this._assetCacheGen &&
+                        this.getServerUrl() === serverUrl &&
+                        this.getTransport() === transport
+                    ) {
+                        this._assetCaches.set(assetType, {
+                            data: items,
+                            timestamp: Date.now(),
+                            cacheKey,
+                        });
+                    }
+                    return items;
+                } catch (err: unknown) {
+                    if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+                        throw err;
+                    }
+                    if (degradeOnError) {
+                        return [];
+                    }
+                    throw err;
+                } finally {
+                    if (this._inFlightAssets.get(assetType) === entry) {
+                        this._inFlightAssets.delete(assetType);
+                    }
                 }
+            })(),
+        };
 
-                const models = data
-                    .map((m) => m.title ?? m.model_name ?? '')
-                    .filter((name) => name.trim().length > 0);
-                this._modelsCache = { data: models, timestamp: Date.now(), serverUrl };
-                return models;
-            } finally {
-                this._inFlightModels = null;
-            }
-        })();
+        this._inFlightAssets.set(assetType, entry);
+        return entry.promise;
+    }
 
-        this._inFlightModels = fetchPromise;
-        return fetchPromise;
+    /**
+     * 获取 SD-WebUI 服务端已加载的模型列表。
+     */
+    public fetchModels(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        return this.fetchCachedAsset(
+            'models',
+            '/sdapi/v1/sd-models',
+            (data) => (data as Array<{ title?: string; model_name?: string }>).map((m) => m.title ?? m.model_name ?? ''),
+            { signal, forceRefresh }
+        );
     }
 
     /**
      * 获取 SD-WebUI 服务端已加载的 VAE 模型列表。
-     *
-     * @remarks
-     * 支持单飞并发合并与 60 秒短时内存缓存。
-     *
-     * @param signal 中止信号
-     * @param forceRefresh 是否强制忽略缓存拉取最新数据
-     * @returns 可用 VAE 模型名称数组
      */
-    public async fetchVaes(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
-        const serverUrl = this.getServerUrl();
-        const transport = this.getTransport();
-        const now = Date.now();
-
-        if (
-            !forceRefresh &&
-            this._vaesCache &&
-            this._vaesCache.serverUrl === serverUrl &&
-            now - this._vaesCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
-        ) {
-            return this._vaesCache.data;
-        }
-
-        if (this._inFlightVaes) {
-            return this._inFlightVaes;
-        }
-
-        const url = `${serverUrl}/sdapi/v1/sd-vae`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 15000, signal },
-                    transport
-                );
-                const data = (await response.json()) as Array<{ model_name?: string }>;
-
-                if (!Array.isArray(data)) {
-                    return [];
-                }
-
-                const vaes = data
-                    .map((m) => m.model_name ?? '')
-                    .filter((name) => name.trim().length > 0);
-                this._vaesCache = { data: vaes, timestamp: Date.now(), serverUrl };
-                return vaes;
-            } finally {
-                this._inFlightVaes = null;
-            }
-        })();
-
-        this._inFlightVaes = fetchPromise;
-        return fetchPromise;
+    public fetchVaes(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        return this.fetchCachedAsset(
+            'vaes',
+            '/sdapi/v1/sd-vae',
+            (data) => (data as Array<{ model_name?: string }>).map((m) => m.model_name ?? ''),
+            { signal, forceRefresh }
+        );
     }
 
     /**
      * 获取 SD-WebUI 服务端支持的采样器列表。
-     *
-     * @remarks
-     * 支持单飞并发合并与 60 秒短时内存缓存。
-     *
-     * @param signal 中止信号
-     * @param forceRefresh 是否强制忽略缓存拉取最新数据
-     * @returns 可用采样器名称数组
      */
-    public async fetchSamplers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
-        const serverUrl = this.getServerUrl();
-        const transport = this.getTransport();
-        const now = Date.now();
-
-        if (
-            !forceRefresh &&
-            this._samplersCache &&
-            this._samplersCache.serverUrl === serverUrl &&
-            now - this._samplersCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
-        ) {
-            return this._samplersCache.data;
-        }
-
-        if (this._inFlightSamplers) {
-            return this._inFlightSamplers;
-        }
-
-        const url = `${serverUrl}/sdapi/v1/samplers`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 15000, signal },
-                    transport
-                );
-                const data = (await response.json()) as Array<{ name?: string }>;
-
-                if (!Array.isArray(data)) {
-                    return [];
-                }
-
-                const samplers = data
-                    .map((s) => s.name ?? '')
-                    .filter((name) => name.trim().length > 0);
-                this._samplersCache = { data: samplers, timestamp: Date.now(), serverUrl };
-                return samplers;
-            } finally {
-                this._inFlightSamplers = null;
-            }
-        })();
-
-        this._inFlightSamplers = fetchPromise;
-        return fetchPromise;
+    public fetchSamplers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        return this.fetchCachedAsset(
+            'samplers',
+            '/sdapi/v1/samplers',
+            (data) => (data as Array<{ name?: string }>).map((s) => s.name ?? ''),
+            { signal, forceRefresh }
+        );
     }
 
     /**
@@ -300,122 +250,33 @@ export class SdWebUIProvider extends BaseGenerationProvider {
      * 现代 A1111 1.9+ / Forge / reForge 支持 `/sdapi/v1/schedulers`；
      * 若旧版 WebUI 未实现该端点 (如返回 404)，静默降级返回空数组，不阻断资产拉取。
      */
-    public async fetchSchedulers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
-        const serverUrl = this.getServerUrl();
-        const transport = this.getTransport();
-        const now = Date.now();
-
-        if (
-            !forceRefresh &&
-            this._schedulersCache &&
-            this._schedulersCache.serverUrl === serverUrl &&
-            now - this._schedulersCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
-        ) {
-            return this._schedulersCache.data;
-        }
-
-        if (this._inFlightSchedulers) {
-            return this._inFlightSchedulers;
-        }
-
-        const url = `${serverUrl}/sdapi/v1/schedulers`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 15000, signal },
-                    transport
-                );
-                if (!response.ok) {
-                    return [];
-                }
-                const data = (await response.json()) as Array<{ name?: string; label?: string }>;
-
-                if (!Array.isArray(data)) {
-                    return [];
-                }
-
-                const schedulers = data
-                    .map((s) => s.name ?? s.label ?? '')
-                    .filter((name) => name.trim().length > 0);
-                this._schedulersCache = { data: schedulers, timestamp: Date.now(), serverUrl };
-                return schedulers;
-            } catch (err: unknown) {
-                if (signal?.aborted) {
-                    throw err;
-                }
-                return [];
-            } finally {
-                this._inFlightSchedulers = null;
-            }
-        })();
-
-        this._inFlightSchedulers = fetchPromise;
-        return fetchPromise;
+    public fetchSchedulers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        return this.fetchCachedAsset(
+            'schedulers',
+            '/sdapi/v1/schedulers',
+            (data) => (data as Array<{ name?: string; label?: string }>).map((s) => s.name ?? s.label ?? ''),
+            { signal, forceRefresh, degradeOnError: true }
+        );
     }
 
     /**
      * 获取 SD-WebUI 服务端已加载的 LoRA 模型列表。
-     *
-     * @remarks
-     * 支持单飞并发合并与 60 秒短时内存缓存。
-     *
-     * @param signal 中止信号
-     * @param forceRefresh 是否强制忽略缓存拉取最新数据
-     * @returns 可用 LoRA 模型名称数组
      */
-    public async fetchLoras(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
-        const serverUrl = this.getServerUrl();
-        const transport = this.getTransport();
-        const now = Date.now();
-
-        if (
-            !forceRefresh &&
-            this._lorasCache &&
-            this._lorasCache.serverUrl === serverUrl &&
-            now - this._lorasCache.timestamp < SdWebUIProvider.ASSET_CACHE_TTL_MS
-        ) {
-            return this._lorasCache.data;
-        }
-
-        if (this._inFlightLoras) {
-            return this._inFlightLoras;
-        }
-
-        const url = `${serverUrl}/sdapi/v1/loras`;
-        const fetchPromise = (async () => {
-            try {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 15000, signal },
-                    transport
-                );
-                const data = (await response.json()) as Array<{ name?: string; alias?: string }>;
-
-                if (!Array.isArray(data)) {
-                    return [];
-                }
-
-                const loras = data
-                    .map((item) => item.name ?? item.alias ?? '')
-                    .filter((name) => name.trim().length > 0);
-                this._lorasCache = { data: loras, timestamp: Date.now(), serverUrl };
-                return loras;
-            } finally {
-                this._inFlightLoras = null;
-            }
-        })();
-
-        this._inFlightLoras = fetchPromise;
-        return fetchPromise;
+    public fetchLoras(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
+        return this.fetchCachedAsset(
+            'loras',
+            '/sdapi/v1/loras',
+            (data) => (data as Array<{ name?: string; alias?: string }>).map((item) => item.name ?? item.alias ?? ''),
+            { signal, forceRefresh }
+        );
     }
 
     /**
-     * 执行 SD-WebUI 图像生成任务（txt2img）。
+     * 执行 SD-WebUI 图像生成任务（支持 txt2img 与局部重绘 img2img）。
      *
      * 包含以下流程：
      * 1. 读取绘图预设与调用参数，装配请求体与 override_settings；
-     * 2. 发起 txt2img 请求并等待生成结果；
+     * 2. 发起 txt2img 或 img2img 请求并等待生成结果；
      * 3. 将响应的 Base64 图片转换为 PNG Blob 并封装元数据返回。
      *
      * @param request 生图请求参数
@@ -439,17 +300,17 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         // 1. 读取激活预设与常规绘图超参数（优先使用队列快照固定的 drawingPresetId）
         const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
-        const resolvedSteps = (params.steps ?? drawingPreset?.steps) as number | undefined;
-        const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale) as number | undefined;
-        const resolvedSamplerName = (params.samplerName ?? drawingPreset?.samplerName) as string | undefined;
-        const resolvedScheduler = (params.scheduler ?? drawingPreset?.scheduler) as string | undefined;
         const isInpaintMode = params.mode === 'inpaint';
+        const resolvedSteps = (params.steps ?? drawingPreset?.steps ?? 28) as number;
+        const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale ?? 5.5) as number;
+        const resolvedSamplerName = (params.samplerName ?? drawingPreset?.samplerName ?? 'Euler a') as string;
+        const resolvedScheduler = (params.scheduler ?? drawingPreset?.scheduler) as string | undefined;
         // 局部重绘优先沿用底图自身尺寸，避免文生图预设分辨率把底图强行拉伸变形
         const resolvedWidth = (
-            isInpaintMode ? params.width : (params.width ?? drawingPreset?.width)
+            isInpaintMode ? params.width : (params.width ?? drawingPreset?.width ?? 832)
         ) as number | undefined;
         const resolvedHeight = (
-            isInpaintMode ? params.height : (params.height ?? drawingPreset?.height)
+            isInpaintMode ? params.height : (params.height ?? drawingPreset?.height ?? 1216)
         ) as number | undefined;
         const resolvedSeed = (params.seed ?? drawingPreset?.seed ?? -1) as number;
         const resolvedBaseModel = (params.baseModel ?? drawingPreset?.baseModel) as string | undefined;
@@ -472,7 +333,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
                 resolvedVae.trim().toLowerCase() === 'automatic' ? 'Automatic' : resolvedVae;
         }
 
-        // 3. 装配 txt2img 请求体
+        // 3. 装配基础生成请求体（后续按 mode 分支适配 txt2img 与 img2img）
         const requestBody: Record<string, unknown> = {
             prompt: fullPrompt,
             negative_prompt: fullNegativePrompt,
@@ -519,8 +380,8 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             }
 
             const [initImageBase64, maskImageBase64] = await Promise.all([
-                imageInputToBase64(sourceImage),
-                imageInputToBase64(maskImage),
+                imageInputToBase64(sourceImage, { signal, timeoutMs: maxTimeoutMs, transport }),
+                imageInputToBase64(maskImage, { signal, timeoutMs: maxTimeoutMs, transport }),
             ]);
 
             requestBody['init_images'] = [initImageBase64];
@@ -570,11 +431,6 @@ export class SdWebUIProvider extends BaseGenerationProvider {
                 throw new Error(`SD-WebUI 服务响应错误 (${err.status}): ${detail}`);
             }
             throw err;
-        }
-
-        if (!resp.ok) {
-            const errBody = await resp.text().catch(() => '');
-            throw new Error(`SD-WebUI 服务响应错误 (${resp.status}): ${errBody || resp.statusText}`);
         }
 
         // 5. 解析响应并转换图像二进制（A1111 images[] 末尾可能追加 grid 图，取第一张即为目标图）

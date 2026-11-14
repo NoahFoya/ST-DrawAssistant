@@ -166,7 +166,7 @@
     box-sizing: border-box;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-lora-modal-header {
         padding: 12px 14px;
     }

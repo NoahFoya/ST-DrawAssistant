@@ -8,7 +8,7 @@
  */
 
 /* 1. 调试日志容器外壳 (.da-log-terminal)
-   深色底色（#0d1117），限制 280px 最大视高，开启纵向滚动 */
+   深色底色（--da-terminal-bg / #101014），限制 280px 最大视高，开启纵向滚动 */
 .da-log-terminal {
     background: var(--da-terminal-bg, #0d1117);
     color: var(--da-terminal-text, #e6edf3);

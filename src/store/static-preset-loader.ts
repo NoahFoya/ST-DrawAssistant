@@ -104,6 +104,10 @@ export function createEmptyPresetSettings(): PresetSettings {
     };
 }
 
+export function getCachedOfficialPresets(): PresetSettings | null {
+    return cachedOfficialPresets ? structuredClone(cachedOfficialPresets) : null;
+}
+
 /**
  * 根据模块所在路径推导 `config/presets/` 的相对路径前缀。
  *

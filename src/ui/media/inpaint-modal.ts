@@ -5,7 +5,7 @@
  * 基于 Soft UI 规范提供 Canvas 遮罩涂抹与局部重绘参数配置能力：
  * 1. 采用双栏工作台布局：左侧承载画布舞台、工具条与快捷键指示；右侧承载重绘参数与提示词检查器；
  * 2. 离屏输出标准二值掩码（黑色底景 #000000 代表保留，白色选区 #ffffff 代表重绘）；
- * 3. 具备实时随动画笔光圈、画布滚轮快捷缩放、画笔与橡皮擦分段切换、一键清空及即时参数记忆；
+ * 3. 具备实时随动画笔光圈、滚轮调节画笔大小、画笔与橡皮擦分段切换、一键清空及即时参数记忆；
  * 4. 支持 Ctrl+Enter 快捷提交与 Esc 退出，并在销毁时安全注销所有监听与引用。
  */
 
@@ -15,6 +15,9 @@ import { Slider } from '../components/slider';
 import { SegmentedControl } from '../components/segmented-control';
 import { renderIcon } from '../components/icons';
 import { Toast } from '../feedback/toast';
+import { providerRegistry } from '../../provider/registry';
+import { settingsStore } from '../../store/settings-store';
+import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
 
 /** 局部重绘偏好配置缓存键名 */
@@ -51,6 +54,8 @@ export interface InpaintConfirmResult {
 export interface InpaintModalOptions {
     /** 原底图地址 (Blob URL 或 Base64 / 相对路径) */
     readonly imageSrc: string;
+    /** 可选的本地存储资产 ID（当 Blob URL 已释放时用于 IDB 回退恢复） */
+    readonly imageId?: string;
     /** 初始正向提示词 */
     readonly initialPrompt?: string;
     /** 初始负向提示词 */
@@ -384,9 +389,14 @@ export class InpaintModal implements Disposable {
         promptGroup.appendChild(promptInput);
         promptSection.appendChild(promptGroup);
 
-        // 负向提示词
+        // 负向提示词（遵循当前激活引擎能力）
+        const activeProvider = settingsStore.getSettings().activeProvider;
+        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const negGroup = document.createElement('div');
         negGroup.className = 'da-inpaint-field-group';
+        if (!supportsNegative) {
+            negGroup.style.display = 'none';
+        }
         const negLabel = document.createElement('span');
         negLabel.className = 'da-inpaint-field-label';
         negLabel.textContent = '负向过滤 (可选)';
@@ -395,7 +405,7 @@ export class InpaintModal implements Disposable {
         const negPromptInput = document.createElement('textarea');
         negPromptInput.className = 'da-inpaint-textarea';
         negPromptInput.rows = 2;
-        negPromptInput.value = this.options.initialNegativePrompt || '';
+        negPromptInput.value = supportsNegative ? this.options.initialNegativePrompt || '' : '';
         negPromptInput.placeholder = '过滤不需要的内容...';
         this.negPromptInput = negPromptInput;
         negGroup.appendChild(negPromptInput);
@@ -511,7 +521,31 @@ export class InpaintModal implements Disposable {
             this.syncCanvasLayout();
         };
 
-        img.onerror = (err) => {
+        let fallbackAttempted = false;
+        img.onerror = async (err) => {
+            if (this.isDisposed) {
+                return;
+            }
+            if (!fallbackAttempted && this.options.imageId) {
+                fallbackAttempted = true;
+                try {
+                    const blob = await imageStorage.getImageBlob(this.options.imageId);
+                    if (this.isDisposed) {
+                        return;
+                    }
+                    if (blob && blob.size > 0) {
+                        const objUrl = URL.createObjectURL(blob);
+                        this.disposers.push(() => URL.revokeObjectURL(objUrl));
+                        img.src = objUrl;
+                        return;
+                    }
+                } catch (fallbackErr) {
+                    logger.warn('[InpaintModal] 本地 Blob 回退恢复失败:', fallbackErr);
+                }
+            }
+            if (this.isDisposed) {
+                return;
+            }
             logger.error('[InpaintModal] 底图加载失败:', err);
             Toast.error('底图加载失败，请检查网络或资源地址');
             this.handleCancel();
@@ -763,8 +797,10 @@ export class InpaintModal implements Disposable {
             return;
         }
 
+        const activeProvider = settingsStore.getSettings().activeProvider;
+        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const prompt = this.promptInput?.value.trim() ?? '';
-        const negativePrompt = this.negPromptInput?.value.trim() || undefined;
+        const negativePrompt = supportsNegative ? this.negPromptInput?.value.trim() || undefined : undefined;
 
         if (!prompt) {
             Toast.warning('重绘正向提示词不能为空');

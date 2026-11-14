@@ -397,8 +397,8 @@ export class GenerationOrchestrator {
      * 包含以下流程：
      * 1. 任务状态机迁移至 generating 状态并建立超时与取消控制；
      * 2. 调用对应 Provider 发送生图请求，支持超时与取消；
-     * 3. 生成完成后保存图片至本地存储，更新楼层消息并触发 image:ready 事件；
-     * 4. 若配置了服务端转存，在后台执行上传。
+     * 3. 生成完成后保存图片至本地存储，并将任务状态迁移至 completed 状态；
+     * 4. 若仍在原会话中，同步回写楼层消息（内部按 saveToServer 配置执行服务端转存）并触发 image:ready 事件；跨会话完成时仅保留在本地图库。
      *
      * @param taskId 待执行任务标识符
      */
@@ -414,12 +414,19 @@ export class GenerationOrchestrator {
         const imageId = task.imageId || `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         task.imageId = imageId;
 
-        // 2. 任务状态机迁移至 generating 状态
-        this.transitionTaskStatus(taskId, 'generating', { imageId });
-
-        // 3. 建立 AbortController 与超时控制
+        // 2. 先注册 AbortController，确保同步状态事件回调触发取消时可立即中止
         const controller = new AbortController();
         this._controllers.set(taskId, controller);
+
+        // 3. 任务状态机迁移至 generating 状态
+        this.transitionTaskStatus(taskId, 'generating', { imageId });
+
+        if (controller.signal.aborted || this.isTaskCancelled(taskId)) {
+            this._controllers.delete(taskId);
+            this._activeCount = Math.max(0, this._activeCount - 1);
+            this.processQueue();
+            return;
+        }
 
         let isTimedOut = false;
         let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -490,7 +497,7 @@ export class GenerationOrchestrator {
                     : undefined,
             };
 
-            // 9. 资产原子持久化（成功后同步写入元数据与二进制 Blob，保证图库索引纯净）
+            // 9. 分表持久化（写入元数据索引与图像二进制 Blob，任一步失败时尝试回滚清理）
             const record: StoredImageRecord = {
                 imageId,
                 taskId: task.taskId,
@@ -503,6 +510,17 @@ export class GenerationOrchestrator {
             };
 
             await this._storage.saveImage(record, finalBlob);
+
+            if (timeoutTimer !== null) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+            this._timeoutTimers.delete(taskId);
+
+            if (controller.signal.aborted || this.isTaskCancelled(taskId)) {
+                logger.info(`已取消任务在保存图像后退出: ${taskId}`);
+                return;
+            }
 
             // 10. 任务状态机迁移至完成态
             task.generationMetadata = finalizedMetadata;
@@ -517,9 +535,11 @@ export class GenerationOrchestrator {
                 );
             } else {
                 try {
-                    await this._sessionLifecycle.updateMessageSlot(task.target, {
-                        imageId,
-                    });
+                    await this._sessionLifecycle.updateMessageSlot(
+                        task.target,
+                        { imageId },
+                        { signal: controller.signal }
+                    );
                 } catch (writeErr) {
                     logger.error(`任务 [${taskId}] 楼层资产回写异常:`, writeErr);
                 }
@@ -608,6 +628,13 @@ export class GenerationOrchestrator {
         for (const id of terminalIds) {
             this._tasks.delete(id);
         }
+    }
+
+    /**
+     * 恢复调度器运行状态（用于插件停用后重新激活）。
+     */
+    public restore(): void {
+        this._isDisposed = false;
     }
 
     /**

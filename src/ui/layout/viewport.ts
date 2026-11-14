@@ -12,7 +12,7 @@
 import type { Disposable } from '../types';
 
 /** 移动端标准断点（与 styles/skin/responsive.css 保持一致） */
-export const MOBILE_VIEWPORT_BREAKPOINT = 680;
+export const MOBILE_VIEWPORT_BREAKPOINT = 640;
 /** 窄屏竖屏手机断点（与 styles/skin/responsive.css 保持一致） */
 export const NARROW_VIEWPORT_BREAKPOINT = 520;
 /** 判定软键盘开启的视口高度最小差值阈值（单位：px） */
@@ -104,7 +104,7 @@ export function getViewportRect(): ViewportRect {
 }
 
 /**
- * 判断当前是否处于紧凑移动端宽度（<= 680px）。
+ * 判断当前是否处于紧凑移动端宽度（<= 640px）。
  */
 export function isCompactMobileViewport(): boolean {
     return getViewportRect().isCompactMobile;

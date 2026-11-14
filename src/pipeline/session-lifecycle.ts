@@ -250,7 +250,7 @@ export class SessionLifecycleManager implements Disposable {
      * 清理指定消息当前激活分支（及对应的 swipe_info 快照）上的全部楼层生图记录。
      *
      * @param messageId 目标消息楼层数字索引
-     * @returns 是否执行了清理并保存成功
+     * @returns 是否检测到并清理了楼层生图记录（有变更时异步触发 saveChat）
      */
     public clearMessageSlotDrawings(messageId: number): boolean {
         const context = this._getContext();
@@ -287,11 +287,13 @@ export class SessionLifecycleManager implements Disposable {
      *
      * @param target 目标楼层挂载定位坐标
      * @param slotEntryOrId 图像资产条目或图像标识符
+     * @param options 可选控制项（如中止回写的 signal）
      * @returns 是否成功写入并保存
      */
     public async updateMessageSlot(
         target: SlotMountTarget,
-        slotEntryOrId: DrawingSlotEntry | string
+        slotEntryOrId: DrawingSlotEntry | string,
+        options?: { signal?: AbortSignal }
     ): Promise<boolean> {
         const context = this._getContext();
         if (!context) {
@@ -355,7 +357,44 @@ export class SessionLifecycleManager implements Disposable {
             : { ...baseEntry };
 
         const charName = this.getCurrentCharacterName(context);
-        const syncResult = await serverStorageService.syncSlotServerImage(candidateEntry, charName);
+        const targetChatId = context.chatId;
+        const targetMessageObj = message;
+        const syncResult = await serverStorageService.syncSlotServerImage(
+            candidateEntry,
+            charName,
+            options?.signal
+        );
+        if (options?.signal?.aborted) {
+            logger.info(`楼层资产回写已取消 (#${target.messageId})`);
+            return false;
+        }
+
+        const latestContext = this._getContext();
+        const latestMessage = latestContext?.chat?.[target.messageId];
+        if (
+            (targetChatId && latestContext?.chatId && latestContext.chatId !== targetChatId) ||
+            latestMessage !== targetMessageObj
+        ) {
+            logger.warn(
+                `写入消息楼层跳过：目标会话或楼层消息已变更/删除 (#${target.messageId})，图像仍保留于图库`
+            );
+            return false;
+        }
+
+        const hasSwipeInfo = Array.isArray(latestMessage.swipe_info);
+        const activeSwipe = latestMessage.swipe_id ?? 0;
+        const hasTargetSwipe =
+            !hasSwipeInfo ||
+            latestMessage.swipe_id === undefined ||
+            activeSwipe === swipeId ||
+            (swipeId >= 0 && swipeId < latestMessage.swipe_info!.length);
+        if (!hasTargetSwipe) {
+            logger.warn(
+                `写入消息楼层跳过：目标分支 (#${target.messageId}, 分支 ${swipeId}) 已不存在，图像仍保留于图库`
+            );
+            return false;
+        }
+
         const finalImageUrl = syncResult.imageUrl || candidateEntry.imageUrl;
 
         const entry: DrawingSlotEntry = {

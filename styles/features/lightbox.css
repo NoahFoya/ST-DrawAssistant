@@ -70,7 +70,7 @@
     align-items: center;
     justify-content: space-between;
     pointer-events: none;
-    z-index: 10;
+    z-index: var(--da-z-raised, 10);
 }
 
 .da-lightbox-info {
@@ -127,7 +127,7 @@
     justify-content: center;
     cursor: pointer;
     transition: background 0.18s var(--da-ease), transform 0.18s var(--da-ease);
-    z-index: 10;
+    z-index: var(--da-z-raised, 10);
 }
 
 .da-lightbox-nav:hover {
@@ -229,7 +229,7 @@
 }
 
 /* 7. 移动端与小屏适配 */
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-lightbox-title {
         max-width: 44vw;
         font-size: 0.84em;

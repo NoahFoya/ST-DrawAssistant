@@ -198,9 +198,6 @@ export class MaterialImageStorage {
             if (val instanceof Blob) {
                 return val;
             }
-            if (typeof val === 'string' && val.startsWith('data:')) {
-                return dataUrlToBlob(val);
-            }
         } catch {
             // 非浏览器测试环境忽略驱动异常
         }

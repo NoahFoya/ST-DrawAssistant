@@ -15,6 +15,9 @@ import type {
 } from '@types';
 import { type SettingsStore, settingsStore } from '../store/settings-store';
 import { resolvePromptMacros } from './macro-resolver';
+import { cleanTagSegments } from './material-definitions';
+import { stripThinkingAndComments } from './prompt-injector';
+import { providerRegistry } from '../provider/registry';
 import { logger } from '../util/logger';
 
 /**
@@ -47,24 +50,18 @@ export function convertWeightToBrackets(text: string): string {
  * @param userNegative 用户特定排除负向提示词
  * @returns 合并去重后的负向提示词字符串
  */
-export function mergeNegativePrompts(presetNegative?: string, userNegative?: string): string {
+export function mergeNegativePrompts(
+    presetNegative?: string,
+    userNegative?: string,
+    deduplicate = true
+): string {
     const p1 = (presetNegative ?? '').trim();
     const p2 = (userNegative ?? '').trim();
     if (!p1 && !p2) return '';
     if (!p1) return p2;
     if (!p2) return p1;
 
-    const seen = new Set<string>();
-    const tags: string[] = [];
-    for (const part of `${p1}, ${p2}`.split(',')) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-        const lookup = trimmed.toLowerCase();
-        if (seen.has(lookup)) continue;
-        seen.add(lookup);
-        tags.push(trimmed);
-    }
-    return tags.join(', ');
+    return cleanTagSegments(`${p1}, ${p2}`, { deduplicate });
 }
 
 /**
@@ -111,14 +108,9 @@ export function sanitizeMessageText(rawText: string): string {
         return '';
     }
 
-    let text = rawText;
-    // 1. 剥离 HTML 注释
-    text = text.replace(/<!--[\s\S]*?-->/g, '');
-    // 2. 剥离已闭合的思考链
-    text = text.replace(/<think(?:ing)?[\s\S]*?<\/think(?:ing)?>/gi, '');
-    // 3. 剥离未闭合的思考链草稿（如流式生成截断中）
-    text = text.replace(/<think(?:ing)?>[\s\S]*$/gi, '');
-    // 4. 剥离代码块与代码标签
+    // 1. 复用公共规则剥离 HTML 注释与 <think>/<thinking> 思考链
+    let text = stripThinkingAndComments(rawText);
+    // 2. 剥离代码块与代码标签
     text = text.replace(/<pre[\s\S]*?<\/pre>/gi, '');
     text = text.replace(/<code[\s\S]*?<\/code>/gi, '');
     text = text.replace(/```[\s\S]*?```/g, '');
@@ -143,44 +135,7 @@ export function sanitizeMessageText(rawText: string): string {
  * @returns 规整后的单行提示词文本
  */
 export function cleanPromptText(rawPrompt: string, deduplicate = false): string {
-    if (!rawPrompt) {
-        return '';
-    }
-
-    // 1. 将中文全角逗号与顿号替换为半角英文逗号
-    const normalized = rawPrompt.replace(/[，、]/g, ',');
-
-    const segments = normalized
-        .split(/[\r\n]+/)
-        .map((seg) => seg.trim())
-        .filter(Boolean);
-
-    const tags: string[] = [];
-    const seenTags = new Set<string>();
-
-    for (const seg of segments) {
-        const parts = seg.split(',');
-        for (const part of parts) {
-            const trimmed = part.trim();
-            if (!trimmed) {
-                continue;
-            }
-
-            if (deduplicate) {
-                // 特殊语法标签（如 <lora:...>）严格保留原样，不做大小写忽略比较
-                const isSpecialTag = trimmed.startsWith('<') && trimmed.endsWith('>');
-                const lookupKey = isSpecialTag ? trimmed : trimmed.toLowerCase();
-                if (seenTags.has(lookupKey)) {
-                    continue;
-                }
-                seenTags.add(lookupKey);
-            }
-
-            tags.push(trimmed);
-        }
-    }
-
-    return tags.join(', ');
+    return cleanTagSegments(rawPrompt, { deduplicate });
 }
 
 /** 楼层中提取出的生图指令描述 */
@@ -377,12 +332,17 @@ export class PromptPipeline {
         // 1. 先行对原始提示词进行思考链与代码块清洗，防止模型思考草稿干扰提示词
         const sanitizedRaw = sanitizeMessageText(options.rawPrompt);
 
-        // 2. 分离正向与负向提示词（以管道符 | 为界）
-        const { positive: rawPositive, negative: rawNegative } = separatePromptByPipe(sanitizedRaw);
+        // 2. 依据 Provider 能力决定是否按管道符 | 分离负向提示词
+        const supportsNegative = provider
+            ? providerRegistry.getProvider(provider)?.supportsNegativePrompt !== false
+            : true;
+        const { positive: rawPositive, negative: rawNegative } = supportsNegative
+            ? separatePromptByPipe(sanitizedRaw)
+            : { positive: sanitizedRaw.trim(), negative: '' };
 
-        // 提取 options.parameters 中的显式负向词 (若存在)
+        // 提取 options.parameters 中的显式负向词 (若后端支持)
         const paramNegative =
-            typeof params.negativePrompt === 'string'
+            supportsNegative && typeof params.negativePrompt === 'string'
                 ? params.negativePrompt.trim()
                 : '';
 
@@ -472,8 +432,8 @@ export class PromptPipeline {
             if (suffix) {
                 positive = positive ? `${positive}, ${suffix}` : suffix;
             }
-            if (defaultNeg) {
-                negative = mergeNegativePrompts(defaultNeg, negative);
+            if (supportsNegative && defaultNeg) {
+                negative = mergeNegativePrompts(defaultNeg, negative, shouldDeduplicate);
             }
         }
 

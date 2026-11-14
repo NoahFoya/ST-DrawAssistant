@@ -15,6 +15,7 @@ import { PresetToolbar, type PresetToolbarItem, type PresetActionType } from './
 import { type LoraEntryItem, type LoraSyntaxMode } from './lora-manager';
 import { openLoraModal } from '../modal/lora-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from './tag-autocomplete';
+import { ConfirmDialog } from '../feedback/confirm-dialog';
 
 /** 提示词卡片表单数据模型 */
 export interface PromptCardData {
@@ -49,13 +50,15 @@ export interface PromptPresetCardOptions {
     /** 可选 LoRA 模型列表 */
     availableModels?: string[];
     /** 预设运维动作回调 */
-    onAction?: (action: PresetActionType, presetId: string, data?: PromptCardData) => void;
+    onAction?: (
+        action: PresetActionType,
+        presetId: string,
+        data?: PromptCardData
+    ) => void | boolean | Promise<void | boolean>;
     /** 导入文件自定义解析回调 */
     onImportFile?: (file: File) => void;
     /** 表单内容变更回调 */
     onChange?: (data: PromptCardData) => void;
-    /** 操作确认回调。未传入时由 PresetToolbar 委托全局确认对话框 ConfirmDialog.confirm */
-    confirmHandler?: (message: string) => Promise<boolean> | boolean;
     /** 附加 CSS 类名 */
     className?: string;
 }
@@ -79,7 +82,11 @@ export class PromptPresetCard implements UIComponent {
     private readonly showLora: boolean;
     private readonly showNegativePrompt: boolean;
     private readonly onChangeCallback?: (data: PromptCardData) => void;
-    private readonly onActionCallback?: (action: PresetActionType, presetId: string, data?: PromptCardData) => void;
+    private readonly onActionCallback?: (
+        action: PresetActionType,
+        presetId: string,
+        data?: PromptCardData
+    ) => void | boolean | Promise<void | boolean>;
 
     private readonly prefixInputListener: () => void;
     private readonly suffixInputListener: () => void;
@@ -132,7 +139,6 @@ export class PromptPresetCard implements UIComponent {
         this.toolbar = new PresetToolbar({
             presets: this.buildToolbarItems(this.rawPresets),
             activePresetId: this.activePresetId,
-            confirmHandler: options.confirmHandler,
             onAction: (action, presetId) => this.handlePresetAction(action, presetId),
             onImportFile: options.onImportFile
         });
@@ -284,6 +290,8 @@ export class PromptPresetCard implements UIComponent {
      * @param activeId 可选的激活预设 ID
      */
     public setPresets(presets: PromptCardPresetItem[], activeId?: string): void {
+        const prevActiveId = this.activePresetId;
+        const wasDirty = this.checkIsDirty();
         this.rawPresets = [...presets];
         let targetId = activeId !== undefined ? activeId : this.activePresetId;
         let found = this.rawPresets.find((p) => p.id === targetId);
@@ -295,6 +303,11 @@ export class PromptPresetCard implements UIComponent {
         this.activePresetId = targetId || '';
 
         this.toolbar.setPresets(this.buildToolbarItems(this.rawPresets), this.activePresetId);
+        if (found && wasDirty && this.activePresetId === prevActiveId) {
+            // 同 preset 池刷新时保留用户未保存草稿
+            this.toolbar.setDirty(true);
+            return;
+        }
         if (found) {
             this.currentData = this.cloneData(found.data);
             this.baselineData = this.cloneData(found.data);
@@ -312,6 +325,37 @@ export class PromptPresetCard implements UIComponent {
             this.syncInputs(this.currentData);
             this.toolbar.setDirty(false);
         }
+    }
+
+    /**
+     * 获取当前激活的提示词预设 ID。
+     */
+    public getActivePresetId(): string {
+        return this.activePresetId;
+    }
+
+    /**
+     * 保存当前未保存的提示词草稿。
+     */
+    public async saveDraft(): Promise<boolean> {
+        if (!this.checkIsDirty()) return true;
+        if (!this.activePresetId) {
+            return await this.handlePresetAction('saveAs', '');
+        }
+        return await this.handlePresetAction('save', this.activePresetId);
+    }
+
+    /**
+     * 静默放弃当前提示词草稿并恢复为基线快照。
+     */
+    public discardDraft(): void {
+        const base =
+            this.rawPresets.find((p) => p.id === this.activePresetId)?.data ?? this.baselineData;
+        this.currentData = this.cloneData(base);
+        this.baselineData = this.cloneData(base);
+        this.syncInputs(this.currentData);
+        this.toolbar.setDirty(false);
+        this.onChangeCallback?.(this.getValue());
     }
 
     /**
@@ -364,8 +408,23 @@ export class PromptPresetCard implements UIComponent {
     }
 
     /** 处理预设工具栏运维动作 */
-    private handlePresetAction(action: PresetActionType, presetId: string): void {
-        if (action === 'select') {
+    private async handlePresetAction(action: PresetActionType, presetId: string): Promise<boolean> {
+        if (action === 'new') {
+            if (this.checkIsDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '新建提示词预设确认',
+                    message: '当前提示词预设存在未保存的修改，新建将放弃未保存的修改。是否确定继续新建？',
+                });
+                if (!confirmed) return false;
+            }
+        } else if (action === 'select') {
+            if (presetId !== this.activePresetId && this.checkIsDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '切换提示词预设确认',
+                    message: '当前提示词预设存在未保存的修改，切换将放弃未保存的修改。是否确定继续切换？',
+                });
+                if (!confirmed) return false;
+            }
             this.activePresetId = presetId;
             const found = this.rawPresets.find((p) => p.id === presetId);
             if (found && found.data) {
@@ -375,23 +434,31 @@ export class PromptPresetCard implements UIComponent {
                 this.toolbar.setDirty(false);
                 this.onChangeCallback?.(this.getValue());
             }
-        } else if (action === 'save') {
+        } else if (action === 'reset') {
+            if (this.checkIsDirty()) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '重置修改确认',
+                    message: '确定要放弃当前未保存的提示词修改并恢复初始状态吗？',
+                });
+                if (!confirmed) return false;
+            }
+            this.discardDraft();
+        }
+
+        const result = await this.onActionCallback?.(action, presetId, this.getValue());
+        if (result === false) {
+            return false;
+        }
+
+        if (action === 'save') {
             const target = this.rawPresets.find((p) => p.id === presetId);
             if (target) {
                 target.data = this.cloneData(this.currentData);
             }
             this.baselineData = this.cloneData(this.currentData);
             this.toolbar.setDirty(false);
-        } else if (action === 'reset') {
-            const base = this.rawPresets.find((p) => p.id === presetId)?.data ?? this.baselineData;
-            this.currentData = this.cloneData(base);
-            this.baselineData = this.cloneData(base);
-            this.syncInputs(this.currentData);
-            this.toolbar.setDirty(false);
-            this.onChangeCallback?.(this.getValue());
         }
-
-        this.onActionCallback?.(action, presetId, this.getValue());
+        return true;
     }
 
     /** 将最新数据回填至界面控件与概要徽标 */

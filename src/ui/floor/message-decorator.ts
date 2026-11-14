@@ -93,6 +93,8 @@ export class MessageDecorator implements Disposable {
 
     /** 活跃楼层容器的临时生命周期清理回调（预载器与移动端手势定时器等） */
     private readonly activeSlotCleanups = new Map<string, () => void>();
+    private readonly activePreloadCleanups = new Map<string, () => void>();
+    private readonly inFlightRenders = new Map<string, Promise<void>>();
 
     /** 消息级异步装饰代次计数器：在清理、删除或切换分支时递增，阻断在途异步回写过期 DOM */
     private readonly messageGenerations = new Map<number, number>();
@@ -105,7 +107,16 @@ export class MessageDecorator implements Disposable {
     private intersectionObserver: IntersectionObserver | null = null;
 
     public constructor() {
-        this.listenEvents();
+        this.bind();
+    }
+
+    /**
+     * 绑定或恢复内部事件监听（幂等，用于插件重新激活）。
+     */
+    public bind(): void {
+        if (!this.unbindEventListener) {
+            this.listenEvents();
+        }
     }
 
     /**
@@ -805,7 +816,12 @@ export class MessageDecorator implements Disposable {
                         }
 
                         try {
-                            return await generationOrchestrator.submitTask(submitOptions);
+                            const taskId = await generationOrchestrator.submitTask(submitOptions);
+                            const submittedTask = taskId ? generationOrchestrator.getTask(taskId) : undefined;
+                            if (submittedTask?.status === 'generating' && button?.getState() === 'pending') {
+                                button.setState('generating');
+                            }
+                            return taskId;
                         } catch (err: unknown) {
                             const errMessage = err instanceof Error ? err.message : String(err);
                             logger.error(`[MessageDecorator] 任务提交失败: ${errMessage}`);
@@ -963,6 +979,41 @@ export class MessageDecorator implements Disposable {
         const containerKey = this.buildSlotKey(effectiveChatId, messageId, effectiveSwipeId, instructionIndex);
         const token = this.captureMessageToken(messageId);
 
+        const prevRender = this.inFlightRenders.get(containerKey) ?? Promise.resolve();
+        const renderPromise = prevRender
+            .catch(() => undefined)
+            .then(() =>
+                this.performRenderImageToFloor(
+                    messageId,
+                    imageId,
+                    instructionIndex,
+                    serverImageUrl,
+                    effectiveChatId,
+                    effectiveSwipeId,
+                    containerKey,
+                    token
+                )
+            );
+        this.inFlightRenders.set(containerKey, renderPromise);
+        try {
+            await renderPromise;
+        } finally {
+            if (this.inFlightRenders.get(containerKey) === renderPromise) {
+                this.inFlightRenders.delete(containerKey);
+            }
+        }
+    }
+
+    private async performRenderImageToFloor(
+        messageId: number,
+        imageId: string | undefined,
+        instructionIndex: number,
+        serverImageUrl: string | undefined,
+        effectiveChatId: string,
+        effectiveSwipeId: number,
+        containerKey: string,
+        token: { clearEpoch: number; generation: number }
+    ): Promise<void> {
         const isStillActiveTarget = (): boolean => {
             if (!this.isMessageTokenValid(messageId, token)) {
                 return false;
@@ -977,6 +1028,10 @@ export class MessageDecorator implements Disposable {
             }
             return true;
         };
+
+        if (!isStillActiveTarget()) {
+            return;
+        }
 
         const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
         if (!messageDom) {
@@ -1015,6 +1070,8 @@ export class MessageDecorator implements Disposable {
                 this.removeSkeleton(messageId, instructionIndex, effectiveChatId, effectiveSwipeId);
                 const existingContainer = this.activeImageContainers.get(containerKey);
                 if (existingContainer) {
+                    this.activePreloadCleanups.get(containerKey)?.();
+                    this.activePreloadCleanups.delete(containerKey);
                     this.activeSlotCleanups.get(containerKey)?.();
                     this.activeSlotCleanups.delete(containerKey);
                     existingContainer.remove();
@@ -1080,8 +1137,8 @@ export class MessageDecorator implements Disposable {
             delete existingImg.dataset.fallbackApplied;
             bindImageFallback(existingImg);
 
-            // 清理当前楼层容器上一次挂起的未决清理器（如上一轮重绘预载器）
-            this.activeSlotCleanups.get(containerKey)?.();
+            // 清理当前楼层容器上一次挂起的未决预载器（保留既有手势交互清理器）
+            this.activePreloadCleanups.get(containerKey)?.();
 
             // 后台静默预载，待图像完成加载后再切换 src 并移除遮罩，避免白屏闪烁
             const preloader = new Image();
@@ -1100,6 +1157,13 @@ export class MessageDecorator implements Disposable {
                 if (applied) return;
                 applied = true;
                 cleanupPreloader();
+                this.activePreloadCleanups.delete(containerKey);
+                if (
+                    this.activeImageContainers.get(containerKey) !== existingContainer ||
+                    !isStillActiveTarget()
+                ) {
+                    return;
+                }
                 existingImg.src = displayUrl;
                 existingImg.classList.remove('da-floor-image--regenerating');
             };
@@ -1117,10 +1181,12 @@ export class MessageDecorator implements Disposable {
                 fallbackTimer = setTimeout(applySwap, 8000);
             }
 
-            this.activeSlotCleanups.set(containerKey, () => {
-                cleanupPreloader();
-                applied = true;
-            });
+            if (!applied) {
+                this.activePreloadCleanups.set(containerKey, () => {
+                    cleanupPreloader();
+                    applied = true;
+                });
+            }
 
             const existingState = this.activeSlotStates.get(containerKey);
             if (existingState) {
@@ -1606,6 +1672,8 @@ export class MessageDecorator implements Disposable {
 
         for (const [key, container] of this.activeImageContainers.entries()) {
             if (isTargetSlot(key)) {
+                this.activePreloadCleanups.get(key)?.();
+                this.activePreloadCleanups.delete(key);
                 this.activeSlotCleanups.get(key)?.();
                 this.activeSlotCleanups.delete(key);
                 container.remove();
@@ -1655,6 +1723,8 @@ export class MessageDecorator implements Disposable {
                 continue;
             }
 
+            this.activePreloadCleanups.get(key)?.();
+            this.activePreloadCleanups.delete(key);
             this.activeSlotCleanups.get(key)?.();
             this.activeSlotCleanups.delete(key);
             this.activeSlotStates.delete(key);
@@ -1701,10 +1771,20 @@ export class MessageDecorator implements Disposable {
         this.clearEpoch += 1;
         this.messageGenerations.clear();
         this.inFlightDecorations.clear();
+        this.inFlightRenders.clear();
         if (this.intersectionObserver) {
             this.intersectionObserver.disconnect();
             this.intersectionObserver = null;
         }
+
+        for (const cleanup of this.activePreloadCleanups.values()) {
+            try {
+                cleanup();
+            } catch {
+                // 忽略注销异常
+            }
+        }
+        this.activePreloadCleanups.clear();
 
         for (const cleanup of this.activeSlotCleanups.values()) {
             try {

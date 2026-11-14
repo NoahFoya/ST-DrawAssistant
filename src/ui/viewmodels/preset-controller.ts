@@ -12,6 +12,7 @@ import type { PresetActionType, PresetToolbarItem } from '../composite/preset-to
 import { settingsStore } from '../../store/settings-store';
 import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { downloadJsonFile } from '../../util/download';
 
 export interface PresetControllerOptions<TData extends Record<string, unknown>> {
     /** 预设所属分类 */
@@ -261,28 +262,44 @@ export class PresetController<TData extends Record<string, unknown>> {
     }
 
     /**
-     * 统一响应 PresetToolbar 的 8 项操作动作。
+     * 统一响应 PresetToolbar 的预设切换与 8 项工具栏操作动作。
      */
-    public async handleAction(action: PresetActionType, targetId?: string): Promise<void> {
+    public async handleAction(
+        action: PresetActionType,
+        targetId?: string
+    ): Promise<boolean> {
         if (this.options.canPerformAction) {
             const check = this.options.canPerformAction(action, this.draftConfig.value);
             if (!check.allowed) {
                 if (check.message) {
                     Toast.show(check.message, { level: 'error' });
                 }
-                return;
+                return false;
             }
         }
 
         switch (action) {
             case 'select': {
                 if (targetId !== undefined) {
+                    if (
+                        targetId !== this.activePresetId.value &&
+                        this.isDirty.value
+                    ) {
+                        const confirmed = await ConfirmDialog.confirm({
+                            title: '切换预设确认',
+                            message:
+                                '当前预设存在未保存的修改，切换将放弃未保存的修改。是否确定继续切换？',
+                        });
+                        if (!confirmed) {
+                            return false;
+                        }
+                    }
                     this.applyActivePreset(targetId);
                     if (this.options.showToast && this.currentPreset.value) {
                         Toast.show(`已切换预设: ${this.currentPreset.value.name}`, { level: 'info' });
                     }
                 }
-                break;
+                return true;
             }
 
             case 'new': {
@@ -292,7 +309,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                         title: '新建预设确认',
                         message: '当前预设存在未保存的修改，新建将放弃未保存的修改。是否确定继续新建？',
                     });
-                    if (!confirmed) return;
+                    if (!confirmed) return false;
                 }
 
                 const list = this.fetchPresetsList();
@@ -312,7 +329,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                         return null;
                     },
                 });
-                if (!newName || !newName.trim()) return;
+                if (!newName || !newName.trim()) return false;
 
                 const newId = this.generateUniqueId();
                 const initialData = this.options.defaultTemplate
@@ -330,7 +347,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                 if (this.options.showToast) {
                     Toast.show(`已新建预设: ${newPreset.name}`, { level: 'success' });
                 }
-                break;
+                return true;
             }
 
             case 'save': {
@@ -338,7 +355,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                     const missing = this.options.validateRequired(this.draftConfig.value);
                     if (missing.length > 0) {
                         Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
-                        return;
+                        return false;
                     }
                 }
                 const cur = this.currentPreset.value;
@@ -358,7 +375,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                             return null;
                         },
                     });
-                    if (!newName || !newName.trim()) return;
+                    if (!newName || !newName.trim()) return false;
 
                     const newId = this.generateUniqueId();
                     const newPreset: PresetItem<TData> = {
@@ -372,7 +389,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                     if (this.options.showToast) {
                         Toast.show(`已新建并保存预设: ${newPreset.name}`, { level: 'success' });
                     }
-                    return;
+                    return true;
                 }
 
                 const toSave: PresetItem<TData> = {
@@ -388,7 +405,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                 if (this.options.showToast) {
                     Toast.show('已成功保存修改', { level: 'success' });
                 }
-                break;
+                return true;
             }
 
             case 'saveAs': {
@@ -396,11 +413,11 @@ export class PresetController<TData extends Record<string, unknown>> {
                     const missing = this.options.validateRequired(this.draftConfig.value);
                     if (missing.length > 0) {
                         Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
-                        return;
+                        return false;
                     }
                 }
                 const cur = this.currentPreset.value;
-                if (!cur) return;
+                if (!cur) return false;
 
                 const defaultCloneName = `${cur.name || '预设'} (副本)`;
                 const list = this.fetchPresetsList();
@@ -419,7 +436,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                         return null;
                     },
                 });
-                if (!targetName || !targetName.trim()) return;
+                if (!targetName || !targetName.trim()) return false;
 
                 const newId = this.generateUniqueId();
                 const cloned: PresetItem<TData> = {
@@ -438,7 +455,7 @@ export class PresetController<TData extends Record<string, unknown>> {
 
             case 'rename': {
                 const cur = this.currentPreset.value;
-                if (!cur) return;
+                if (!cur) return false;
 
                 const list = this.fetchPresetsList();
                 const otherNames = new Set(list.filter((p) => p.id !== cur.id).map((p) => p.name));
@@ -459,7 +476,7 @@ export class PresetController<TData extends Record<string, unknown>> {
                         return null;
                     },
                 });
-                if (!newName || !newName.trim() || newName.trim() === cur.name) return;
+                if (!newName || !newName.trim() || newName.trim() === cur.name) return false;
 
                 const updated: PresetItem<TData> = {
                     ...cur,
@@ -477,29 +494,25 @@ export class PresetController<TData extends Record<string, unknown>> {
 
             case 'export': {
                 const cur = this.currentPreset.value;
-                if (!cur) return;
+                if (!cur) return false;
 
                 const prefix =
                     this.options.exportFilenamePrefix ??
                     `${this.options.provider || this.options.category}_preset_`;
                 const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
-                const blob = new Blob([JSON.stringify(cur, null, 2)], {
-                    type: 'application/json',
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${prefix}${safeName}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                downloadJsonFile(`${prefix}${safeName}.json`, cur);
                 break;
             }
 
             case 'reset': {
-                this.draftConfig.value = structuredClone(this.baselineSnapshot.value);
-                this.extraInvalidFields.value = new Set();
-                this.options.onDraftChanged?.(this.draftConfig.value);
-                this.options.onPresetApplied?.(this.currentPreset.value, this.draftConfig.value);
+                if (this.isDirty.value) {
+                    const confirmed = await ConfirmDialog.confirm({
+                        title: '重置修改确认',
+                        message: '确定要放弃当前未保存的修改并恢复为激活预设初始值吗？',
+                    });
+                    if (!confirmed) return false;
+                }
+                this.discardDraft();
                 if (this.options.showToast) {
                     Toast.show('已放弃未保存修改', { level: 'info' });
                 }
@@ -508,7 +521,7 @@ export class PresetController<TData extends Record<string, unknown>> {
 
             case 'delete': {
                 const targetIdToDelete = targetId ?? this.currentPreset.value?.id;
-                if (!targetIdToDelete) return;
+                if (!targetIdToDelete) return false;
 
                 const minRemaining = this.options.minRemainingOnDelete ?? 0;
                 const currentList = this.fetchPresetsList();
@@ -517,8 +530,17 @@ export class PresetController<TData extends Record<string, unknown>> {
                         this.options.minRemainingWarning ?? '至少保留一套基准预设，无法删除',
                         { level: 'warning' }
                     );
-                    return;
+                    return false;
                 }
+
+                const targetItem = currentList.find((p) => p.id === targetIdToDelete);
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '删除预设确认',
+                    message: `确定要删除预设「${targetItem?.name || targetIdToDelete}」吗？此操作无法撤销。`,
+                    isDanger: true,
+                    confirmText: '删除',
+                });
+                if (!confirmed) return false;
 
                 const isDeletingActive = this.currentPreset.value?.id === targetIdToDelete;
                 settingsStore.deletePreset(this.options.category, targetIdToDelete, this.options.provider);
@@ -545,6 +567,17 @@ export class PresetController<TData extends Record<string, unknown>> {
                 break;
             }
         }
+        return true;
+    }
+
+    /**
+     * 静默放弃当前未保存草稿，恢复为激活预设基线快照。
+     */
+    public discardDraft(): void {
+        this.draftConfig.value = structuredClone(this.baselineSnapshot.value);
+        this.extraInvalidFields.value = new Set();
+        this.options.onDraftChanged?.(this.draftConfig.value);
+        this.options.onPresetApplied?.(this.currentPreset.value, this.draftConfig.value);
     }
 
     /**

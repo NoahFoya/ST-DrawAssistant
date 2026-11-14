@@ -289,7 +289,7 @@
     box-sizing: border-box;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
     .da-action-panel {
         width: 100%;
         max-width: 100%;
@@ -457,7 +457,7 @@
 }
 
 .da-highlight-editor__textarea::selection {
-    background: rgba(99, 102, 241, 0.35);
+    background: rgba(var(--da-accent-rgb), 0.35);
     color: transparent;
 }
 
@@ -472,7 +472,7 @@
 }
 
 .da-macro--invalid {
-    color: var(--da-color-danger, #ef4444) !important;
+    color: var(--da-color-error) !important;
     font-weight: 600;
 }
 
