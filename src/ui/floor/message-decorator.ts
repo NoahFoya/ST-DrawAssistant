@@ -1976,8 +1976,13 @@ export class MessageDecorator implements Disposable {
             }
         }
 
+        const {
+            sourceImage: rawSourceImage,
+            maskImage: rawMaskImage,
+            ...restExtraParams
+        } = extraParams || {};
         const mergedParams: Record<string, unknown> = {
-            ...(extraParams || {}),
+            ...restExtraParams,
         };
         if (newNegativePrompt) {
             mergedParams.negativePrompt = newNegativePrompt;
@@ -1985,6 +1990,8 @@ export class MessageDecorator implements Disposable {
 
         const submitOptions: SubmitTaskOptions = {
             rawPrompt: newPrompt,
+            sourceImage: rawSourceImage as Blob | string | undefined,
+            maskImage: rawMaskImage as Blob | string | undefined,
             providerType: currentSettings.activeProvider as ProviderType,
             target,
             parameters: Object.keys(mergedParams).length > 0 ? mergedParams : undefined,

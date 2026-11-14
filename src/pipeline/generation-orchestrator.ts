@@ -260,8 +260,10 @@ export class GenerationOrchestrator {
         });
         const effectiveDrawingPresetId = resolvedDrawing.presetId;
 
-        const effectiveSourceImage = options.sourceImage;
-        const effectiveMaskImage = options.maskImage;
+        const rawParamSource = options.parameters?.sourceImage as Blob | string | undefined;
+        const rawParamMask = options.parameters?.maskImage as Blob | string | undefined;
+        const effectiveSourceImage = options.sourceImage ?? rawParamSource;
+        const effectiveMaskImage = options.maskImage ?? rawParamMask;
 
         const mergedParamsSnapshot: Record<string, unknown> | undefined =
             options.parameters || effectiveDrawingPresetId
@@ -269,6 +271,8 @@ export class GenerationOrchestrator {
                 : undefined;
 
         if (mergedParamsSnapshot) {
+            delete mergedParamsSnapshot.sourceImage;
+            delete mergedParamsSnapshot.maskImage;
             if (effectiveDrawingPresetId && !mergedParamsSnapshot.drawingPresetId) {
                 mergedParamsSnapshot.drawingPresetId = effectiveDrawingPresetId;
             }
