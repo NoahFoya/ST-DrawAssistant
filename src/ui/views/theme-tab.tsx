@@ -2,12 +2,11 @@
  * 主题设置专属选项卡视图 (ThemeTabView)。
  *
  * @remarks
- * 主题设置全功能面板：
- * 1. 主题预设管理与常用配色快捷选择；
+ * 主题设置面板：
+ * 1. 主题预设管理；
  * 2. 重点颜色与渐变配色；
  * 3. 窗口背景、侧边栏背景与卡片背景分层；
- * 4. 边框线与文字颜色对比；
- * 5. 全局圆角、控件圆角与毛玻璃虚化调节。
+ * 4. 边框线与文字颜色对比。
  */
 
 import type { VNode } from 'preact';
@@ -16,22 +15,11 @@ import {
     PreactSettingsView,
     CardView,
     FormFieldView,
-    SliderControl,
     PresetToolbarView,
 } from '../framework';
 import { PresetController } from '../viewmodels';
 import { settingsStore } from '../../store/settings-store';
 import { themeService } from '../theme/theme-service';
-
-const ACCENT_COLOR_PALETTE = [
-    { label: '深色紫', color: '#818cf8' },
-    { label: '暖金色', color: '#f59e0b' },
-    { label: '天青蓝', color: '#0ea5e9' },
-    { label: '薄荷绿', color: '#10b981' },
-    { label: '落日粉', color: '#f43f5e' },
-    { label: '极夜灰', color: '#e2e8f0' },
-    { label: '靛青蓝', color: '#6366f1' },
-];
 
 /** 轻量双模拾色组件：支持点击色块调用原生拾色器与输入框键入十六进制/RGBA */
 function ColorPickerInput(props: {
@@ -116,22 +104,6 @@ export class ThemeTabView extends PreactSettingsView {
                         dirty.add(key as string);
                     }
                 }
-                const numKeys: (keyof ThemePresetData)[] = [
-                    'borderRadius',
-                    'radiusModal',
-                    'radiusCard',
-                    'radiusInput',
-                    'blurModal',
-                    'blurPanel',
-                ];
-                for (const key of numKeys) {
-                    if (
-                        draft[key] !== snap[key] &&
-                        (draft[key] !== undefined || snap[key] !== undefined)
-                    ) {
-                        dirty.add(key as string);
-                    }
-                }
                 return dirty;
             },
             onDraftChanged: (draft) => {
@@ -150,7 +122,6 @@ export class ThemeTabView extends PreactSettingsView {
         const draft = this.presetController.draftConfig.value;
         const isDirty = this.presetController.isDirty.value;
         const dirtyFields = this.presetController.dirtyFields.value;
-        const currentAccent = (draft.accent || '').toLowerCase();
 
         return (
             <div className="da-settings-stack">
@@ -163,39 +134,12 @@ export class ThemeTabView extends PreactSettingsView {
                         onAction={(action, id) => this.presetController.handleAction(action, id)}
                         onImportFile={(file) => this.presetController.handleImportFile(file)}
                     />
-
-                    <FormFieldView
-                        label="常用配色"
-                        tooltip="一键快速应用常用品牌主题色"
-                        width="auto"
-                        dirty={dirtyFields.has('accent')}
-                    >
-                        <div className="da-color-palette-group">
-                            {ACCENT_COLOR_PALETTE.map((item) => {
-                                const isActive = currentAccent === item.color.toLowerCase();
-                                return (
-                                    <button
-                                        key={item.color}
-                                        type="button"
-                                        className={`da-color-swatch${isActive ? ' is-active' : ''}`}
-                                        data-color={item.color}
-                                        title={item.label}
-                                        style={{ backgroundColor: item.color }}
-                                        onClick={() =>
-                                            this.presetController.updateDraft('accent', item.color)
-                                        }
-                                    />
-                                );
-                            })}
-                        </div>
-                    </FormFieldView>
                 </CardView>
 
                 {/* 2. 重点颜色 */}
                 <CardView title="重点颜色">
                     <FormFieldView
                         label="主强调色"
-                        tooltip="按钮与高亮元素的主题颜色 (accent)"
                         width="auto"
                         dirty={dirtyFields.has('accent')}
                     >
@@ -208,7 +152,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="辅助渐变色"
-                        tooltip="主要按钮与边框的渐变辅助颜色 (accentSecondary)"
                         width="auto"
                         dirty={dirtyFields.has('accentSecondary')}
                     >
@@ -221,7 +164,7 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="主按钮文字颜色"
-                        tooltip="主要操作按钮上的文字颜色 (深色背景填白色，浅色背景填深色)"
+                        tooltip="主要按钮上的前景文字颜色（强调色偏深时建议白色，偏亮时建议深色）"
                         width="auto"
                         dirty={dirtyFields.has('textOnAccent')}
                     >
@@ -237,7 +180,6 @@ export class ThemeTabView extends PreactSettingsView {
                 <CardView title="背景颜色">
                     <FormFieldView
                         label="窗口背景"
-                        tooltip="弹窗主界面的背景颜色 (bgPrimary)"
                         width="auto"
                         dirty={dirtyFields.has('bgPrimary')}
                     >
@@ -250,7 +192,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="侧边栏背景"
-                        tooltip="左侧导航栏的背景颜色 (bgSecondary)"
                         width="auto"
                         dirty={dirtyFields.has('bgSecondary')}
                     >
@@ -263,7 +204,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="卡片背景"
-                        tooltip="内容卡片的背景颜色，比窗口背景稍亮可增强层次感 (bgCard)"
                         width="auto"
                         dirty={dirtyFields.has('bgCard')}
                     >
@@ -276,7 +216,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="卡片悬停背景"
-                        tooltip="鼠标滑过卡片时的背景颜色 (bgCardHover)"
                         width="auto"
                         dirty={dirtyFields.has('bgCardHover')}
                     >
@@ -289,7 +228,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="输入框背景"
-                        tooltip="文本框与选择框的底色 (bgInput)"
                         width="auto"
                         dirty={dirtyFields.has('bgInput')}
                     >
@@ -305,7 +243,6 @@ export class ThemeTabView extends PreactSettingsView {
                 <CardView title="边框与文字颜色">
                     <FormFieldView
                         label="边框颜色"
-                        tooltip="卡片与控件的外围边框线颜色 (borderColor)"
                         width="auto"
                         dirty={dirtyFields.has('borderColor')}
                     >
@@ -318,7 +255,7 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="高亮边框颜色"
-                        tooltip="卡片悬停与聚焦时的边框高亮颜色 (borderHighlight)"
+                        tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色 (borderHighlight)"
                         width="auto"
                         dirty={dirtyFields.has('borderHighlight')}
                     >
@@ -331,7 +268,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="正文文字颜色"
-                        tooltip="主标题与正文主要文字颜色 (textPrimary)"
                         width="auto"
                         dirty={dirtyFields.has('textPrimary')}
                     >
@@ -344,7 +280,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="次要文字颜色"
-                        tooltip="副标题与辅助说明文字颜色 (textSecondary)"
                         width="auto"
                         dirty={dirtyFields.has('textSecondary')}
                     >
@@ -357,7 +292,6 @@ export class ThemeTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="提示文字颜色"
-                        tooltip="输入框占位符与弱化提示文字颜色 (textMuted)"
                         width="auto"
                         dirty={dirtyFields.has('textMuted')}
                     >
@@ -365,85 +299,6 @@ export class ThemeTabView extends PreactSettingsView {
                             value={draft.textMuted}
                             placeholder="#71717a"
                             onChange={(val) => this.presetController.updateDraft('textMuted', val)}
-                        />
-                    </FormFieldView>
-                </CardView>
-
-                {/* 5. 圆角与毛玻璃 */}
-                <CardView title="圆角与毛玻璃">
-                    <FormFieldView
-                        label="全局圆角"
-                        tooltip="统一快速调节全界面的圆角大小 (0px ~ 20px)"
-                        width="w-240"
-                        dirty={dirtyFields.has('borderRadius')}
-                    >
-                        <SliderControl
-                            min={0}
-                            max={20}
-                            step={1}
-                            value={draft.borderRadius ?? 12}
-                            unit="px"
-                            onChange={(val) =>
-                                this.presetController.patchDraft({
-                                    borderRadius: val,
-                                    radiusModal: Math.max(14, val + 4),
-                                    radiusCard: Math.max(10, val + 2),
-                                    radiusInput: Math.min(8, Math.round(val * 0.65)),
-                                })
-                            }
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="卡片圆角"
-                        tooltip="独立调整卡片容器的圆角弧度 (radiusCard)"
-                        width="w-240"
-                        dirty={dirtyFields.has('radiusCard')}
-                    >
-                        <SliderControl
-                            min={0}
-                            max={24}
-                            step={1}
-                            value={draft.radiusCard ?? 14}
-                            unit="px"
-                            onChange={(val) => this.presetController.updateDraft('radiusCard', val)}
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="按钮与输入框圆角"
-                        tooltip="独立调整按钮与文本框的圆角弧度 (radiusInput)"
-                        width="w-240"
-                        dirty={dirtyFields.has('radiusInput')}
-                    >
-                        <SliderControl
-                            min={0}
-                            max={16}
-                            step={1}
-                            value={draft.radiusInput ?? 8}
-                            unit="px"
-                            onChange={(val) => this.presetController.updateDraft('radiusInput', val)}
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="毛玻璃虚化"
-                        tooltip="调整弹窗背景的高斯模糊程度 (blurModal)"
-                        width="w-240"
-                        dirty={dirtyFields.has('blurModal')}
-                    >
-                        <SliderControl
-                            min={0}
-                            max={30}
-                            step={2}
-                            value={draft.blurModal ?? 20}
-                            unit="px"
-                            onChange={(val) =>
-                                this.presetController.patchDraft({
-                                    blurModal: val,
-                                    blurPanel: val + 4,
-                                })
-                            }
                         />
                     </FormFieldView>
                 </CardView>

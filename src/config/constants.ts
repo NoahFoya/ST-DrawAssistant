@@ -39,13 +39,13 @@ export const SAFE_FALLBACK_THEME: Readonly<ThemePresetData> = Object.freeze({
     bgInput: '#0e0f13',
     bgInputHover: '#16171d',
     bgModal: '#141418',
-    bgOverlay: 'rgba(8, 8, 10, 0.78)',
+    bgOverlay: 'rgba(8, 8, 12, 0.78)',
 
     // 2. 品牌与强调色体系
     accent: '#818cf8',
     accentSecondary: '#6366f1',
-    accentHover: '#939bf9',
-    accentGlow: '0 0 24px rgba(129, 140, 248, 0.35)',
+    accentHover: '#a5b4fc',
+    accentGlow: '0 0 24px rgba(129, 140, 248, 0.30)',
     accentGradient: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)',
 
     // 3. 文本与内容层级体系
@@ -55,15 +55,7 @@ export const SAFE_FALLBACK_THEME: Readonly<ThemePresetData> = Object.freeze({
     textOnAccent: '#ffffff',
 
     // 4. 边框与分割体系
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderHighlight: 'rgba(129, 140, 248, 0.45)',
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    borderHighlight: 'rgba(129, 140, 248, 0.36)',
     borderSubtle: 'rgba(255, 255, 255, 0.04)',
-
-    // 5. 几何形态与滤镜体系
-    borderRadius: 12,
-    radiusModal: 16,
-    radiusCard: 14,
-    radiusInput: 8,
-    blurModal: 20,
-    blurPanel: 24,
 });

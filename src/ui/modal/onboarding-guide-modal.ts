@@ -100,7 +100,7 @@ const GUIDE_STEPS: readonly GuideStepSpec[] = [
                 bullets: [
                     {
                         lead: '默认开启「故事插画」',
-                        body: '作为开箱主通道，安装后默认处于启用状态，可参考其中结构按需调整；',
+                        body: '作为默认开启的主通道，安装后默认处于启用状态，可参考其中结构按需调整；',
                     },
                     {
                         lead: '其余三项默认关闭',

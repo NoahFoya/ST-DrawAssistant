@@ -148,7 +148,7 @@ export class AboutTabView extends PreactSettingsView {
         if (!silent) {
             if (res.hasUpdate) {
                 const versionHint = res.remoteSha || (res.remoteVersion ? `v${res.remoteVersion}` : '最新');
-                Toast.show(`发现新版本提交 (${versionHint})，可点击一键更新`, {
+                Toast.show(`发现新版本提交 (${versionHint})，可点击立即更新`, {
                     level: 'info',
                 });
             } else if (!res.success) {
@@ -165,7 +165,7 @@ export class AboutTabView extends PreactSettingsView {
             state.remoteCommitSha ||
             (state.remoteVersion ? `v${state.remoteVersion}` : `${state.currentBranch || '最新'}提交`);
         const confirmed = await ConfirmDialog.confirm({
-            title: '确认一键更新',
+            title: '确认更新插件',
             message: `即将从远程仓库拉取最新代码 (${targetLabel}) 并更新当前插件。更新完成后将自动刷新页面，确定继续吗？`,
             confirmText: '立即更新',
             cancelText: '取消',
@@ -188,7 +188,7 @@ export class AboutTabView extends PreactSettingsView {
                 }
             }, 1500);
         } else {
-            Toast.show(`一键更新失败: ${result.message || '未知错误'}`, { level: 'error' });
+            Toast.show(`更新失败: ${result.message || '未知错误'}`, { level: 'error' });
         }
     }
 
@@ -321,7 +321,7 @@ export class AboutTabView extends PreactSettingsView {
                         {statusPill}
                     </div>
                     <div className="da-about-header__desc">
-                        轻量可靠、开箱即用的 SillyTavern AI 生图扩展插件 · 开发者: NoahFoya · 开源协议: GPL-3.0 License
+                        适用于 SillyTavern 的上下文感知多后端 AI 生图扩展插件 · 作者: NoahFoya · 开源协议: GPL-3.0 License
                     </div>
                     <div className="da-about-header__actions">
                         {update.hasUpdate && (
@@ -330,10 +330,10 @@ export class AboutTabView extends PreactSettingsView {
                                     update.isUpdating
                                         ? '正在更新...'
                                         : update.remoteCommitSha
-                                          ? `一键更新至 ${update.remoteCommitSha}`
+                                          ? `更新至 ${update.remoteCommitSha}`
                                           : update.remoteVersion
-                                            ? `一键更新至 v${update.remoteVersion}`
-                                            : `一键更新 (${update.currentBranch || '最新'})`
+                                            ? `更新至 v${update.remoteVersion}`
+                                            : `立即更新 (${update.currentBranch || '最新'})`
                                 }
                                 variant="primary"
                                 size="sm"
@@ -475,7 +475,7 @@ export class AboutTabView extends PreactSettingsView {
                                     <span>系统诊断排障报告</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    一键汇总扩展版本、宿主环境与当前生图配置信息至剪贴板，用于 Issue 反馈与故障排查
+                                    汇总扩展版本、宿主环境与当前生图配置信息至剪贴板，用于 Issue 反馈与故障排查
                                 </div>
                             </div>
                             <div className="da-settings-row__action">

@@ -24,7 +24,7 @@ const SVG_PATHS = {
     export: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>',
     /** 文件导入图标（向内箭头进入文件，与 SillyTavern fa-file-import 风格一致） */
     fileImport:
-        '<path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M2 15h10"></path><path d="m9 18 3-3-3-3"></path>',
+        '<path d="M5 22h14a2 2 0 0 0 2-2V7.5L15.5 2H7a2 2 0 0 0-2 2v4"></path><polyline points="15 2 15 8 21 8"></polyline><path d="M3 15h10"></path><path d="m10 18 3-3-3-3"></path>',
     /** 文件导出图标（向外箭头离开文件，与 SillyTavern fa-file-export 风格一致） */
     fileExport:
         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M12 15h10"></path><path d="m18 11 4 4-4 4"></path>',
@@ -33,6 +33,8 @@ const SVG_PATHS = {
     /** 帮助问号 `?` 图标（圆圈内问号，用于使用引导与规则说明） */
     helpCircle:
         '<circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+    /** 纯问号 `?` 图标（无外圈，用于外层已有方形/圆形边框的顶栏帮助按钮） */
+    help: '<path d="M9.1 8.6a3 3 0 0 1 5.8 1c0 2-2.9 2.9-2.9 3.9"></path><line x1="12" y1="17.5" x2="12.01" y2="17.5"></line>',
     /** 未收藏描边星标 */
     star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>',
     /** 已收藏实心星标 */
@@ -47,20 +49,20 @@ const SVG_PATHS = {
     /** 复制 */
     copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
     /** 编辑/重命名 */
-    edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>',
+    edit: '<path d="M11 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"></path><path d="M18.5 3.5a2.121 2.121 0 0 1 3 3L12 16l-4 1 1-4 9.5-9.5z"></path>',
     /** 外发/导出/外部链接 */
     external:
         '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>',
     /** 刷新/重置/重新生成 */
     refresh:
-        '<polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>',
+        '<polyline points="22 5 22 10 17 10"></polyline><polyline points="2 19 2 14 7 14"></polyline><path d="M4.2 9.2a8.2 8.2 0 0 1 13.7-3.1L22 10M2 14l4.1 3.9A8.2 8.2 0 0 0 19.8 14.8"></path>',
     /** 删除垃圾桶 */
-    trash: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>',
+    trash: '<polyline points="4 7 6 7 20 7"></polyline><path d="M19 7v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7m3 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>',
     /** 关闭叉号 */
     close: '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>',
     /** 参数调节/微调重绘滑杆 */
     sliders:
-        '<line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>',
+        '<line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="2" y1="14" x2="6" y2="14"></line><line x1="10" y1="8" x2="14" y2="8"></line><line x1="18" y1="16" x2="22" y2="16"></line>',
     /** 画笔/涂抹工具 */
     brush:
         '<path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"></path><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"></path>',
@@ -140,6 +142,7 @@ export const ICONS: Readonly<Record<IconName, string>> = {
     fileExport: renderIcon('fileExport', 14),
     info: renderIcon('info', 14),
     helpCircle: renderIcon('helpCircle', 14),
+    help: renderIcon('help', 14),
     star: renderIcon('star', 14),
     starFilled: renderIcon('starFilled', 14),
     plus: renderIcon('plus', 14),

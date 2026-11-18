@@ -141,8 +141,14 @@
     }
 
     /* 弹窗主体容器由左右分栏转为上下纵向排列（顶部 Tab + 二级引擎胶囊 + 下方内容区） */
-    .da-modal-body {
+    .st-da-root .da-modal-body {
         flex-direction: column;
+    }
+
+    /* 确保移动端横排导航条不被上方 max-width: 900px 的侧栏宽度规则覆盖 */
+    .st-da-root .da-sidebar-tabs {
+        width: 100%;
+        flex: 0 0 auto;
     }
 
     /* 内容滚动区域设置 contain 滚动行为，限制滚动外溢到外部页面 */

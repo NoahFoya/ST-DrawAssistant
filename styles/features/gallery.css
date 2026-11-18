@@ -197,10 +197,10 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    padding: 10px 16px;
-    background: var(--da-surface-card, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-md, 8px);
+    padding: 12px 16px 4px 16px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--da-separator, var(--da-border-color));
     box-sizing: border-box;
     flex-wrap: wrap;
 }

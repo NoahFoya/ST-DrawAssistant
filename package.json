@@ -17,6 +17,7 @@
     "test:gemini": "vitest run tests/live/openai-live.test.ts",
     "test:all": "vitest run",
     "mock:openai": "node tests/helpers/start-mock-server.mjs",
+    "preview:ui": "node tests/ui-playground/server.mjs",
     "check-terms": "node tests/check-terms.mjs",
     "clean:test-output": "node -e \"const fs = require('fs'); fs.rmSync('tests/output', { recursive: true, force: true }); fs.mkdirSync('tests/output', { recursive: true }); fs.writeFileSync('tests/output/.gitkeep', '');\""
   },

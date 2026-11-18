@@ -19,6 +19,7 @@ import {
     SegmentedControlView,
     PresetToolbarView,
     SelectControl,
+    NumberInputControl,
 } from '../../framework';
 import type { PresetActionType } from '../../composite';
 import type { PresetController } from '../../viewmodels';
@@ -289,29 +290,12 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                         tooltip="从最近几条对话消息中检索角色/服装名称或别名（默认 2 条；设为 0 表示不扫描聊天正文，仅注入「常驻」素材）。"
                         width="w-120"
                     >
-                        <input
-                            type="number"
-                            className="da-input da-input--sm"
+                        <NumberInputControl
                             min={0}
                             max={100}
+                            step={1}
                             value={actDraft?.scanDepth ?? 2}
-                            onInput={(e) => {
-                                const raw = (e.currentTarget as HTMLInputElement).value.trim();
-                                if (raw === '') return;
-                                const parsed = Number.parseInt(raw, 10);
-                                if (!Number.isNaN(parsed)) {
-                                    activationController.updateDraft(
-                                        'scanDepth',
-                                        Math.max(0, Math.min(100, parsed))
-                                    );
-                                }
-                            }}
-                            onBlur={(e) => {
-                                const raw = (e.currentTarget as HTMLInputElement).value.trim();
-                                if (raw === '') {
-                                    activationController.updateDraft('scanDepth', 2);
-                                }
-                            }}
+                            onChange={(val) => activationController.updateDraft('scanDepth', val)}
                         />
                     </FormFieldView>
 

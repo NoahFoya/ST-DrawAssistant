@@ -20,7 +20,7 @@
     backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
     -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
     color: var(--da-text-primary);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), var(--da-inset-top-light);
+    box-shadow: var(--da-shadow-md), var(--da-inset-top-light);
     border: 1px solid var(--da-border-color);
     font-size: var(--da-font-size-sm, 0.80rem);
     display: inline-flex;

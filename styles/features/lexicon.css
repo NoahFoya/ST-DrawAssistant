@@ -236,15 +236,11 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    border-radius: var(--da-radius-lg, 10px);
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    background: var(--da-bg-card, #1e1f29);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    border-radius: var(--da-radius-md, 8px);
+    border: 1px solid var(--da-border-color);
+    background: transparent;
+    box-shadow: none;
     overflow: hidden;
-}
-
-[data-theme-mode="dark"] .da-lexicon-table-container {
-    background: var(--da-bg-card, #181922);
 }
 
 .da-lexicon-th-action {

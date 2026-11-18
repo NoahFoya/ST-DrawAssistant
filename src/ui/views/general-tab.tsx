@@ -46,8 +46,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 label: '启用插件',
                 type: 'switch',
                 width: 'w-toggle',
-                tooltip:
-                    '控制绘画助手的全局运行状态。关闭时将暂停所有自动生图、提示词注入与楼层交互按钮，从属设置项自动联动置灰。',
             },
             {
                 key: 'activeProvider',
@@ -55,8 +53,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'select',
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '当前执行生图任务的目标后端服务。不同后端支持的参数调节范围与工作流能力各不相同，切换后可在对应的后端设置标签页中配置专属连接与模型参数。',
                 options: [
                     { label: 'ComfyUI', value: 'comfyui' },
                     { label: 'SD-WebUI / Forge', value: 'sdwebui' },
@@ -71,7 +67,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认由浏览器直接向生图服务发起网络请求；若遇到跨域 (CORS) 拦截或远程 HTTPS 酒馆无法直接访问本地 HTTP 服务时，请切换为「酒馆代理」由酒馆服务端中转请求（需在酒馆 config.yaml 中开启 enableCorsProxy: true）。',
+                    '默认由浏览器直连生图服务；遇到跨域 (CORS) 拦截或远程 HTTPS 酒馆访问本地 HTTP 服务时，请切换为「酒馆代理」（需在酒馆 config.yaml 开启 enableCorsProxy: true）。',
                 options: [
                     { label: '浏览器直连', value: 'direct' },
                     { label: '酒馆代理', value: 'relay' },
@@ -87,8 +83,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 step: 10,
                 unit: '秒',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '向生图服务发起请求的最长等待时间（秒）。若后端显卡排队或生成耗时超过该设定，将自动终止当前等待并提示超时，避免任务因后端无响应而无限期停滞。',
             },
             {
                 key: 'cancelOnChatChange',
@@ -97,7 +91,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认开启，在生图过程中切换至其他酒馆会话将立即中断并丢弃未完成任务；关闭后，任务将在后台继续生成并仅保存至「本地图库」，不向已离开的会话楼层回写图片。',
+                    '默认开启，切换至其他酒馆会话时将取消未完成任务；关闭后任务继续在后台完成并仅保存至「本地图库」。',
             },
         ],
     },
@@ -113,7 +107,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 placeholder: '例如: image###',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '用于在 AI 回复正文中识别生图指令的起始标记。支持在指令内使用“|”字符同时输入正向与负向提示词（例如: image### 1girl, masterpiece | lowres, blurry ###）。',
+                    '用于在 AI 回复正文中成对识别生图指令，支持使用“|”同时填写正负向提示词（如 image### 1girl | lowres ###）。',
             },
             {
                 key: 'promptEndTag',
@@ -122,8 +116,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 placeholder: '例如: ###',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '用于在 AI 回复正文中识别生图指令的结束闭合标记，与开始标记成对使用以精准提取提示词内容（例如: ###）。',
             },
             {
                 key: 'autoGenerate',
@@ -131,8 +123,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '开启后，当 AI 回复中包含成对的生图指令标记时，将立即自动加入生成队列并开始生图，无需每次手动点击聊天气泡下方的生图按钮。',
             },
             {
                 key: 'hideButtonOnDone',
@@ -141,7 +131,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '开启后，当单张图片成功生成并上屏显示后，自动隐藏该楼层下方的生图触发按钮，使聊天记录保持清爽；如需重新生成，可随时通过右键菜单或大图预览中的操作重试。',
+                    '开启后，出图完成将隐藏该楼层下方的生图按钮；如需重绘，可通过右键、长按或大图预览菜单操作。',
             },
             {
                 key: 'imageActionPanelEnabled',
@@ -150,13 +140,11 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '开启后可在聊天楼层便捷打开图片操作菜单（桌面端右键图片、移动端长按图片 500ms，或在大图预览视窗中点击菜单），支持修改提示词重新生成、进入局部重绘或查看生成参数信息。',
+                    '开启后，桌面端右键图片、移动端长按图片（500ms）或在大图预览菜单中可打开编辑与重绘面板。',
             },
             {
                 key: 'lightboxEnabled',
                 label: '点击查看大图',
-                tooltip:
-                    '开启后，在聊天楼层中轻点生成图片即可唤起全屏大图预览视窗，支持滚轮缩放、拖拽平移、键盘快捷翻页以及一键保存下载原图。',
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
@@ -168,7 +156,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '在向后端提交生图前，自动清理提示词中连续重复的逗号、多余空格以及完全相同的重复标签，并保持 <lora:...> 语法完整。',
+                    '提交生成前自动清理多余逗号、空格及重复标签，同时保留 <lora:...> 语法。',
             },
         ],
     },
@@ -182,8 +170,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'segmented',
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '设置生成图片在消息气泡内的水平摆放位置，可选居中对齐、靠左对齐或靠右对齐。',
                 options: [
                     { label: '居中对齐', value: 'center' },
                     { label: '靠左对齐', value: 'flex-start' },
@@ -197,7 +183,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '设置图片在楼层显示区域内的自适应填充规则：完整显示（保持宽高比完整可见，两边留空）、裁剪填充（铺满设定尺寸，局部居中裁切）或原始尺寸（不主动缩放，按原图实际像素呈现）。',
+                    '完整显示：保持比例完整展示；裁剪填充：铺满容器并裁切多余部分；原始尺寸：按原图像素呈现。',
                 options: [
                     { label: '完整显示', value: 'contain' },
                     { label: '裁剪填充', value: 'cover' },
@@ -214,8 +200,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 step: 5,
                 unit: '%',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '限制图片在聊天消息气泡内占用的最大宽度百分比（默认 100% 占满宽度，调小后可以让单张图片更加精致紧凑）。',
             },
             {
                 key: 'maxHeight',
@@ -227,8 +211,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 step: 20,
                 unit: 'px',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '限制图片在聊天楼层内展示的最大像素高度。超出高度限制时将按缩放模式自适应，防止超长竖图单张占据过多屏幕空间。',
             },
             {
                 key: 'rounded',
@@ -236,8 +218,6 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '开启后为楼层中的图片应用平滑的圆角边框，与主题卡片风格自然融合；关闭后图片保持直角边缘。',
             },
             {
                 key: 'autoBlur',
@@ -246,7 +226,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '开启后，楼层中生成完成的图片默认施加高斯模糊遮罩；鼠标悬停时临时解除模糊，点击可进入大图查看清晰原图，适合在公共场合或多人环境下保护隐私。',
+                    '生成图片默认呈模糊遮罩，鼠标悬停或点击查看大图后显示清晰画面。',
             },
         ],
     },
@@ -261,7 +241,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '原图格式无损保存原始 PNG/JPEG 像素及 EXIF 绘图参数元数据；WebP 格式可大幅节省 50%~80% 磁盘存储占用，显著降低本地 IndexedDB 配额压力并提升多图加载流畅度。',
+                    '原始格式保留完整像素与 EXIF 绘图参数元数据；WebP 格式可明显减少本地 IndexedDB 存储占用。',
                 options: [
                     { label: '原始格式 (无损)', value: 'original' },
                     { label: 'WebP 高质量 (90%)', value: 'webp-high' },

@@ -92,8 +92,7 @@
     background: var(--da-bg-active, rgba(var(--da-accent-rgb), 0.14));
     color: var(--da-text-primary);
     font-weight: 600;
-    border: 1px solid rgba(var(--da-accent-rgb), 0.22);
-    box-shadow: var(--da-shadow-sm);
+    border-color: transparent;
 }
 
 /* 激活态纵向强调色指示条 */

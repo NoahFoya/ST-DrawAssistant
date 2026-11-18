@@ -3,12 +3,13 @@
  *
  * @remarks
  * 基于 Preact JSX 与 ReactiveSettingsBridge 声明式构建：
- * 1. 基础行为卡片：常驻显隐开关、不透明度滑块与停靠位置重置按钮；
- * 2. 图标与外观卡片：内置矢量图标切换、自定义圆形头像本地上传与互斥预览。
+ * 1. 基础配置卡片：常驻显隐开关、不透明度滑块与停靠位置重置按钮；
+ * 2. 图标与外观卡片：内置矢量图标切换、自定义圆形头像本地上传与绘图动效直选。
  */
 
 import { useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
+import type { DrawAssistantSettings } from '../../store/settings-store';
 import {
     PreactSettingsView,
     CardView,
@@ -20,6 +21,22 @@ import {
 import { ReactiveSettingsBridge } from '../viewmodels';
 import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
+
+type FabAnimationOption = NonNullable<DrawAssistantSettings['ui']['fab']['animationType']>;
+
+interface AnimationOptionMeta {
+    readonly id: FabAnimationOption;
+    readonly label: string;
+    readonly desc: string;
+}
+
+export const FAB_ANIMATION_OPTIONS: readonly AnimationOptionMeta[] = [
+    { id: 'starlight', label: '星光环绕', desc: '绘图期间三颗星芒沿外轨错相闪烁旋转' },
+    { id: 'orbit-ring', label: '极光流环', desc: '绘图期间外圈主题色渐变细环连续旋转' },
+    { id: 'aurora-pulse', label: '呼吸脉冲', desc: '绘图期间外圈呈现柔和脉冲光环' },
+    { id: 'ripple', label: '波纹扩散', desc: '绘图期间外圈细环按节奏向外扩散' },
+    { id: 'none', label: '无动效', desc: '绘图期间仅显示主题色边框高亮，不播动画' },
+];
 
 export const FAB_BUILTIN_ICONS: Record<string, string> = {
     palette: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>`,
@@ -61,11 +78,14 @@ export class FabTabView extends PreactSettingsView {
         );
     }
 
-    private updateFabSettings(patch: Partial<{ visible: boolean; opacity: number; icon: string }>): void {
+    private updateFabSettings(
+        patch: Partial<{ visible: boolean; opacity: number; icon: string; animationType: FabAnimationOption }>
+    ): void {
         const currentFab = this.bridge.get('ui')?.fab || {
             visible: true,
             opacity: 0.95,
             icon: 'palette',
+            animationType: 'starlight' as FabAnimationOption,
         };
         this.bridge.updateUi({
             fab: {
@@ -106,16 +126,19 @@ export class FabTabView extends PreactSettingsView {
 
         const fab = this.bridge.settings.value.ui?.fab;
         const visible = fab?.visible ?? true;
-        const opacityPct = Math.round((fab?.opacity ?? 0.95) * 100);
+        const opacity = fab?.opacity ?? 0.95;
+        const opacityPct = Math.round(opacity * 100);
         const currentIcon = (fab?.icon as string) || 'palette';
+        const currentAnim: FabAnimationOption = fab?.animationType ?? 'starlight';
+        const activeAnimMeta =
+            FAB_ANIMATION_OPTIONS.find((item) => item.id === currentAnim) ?? FAB_ANIMATION_OPTIONS[0];
         const isCustom = this.isCustomIcon(currentIcon);
 
         return (
             <>
-                <CardView title="基础行为">
+                <CardView title="基础配置">
                     <FormFieldView
                         label="启用悬浮球"
-                        tooltip="在屏幕边缘保留常驻悬浮快捷入口，点击可随时唤起扩展主设置面板，支持自由拖拽与边缘贴靠。"
                         width="w-toggle"
                     >
                         <SwitchControl
@@ -126,7 +149,6 @@ export class FabTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="悬浮球不透明度"
-                        tooltip="调节屏幕边缘常驻悬浮球的透明度，调低后可减少视觉遮挡。"
                         width="w-240"
                     >
                         <SliderControl
@@ -143,10 +165,7 @@ export class FabTabView extends PreactSettingsView {
                         />
                     </FormFieldView>
 
-                    <FormFieldView
-                        label="悬浮球位置"
-                        tooltip="将悬浮球恢复至初始右下角停靠位置，解决拖拽至屏幕可视区域之外等异常情况。"
-                    >
+                    <FormFieldView label="悬浮球位置">
                         <ButtonControl
                             label="重置默认位置"
                             variant="secondary"
@@ -160,10 +179,7 @@ export class FabTabView extends PreactSettingsView {
                 </CardView>
 
                 <CardView title="图标与外观">
-                    <FormFieldView
-                        label="内置图标"
-                        tooltip="选择悬浮球默认展示的预设矢量图标。"
-                    >
+                    <FormFieldView label="内置图标">
                         <div className="da-fab-icon-grid">
                             {BUILTIN_ICON_LIST.map((item) => {
                                 const isActive = !isCustom && currentIcon === item.id;
@@ -184,7 +200,7 @@ export class FabTabView extends PreactSettingsView {
 
                     <FormFieldView
                         label="自定义图标"
-                        tooltip="支持上传本地 PNG、JPG 或 WebP 图片作为悬浮球头像（存储于浏览器本地，不消耗云端带宽），居中裁切并自动适配暗黑/明亮主题光晕。"
+                        tooltip="支持上传本地图片（PNG / JPG / WebP）作为悬浮球头像，图片保存在浏览器本地并自动居中裁切。"
                     >
                         <div className="da-fab-custom-icon-wrapper">
                             <div className="da-fab-preview-avatar">
@@ -233,6 +249,57 @@ export class FabTabView extends PreactSettingsView {
                                     this.handleFileChange(e.currentTarget as HTMLInputElement)
                                 }
                             />
+                        </div>
+                    </FormFieldView>
+
+                    <FormFieldView label="绘图动效">
+                        <div className="da-fab-effect-panel">
+                            <div className="da-fab-effect-grid" role="radiogroup" aria-label="悬浮球绘图动效">
+                                {FAB_ANIMATION_OPTIONS.map((item) => {
+                                    const isActive = currentAnim === item.id;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={isActive}
+                                            data-effect={item.id}
+                                            title={item.desc}
+                                            className={`da-fab-effect-chip${isActive ? ' is-active' : ''}`}
+                                            onClick={() => this.updateFabSettings({ animationType: item.id })}
+                                        >
+                                            <span
+                                                className={`da-fab-btn da-fab-btn--preview${isActive ? ' is-busy' : ''}`}
+                                                data-fab-effect={item.id}
+                                                style={{ opacity }}
+                                            >
+                                                <span className="da-fab-effects" aria-hidden="true">
+                                                    <span className="da-fab-orbit">
+                                                        <span className="da-fab-star da-fab-star--1" />
+                                                        <span className="da-fab-star da-fab-star--2" />
+                                                        <span className="da-fab-star da-fab-star--3" />
+                                                    </span>
+                                                </span>
+                                                <span className="da-fab-icon">
+                                                    {isCustom ? (
+                                                        <img alt={item.label} src={currentIcon} />
+                                                    ) : (
+                                                        <span
+                                                            dangerouslySetInnerHTML={{
+                                                                __html:
+                                                                    FAB_BUILTIN_ICONS[currentIcon] ??
+                                                                    FAB_BUILTIN_ICONS.palette,
+                                                            }}
+                                                        />
+                                                    )}
+                                                </span>
+                                            </span>
+                                            <span className="da-fab-effect-chip__label">{item.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div className="da-fab-effect-hint">{activeAnimMeta.desc}</div>
                         </div>
                     </FormFieldView>
                 </CardView>

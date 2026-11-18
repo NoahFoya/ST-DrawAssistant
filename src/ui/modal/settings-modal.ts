@@ -852,7 +852,7 @@ export class SettingsModal implements Disposable {
         helpBtn.type = 'button';
         helpBtn.setAttribute('aria-label', '打开使用引导');
         helpBtn.setAttribute('title', '查看功能说明与使用引导');
-        helpBtn.innerHTML = renderIcon('helpCircle', 16);
+        helpBtn.innerHTML = renderIcon('help', 15);
         helpBtn.addEventListener('click', () => {
             this.openOnboardingGuide();
         });

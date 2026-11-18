@@ -1,57 +1,11 @@
 /**
- * 字段问号帮助提示按钮与浮动释义气泡样式。
+ * 浮动释义气泡样式。
  *
  * @remarks
- * 1. 结构形式：提供紧凑的圆形问号图标按钮（.da-help-btn / .da-help-icon），嵌入表单行标题侧边。
- * 2. 交互控制：默认弱化视觉干扰（0.35 透明度），hover 时自然高亮呈现并支持 tooltip 浮层。
- * 3. 布局限制：气泡内容超出宽度自动换行，具备最大宽度约束。
+ * 气泡内容超出宽度自动换行，具备最大宽度约束（字段旁圆标样式由 form-field.css 统一维护）。
  */
 
-/* 1. 问号帮助按钮外壳与交互态 (.da-help-btn)
-   尺寸限制为 13px 圆形徽标，平时保持低透明度（0.35）弱化视觉干扰；
-   当所在行或字段标题被 hover 时透明度提升至 0.85，引导用户发现；
-   自身 hover 时放大至 1.15 倍并呈现品牌色背景。 */
-.da-help-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 13px;
-    height: 13px;
-    min-width: 13px;
-    min-height: 13px;
-    border-radius: 50%;
-    background: transparent;
-    border: 1px solid var(--da-border-color);
-    color: var(--da-text-secondary);
-    font-size: 9px;
-    font-weight: 600;
-    font-family: var(--da-font-family);
-    line-height: 1;
-    padding: 0;
-    cursor: pointer;
-    user-select: none;
-    outline: none;
-    opacity: 0.35;
-    transition: opacity 0.15s var(--da-ease), background 0.15s var(--da-ease), color 0.15s var(--da-ease), border-color 0.15s var(--da-ease), transform 0.12s var(--da-ease-spring);
-}
-
-.da-row:hover .da-help-btn {
-    opacity: 0.85;
-}
-
-.da-help-btn:hover {
-    opacity: 1 !important;
-    background: rgba(var(--da-accent-rgb), 0.2);
-    border-color: var(--da-accent-color);
-    color: var(--da-accent-color);
-    transform: scale(1.15);
-}
-
-.da-help-btn:active {
-    transform: scale(0.94);
-}
-
-/* 2. 浮动释义气泡卡片 (.da-help-bubble)
+/* 1. 浮动释义气泡卡片 (.da-help-bubble)
    基准宽度 260px，结合动态可视视口宽度约束；
    多层阴影搭配高斯模糊虚化底层内容，保障帮助文本的高可读性。 */
 .da-help-bubble {

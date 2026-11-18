@@ -6,7 +6,7 @@
  * 1. 相对比例定位：统一通过 CSS 自定义属性 `--da-fab-rx / --da-fab-ry`（归一化区间 0~1）
  *    结合 `ViewportService` 实时动态视口及安全区实现跨端自适应停靠；
  * 2. 拖拽与越界隔离：支持鼠标与触控拖拽，在有效安全活动区间内同步映射比例，避开移动端宿主顶栏与底栏；
- * 3. 外观样式与徽标：支持透明度、预设图标、自定义图片与完成/未读计数角标。
+ * 3. 外观样式与绘图动效：支持透明度、预设图标、自定义图片与可配置的绘图中环形/星光动效。
  */
 
 import type { UIComponent, Disposable } from '../types';
@@ -16,6 +16,8 @@ import { FAB_BUILTIN_ICONS } from '../views/fab-tab';
 import { getViewportRect } from '../layout/viewport';
 
 export { FAB_BUILTIN_ICONS };
+
+export type FabAnimationType = 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
 
 export interface FloatingActionButtonOptions {
     onClick?: () => void;
@@ -38,7 +40,6 @@ function clampUnit(value: number): number {
 export class FloatingActionButton implements UIComponent, Disposable {
     public readonly element: HTMLElement;
     private readonly iconContainer: HTMLElement;
-    private readonly badgeElement: HTMLElement;
     private readonly clickHandler?: () => void;
 
     private isDragging = false;
@@ -52,6 +53,8 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private cachedElemHeight = 48;
     private clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
     private snapTimer: ReturnType<typeof setTimeout> | null = null;
+    private pulseTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly activeTaskIds = new Set<string>();
 
     private currentRatioX: number = DEFAULT_FAB_RATIO.ratioX;
     private currentRatioY: number = DEFAULT_FAB_RATIO.ratioY;
@@ -62,6 +65,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private readonly onPointerUpBound: (e: PointerEvent) => void;
     private readonly onResetPositionBound: () => void;
     private readonly onSettingsUpdatedBound: () => void;
+    private unlistenTaskStatus: (() => void) | null = null;
 
     public constructor(options: FloatingActionButtonOptions = {}) {
         this.element = typeof document !== 'undefined'
@@ -73,16 +77,26 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.element.classList.add('da-fab-btn', 'da-fab-entry');
         }
 
-        // 1. 内部图标容器与未读徽标
+        // 1. 内部图标容器与星光环绕装饰层
         this.iconContainer = document.createElement('div');
         this.iconContainer.className = 'da-fab-icon';
 
-        this.badgeElement = document.createElement('span');
-        this.badgeElement.className = 'da-fab-badge';
-        this.badgeElement.style.display = 'none';
+        if (typeof document !== 'undefined') {
+            const effectsLayer = document.createElement('span');
+            effectsLayer.className = 'da-fab-effects';
+            effectsLayer.setAttribute('aria-hidden', 'true');
+            const orbit = document.createElement('span');
+            orbit.className = 'da-fab-orbit';
+            for (let i = 1; i <= 3; i += 1) {
+                const star = document.createElement('span');
+                star.className = `da-fab-star da-fab-star--${i}`;
+                orbit.appendChild(star);
+            }
+            effectsLayer.appendChild(orbit);
+            this.element.appendChild(effectsLayer);
+        }
 
         this.element.appendChild(this.iconContainer);
-        this.element.appendChild(this.badgeElement);
 
         this.clickHandler = options.onClick;
 
@@ -103,9 +117,18 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.element.addEventListener?.('pointerdown', this.onPointerDownBound);
         this.element.addEventListener?.('click', this.onClickBound);
 
-        // 监听位置重置与配置更新事件（视口缩放由 CSS 变量 --da-fab-rx/ry 联动 --da-vvw/vvh 实时响应）
+        // 监听位置重置、配置更新及后台任务状态变更事件
         eventBus.on('ui:reset-fab-position', this.onResetPositionBound);
         eventBus.on('settings:updated', this.onSettingsUpdatedBound);
+        this.unlistenTaskStatus = eventBus.on('task:status', (payload) => {
+            if (!payload?.taskId) return;
+            if (payload.status === 'pending' || payload.status === 'generating') {
+                this.activeTaskIds.add(payload.taskId);
+            } else {
+                this.activeTaskIds.delete(payload.taskId);
+            }
+            this.element.classList?.toggle('is-busy', this.activeTaskIds.size > 0);
+        });
     }
 
     /**
@@ -209,6 +232,21 @@ export class FloatingActionButton implements UIComponent, Disposable {
         }
     }
 
+    private triggerClickPulse(): void {
+        if (!this.element.classList) return;
+        if (this.pulseTimer !== null) {
+            clearTimeout(this.pulseTimer);
+            this.pulseTimer = null;
+        }
+        this.element.classList.remove('is-pulsing');
+        void this.element.offsetWidth;
+        this.element.classList.add('is-pulsing');
+        this.pulseTimer = setTimeout(() => {
+            this.element.classList?.remove('is-pulsing');
+            this.pulseTimer = null;
+        }, 520);
+    }
+
     private onClick(e: MouseEvent): void {
         if (this.suppressNextClick) {
             this.suppressNextClick = false;
@@ -220,6 +258,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
             e.stopPropagation();
             return;
         }
+        this.triggerClickPulse();
         this.clickHandler?.();
     }
 
@@ -296,7 +335,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
     }
 
     /**
-     * 从 settingsStore 同步显隐、透明度与图标设置。
+     * 从 settingsStore 同步显隐、透明度、图标与绘图动效设置。
      */
     public syncFromSettings(): void {
         const fab = settingsStore.get('ui')?.fab;
@@ -310,7 +349,11 @@ export class FloatingActionButton implements UIComponent, Disposable {
         const opacity = fab.opacity ?? 0.95;
         this.element.style.opacity = String(opacity);
 
-        // 3. 图标渲染
+        // 3. 绘图中动效类型
+        const effectType: FabAnimationType = fab.animationType ?? 'starlight';
+        this.element.setAttribute?.('data-fab-effect', effectType);
+
+        // 4. 图标渲染
         const iconKey = fab.icon || 'palette';
         if (iconKey.startsWith('http://') || iconKey.startsWith('https://') || iconKey.startsWith('data:image')) {
             const img = document.createElement('img');
@@ -324,29 +367,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
     }
 
     /**
-     * 设置未读状态计数徽标。
-     *
-     * @param count 数量；为 0 或 undefined 时隐藏
-     */
-    public setBadge(count?: number): void {
-        if (!count || count <= 0) {
-            this.badgeElement.style.display = 'none';
-            this.badgeElement.textContent = '';
-            this.badgeElement.classList?.remove('is-popping');
-        } else {
-            const nextText = count > 99 ? '99+' : String(count);
-            const changed = this.badgeElement.style.display === 'none' || this.badgeElement.textContent !== nextText;
-            this.badgeElement.style.display = 'flex';
-            this.badgeElement.textContent = nextText;
-            if (changed && this.badgeElement.classList) {
-                this.badgeElement.classList.remove('is-popping');
-                void this.badgeElement.offsetWidth;
-                this.badgeElement.classList.add('is-popping');
-            }
-        }
-    }
-
-    /**
      * 释放悬浮球 DOM 引用与事件监听。
      */
     public dispose(): void {
@@ -355,6 +375,11 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
         eventBus.off('ui:reset-fab-position', this.onResetPositionBound);
         eventBus.off('settings:updated', this.onSettingsUpdatedBound);
+        if (this.unlistenTaskStatus) {
+            this.unlistenTaskStatus();
+            this.unlistenTaskStatus = null;
+        }
+        this.activeTaskIds.clear();
 
         if (typeof window !== 'undefined') {
             window.removeEventListener('pointermove', this.onPointerMoveBound);
@@ -369,6 +394,10 @@ export class FloatingActionButton implements UIComponent, Disposable {
         if (this.snapTimer !== null) {
             clearTimeout(this.snapTimer);
             this.snapTimer = null;
+        }
+        if (this.pulseTimer !== null) {
+            clearTimeout(this.pulseTimer);
+            this.pulseTimer = null;
         }
 
         this.element.parentElement?.removeChild(this.element);

@@ -21,10 +21,6 @@
     overflow: hidden;
 }
 
-.da-card:hover {
-    border-color: var(--da-border-card-hover, rgba(var(--da-accent-rgb), 0.28));
-}
-
 /* 降级容错：在非 flex 容器中作为相邻卡片时维持标准间距 */
 .da-card + .da-card {
     margin-top: var(--da-space-card-gap, 14px);
@@ -43,7 +39,7 @@
     margin-top: 0;
 }
 
-/* 仅带有明确可交互行为的卡片（如预设卡、模型卡）允许微悬浮 */
+/* 仅可交互卡片在悬停时呈现边框与投影提示，避免大面积静态容器整框泛起高亮彩边 */
 .da-card--interactive {
     cursor: pointer;
     transition: transform 0.18s var(--da-ease-spring), border-color 0.16s var(--da-ease), box-shadow 0.18s var(--da-ease);
@@ -51,6 +47,7 @@
 
 .da-card--interactive:hover {
     transform: translateY(-1px);
+    border-color: var(--da-border-card-hover, rgba(var(--da-accent-rgb), 0.28));
     box-shadow: var(--da-shadow-md);
 }
 

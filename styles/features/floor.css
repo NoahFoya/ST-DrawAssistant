@@ -248,6 +248,7 @@
 
 /* 3. 楼层图片生成中占位骨架屏 */
 .da-floor-image-skeleton {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -258,13 +259,28 @@
     height: 180px;
     margin: 8px 0;
     border-radius: var(--da-radius-md, 8px);
-    background: linear-gradient(90deg, var(--da-bg-subtle) 25%, var(--da-bg-hover) 50%, var(--da-bg-subtle) 75%);
+    background: linear-gradient(
+        110deg,
+        var(--da-bg-subtle) 22%,
+        rgba(var(--da-accent-rgb, 129, 140, 248), 0.14) 50%,
+        var(--da-bg-subtle) 78%
+    );
     background-size: 200% 100%;
-    animation: da-skeleton-pulse 1.8s ease-in-out infinite;
-    border: 1px dashed var(--da-border-color);
+    animation: da-skeleton-pulse 1.9s ease-in-out infinite;
+    border: 1px dashed rgba(var(--da-accent-rgb, 129, 140, 248), 0.36);
     color: var(--da-text-secondary);
     font-size: var(--da-font-size-xs, 0.78rem);
     user-select: none;
+}
+
+.da-floor-image-skeleton::before {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(var(--da-accent-rgb, 129, 140, 248), 0.22);
+    border-top-color: var(--da-accent-color);
+    animation: da-spin 0.95s linear infinite;
 }
 
 @keyframes da-skeleton-pulse {

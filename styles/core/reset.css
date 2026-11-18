@@ -43,6 +43,14 @@
     color: inherit;
 }
 
+/* 3.1 矢量图标块级化与基线归零，消除行内基线引起的中心偏移 */
+.st-da-root svg,
+.da-modal-backdrop svg,
+.da-main-modal-inner svg {
+    display: block;
+    flex-shrink: 0;
+}
+
 /* 4. 标题与段落边距归零 */
 .da-main-modal-inner h1,
 .da-main-modal-inner h2,

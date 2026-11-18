@@ -87,26 +87,59 @@
     to   { transform: rotate(360deg); }
 }
 
-/* 悬浮球弹性入场与徽标弹出关键帧 */
+/* 悬浮球弹性入场、星光环绕、极光呼吸与扩散波纹关键帧 */
 @keyframes da-fab-pop {
     from {
         opacity: 0;
-        transform: scale(0.76);
+        transform: scale(0.8) translateY(8px);
     }
     to {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1) translateY(0);
     }
 }
 
-@keyframes da-badge-pop {
-    from {
-        opacity: 0;
-        transform: scale(0.5);
+@keyframes da-fab-star-twinkle {
+    0%, 100% {
+        opacity: 0.45;
+        transform: translate(-50%, -50%) scale(0.75);
     }
-    to {
+    50% {
         opacity: 1;
-        transform: scale(1);
+        transform: translate(-50%, -50%) scale(1.18);
+    }
+}
+
+@keyframes da-fab-aurora-pulse {
+    0%, 100% {
+        opacity: 0.35;
+        transform: scale(0.96);
+    }
+    50% {
+        opacity: 0.85;
+        transform: scale(1.12);
+    }
+}
+
+@keyframes da-fab-radar-ring {
+    0% {
+        opacity: 0.72;
+        transform: scale(0.95);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.58);
+    }
+}
+
+@keyframes da-fab-ripple {
+    0% {
+        opacity: 0.65;
+        transform: scale(0.94);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.48);
     }
 }
 
@@ -135,8 +168,12 @@
     .da-modal-backdrop *::after,
     .da-fab-btn,
     .da-fab-btn *,
+    .da-fab-btn::before,
+    .da-fab-btn::after,
     .da-floor-slot,
     .da-floor-slot *,
+    .da-floor-slot::before,
+    .da-floor-slot *::before,
     .da-toast,
     .da-toast * {
         animation-duration: 0.01ms !important;

@@ -12,7 +12,7 @@
   "cleanPrompt": true,
   "promptStartTag": "image###",
   "promptEndTag": "###",
-  "activeThemePresetId": "iris-mist",
+  "activeThemePresetId": "linear-indigo",
   "presets": {
     "themes": [],
     "prompts": {
@@ -91,7 +91,8 @@
     "fab": {
       "visible": true,
       "opacity": 0.95,
-      "icon": "palette"
+      "icon": "palette",
+      "animationType": "starlight"
     },
     "lightbox": {
       "enabled": true

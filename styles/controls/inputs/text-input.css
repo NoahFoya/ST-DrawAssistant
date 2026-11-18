@@ -286,9 +286,18 @@ input.da-number-input__field {
 }
 
 .da-number-input__field::-webkit-outer-spin-button,
-.da-number-input__field::-webkit-inner-spin-button {
+.da-number-input__field::-webkit-inner-spin-button,
+.st-da-root input[type="number"]::-webkit-outer-spin-button,
+.st-da-root input[type="number"]::-webkit-inner-spin-button,
+.da-modal-backdrop input[type="number"]::-webkit-outer-spin-button,
+.da-modal-backdrop input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+.st-da-root input[type="number"],
+.da-modal-backdrop input[type="number"] {
+    -moz-appearance: textfield;
 }
 
 .da-number-input__unit {

@@ -170,14 +170,6 @@ export interface ThemePresetData {
     borderHighlight?: string;
     borderSubtle?: string;
 
-    // 5. 几何形态与滤镜体系 (Geometry & Physics)
-    borderRadius?: number;
-    radiusModal?: number;
-    radiusCard?: number;
-    radiusInput?: number;
-    blurModal?: number;
-    blurPanel?: number;
-
     [key: string]: unknown;
 }
 

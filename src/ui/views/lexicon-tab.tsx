@@ -1290,7 +1290,7 @@ export class LexiconTabView extends PreactSettingsView {
                             variant="secondary"
                             size="sm"
                             className="da-lexicon-reindex-btn"
-                            tooltip="从本地 IndexedDB 重新读取词库文件与自定义词汇，清空并重新构建内存前缀搜索树（Trie）与多音字别名倒排索引。当联想出现卡顿或未及时更新时可点击重建。"
+                            tooltip="从本地 IndexedDB 重新读取词库文件与自定义词条并重建检索索引；若标签联想未及时更新可点击刷新。"
                             onClick={async () => {
                                 await this.reloadFromStorage();
                                 Toast.show('本地词库索引已刷新', { level: 'success' });

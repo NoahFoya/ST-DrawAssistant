@@ -67,12 +67,11 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
             <CardView
                 title="楼层档案提取设置"
                 subtitle="角色与服装档案正文提取规则"
-                tooltip={`从酒馆会话消息中自动捕获与识别 <character> 与 <outfit> 档案数据块：\n- 智能解析起止标记与内部键值对（如 NAME、ALIASES、外观及身体部位标签）；\n- 支持弹窗预览并一键收录至本地素材库，实现开箱即用的自动化档案收录与同步。`}
+                tooltip={`从酒馆会话消息中自动识别 <character> 与 <outfit> 档案数据块：\n- 解析起止标记与内部键值对（如 NAME、ALIASES、外观及身体部位标签）；\n- 支持弹窗预览并录入本地素材库。`}
                 className="da-card--padded"
             >
                 <FormFieldView
                     label="启用楼层档案提取"
-                    tooltip="开启后，扩展将对酒馆对话消息进行扫描，识别其中符合规范的角色与服装档案标记块；关闭后停止扫描楼层正文。"
                     width="w-toggle"
                 >
                     <SwitchControl
@@ -85,7 +84,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
 
                 <FormFieldView
                     label="AI 回复后自动检测并弹窗确认"
-                    tooltip="开启后，当 AI 回复中包含符合正则规范的 <character> 或 <outfit> 档案数据块时，立即弹出确认对话框，支持一键将新角色/新服装录入本地素材库或增量更新已有档案。"
+                    tooltip="开启后，当 AI 回复中包含匹配的 <character> 或 <outfit> 档案数据块时，弹出确认框供预览并录入或更新本地素材库。"
                     width="w-toggle"
                 >
                     <SwitchControl
@@ -98,7 +97,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
 
                 <FormFieldView
                     label="折叠楼层原始文本"
-                    tooltip="开启后，楼层正文中被成功解析的档案原始数据块将被自动折叠收纳为微型胶囊徽章，避免冗长的原始文本影响正文沉浸式阅读。"
+                    tooltip="开启后，已解析成功的档案块将在聊天楼层折叠为轻量胶囊标记，点击可展开查看原文。"
                     width="w-toggle"
                 >
                     <SwitchControl

@@ -132,7 +132,10 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
     { cssVar: '--da-border-card', resolve: (d) => d.borderColor },
     { cssVar: '--da-border-subtle', resolve: (d) => d.borderSubtle },
     { cssVar: '--da-border-highlight', resolve: (d) => d.borderHighlight },
-    { cssVar: '--da-border-card-hover', resolve: (d) => d.borderHighlight },
+    {
+        cssVar: '--da-border-card-hover',
+        resolve: (d) => (d.accent ? `rgba(${hexToRgb(d.accent) || '129, 140, 248'}, 0.28)` : d.borderHighlight),
+    },
     {
         cssVar: '--da-border-light',
         resolve: (d) => {
@@ -153,40 +156,6 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
             const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#141418') > 0.55;
             return isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)';
         },
-    },
-
-    // 5. 几何形态与滤镜体系
-    {
-        cssVar: '--da-border-radius',
-        resolve: (d) => (d.borderRadius !== undefined ? `${d.borderRadius}px` : undefined),
-    },
-    {
-        cssVar: '--da-radius-modal',
-        resolve: (d) => (d.radiusModal !== undefined ? `${d.radiusModal}px` : undefined),
-    },
-    {
-        cssVar: '--da-radius-card',
-        resolve: (d) => (d.radiusCard !== undefined ? `${d.radiusCard}px` : undefined),
-    },
-    {
-        cssVar: '--da-radius-lg',
-        resolve: (d) => (d.radiusCard !== undefined ? `${d.radiusCard}px` : undefined),
-    },
-    {
-        cssVar: '--da-radius-input',
-        resolve: (d) => (d.radiusInput !== undefined ? `${d.radiusInput}px` : undefined),
-    },
-    {
-        cssVar: '--da-radius-btn',
-        resolve: (d) => (d.radiusInput !== undefined ? `${d.radiusInput}px` : undefined),
-    },
-    {
-        cssVar: '--da-blur-modal',
-        resolve: (d) => (d.blurModal !== undefined ? `${d.blurModal}px` : undefined),
-    },
-    {
-        cssVar: '--da-blur-panel',
-        resolve: (d) => (d.blurPanel !== undefined ? `${d.blurPanel}px` : undefined),
     },
 ];
 

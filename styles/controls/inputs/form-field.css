@@ -61,10 +61,12 @@
     height: 14px;
     min-width: 14px;
     min-height: 14px;
+    padding: 0;
     border-radius: 50%;
     background: var(--da-bg-input);
     border: 1px solid var(--da-border-color);
     font-size: 10px;
+    font-weight: 600;
     font-family: var(--da-font-family);
     color: var(--da-text-secondary);
     cursor: help;
@@ -228,37 +230,7 @@
     margin-right: 1px;
 }
 
-/* 5. 色彩选择器色板组 (.da-color-palette-group) 与色块项 (.da-color-swatch) */
-.da-color-palette-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.da-color-swatch {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-    outline: none;
-    box-sizing: border-box;
-    padding: 0;
-    transition: transform 0.15s var(--da-ease), border-color 0.15s var(--da-ease), box-shadow 0.15s var(--da-ease);
-}
-
-.da-color-swatch:hover {
-    transform: scale(1.15);
-}
-
-.da-color-swatch.is-active {
-    border-color: var(--da-accent-color) !important;
-    box-shadow: 0 0 0 2px var(--da-bg-card, #22232b), 0 0 0 4px var(--da-accent-color) !important;
-    transform: scale(1.1);
-}
-
-/* 6. 双模拾色器控件 (.da-color-picker) 与纵向设置卡片栈 (.da-settings-stack) */
+/* 5. 双模拾色器控件 (.da-color-picker) 与纵向设置卡片栈 (.da-settings-stack) */
 .da-settings-stack {
     display: flex;
     flex-direction: column;

@@ -78,13 +78,13 @@ const RESET_GROUPS: ResetGroupDef[] = [
             {
                 key: 'ui',
                 label: '界面交互与排版设置',
-                desc: '悬浮球外观、大图预览、楼层按钮、图片编辑面板与展示排版',
+                desc: '悬浮球外观与绘图动效、大图预览、楼层按钮、图片编辑面板与图片显示设置',
                 defaultChecked: true,
             },
             {
                 key: 'themePresets',
                 label: '界面主题预设',
-                desc: '内置主题配色、毛玻璃背景与对比度预设',
+                desc: '重置内置 8 套经典主题预设并恢复默认配色方案',
                 defaultChecked: true,
             },
             {

@@ -15,7 +15,7 @@
     height: 32px;
     padding: 2px;
     background-color: var(--da-bg-input);
-    border: 1px solid var(--da-border-subtle, var(--da-border-color));
+    border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-sm, 6px);
     box-sizing: border-box;
     user-select: none;
@@ -85,7 +85,7 @@
     padding: 3px;
     border-radius: var(--da-radius-md, 8px);
     background-color: var(--da-bg-input);
-    border: 1px solid var(--da-border-subtle, var(--da-border-color));
+    border: 1px solid var(--da-border-color);
 }
 
 [data-theme-mode="dark"] .da-segmented--lg {
