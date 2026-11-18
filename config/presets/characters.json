@@ -1,0 +1,33 @@
+[
+  {
+    "id": "char_sample_alice",
+    "name": "爱丽丝",
+    "data": {
+      "name": "爱丽丝",
+      "aliases": "alice",
+      "trigger": "",
+      "description": "金发蓝眼的见习魔法使，性格温顺文雅",
+      "boundOutfitIds": [
+        "outfit_sample_school"
+      ],
+      "parts": {
+        "appearance": "fair_skin, slender, petite",
+        "hair": "blonde_hair, long_hair",
+        "face": "blue_eyes, delicate_face",
+        "features": "",
+        "accessories": "hair_ribbon, gold_pendant",
+        "neck_shoulders": "|[clothed]collarbone|[nude]bare_shoulders, collarbone",
+        "breasts": "medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae",
+        "upper_back": "|[nude]bare_back",
+        "abdomen": "|[exposed]midriff, navel|[nude]narrow_waist, navel",
+        "arms": "slender_arms",
+        "hands": "slender_fingers",
+        "hips": "|[exposed]gentle_hips|[nude]gentle_hips",
+        "genitals": "|[nude]pussy, trimmed_pubic_hair",
+        "anus": "",
+        "legs": "slender_legs|[nude]bare_legs, slender_thighs",
+        "feet": "|[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes"
+      }
+    }
+  }
+]

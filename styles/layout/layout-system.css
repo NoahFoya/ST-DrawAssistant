@@ -1,0 +1,94 @@
+/**
+ * 布局系统基础容器与通用工具类。
+ *
+ * @remarks
+ * 1. 结构划分：声明流式行（.da-row）、列（.da-col）、网格及表单占位槽等基础布局单元。
+ * 2. 样式解耦：容器仅负责空间划分与对齐排版，颜色等外观统一引用 var(--da-*) 设计令牌。
+ */
+
+/* 1. 基础流式容器 */
+.da-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--da-space-lg, 16px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-row.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 2. 控件宽度容器 */
+.da-slot {
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+/* 3. 状态与可见性工具类 */
+.da-composite-host {
+    display: contents;
+}
+
+.da-hidden { display: none !important; }
+.da-text-danger { color: var(--da-color-error) !important; }
+
+/* 4. 空状态占位提示 (.da-empty-tip / .da-empty-hint / .da-tab-placeholder) */
+.da-empty-hint {
+    padding: 24px 16px;
+    border-radius: var(--da-radius-input, 8px);
+    background: var(--da-bg-surface-subtle);
+    border: 1px dashed var(--da-border-color);
+    color: var(--da-text-secondary);
+    font-size: var(--da-font-size-xs, 12px);
+    line-height: 1.6;
+    text-align: center;
+}
+
+.da-empty-tip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--da-space-lg, 20px) var(--da-space-md, 12px);
+    color: var(--da-text-muted);
+    font-size: var(--da-font-size-xs, 0.76rem);
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+    grid-column: 1 / -1;
+    gap: var(--da-space-xs, 4px);
+}
+
+.da-empty-tip__icon {
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.da-empty-tip__title {
+    font-weight: 600;
+    color: var(--da-text-secondary);
+}
+
+.da-empty-tip__sub {
+    font-size: 0.82em;
+    opacity: 0.75;
+}
+
+.da-tab-placeholder__title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.da-tab-placeholder__desc {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.75;
+}

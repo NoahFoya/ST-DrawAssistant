@@ -1,0 +1,46 @@
+[
+  {
+    "id": "outfit_sample_school",
+    "name": "学院制服",
+    "data": {
+      "name": "学院制服",
+      "aliases": "school_uniform|制服",
+      "trigger": "",
+      "description": "经典日系深蓝水手服与百褶短裙",
+      "parts": {
+        "style": "school_uniform, serafuku",
+        "headwear": "white_headband",
+        "outerwear": "",
+        "top": "sailor_collar, short_sleeves, white_shirt|[disheveled]open_shirt, shirt_lift",
+        "bottom": "blue_skirt, pleated_skirt|[disheveled]skirt_lift",
+        "bra": "white_bra",
+        "panties": "white_panties|[disheveled]panties_aside",
+        "legwear": "white_socks",
+        "shoes": "brown_loafers",
+        "accessories": "red_neckerchief"
+      }
+    }
+  },
+  {
+    "id": "outfit_sample_casual",
+    "name": "日常便服",
+    "data": {
+      "name": "日常便服",
+      "aliases": "casual|便服",
+      "trigger": "",
+      "description": "舒适宽松的连帽卫衣与牛仔裤",
+      "parts": {
+        "style": "",
+        "headwear": "",
+        "outerwear": "",
+        "top": "oversized_hoodie, grey_hoodie|[disheveled]unzipped, off_shoulder",
+        "bottom": "blue_jeans, denim_pants|[disheveled]pants_down",
+        "bra": "black_bra",
+        "panties": "black_panties",
+        "legwear": "ankle_socks",
+        "shoes": "sneakers",
+        "accessories": ""
+      }
+    }
+  }
+]

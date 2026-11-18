@@ -1,0 +1,462 @@
+/**
+ * 常驻悬浮球控件 (FAB) 与设置面板外观选择样式。
+ *
+ * @remarks
+ * 1. 相对比例与安全区定位：统一使用 `--da-fab-rx / --da-fab-ry` 比例变量配合动态视口变量
+ *    `--da-vvw / --da-vvh / --da-vv-top / --da-vv-left` 基于比例坐标计算停靠位置；
+ * 2. 宿主隔离与磨砂玻璃衬底：显式锁定前景色与半透明磨砂玻璃衬底，避免直接继承宿主文本色或呈纯白高亮色块；
+ * 3. 可配置绘图动效：待机态保持静谧，绘图中 (.is-busy) 按 data-fab-effect 呈现星光环绕、流光环绕、呼吸脉冲、波纹扩散等动效。
+ */
+
+/* 1. 悬浮球基础结构与磨砂玻璃衬底 */
+.da-fab-btn,
+#da-fab-button {
+    position: fixed;
+    --da-fab-size: 48px;
+    --da-fab-safe-x: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --da-fab-safe-top: max(16px, env(safe-area-inset-top));
+    --da-fab-safe-bottom: max(20px, env(safe-area-inset-bottom));
+    left: clamp(
+        calc(var(--da-vv-left, 0px) + var(--da-fab-safe-x)),
+        calc(
+            var(--da-vv-left, 0px) + var(--da-fab-safe-x) + var(--da-fab-rx, 0.96) *
+                max(0px, var(--da-vvw, 100vw) - var(--da-fab-size) - var(--da-fab-safe-x) * 2)
+        ),
+        calc(var(--da-vv-left, 0px) + var(--da-vvw, 100vw) - var(--da-fab-size) - var(--da-fab-safe-x))
+    );
+    top: clamp(
+        calc(var(--da-vv-top, 0px) + var(--da-fab-safe-top)),
+        calc(
+            var(--da-vv-top, 0px) + var(--da-fab-safe-top) + var(--da-fab-ry, 0.86) *
+                max(
+                    0px,
+                    var(--da-vvh, 100dvh) - var(--da-fab-size) - var(--da-fab-safe-top) - var(--da-fab-safe-bottom)
+                )
+        ),
+        calc(var(--da-vv-top, 0px) + var(--da-vvh, 100dvh) - var(--da-fab-size) - var(--da-fab-safe-bottom))
+    );
+    width: var(--da-fab-size);
+    height: var(--da-fab-size);
+    border-radius: 50%;
+    color: var(--da-accent-color, #cba6f7);
+    background:
+        radial-gradient(circle at 30% 24%, rgba(var(--da-accent-rgb, 203, 166, 247), 0.16), transparent 64%),
+        color-mix(in srgb, var(--da-bg-card, #28293d) 78%, transparent);
+    backdrop-filter: blur(16px) saturate(145%);
+    -webkit-backdrop-filter: blur(16px) saturate(145%);
+    border: 1px solid color-mix(in srgb, var(--da-accent-color, #cba6f7) 28%, var(--da-border-color, rgba(205, 214, 244, 0.12)));
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.36),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 0 0 1px rgba(var(--da-accent-rgb, 203, 166, 247), 0.10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    z-index: var(--da-z-fab, 9999);
+    touch-action: none;
+    user-select: none;
+    box-sizing: border-box;
+    overflow: visible;
+    transition:
+        transform var(--da-duration-fast, 0.16s) var(--da-ease-spring),
+        box-shadow 0.22s var(--da-ease),
+        border-color 0.22s var(--da-ease),
+        background 0.22s var(--da-ease),
+        color 0.2s var(--da-ease);
+}
+
+/* 默认隐藏待机外环，仅在绘图中 (.is-busy) 按所选动效类型激活 */
+.da-fab-btn::before,
+#da-fab-button::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    box-sizing: border-box;
+}
+
+/* 星光环绕轨道容器（仅在 is-busy + starlight 时显示） */
+.da-fab-effects {
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.22s var(--da-ease);
+}
+
+.da-fab-orbit {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    will-change: transform;
+}
+
+.da-fab-star {
+    position: absolute;
+    background: var(--da-accent-hover, var(--da-accent-color, #cba6f7));
+    clip-path: polygon(
+        50% 0%,
+        62% 38%,
+        100% 50%,
+        62% 62%,
+        50% 100%,
+        38% 62%,
+        0% 50%,
+        38% 38%
+    );
+    filter: drop-shadow(0 0 4px rgba(var(--da-accent-rgb, 203, 166, 247), 0.85));
+}
+
+.da-fab-star--1 {
+    top: 2px;
+    left: 50%;
+    width: 11px;
+    height: 11px;
+    animation: da-fab-star-twinkle 1.6s var(--da-ease) infinite;
+}
+
+.da-fab-star--2 {
+    top: 74%;
+    left: 11%;
+    width: 8px;
+    height: 8px;
+    background: var(--da-accent-color, #cba6f7);
+    animation: da-fab-star-twinkle 1.6s var(--da-ease) 0.53s infinite;
+}
+
+.da-fab-star--3 {
+    top: 74%;
+    left: 89%;
+    width: 7px;
+    height: 7px;
+    background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
+    animation: da-fab-star-twinkle 1.6s var(--da-ease) 1.06s infinite;
+}
+
+/* 动效 1: 星光环绕 (starlight，默认) */
+.da-fab-btn.is-busy[data-fab-effect="starlight"]::before,
+#da-fab-button.is-busy[data-fab-effect="starlight"]::before {
+    inset: -4px;
+    opacity: 0.72;
+    border: 1px dashed rgba(var(--da-accent-rgb, 203, 166, 247), 0.42);
+    animation: da-spin 9s linear infinite reverse;
+}
+
+.da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-effects,
+#da-fab-button.is-busy[data-fab-effect="starlight"] .da-fab-effects {
+    opacity: 1;
+}
+
+.da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-orbit,
+#da-fab-button.is-busy[data-fab-effect="starlight"] .da-fab-orbit {
+    animation: da-spin 2.8s linear infinite;
+}
+
+/* 动效 2: 流光环绕 (orbit-ring) */
+.da-fab-btn.is-busy[data-fab-effect="orbit-ring"]::before,
+#da-fab-button.is-busy[data-fab-effect="orbit-ring"]::before {
+    inset: -3px;
+    padding: 2px;
+    border: none;
+    opacity: 0.95;
+    background: conic-gradient(
+        from 0deg,
+        var(--da-accent-color, #cba6f7) 0deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.28) 110deg,
+        transparent 210deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.45) 310deg,
+        var(--da-accent-color, #cba6f7) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: da-spin 1.15s linear infinite;
+}
+
+/* 动效 3: 呼吸脉冲 (aurora-pulse) */
+.da-fab-btn.is-busy[data-fab-effect="aurora-pulse"]::before,
+#da-fab-button.is-busy[data-fab-effect="aurora-pulse"]::before {
+    inset: -5px;
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.58);
+    background: radial-gradient(circle, rgba(var(--da-accent-rgb, 203, 166, 247), 0.24) 0%, transparent 70%);
+    opacity: 0.8;
+    animation: da-fab-aurora-pulse 2s var(--da-ease) infinite;
+}
+
+/* 动效 4: 波纹扩散 (ripple) */
+.da-fab-btn.is-busy[data-fab-effect="ripple"]::before,
+#da-fab-button.is-busy[data-fab-effect="ripple"]::before {
+    inset: -2px;
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.65);
+    opacity: 0.72;
+    animation: da-fab-radar-ring 1.6s var(--da-ease) infinite;
+}
+
+/* 动效 5: 禁用连续动效 (none)，仅保留强调边框状态 */
+.da-fab-btn.is-busy[data-fab-effect="none"],
+#da-fab-button.is-busy[data-fab-effect="none"] {
+    border-color: var(--da-accent-color);
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.36),
+        0 0 0 2px rgba(var(--da-accent-rgb, 203, 166, 247), 0.28);
+}
+
+/* 点击瞬间一次性波纹扩散环 */
+.da-fab-btn::after,
+#da-fab-button::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.65);
+    pointer-events: none;
+    opacity: 0;
+}
+
+.da-fab-btn.is-pulsing::after,
+#da-fab-button.is-pulsing::after {
+    animation: da-fab-ripple 0.5s var(--da-ease) forwards;
+}
+
+.da-fab-btn.da-fab-entry,
+#da-fab-button.da-fab-entry {
+    animation: da-fab-pop 0.3s var(--da-ease-spring) backwards;
+}
+
+.da-fab-btn.is-snapping,
+#da-fab-button.is-snapping {
+    transition:
+        left 0.28s var(--da-ease-spring),
+        top 0.28s var(--da-ease-spring),
+        transform var(--da-duration-fast, 0.16s) var(--da-ease-spring),
+        box-shadow 0.22s var(--da-ease),
+        border-color 0.22s var(--da-ease),
+        background 0.22s var(--da-ease);
+}
+
+@media (max-width: 640px) {
+    .da-fab-btn,
+    #da-fab-button {
+        --da-fab-safe-x: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
+        --da-fab-safe-top: max(52px, calc(env(safe-area-inset-top) + 44px));
+        --da-fab-safe-bottom: max(76px, calc(env(safe-area-inset-bottom) + 64px));
+    }
+}
+
+.da-fab-btn:hover,
+#da-fab-button:hover {
+    color: var(--da-accent-hover, var(--da-accent-color));
+    background:
+        radial-gradient(circle at 30% 22%, rgba(var(--da-accent-rgb, 203, 166, 247), 0.24), transparent 68%),
+        color-mix(in srgb, var(--da-bg-card-hover, #313244) 84%, transparent);
+    border-color: rgba(var(--da-accent-rgb, 203, 166, 247), 0.68);
+    box-shadow:
+        0 10px 26px rgba(0, 0, 0, 0.42),
+        0 0 14px rgba(var(--da-accent-rgb, 203, 166, 247), 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px) scale(1.06);
+}
+
+.da-fab-btn:hover .da-fab-icon svg,
+#da-fab-button:hover .da-fab-icon svg {
+    transform: scale(1.08) rotate(-6deg);
+}
+
+.da-fab-btn:hover .da-fab-icon img,
+#da-fab-button:hover .da-fab-icon img {
+    transform: scale(1.05);
+}
+
+.da-fab-btn:active,
+#da-fab-button:active {
+    border-color: var(--da-accent-color);
+    cursor: grabbing;
+    transform: scale(0.93);
+}
+
+/* 拖拽进行中状态：禁用坐标过渡确保跟手，隐藏外环动效避免拖影 */
+.da-fab-btn.is-dragging,
+#da-fab-button.is-dragging {
+    transition: none !important;
+    transform: scale(1.04) !important;
+    cursor: grabbing !important;
+    box-shadow:
+        0 14px 30px rgba(0, 0, 0, 0.48),
+        0 0 0 1px rgba(var(--da-accent-rgb, 203, 166, 247), 0.45);
+}
+
+.da-fab-btn.is-dragging:not(.is-busy)::before,
+#da-fab-button.is-dragging:not(.is-busy)::before {
+    opacity: 0;
+    animation: none;
+}
+
+/* 2. 浅色主题柔和磨砂衬底保护（消除在深色宿主背景下产生刺眼纯白圆球） */
+[data-theme-mode="light"] .da-fab-btn,
+[data-theme-mode="light"] #da-fab-button {
+    color: var(--da-accent-color);
+    background:
+        radial-gradient(circle at 30% 24%, color-mix(in srgb, var(--da-accent-color) 16%, transparent), transparent 68%),
+        color-mix(in srgb, var(--da-bg-secondary, #e2e8f0) 68%, rgba(203, 213, 225, 0.64));
+    border-color: color-mix(in srgb, var(--da-accent-color) 28%, rgba(15, 23, 42, 0.16));
+    box-shadow:
+        0 6px 18px rgba(15, 23, 42, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+[data-theme-mode="light"] .da-fab-btn:hover,
+[data-theme-mode="light"] #da-fab-button:hover {
+    color: var(--da-accent-secondary, var(--da-accent-color));
+    background:
+        radial-gradient(circle at 30% 24%, color-mix(in srgb, var(--da-accent-color) 22%, transparent), transparent 68%),
+        color-mix(in srgb, var(--da-bg-secondary, #e2e8f0) 78%, rgba(203, 213, 225, 0.72));
+    border-color: color-mix(in srgb, var(--da-accent-color) 52%, rgba(15, 23, 42, 0.22));
+    box-shadow:
+        0 10px 22px rgba(15, 23, 42, 0.22),
+        0 0 10px color-mix(in srgb, var(--da-accent-color) 18%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+[data-theme-mode="light"] .da-fab-star {
+    background: var(--da-accent-color);
+    filter: drop-shadow(0 0 2px rgba(var(--da-accent-rgb), 0.45));
+}
+
+/* 3. 悬浮球内部图标 */
+.da-fab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: inherit;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+
+.da-fab-icon svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+    transition: transform var(--da-duration-fast, 0.16s) var(--da-ease-spring);
+}
+
+.da-fab-icon img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    transition: transform var(--da-duration-fast, 0.16s) var(--da-ease-spring);
+}
+
+/* 4. 悬浮球预设图标选择网格 */
+.da-fab-icon-grid {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+}
+
+.da-fab-icon-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-sm, 6px);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.16s var(--da-ease), background-color 0.16s var(--da-ease), color 0.16s var(--da-ease), transform 0.16s var(--da-ease);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.da-fab-icon-chip svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    transition: transform 0.16s var(--da-ease-spring);
+}
+
+.da-fab-icon-chip:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    border-color: rgba(var(--da-accent-rgb, 203, 166, 247), 0.45);
+    color: var(--da-accent-color);
+    transform: translateY(-1px);
+}
+
+.da-fab-icon-chip:hover svg {
+    transform: scale(1.08);
+}
+
+.da-fab-icon-chip.is-active {
+    background: rgba(var(--da-accent-rgb, 203, 166, 247), 0.14);
+    border-color: var(--da-accent-color);
+    color: var(--da-accent-color);
+}
+
+/* 5. 自定义图标圆形头像预览 */
+.da-fab-custom-icon-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.da-fab-preview-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-secondary);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--da-bg-input, var(--da-bg-primary));
+    flex-shrink: 0;
+    transition: border-color 0.16s var(--da-ease), color 0.16s var(--da-ease);
+}
+
+.da-fab-preview-avatar.has-custom {
+    border: 2px solid var(--da-accent-color);
+    color: var(--da-accent-color);
+    box-shadow: var(--da-shadow-sm);
+}
+
+.da-fab-preview-avatar .da-fab-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.da-fab-preview-avatar .da-fab-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.da-fab-preview-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 6. 悬浮球设置面板操作区 */
+.da-fab-action-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
