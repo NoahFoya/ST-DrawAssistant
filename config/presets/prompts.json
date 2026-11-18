@@ -1,0 +1,126 @@
+{
+  "comfyui": [
+    {
+      "id": "prompt_comfyui_illustrious",
+      "name": "Illustrious / NoobAI 二次元",
+      "data": {
+        "positivePrefix": "masterpiece, best quality, newest, absurdres, highres",
+        "positiveSuffix": "",
+        "negativePrompt": "worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, fewer digits, blurry, signature, watermark, text",
+        "loraSyntaxMode": "weilin",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_comfyui_pony",
+      "name": "Pony V6 评分规范",
+      "data": {
+        "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, source_anime",
+        "positiveSuffix": "",
+        "negativePrompt": "score_5, score_4, worst quality, low quality, deformed, bad anatomy, extra digits, text, watermark, signature",
+        "loraSyntaxMode": "weilin",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_comfyui_sdxl_photo",
+      "name": "SDXL 写实摄影",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "natural skin texture, realistic lighting, depth of field",
+        "negativePrompt": "anime, cartoon, illustration, painting, 3d render, drawing, sketch, lowres, blurry, bad anatomy, watermark, signature",
+        "loraSyntaxMode": "weilin",
+        "loras": []
+      }
+    }
+  ],
+  "sdwebui": [
+    {
+      "id": "prompt_sdwebui_illustrious",
+      "name": "Illustrious / NoobAI 二次元",
+      "data": {
+        "positivePrefix": "masterpiece, best quality, newest, absurdres, highres",
+        "positiveSuffix": "",
+        "negativePrompt": "worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, fewer digits, blurry, signature, watermark, text",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_sdwebui_pony",
+      "name": "Pony V6 评分规范",
+      "data": {
+        "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, source_anime",
+        "positiveSuffix": "",
+        "negativePrompt": "score_5, score_4, worst quality, low quality, deformed, bad anatomy, extra digits, text, watermark, signature",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_sdwebui_sdxl_photo",
+      "name": "SDXL 写实摄影",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "natural skin texture, realistic lighting, depth of field",
+        "negativePrompt": "anime, cartoon, illustration, painting, 3d render, drawing, sketch, lowres, blurry, bad anatomy, watermark, signature",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    }
+  ],
+  "novelai": [
+    {
+      "id": "prompt_nai_v45_light",
+      "name": "NAI V4.5 官方动漫 (Light UC)",
+      "data": {
+        "positivePrefix": "no text, very aesthetic, masterpiece, best quality, absurdres",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_v45_heavy",
+      "name": "NAI V4.5 精细控制 (Heavy UC)",
+      "data": {
+        "positivePrefix": "no text, very aesthetic, masterpiece, best quality, absurdres",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, @_@, mismatched pupils, glowing eyes, bad anatomy, bad hands, blurry",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_v3",
+      "name": "NAI V3 经典日系",
+      "data": {
+        "positivePrefix": "best quality, amazing quality, very aesthetic, absurdres",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+        "loras": []
+      }
+    }
+  ],
+  "openai": [
+    {
+      "id": "prompt_openai_anime",
+      "name": "日系插画风格",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "clean anime illustration style, cohesive color palette, expressive lighting",
+        "negativePrompt": "",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_openai_photo",
+      "name": "写实摄影风格",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "natural cinematic photography, realistic lighting and skin texture, shallow depth of field",
+        "negativePrompt": "",
+        "loras": []
+      }
+    }
+  ]
+}

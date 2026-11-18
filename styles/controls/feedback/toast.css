@@ -1,0 +1,52 @@
+/**
+ * 轻量非模态 Toast 消息气泡提示样式。
+ *
+ * @remarks
+ * 固定定位在视口底部中央，通过 pointer-events: none 避免阻断底层交互。
+ */
+
+/* 非阻塞 Toast 提示气泡 (.da-toast)
+   相对动态可视视口（--da-vv-*）定位在底部安全区上方，自动避让移动端虚拟键盘与底部输入栏；
+   pointer-events: none 保证消息呈现时不阻断底层点击交互。 */
+.da-toast {
+    position: fixed;
+    bottom: calc(var(--da-vv-bottom-inset, 0px) + max(16px, env(safe-area-inset-bottom)));
+    left: calc(var(--da-vv-left, 0px) + var(--da-vvw, 100vw) / 2);
+    transform: translateX(-50%);
+    max-width: calc(var(--da-vvw, 100vw) - 24px);
+    padding: 7px 14px;
+    border-radius: var(--da-radius-input, 6px);
+    background: var(--da-bg-modal, rgba(24, 27, 34, 0.92));
+    backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
+    color: var(--da-text-primary);
+    box-shadow: var(--da-shadow-md), var(--da-inset-top-light);
+    border: 1px solid var(--da-border-color);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: var(--da-z-toast, 100200);
+    pointer-events: none;
+    animation: da-toast-in 0.2s var(--da-ease-spring);
+    box-sizing: border-box;
+}
+
+.da-toast--success {
+    border-left: 3px solid var(--da-color-success, #10b981);
+}
+
+.da-toast--error {
+    border-left: 3px solid var(--da-color-error, #ef4444);
+}
+
+.da-toast--warn {
+    border-left: 3px solid var(--da-color-warn, #f59e0b);
+}
+
+.da-toast--info {
+    border-left: 3px solid var(--da-accent-color, #3b82f6);
+}

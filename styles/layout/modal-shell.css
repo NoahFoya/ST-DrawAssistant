@@ -1,0 +1,498 @@
+/**
+ * 模态弹窗背景遮罩、主视窗骨架与浮动菜单层样式。
+ *
+ * @remarks
+ * 1. 遮罩角色分离：
+ *    - `.da-modal-backdrop`：默认次级居中弹性遮罩，绑定动态可视视口（--da-vv*）并启用 `overflow-y: auto` 防止软键盘裁切；
+ *    - `.da-modal-backdrop--fullscreen`：主设置弹窗、蓝图与全屏媒体编辑专用，移动端切换为无边距贴边全屏；
+ *    - `.da-modal-backdrop--sheet`：移动端自动切换为贴底弹出 Action Sheet 容器；
+ * 2. 统一浮动菜单层与底部 Action Sheet（`.da-floating-popover` / `.da-floating-sheet`），脱离主弹窗包含块约束；
+ * 3. 根滚动隔离（`html.da-has-active-modal`）：与 OverlayStack 联动，阻止移动端连带滚动宿主对话区。
+ */
+
+/* 0. 活跃模态栈联动根滚动隔离 */
+html.da-has-active-modal,
+html.da-has-active-modal body {
+    overscroll-behavior: none;
+}
+
+@media (max-width: 768px) {
+    html.da-has-active-modal,
+    html.da-has-active-modal body {
+        overflow: hidden;
+    }
+}
+
+/* 1. 统一遮罩层基类 (.da-modal-backdrop)
+   覆盖当前交互可视区域（适配 iOS/Android 地址栏伸缩与软键盘缩放），内部面板通过 margin: auto 防止短屏顶边裁切。 */
+.da-modal-backdrop {
+    position: fixed;
+    top: var(--da-vv-top, 0px);
+    left: var(--da-vv-left, 0px);
+    width: var(--da-vvw, 100vw);
+    height: var(--da-vvh, 100dvh);
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--da-z-modal, 10000);
+    cursor: default;
+    box-sizing: border-box;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+        max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation: da-backdrop-fade 0.18s var(--da-ease);
+}
+
+.da-modal-backdrop > * {
+    margin: auto;
+}
+
+@media (max-width: 640px) {
+    .da-modal-backdrop.da-modal-backdrop--fullscreen {
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--fullscreen > * {
+        margin: 0;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--sheet {
+        align-items: flex-end;
+        padding: max(24px, env(safe-area-inset-top)) 0 0 0;
+        overflow: hidden;
+    }
+
+    .da-modal-backdrop.da-modal-backdrop--sheet > * {
+        margin: 0;
+    }
+}
+
+/* 2. 弹窗主体视窗骨架 (.da-main-modal-inner)
+   桌面端保持 min(960px, 94vw) / min(740px, 88dvh)；内部 flex 纵向划分 Header、Body、Footer。 */
+.st-da-root.da-main-modal-inner,
+.st-da-root .da-main-modal-inner {
+    width: min(960px, 94vw);
+    height: min(740px, calc(var(--da-vvh, 100dvh) * 0.88));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--da-bg-modal);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal);
+    animation: da-modal-slide-in 0.22s var(--da-ease);
+    box-sizing: border-box;
+    position: relative;
+    transition: width 0.18s var(--da-ease), height 0.18s var(--da-ease), border-radius 0.18s var(--da-ease);
+}
+
+/* 3. 弹窗主体水平分栏容器 (.da-modal-body)
+   承载左侧导航侧边栏（.da-sidebar-tabs）与右侧内容滚动区（.da-modal-content）的水平弹性容器；
+   overflow: hidden 与 min-height: 0 保证内部各子容器建立局部独立滚动区域，防止内容溢出容器。 */
+.st-da-root .da-modal-body {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    background: var(--da-bg-primary);
+}
+
+/* 4. 独立恢复出厂设置细分模态弹窗 (.da-reset-factory-panel) */
+.da-modal-backdrop.da-reset-factory-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
+    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
+}
+
+.da-reset-factory-panel {
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, #18191f);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--da-radius-modal, 12px);
+    box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.6));
+    overflow: hidden;
+    box-sizing: border-box;
+    animation: da-modal-slide-in 0.2s var(--da-ease);
+}
+
+.da-reset-factory-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 14px 20px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-modal, #18191f);
+    flex-shrink: 0;
+}
+
+.da-reset-factory-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.da-reset-factory-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+    margin: 0;
+}
+
+.da-reset-factory-subtitle {
+    font-size: 0.8em;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    line-height: 1.4;
+}
+
+.da-reset-factory-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    border: none;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.da-reset-factory-close:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-reset-factory-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+
+.da-reset-factory-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+}
+
+.da-reset-factory-toolbar__label {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.da-reset-factory-quick-btn {
+    padding: 2px 8px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+}
+
+.da-reset-factory-group {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--da-bg-card, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.07));
+    border-radius: var(--da-radius-md, 10px);
+}
+
+.da-reset-factory-group__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-reset-factory-group__title {
+    font-size: var(--da-font-size-sm, 0.86rem);
+    font-weight: 600;
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-reset-factory-group__subtitle {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.da-reset-factory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+}
+
+.da-reset-factory-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--da-radius-sm, 6px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.da-reset-factory-option:hover {
+    background-color: var(--da-bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.da-reset-factory-option__checkbox {
+    margin-top: 3px;
+    cursor: pointer;
+}
+
+.da-reset-factory-option__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-reset-factory-option__title {
+    font-size: var(--da-font-size-sm, 0.84rem);
+    font-weight: 500;
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-reset-factory-option__title--danger {
+    color: var(--da-color-error);
+}
+
+.da-reset-factory-option__desc {
+    font-size: var(--da-font-size-xs, 0.74rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+    line-height: 1.35;
+}
+
+.da-reset-factory-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-modal, #18191f);
+    flex-shrink: 0;
+}
+
+.da-reset-factory-footer__left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.da-reset-factory-footer__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 5. 统一浮动菜单层 (.da-floating-popover) 与移动端底部 Action Sheet (.da-floating-sheet)
+   直接挂载至 document.body，隔离设置弹窗的 backdrop-filter 与局部滚动包含块限制 */
+.da-floating-popover-host {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: var(--da-z-popover, 10035);
+}
+
+.da-floating-popover {
+    position: fixed;
+    pointer-events: auto;
+    z-index: var(--da-z-popover, 10035);
+    min-width: 180px;
+    max-width: min(320px, calc(var(--da-vvw, 100vw) - 20px));
+    max-height: min(340px, calc(var(--da-vvh, 100dvh) - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px;
+    border-radius: var(--da-radius-card, 10px);
+    background: var(--da-bg-modal, #1a1e29);
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
+    box-shadow: var(--da-shadow-modal, 0 12px 32px rgba(0, 0, 0, 0.55));
+    backdrop-filter: blur(var(--da-blur-panel, 18px));
+    -webkit-backdrop-filter: blur(var(--da-blur-panel, 18px));
+    box-sizing: border-box;
+    animation: da-fadein 0.14s var(--da-ease);
+}
+
+.da-modal-backdrop.da-floating-sheet-backdrop {
+    z-index: var(--da-z-popover, 10035);
+}
+
+.da-floating-sheet {
+    width: 100%;
+    max-height: calc(var(--da-vvh, 100dvh) - 36px);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal, #18191f);
+    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.14));
+    border-radius: var(--da-radius-modal, 14px) var(--da-radius-modal, 14px) 0 0;
+    box-shadow: var(--da-shadow-modal, 0 -10px 32px rgba(0, 0, 0, 0.55));
+    padding: 8px 12px max(14px, env(safe-area-inset-bottom)) 12px;
+    box-sizing: border-box;
+    overflow: hidden;
+    animation: da-sheet-slide-up 0.2s var(--da-ease);
+}
+
+.da-floating-sheet__handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--da-border-color, rgba(255, 255, 255, 0.22));
+    margin: 2px auto 8px auto;
+    flex-shrink: 0;
+}
+
+.da-floating-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 2px 4px 10px 4px;
+    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.da-floating-sheet__title {
+    font-size: var(--da-font-size-base, 13.5px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-floating-sheet__cancel {
+    flex-shrink: 0;
+}
+
+.da-floating-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
+}
+
+.da-floating-menu-divider {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--da-separator, rgba(255, 255, 255, 0.08));
+    flex-shrink: 0;
+}
+
+.da-floating-menu-group-title {
+    padding: 6px 10px 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    letter-spacing: 0.02em;
+}
+
+.da-floating-menu-group-title--highlighted {
+    color: var(--da-accent-color);
+}
+
+.da-floating-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 13px);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.da-floating-menu-item:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.da-floating-menu-item.is-highlighted {
+    background: rgba(var(--da-accent-rgb), 0.12);
+}
+
+.da-floating-menu-item.is-danger {
+    color: var(--da-color-error, #f87171);
+}
+
+.da-floating-menu-item.is-danger:hover {
+    background: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.14);
+}
+
+.da-floating-menu-item__icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.da-floating-menu-item__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.da-floating-menu-item__code {
+    font-family: var(--da-font-mono, monospace);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--da-accent-color);
+    word-break: break-all;
+}
+
+.da-floating-menu-item__label {
+    font-size: var(--da-font-size-sm, 13px);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.da-floating-menu-item__desc {
+    font-size: var(--da-font-size-xs, 11.5px);
+    color: var(--da-text-secondary);
+}
+
+@media (max-width: 640px) {
+    .da-floating-menu-item {
+        min-height: 44px;
+        padding: 10px 12px;
+        border-radius: var(--da-radius-md, 8px);
+    }
+}
