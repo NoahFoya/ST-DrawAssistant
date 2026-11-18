@@ -12,7 +12,7 @@
   "cleanPrompt": true,
   "promptStartTag": "image###",
   "promptEndTag": "###",
-  "activeThemePresetId": "linear-indigo",
+  "activeThemePresetId": "catppuccin-mocha",
   "presets": {
     "themes": [],
     "prompts": {

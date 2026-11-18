@@ -65,7 +65,7 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
     {
         cssVar: '--da-accent-glow',
         resolve: (d) => {
-            const bg = d.bgPrimary || d.bgCanvas || '#141418';
+            const bg = d.bgPrimary || d.bgCanvas || '#1e1e2e';
             if (getPerceivedLuminance(bg) > 0.55) {
                 return 'none';
             }
@@ -75,18 +75,18 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
     {
         cssVar: '--da-card-glow',
         resolve: (d) => {
-            const bg = d.bgPrimary || d.bgCanvas || '#141418';
+            const bg = d.bgPrimary || d.bgCanvas || '#1e1e2e';
             if (getPerceivedLuminance(bg) > 0.55) {
                 return 'none';
             }
-            const accentRgb = hexToRgb(d.accent) || '129, 140, 248';
+            const accentRgb = hexToRgb(d.accent) || '203, 166, 247';
             return `0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 0 16px -2px rgba(${accentRgb}, 0.15)`;
         },
     },
     {
         cssVar: '--da-inset-top-light',
         resolve: (d) => {
-            const bg = d.bgPrimary || d.bgCanvas || '#141418';
+            const bg = d.bgPrimary || d.bgCanvas || '#1e1e2e';
             if (getPerceivedLuminance(bg) > 0.55) {
                 return 'none';
             }
@@ -122,7 +122,7 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
     {
         cssVar: '--da-bg-surface-subtle',
         resolve: (d) => {
-            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#141418') > 0.55;
+            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#1e1e2e') > 0.55;
             return isLight ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.03)';
         },
     },
@@ -134,26 +134,26 @@ const THEME_TOKEN_RULES: TokenMappingRule[] = [
     { cssVar: '--da-border-highlight', resolve: (d) => d.borderHighlight },
     {
         cssVar: '--da-border-card-hover',
-        resolve: (d) => (d.accent ? `rgba(${hexToRgb(d.accent) || '129, 140, 248'}, 0.28)` : d.borderHighlight),
+        resolve: (d) => (d.accent ? `rgba(${hexToRgb(d.accent) || '203, 166, 247'}, 0.28)` : d.borderHighlight),
     },
     {
         cssVar: '--da-border-light',
         resolve: (d) => {
-            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#141418') > 0.55;
+            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#1e1e2e') > 0.55;
             return isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.06)';
         },
     },
     {
         cssVar: '--da-separator',
         resolve: (d) => {
-            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#141418') > 0.55;
+            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#1e1e2e') > 0.55;
             return isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)';
         },
     },
     {
         cssVar: '--da-toggle-track-bg',
         resolve: (d) => {
-            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#141418') > 0.55;
+            const isLight = getPerceivedLuminance(d.bgPrimary || d.bgCanvas || '#1e1e2e') > 0.55;
             return isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)';
         },
     },
@@ -223,7 +223,7 @@ export class ThemeService implements Disposable {
     /**
      * 应用当前配置中心中保存的主题。
      *
-     * @param overrides 额外的局部微调覆盖项（如用户自定义的圆角或主色）
+     * @param overrides 额外的局部微调覆盖项（如在主题编辑页实时微调配色字段）
      */
     public applyCurrentTheme(overrides?: Partial<ThemePresetData>): void {
         if (!this.targetElement && typeof document !== 'undefined') {
@@ -268,7 +268,7 @@ export class ThemeService implements Disposable {
         }
 
         // 1. 设置当前主题标识符与明暗模式标识
-        const bgSample = merged.bgPrimary || merged.bgCanvas || merged.bgModal || '#141418';
+        const bgSample = merged.bgPrimary || merged.bgCanvas || merged.bgModal || '#1e1e2e';
         const isLight = getPerceivedLuminance(bgSample) > 0.55;
 
         target.setAttribute('data-theme', theme?.id || themeId || 'default');

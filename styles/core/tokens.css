@@ -7,58 +7,58 @@
  * 2. 主题强调色：主强调色、辅助强调色及透明渐变变量；
  * 3. 文本颜色：主文本、次级文本与弱化文本层级；
  * 4. 边框与高亮：常规边框、微妙边框与焦点高光色；
- * 5. 圆角标度：8px / 14px / 16px 圆角变量。
+ * 5. 圆角标度：6px / 10px / 14px / 16px 圆角变量。
  */
 
 :root {
-    /* 1. 表面层级 */
-    --da-bg-canvas: #0c0d10;
-    --da-bg-primary: #141418;
-    --da-bg-secondary: #101013;
-    --da-bg-sidebar: #101013;
-    --da-bg-subtle: rgba(var(--da-accent-rgb, 129, 140, 248), 0.05);
-    --da-bg-card: #22232b;
-    --da-bg-card-hover: #292a34;
-    --da-surface-card: #22232b;
-    --da-surface-card-hover: #292a34;
-    --da-bg-tertiary: #191a21;
-    --da-bg-input: #0e0f13;
-    --da-bg-input-hover: #16171d;
-    --da-bg-hover: rgba(var(--da-accent-rgb, 129, 140, 248), 0.08);
-    --da-bg-active: rgba(var(--da-accent-rgb, 129, 140, 248), 0.16);
-    --da-bg-modal: #141418;
-    --da-bg-gradient: linear-gradient(160deg, #1c1d24 0%, #121215 100%);
-    --da-bg-overlay-modal: rgba(8, 8, 10, 0.78);
-    --da-bg-overlay-heavy: rgba(8, 8, 10, 0.92);
+    /* 1. 表面层级（基准色值与默认阅读主题 Catppuccin Mocha 对齐） */
+    --da-bg-canvas: #11111b;
+    --da-bg-primary: #1e1e2e;
+    --da-bg-secondary: #181825;
+    --da-bg-sidebar: #181825;
+    --da-bg-subtle: rgba(var(--da-accent-rgb, 203, 166, 247), 0.05);
+    --da-bg-card: #28293d;
+    --da-bg-card-hover: #313244;
+    --da-surface-card: #28293d;
+    --da-surface-card-hover: #313244;
+    --da-bg-tertiary: #222235;
+    --da-bg-input: #161622;
+    --da-bg-input-hover: #222235;
+    --da-bg-hover: rgba(var(--da-accent-rgb, 203, 166, 247), 0.08);
+    --da-bg-active: rgba(var(--da-accent-rgb, 203, 166, 247), 0.16);
+    --da-bg-modal: #1e1e2e;
+    --da-bg-gradient: linear-gradient(160deg, #242538 0%, #181825 100%);
+    --da-bg-overlay-modal: rgba(17, 17, 27, 0.78);
+    --da-bg-overlay-heavy: rgba(17, 17, 27, 0.92);
 
     /* 2. 文本与内容层级 (Content & Typography) */
-    --da-text-primary: #f4f4f5;
-    --da-text-secondary: #a1a1aa;
-    --da-text-muted: #71717a;
-    --da-text-on-accent: #ffffff;
+    --da-text-primary: #cdd6f4;
+    --da-text-secondary: #a6adc8;
+    --da-text-muted: #6c7086;
+    --da-text-on-accent: #11111b;
 
     /* 3. 边框与分割线 (Borders & Inset Lighting) */
-    --da-border-color: rgba(255, 255, 255, 0.08);
-    --da-border-subtle: rgba(255, 255, 255, 0.04);
-    --da-border-card: rgba(255, 255, 255, 0.07);
-    --da-border-card-hover: rgba(var(--da-accent-rgb, 129, 140, 248), 0.38);
-    --da-border-light: rgba(255, 255, 255, 0.06);
-    --da-border-highlight: rgba(var(--da-accent-rgb, 129, 140, 248), 0.45);
-    --da-border-focus: var(--da-accent-color, #818cf8);
-    --da-border-glow: 0 0 16px rgba(var(--da-accent-rgb, 129, 140, 248), 0.35);
-    --da-separator: rgba(255, 255, 255, 0.04);
-    --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.09);
+    --da-border-color: rgba(205, 214, 244, 0.10);
+    --da-border-subtle: rgba(205, 214, 244, 0.05);
+    --da-border-card: rgba(205, 214, 244, 0.08);
+    --da-border-card-hover: rgba(var(--da-accent-rgb, 203, 166, 247), 0.34);
+    --da-border-light: rgba(205, 214, 244, 0.06);
+    --da-border-highlight: rgba(var(--da-accent-rgb, 203, 166, 247), 0.34);
+    --da-border-focus: var(--da-accent-color, #cba6f7);
+    --da-border-glow: 0 0 16px rgba(var(--da-accent-rgb, 203, 166, 247), 0.30);
+    --da-separator: rgba(205, 214, 244, 0.05);
+    --da-inset-top-light: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 
     /* 4. 品牌主色、辅色与流光 (Brand & Accent) */
-    --da-accent-color: #818cf8;
-    --da-accent-hover: #939bf9;
-    --da-accent-muted: rgba(129, 140, 248, 0.25);
-    --da-accent-rgb: 129, 140, 248;
-    --da-accent-secondary: #a78bfa;
-    --da-accent-secondary-rgb: 167, 139, 250;
-    --da-accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
-    --da-accent-glow: 0 0 24px rgba(129, 140, 248, 0.35);
-    --da-card-glow: 0 14px 36px -6px rgba(0, 0, 0, 0.55), 0 0 20px -2px rgba(var(--da-accent-rgb, 129, 140, 248), 0.22);
+    --da-accent-color: #cba6f7;
+    --da-accent-hover: #d8bdf9;
+    --da-accent-muted: rgba(203, 166, 247, 0.25);
+    --da-accent-rgb: 203, 166, 247;
+    --da-accent-secondary: #89b4fa;
+    --da-accent-secondary-rgb: 137, 180, 250;
+    --da-accent-gradient: linear-gradient(135deg, #cba6f7 0%, #89b4fa 100%);
+    --da-accent-glow: 0 0 24px rgba(203, 166, 247, 0.28);
+    --da-card-glow: 0 14px 36px -6px rgba(0, 0, 0, 0.50), 0 0 20px -2px rgba(var(--da-accent-rgb, 203, 166, 247), 0.18);
 
     /* 5. 语义状态颜色 (成功、报错、警告、收藏) */
     --da-color-success: #10b981;
@@ -72,7 +72,7 @@
     --da-color-warn-subtle: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.12);
     --da-color-info: #38bdf8;
     --da-color-info-rgb: 56, 189, 248;
-    --da-color-info-subtle: rgba(var(--da-accent-rgb, 129, 140, 248), 0.12);
+    --da-color-info-subtle: rgba(var(--da-accent-rgb, 203, 166, 247), 0.12);
     --da-color-fav: #eab308;
     --da-bg-surface-subtle: rgba(255, 255, 255, 0.02);
     --da-bg-mask-light: rgba(0, 0, 0, 0.45);

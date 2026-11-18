@@ -5,7 +5,7 @@
  * 1. 相对比例与安全区定位：统一使用 `--da-fab-rx / --da-fab-ry` 比例变量配合动态视口变量
  *    `--da-vvw / --da-vvh / --da-vv-top / --da-vv-left` 基于比例坐标计算停靠位置；
  * 2. 宿主隔离与磨砂玻璃衬底：显式锁定前景色与半透明磨砂玻璃衬底，避免直接继承宿主文本色或呈纯白高亮色块；
- * 3. 可配置绘图动效：待机态保持静谧，绘图中 (.is-busy) 按 data-fab-effect 呈现星光环绕、极光流环、呼吸光晕等动效。
+ * 3. 可配置绘图动效：待机态保持静谧，绘图中 (.is-busy) 按 data-fab-effect 呈现星光环绕、流光环绕、呼吸脉冲、波纹扩散等动效。
  */
 
 /* 1. 悬浮球基础结构与磨砂玻璃衬底 */
@@ -38,17 +38,17 @@
     width: var(--da-fab-size);
     height: var(--da-fab-size);
     border-radius: 50%;
-    color: var(--da-accent-color, #818cf8);
+    color: var(--da-accent-color, #cba6f7);
     background:
-        radial-gradient(circle at 30% 24%, rgba(var(--da-accent-rgb, 129, 140, 248), 0.16), transparent 64%),
-        color-mix(in srgb, var(--da-bg-card, #1c1d25) 78%, transparent);
+        radial-gradient(circle at 30% 24%, rgba(var(--da-accent-rgb, 203, 166, 247), 0.16), transparent 64%),
+        color-mix(in srgb, var(--da-bg-card, #28293d) 78%, transparent);
     backdrop-filter: blur(16px) saturate(145%);
     -webkit-backdrop-filter: blur(16px) saturate(145%);
-    border: 1px solid color-mix(in srgb, var(--da-accent-color, #818cf8) 28%, var(--da-border-color, rgba(255, 255, 255, 0.12)));
+    border: 1px solid color-mix(in srgb, var(--da-accent-color, #cba6f7) 28%, var(--da-border-color, rgba(205, 214, 244, 0.12)));
     box-shadow:
         0 8px 22px rgba(0, 0, 0, 0.36),
         inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        0 0 0 1px rgba(var(--da-accent-rgb, 129, 140, 248), 0.10);
+        0 0 0 1px rgba(var(--da-accent-rgb, 203, 166, 247), 0.10);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -64,26 +64,6 @@
         border-color 0.22s var(--da-ease),
         background 0.22s var(--da-ease),
         color 0.2s var(--da-ease);
-}
-
-/* 设置页内嵌预览悬浮球（取消固定坐标，保留一致外观与选中动效） */
-.da-fab-btn.da-fab-btn--preview {
-    --da-fab-size: 38px;
-    position: relative;
-    left: auto;
-    top: auto;
-    flex-shrink: 0;
-    z-index: 1;
-    pointer-events: none;
-}
-
-.da-fab-btn.da-fab-btn--preview .da-fab-icon svg {
-    width: 18px;
-    height: 18px;
-}
-
-.da-fab-btn.da-fab-btn--preview .da-fab-effects {
-    inset: -6px;
 }
 
 /* 默认隐藏待机外环，仅在绘图中 (.is-busy) 按所选动效类型激活 */
@@ -118,7 +98,7 @@
 
 .da-fab-star {
     position: absolute;
-    background: var(--da-accent-hover, var(--da-accent-color, #818cf8));
+    background: var(--da-accent-hover, var(--da-accent-color, #cba6f7));
     clip-path: polygon(
         50% 0%,
         62% 38%,
@@ -129,7 +109,7 @@
         0% 50%,
         38% 38%
     );
-    filter: drop-shadow(0 0 4px rgba(var(--da-accent-rgb, 129, 140, 248), 0.85));
+    filter: drop-shadow(0 0 4px rgba(var(--da-accent-rgb, 203, 166, 247), 0.85));
 }
 
 .da-fab-star--1 {
@@ -145,7 +125,7 @@
     left: 11%;
     width: 8px;
     height: 8px;
-    background: var(--da-accent-color, #818cf8);
+    background: var(--da-accent-color, #cba6f7);
     animation: da-fab-star-twinkle 1.6s var(--da-ease) 0.53s infinite;
 }
 
@@ -154,7 +134,7 @@
     left: 89%;
     width: 7px;
     height: 7px;
-    background: var(--da-accent-secondary, var(--da-accent-color, #818cf8));
+    background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
     animation: da-fab-star-twinkle 1.6s var(--da-ease) 1.06s infinite;
 }
 
@@ -163,7 +143,7 @@
 #da-fab-button.is-busy[data-fab-effect="starlight"]::before {
     inset: -4px;
     opacity: 0.72;
-    border: 1px dashed rgba(var(--da-accent-rgb, 129, 140, 248), 0.42);
+    border: 1px dashed rgba(var(--da-accent-rgb, 203, 166, 247), 0.42);
     animation: da-spin 9s linear infinite reverse;
 }
 
@@ -177,7 +157,7 @@
     animation: da-spin 2.8s linear infinite;
 }
 
-/* 动效 2: 极光流环 (orbit-ring) */
+/* 动效 2: 流光环绕 (orbit-ring) */
 .da-fab-btn.is-busy[data-fab-effect="orbit-ring"]::before,
 #da-fab-button.is-busy[data-fab-effect="orbit-ring"]::before {
     inset: -3px;
@@ -186,11 +166,11 @@
     opacity: 0.95;
     background: conic-gradient(
         from 0deg,
-        var(--da-accent-color, #818cf8) 0deg,
-        rgba(var(--da-accent-rgb, 129, 140, 248), 0.28) 110deg,
+        var(--da-accent-color, #cba6f7) 0deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.28) 110deg,
         transparent 210deg,
-        rgba(var(--da-accent-rgb, 129, 140, 248), 0.45) 310deg,
-        var(--da-accent-color, #818cf8) 360deg
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.45) 310deg,
+        var(--da-accent-color, #cba6f7) 360deg
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -199,12 +179,12 @@
     animation: da-spin 1.15s linear infinite;
 }
 
-/* 动效 3: 呼吸光晕 (aurora-pulse) */
+/* 动效 3: 呼吸脉冲 (aurora-pulse) */
 .da-fab-btn.is-busy[data-fab-effect="aurora-pulse"]::before,
 #da-fab-button.is-busy[data-fab-effect="aurora-pulse"]::before {
     inset: -5px;
-    border: 1.5px solid rgba(var(--da-accent-rgb, 129, 140, 248), 0.58);
-    background: radial-gradient(circle, rgba(var(--da-accent-rgb, 129, 140, 248), 0.24) 0%, transparent 70%);
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.58);
+    background: radial-gradient(circle, rgba(var(--da-accent-rgb, 203, 166, 247), 0.24) 0%, transparent 70%);
     opacity: 0.8;
     animation: da-fab-aurora-pulse 2s var(--da-ease) infinite;
 }
@@ -213,18 +193,18 @@
 .da-fab-btn.is-busy[data-fab-effect="ripple"]::before,
 #da-fab-button.is-busy[data-fab-effect="ripple"]::before {
     inset: -2px;
-    border: 1.5px solid rgba(var(--da-accent-rgb, 129, 140, 248), 0.65);
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.65);
     opacity: 0.72;
     animation: da-fab-radar-ring 1.6s var(--da-ease) infinite;
 }
 
-/* 动效 5: 无连续动效 (none)，仅保留强调边框状态 */
+/* 动效 5: 禁用连续动效 (none)，仅保留强调边框状态 */
 .da-fab-btn.is-busy[data-fab-effect="none"],
 #da-fab-button.is-busy[data-fab-effect="none"] {
     border-color: var(--da-accent-color);
     box-shadow:
         0 8px 22px rgba(0, 0, 0, 0.36),
-        0 0 0 2px rgba(var(--da-accent-rgb, 129, 140, 248), 0.28);
+        0 0 0 2px rgba(var(--da-accent-rgb, 203, 166, 247), 0.28);
 }
 
 /* 点击瞬间一次性波纹扩散环 */
@@ -234,7 +214,7 @@
     position: absolute;
     inset: -2px;
     border-radius: 50%;
-    border: 1.5px solid rgba(var(--da-accent-rgb, 129, 140, 248), 0.65);
+    border: 1.5px solid rgba(var(--da-accent-rgb, 203, 166, 247), 0.65);
     pointer-events: none;
     opacity: 0;
 }
@@ -261,7 +241,7 @@
 }
 
 @media (max-width: 640px) {
-    .da-fab-btn:not(.da-fab-btn--preview),
+    .da-fab-btn,
     #da-fab-button {
         --da-fab-safe-x: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
         --da-fab-safe-top: max(52px, calc(env(safe-area-inset-top) + 44px));
@@ -273,12 +253,12 @@
 #da-fab-button:hover {
     color: var(--da-accent-hover, var(--da-accent-color));
     background:
-        radial-gradient(circle at 30% 22%, rgba(var(--da-accent-rgb, 129, 140, 248), 0.24), transparent 68%),
-        color-mix(in srgb, var(--da-bg-card-hover, #252734) 84%, transparent);
-    border-color: rgba(var(--da-accent-rgb, 129, 140, 248), 0.68);
+        radial-gradient(circle at 30% 22%, rgba(var(--da-accent-rgb, 203, 166, 247), 0.24), transparent 68%),
+        color-mix(in srgb, var(--da-bg-card-hover, #313244) 84%, transparent);
+    border-color: rgba(var(--da-accent-rgb, 203, 166, 247), 0.68);
     box-shadow:
         0 10px 26px rgba(0, 0, 0, 0.42),
-        0 0 14px rgba(var(--da-accent-rgb, 129, 140, 248), 0.26),
+        0 0 14px rgba(var(--da-accent-rgb, 203, 166, 247), 0.26),
         inset 0 1px 0 rgba(255, 255, 255, 0.18);
     transform: translateY(-2px) scale(1.06);
 }
@@ -308,7 +288,7 @@
     cursor: grabbing !important;
     box-shadow:
         0 14px 30px rgba(0, 0, 0, 0.48),
-        0 0 0 1px rgba(var(--da-accent-rgb, 129, 140, 248), 0.45);
+        0 0 0 1px rgba(var(--da-accent-rgb, 203, 166, 247), 0.45);
 }
 
 .da-fab-btn.is-dragging:not(.is-busy)::before,
@@ -379,14 +359,12 @@
     transition: transform var(--da-duration-fast, 0.16s) var(--da-ease-spring);
 }
 
-/* 4. 悬浮球预设图标与绘图动效选择网格 */
+/* 4. 悬浮球预设图标选择网格 */
 .da-fab-icon-grid {
     display: flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
+    gap: 8px;
     box-sizing: border-box;
-    margin-top: 4px;
     flex-wrap: wrap;
 }
 
@@ -394,126 +372,80 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
+    background: var(--da-bg-input, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-sm, 4px);
+    border-radius: var(--da-radius-sm, 6px);
     color: var(--da-text-secondary, rgba(255, 255, 255, 0.7));
     cursor: pointer;
     user-select: none;
-    transition: all 0.18s var(--da-ease);
+    transition: border-color 0.16s var(--da-ease), background-color 0.16s var(--da-ease), color 0.16s var(--da-ease), transform 0.16s var(--da-ease);
     outline: none;
     box-sizing: border-box;
 }
 
 .da-fab-icon-chip svg {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     stroke: currentColor;
-    transition: transform 0.18s var(--da-ease-spring), stroke 0.18s ease;
+    transition: transform 0.16s var(--da-ease-spring);
 }
 
 .da-fab-icon-chip:hover {
     background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
-    border-color: rgba(var(--da-accent-rgb), 0.45);
+    border-color: rgba(var(--da-accent-rgb, 203, 166, 247), 0.45);
     color: var(--da-accent-color);
-    transform: translateY(-2px);
-    box-shadow: var(--da-shadow-md);
-}
-
-.da-fab-icon-chip:hover svg {
-    transform: scale(1.1);
-}
-
-.da-fab-icon-chip.is-active {
-    background: rgba(var(--da-accent-rgb), 0.16);
-    border-color: var(--da-accent-color);
-    color: var(--da-accent-color);
-    box-shadow: 0 0 12px rgba(var(--da-accent-rgb), 0.35);
-}
-
-.da-fab-effect-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.da-fab-effect-grid {
-    display: flex;
-    align-items: stretch;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.da-fab-effect-chip {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 78px;
-    padding: 12px 10px 8px;
-    border-radius: var(--da-radius-md, 10px);
-    border: 1px solid var(--da-border-color);
-    background: var(--da-bg-input);
-    color: var(--da-text-secondary);
-    font-family: var(--da-font-family);
-    font-size: var(--da-font-size-xs, 12px);
-    font-weight: 500;
-    cursor: pointer;
-    user-select: none;
-    box-sizing: border-box;
-    transition: border-color 0.16s var(--da-ease), background-color 0.16s var(--da-ease), color 0.16s var(--da-ease), transform 0.16s var(--da-ease);
-}
-
-.da-fab-effect-chip:hover {
-    background: var(--da-bg-hover);
-    border-color: rgba(var(--da-accent-rgb), 0.45);
-    color: var(--da-text-primary);
     transform: translateY(-1px);
 }
 
-.da-fab-effect-chip.is-active {
-    background: rgba(var(--da-accent-rgb), 0.12);
+.da-fab-icon-chip:hover svg {
+    transform: scale(1.08);
+}
+
+.da-fab-icon-chip.is-active {
+    background: rgba(var(--da-accent-rgb, 203, 166, 247), 0.14);
     border-color: var(--da-accent-color);
     color: var(--da-accent-color);
-    font-weight: 600;
-}
-
-.da-fab-effect-chip__label {
-    line-height: 1.2;
-    white-space: nowrap;
-}
-
-.da-fab-effect-hint {
-    font-size: var(--da-font-size-xs, 12px);
-    color: var(--da-text-muted);
-    line-height: 1.4;
 }
 
 /* 5. 自定义图标圆形头像预览 */
 .da-fab-custom-icon-wrapper {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .da-fab-preview-avatar {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    border: 2px solid var(--da-accent-color);
-    color: var(--da-accent-color);
+    border: 1px solid var(--da-border-color);
+    color: var(--da-text-secondary);
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--da-bg-card, var(--da-bg-primary));
+    background: var(--da-bg-input, var(--da-bg-primary));
+    flex-shrink: 0;
+    transition: border-color 0.16s var(--da-ease), color 0.16s var(--da-ease);
+}
+
+.da-fab-preview-avatar.has-custom {
+    border: 2px solid var(--da-accent-color);
+    color: var(--da-accent-color);
     box-shadow: var(--da-shadow-sm);
+}
+
+.da-fab-preview-avatar .da-fab-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.da-fab-preview-avatar .da-fab-icon svg {
+    width: 18px;
+    height: 18px;
 }
 
 .da-fab-preview-avatar img {

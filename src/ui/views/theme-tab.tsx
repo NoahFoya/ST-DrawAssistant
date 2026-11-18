@@ -29,7 +29,7 @@ function ColorPickerInput(props: {
 }): VNode {
     const rawVal = props.value || '';
     // 原生 color input 仅识别合法的 6 位十六进制
-    const validHex = /^#[0-9a-fA-F]{6}$/.test(rawVal) ? rawVal : '#818cf8';
+    const validHex = /^#[0-9a-fA-F]{6}$/.test(rawVal) ? rawVal : '#cba6f7';
 
     return (
         <div className="da-color-picker">
@@ -145,7 +145,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.accent}
-                            placeholder="#818cf8"
+                            placeholder="#cba6f7"
                             onChange={(val) => this.presetController.updateDraft('accent', val)}
                         />
                     </FormFieldView>
@@ -157,7 +157,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.accentSecondary}
-                            placeholder="#a78bfa"
+                            placeholder="#89b4fa"
                             onChange={(val) => this.presetController.updateDraft('accentSecondary', val)}
                         />
                     </FormFieldView>
@@ -170,7 +170,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.textOnAccent}
-                            placeholder="#ffffff"
+                            placeholder="#11111b"
                             onChange={(val) => this.presetController.updateDraft('textOnAccent', val)}
                         />
                     </FormFieldView>
@@ -185,7 +185,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.bgPrimary}
-                            placeholder="#141418"
+                            placeholder="#1e1e2e"
                             onChange={(val) => this.presetController.updateDraft('bgPrimary', val)}
                         />
                     </FormFieldView>
@@ -197,7 +197,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.bgSecondary}
-                            placeholder="#101013"
+                            placeholder="#181825"
                             onChange={(val) => this.presetController.updateDraft('bgSecondary', val)}
                         />
                     </FormFieldView>
@@ -209,7 +209,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.bgCard}
-                            placeholder="#22232b"
+                            placeholder="#28293d"
                             onChange={(val) => this.presetController.updateDraft('bgCard', val)}
                         />
                     </FormFieldView>
@@ -221,7 +221,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.bgCardHover}
-                            placeholder="#292a34"
+                            placeholder="#313244"
                             onChange={(val) => this.presetController.updateDraft('bgCardHover', val)}
                         />
                     </FormFieldView>
@@ -233,7 +233,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.bgInput}
-                            placeholder="#0e0f13"
+                            placeholder="#161622"
                             onChange={(val) => this.presetController.updateDraft('bgInput', val)}
                         />
                     </FormFieldView>
@@ -248,7 +248,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.borderColor}
-                            placeholder="rgba(255, 255, 255, 0.08)"
+                            placeholder="rgba(205, 214, 244, 0.10)"
                             onChange={(val) => this.presetController.updateDraft('borderColor', val)}
                         />
                     </FormFieldView>
@@ -261,7 +261,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.borderHighlight}
-                            placeholder="rgba(129, 140, 248, 0.45)"
+                            placeholder="rgba(203, 166, 247, 0.34)"
                             onChange={(val) => this.presetController.updateDraft('borderHighlight', val)}
                         />
                     </FormFieldView>
@@ -273,7 +273,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.textPrimary}
-                            placeholder="#f4f4f5"
+                            placeholder="#cdd6f4"
                             onChange={(val) => this.presetController.updateDraft('textPrimary', val)}
                         />
                     </FormFieldView>
@@ -285,7 +285,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.textSecondary}
-                            placeholder="#a1a1aa"
+                            placeholder="#a6adc8"
                             onChange={(val) => this.presetController.updateDraft('textSecondary', val)}
                         />
                     </FormFieldView>
@@ -297,7 +297,7 @@ export class ThemeTabView extends PreactSettingsView {
                     >
                         <ColorPickerInput
                             value={draft.textMuted}
-                            placeholder="#71717a"
+                            placeholder="#6c7086"
                             onChange={(val) => this.presetController.updateDraft('textMuted', val)}
                         />
                     </FormFieldView>
