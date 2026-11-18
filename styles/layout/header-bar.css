@@ -132,8 +132,8 @@ select.da-quick-theme-select {
 
 .da-quick-theme-select option,
 select.da-quick-theme-select option {
-    background-color: var(--da-bg-secondary, #0d0f18);
-    color: var(--da-text-primary, #ffffff);
+    background-color: var(--da-bg-card, var(--da-bg-secondary));
+    color: var(--da-text-primary);
     font-size: var(--da-font-size-sm, 13px);
     padding: 6px 10px;
     text-align: center;

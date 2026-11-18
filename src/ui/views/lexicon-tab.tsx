@@ -1149,7 +1149,7 @@ export class LexiconTabView extends PreactSettingsView {
                                     type="text"
                                     className="da-input da-lexicon-cell da-lexicon-cell-tag da-lexicon-tail-tag"
                                     value={this.tailDraft.value.tag}
-                                    placeholder="+ 输入英文 Tag 并按 Enter 保存 (如 cowboy_shot)"
+                                    placeholder="+ 输入英文 Tag，Enter 保存"
                                     onInput={(e) => {
                                         this.tailDraft.value = {
                                             ...this.tailDraft.value,

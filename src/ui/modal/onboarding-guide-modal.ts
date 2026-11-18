@@ -54,7 +54,7 @@ const GUIDE_STEPS: readonly GuideStepSpec[] = [
             },
             {
                 step: '02 上下文注入',
-                title: '插件通道或外部世界书',
+                title: '通道与世界书注入',
                 desc: '可选向酒馆注入提示词，告知 AI 何时以及用何种标记输出指令',
             },
             {

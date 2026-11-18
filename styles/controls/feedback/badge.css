@@ -96,7 +96,7 @@
 .da-badge--neutral {
     background: var(--da-bg-input);
     border-color: var(--da-border-color);
-    color: var(--da-text-muted);
+    color: var(--da-text-secondary);
 }
 
 /* 轻量半透明计数标签 */

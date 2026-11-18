@@ -255,7 +255,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     <div className="da-macro-unified-toolbar__actions">
                         <ButtonControl
                             label="恢复默认规则"
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
                             onClick={resetToDefaults}
                         />
@@ -424,7 +424,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     <div className="da-format-preview-col">
                         <div className="da-format-preview-col__header">
                             <span className="da-format-preview-col__title">角色单行效果</span>
-                            <BadgeView text="{{角色启用列表}}" variant="info" />
+                            <BadgeView text="{{角色启用列表}}" variant="primary" />
                         </div>
                         <div className="da-format-preview-col__content">
                             {renderCharPreview(fmt.characterTemplate)}
@@ -444,7 +444,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     <div className="da-format-preview-col">
                         <div className="da-format-preview-col__header">
                             <span className="da-format-preview-col__title">角色可用宏列表预览</span>
-                            <BadgeView text="{{角色可用宏列表}}" variant="info" />
+                            <BadgeView text="{{角色可用宏列表}}" variant="primary" />
                         </div>
                         <div className="da-format-preview-col__content da-format-preview-col__content--macros">
                             {renderMacrosPreview(sampleCharRules, fmt.macroTemplate)}
@@ -487,7 +487,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                     <div className="da-macro-unified-toolbar__actions">
                         <ButtonControl
                             label="恢复默认模板"
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
                             onClick={() => {
                                 const kind = activeTemplateKind.value;

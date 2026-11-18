@@ -2,13 +2,13 @@
  * 单行文本输入框、居中短文本与居中数字微调框样式。
  *
  * @remarks
- * 1. 居中排版：短标记文本框与数值输入框居中对齐，与右侧下拉框保持视觉重心一致。
+ * 1. 左对齐常规排版：默认单行输入框左对齐，短文本与数值变体（--short / --center / --number）支持居中对齐。
  * 2. 避免跳动：数值类输入框开启 tabular-nums 等宽数字特性，防止数值增减时字宽抖动。
  * 3. 精确调节：采样步数、CFG、透明度等数值采用精确数字微调框。
  * 4. 状态反馈：支持 .is-dirty 变更提示与 .is-invalid 校验错误状态。
  */
 
-/* 1. 单行文本输入框基类 (标准 240px 宽阶梯，居中排版) */
+/* 1. 单行文本输入框基类 (标准 240px 宽阶梯，常规左对齐排版) */
 .da-input {
     width: 240px;
     max-width: 100%;
@@ -17,22 +17,21 @@
     height: 32px;
     padding: 0 var(--da-space-md, 10px);
     box-sizing: border-box;
-    border-radius: var(--da-radius-input, 6px);
+    border-radius: var(--da-radius-input, 8px);
     border: 1px solid var(--da-border-color);
     background: var(--da-bg-input);
     color: var(--da-text-primary);
     font-family: var(--da-font-family);
     font-size: var(--da-font-size-sm, 0.80rem);
-    text-align: center;
+    text-align: left;
     outline: none;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), var(--da-inset-top-light);
     transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background-color 0.14s var(--da-ease);
 }
 
 .da-input::placeholder {
     color: var(--da-text-muted);
-    opacity: 0.7;
-    text-align: center;
+    opacity: 0.78;
+    text-align: left;
 }
 
 .da-input:hover:not(:disabled) {
@@ -42,13 +41,13 @@
 
 .da-input:focus {
     border-color: var(--da-accent-color);
-    box-shadow: var(--da-focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--da-focus-ring);
     background: var(--da-bg-input);
 }
 
 .da-input:focus-visible {
     border-color: var(--da-accent-color);
-    box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring)), inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--da-focus-visible-ring, var(--da-focus-ring));
     background: var(--da-bg-input);
 }
 

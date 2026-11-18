@@ -9,7 +9,7 @@
 /* 1. 主内容滚动区域 (.da-modal-content)
    .st-da-root 前缀确保不被宿主全局 flex 规则覆盖；
    min-width: 0 与 min-height: 0 允许 flex 子项收缩以建立局部独立滚动上下文；
-   细窄半透明滚动条配合 scrollbar-gutter: stable 维持界面轻量无跳动感。 */
+   配合 scrollbar-gutter: stable 防止滚动条显隐引起宽度跳动（细窄滚动条样式由 reset.css 统一提供）。 */
 .st-da-root .da-modal-content {
     flex: 1 1 0%;
     min-width: 0;
@@ -21,27 +21,6 @@
     scrollbar-gutter: stable;
     background: transparent;
     box-sizing: border-box;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(var(--da-accent-rgb), 0.22) transparent;
-}
-
-.da-modal-content::-webkit-scrollbar {
-    width: 6px;
-}
-
-.da-modal-content::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.da-modal-content::-webkit-scrollbar-thumb {
-    background: rgba(var(--da-accent-rgb), 0.22);
-    border-radius: 4px;
-    transition: background 0.15s ease;
-}
-
-.da-modal-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--da-accent-rgb), 0.45);
-    box-shadow: 0 0 6px rgba(var(--da-accent-rgb), 0.35);
 }
 
 /* 2. 单个 Tab 页面承载面板 (.da-tab-pane)

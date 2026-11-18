@@ -370,7 +370,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                             <input
                                 type="text"
                                 className="da-wi-search-input"
-                                placeholder="搜索标题、关键词或正文..."
+                                placeholder="搜索标题或关键词..."
                                 value={searchQuery}
                                 onInput={(e) =>
                                     setSearchQuery((e.currentTarget as HTMLInputElement).value)

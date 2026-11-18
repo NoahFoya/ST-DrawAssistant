@@ -466,23 +466,25 @@
 /* 尾部空白追加行 (Tail Blank Row) */
 .da-lexicon-tail-draft-row {
     margin-top: 6px;
-    background: rgba(255, 255, 255, 0.015);
-    border-top: 1px dashed var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-surface-subtle);
+    border-top: 1px dashed var(--da-border-color);
     border-bottom: none;
 }
 
-[data-theme-mode="dark"] .da-lexicon-tail-draft-row {
-    background: rgba(255, 255, 255, 0.015);
+.da-lexicon-tail-draft-row .da-lexicon-cell {
+    border-color: var(--da-border-color);
+    background: var(--da-bg-input);
+    color: var(--da-text-primary);
 }
 
-.da-lexicon-tail-draft-row .da-lexicon-cell {
-    border-color: rgba(255, 255, 255, 0.06);
-    background: rgba(0, 0, 0, 0.12);
+.da-lexicon-tail-draft-row .da-lexicon-cell::placeholder {
+    color: var(--da-text-muted);
+    opacity: 0.82;
 }
 
 .da-lexicon-tail-draft-row .da-lexicon-cell:focus {
     border-color: var(--da-accent-color);
-    background: var(--da-bg-input, #161720);
+    background: var(--da-bg-input-hover, var(--da-bg-input));
 }
 
 /* 中间插入行 (Inserted Row) */

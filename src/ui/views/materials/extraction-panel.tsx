@@ -194,7 +194,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                     <div className="da-sandbox-actions">
                         <ButtonControl
                             label="载入示例"
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
                             onClick={() => {
                                 sandboxText.value = DEFAULT_SANDBOX_SAMPLE;
@@ -202,7 +202,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                         />
                         <ButtonControl
                             label="清空"
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
                             disabled={!sandboxText.value}
                             onClick={() => {

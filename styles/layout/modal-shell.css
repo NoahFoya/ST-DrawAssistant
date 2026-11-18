@@ -42,6 +42,7 @@ html.da-has-active-modal body {
     box-sizing: border-box;
     padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
         max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
     animation: da-backdrop-fade 0.18s var(--da-ease);

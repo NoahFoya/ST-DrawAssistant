@@ -488,7 +488,7 @@ export class AboutTabView extends PreactSettingsView {
                                 />
                                 <ButtonControl
                                     label="刷新状态"
-                                    variant="ghost"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={() => void this.refreshEnvState()}
                                 />
@@ -517,7 +517,7 @@ export class AboutTabView extends PreactSettingsView {
                                     <span>配置备份与导入</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    导出全部设置与各类预设（含提示词、素材与工作流等）至 JSON 文件，或从备份恢复
+                                    导出全部设置与各类预设为 JSON 备份文件，或从本地备份文件恢复
                                 </div>
                             </div>
                             <div className="da-settings-row__action">

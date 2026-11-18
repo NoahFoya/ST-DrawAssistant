@@ -68,4 +68,60 @@
     list-style: none;
 }
 
+/* 6. 主题明暗 color-scheme 与全作用域细窄滚动条 */
+[data-theme-mode="dark"] .st-da-root,
+[data-theme-mode="dark"] .da-modal-backdrop,
+[data-theme-mode="dark"] .da-main-modal-inner,
+.st-da-root[data-theme-mode="dark"],
+.da-modal-backdrop[data-theme-mode="dark"] {
+    color-scheme: dark;
+}
+
+[data-theme-mode="light"] .st-da-root,
+[data-theme-mode="light"] .da-modal-backdrop,
+[data-theme-mode="light"] .da-main-modal-inner,
+.st-da-root[data-theme-mode="light"],
+.da-modal-backdrop[data-theme-mode="light"] {
+    color-scheme: light;
+}
+
+.st-da-root *,
+.da-modal-backdrop *,
+.da-main-modal-inner * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--da-accent-rgb, 129, 140, 248), 0.24) transparent;
+}
+
+.st-da-root *::-webkit-scrollbar,
+.da-modal-backdrop *::-webkit-scrollbar,
+.da-main-modal-inner *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.st-da-root *::-webkit-scrollbar-track,
+.da-modal-backdrop *::-webkit-scrollbar-track,
+.da-main-modal-inner *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.st-da-root *::-webkit-scrollbar-thumb,
+.da-modal-backdrop *::-webkit-scrollbar-thumb,
+.da-main-modal-inner *::-webkit-scrollbar-thumb {
+    background: rgba(var(--da-accent-rgb, 129, 140, 248), 0.24);
+    border-radius: 4px;
+}
+
+.st-da-root *::-webkit-scrollbar-thumb:hover,
+.da-modal-backdrop *::-webkit-scrollbar-thumb:hover,
+.da-main-modal-inner *::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--da-accent-rgb, 129, 140, 248), 0.45);
+}
+
+/* 7. 主题原子化切换过渡冻结标记（消除深浅切换瞬间的过渡异步反色撕裂） */
+.da-theme-switching,
+.da-theme-switching * {
+    transition: none !important;
+}
+
 

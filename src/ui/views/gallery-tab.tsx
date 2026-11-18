@@ -91,7 +91,7 @@ export class GalleryTabView extends PreactSettingsView {
                         <div className="da-gallery-toolbar-actions">
                             <ButtonControl
                                 label="刷新"
-                                variant="ghost"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => this.vm.refresh()}
                             />

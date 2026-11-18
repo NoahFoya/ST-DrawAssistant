@@ -20,8 +20,6 @@
     overflow-y: auto;
     overflow-x: hidden;
     box-sizing: border-box;
-    scrollbar-width: thin;
-    scrollbar-color: var(--da-border-color) transparent;
 }
 
 /* 2. 选项卡条目按钮与交互态 */

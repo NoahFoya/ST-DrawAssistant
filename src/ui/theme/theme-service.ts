@@ -289,6 +289,15 @@ export class ThemeService implements Disposable {
 
         const target = this.targetElement;
 
+        // 0. 冻结颜色与背景 CSS 过渡，确保深浅主题切换时所有子控件同帧原子更新
+        const canFreeze =
+            typeof window !== 'undefined' &&
+            typeof window.requestAnimationFrame === 'function' &&
+            target.classList;
+        if (canFreeze) {
+            target.classList.add('da-theme-switching');
+        }
+
         // 1. 设置当前主题标识符与明暗模式标识
         const bgSample = merged.bgPrimary || merged.bgCanvas || merged.bgModal || '#141418';
         const isLight = getPerceivedLuminance(bgSample) > 0.55;
@@ -304,6 +313,14 @@ export class ThemeService implements Disposable {
             } else {
                 target.style.removeProperty(rule.cssVar);
             }
+        }
+
+        if (canFreeze) {
+            // 强制完成当前帧样式重算后再解除过渡冻结
+            void target.offsetHeight;
+            window.requestAnimationFrame(() => {
+                target.classList.remove('da-theme-switching');
+            });
         }
     }
 

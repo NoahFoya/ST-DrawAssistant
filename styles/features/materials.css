@@ -151,14 +151,16 @@
     width: 100%;
 }
 
-/* 基础信息卡片流式布局 (顶部居中立绘、下方表单字段) */
+/* 基础信息卡片双栏布局 (桌面端左图右表单，窄屏自动回落单列) */
 .da-material-identity-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 12px 16px;
     padding: 16px;
     box-sizing: border-box;
     width: 100%;
+    align-items: start;
 }
 
 .da-material-identity-row-2 {
@@ -177,11 +179,13 @@
 }
 
 .da-material-avatar-center-wrap {
+    grid-column: 1;
+    grid-row: 1 / span 2;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    width: 100%;
-    padding: 4px 0 6px 0;
+    width: 120px;
+    padding: 0;
 }
 
 .da-material-avatar-box {
@@ -804,7 +808,8 @@
     font-size: 11.5px;
     line-height: 1.6;
     color: var(--da-text-primary);
-    word-break: break-all;
+    word-break: normal;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
     min-height: 58px;
     box-sizing: border-box;
@@ -1008,8 +1013,16 @@
 
 @media (max-width: 640px) {
     .da-material-identity-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
         padding: 12px;
         gap: 10px;
+    }
+    .da-material-avatar-center-wrap {
+        grid-column: 1;
+        grid-row: auto;
+        width: 100%;
+        padding: 2px 0;
     }
     .da-material-avatar-box {
         max-width: 120px;
@@ -1781,7 +1794,10 @@
 
 .da-macro-desc-input {
     width: 100% !important;
+    height: 28px !important;
+    border-radius: var(--da-radius-sm, 6px) !important;
     font-size: 12px !important;
+    text-align: left !important;
 }
 
 .da-macro-delete-btn {
