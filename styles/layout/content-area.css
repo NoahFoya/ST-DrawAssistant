@@ -1,0 +1,66 @@
+/**
+ * 模态弹窗主内容区域容器样式。
+ *
+ * @remarks
+ * 声明弹窗右侧主内容滚动区（.da-modal-content）与 Tab 面板容器（.da-tab-pane）。
+ * 建立局部独立滚动上下文，并使用 scrollbar-gutter: stable 防止滚动条显隐引起宽度跳动。
+ */
+
+/* 1. 主内容滚动区域 (.da-modal-content)
+   .st-da-root 前缀确保不被宿主全局 flex 规则覆盖；
+   min-width: 0 与 min-height: 0 允许 flex 子项收缩以建立局部独立滚动上下文；
+   细窄半透明滚动条配合 scrollbar-gutter: stable 维持界面轻量无跳动感。 */
+.st-da-root .da-modal-content {
+    flex: 1 1 0%;
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    padding: 16px 14px 24px 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    background: transparent;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--da-accent-rgb), 0.22) transparent;
+}
+
+.da-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.da-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.da-modal-content::-webkit-scrollbar-thumb {
+    background: rgba(var(--da-accent-rgb), 0.22);
+    border-radius: 4px;
+    transition: background 0.15s ease;
+}
+
+.da-modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--da-accent-rgb), 0.45);
+    box-shadow: 0 0 6px rgba(var(--da-accent-rgb), 0.35);
+}
+
+/* 2. 单个 Tab 页面承载面板 (.da-tab-pane)
+   纵向弹性容器，各功能卡片间距适度舒展 14px；
+   加载时配合 da-fadein 产生平滑淡入动效。 */
+.st-da-root .da-tab-pane {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--da-space-card-gap, 14px);
+    box-sizing: border-box;
+    padding: 4px 0 20px 0;
+    animation: da-fadein 0.18s var(--da-ease);
+}
+
+/* Tab 占位与空状态提示文本 */
+.da-tab-placeholder {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--da-text-secondary);
+}
