@@ -1,0 +1,114 @@
+{
+  "isInitialized": false,
+  "hasSeenGuide": false,
+  "enabled": true,
+  "activeProvider": "comfyui",
+  "transport": "direct",
+  "taskTimeoutMs": 120000,
+  "cancelOnChatChange": true,
+  "saveToServer": false,
+  "imageQuality": "original",
+  "autoGenerate": false,
+  "cleanPrompt": true,
+  "promptStartTag": "image###",
+  "promptEndTag": "###",
+  "activeThemePresetId": "iris-mist",
+  "presets": {
+    "themes": [],
+    "prompts": {
+      "comfyui": [],
+      "sdwebui": [],
+      "novelai": [],
+      "openai": []
+    },
+    "workflows": [],
+    "drawing": {
+      "comfyui": [],
+      "sdwebui": [],
+      "novelai": [],
+      "openai": []
+    },
+    "characters": [],
+    "outfits": [],
+    "material_activations": [],
+    "material_extractions": [],
+    "material_formats": [],
+    "prompt_story": [],
+    "prompt_character": [],
+    "prompt_vocab": [],
+    "prompt_material": []
+  },
+  "promptInjection": {
+    "story": {
+      "enabled": true,
+      "activePresetId": "prompt_story_default"
+    },
+    "character": {
+      "enabled": false,
+      "activePresetId": "prompt_character_default"
+    },
+    "vocab": {
+      "enabled": false,
+      "activePresetId": "prompt_vocab_default"
+    },
+    "material": {
+      "enabled": false,
+      "activePresetId": "prompt_material_default",
+      "hideWhenEmpty": true
+    }
+  },
+  "materialConfig": {
+    "activeCharacterPresetId": "",
+    "activeOutfitPresetId": "",
+    "activeActivationPresetId": "mat_act_default",
+    "activeExtractionPresetId": "ext_default",
+    "activeFormatPresetId": "fmt_default",
+    "autoSwitchByCard": false
+  },
+  "providers": {
+    "comfyui": {
+      "serverUrl": "http://127.0.0.1:8188",
+      "activeDrawingPresetId": "comfyui_anime"
+    },
+    "sdwebui": {
+      "serverUrl": "http://127.0.0.1:7860",
+      "activeDrawingPresetId": "sdwebui_anime"
+    },
+    "novelai": {
+      "serviceId": "novelai-official",
+      "serverUrl": "https://image.novelai.net",
+      "apiKey": "",
+      "activeDrawingPresetId": "novelai_v45_curated"
+    },
+    "openai": {
+      "serviceId": "openai-official",
+      "serverUrl": "https://api.openai.com/v1",
+      "apiKey": "",
+      "activeDrawingPresetId": "openai_dalle3_vivid"
+    }
+  },
+  "ui": {
+    "fab": {
+      "visible": true,
+      "opacity": 0.95,
+      "icon": "palette"
+    },
+    "lightbox": {
+      "enabled": true
+    },
+    "floorButton": {
+      "hideOnDone": false
+    },
+    "imageActionPanel": {
+      "enabled": true
+    },
+    "imageDisplay": {
+      "align": "center",
+      "objectFit": "contain",
+      "maxHeight": 480,
+      "maxWidthPct": 100,
+      "rounded": true,
+      "autoBlur": false
+    }
+  }
+}

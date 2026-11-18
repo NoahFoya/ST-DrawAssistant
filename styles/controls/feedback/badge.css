@@ -1,0 +1,134 @@
+/**
+ * 状态微标样式。
+ *
+ * @remarks
+ * 1. 结构形式：维护行内状态微标（.da-badge）。
+ * 2. 语义色彩：提供 success / accent / muted / warn / error 色彩变体。
+ */
+
+/* 1. 通用语义状态微标族 */
+.da-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    font-size: 0.72em;
+    font-weight: 600;
+    border-radius: 4px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.da-badge.is-clickable {
+    cursor: pointer;
+}
+
+.da-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    flex-shrink: 0;
+}
+
+.da-badge--success .da-badge__dot {
+    background-color: var(--da-color-success);
+    box-shadow: 0 0 4px var(--da-color-success);
+}
+
+.da-badge--accent .da-badge__dot,
+.da-badge--primary .da-badge__dot {
+    background-color: var(--da-accent-color);
+    box-shadow: 0 0 4px var(--da-accent-color);
+}
+
+.da-badge--info .da-badge__dot {
+    background-color: var(--da-color-info);
+    box-shadow: 0 0 4px var(--da-color-info);
+}
+
+.da-badge--muted .da-badge__dot,
+.da-badge--neutral .da-badge__dot {
+    background-color: var(--da-text-muted);
+}
+
+.da-badge--warn .da-badge__dot,
+.da-badge--warning .da-badge__dot {
+    background-color: var(--da-color-warn);
+    box-shadow: 0 0 4px var(--da-color-warn);
+}
+
+.da-badge--danger .da-badge__dot,
+.da-badge--error .da-badge__dot,
+.da-badge--invalid .da-badge__dot {
+    background-color: var(--da-color-error);
+    box-shadow: 0 0 4px var(--da-color-error);
+}
+
+.da-badge__text {
+    line-height: 1.2;
+}
+
+/* 成功 / 就绪 / 在线状态 */
+.da-badge--success {
+    background: rgba(var(--da-color-success-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-success-rgb), 0.35) !important;
+    color: var(--da-color-success) !important;
+}
+
+/* 品牌强调 / 活跃状态 */
+.da-badge--accent,
+.da-badge--primary {
+    background: rgba(var(--da-accent-rgb), 0.15) !important;
+    border-color: rgba(var(--da-accent-rgb), 0.35) !important;
+    color: var(--da-accent-color) !important;
+}
+
+/* 信息提示状态 */
+.da-badge--info {
+    background: rgba(var(--da-color-info-rgb), 0.15) !important;
+    border-color: rgba(var(--da-color-info-rgb), 0.35) !important;
+    color: var(--da-color-info) !important;
+}
+
+/* 次级弱化 / 离线 / 默认状态 */
+.da-badge--muted,
+.da-badge--neutral {
+    background: var(--da-bg-input);
+    border-color: var(--da-border-color);
+    color: var(--da-text-muted);
+}
+
+/* 轻量半透明计数标签 */
+.da-badge--subtle {
+    background: var(--da-bg-subtle);
+    border-color: var(--da-border-color);
+    color: var(--da-text-secondary);
+}
+
+/* 警告 / 待处理 / 连通延迟告警 */
+.da-badge--warn,
+.da-badge--warning {
+    background: rgba(var(--da-color-warn-rgb), 0.15) !important;
+    color: var(--da-color-warn) !important;
+    border: 1px solid rgba(var(--da-color-warn-rgb), 0.35) !important;
+}
+
+/* 异常 / 错误 / 依赖模型失效告警 */
+.da-badge--danger,
+.da-badge--error,
+.da-badge--invalid,
+.da-badge--missing {
+    background: rgba(var(--da-color-error-rgb), 0.15) !important;
+    color: var(--da-color-error) !important;
+    border: 1px solid rgba(var(--da-color-error-rgb), 0.35) !important;
+}
+
+/* 浅色模式下去除彩色发光投影 */
+[data-theme-mode="light"] .da-badge__dot {
+    box-shadow: none;
+}
+
+
+
+

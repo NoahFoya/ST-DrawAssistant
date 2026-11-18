@@ -1,0 +1,206 @@
+/**
+ * 通用按钮控件、语义变体与按钮组样式。
+ *
+ * @remarks
+ * 1. 基础变体：声明通用按钮基类（.da-btn）及语义化变体（Primary/Secondary/Danger/Success）。
+ * 2. 尺寸与交互状态：提供 .da-btn--sm / --icon 尺寸变体，以及加载态、禁用态与内部图标/加载指示样式。
+ */
+
+/* 1. 核心通用按钮基类 */
+.da-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--da-radius-btn, 6px);
+    border: 1px solid var(--da-border-color);
+    background: var(--da-bg-subtle, rgba(255, 255, 255, 0.05));
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 0.80rem);
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    box-shadow: var(--da-inset-top-light);
+    transition: background 0.14s var(--da-ease), border-color 0.14s var(--da-ease), transform 0.1s var(--da-ease-spring), box-shadow 0.14s var(--da-ease);
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+}
+
+.da-btn:hover {
+    background: var(--da-bg-hover);
+    border-color: var(--da-border-highlight);
+}
+
+.da-btn:active {
+    transform: scale(0.97);
+    background: var(--da-bg-active);
+}
+
+/* 键盘 Tab 聚焦时的高对比度焦点指示 */
+.da-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+/* 2. 语义化按钮变体 */
+/* Primary 主要按钮：品牌色流光渐变背景，文字为高对比度深色/反白色 */
+.st-da-root .da-btn--primary,
+.da-btn.da-btn--primary {
+    background: var(--da-accent-gradient, linear-gradient(135deg, var(--da-accent-color) 0%, var(--da-accent-hover) 100%));
+    border-color: var(--da-accent-color);
+    color: var(--da-text-on-accent, #ffffff);
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), var(--da-inset-top-light);
+}
+
+.st-da-root .da-btn--primary:hover,
+.da-btn.da-btn--primary:hover {
+    background: var(--da-accent-gradient, linear-gradient(135deg, var(--da-accent-hover) 0%, var(--da-accent-color) 100%));
+    border-color: var(--da-accent-hover);
+    box-shadow: 0 4px 14px rgba(var(--da-accent-rgb), 0.35), var(--da-inset-top-light);
+    color: var(--da-text-on-accent, #ffffff);
+}
+
+/* Secondary 次要按钮：半透明低对比度底色 */
+.da-btn--secondary {
+    background: var(--da-bg-subtle);
+    border-color: var(--da-border-color);
+    color: var(--da-text-primary);
+}
+
+/* Ghost 透明按钮变体：无底色与透明边框，悬停时显示浅色背景 */
+.st-da-root .da-btn--ghost,
+.da-btn.da-btn--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--da-text-secondary);
+    box-shadow: none;
+}
+
+.st-da-root .da-btn--ghost:hover:not(:disabled),
+.da-btn.da-btn--ghost:hover:not(:disabled) {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+    border-color: var(--da-border-color);
+}
+
+.st-da-root .da-btn--ghost.da-btn--danger,
+.da-btn.da-btn--ghost.da-btn--danger {
+    color: var(--da-color-error);
+}
+
+.st-da-root .da-btn--ghost.da-btn--danger:hover:not(:disabled),
+.da-btn.da-btn--ghost.da-btn--danger:hover:not(:disabled) {
+    background: rgba(var(--da-color-error-rgb), 0.12);
+    border-color: rgba(var(--da-color-error-rgb), 0.35);
+}
+
+/* Danger 危险按钮：警示红半透明背景与红边框，用于清空与删除操作 */
+.da-btn--danger {
+    background: rgba(var(--da-color-error-rgb), 0.12);
+    border-color: rgba(var(--da-color-error-rgb), 0.35);
+    color: var(--da-color-error);
+}
+
+.da-btn--danger:hover {
+    background: rgba(var(--da-color-error-rgb), 0.2);
+    box-shadow: 0 0 8px rgba(var(--da-color-error-rgb), 0.2);
+}
+
+/* Success 成功按钮变体：用于保存完毕或连通验证成功的即时反馈 */
+.st-da-root .da-btn--success,
+.da-btn.da-btn--success {
+    background: rgba(var(--da-color-success-rgb), 0.15);
+    border-color: rgba(var(--da-color-success-rgb), 0.4);
+    color: var(--da-color-success);
+}
+
+.st-da-root .da-btn--success:hover,
+.da-btn.da-btn--success:hover {
+    background: rgba(var(--da-color-success-rgb), 0.25);
+    box-shadow: 0 0 8px rgba(var(--da-color-success-rgb), 0.25);
+}
+
+/* 加载中与禁用状态 */
+.da-btn.is-loading,
+.da-btn.da-btn--loading,
+.da-btn.da-btn--disabled,
+.da-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* 3. 尺寸与形态修饰符 */
+/* 紧凑小型尺寸 (26px) */
+.st-da-root .da-btn--sm,
+.da-btn.da-btn--sm {
+    height: 26px;
+    padding: 0 8px;
+    font-size: var(--da-font-size-xs, 0.74rem);
+}
+
+/* 等宽高纯图标按钮 */
+.st-da-root .da-btn--icon,
+.da-btn.da-btn--icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+.st-da-root .da-btn--icon.da-btn--sm,
+.da-btn.da-btn--icon.da-btn--sm {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+}
+
+/* 按钮内部子元素 (.da-btn__spinner / __icon / __label) */
+.da-btn__spinner,
+.da-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: da-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.da-spinner--sm {
+    width: 12px;
+    height: 12px;
+    border-width: 1.5px;
+}
+
+.da-btn__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.da-btn__label {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+/* 浅色模式按钮投影与发光降权，避免色斑晕染 */
+[data-theme-mode="light"] .da-btn--primary {
+    box-shadow: var(--da-shadow-sm);
+}
+
+[data-theme-mode="light"] .da-btn--primary:hover {
+    box-shadow: var(--da-shadow-md);
+}
+
+[data-theme-mode="light"] .da-btn--danger:hover,
+[data-theme-mode="light"] .da-btn--success:hover {
+    box-shadow: none;
+}

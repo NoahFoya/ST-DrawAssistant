@@ -1,0 +1,82 @@
+/**
+ * 生图参数复合控件样式 (DimensionPicker & SamplerCard)。
+ *
+ * @remarks
+ * 统一承载生图引擎视图下的紧凑复合参数控件样式：
+ * 1. 画幅比例与宽高尺寸对称复合控件（.da-dimension-picker）；
+ * 2. 随机种子输入框与快捷操作栏（.da-sampler-card）。
+ */
+
+/* 1. 画幅比例与尺寸卡片 (DimensionPicker) */
+.da-dimension-picker {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker--embedded {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 尺寸复合输入控件组 (宽 × 高)，总宽 240px */
+.da-dimension-picker__size-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+    flex: 0 0 240px;
+    gap: 8px;
+    box-sizing: border-box;
+}
+
+.da-dimension-picker__size-group .da-number-input {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.da-dimension-picker__size-separator {
+    font-size: var(--da-font-size-sm, 13px);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    user-select: none;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* 2. 采样与随机种子复合控件 (SamplerCard) */
+.da-sampler-card__seed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.da-sampler-card__seed-input-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-sampler-card__seed-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.da-sampler-card__actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--da-border-light, rgba(255, 255, 255, 0.08));
+}

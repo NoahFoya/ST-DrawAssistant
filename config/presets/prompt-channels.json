@@ -1,0 +1,88 @@
+{
+  "prompt_story": [
+    {
+      "id": "prompt_story_default",
+      "name": "默认故事插画预设",
+      "description": "核心插画创作规范：包含 <imagethink> 画面构思、纯英文 Danbooru 标签格式与多角色特征分段写法",
+      "data": {
+        "entries": [
+          {
+            "id": "story_core_rule",
+            "name": "核心|插图规则",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 10,
+            "content": "<image_generation_instruction>\n绘画指令：推进剧情时，根据画面需要为合适的场景（通常 1 至 3 处）输出插画。在对应剧情段落下方先输出闭合的 `<imagethink>...</imagethink>`，再另起一行输出 `image###...###`。\n\n## 1. 选图时机、景别与 `<imagethink>`\n- 优先选图时机：场景或氛围切换、角色首次登场或外貌穿搭变化、关键动作或情绪转折。\n- 景别参考：神态与面部或上半身互动优先用 `close-up` / `portrait` / `upper_body`；完整穿搭、动作或大场景优先用 `cowboy_shot` / `full_body` / `wide_shot`。\n- `<imagethink>` 依次写出四点：\n<imagethink>\n1. 构图与宏选型：确定人数（1girl / 2girls / 1girl, 1boy 等）与景别；若资料库已有该角色或服装，选定对应的 `$名称-宏-状态$`。\n2. 外貌与实时状态：确认外观与穿戴状态（整洁、敞开、撩起、半褪、湿身、破损等）及对应动态标签。\n3. 动作神情与视线：明确姿态、交互动作、表情与视线落点（looking_at_viewer / looking_away 等）。\n4. 机位、环境与光影：确定机位视角（from_above / from_below / from_side / from_behind / pov）、景别、地点道具与光线。\n</imagethink>\nimage###danbooru_tag_1, danbooru_tag_2, ...###\n\n## 2. 标签格式\n- 优先使用词表与资料库中的标准 Danbooru 英文标签，全小写，单词间用 `_` 连接，标签间用 `, ` 分隔；原作角色与作品名保留官方写法（如 `ch'en_(arknights)`）。\n- 排列顺序：`人数与作品 ➔ 外貌与穿着（或宏） ➔ 动作神情与视线 ➔ 景别与机位 ➔ 环境道具与光影`；需要强调某项时适度使用权重括号（如 `(tag:1.2)`）。\n- 多人同框：先写总人数与作品名，再用 `1girl` 或 `1boy` 领起各角色段落分别写外貌、穿着与独立动作，最后统一写双方交互、景别机位与环境光影。\n- 负向排除（可选）：需要排除特定元素时，在末尾用 ` | ` 分隔追加负向英文标签（如 `image###1girl, solo, ... | glasses, jacket###`）。\n\n## 3. 禁忌\n- 禁止输出 `masterpiece`、`best quality`、`highres`、`worst quality`、`lowres` 等通用画质词或画风词。\n- 禁止中译英生造英文词；词表未收录时拆成基础 Danbooru 词根组合。\n- 禁止在 `<imagethink>` 中复述剧情或罗列标签清单。\n\n## 4. 示例\n\n### 示例 1：单人七分身中景\n<imagethink>\n1. 构图与宏选型：单人七分身平视中景（1girl, solo, cowboy_shot），未调用资料库宏时使用全英文标签描写。\n2. 外貌与实时状态：金发蓝眼少女，佩戴白色发箍与发带、金色吊坠，身着整洁的深蓝水手校服与百褶短裙。\n3. 动作神情与视线：怀抱书本，带着温和浅笑看向镜头。\n4. 机位、环境与光影：午后教学楼室内走廊，窗侧暖阳照亮画面。\n</imagethink>\nimage###1girl, solo, blonde_hair, long_hair, blue_eyes, hair_ribbon, gold_pendant, school_uniform, serafuku, white_headband, sailor_collar, white_shirt, red_neckerchief, blue_skirt, pleated_skirt, holding_book, light_smile, looking_at_viewer, cowboy_shot, indoor, corridor, sunlight, warm_lighting###\n\n### 示例 2：同人双人对峙\n<imagethink>\n1. 构图与宏选型：双人全身广角低机位仰拍（2girls, arknights, full_body, wide_shot, from_below）。\n2. 外貌与实时状态：陈（黑长发双丸子头、红瞳、龙角龙尾、蓝色警服外套）与塔露拉（银长发、金瞳、龙角龙尾、黑色大衣与黑裙）。\n3. 动作神情与视线：双方拔剑正面峙立、神情冷峻对视，摆出战斗架势。\n4. 机位、环境与光影：夜晚废墟场景，四周火光与飞散余烬配合强烈逆光勾勒剪影。\n</imagethink>\nimage###2girls, arknights, 1girl, ch'en_(arknights), black_hair, long_hair, double_bun, red_eyes, dragon_horns, dragon_tail, blue_jacket, police_uniform, holding_sword, fighting_stance, serious, 1girl, talulah_(arknights), silver_hair, long_hair, yellow_eyes, dragon_horns, dragon_tail, black_coat, black_dress, holding_sword, glare, confrontation, facing_another, full_body, wide_shot, from_below, ruins, night, fire, embers, backlighting###\n</image_generation_instruction>"
+          }
+        ]
+      }
+    }
+  ],
+  "prompt_character": [
+    {
+      "id": "prompt_character_default",
+      "name": "默认素材创作预设",
+      "description": "在 <designthink> 中梳理设定要点，并输出规范的 <character> 与 <outfit> 结构化档案",
+      "data": {
+        "entries": [
+          {
+            "id": "char_creation_core",
+            "name": "核心|素材创作规范",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 20,
+            "content": "<character_design_instruction>\n绘画指令：需要新建角色、更新外貌或设计新服装时，先在 `<designthink>...</designthink>` 内梳理造型，再换行输出 `<character>...</character>` 与 `<outfit>...</outfit>` 档案（仅新增穿搭时只输出 `<outfit>`）。\n\n## 1. 编写要求\n- 归属划分：固有外貌、身体特征与常驻随身物写入 `<character>`（`TORSO` 写肩颈至腰腹，`HIPS` 写臀胯，`CHEST` 写胸部轮廓及乳头/乳晕，`PRIVATES` 写生殖构造与阴毛）；可更换的服饰、鞋袜、头饰与内衣写入 `<outfit>`。\n- 必填与留空：`<character>` 必填 `NAME`、`OUTFITS`、`APPEARANCE`、`HAIR`、`FACE`；`<outfit>` 必填 `NAME` 与主体服饰 `TOP`（分体穿搭时同步填写 `BOTTOM`；连衣裙、连体泳衣与连体服留空 `BOTTOM`），推荐填写 `UNDERWEAR`。`TRIGGER` 仅填原作角色或官方套装触发词，其余无对应特征的可选部位留空。\n- 命名与绑定：`NAME` 为唯一主名称，`OUTFITS` 填写绑定的服装 `NAME`（多个用 `|` 分隔），并为每套服装输出对应 `NAME` 的 `<outfit>` 档案。\n- 语言与标签：`NAME`、`DESCRIPTION` 与 `OUTFITS` 用当前剧情语言，`ALIASES` 可中英并用（多个用 `|` 分隔）；所有视觉部位用全小写英文 Danbooru 标签，用 `, ` 分隔，按「颜色 + 款式/长度 + 材质细节」填写。\n- 状态分层（`通用tags|[状态]tags`）：\n  - `<character>` 支持 `通用tags|[clothed]tags|[exposed]tags|[nude]tags`，共用特征写最前，特定状态可见特征写在对应 `[状态]` 后。\n  - `<outfit>` 支持 `通用tags|[intact]tags|[disheveled]tags`（`[intact]` 为穿戴完整，`[disheveled]` 为敞开、撩起或半褪）。\n  - 各 `[状态]` 之间互不继承，需要跨状态出现的细节须在对应 `[状态]` 中各自写齐。\n\n## 2. 禁忌\n- 禁止在档案中写入景别、机位、光影或临时动作神情。\n- 禁止将正常穿衣时被遮挡的部位（如乳头、私处等）写入通用层或 `[clothed]` 层。\n- 禁止为无对应特征的部位硬凑标签。\n\n## 3. 档案模板\n<designthink>\n1. 整体定位与体态：明确体型比例、肤色基调与整体气质。\n2. 头面部与身体分层：梳理发色发型、五官标记、特殊特征，以及胸部、上身腰腹、臀部、四肢与私密部位在通用/穿衣/半裸/全裸各层的可见边界。\n3. 服装层次与状态：拆解套装风格、头饰、外套、上衣与下装版型、内衣、袜子、鞋子与配饰，区分穿戴完整与凌乱半褪状态标签。\n</designthink>\n<character>\nNAME: 唯一主名称，使用当前剧情语言（必填）\nALIASES: 别名或英文称呼，多个以 | 分隔\nTRIGGER: 仅填同人原作角色或专用触发词（原创角色留空，如 ch'en_(arknights), arknights）\nDESCRIPTION: 简短外貌、气质与性格概述，使用当前剧情语言\nOUTFITS: 绑定的服装 NAME，多个以 | 分隔，使用当前剧情语言（必填，至少绑定一套服装）\nAPPEARANCE: 体型比例、身高感、种族与肤色（必填，如 fair_skin, slender, petite）\nHAIR: 发色、长度、发型、刘海与呆毛（必填，如 blonde_hair, long_hair, twintails, blunt_bangs|[nude]messy_hair）\nFACE: 瞳色、眼型、唇色、睫毛与痣/疤痕等固有面部标记（必填，如 blue_eyes, tareme, mole_under_eye）\nFEATURES: 兽耳、兽尾、翅膀、角、光环或永久体表纹身（如 cat_ears, cat_tail）\nACCESSORIES: 不随换装取下的常驻随身配饰（如 glasses, earrings, gold_pendant）\nCHEST: 胸围体型置前；[exposed]/[nude] 补充乳头与乳晕细节（如 medium_breasts|[exposed]cleavage, nipples|[nude]nipples, puffy_nipples, areolae）\nTORSO: 肩颈、锁骨、背部、手臂、腰线、小腹与肚脐（如 slender_arms|[clothed]collarbone|[exposed]midriff, navel|[nude]bare_shoulders, narrow_waist, navel）\nHIPS: 臀部比例与曲线（如 |[exposed]wide_hips|[nude]wide_hips, round_ass）\nHANDS: 手型比例、手指与固定美甲（如 slender_fingers, pink_nails）\nLEGS: 大腿与小腿线条（如 slender_legs|[nude]bare_legs, thick_thighs）\nFEET: 脚踝、足弓与脚趾细节（如 |[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes）\nPRIVATES: 客观填写静态生殖构造、阴毛形态与固定私处特征，仅填于 [exposed]/[nude] 层（如 |[nude]pussy, trimmed_pubic_hair 或 |[nude]penis, testicles）\n</character>\n\n<outfit>\nNAME: 唯一主名称，使用当前剧情语言（必填）\nALIASES: 别名或英文简称，多个以 | 分隔\nTRIGGER: 仅填官方套装或专用触发词（原创搭配留空，如 racing_miku_2024）\nDESCRIPTION: 简短服装风格、版型与配色说明，使用当前剧情语言\nSTYLE: 整体套装风格与主色调标签，无固定套装主题留空（如 school_uniform, serafuku）\nHEADWEAR: 帽子、发箍、发带、头纱等头饰（如 white_headband|[disheveled]askew_headwear）\nOUTERWEAR: 外套、开衫、大衣、披肩等外搭服饰（如 blue_cardigan|[intact]buttoned|[disheveled]open_cardigan, off_shoulder）\nTOP: 上衣版型、领口袖长，或连衣裙/连体泳衣/连体衣主件（必填，如 sailor_collar, white_shirt|[disheveled]open_shirt, shirt_lift）\nBOTTOM: 半身裙、裤装、短裤等分体下装；连体服时留空（如 blue_skirt, pleated_skirt|[disheveled]skirt_lift）\nUNDERWEAR: 贴身文胸、内裤、吊袜带与内衬款式（推荐填写，如 white_bra, lace_panties|[disheveled]bra_pulled_down, panties_aside）\nLEGWEAR: 短袜、过膝袜、连裤袜、丝袜与腿环（如 white_socks|[disheveled]socks_pulled_down）\nSHOES: 鞋履与靴款材质配色（如 brown_loafers|[disheveled]one_shoe_off）\nACCESSORIES: 手套、腕饰、领结、腰带、胸针与包袋（如 red_neckerchief, wrist_cuffs）\n</outfit>\n</character_design_instruction>"
+          }
+        ]
+      }
+    }
+  ],
+  "prompt_material": [
+    {
+      "id": "prompt_material_default",
+      "name": "默认素材注入预设",
+      "description": "向推理上下文注入已激活的角色与服装档案，并提供固定格式素材宏调用规则",
+      "data": {
+        "entries": [
+          {
+            "id": "mat_db_store",
+            "name": "核心|绘画素材库",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 30,
+            "content": "<image_database>\n  <character_database>\n    {{角色启用列表}}\n  </character_database>\n\n  <outfit_database>\n    {{服装启用列表}}\n  </outfit_database>\n</image_database>"
+          },
+          {
+            "id": "mat_db_macro",
+            "name": "核心|绘画宏指令",
+            "description": "规范编写人物与服饰绘画 Tags 时 $名称-宏-状态$ 的构思与调用方式",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 31,
+            "content": "<drawing_macro_instruction>\n绘画指令：编写人物与服饰的绘画标签时，若目标已收录于上方 `<image_database>`，直接用素材宏代表其固定外貌与穿搭，并在宏后补充当前剧情的实时神情、动作、视线、景别机位与环境光影；未收录的临时角色或服装直接用英文标签描写。\n\n## 1. 宏调用要求\n1. **固定三段式语法**：必须严格采用 **`$名称-宏-状态$`**。\n   - `名称`：严格对应 `<image_database>` 中的 `NAME` 主名称；\n   - `宏`：从下方可用宏列表中选用；\n   - `状态`：角色固定三选一：`clothed`（穿衣）/ `exposed`（半裸或局部露出）/ `nude`（全裸）；服装固定二选一：`intact`（完整）/ `disheveled`（敞开或半褪）。\n2. **独立选型与顺序**：角色宏与服装宏各自按当前实际状态选用；多人同框时，每个角色段落按「角色宏 ➔ 服装宏 ➔ 实时神情与独立动作」顺序编写。\n\n## 2. 禁忌\n- 禁止省略 `-状态` 后缀或使用列表之外的宏名与状态词。\n- 禁止重复编写宏内已包含的固定外貌与服装标签。\n\n## 3. 场景搭配示例\n- 常规全身着装：`1girl, solo, $爱丽丝-full-clothed$, $学院制服-full-intact$, standing, light_smile, looking_at_viewer, full_body, outdoor, sunlight`\n- 室内居家去鞋与外套：`1girl, solo, $爱丽丝-full-clothed$, $学院制服-indoor-intact$, sitting, barefoot, warm_lighting, indoor`\n- 外衣敞开、撩裙或半褪露出内衣：`1girl, solo, $爱丽丝-full-exposed$, $学院制服-undressed-disheveled$, blush, parted_lips, looking_away, cowboy_shot, indoor`\n- 脱去外装、仅穿内衣袜饰：`1girl, solo, $爱丽丝-full-exposed$, $学院制服-intimate-intact$, sitting_on_bed, bedroom`\n- 无遮挡全裸状态（仅调用角色宏）：`1girl, solo, $爱丽丝-full-nude$, steam, onsen, soft_lighting`（局部特写可用 `$爱丽丝-intimate-nude$`）\n- 多人同框对峙：`2girls, 1girl, $角色A-cowboy-clothed$, $服装A-cowboy-intact$, holding_sword, glare, 1girl, $角色B-cowboy-clothed$, $服装B-cowboy-intact$, fighting_stance, cowboy_shot, night`\n\n## 4. 当前可用宏列表\n<character_macros>\n{{角色可用宏列表}}\n</character_macros>\n\n<outfit_macros>\n{{服装可用宏列表}}\n</outfit_macros>\n</drawing_macro_instruction>"
+          }
+        ]
+      }
+    }
+  ]
+}
