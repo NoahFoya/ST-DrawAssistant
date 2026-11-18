@@ -193,24 +193,28 @@ export type OutfitPartState = 'intact' | 'disheveled';
 /** 素材部位统一状态后缀 */
 export type MaterialPartState = CharacterPartState | OutfitPartState;
 
-/** 角色部位英文键名（12 项基础外貌与身体细节部位） */
+/** 角色部位英文键名（16 项按真实解剖结构划分的部位） */
 export type CharacterPartKey =
     | 'appearance'
     | 'hair'
     | 'face'
     | 'features'
     | 'accessories'
-    | 'chest'
-    | 'torso'
-    | 'hips'
+    | 'neck_shoulders'
+    | 'breasts'
+    | 'upper_back'
+    | 'abdomen'
+    | 'arms'
     | 'hands'
+    | 'hips'
+    | 'genitals'
+    | 'anus'
     | 'legs'
-    | 'feet'
-    | 'privates';
+    | 'feet';
 
-/** 角色 12 个按需部位字段（支持 `通用tags|[clothed]tags|[exposed]tags|[nude]tags` 分层） */
+/** 角色 16 个按需部位字段（支持 `通用tags|[clothed]tags|[exposed]tags|[nude]tags` 分层） */
 export interface CharacterParts {
-    /** 外貌与身材（种族、肤色、身高体型与整体体态） */
+    /** 外貌与体型（种族、肤色、身高体型与整体体态） */
     appearance: string;
     /** 发型与发色（发色、发长、发型、刘海、呆毛） */
     hair: string;
@@ -220,20 +224,28 @@ export interface CharacterParts {
     features: string;
     /** 常驻配饰（眼镜、常驻耳饰、项圈等随身饰品） */
     accessories: string;
-    /** 胸部（胸围体型；裸露或半裸层补充乳头与乳晕细节） */
-    chest: string;
-    /** 上身与腰腹（肩颈、锁骨、背部、手臂、腰线、小腹与肚脐） */
-    torso: string;
-    /** 臀部（臀部曲线、腰臀比与骨盆轮廓） */
-    hips: string;
+    /** 颈肩与锁骨（脖颈、锁骨、肩部轮廓） */
+    neck_shoulders: string;
+    /** 胸部/乳房（胸围体型；裸露或半裸层补充乳头与乳晕细节） */
+    breasts: string;
+    /** 背部（肩胛、脊背线条、背部纹身等背面特征） */
+    upper_back: string;
+    /** 腰腹与肚脐（腰线、小腹、马甲线与肚脐） */
+    abdomen: string;
+    /** 手臂（大臂、小臂线条与上肢特征） */
+    arms: string;
     /** 手部（手型比例、手指、手腕与固定美甲） */
     hands: string;
+    /** 臀部（臀部曲线、腰臀比与骨盆轮廓） */
+    hips: string;
+    /** 生殖器（阴部/生殖构造与阴毛形态） */
+    genitals: string;
+    /** 肛门/后庭（后庭与肛周形态特征） */
+    anus: string;
     /** 腿部（大腿、小腿线条与腿部轮廓） */
     legs: string;
     /** 足部（脚踝、足弓、脚趾与赤足细节） */
     feet: string;
-    /** 私密部位（生殖构造、阴毛形态与固定私处特征） */
-    privates: string;
     [key: string]: string;
 }
 
@@ -258,19 +270,20 @@ export interface CharacterPresetData {
     [key: string]: unknown;
 }
 
-/** 服装部位英文键名（9 项标准穿戴部位） */
+/** 服装部位英文键名（10 项标准穿戴部位） */
 export type OutfitPartKey =
     | 'style'
     | 'headwear'
     | 'outerwear'
     | 'top'
     | 'bottom'
-    | 'underwear'
+    | 'bra'
+    | 'panties'
     | 'legwear'
     | 'shoes'
     | 'accessories';
 
-/** 服装 9 个按需部位字段（支持 `通用tags|[intact]tags|[disheveled]tags` 分层） */
+/** 服装 10 个按需部位字段（支持 `通用tags|[intact]tags|[disheveled]tags` 分层） */
 export interface OutfitParts {
     /** 整体风格（套装主题标签与主配色，无固定套装主题可留空） */
     style: string;
@@ -282,8 +295,10 @@ export interface OutfitParts {
     top: string;
     /** 下装（半身裙、裤装、短裤等分体下装；连体服时留空） */
     bottom: string;
-    /** 内衣（文胸、内裤、吊袜带、打底内衬） */
-    underwear: string;
+    /** 文胸/内衣上装（文胸、抹胸、吊带内衬） */
+    bra: string;
+    /** 内裤/底裤（内裤、丁字裤、安全裤） */
+    panties: string;
     /** 袜子（短袜、过膝袜、连裤袜、丝袜、腿环） */
     legwear: string;
     /** 鞋子（皮鞋、运动鞋、高跟鞋、靴子、凉鞋） */

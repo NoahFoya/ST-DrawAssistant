@@ -1420,7 +1420,7 @@ export class SettingsStore {
                 officialPresets.material_formats
             );
             this._settings.materialConfig.activeFormatPresetId =
-                officialPresets.material_formats[0]?.id || 'fmt_default';
+                officialPresets.material_formats[0]?.id || 'format_default';
         }
 
         // 级联清理跨分类的失效引用 ID（例如单独恢复提示词/工作流/角色/服装预设后）

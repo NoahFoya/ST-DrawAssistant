@@ -13,7 +13,8 @@
         "outerwear": "",
         "top": "sailor_collar, short_sleeves, white_shirt|[disheveled]open_shirt, shirt_lift",
         "bottom": "blue_skirt, pleated_skirt|[disheveled]skirt_lift",
-        "underwear": "white_bra, white_panties|[disheveled]panties_aside",
+        "bra": "white_bra",
+        "panties": "white_panties|[disheveled]panties_aside",
         "legwear": "white_socks",
         "shoes": "brown_loafers",
         "accessories": "red_neckerchief"
@@ -34,7 +35,8 @@
         "outerwear": "",
         "top": "oversized_hoodie, grey_hoodie|[disheveled]unzipped, off_shoulder",
         "bottom": "blue_jeans, denim_pants|[disheveled]pants_down",
-        "underwear": "black_bra, black_panties",
+        "bra": "black_bra",
+        "panties": "black_panties",
         "legwear": "ankle_socks",
         "shoes": "sneakers",
         "accessories": ""

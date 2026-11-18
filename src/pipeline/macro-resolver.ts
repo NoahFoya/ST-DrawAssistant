@@ -579,7 +579,7 @@ function buildSuffixCandidates(
             const ruleName = rule.name.trim();
             const defaultState =
                 entry.kind === 'character'
-                    ? ruleName === 'intimate'
+                    ? ruleName === 'crotch'
                         ? 'nude'
                         : 'clothed'
                     : 'intact';

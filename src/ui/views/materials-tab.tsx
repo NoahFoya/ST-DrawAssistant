@@ -3,8 +3,8 @@
  *
  * @remarks
  * 基于顶部分段导航划分为五个子面板：
- * 1. 角色管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 12 项部位全宽文本域）、服装绑定列表；
- * 2. 服装管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 9 项服饰部位全宽文本域）；
+ * 1. 角色管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 16 项部位全宽文本域）、服装绑定列表；
+ * 2. 服装管理：预设工具栏、基本属性卡片（含居中参考图与基础字段）、绘画标签卡片（含头部 Token 统计条与 10 项服饰部位全宽文本域）；
  * 3. 启用设置：独立启用预设工具栏、酒馆角色卡自动联动开关、角色启用规则列表、通用服装启用规则列表；
  * 4. 解析设置：楼层档案提取配置、起止标记与档案提取测试；
  * 5. 变量与宏管理：单行格式展现模板设计、一体化生图宏规则维护、独立实时渲染效果预览。
@@ -86,8 +86,9 @@ export class MaterialsTabView extends PreactSettingsView {
     public readonly sandboxText = signal<string>(DEFAULT_SANDBOX_SAMPLE);
 
     public readonly charGroupExpanded = signal<Record<string, boolean>>({
-        basic_appearance: true,
-        body_details: false,
+        head_appearance: true,
+        upper_body: false,
+        lower_body: false,
     });
     public readonly outfitGroupExpanded = signal<Record<string, boolean>>({
         main_clothing: true,
@@ -252,7 +253,7 @@ export class MaterialsTabView extends PreactSettingsView {
                 outfitMacros: [],
             }),
             getActiveId: () =>
-                settingsStore.get('materialConfig')?.activeFormatPresetId || 'fmt_default',
+                settingsStore.get('materialConfig')?.activeFormatPresetId || 'format_default',
             setActiveId: (id) => {
                 const cur = settingsStore.get('materialConfig');
                 const next: MaterialLibraryConfig = {

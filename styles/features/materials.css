@@ -1038,9 +1038,9 @@
 
 .da-format-editor-textarea {
     width: 100% !important;
-    min-height: 54px;
+    min-height: 58px;
     resize: vertical;
-    padding: 10px 12px !important;
+    padding: 10px 12px 12px !important;
     font-family: var(--da-font-mono, monospace);
     font-size: 12.5px;
     line-height: 1.5;
@@ -1068,7 +1068,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 3px 8px;
+    padding: 5px 10px;
     background: var(--da-bg-surface-subtle);
     border-top: 1px solid var(--da-border-color);
 }
@@ -1674,9 +1674,14 @@
 
 .da-macro-accordion-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 10px 12px;
+}
+
+.da-macro-accordion-header > .da-badge {
+    margin-left: auto;
 }
 
 .da-macro-expand-btn {
@@ -1768,8 +1773,10 @@
 }
 
 .da-macro-desc-wrap {
-    flex: 1;
-    min-width: 160px;
+    flex: 1 1 100%;
+    order: 4;
+    padding-left: 32px;
+    min-width: 0;
 }
 
 .da-macro-desc-input {
@@ -1866,12 +1873,13 @@
 
 .da-format-preview-col__content--macros {
     white-space: pre-wrap;
-    word-break: break-all;
+    word-break: normal;
+    overflow-wrap: anywhere;
     font-family: var(--da-font-mono, monospace);
     font-size: 11.5px;
     line-height: 1.5;
     color: var(--da-text-secondary);
-    max-height: 200px;
+    max-height: 240px;
     overflow-y: auto;
 }
 
@@ -1900,11 +1908,12 @@
     .da-macro-desc-wrap {
         flex: 1 1 100%;
         min-width: 0;
-        order: 3;
+        padding-left: 0;
+        order: 4;
     }
 
     .da-macro-delete-btn {
-        margin-left: auto;
+        margin-left: 0;
     }
 
     .da-macro-accordion-body {

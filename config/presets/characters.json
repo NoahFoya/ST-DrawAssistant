@@ -16,13 +16,17 @@
         "face": "blue_eyes, delicate_face",
         "features": "",
         "accessories": "hair_ribbon, gold_pendant",
-        "chest": "medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae",
-        "torso": "slender_arms|[clothed]collarbone|[exposed]midriff, navel|[nude]bare_shoulders, narrow_waist, navel",
-        "hips": "|[exposed]gentle_hips|[nude]gentle_hips",
+        "neck_shoulders": "|[clothed]collarbone|[nude]bare_shoulders, collarbone",
+        "breasts": "medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae",
+        "upper_back": "|[nude]bare_back",
+        "abdomen": "|[exposed]midriff, navel|[nude]narrow_waist, navel",
+        "arms": "slender_arms",
         "hands": "slender_fingers",
+        "hips": "|[exposed]gentle_hips|[nude]gentle_hips",
+        "genitals": "|[nude]pussy, trimmed_pubic_hair",
+        "anus": "",
         "legs": "slender_legs|[nude]bare_legs, slender_thighs",
-        "feet": "|[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes",
-        "privates": "|[nude]pussy, trimmed_pubic_hair"
+        "feet": "|[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes"
       }
     }
   }

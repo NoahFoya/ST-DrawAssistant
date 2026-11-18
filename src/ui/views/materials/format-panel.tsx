@@ -127,7 +127,8 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                 outerwear: 'blue_cardigan|[disheveled]open_cardigan',
                 top: 'sailor_collar, short_sleeves, white_shirt|[disheveled]open_shirt',
                 bottom: 'blue_skirt, pleated_skirt|[disheveled]skirt_lift',
-                underwear: 'white_bra, white_panties',
+                bra: 'white_bra',
+                panties: 'white_panties',
                 legwear: 'white_socks',
                 shoes: 'brown_loafers',
                 accessories: 'red_neckerchief, wrist_cuffs',
@@ -146,13 +147,17 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             face: 'blue_eyes, delicate_face',
             features: 'cat_ears, wings',
             accessories: 'hair_ribbon, gold_pendant',
-            chest: 'medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae',
-            torso: 'slender_arms|[clothed]collarbone|[nude]bare_shoulders, narrow_waist, navel',
-            hips: '|[exposed]gentle_hips|[nude]gentle_hips',
+            neck_shoulders: '|[clothed]collarbone|[nude]bare_shoulders, collarbone',
+            breasts: 'medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae',
+            upper_back: '|[nude]bare_back',
+            abdomen: '|[exposed]midriff, navel|[nude]narrow_waist, navel',
+            arms: 'slender_arms',
             hands: 'slender_fingers',
+            hips: '|[exposed]gentle_hips|[nude]gentle_hips',
+            genitals: '|[nude]pussy, trimmed_pubic_hair',
+            anus: '',
             legs: 'slender_legs|[nude]bare_legs',
             feet: '|[nude]barefoot, slender_ankles',
-            privates: '|[nude]pussy, trimmed_pubic_hair',
         },
     });
 
@@ -563,7 +568,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                                     <textarea
                                         id={cfg.textareaId}
                                         className={`da-textarea da-format-editor-textarea ${cfg.textareaCls}`}
-                                        rows={2}
+                                        rows={cfg.kind === 'macro' ? 2 : 5}
                                         value={cfg.value}
                                         placeholder={cfg.placeholder}
                                         onInput={(e) =>

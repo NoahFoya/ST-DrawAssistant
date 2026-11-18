@@ -62,7 +62,7 @@
     "activeOutfitPresetId": "",
     "activeActivationPresetId": "mat_act_default",
     "activeExtractionPresetId": "ext_default",
-    "activeFormatPresetId": "fmt_default",
+    "activeFormatPresetId": "format_default",
     "autoSwitchByCard": false
   },
   "providers": {

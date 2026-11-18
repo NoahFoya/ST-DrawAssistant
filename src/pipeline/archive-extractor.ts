@@ -45,7 +45,7 @@ export interface ExtractedArchiveItem {
     description: string;
     /** 绑定的服装预设 ID 或名称列表（仅 kind === 'character' 有效） */
     boundOutfitIds: string[];
-    /** 预置部位 Tags（角色含 12 项，服装含 9 项） */
+    /** 预置部位 Tags（角色含 16 项，服装含 10 项） */
     parts: Record<string, string>;
 }
 

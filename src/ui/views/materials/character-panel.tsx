@@ -198,7 +198,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                 </div>
             </CardView>
 
-            {/* 2. 绘画标签卡片 (按基础外貌与身体细节自然分组) */}
+            {/* 2. 绘画标签卡片 (按头部与外貌、上身与躯干、下身与局部自然分组) */}
             <CardView
                 title="绘画标签"
                 tooltip="各部位支持 通用tags|[clothed]tags|[exposed]tags|[nude]tags 状态分层格式：\n- 最左侧无前缀为全状态共用的通用 Tags；\n- [clothed] / [exposed] / [nude] 各自独立，调用 $名称-宏-状态$ 时按需展开。"

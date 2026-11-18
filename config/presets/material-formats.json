@@ -1,8 +1,7 @@
 [
   {
-    "id": "fmt_default",
+    "id": "format_default",
     "name": "默认变量与宏预设",
-    "description": "默认角色与服装多级列表模板及常用生图宏指令规则",
     "data": {
       "characterTemplate": "{{name}}:\n  - 别名: {{aliases}}\n  - 描述: {{description}}\n  - 专属服装:\n{{outfits}}",
       "outfitTemplate": "[{{name}}]\n  - 别名: {{aliases}}\n  - 描述: {{description}}",
@@ -11,7 +10,7 @@
         {
           "id": "char_macro_closeup",
           "name": "closeup",
-          "description": "头部与面部特写构图使用，包含外貌基调、发型发色、面部五官、特殊特征与常驻配饰。",
+          "description": "头部与面部特写构图，包含整体外貌、发型发色、面部五官、特殊特征与常驻配饰。",
           "targetParts": [
             "appearance",
             "hair",
@@ -23,97 +22,116 @@
         {
           "id": "char_macro_upper",
           "name": "upper",
-          "description": "上半身半身像构图使用，包含外貌、头面、胸部、上身与腰腹、手部及常驻配饰。",
+          "description": "上半身半身构图，包含外貌、头部五官、颈肩、胸部、腰腹、手臂、手部与常驻配饰。",
           "targetParts": [
             "appearance",
             "hair",
             "face",
             "features",
             "accessories",
-            "chest",
-            "torso",
+            "neck_shoulders",
+            "breasts",
+            "abdomen",
+            "arms",
             "hands"
           ]
         },
         {
           "id": "char_macro_cowboy",
           "name": "cowboy",
-          "description": "膝上七分身构图使用，包含上半身全部部位与臀部曲线（exposed / nude 状态下含私密部位）。",
+          "description": "膝上七分身构图，包含上半身全部部位、臀部、大腿与生殖器（半裸或全裸时可见）。",
           "targetParts": [
             "appearance",
             "hair",
             "face",
             "features",
             "accessories",
-            "chest",
-            "torso",
-            "hips",
+            "neck_shoulders",
+            "breasts",
+            "abdomen",
+            "arms",
             "hands",
-            "privates"
+            "hips",
+            "genitals",
+            "legs"
           ]
         },
         {
           "id": "char_macro_full",
           "name": "full",
-          "description": "全身或大场景构图使用，包含角色从头到足全部部位（按所选状态过滤可见细节）。",
+          "description": "全身或大场景构图，包含从头到脚正面及常规全身部位（按状态过滤遮挡部位）。",
           "targetParts": [
             "appearance",
             "hair",
             "face",
             "features",
             "accessories",
-            "chest",
-            "torso",
-            "hips",
+            "neck_shoulders",
+            "breasts",
+            "abdomen",
+            "arms",
             "hands",
+            "hips",
+            "genitals",
             "legs",
-            "feet",
-            "privates"
+            "feet"
           ]
         },
         {
           "id": "char_macro_back",
           "name": "back",
-          "description": "背影或从后视角构图使用，省略正面五官与胸部，保留外貌、发型、脊背腰腹、臀腿与足部。",
+          "description": "背影或背面视角构图，省略正面五官与胸部，包含外貌、发型、颈肩、背部、手臂、手部、臀部与腿足。",
           "targetParts": [
             "appearance",
             "hair",
             "features",
-            "torso",
+            "accessories",
+            "neck_shoulders",
+            "upper_back",
+            "arms",
+            "hands",
             "hips",
             "legs",
-            "feet",
-            "privates"
+            "feet"
           ]
         },
         {
           "id": "char_macro_lower",
           "name": "lower",
-          "description": "腰胯以下视角构图使用，包含臀部、腿部与足部（exposed / nude 状态下含私密部位）。",
+          "description": "腰胯以下构图，包含臀部、腿部、足部与生殖器（半裸或全裸时可见）。",
           "targetParts": [
             "hips",
+            "genitals",
             "legs",
-            "feet",
-            "privates"
+            "feet"
           ]
         },
         {
           "id": "char_macro_foot",
           "name": "foot",
-          "description": "足部与下肢局部特写使用，包含腿部与足部特征。",
+          "description": "足部与下肢局部特写，包含腿部与足部特征。",
           "targetParts": [
             "legs",
             "feet"
           ]
         },
         {
-          "id": "char_macro_intimate",
-          "name": "intimate",
-          "description": "私密局部特写使用，聚焦胸部、臀部与私密部位特征。",
+          "id": "char_macro_bust",
+          "name": "bust",
+          "description": "胸部局部特写构图，聚焦颈肩与胸部特征。",
           "targetParts": [
-            "chest",
+            "neck_shoulders",
+            "breasts"
+          ]
+        },
+        {
+          "id": "char_macro_crotch",
+          "name": "crotch",
+          "description": "胯部与生殖器局部特写构图，包含下腹、臀胯与生殖器特征（不含胸部）。",
+          "targetParts": [
+            "abdomen",
             "hips",
-            "privates"
+            "genitals"
           ]
         }
       ],
@@ -121,7 +139,7 @@
         {
           "id": "outfit_macro_closeup",
           "name": "closeup",
-          "description": "头部与肩领特写使用，包含头饰与领饰配件。",
+          "description": "头部与领口特写构图，包含头饰与配饰。",
           "targetParts": [
             "headwear",
             "accessories"
@@ -130,7 +148,7 @@
         {
           "id": "outfit_macro_upper",
           "name": "upper",
-          "description": "上半身半身像构图使用，包含整体风格、头饰、外套、上衣与配饰。",
+          "description": "上半身半身构图，包含整体风格、头饰、外套、上衣与配饰。",
           "targetParts": [
             "style",
             "headwear",
@@ -142,7 +160,7 @@
         {
           "id": "outfit_macro_cowboy",
           "name": "cowboy",
-          "description": "膝上七分身构图使用，包含风格、头饰、外套、上衣、下装与配饰。",
+          "description": "膝上七分身构图，包含风格、头饰、外套、上衣、下装与配饰。",
           "targetParts": [
             "style",
             "headwear",
@@ -155,7 +173,7 @@
         {
           "id": "outfit_macro_full",
           "name": "full",
-          "description": "完整全身外装构图使用，包含风格、头饰、外套、上衣、下装、袜子、鞋子与配饰（不含内衣）。",
+          "description": "完整全身外衣构图，包含外衣全部部位（不含内衣）。",
           "targetParts": [
             "style",
             "headwear",
@@ -170,14 +188,15 @@
         {
           "id": "outfit_macro_undressed",
           "name": "undressed",
-          "description": "外装敞开、撩起或半褪并露出内衣时使用，同时包含外装各部位与内衣。",
+          "description": "外衣敞开、撩起或半褪露出内衣时使用，同时包含外衣与文胸、内裤。",
           "targetParts": [
             "style",
             "headwear",
             "outerwear",
             "top",
             "bottom",
-            "underwear",
+            "bra",
+            "panties",
             "legwear",
             "shoes",
             "accessories"
@@ -186,7 +205,7 @@
         {
           "id": "outfit_macro_indoor",
           "name": "indoor",
-          "description": "室内或居家穿着构图使用，省略外套与鞋子，保留主体上衣、下装、袜子与配饰。",
+          "description": "室内或居家穿着构图，省略外套与鞋子，保留风格、头饰、上衣、下装、袜子与配饰。",
           "targetParts": [
             "style",
             "headwear",
@@ -199,7 +218,7 @@
         {
           "id": "outfit_macro_lower",
           "name": "lower",
-          "description": "下半身与鞋袜构图使用，包含下装、袜子与鞋子。",
+          "description": "下半身与鞋袜构图，包含下装、袜子与鞋子。",
           "targetParts": [
             "bottom",
             "legwear",
@@ -209,20 +228,20 @@
         {
           "id": "outfit_macro_foot",
           "name": "foot",
-          "description": "足部穿搭特写使用，包含袜子与鞋子特征。",
+          "description": "足部穿搭特写，包含袜子与鞋子。",
           "targetParts": [
             "legwear",
             "shoes"
           ]
         },
         {
-          "id": "outfit_macro_intimate",
-          "name": "intimate",
-          "description": "脱去外装、仅穿内衣状态使用，包含内衣、袜子与配饰。",
+          "id": "outfit_macro_lingerie",
+          "name": "lingerie",
+          "description": "脱去外衣、仅穿内衣状态构图，包含文胸、内裤与袜子。",
           "targetParts": [
-            "underwear",
-            "legwear",
-            "accessories"
+            "bra",
+            "panties",
+            "legwear"
           ]
         }
       ]

@@ -130,18 +130,24 @@ export const OUTFIT_PART_STATE_LABELS: Readonly<Record<OutfitPartState, string>>
     disheveled: '凌乱/敞开/半褪状态',
 };
 
-/** 角色部位 2 组自然划分 */
+/** 角色部位 3 组自然划分 */
 export const CHAR_PART_GROUPS: ReadonlyArray<MaterialPartGroup<CharacterPartKey>> = [
     {
-        id: 'basic_appearance',
-        label: '基础外貌',
+        id: 'head_appearance',
+        label: '头部与外貌',
         keys: ['appearance', 'hair', 'face', 'features', 'accessories'],
         defaultExpanded: true,
     },
     {
-        id: 'body_details',
-        label: '身体细节',
-        keys: ['chest', 'torso', 'hips', 'hands', 'legs', 'feet', 'privates'],
+        id: 'upper_body',
+        label: '上身与躯干',
+        keys: ['neck_shoulders', 'breasts', 'upper_back', 'abdomen', 'arms', 'hands'],
+        defaultExpanded: false,
+    },
+    {
+        id: 'lower_body',
+        label: '下身与局部',
+        keys: ['hips', 'genitals', 'anus', 'legs', 'feet'],
         defaultExpanded: false,
     },
 ];
@@ -157,19 +163,19 @@ export const OUTFIT_PART_GROUPS: ReadonlyArray<MaterialPartGroup<OutfitPartKey>>
     {
         id: 'inner_footwear_acc',
         label: '内衣、鞋袜与配饰',
-        keys: ['underwear', 'legwear', 'shoes', 'accessories'],
+        keys: ['bra', 'panties', 'legwear', 'shoes', 'accessories'],
         defaultExpanded: false,
     },
 ];
 
-/** 角色全部 12 个标准部位定义（支持 通用tags|[clothed]tags|[exposed]tags|[nude]tags 分层） */
+/** 角色全部 16 个标准部位定义（支持 通用tags|[clothed]tags|[exposed]tags|[nude]tags 分层） */
 export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] = [
     {
         key: 'appearance',
-        label: '外貌与身材',
+        label: '外貌与体型',
         hint: '整体体型、身高感、肤色与种族（如 fair_skin, slender, elf）',
         placeholder: '例如: fair_skin, slender, petite',
-        extractAliases: ['APPEARANCE', 'PHYSIQUE', 'GENERAL', 'OVERALL', '外貌与身材', '外貌', '身材'],
+        extractAliases: ['APPEARANCE', 'PHYSIQUE', 'GENERAL', 'OVERALL', '外貌与身材', '外貌与体型', '外貌', '身材'],
     },
     {
         key: 'hair',
@@ -200,25 +206,39 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
         extractAliases: ['ACCESSORIES', 'ACC', '常驻配饰', '配饰', '常驻饰品'],
     },
     {
-        key: 'chest',
-        label: '胸部',
+        key: 'neck_shoulders',
+        label: '颈肩与锁骨',
+        hint: '脖颈、锁骨、肩部线条；[clothed] 仅填外露锁骨，[exposed]/[nude] 补全裸肩（如 |[clothed]collarbone|[nude]bare_shoulders, collarbone）',
+        placeholder: '例如: |[clothed]collarbone|[nude]bare_shoulders, collarbone',
+        extractAliases: ['NECK_SHOULDERS', 'NECK', 'SHOULDERS', 'COLLARBONE', '颈肩与锁骨', '颈肩', '锁骨', '肩膀'],
+    },
+    {
+        key: 'breasts',
+        label: '胸部/乳房',
         hint: '胸围体型置前；[exposed]/[nude] 补充乳头与乳晕细节（如 medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae）',
         placeholder: '例如: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, puffy_nipples, areolae',
-        extractAliases: ['CHEST', 'BREASTS', 'BUST', 'NIPPLES', '胸部', '胸围', '胸型'],
+        extractAliases: ['BREASTS', 'CHEST', 'BUST', 'NIPPLES', '胸部/乳房', '胸部', '乳房', '胸围', '胸型'],
     },
     {
-        key: 'torso',
-        label: '上身与腰腹',
-        hint: '肩颈、锁骨、背部、手臂与腰腹肚脐；[clothed] 仅填外露手臂或锁骨，[exposed]/[nude] 补全腰腹与背部',
-        placeholder: '例如: slender_arms|[clothed]collarbone|[exposed]midriff, navel|[nude]bare_shoulders, narrow_waist, navel',
-        extractAliases: ['TORSO', 'UPPER', 'SHOULDERS', 'ARMS', 'STOMACH', 'BELLY', 'NAVEL', '上身与腰腹', '躯干', '腰腹', '手臂'],
+        key: 'upper_back',
+        label: '背部',
+        hint: '肩胛、脊背线条、背部纹身或伤疤，仅用于背面视角（如 |[exposed]bare_back|[nude]bare_back, back_tattoo）',
+        placeholder: '例如: |[exposed]bare_back|[nude]bare_back, spine',
+        extractAliases: ['UPPER_BACK', 'BACK', 'SPINE', '背部', '后背', '脊背'],
     },
     {
-        key: 'hips',
-        label: '臀部',
-        hint: '臀部比例与曲线；[clothed] 通常留空，[exposed]/[nude] 填写详细臀型特征',
-        placeholder: '例如: |[exposed]wide_hips|[nude]wide_hips, round_ass',
-        extractAliases: ['HIPS', 'BUTT', 'PELVIS', '臀部', '臀胯'],
+        key: 'abdomen',
+        label: '腰腹与肚脐',
+        hint: '腰线、小腹、马甲线与肚脐；[exposed]/[nude] 填写外露腰腹特征（如 |[exposed]midriff, navel|[nude]narrow_waist, flat_stomach, navel）',
+        placeholder: '例如: |[exposed]midriff, navel|[nude]narrow_waist, flat_stomach, navel',
+        extractAliases: ['ABDOMEN', 'WAIST', 'STOMACH', 'BELLY', 'NAVEL', 'MIDRIFF', '腰腹与肚脐', '腰腹', '腹部', '腰身', '肚脐'],
+    },
+    {
+        key: 'arms',
+        label: '手臂',
+        hint: '大臂、小臂线条与上肢轮廓（如 slender_arms|[nude]bare_arms）',
+        placeholder: '例如: slender_arms|[nude]bare_arms',
+        extractAliases: ['ARMS', 'UPPER_ARMS', 'FOREARMS', '手臂', '胳膊'],
     },
     {
         key: 'hands',
@@ -226,6 +246,27 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
         hint: '手型比例、手指与固定美甲（如 slender_fingers, pink_nails）',
         placeholder: '例如: slender_fingers, pink_nails',
         extractAliases: ['HANDS', 'FINGERS', 'NAILS', '手部', '手指'],
+    },
+    {
+        key: 'hips',
+        label: '臀部',
+        hint: '臀部比例与曲线；[clothed] 通常留空，[exposed]/[nude] 填写详细臀型特征',
+        placeholder: '例如: |[exposed]wide_hips|[nude]wide_hips, round_ass',
+        extractAliases: ['HIPS', 'BUTT', 'ASS', 'PELVIS', '臀部', '臀胯'],
+    },
+    {
+        key: 'genitals',
+        label: '生殖器',
+        hint: '静态生殖构造与阴毛形态，仅填写于 [exposed]/[nude] 层（如 |[nude]pussy, trimmed_pubic_hair）',
+        placeholder: '例如: |[nude]pussy, trimmed_pubic_hair（或 |[nude]penis, testicles）',
+        extractAliases: ['GENITALS', 'PUSSY', 'PENIS', 'REPRODUCTIVE', '生殖器', '阴部'],
+    },
+    {
+        key: 'anus',
+        label: '肛门/后庭',
+        hint: '后庭与肛周特征，仅填写于 [exposed]/[nude] 层，供特写视角按需调用（如 |[nude]anus）',
+        placeholder: '例如: |[nude]anus',
+        extractAliases: ['ANUS', 'ANAL', '肛门/后庭', '肛门', '后庭'],
     },
     {
         key: 'legs',
@@ -241,16 +282,9 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
         placeholder: '例如: |[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes',
         extractAliases: ['FEET', 'FOOT', 'BARE_FEET', 'SOLES', '足部', '赤足', '脚掌'],
     },
-    {
-        key: 'privates',
-        label: '私密部位',
-        hint: '静态生殖构造与阴毛形态，仅填写于 [exposed]/[nude] 层（如 |[nude]pussy, trimmed_pubic_hair）',
-        placeholder: '例如: |[nude]pussy, trimmed_pubic_hair（或 |[nude]penis, testicles）',
-        extractAliases: ['PRIVATES', 'GENITALS', 'REPRODUCTIVE', '私密部位', '私处'],
-    },
 ];
 
-/** 服装全部 9 个标准穿戴部位定义（支持 通用tags|[intact]tags|[disheveled]tags 分层） */
+/** 服装全部 10 个标准穿戴部位定义（支持 通用tags|[intact]tags|[disheveled]tags 分层） */
 export const OUTFIT_PART_DEFS: readonly MaterialPartDef<OutfitPartKey>[] = [
     {
         key: 'style',
@@ -288,11 +322,18 @@ export const OUTFIT_PART_DEFS: readonly MaterialPartDef<OutfitPartKey>[] = [
         extractAliases: ['BOTTOM', 'SKIRT', 'PANTS', 'SHORTS', '下装', '裙子', '裤装'],
     },
     {
-        key: 'underwear',
-        label: '内衣',
-        hint: '文胸、内裤、吊袜带与打底内衬（仅由 intimate 宏按需调用）',
-        placeholder: '例如: white_bra, white_panties|[disheveled]bra_pulled_down, panties_aside',
-        extractAliases: ['UNDERWEAR', 'LINGERIE', '内衣', '内衣裤'],
+        key: 'bra',
+        label: '文胸/内衣上装',
+        hint: '文胸、抹胸、吊带内衬与乳贴（如 white_bra|[disheveled]bra_pulled_down）',
+        placeholder: '例如: white_bra|[disheveled]bra_pulled_down',
+        extractAliases: ['BRA', 'BRASSIERE', 'PASTIES', '文胸/内衣上装', '文胸', '胸罩', '抹胸'],
+    },
+    {
+        key: 'panties',
+        label: '内裤/底裤',
+        hint: '内裤、丁字裤、安全裤与吊袜带（如 white_panties|[disheveled]panties_aside）',
+        placeholder: '例如: white_panties|[disheveled]panties_aside',
+        extractAliases: ['PANTIES', 'BRIEFS', 'THONG', 'UNDERPANTS', '内裤/底裤', '内裤', '底裤'],
     },
     {
         key: 'legwear',
@@ -367,13 +408,17 @@ export function createEmptyCharacterParts(): CharacterParts {
         face: '',
         features: '',
         accessories: '',
-        chest: '',
-        torso: '',
-        hips: '',
+        neck_shoulders: '',
+        breasts: '',
+        upper_back: '',
+        abdomen: '',
+        arms: '',
         hands: '',
+        hips: '',
+        genitals: '',
+        anus: '',
         legs: '',
         feet: '',
-        privates: '',
     };
 }
 
@@ -385,7 +430,8 @@ function createEmptyOutfitParts(): OutfitParts {
         outerwear: '',
         top: '',
         bottom: '',
-        underwear: '',
+        bra: '',
+        panties: '',
         legwear: '',
         shoes: '',
         accessories: '',
@@ -1035,7 +1081,7 @@ export function computeCharacterTokenStats(raw: Partial<CharacterPresetData>): M
         DEFAULT_MATERIAL_FORMAT_DATA.characterMacros,
         'upper',
         validKeySet,
-        ['appearance', 'hair', 'face', 'features', 'accessories', 'chest', 'torso', 'hands']
+        ['appearance', 'hair', 'face', 'features', 'accessories', 'neck_shoulders', 'breasts', 'abdomen', 'arms', 'hands']
     );
     const fullParts = getDefaultMacroTargetParts<CharacterPartKey>(
         DEFAULT_MATERIAL_FORMAT_DATA.characterMacros,
