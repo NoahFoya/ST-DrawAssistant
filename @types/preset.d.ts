@@ -66,8 +66,10 @@ export interface DrawingPresetData {
     width?: number;
     /** 图像生成高度 (像素) */
     height?: number;
-    /** 关联的提示词预设标识符 */
+    /** 关联的提示词预设标识符（当值为 '__polling__' 时启用提示词轮询） */
     promptPresetId?: string;
+    /** 提示词轮询候选池配置（空数组或未设置时默认从当前服务全部提示词预设中随机抽取） */
+    promptPollingPool?: PromptPollingPoolItem[];
     /** 关联的文生图工作流预设标识符 */
     txt2imgWorkflowId?: string;
     /** 关联的局部重绘预设标识符 */
@@ -90,7 +92,7 @@ export interface DrawingPresetData {
     customModel?: string;
     /** OpenAI 兼容自定义请求体 JSON 字符串 */
     customBodyJson?: string;
-    /** NovelAI 是否将权重语法自动转换为花括号 */
+    /** NovelAI 是否启用权重语法自动转换（V4+ 转为 weight::tag::，V3 兼容转为 {}/[]） */
     convertSyntax?: boolean;
     /** NovelAI SMEA 采样增强模式 (仅限 V3 经典模型，smea_dyn / smea / none) */
     smeaMode?: string;
@@ -100,6 +102,16 @@ export interface DrawingPresetData {
     cfgRescale?: number;
     /** 引擎扩展参数通用键值 */
     [key: string]: unknown;
+}
+
+/** 提示词预设轮询候选池单条目 */
+export interface PromptPollingPoolItem {
+    /** 关联的提示词预设 ID */
+    readonly presetId: string;
+    /** 预设名称快照（用于失效排查或跨环境按名回退匹配） */
+    readonly presetName?: string;
+    /** 是否在当前轮询池中启用（关闭时跳过抽取但保留条目） */
+    enabled: boolean;
 }
 
 /** LoRA 语法模式：标准模式 ('standard') 与 WeiLin 扩展模式 ('weilin') */
@@ -376,13 +388,13 @@ export interface CharacterExtractionConfig {
     autoDetect: boolean;
     /** 是否将楼层中的原始档案文本块折叠为轻量可点击胶囊徽标 */
     collapseInFloor: boolean;
-    /** 角色档案起始标记，默认 "<角色>" */
+    /** 角色档案起始标记，默认 "<character>" */
     charStartTag: string;
-    /** 角色档案结束标记，默认 "</角色>" */
+    /** 角色档案结束标记，默认 "</character>" */
     charEndTag: string;
-    /** 服装档案起始标记，默认 "<服装>" */
+    /** 服装档案起始标记，默认 "<outfit>" */
     outfitStartTag: string;
-    /** 服装档案结束标记，默认 "</服装>" */
+    /** 服装档案结束标记，默认 "</outfit>" */
     outfitEndTag: string;
     /** 名称键别名列表，默认 "NAME|名称|角色名|服装名|CN_NAME|中文名" */
     nameKeys: string;
@@ -521,6 +533,30 @@ export interface LocalLexiconFileMeta {
     enabled: boolean;
     /** 导入时间戳 */
     importedAt: number;
+    /** 关联的预置词库分片 ID（手动导入文件无此字段） */
+    presetPackId?: string;
+}
+
+/** 预置静态词库单个分片元数据 */
+export interface StaticLexiconPackMeta {
+    /** 分片唯一标识（如 'general-meta-1'、'copyright'） */
+    id: string;
+    /** 对应静态 CSV 文件名 */
+    fileName: string;
+    /** 列表中展示的中文词库名称 */
+    displayName: string;
+    /** 词条数量 */
+    entryCount: number;
+}
+
+/** 预置静态词库总清单结构 (config/lexicon/manifest.json) */
+export interface StaticLexiconManifest {
+    /** 清单版本 */
+    version: string;
+    /** 全部预置分片总词条数 */
+    totalEntries: number;
+    /** 分片清单 */
+    packs: StaticLexiconPackMeta[];
 }
 
 /** IndexedDB 本地自定义词汇单条记录 */

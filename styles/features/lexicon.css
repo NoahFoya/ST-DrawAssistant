@@ -507,3 +507,27 @@
     padding: 4px;
 }
 
+.da-lexicon-file-row--unloaded .da-lexicon-file-name {
+    color: var(--da-text-secondary);
+}
+
+.da-lexicon-file-meta {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted);
+    white-space: nowrap;
+}
+
+.da-lexicon-file-row__right {
+    flex-shrink: 0;
+}
+
+.da-lexicon-preset-error-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+
