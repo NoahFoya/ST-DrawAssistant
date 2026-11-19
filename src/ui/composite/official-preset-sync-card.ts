@@ -85,7 +85,7 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
         const descEl = document.createElement('div');
         descEl.className = 'da-sync-card__desc';
         descEl.textContent =
-            '仅覆盖更新与官方同名的默认预设并补充新增官方项（保留现有绑定 ID），绝不删除或改动您的其他自定义预设。';
+            '仅覆盖更新与官方同名的默认预设并补充新增官方项（保留现有绑定 ID），不会删除或改动您的其他自定义预设。';
         titleWrap.appendChild(descEl);
 
         header.appendChild(titleWrap);

@@ -1137,7 +1137,7 @@ export class UpdateService {
     }
 
     /**
-     * 判断当前已安装老用户升级后是否存在尚未阅读的更新说明。
+     * 判断已初始化用户在版本升级后是否存在尚未阅读的更新说明。
      * 首次全新安装（`!hasSeenGuide`）由新手引导接管，不重复弹窗。
      */
     public hasPendingChangelogNotice(
