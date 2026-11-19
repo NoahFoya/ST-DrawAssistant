@@ -333,4 +333,9 @@ export class ThemeTabView extends PreactSettingsView {
     public discardUnsavedChanges(): void {
         this.presetController.discardDraft();
     }
+
+    public override dispose(): void {
+        this.presetController.dispose();
+        super.dispose();
+    }
 }

@@ -1,6 +1,7 @@
 # 本地研发资料、智能体配置与私有参数
 docs/
 .agents/
+scripts/
 scratch/
 *.local.*
 *.local.json

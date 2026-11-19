@@ -12,17 +12,6 @@
       }
     },
     {
-      "id": "prompt_comfyui_pony",
-      "name": "Pony V6 评分规范",
-      "data": {
-        "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, source_anime",
-        "positiveSuffix": "",
-        "negativePrompt": "score_5, score_4, worst quality, low quality, deformed, bad anatomy, extra digits, text, watermark, signature",
-        "loraSyntaxMode": "weilin",
-        "loras": []
-      }
-    },
-    {
       "id": "prompt_comfyui_sdxl_photo",
       "name": "SDXL 写实摄影",
       "data": {
@@ -42,17 +31,6 @@
         "positivePrefix": "masterpiece, best quality, newest, absurdres, highres",
         "positiveSuffix": "",
         "negativePrompt": "worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, fewer digits, blurry, signature, watermark, text",
-        "loraSyntaxMode": "standard",
-        "loras": []
-      }
-    },
-    {
-      "id": "prompt_sdwebui_pony",
-      "name": "Pony V6 评分规范",
-      "data": {
-        "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, source_anime",
-        "positiveSuffix": "",
-        "negativePrompt": "score_5, score_4, worst quality, low quality, deformed, bad anatomy, extra digits, text, watermark, signature",
         "loraSyntaxMode": "standard",
         "loras": []
       }
@@ -91,12 +69,42 @@
       }
     },
     {
-      "id": "prompt_nai_v3",
-      "name": "NAI V3 经典日系",
+      "id": "prompt_nai_artist_impasto_glossy",
+      "name": "画师串 · 厚涂油润肌理",
       "data": {
-        "positivePrefix": "best quality, amazing quality, very aesthetic, absurdres",
+        "positivePrefix": "1.4::artist:haoni::, 1.2::artist:xiaoluo_xl::, 1.2::artist:rororo::, 1.1::artist:misaka12003-gou::, 1.1::artist:houkisei::, 0.8::artist:dishwasher1910::, 0.7::artist:thirty8ght::, 0.6::artist:pottsness::, 0.2::artist:qiandaiyiyu::, 0.9::artist:dino_(dinoartforame), artist:wanke, artist:liduke::, year 2025, 1.3::shiny skin, glossy skin, subsurface scattering::, 1.2::soft lighting, rim light, volumetric lighting::, 1.2::intricate details, impasto::, 1.4::very aesthetic, masterpiece, best quality, absurdres::, -2::flat color, anime coloring::",
         "positiveSuffix": "",
-        "negativePrompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, 1.3::artist collaboration::, 1.2::bad anatomy, bad hands, extra digits, fewer digits, polydactyly, fused toes, bad feet, mismatched pupils, glowing eyes::, 1.3::plastic skin, mannequin, porcelain doll, airbrushed, cloned face::",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_artist_kafka_mame",
+      "name": "画师串 · 细腻插画质感",
+      "data": {
+        "positivePrefix": "year 2025, year 2024, very aesthetic, masterpiece, best quality, absurdres, 1.4::artist:john_kafka::, 0.7::artist:freng::, 0.5::artist:au_(d_elete)::, 0.5::artist:qiandaiyiyu::, 1.7::artist:ningen_mame::, 2.2::artist:96yottea::, shiny skin, intricate details",
+        "positiveSuffix": "-2::text, Japanese text::, -1.5::simple illustration::",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_artist_kimeb_quasar",
+      "name": "画师串 · 华丽光影精绘",
+      "data": {
+        "positivePrefix": "1.8::artist:kim eb::, 1.65::artist:quasarcake::, 1.6::artist:bm94199::, 1.6::artist:torino aqua::, 1.6::artist:yoya yogurt::, 1.3::artist:qiandaiyiyu::, 1.1::artist:dishwasher1910::, 1.1::artist:96yottea::, 1.1::artist:freng::, 0.6::artist:cutesexyrobutts::, 0.4::artist:henriiku (ahemaru)::, 0.3::artist:mx2j::, year 2025, year 2024",
+        "positiveSuffix": "1.2::ambient occlusion::, 1.1::volumetric lighting, subsurface scattering::, 1.1::intricate linework, natural shadows, subtle bloom, soft shading, smooth gradients, crisp outlines, vibrant colors, balanced contrast::, very aesthetic, masterpiece, best quality, absurdres",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_artist_anime_ethereal",
+      "name": "画师串 · 唯美日系平涂光影",
+      "data": {
+        "positivePrefix": "year 2024, very aesthetic, masterpiece, best quality, absurdres, 1.2::artist:rella::, 1.1::artist:torino aqua::, 0.9::artist:ask (askzy)::, 0.7::artist:qiandaiyiyu::",
+        "positiveSuffix": "1.1::cinematic lighting, glowing light, soft shading::",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
         "loras": []
       }
     }

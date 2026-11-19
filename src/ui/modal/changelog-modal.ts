@@ -11,6 +11,7 @@
 import type { Disposable } from '../types';
 import type { ChangelogItem } from '@types';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
+import { OfficialPresetSyncCard } from '../composite/official-preset-sync-card';
 import { updateService } from '../../pipeline/update-service';
 import { logger } from '../../util/logger';
 
@@ -25,6 +26,7 @@ export class ChangelogModal implements Disposable {
     private static activeInstance: ChangelogModal | null = null;
     private isDisposed = false;
     private backdropEl?: HTMLElement;
+    private syncCard?: OfficialPresetSyncCard;
     private readonly disposers: (() => void)[] = [];
 
     public constructor(options: ChangelogModalOptions = {}) {
@@ -77,10 +79,19 @@ export class ChangelogModal implements Disposable {
         header.appendChild(closeBtn);
         panel.appendChild(header);
 
-        // 4. 内容区域（版本日志列表）
+        // 4. 内容区域（内嵌官方预设快速同步面板 + 版本日志列表）
         const content = document.createElement('div');
         content.className = 'da-changelog-content';
         panel.appendChild(content);
+
+        this.syncCard = new OfficialPresetSyncCard({
+            compact: true,
+        });
+        content.appendChild(this.syncCard.element);
+
+        const versionsContainer = document.createElement('div');
+        versionsContainer.className = 'da-changelog-versions';
+        content.appendChild(versionsContainer);
 
         // 5. 底栏操作动作
         const footer = document.createElement('div');
@@ -108,7 +119,7 @@ export class ChangelogModal implements Disposable {
         );
 
         // 7. 加载并渲染日志条目
-        this.renderItems(content, options.items);
+        this.renderItems(versionsContainer, options.items);
     }
 
     private renderItems(container: HTMLElement, customItems?: ChangelogItem[]): void {
@@ -183,6 +194,7 @@ export class ChangelogModal implements Disposable {
     }
 
     private handleClose(onClose?: () => void): void {
+        updateService.markChangelogAsSeen();
         onClose?.();
         this.dispose();
     }
@@ -192,6 +204,9 @@ export class ChangelogModal implements Disposable {
             return;
         }
         this.isDisposed = true;
+
+        this.syncCard?.dispose();
+        this.syncCard = undefined;
 
         overlayStack.remove('changelog-modal');
         if (ChangelogModal.activeInstance === this) {

@@ -382,6 +382,8 @@ export class GenerationOrchestrator {
             rawNegativePrompt: request.rawNegativePrompt,
             providerType,
             parametersSnapshot: mergedParamsSnapshot,
+            resolvedPromptPresetId: request.resolvedPromptPresetId,
+            resolvedPromptPresetName: request.resolvedPromptPresetName,
             sourceImage: effectiveSourceImage,
             maskImage: effectiveMaskImage,
             createdAt: Date.now(),
@@ -602,6 +604,10 @@ export class GenerationOrchestrator {
                 rawNegativePrompt: supportsNegative
                     ? (result.metadata?.rawNegativePrompt ?? task.rawNegativePrompt)
                     : undefined,
+                resolvedPromptPresetId:
+                    result.metadata?.resolvedPromptPresetId ?? task.resolvedPromptPresetId,
+                resolvedPromptPresetName:
+                    result.metadata?.resolvedPromptPresetName ?? task.resolvedPromptPresetName,
             };
 
             // 9. 分表持久化（写入元数据索引与图像二进制 Blob）

@@ -12,9 +12,9 @@ import type {
     ProviderType,
     ProviderAssetCache,
     DrawingPresetData,
-    PromptPresetData,
     ProviderStoredConfig,
 } from '@types';
+import { resolveEffectivePromptPresetsForValidation } from './prompt-pipeline';
 import { providerRegistry } from '../provider/registry';
 import { hasProviderAssetSync } from '../provider/base-provider';
 import { settingsStore } from '../store/settings-store';
@@ -306,19 +306,20 @@ export class AssetSyncCoordinator {
             // 6. 计算资产增减差异
             const diff = computeAssetDiff(prevCache, updatedCache);
 
-            // 7. 比对当前激活绘图预设与提示词预设的可用性
+            // 7. 比对当前激活绘图预设与提示词预设（含轮询候选池）的可用性
             const activeDrawingId = prevCfg?.activeDrawingPresetId;
             const dp = activeDrawingId
                 ? settingsStore.getPreset<DrawingPresetData>('drawing', activeDrawingId, providerType)
                 : undefined;
-            const promptPresetId = dp?.data?.promptPresetId;
-            const pp = promptPresetId
-                ? settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId, providerType)
-                : undefined;
+            const promptPresetsForCheck = resolveEffectivePromptPresetsForValidation(
+                settingsStore,
+                providerType,
+                dp?.data
+            );
 
             const validation = validatePresetAssets({
                 drawingPreset: dp?.data,
-                promptPreset: pp?.data,
+                promptPresets: promptPresetsForCheck,
                 assetCache: updatedCache,
                 providerType,
             });

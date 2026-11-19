@@ -3,10 +3,10 @@
  *
  * @remarks
  * 基于 `localforage` 独立实例 (`st_draw_assistant_lexicon`) 管理纯本地联想词库：
- * 1. 无内置默认词条，独立于 `SettingsStore` 与「提示词 -> 词汇指导」，不参与宿主上下文注入；
- * 2. 导入词汇文件 (`files_meta` + `file_entries_<id>`)：
- *    支持 Tagcomplete CSV (`tag,category,count,"aliases"`)、双列中英 CSV/TSV (`tag,中文`) 与 JSON 词表，
- *    支持多文件共存、按文件独立启停与单文件删除；
+ * 1. 默认无激活词条，独立于 `SettingsStore` 与「提示词 -> 词汇指导」，不参与宿主上下文注入；
+ * 2. 词汇文件 (`files_meta` + `file_entries_<id>`)：
+ *    支持按需载入预置 Danbooru 静态分片或导入 Tagcomplete CSV、双列中英 CSV/TSV 与 JSON 词表，
+ *    支持多文件共存、按文件独立启停、单文件删除及按分片 ID 卸载；
  * 3. 自定义词汇 (`custom_words`)：
  *    支持单条增删改、同名 Tag 自动合并更新、多行文本批量粘贴解析及导出；
  * 4. 变更事件：每次修改后通过 `eventBus` 派发 `'lexicon:local-updated'`，驱动联想索引服务增量刷新。
@@ -19,6 +19,8 @@ import { eventBus } from '../util/event-bus';
 const KEY_FILES_META = 'files_meta';
 const KEY_FILE_ENTRIES_PREFIX = 'file_entries_';
 const KEY_CUSTOM_WORDS = 'custom_words';
+/** 上游 Excel 导出 CSV 时产生的公式错误占位符 */
+const EXCEL_ERROR_TAG_REGEX = /^#(NAME\?|VALUE!|REF!|DIV\/0!|N\/A|NUM!|NULL!)$/i;
 
 /** 单条解析后的本地词库词条 */
 export interface ParsedLocalLexiconEntry {
@@ -32,6 +34,12 @@ export interface ParsedLocalLexiconEntry {
     readonly category?: number;
     /** 词条使用热度计数（用于联想排序） */
     readonly count?: number;
+}
+
+/** 本地词库文件导入附加选项 */
+export interface ImportLexiconFileOptions {
+    /** 关联的预置分片 ID（传入时执行同 ID 幂等替换更新） */
+    readonly presetPackId?: string;
 }
 
 /** 本地词库文件内容解析结果 */
@@ -243,12 +251,14 @@ export function parseLocalLexiconFileContent(
 
     for (const rawLine of lines) {
         const line = rawLine.trim();
-        if (!line || line.startsWith('#') || line.startsWith('//')) {
+        if (!line || line.startsWith('//')) {
             continue;
         }
+        const isHashPrefixed = line.startsWith('#');
 
-        // 优先检查制表符 TSV
+        // 优先检查制表符 TSV（以 # 开头的行视为注释跳过）
         if (line.includes('\t') && !line.includes(',')) {
+            if (isHashPrefixed) continue;
             const parts = line.split('\t').map((s) => s.trim());
             const tag = parts[0];
             const cn = parts.slice(1).filter(Boolean).join(' / ');
@@ -259,7 +269,7 @@ export function parseLocalLexiconFileContent(
         }
 
         const cols = splitCsvLine(line);
-        if (cols.length === 0 || !cols[0]) continue;
+        if (cols.length === 0 || !cols[0] || EXCEL_ERROR_TAG_REGEX.test(cols[0])) continue;
 
         const firstColLower = cols[0].toLowerCase();
         if (
@@ -273,28 +283,65 @@ export function parseLocalLexiconFileContent(
         }
 
         // 检测 Tagcomplete CSV 结构：col[1] 为分类数字 (0..15)，col[2] 为词频数字
+        // 注意：#compass、#unicus_(idolmaster) 等真实 Danbooru 标签可能以 '#' 开头，仅当其不符合 Tagcomplete 结构时才按注释跳过
         const catNum = cols.length >= 3 ? Number(cols[1]) : NaN;
         const countNum = cols.length >= 3 ? Number(cols[2]) : NaN;
-        if (
+        const isTagcompleteRow =
             cols.length >= 3 &&
             Number.isInteger(catNum) &&
             catNum >= 0 &&
             catNum <= 15 &&
             Number.isFinite(countNum) &&
-            countNum >= 0
-        ) {
+            countNum >= 0;
+
+        if (!isTagcompleteRow) {
+            if (isHashPrefixed) continue;
+        } else {
             tagcompleteVotes++;
             const tag = cols[0];
-            const rawAliasField = cols.slice(3).join(',');
-            const aliases = rawAliasField
-                .split(/[,，|]+/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-            const cnTokens = aliases.filter((a) => hasChineseChar(a));
-            const cn =
-                cnTokens.length > 0
-                    ? cnTokens.slice(0, 4).join(' / ')
-                    : aliases[0] || undefined;
+            const splitTokens = (raw: string): string[] =>
+                (raw || '')
+                    .split(/[,，|]+/)
+                    .map((s) => s.trim())
+                    .filter((s) => Boolean(s) && s !== '内置分类-禁');
+
+            let cn: string | undefined;
+            let aliases: string[];
+
+            if (cols.length >= 5) {
+                // 5+ 列结构：col[3] 为英文/快捷别名，col[4] 为主中文释义，col[5+] 为附加分类标签
+                const enAliases = splitTokens(cols[3] || '');
+                const cnPrimaryTokens = splitTokens(cols[4] || '');
+                const extraTokens = splitTokens(cols.slice(5).join(','));
+
+                const cnChineseTokens = cnPrimaryTokens.filter((a) => hasChineseChar(a));
+                const enChineseTokens = enAliases.filter((a) => hasChineseChar(a));
+
+                if (cnChineseTokens.length > 0) {
+                    cn = cnChineseTokens.slice(0, 4).join(' / ');
+                } else if (cnPrimaryTokens.length > 0) {
+                    cn = cnPrimaryTokens.slice(0, 4).join(' / ');
+                } else if (enChineseTokens.length > 0) {
+                    cn = enChineseTokens.slice(0, 4).join(' / ');
+                }
+
+                const seenAlias = new Set<string>();
+                aliases = [];
+                for (const token of [...cnPrimaryTokens, ...enAliases, ...extraTokens]) {
+                    if (!seenAlias.has(token)) {
+                        seenAlias.add(token);
+                        aliases.push(token);
+                    }
+                }
+            } else {
+                // 4 列结构：中文与英文别名混排于第 4 列
+                aliases = splitTokens(cols.slice(3).join(','));
+                const cnTokens = aliases.filter((a) => hasChineseChar(a));
+                cn =
+                    cnTokens.length > 0
+                        ? cnTokens.slice(0, 4).join(' / ')
+                        : aliases[0] || undefined;
+            }
 
             entries.push({
                 tag,
@@ -447,17 +494,26 @@ export class LocalLexiconStorage {
     }
 
     /**
-     * 解析并导入一个外部词汇文件。
+     * 解析并导入一个外部或预置词汇文件（若传入 presetPackId 且本地已存在，执行幂等替换更新）。
      */
     public async importLexiconFile(
         fileName: string,
-        rawText: string
+        rawText: string,
+        options?: ImportLexiconFileOptions
     ): Promise<LocalLexiconFileMeta> {
         return this._enqueueWrite(async () => {
             const parsed = parseLocalLexiconFileContent(rawText, fileName);
-            const id = `lex_file_${Date.now().toString(36)}_${Math.random()
-                .toString(36)
-                .slice(2, 6)}`;
+            const currentMetas = await this.listFilesMeta();
+            const presetPackId = options?.presetPackId?.trim() || undefined;
+            const existingPreset = presetPackId
+                ? currentMetas.find((m) => m.presetPackId === presetPackId)
+                : undefined;
+
+            const id =
+                existingPreset?.id ??
+                `lex_file_${Date.now().toString(36)}_${Math.random()
+                    .toString(36)
+                    .slice(2, 6)}`;
             const byteSize = new TextEncoder().encode(rawText || '').byteLength;
 
             const meta: LocalLexiconFileMeta = {
@@ -466,21 +522,59 @@ export class LocalLexiconStorage {
                 format: parsed.format,
                 entryCount: parsed.entries.length,
                 byteSize,
-                enabled: true,
+                enabled: existingPreset ? existingPreset.enabled : true,
                 importedAt: Date.now(),
+                ...(presetPackId ? { presetPackId } : {}),
             };
 
-            const currentMetas = await this.listFilesMeta();
+            const previousEntries = existingPreset
+                ? await this.getFileEntries(existingPreset.id)
+                : null;
             await this._setItem(`${KEY_FILE_ENTRIES_PREFIX}${id}`, parsed.entries);
             try {
-                await this._setItem(KEY_FILES_META, [meta, ...currentMetas]);
+                const nextMetas = existingPreset
+                    ? [meta, ...currentMetas.filter((m) => m.id !== existingPreset.id)]
+                    : [meta, ...currentMetas];
+                await this._setItem(KEY_FILES_META, nextMetas);
             } catch (err) {
-                await this._removeItem(`${KEY_FILE_ENTRIES_PREFIX}${id}`).catch(() => {});
+                if (existingPreset && previousEntries !== null) {
+                    await this._setItem(`${KEY_FILE_ENTRIES_PREFIX}${id}`, previousEntries).catch(
+                        () => {}
+                    );
+                } else {
+                    await this._removeItem(`${KEY_FILE_ENTRIES_PREFIX}${id}`).catch(() => {});
+                }
                 throw err;
             }
 
             eventBus.emit('lexicon:local-updated', { reason: 'file-imported' });
             return meta;
+        });
+    }
+
+    /**
+     * 卸载指定预置分片 ID 对应的已载入词库文件及其词条数据。
+     */
+    public async uninstallPresetPack(presetPackId: string): Promise<boolean> {
+        const targetId = (presetPackId || '').trim();
+        if (!targetId) {
+            return false;
+        }
+        return this._enqueueWrite(async () => {
+            const currentMetas = await this.listFilesMeta();
+            const matched = currentMetas.filter((m) => m.presetPackId === targetId);
+            if (matched.length === 0) {
+                return false;
+            }
+
+            const matchedIds = new Set(matched.map((m) => m.id));
+            const nextMetas = currentMetas.filter((m) => !matchedIds.has(m.id));
+            await this._setItem(KEY_FILES_META, nextMetas);
+            await Promise.all(
+                matched.map((m) => this._removeItem(`${KEY_FILE_ENTRIES_PREFIX}${m.id}`))
+            );
+            eventBus.emit('lexicon:local-updated', { reason: 'file-deleted' });
+            return true;
         });
     }
 

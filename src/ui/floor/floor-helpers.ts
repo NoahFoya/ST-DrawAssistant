@@ -8,11 +8,13 @@
 
 import type {
     DrawingPresetData,
-    PromptPresetData,
     ProviderStoredConfig,
     ProviderType,
 } from '@types';
-import type { promptPipeline } from '../../pipeline/prompt-pipeline';
+import {
+    type promptPipeline,
+    resolveEffectivePromptPresetsForValidation,
+} from '../../pipeline/prompt-pipeline';
 import { settingsStore } from '../../store/settings-store';
 import { validatePresetAssets } from '../../util/asset-matcher';
 
@@ -46,14 +48,15 @@ export function validateCurrentPresetAssets(
     }
 
     const dp = settingsStore.getPreset<DrawingPresetData>('drawing', activeDrawingId, providerType);
-    const promptPresetId = dp?.data?.promptPresetId;
-    const pp = promptPresetId
-        ? settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId, providerType)
-        : undefined;
+    const promptPresetsForCheck = resolveEffectivePromptPresetsForValidation(
+        settingsStore,
+        providerType,
+        dp?.data
+    );
 
     return validatePresetAssets({
         drawingPreset: dp?.data,
-        promptPreset: pp?.data,
+        promptPresets: promptPresetsForCheck,
         assetCache: cache,
         providerType,
     });

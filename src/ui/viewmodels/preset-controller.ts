@@ -14,6 +14,148 @@ import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { downloadJsonFile } from '../../util/browser-io';
 
+const FORBIDDEN_IMPORT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** 剥离文件名末尾 `.json` 扩展名作为导入预设的默认名称 */
+export function stripJsonExtension(fileName?: string): string {
+    return typeof fileName === 'string' ? fileName.replace(/\.json$/i, '').trim() : '';
+}
+
+/** 递归剔除 `__proto__` / `constructor` / `prototype` 等危险原型键，防止导入外部 JSON 时引入原型污染属性 */
+export function sanitizeImportedObject<T>(value: T): T {
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeImportedObject(item)) as unknown as T;
+    }
+    if (!value || typeof value !== 'object') {
+        return value;
+    }
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>)) {
+        if (FORBIDDEN_IMPORT_KEYS.has(key)) continue;
+        result[key] = sanitizeImportedObject((value as Record<string, unknown>)[key]);
+    }
+    return result as T;
+}
+
+/** 按预设分类校验导入 `data` 对象的结构特征，防止跨分类误导入 */
+export function validatePresetPayloadForCategory(
+    category: PresetCategory,
+    data: Record<string, unknown>
+): string | null {
+    const isPlainObj = (v: unknown): v is Record<string, unknown> =>
+        Boolean(v && typeof v === 'object' && !Array.isArray(v));
+
+    if (category === 'themes') {
+        if (typeof data.accent !== 'string' || !data.accent.trim()) {
+            return '主题预设格式错误：缺少有效的 accent 主强调色字段';
+        }
+        return null;
+    }
+    if (category === 'prompts') {
+        if (
+            'workflow' in data ||
+            Array.isArray(data.entries) ||
+            'parts' in data ||
+            'characterRules' in data ||
+            'characterTemplate' in data ||
+            'charStartTag' in data ||
+            ('accent' in data && 'bgPrimary' in data)
+        ) {
+            return '导入文件属于其他类别预设，与当前「提示词预设」不兼容';
+        }
+        if (data.loras !== undefined && !Array.isArray(data.loras)) {
+            return '提示词预设格式错误：loras 字段必须为数组';
+        }
+        return null;
+    }
+    if (category === 'characters' || category === 'outfits') {
+        if (
+            'workflow' in data ||
+            Array.isArray(data.entries) ||
+            'characterRules' in data ||
+            'characterTemplate' in data ||
+            'charStartTag' in data ||
+            ('accent' in data && 'bgPrimary' in data) ||
+            (data.parts !== undefined && !isPlainObj(data.parts))
+        ) {
+            return `导入文件与当前「${category === 'characters' ? '角色' : '服装'}档案」预设格式不兼容`;
+        }
+        return null;
+    }
+    if (category === 'material_activations') {
+        if (
+            (data.characterRules !== undefined && !isPlainObj(data.characterRules)) ||
+            (data.outfitRules !== undefined && !isPlainObj(data.outfitRules)) ||
+            (!('characterRules' in data) && !('outfitRules' in data))
+        ) {
+            return '素材启用预设格式错误：缺少有效的 characterRules / outfitRules 规则字典';
+        }
+        return null;
+    }
+    if (category === 'material_extractions') {
+        if (
+            !('charStartTag' in data) &&
+            !('outfitStartTag' in data) &&
+            !('enabled' in data)
+        ) {
+            return '解析设置预设格式错误：未包含有效的档案提取规则字段';
+        }
+        return null;
+    }
+    if (category === 'material_formats') {
+        if (!('characterTemplate' in data) && !('outfitTemplate' in data)) {
+            return '变量与宏预设格式错误：缺少有效的渲染模板字段';
+        }
+        return null;
+    }
+    if (category === 'drawing') {
+        if (
+            'workflow' in data ||
+            Array.isArray(data.entries) ||
+            'parts' in data ||
+            'characterRules' in data ||
+            'characterTemplate' in data ||
+            'charStartTag' in data ||
+            ('accent' in data && 'bgPrimary' in data)
+        ) {
+            return '导入文件属于其他类别预设，与当前「生图预设」不兼容';
+        }
+    }
+    return null;
+}
+
+/** 统一校验并在同名冲突时通过弹窗协商唯一预设名称 */
+export async function resolveUniquePresetName(
+    proposedName: string,
+    existingNormalizedNames: ReadonlySet<string>,
+    fallbackName: string
+): Promise<string | null> {
+    const cleanBase = proposedName.trim() || fallbackName;
+    if (!existingNormalizedNames.has(normalizePresetNameKey(cleanBase))) {
+        return cleanBase;
+    }
+    const negotiated = await ConfirmDialog.prompt({
+        title: '导入预设名称冲突',
+        message: `已存在同名预设「${cleanBase}」，请为导入预设指定一个新名称:`,
+        defaultValue: `${cleanBase} (导入)`,
+        placeholder: '请输入唯一的预设名称',
+        validator: (val) => {
+            const trimmed = val.trim();
+            if (!trimmed) {
+                return '预设名称不能为空';
+            }
+            if (existingNormalizedNames.has(normalizePresetNameKey(trimmed))) {
+                return '预设名称已存在，请换一个名称';
+            }
+            return null;
+        },
+    });
+    if (!negotiated || !negotiated.trim()) {
+        return null;
+    }
+    return negotiated.trim();
+}
+
 export interface PresetControllerOptions<TData extends Record<string, unknown>> {
     /** 预设所属分类 */
     category: PresetCategory;
@@ -67,6 +209,7 @@ export interface PresetControllerOptions<TData extends Record<string, unknown>> 
 export class PresetController<TData extends Record<string, unknown>> {
     private readonly options: PresetControllerOptions<TData>;
     private readonly idPrefix: string;
+    private isDisposed = false;
 
     /** 当前分类下的预设列表 */
     public readonly presets: Signal<PresetItem<TData>[]>;
@@ -584,11 +727,21 @@ export class PresetController<TData extends Record<string, unknown>> {
                 const cur = this.currentPreset.value;
                 if (!cur) return false;
 
+                const draft = this.draftConfig.value;
+                const exportData =
+                    draft && typeof draft === 'object' && !Array.isArray(draft)
+                        ? this.syncMaterialInnerName(structuredClone(draft), cur.name)
+                        : cur.data;
+                const exportPayload: PresetItem<TData> = {
+                    ...cur,
+                    data: exportData,
+                    updatedAt: Date.now(),
+                };
                 const prefix =
                     this.options.exportFilenamePrefix ??
                     `${this.options.provider || this.options.category}_preset_`;
                 const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
-                downloadJsonFile(`${prefix}${safeName}.json`, cur);
+                downloadJsonFile(`${prefix}${safeName}.json`, exportPayload);
                 break;
             }
 
@@ -669,52 +822,74 @@ export class PresetController<TData extends Record<string, unknown>> {
         this.options.onPresetApplied?.(this.currentPreset.value, this.draftConfig.value);
     }
 
+    /** 标记控制器已释放，阻断在途异步导入回调写回状态 */
+    public dispose(): void {
+        this.isDisposed = true;
+    }
+
     /**
      * 解析并导入外部 JSON 预设文件。
      */
     public handleImportFile(file: File): void {
         const reader = new FileReader();
         reader.onload = async () => {
+            if (this.isDisposed) return;
             try {
                 const parsed = JSON.parse(reader.result as string);
-                if (!parsed || typeof parsed !== 'object' || !parsed.data) {
-                    throw new Error('预设文件格式错误：未包含有效的 data 配置项');
+                if (
+                    !parsed ||
+                    typeof parsed !== 'object' ||
+                    Array.isArray(parsed) ||
+                    !parsed.data ||
+                    typeof parsed.data !== 'object' ||
+                    Array.isArray(parsed.data)
+                ) {
+                    throw new Error('预设文件格式错误：未包含有效的 data 配置对象');
                 }
+                const sanitizedData = sanitizeImportedObject(
+                    parsed.data as Record<string, unknown>
+                );
+                const validationError = validatePresetPayloadForCategory(
+                    this.options.category,
+                    sanitizedData
+                );
+                if (validationError) {
+                    throw new Error(validationError);
+                }
+
+                if (this.isDirty.value) {
+                    const confirmed = await ConfirmDialog.confirm({
+                        title: '导入预设确认',
+                        message:
+                            '当前预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？',
+                    });
+                    if (!confirmed || this.isDisposed) return;
+                }
+
                 const list = this.fetchPresetsList();
                 const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
+                const fileBaseName = stripJsonExtension(file?.name);
+                const fallbackName =
+                    this.options.defaultImportName ||
+                    `导入的 ${this.options.provider || this.options.category} 预设`;
                 const baseName = String(
-                    parsed.name ||
-                        this.options.defaultImportName ||
-                        `导入的 ${this.options.provider || this.options.category} 预设`
+                    (typeof parsed.name === 'string' && parsed.name.trim()) ||
+                        fileBaseName ||
+                        fallbackName
                 ).trim();
 
-                let finalName = baseName;
-                if (existingNames.has(normalizePresetNameKey(baseName))) {
-                    const negotiated = await ConfirmDialog.prompt({
-                        title: '导入预设名称冲突',
-                        message: `已存在同名预设「${baseName}」，请为导入预设指定一个新名称:`,
-                        defaultValue: `${baseName} (导入)`,
-                        placeholder: '请输入唯一的预设名称',
-                        validator: (val) => {
-                            const trimmed = val.trim();
-                            if (!trimmed) {
-                                return '预设名称不能为空';
-                            }
-                            if (existingNames.has(normalizePresetNameKey(trimmed))) {
-                                return '预设名称已存在，请换一个名称';
-                            }
-                            return null;
-                        },
-                    });
-                    if (!negotiated || !negotiated.trim()) return;
-                    finalName = negotiated.trim();
-                }
+                const finalName = await resolveUniquePresetName(
+                    baseName,
+                    existingNames,
+                    fallbackName
+                );
+                if (!finalName || this.isDisposed) return;
 
                 const newId = this.generateUniqueId();
                 const importedItem: PresetItem<TData> = {
                     id: newId,
                     name: finalName,
-                    data: this.syncMaterialInnerName(parsed.data as TData, finalName),
+                    data: this.syncMaterialInnerName(sanitizedData as TData, finalName),
                     updatedAt: Date.now(),
                 };
                 settingsStore.savePreset(
@@ -727,11 +902,13 @@ export class PresetController<TData extends Record<string, unknown>> {
                     Toast.show(`已成功导入预设: ${importedItem.name}`, { level: 'success' });
                 }
             } catch (err: unknown) {
+                if (this.isDisposed) return;
                 const message = err instanceof Error ? err.message : String(err);
                 Toast.show(`导入预设解析失败: ${message}`, { level: 'error' });
             }
         };
         reader.onerror = () => {
+            if (this.isDisposed) return;
             Toast.show('读取预设文件失败', { level: 'error' });
         };
         reader.readAsText(file);

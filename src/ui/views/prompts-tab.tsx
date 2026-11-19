@@ -34,8 +34,12 @@ import {
     PROMPT_CHANNELS,
     type PromptChannelMeta,
 } from './prompts-preview-panel';
-import { PresetController } from '../viewmodels';
-import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
+import {
+    PresetController,
+    resolveUniquePresetName,
+    stripJsonExtension,
+} from '../viewmodels';
+import { normalizePresetNameKey, settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
 import { getCachedOfficialPresets } from '../../store/static-preset-loader';
 import { eventBus } from '../../util/event-bus';
 import { promptInjector } from '../../pipeline/prompt-injector';
@@ -113,6 +117,7 @@ export class PromptsTabView extends PreactSettingsView {
     >;
 
     private unlistenSettings: (() => void) | null = null;
+    private isDisposedView = false;
 
     public constructor() {
         super('da-tab-pane da-view-prompts');
@@ -177,6 +182,13 @@ export class PromptsTabView extends PreactSettingsView {
                 data.keys?.includes('materialConfig') ||
                 data.keys?.includes('presets')
             ) {
+                if (data.isReset || data.keys?.includes('presets')) {
+                    for (const meta of PROMPT_CHANNELS) {
+                        if (!this.controllers[meta.id].isDirty.value) {
+                            this.controllers[meta.id].reloadFromStore();
+                        }
+                    }
+                }
                 this.promptInjectionSignal.value = settingsStore.get('promptInjection');
                 this.previewVersionSignal.value += 1;
             }
@@ -219,6 +231,10 @@ export class PromptsTabView extends PreactSettingsView {
     }
 
     public override dispose(): void {
+        this.isDisposedView = true;
+        for (const meta of PROMPT_CHANNELS) {
+            this.controllers[meta.id].dispose();
+        }
         if (this.unlistenSettings) {
             this.unlistenSettings();
             this.unlistenSettings = null;
@@ -288,8 +304,10 @@ export class PromptsTabView extends PreactSettingsView {
      */
     public async importParsedJsonForChannel(
         channelId: PromptChannelId,
-        raw: unknown
+        raw: unknown,
+        fallbackFileName?: string
     ): Promise<void> {
+        if (this.isDisposedView) return;
         const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
         const controller = this.controllers[channelId];
         const format = detectPromptImportFormat(raw);
@@ -302,9 +320,10 @@ export class PromptsTabView extends PreactSettingsView {
         }
 
         if (format === 'plugin-preset') {
+            const fallbackName = stripJsonExtension(fallbackFileName) || `导入${meta.label}预设`;
             const normalized = normalizePluginPromptChannelPreset(
                 raw as Record<string, unknown>,
-                `导入${meta.label}预设`
+                fallbackName
             );
             if (!normalized) {
                 Toast.show('导入失败：预设缺少 entries 数组', { level: 'error' });
@@ -370,28 +389,29 @@ export class PromptsTabView extends PreactSettingsView {
         proposedName: string,
         entries: PromptInjectionEntry[]
     ): Promise<void> {
+        if (this.isDisposedView) return;
         const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
         const controller = this.controllers[channelId];
-        const list = controller.fetchPresetsList();
-        const existingNames = new Set(list.map((p) => p.name));
 
-        let finalName = (proposedName || '').trim() || `导入${meta.label}预设`;
-        if (existingNames.has(finalName)) {
-            const negotiated = await ConfirmDialog.prompt({
-                title: '导入预设名称冲突',
-                message: `已存在同名预设「${finalName}」，请指定新名称:`,
-                defaultValue: `${finalName} (导入)`,
-                placeholder: '请输入唯一的预设名称',
-                validator: (val) => {
-                    const trimmed = val.trim();
-                    if (!trimmed) return '预设名称不能为空';
-                    return existingNames.has(trimmed) ? '预设名称已存在，请换一个名称' : null;
-                },
+        if (controller.isDirty.value) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '导入预设确认',
+                message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
             });
-            if (!negotiated || !negotiated.trim()) {
-                return;
-            }
-            finalName = negotiated.trim();
+            if (!confirmed || this.isDisposedView) return;
+        }
+
+        const list = controller.fetchPresetsList();
+        const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
+        const fallbackName = `导入${meta.label}预设`;
+
+        const finalName = await resolveUniquePresetName(
+            proposedName,
+            existingNames,
+            fallbackName
+        );
+        if (!finalName || this.isDisposedView) {
+            return;
         }
 
         const existingIds = new Set(list.map((p) => p.id));
@@ -416,15 +436,17 @@ export class PromptsTabView extends PreactSettingsView {
     private handleImportFile(channelId: PromptChannelId, file: File): void {
         const reader = new FileReader();
         reader.onload = () => {
+            if (this.isDisposedView) return;
             try {
                 const parsed = JSON.parse(String(reader.result || ''));
-                void this.importParsedJsonForChannel(channelId, parsed);
+                void this.importParsedJsonForChannel(channelId, parsed, file.name);
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 Toast.show(`解析 JSON 文件失败: ${message}`, { level: 'error' });
             }
         };
         reader.onerror = () => {
+            if (this.isDisposedView) return;
             Toast.show('读取导入文件失败', { level: 'error' });
         };
         reader.readAsText(file);
