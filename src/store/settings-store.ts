@@ -172,7 +172,7 @@ export interface DrawAssistantSettings {
             visible: boolean;
             opacity: number;
             icon: string;
-            animationType?: 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
+            animationType?: 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
         };
         lightbox: {
             enabled: boolean;

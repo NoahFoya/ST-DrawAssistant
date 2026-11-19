@@ -5,7 +5,7 @@
  * 1. 相对比例与安全区定位：统一使用 `--da-fab-rx / --da-fab-ry` 比例变量配合动态视口变量
  *    `--da-vvw / --da-vvh / --da-vv-top / --da-vv-left` 基于比例坐标计算停靠位置；
  * 2. 宿主隔离与磨砂玻璃衬底：显式锁定前景色与半透明磨砂玻璃衬底，避免直接继承宿主文本色或呈纯白高亮色块；
- * 3. 可配置绘图动效：待机态保持静谧，绘图中 (.is-busy) 按 data-fab-effect 呈现流光环绕、呼吸脉冲、波纹扩散等动效。
+ * 3. 可配置绘图动效：待机态保持静谧，绘图中 (.is-busy) 按 data-fab-effect 呈现星光环绕、流光环绕、呼吸脉冲、波纹扩散等动效。
  */
 
 /* 1. 悬浮球基础结构与磨砂玻璃衬底 */
@@ -78,7 +78,117 @@
     box-sizing: border-box;
 }
 
-/* 动效 1: 流光环绕 (orbit-ring，默认) */
+/* 星光拖尾环绕轨道容器（与 ::before 保持同心半径与同周期旋转，仅在 is-busy + starlight 时显示） */
+.da-fab-effects {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.22s var(--da-ease);
+}
+
+.da-fab-orbit {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    will-change: transform;
+}
+
+.da-fab-star {
+    position: absolute;
+    background: var(--da-accent-hover, var(--da-accent-color, #cba6f7));
+    clip-path: polygon(
+        50% 0%,
+        62% 38%,
+        100% 50%,
+        62% 62%,
+        50% 100%,
+        38% 62%,
+        0% 50%,
+        38% 38%
+    );
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 3px rgba(var(--da-accent-rgb, 203, 166, 247), 0.9));
+}
+
+.da-fab-star--1 {
+    top: 2%;
+    left: 50%;
+    width: 9px;
+    height: 9px;
+    opacity: 1;
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) infinite;
+}
+
+.da-fab-star--2 {
+    top: 4.35%;
+    left: 35.17%;
+    width: 6px;
+    height: 6px;
+    opacity: 0.88;
+    background: var(--da-accent-color, #cba6f7);
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.25s infinite;
+}
+
+.da-fab-star--3 {
+    top: 11.17%;
+    left: 21.79%;
+    width: 4.5px;
+    height: 4.5px;
+    opacity: 0.65;
+    background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.5s infinite;
+}
+
+.da-fab-star--4 {
+    top: 23.16%;
+    left: 10.21%;
+    width: 3.5px;
+    height: 3.5px;
+    opacity: 0.42;
+    background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.75s infinite;
+}
+
+/* 动效 1: 星光环绕 (starlight，默认，贴合流光彗星尾 + 领航四星拖尾) */
+.da-fab-btn.is-busy[data-fab-effect="starlight"]::before,
+#da-fab-button.is-busy[data-fab-effect="starlight"]::before {
+    inset: -3px;
+    padding: 2px;
+    border: none;
+    opacity: 0.95;
+    background: conic-gradient(
+        from 0deg,
+        var(--da-accent-hover, var(--da-accent-color, #cba6f7)) 0deg,
+        transparent 5deg,
+        transparent 165deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.16) 245deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.58) 315deg,
+        var(--da-accent-color, #cba6f7) 348deg,
+        var(--da-accent-hover, var(--da-accent-color, #cba6f7)) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: da-spin 1.35s linear infinite;
+}
+
+.da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-effects,
+#da-fab-button.is-busy[data-fab-effect="starlight"] .da-fab-effects {
+    opacity: 1;
+}
+
+.da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-orbit,
+#da-fab-button.is-busy[data-fab-effect="starlight"] .da-fab-orbit {
+    animation: da-spin 1.35s linear infinite;
+}
+
+/* 动效 2: 流光环绕 (orbit-ring) */
 .da-fab-btn.is-busy[data-fab-effect="orbit-ring"]::before,
 #da-fab-button.is-busy[data-fab-effect="orbit-ring"]::before {
     inset: -3px;
@@ -242,6 +352,11 @@
         0 10px 22px rgba(15, 23, 42, 0.22),
         0 0 10px color-mix(in srgb, var(--da-accent-color) 18%, transparent),
         inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+[data-theme-mode="light"] .da-fab-star {
+    background: var(--da-accent-color);
+    filter: drop-shadow(0 0 2px rgba(var(--da-accent-rgb), 0.45));
 }
 
 /* 3. 悬浮球内部图标 */

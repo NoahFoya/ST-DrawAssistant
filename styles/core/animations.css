@@ -87,7 +87,7 @@
     to   { transform: rotate(360deg); }
 }
 
-/* 悬浮球弹性入场、极光呼吸与扩散波纹关键帧 */
+/* 悬浮球弹性入场、星光闪烁、极光呼吸与扩散波纹关键帧 */
 @keyframes da-fab-pop {
     from {
         opacity: 0;
@@ -96,6 +96,15 @@
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes da-fab-star-twinkle {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(0.88);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.16);
     }
 }
 

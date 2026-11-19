@@ -6,7 +6,7 @@
  * 1. 相对比例定位：统一通过 CSS 自定义属性 `--da-fab-rx / --da-fab-ry`（归一化区间 0~1）
  *    结合 `ViewportService` 实时动态视口及安全区实现跨端自适应停靠；
  * 2. 拖拽与越界隔离：支持鼠标与触控拖拽，在有效安全活动区间内同步映射比例，避开移动端宿主顶栏与底栏；
- * 3. 外观样式与绘图动效：支持透明度、预设图标、自定义图片与可配置的绘图中状态动效（流光环绕 / 呼吸脉冲 / 波纹扩散 / 禁用）。
+ * 3. 外观样式与绘图动效：支持透明度、预设图标、自定义图片与可配置的绘图中状态动效（星光环绕 / 流光环绕 / 呼吸脉冲 / 波纹扩散 / 禁用）。
  */
 
 import type { UIComponent, Disposable } from '../types';
@@ -17,9 +17,10 @@ import { getViewportRect } from '../layout/viewport';
 
 export { FAB_BUILTIN_ICONS };
 
-export type FabAnimationType = 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
+export type FabAnimationType = 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
 
 const VALID_FAB_ANIMATIONS: ReadonlySet<string> = new Set<FabAnimationType>([
+    'starlight',
     'orbit-ring',
     'aurora-pulse',
     'ripple',
@@ -84,9 +85,25 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.element.classList.add('da-fab-btn', 'da-fab-entry');
         }
 
-        // 1. 内部图标容器
+        // 1. 内部图标容器与星光拖尾装饰层
         this.iconContainer = document.createElement('div');
         this.iconContainer.className = 'da-fab-icon';
+
+        if (typeof document !== 'undefined') {
+            const effectsLayer = document.createElement('span');
+            effectsLayer.className = 'da-fab-effects';
+            effectsLayer.setAttribute('aria-hidden', 'true');
+            const orbit = document.createElement('span');
+            orbit.className = 'da-fab-orbit';
+            for (let i = 1; i <= 4; i += 1) {
+                const star = document.createElement('span');
+                star.className = `da-fab-star da-fab-star--${i}`;
+                orbit.appendChild(star);
+            }
+            effectsLayer.appendChild(orbit);
+            this.element.appendChild(effectsLayer);
+        }
+
         this.element.appendChild(this.iconContainer);
 
         this.clickHandler = options.onClick;
@@ -340,12 +357,12 @@ export class FloatingActionButton implements UIComponent, Disposable {
         const opacity = fab.opacity ?? 0.95;
         this.element.style.opacity = String(opacity);
 
-        // 3. 绘图中动效类型（未设置或旧版无效值统一回退为默认流光环绕）
+        // 3. 绘图中动效类型
         const rawEffect = fab.animationType as string | undefined;
         const effectType: FabAnimationType =
             rawEffect && VALID_FAB_ANIMATIONS.has(rawEffect)
                 ? (rawEffect as FabAnimationType)
-                : 'orbit-ring';
+                : 'starlight';
         this.element.setAttribute?.('data-fab-effect', effectType);
 
         // 4. 图标渲染

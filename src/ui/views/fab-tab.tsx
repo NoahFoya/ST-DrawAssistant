@@ -26,6 +26,7 @@ import { Toast } from '../feedback/toast';
 type FabAnimationOption = NonNullable<DrawAssistantSettings['ui']['fab']['animationType']>;
 
 export const FAB_ANIMATION_OPTIONS: readonly { value: FabAnimationOption; label: string }[] = [
+    { value: 'starlight', label: '星光环绕' },
     { value: 'orbit-ring', label: '流光环绕' },
     { value: 'aurora-pulse', label: '呼吸脉冲' },
     { value: 'ripple', label: '波纹扩散' },
@@ -79,7 +80,7 @@ export class FabTabView extends PreactSettingsView {
             visible: true,
             opacity: 0.95,
             icon: 'palette',
-            animationType: 'orbit-ring' as FabAnimationOption,
+            animationType: 'starlight' as FabAnimationOption,
         };
         this.bridge.updateUi({
             fab: {
@@ -128,7 +129,7 @@ export class FabTabView extends PreactSettingsView {
             (opt) => opt.value === rawAnim
         )
             ? (rawAnim as FabAnimationOption)
-            : 'orbit-ring';
+            : 'starlight';
         const isCustom = this.isCustomIcon(currentIcon);
 
         return (
