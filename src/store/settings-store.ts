@@ -27,6 +27,7 @@ import type {
     PromptInjectionConfig,
     ImageStorageQuality,
 } from '@types';
+import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
 import { EMBEDDED_AVATAR_FIELD, materialImageStorage } from './material-image-storage';
@@ -44,6 +45,48 @@ import {
     loadOfficialStaticPresets,
     type LoadStaticPresetsOptions,
 } from './static-preset-loader';
+
+/** 官方预设快速同步分组 */
+export type OfficialPresetSyncCategory =
+    | 'prompts'
+    | 'drawing'
+    | 'workflows'
+    | 'materialsAndThemes'
+    | 'injectionAndRules';
+
+/** 全部官方预设快速同步分组列表（按依赖先后排列） */
+export const ALL_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[] = [
+    'prompts',
+    'workflows',
+    'drawing',
+    'materialsAndThemes',
+    'injectionAndRules',
+];
+
+/** 官方预设快速同步分组差异统计 */
+export interface OfficialPresetCategoryDiff {
+    readonly category: OfficialPresetSyncCategory;
+    readonly label: string;
+    readonly overwriteCount: number;
+    readonly addCount: number;
+    readonly customPreservedCount: number;
+}
+
+/** 官方预设预览或同步结果统计 */
+export interface OfficialPresetSyncResult {
+    readonly totalOverwriteCount: number;
+    readonly totalAddCount: number;
+    readonly totalCustomPreservedCount: number;
+    readonly categories: OfficialPresetCategoryDiff[];
+}
+
+/** 官方预设同步参数选项 */
+export interface SyncOfficialPresetsOptions {
+    /** 需要同步的分组清单，未传时同步全部分组 */
+    readonly categories?: readonly OfficialPresetSyncCategory[];
+    /** 静态预设加载附加选项（如强制刷新或测试注入 fetcher） */
+    readonly loaderOptions?: LoadStaticPresetsOptions;
+}
 
 /** 配置导入结果结构 */
 export interface SettingsImportResult {
@@ -101,6 +144,7 @@ export interface ResolveDrawingPresetOptions {
 export interface DrawAssistantSettings {
     isInitialized: boolean;
     hasSeenGuide: boolean;
+    lastSeenChangelogVersion?: string;
     enabled: boolean;
     activeProvider: ProviderType;
     transport: TransportMode;
@@ -128,7 +172,7 @@ export interface DrawAssistantSettings {
             visible: boolean;
             opacity: number;
             icon: string;
-            animationType?: 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
+            animationType?: 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
         };
         lightbox: {
             enabled: boolean;
@@ -347,6 +391,402 @@ function mergeEmptyPresetCategories(
     }
 
     return next;
+}
+
+const OFFICIAL_SYNC_CATEGORY_LABELS: Readonly<Record<OfficialPresetSyncCategory, string>> = {
+    prompts: '提示词预设（含画师串）',
+    workflows: '工作流预设 (ComfyUI)',
+    drawing: '绘图参数预设',
+    materialsAndThemes: '角色 / 服装 / 主题外观',
+    injectionAndRules: '提示词通道与素材规则',
+};
+
+/** 生成键顺序无关的稳定 JSON 字符串，用于比较预设内容是否真正发生变化 */
+function canonicalizeForCompare(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(canonicalizeForCompare);
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        const sorted: Record<string, unknown> = {};
+        for (const key of Object.keys(record).sort()) {
+            const v = record[key];
+            if (v !== undefined) {
+                sorted[key] = canonicalizeForCompare(v);
+            }
+        }
+        return sorted;
+    }
+    return value;
+}
+
+function isPresetContentEqual<T>(
+    localItem: PresetItem<T>,
+    officialName: string,
+    officialDescription: string | undefined,
+    officialData: T
+): boolean {
+    const a = canonicalizeForCompare({
+        name: (localItem.name || '').trim(),
+        description: localItem.description ?? '',
+        data: localItem.data,
+    });
+    const b = canonicalizeForCompare({
+        name: (officialName || '').trim(),
+        description: officialDescription ?? '',
+        data: officialData,
+    });
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** 分配不与已占用集合冲突的稳定唯一预设 ID */
+function resolveSafeUniquePresetId(preferredId: string, usedIds: Set<string>): string {
+    if (preferredId && !usedIds.has(preferredId)) {
+        return preferredId;
+    }
+    const base = preferredId || 'preset';
+    let suffix = 1;
+    let candidate = `${base}_official`;
+    while (usedIds.has(candidate)) {
+        suffix += 1;
+        candidate = `${base}_official_${suffix}`;
+    }
+    return candidate;
+}
+
+/** 基于当前列表与官方列表构建官方 ID -> 实际本地 ID 映射（用于跨分类关联重映射） */
+function buildOfficialIdMap<T>(
+    effectiveList: readonly PresetItem<T>[],
+    officialList: readonly PresetItem<T>[]
+): Map<string, string> {
+    const map = new Map<string, string>();
+    const byName = new Map<string, PresetItem<T>>();
+    for (const item of effectiveList) {
+        if (!item?.name) continue;
+        const key = normalizePresetNameKey(item.name);
+        if (key && !byName.has(key)) {
+            byName.set(key, item);
+        }
+    }
+    for (const off of officialList) {
+        if (!off?.id) continue;
+        const matched = byName.get(normalizePresetNameKey(off.name || ''));
+        if (matched) {
+            map.set(off.id, matched.id);
+        } else if (effectiveList.some((item) => item.id === off.id)) {
+            map.set(off.id, off.id);
+        }
+    }
+    return map;
+}
+
+/**
+ * 纯函数：按归一化名称对单个预设数组执行覆盖式合并。
+ * - 同名官方预设：覆盖 `name` / `description` / `data`，保留用户原有的 `id` 与 `createdAt`；
+ * - 全新官方预设：深拷贝追加至末尾（若 ID 与用户改名副本冲突则安全去重）；
+ * - 非同名用户自建预设或改名副本：完全保留原有顺序与原始内容。
+ */
+function mergePresetListByName<T>(
+    localList: readonly PresetItem<T>[],
+    officialList: readonly PresetItem<T>[],
+    options?: {
+        readonly now?: number;
+        readonly transformData?: (data: T, officialItem: PresetItem<T>) => T;
+    }
+): {
+    readonly nextList: PresetItem<T>[];
+    readonly overwriteCount: number;
+    readonly addCount: number;
+    readonly customPreservedCount: number;
+} {
+    const now = options?.now ?? Date.now();
+    const safeLocal = Array.isArray(localList) ? localList : [];
+    const safeOfficial = Array.isArray(officialList) ? officialList : [];
+
+    const nextList = safeLocal.map((item) => structuredClone(item));
+    const indexByName = new Map<string, number>();
+    const usedIds = new Set<string>();
+    const matchedLocalIndices = new Set<number>();
+
+    for (let idx = 0; idx < nextList.length; idx++) {
+        const item = nextList[idx];
+        if (item?.id) usedIds.add(item.id);
+        const key = item?.name ? normalizePresetNameKey(item.name) : '';
+        if (key && !indexByName.has(key)) {
+            indexByName.set(key, idx);
+        }
+    }
+
+    let overwriteCount = 0;
+    let addCount = 0;
+
+    for (const off of safeOfficial) {
+        if (!off?.name) continue;
+        const nameKey = normalizePresetNameKey(off.name);
+        if (!nameKey) continue;
+
+        const transformedData = options?.transformData
+            ? options.transformData(structuredClone(off.data), off)
+            : structuredClone(off.data);
+
+        const existingIdx = indexByName.get(nameKey);
+        if (existingIdx !== undefined) {
+            matchedLocalIndices.add(existingIdx);
+            const localItem = nextList[existingIdx];
+            if (!isPresetContentEqual(localItem, off.name, off.description, transformedData)) {
+                overwriteCount += 1;
+                nextList[existingIdx] = {
+                    ...localItem,
+                    name: off.name,
+                    ...(off.description !== undefined ? { description: off.description } : {}),
+                    data: transformedData,
+                    updatedAt: now,
+                };
+            }
+        } else {
+            addCount += 1;
+            const nextId = resolveSafeUniquePresetId(off.id, usedIds);
+            usedIds.add(nextId);
+            const addedItem: PresetItem<T> = {
+                ...structuredClone(off),
+                id: nextId,
+                data: transformedData,
+                createdAt: off.createdAt ?? now,
+                updatedAt: now,
+            };
+            indexByName.set(nameKey, nextList.length);
+            nextList.push(addedItem);
+        }
+    }
+
+    const customPreservedCount = Math.max(0, safeLocal.length - matchedLocalIndices.size);
+    return { nextList, overwriteCount, addCount, customPreservedCount };
+}
+
+interface OfficialSyncPlan {
+    readonly nextPresets: PresetSettings;
+    readonly result: OfficialPresetSyncResult;
+}
+
+/** 计算官方预设同步执行计划（供干跑预览与真实持久化共用） */
+function planOfficialPresetSync(
+    current: PresetSettings,
+    official: PresetSettings,
+    selectedCategories: readonly OfficialPresetSyncCategory[]
+): OfficialSyncPlan {
+    const selectedSet = new Set<OfficialPresetSyncCategory>(selectedCategories);
+    const nextPresets = structuredClone(current);
+    const now = Date.now();
+    const diffs: OfficialPresetCategoryDiff[] = [];
+
+    // 1. 提示词预设 (按提供商分桶)
+    {
+        let overwriteCount = 0;
+        let addCount = 0;
+        let customPreservedCount = 0;
+        const providerKeys = new Set([
+            ...Object.keys(nextPresets.prompts || {}),
+            ...Object.keys(official.prompts || {}),
+        ]);
+        for (const provKey of providerKeys) {
+            const localArr = nextPresets.prompts?.[provKey] || [];
+            const offArr = official.prompts?.[provKey] || [];
+            if (selectedSet.has('prompts')) {
+                const merged = mergePresetListByName(localArr, offArr, { now });
+                nextPresets.prompts[provKey] = merged.nextList;
+                overwriteCount += merged.overwriteCount;
+                addCount += merged.addCount;
+                customPreservedCount += merged.customPreservedCount;
+            }
+        }
+        if (selectedSet.has('prompts')) {
+            diffs.push({
+                category: 'prompts',
+                label: OFFICIAL_SYNC_CATEGORY_LABELS.prompts,
+                overwriteCount,
+                addCount,
+                customPreservedCount,
+            });
+        }
+    }
+
+    // 2. ComfyUI 工作流预设
+    if (selectedSet.has('workflows')) {
+        const merged = mergePresetListByName(
+            nextPresets.workflows || [],
+            official.workflows || [],
+            { now }
+        );
+        nextPresets.workflows = merged.nextList;
+        diffs.push({
+            category: 'workflows',
+            label: OFFICIAL_SYNC_CATEGORY_LABELS.workflows,
+            overwriteCount: merged.overwriteCount,
+            addCount: merged.addCount,
+            customPreservedCount: merged.customPreservedCount,
+        });
+    }
+
+    // 3. 绘图参数预设（依托上方解析后的提示词与工作流本地 ID 重映射引用）
+    if (selectedSet.has('drawing')) {
+        const workflowIdMap = buildOfficialIdMap(
+            nextPresets.workflows || [],
+            official.workflows || []
+        );
+        let overwriteCount = 0;
+        let addCount = 0;
+        let customPreservedCount = 0;
+        const providerKeys = new Set([
+            ...Object.keys(nextPresets.drawing || {}),
+            ...Object.keys(official.drawing || {}),
+        ]);
+        for (const provKey of providerKeys) {
+            const localArr = nextPresets.drawing?.[provKey] || [];
+            const offArr = official.drawing?.[provKey] || [];
+            const promptIdMap = buildOfficialIdMap(
+                nextPresets.prompts?.[provKey] || [],
+                official.prompts?.[provKey] || []
+            );
+            const merged = mergePresetListByName(localArr, offArr, {
+                now,
+                transformData: (data) => {
+                    const remapped = { ...data };
+                    if (
+                        remapped.promptPresetId &&
+                        remapped.promptPresetId !== PROMPT_POLLING_PRESET_ID
+                    ) {
+                        remapped.promptPresetId =
+                            promptIdMap.get(remapped.promptPresetId) ?? remapped.promptPresetId;
+                    }
+                    if (remapped.txt2imgWorkflowId) {
+                        remapped.txt2imgWorkflowId =
+                            workflowIdMap.get(remapped.txt2imgWorkflowId) ??
+                            remapped.txt2imgWorkflowId;
+                    }
+                    if (remapped.inpaintPresetId) {
+                        remapped.inpaintPresetId =
+                            workflowIdMap.get(remapped.inpaintPresetId) ??
+                            remapped.inpaintPresetId;
+                    }
+                    if (Array.isArray(remapped.promptPollingPool)) {
+                        remapped.promptPollingPool = remapped.promptPollingPool.map((entry) => ({
+                            ...entry,
+                            presetId: promptIdMap.get(entry.presetId) ?? entry.presetId,
+                        }));
+                    }
+                    return remapped;
+                },
+            });
+            nextPresets.drawing[provKey] = merged.nextList;
+            overwriteCount += merged.overwriteCount;
+            addCount += merged.addCount;
+            customPreservedCount += merged.customPreservedCount;
+        }
+        diffs.push({
+            category: 'drawing',
+            label: OFFICIAL_SYNC_CATEGORY_LABELS.drawing,
+            overwriteCount,
+            addCount,
+            customPreservedCount,
+        });
+    }
+
+    // 4. 角色 / 服装 / 主题外观
+    if (selectedSet.has('materialsAndThemes')) {
+        const outfitsMerged = mergePresetListByName(
+            nextPresets.outfits || [],
+            official.outfits || [],
+            { now }
+        );
+        nextPresets.outfits = outfitsMerged.nextList;
+        const outfitIdMap = buildOfficialIdMap(nextPresets.outfits, official.outfits || []);
+
+        const charsMerged = mergePresetListByName(
+            nextPresets.characters || [],
+            official.characters || [],
+            {
+                now,
+                transformData: (data) => {
+                    if (!Array.isArray(data.boundOutfitIds)) return data;
+                    return {
+                        ...data,
+                        boundOutfitIds: data.boundOutfitIds.map((oid) => outfitIdMap.get(oid) ?? oid),
+                    };
+                },
+            }
+        );
+        nextPresets.characters = charsMerged.nextList;
+
+        const themesMerged = mergePresetListByName(
+            nextPresets.themes || [],
+            official.themes || [],
+            { now }
+        );
+        nextPresets.themes = themesMerged.nextList;
+
+        diffs.push({
+            category: 'materialsAndThemes',
+            label: OFFICIAL_SYNC_CATEGORY_LABELS.materialsAndThemes,
+            overwriteCount:
+                outfitsMerged.overwriteCount +
+                charsMerged.overwriteCount +
+                themesMerged.overwriteCount,
+            addCount: outfitsMerged.addCount + charsMerged.addCount + themesMerged.addCount,
+            customPreservedCount:
+                outfitsMerged.customPreservedCount +
+                charsMerged.customPreservedCount +
+                themesMerged.customPreservedCount,
+        });
+    }
+
+    // 5. 提示词通道与素材规则预设
+    if (selectedSet.has('injectionAndRules')) {
+        const ruleKeys = [
+            'material_activations',
+            'material_extractions',
+            'material_formats',
+            'prompt_story',
+            'prompt_character',
+            'prompt_vocab',
+            'prompt_material',
+        ] as const;
+
+        let overwriteCount = 0;
+        let addCount = 0;
+        let customPreservedCount = 0;
+
+        for (const key of ruleKeys) {
+            const localArr = (nextPresets[key] as PresetItem<unknown>[]) || [];
+            const offArr = (official[key] as PresetItem<unknown>[]) || [];
+            const merged = mergePresetListByName(localArr, offArr, { now });
+            (nextPresets as unknown as Record<string, unknown>)[key] = merged.nextList;
+            overwriteCount += merged.overwriteCount;
+            addCount += merged.addCount;
+            customPreservedCount += merged.customPreservedCount;
+        }
+
+        diffs.push({
+            category: 'injectionAndRules',
+            label: OFFICIAL_SYNC_CATEGORY_LABELS.injectionAndRules,
+            overwriteCount,
+            addCount,
+            customPreservedCount,
+        });
+    }
+
+    const totalOverwriteCount = diffs.reduce((sum, d) => sum + d.overwriteCount, 0);
+    const totalAddCount = diffs.reduce((sum, d) => sum + d.addCount, 0);
+    const totalCustomPreservedCount = diffs.reduce((sum, d) => sum + d.customPreservedCount, 0);
+
+    return {
+        nextPresets,
+        result: {
+            totalOverwriteCount,
+            totalAddCount,
+            totalCustomPreservedCount,
+            categories: diffs,
+        },
+    };
 }
 
 /**
@@ -866,9 +1306,10 @@ export class SettingsStore {
     /**
      * 删除指定预设，并同步清理依赖它的关联引用：
      * 1. 删除提示词预设时，将引用它的绘图预设 `promptPresetId` 重置为可用首项或空串；
-     * 2. 删除角色或服装时，从各素材启用预设中移除对应规则；
-     * 3. 删除服装时，从所有角色的 `boundOutfitIds` 中移除该服装 ID；
-     * 4. 删除当前激活的主题或提示词通道预设时，回退至剩余列表首项或默认预设。
+     * 2. 删除工作流预设时，清理绘图预设中失效的 `txt2imgWorkflowId` / `inpaintPresetId` 引用；
+     * 3. 删除角色或服装时，从各素材启用预设中移除对应规则；
+     * 4. 删除服装时，从所有角色的 `boundOutfitIds` 中移除该服装 ID；
+     * 5. 删除当前激活的主题或提示词通道预设时，回退至剩余列表首项或默认预设。
      *
      * @param category 预设分类
      * @param id 待删除的预设 ID
@@ -890,21 +1331,31 @@ export class SettingsStore {
 
             let updatedDrawingPresets = this._settings.presets.drawing;
             let updatedProviders = this._settings.providers;
-            // 若删除的是提示词预设，且当前后端的绘图预设关联了该预设，则自动对齐为剩余预设首项
+            // 若删除的是提示词预设，对齐固定绑定并从轮询候选池清理该失效 ID（保留 '__polling__' 特殊绑定）
             if (category === 'prompts' && updatedDrawingPresets?.[providerKey]) {
                 const fallbackPromptId = nextList[0]?.id || '';
                 const currentDrawings = updatedDrawingPresets[providerKey] || [];
                 const patchedDrawings = currentDrawings.map((dp) => {
-                    if (dp?.data?.promptPresetId === id) {
-                        return {
-                            ...dp,
-                            data: {
-                                ...dp.data,
-                                promptPresetId: fallbackPromptId,
-                            },
-                        };
-                    }
-                    return dp;
+                    if (!dp?.data) return dp;
+                    const clearPromptId = dp.data.promptPresetId === id;
+                    const rawPool = dp.data.promptPollingPool;
+                    const hasInPool =
+                        Array.isArray(rawPool) && rawPool.some((item) => item?.presetId === id);
+                    if (!clearPromptId && !hasInPool) return dp;
+                    return {
+                        ...dp,
+                        data: {
+                            ...dp.data,
+                            ...(clearPromptId ? { promptPresetId: fallbackPromptId } : {}),
+                            ...(hasInPool
+                                ? {
+                                      promptPollingPool: rawPool.filter(
+                                          (item) => item?.presetId !== id
+                                      ),
+                                  }
+                                : {}),
+                        },
+                    };
                 });
                 updatedDrawingPresets = {
                     ...updatedDrawingPresets,
@@ -1246,6 +1697,79 @@ export class SettingsStore {
                 return { success: false, error: '配置格式必须为 JSON 对象' };
             }
 
+            const parsedRecord = parsed as Record<string, unknown>;
+            const KNOWN_SETTINGS_KEYS = [
+                'isInitialized',
+                'hasSeenGuide',
+                'enabled',
+                'activeProvider',
+                'transport',
+                'taskTimeoutMs',
+                'cancelOnChatChange',
+                'saveToServer',
+                'imageQuality',
+                'autoGenerate',
+                'cleanPrompt',
+                'promptStartTag',
+                'promptEndTag',
+                'activeThemePresetId',
+                'presets',
+                'promptInjection',
+                'materialConfig',
+                'providers',
+                'ui',
+            ];
+            const hasKnownKey = KNOWN_SETTINGS_KEYS.some((k) => k in parsedRecord);
+            const looksLikeSinglePreset =
+                !hasKnownKey && isPlainObject(parsedRecord.data);
+            const looksLikeComfyWorkflow =
+                !hasKnownKey &&
+                (Array.isArray(parsedRecord.nodes) ||
+                    Object.values(parsedRecord).some(
+                        (v) =>
+                            isPlainObject(v) &&
+                            typeof v.class_type === 'string' &&
+                            isPlainObject(v.inputs)
+                    ));
+            if (!hasKnownKey || looksLikeSinglePreset || looksLikeComfyWorkflow) {
+                return {
+                    success: false,
+                    error: looksLikeComfyWorkflow
+                        ? '检测到该文件为 ComfyUI 工作流 JSON，请前往「ComfyUI → 工作流设置」导入'
+                        : looksLikeSinglePreset
+                          ? '检测到该文件为单项预设 JSON，请前往对应功能选项卡的预设栏导入'
+                          : '配置备份格式无效：未包含有效的插件全局配置字段',
+                };
+            }
+
+            if ('presets' in parsedRecord) {
+                if (!isPlainObject(parsedRecord.presets)) {
+                    return { success: false, error: '配置备份格式无效：presets 字段必须为对象' };
+                }
+                const cleanedPresets: Record<string, unknown> = {};
+                for (const [catKey, catVal] of Object.entries(parsedRecord.presets)) {
+                    if (FORBIDDEN_MERGE_KEYS.has(catKey)) continue;
+                    if (Array.isArray(catVal)) {
+                        cleanedPresets[catKey] = catVal.filter(
+                            (item) => isPlainObject(item) && typeof item.id === 'string' && isPlainObject(item.data)
+                        );
+                    } else if (isPlainObject(catVal)) {
+                        const subMap: Record<string, unknown> = {};
+                        for (const [subKey, subArr] of Object.entries(catVal)) {
+                            if (FORBIDDEN_MERGE_KEYS.has(subKey)) continue;
+                            if (Array.isArray(subArr)) {
+                                subMap[subKey] = subArr.filter(
+                                    (item) =>
+                                        isPlainObject(item) && typeof item.id === 'string' && isPlainObject(item.data)
+                                );
+                            }
+                        }
+                        cleanedPresets[catKey] = subMap;
+                    }
+                }
+                parsedRecord.presets = cleanedPresets;
+            }
+
             // 保护现有敏感密钥：若导入数据中敏感字段为空字符串，保留本地已有有效密钥
             if (parsed.providers && typeof parsed.providers === 'object') {
                 for (const [pKey, pCfg] of Object.entries(parsed.providers)) {
@@ -1432,9 +1956,28 @@ export class SettingsStore {
                 const validPromptIds = new Set((promptsByProvider[provKey] || []).map((p) => p.id));
                 const fallbackPromptId = promptsByProvider[provKey]?.[0]?.id || '';
                 this._settings.presets.drawing[provKey] = dpList.map((dp) => {
-                    const pid = dp?.data?.promptPresetId;
-                    if (!pid || validPromptIds.has(pid)) return dp;
-                    return { ...dp, data: { ...dp.data, promptPresetId: fallbackPromptId } };
+                    if (!dp?.data) return dp;
+                    const pid = dp.data.promptPresetId;
+                    const needResetPrompt =
+                        typeof pid === 'string' &&
+                        pid.length > 0 &&
+                        pid !== PROMPT_POLLING_PRESET_ID &&
+                        !validPromptIds.has(pid);
+                    const rawPool = dp.data.promptPollingPool;
+                    const filteredPool = Array.isArray(rawPool)
+                        ? rawPool.filter((entry) => entry && validPromptIds.has(entry.presetId))
+                        : undefined;
+                    const poolChanged =
+                        Array.isArray(rawPool) && filteredPool!.length !== rawPool.length;
+                    if (!needResetPrompt && !poolChanged) return dp;
+                    return {
+                        ...dp,
+                        data: {
+                            ...dp.data,
+                            ...(needResetPrompt ? { promptPresetId: fallbackPromptId } : {}),
+                            ...(poolChanged ? { promptPollingPool: filteredPool } : {}),
+                        },
+                    };
                 });
             }
         }
@@ -1543,6 +2086,57 @@ export class SettingsStore {
             isReset: true,
             keys: Object.keys(this._settings),
         });
+    }
+
+    /**
+     * 干跑预览覆盖式同步官方静态预设的差异计数（不修改本地存储）。
+     *
+     * @param options 同步范围与静态加载选项
+     * @returns 各分组与总计的同名覆盖数、新增数及保留的自定义预设数
+     */
+    public async previewOfficialPresetSync(
+        options?: SyncOfficialPresetsOptions
+    ): Promise<OfficialPresetSyncResult> {
+        const official = await loadOfficialStaticPresets(options?.loaderOptions);
+        const categories =
+            options?.categories && options.categories.length > 0
+                ? options.categories
+                : ALL_OFFICIAL_SYNC_CATEGORIES;
+        return planOfficialPresetSync(this._settings.presets, official, categories).result;
+    }
+
+    /**
+     * 非破坏性覆盖式同步官方最新预设：
+     * 1. 仅按名称匹配并覆盖更新同名的官方预设（保留原有本地 ID 以维持关联不断裂）；
+     * 2. 自动补充本地尚未收录的官方预设；
+     * 3. 完整保留用户自建、改名副本或本地留存的历史其他预设，不做任何删除或改动。
+     *
+     * @param options 同步范围与静态加载选项
+     * @returns 实际执行的变更数量统计
+     */
+    public async syncOfficialPresets(
+        options?: SyncOfficialPresetsOptions
+    ): Promise<OfficialPresetSyncResult> {
+        const official = await loadOfficialStaticPresets(options?.loaderOptions);
+        const categories =
+            options?.categories && options.categories.length > 0
+                ? options.categories
+                : ALL_OFFICIAL_SYNC_CATEGORIES;
+        const plan = planOfficialPresetSync(this._settings.presets, official, categories);
+
+        if (plan.result.totalOverwriteCount > 0 || plan.result.totalAddCount > 0) {
+            this._settings = {
+                ...this._settings,
+                presets: plan.nextPresets,
+            };
+            this.saveToHost(false);
+            eventBus.emit('settings:updated', {
+                isReset: true,
+                keys: ['presets'],
+            });
+        }
+
+        return plan.result;
     }
 
     /**

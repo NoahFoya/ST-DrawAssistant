@@ -25,8 +25,10 @@ import {
     GITHUB_CDN_BASE,
     UPDATE_CHECK_COOLDOWN_MS,
     INSTALLED_COMMIT_SHA_KEY,
+    PENDING_CHANGELOG_POPUP_KEY,
 } from '../config/constants';
 import { getHostRequestHeaders } from '../util/http-client';
+import { settingsStore, type SettingsStore } from '../store/settings-store';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
 import defaultChangelog from '../../config/changelog.json';
@@ -1045,6 +1047,7 @@ export class UpdateService {
             if (targetSha) {
                 this.setLocalInstalledCommitSha(targetSha);
             }
+            this.markPendingChangelogPopup();
 
             this.setState({
                 isUpdating: false,
@@ -1092,6 +1095,77 @@ export class UpdateService {
             return defaultChangelog as ChangelogItem[];
         }
         return [];
+    }
+
+    /** 获取当前最新更新标志版本号（优先取 changelog 首条版本，回退 EXTENSION_VERSION） */
+    public getLatestChangelogVersion(): string {
+        const list = this.getChangelog();
+        const topVer = typeof list[0]?.version === 'string' ? list[0].version.trim() : '';
+        return topVer || EXTENSION_VERSION;
+    }
+
+    /** 标记通过应用内更新拉取后需在下次打开设置面板时弹出更新说明 */
+    public markPendingChangelogPopup(): void {
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(PENDING_CHANGELOG_POPUP_KEY, '1');
+            }
+        } catch {
+            // 隐私模式下忽略 localStorage 异常
+        }
+    }
+
+    private hasPendingPopupFlag(): boolean {
+        try {
+            return (
+                typeof localStorage !== 'undefined' &&
+                localStorage.getItem(PENDING_CHANGELOG_POPUP_KEY) === '1'
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    private clearPendingPopupFlag(): void {
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.removeItem(PENDING_CHANGELOG_POPUP_KEY);
+            }
+        } catch {
+            // 忽略清理异常
+        }
+    }
+
+    /**
+     * 判断当前已安装老用户升级后是否存在尚未阅读的更新说明。
+     * 首次全新安装（`!hasSeenGuide`）由新手引导接管，不重复弹窗。
+     */
+    public hasPendingChangelogNotice(
+        store: Pick<SettingsStore, 'get'> = settingsStore
+    ): boolean {
+        if (!Boolean(store.get('isInitialized')) || !Boolean(store.get('hasSeenGuide'))) {
+            return false;
+        }
+        if (this.hasPendingPopupFlag()) {
+            return true;
+        }
+        const seenVersion = store.get('lastSeenChangelogVersion');
+        const normalizedSeen = typeof seenVersion === 'string' ? seenVersion.trim() : '';
+        return normalizedSeen !== this.getLatestChangelogVersion();
+    }
+
+    /**
+     * 将当前更新日志版本标记为已阅读并清除待弹窗临时标记。
+     */
+    public markChangelogAsSeen(
+        store: Pick<SettingsStore, 'get' | 'set'> = settingsStore
+    ): void {
+        const latest = this.getLatestChangelogVersion();
+        const currentSeen = store.get('lastSeenChangelogVersion');
+        if (currentSeen !== latest) {
+            store.set('lastSeenChangelogVersion', latest);
+        }
+        this.clearPendingPopupFlag();
     }
 }
 

@@ -1,6 +1,7 @@
 {
   "isInitialized": false,
   "hasSeenGuide": false,
+  "lastSeenChangelogVersion": "",
   "enabled": true,
   "activeProvider": "comfyui",
   "transport": "direct",
@@ -92,7 +93,7 @@
       "visible": true,
       "opacity": 0.95,
       "icon": "palette",
-      "animationType": "starlight"
+      "animationType": "orbit-ring"
     },
     "lightbox": {
       "enabled": true

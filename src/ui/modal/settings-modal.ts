@@ -24,6 +24,7 @@ import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 import { isCompactMobileViewport, viewportService } from '../layout/viewport';
 import { openOnboardingGuideModal, type OnboardingGuideModal } from './onboarding-guide-modal';
+import { openChangelogModal } from './changelog-modal';
 import type { ProviderType } from '@types';
 
 /**
@@ -160,6 +161,7 @@ export class SettingsModal implements Disposable {
     private removeBackdropDismiss: (() => void) | null = null;
     private updateDotElement: HTMLElement | null = null;
     private activeGuideModal: OnboardingGuideModal | null = null;
+    private activeChangelogModal: Disposable | null = null;
     private isPromptingClose = false;
 
     constructor(private readonly options: SettingsModalOptions = {}) {
@@ -277,10 +279,14 @@ export class SettingsModal implements Disposable {
 
         this.options.onOpen?.();
 
-        // 首次安装初始化完成后首次打开设置面板时，自动弹出使用引导并记录状态
+        // 首次安装初始化完成后首次打开设置面板时，自动弹出使用引导并写入当前更新标志（避免叠加弹窗）
         if (Boolean(settingsStore.get('isInitialized')) && !settingsStore.get('hasSeenGuide')) {
             settingsStore.set('hasSeenGuide', true);
+            updateService.markChangelogAsSeen();
             this.openOnboardingGuide();
+        } else if (updateService.hasPendingChangelogNotice()) {
+            // 已安装用户升级后首次主动打开悬浮球进入设置面板时，自动弹出更新说明
+            this.openChangelogPopup();
         }
     }
 
@@ -361,6 +367,7 @@ export class SettingsModal implements Disposable {
         }
 
         this.closeOnboardingGuide();
+        this.closeChangelogPopup();
         ConfirmDialog.dispose();
         tooltipService.hide();
         this.isOpenState = false;
@@ -1242,6 +1249,26 @@ export class SettingsModal implements Disposable {
         if (this.activeGuideModal) {
             const modal = this.activeGuideModal;
             this.activeGuideModal = null;
+            modal.dispose();
+        }
+    }
+
+    /** 打开未读版本更新说明弹窗（幂等防重复堆叠） */
+    private openChangelogPopup(): void {
+        if (this.activeChangelogModal) {
+            return;
+        }
+        this.activeChangelogModal = openChangelogModal({
+            onClose: () => {
+                this.activeChangelogModal = null;
+            },
+        });
+    }
+
+    private closeChangelogPopup(): void {
+        if (this.activeChangelogModal) {
+            const modal = this.activeChangelogModal;
+            this.activeChangelogModal = null;
             modal.dispose();
         }
     }

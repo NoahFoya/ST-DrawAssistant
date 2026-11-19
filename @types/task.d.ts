@@ -42,6 +42,10 @@ export interface DrawingTask {
     readonly providerType: ProviderType;
     /** 任务入队时的生成参数快照 */
     readonly parametersSnapshot?: Record<string, unknown>;
+    /** 实际解析命中的提示词预设 ID（含轮询抽取结果） */
+    readonly resolvedPromptPresetId?: string;
+    /** 实际解析命中的提示词预设名称 */
+    readonly resolvedPromptPresetName?: string;
     /** 源图像参考输入（图生图 / 局部重绘） */
     sourceImage?: Blob | string;
     /** 蒙版图像输入（局部重绘） */
