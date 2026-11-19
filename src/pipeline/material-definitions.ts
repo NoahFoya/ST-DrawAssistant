@@ -788,9 +788,9 @@ function splitTopLevelTags(line: string): string[] {
             continue;
         }
 
-        // 检测 NovelAI 数值权重定界符 `1.2::tag1, tag2::`
+        // 检测 NovelAI 数值权重定界符 `1.2::tag1, tag2::`（同时兼容 `1.4::a::1.2::b::` 连写）
         if (ch === ':' && line[i + 1] === ':') {
-            if (!inWeightColon && /(?:^|[,\s])[-+]?\d+(?:\.\d+)?$/.test(current)) {
+            if (!inWeightColon && /(?:^|[,\s]|::)[-+]?\d+(?:\.\d+)?$/.test(current)) {
                 inWeightColon = true;
             } else if (inWeightColon) {
                 inWeightColon = false;

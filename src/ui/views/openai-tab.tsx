@@ -21,6 +21,7 @@ import {
     type FieldSchema,
     DimensionPickerView,
     PresetToolbarView,
+    PromptPollingPanelView,
 } from '../framework';
 import { OPENAI_ASPECT_RATIOS } from '../composite';
 import { Toast } from '../feedback/toast';
@@ -272,6 +273,8 @@ export class OpenAITabView extends ProviderTabView {
                         invalidFields={invalidFields}
                         onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                     />
+
+                    <PromptPollingPanelView vm={this.vm} />
 
                     <div className="da-section-banner">
                         <span className="da-section-banner__title">分辨率与画幅</span>

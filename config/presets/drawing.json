@@ -68,8 +68,8 @@
   "novelai": [
     {
       "id": "novelai_v45_curated",
-      "name": "NAI V4.5 动漫精选",
-      "description": "NovelAI V4.5 Curated 旗舰二次元模型，细节极高且人体结构精准",
+      "name": "NAI V4.5 动漫精选 (Curated)",
+      "description": "NovelAI V4.5 Curated 旗舰二次元模型，默认绑定基础画质提示词预设，可在下方按需切换为画师串轮询",
       "data": {
         "baseModel": "nai-diffusion-4-5-curated",
         "width": 832,
@@ -77,21 +77,23 @@
         "steps": 28,
         "cfgScale": 5,
         "samplerName": "k_euler",
-        "promptPresetId": ""
+        "convertSyntax": true,
+        "promptPresetId": "prompt_nai_v45_light"
       }
     },
     {
-      "id": "novelai_v3_classic",
-      "name": "NAI V3 经典日系",
-      "description": "NovelAI V3 经典日系二次元动漫模型，色彩通透浓郁",
+      "id": "novelai_v45_full",
+      "name": "NAI V4.5 全能旗舰 (Full)",
+      "description": "NovelAI V4.5 Full 完整模型，题材泛化更广，适合多样化构图与高精细度画师串表现",
       "data": {
-        "baseModel": "nai-diffusion-3",
+        "baseModel": "nai-diffusion-4-5-full",
         "width": 832,
         "height": 1216,
         "steps": 28,
-        "cfgScale": 6,
-        "samplerName": "k_euler_ancestral",
-        "promptPresetId": ""
+        "cfgScale": 5,
+        "samplerName": "k_euler",
+        "convertSyntax": true,
+        "promptPresetId": "prompt_nai_v45_light"
       }
     }
   ],

@@ -473,6 +473,9 @@ export class PromptPresetCard implements UIComponent {
             }
             this.baselineData = this.cloneData(this.currentData);
             this.toolbar.setDirty(false);
+        } else if (action === 'saveAs') {
+            this.baselineData = this.cloneData(this.currentData);
+            this.toolbar.setDirty(false);
         }
         return true;
     }

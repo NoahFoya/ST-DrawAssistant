@@ -20,6 +20,7 @@ import {
     DimensionPickerView,
     SamplerCardView,
     PresetToolbarView,
+    PromptPollingPanelView,
 } from '../framework';
 import { NOVELAI_RANGE_CONFIG } from '../composite';
 import type { ProviderPreset } from '../composite/connection-card';
@@ -166,7 +167,7 @@ export class NovelAITabView extends ProviderTabView {
                 label: '权重语法自动转换',
                 type: 'switch',
                 tooltip:
-                    '开启后自动将 SD 惯用的圆括号权重语法（如 (masterpiece:1.2)）转换为 NovelAI 专有的花括号增强语法（如 {masterpiece}），防止模型误解析权重数值。',
+                    '开启后自动将 SD 圆括号权重（如 (masterpiece:1.2) 与双层裸括号 ((tag))）转换为 NovelAI 对应架构语法：V4 / V4.5 / V5 默认转为原生 weight::tag::，仅选择 V3 模型时兼容转为 {tag} / [tag] 并降级 :: 区块。',
                 transform: {
                     toView: (v) => v !== false,
                     fromView: (v) => Boolean(v),
@@ -257,6 +258,8 @@ export class NovelAITabView extends ProviderTabView {
                         invalidFields={invalidFields}
                         onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                     />
+
+                    <PromptPollingPanelView vm={this.vm} />
 
                     <div className="da-section-banner">
                         <span className="da-section-banner__title">分辨率与画幅</span>

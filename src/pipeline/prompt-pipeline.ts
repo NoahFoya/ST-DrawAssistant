@@ -9,11 +9,15 @@
 import type {
     GenerationRequest,
     ProviderType,
+    PresetItem,
     PromptPresetData,
+    PromptPollingPoolItem,
     DrawingPresetData,
     LoraSyntaxMode,
 } from '@types';
-import { type SettingsStore, settingsStore } from '../store/settings-store';
+import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
+import { type SettingsStore, normalizePresetNameKey, settingsStore } from '../store/settings-store';
+import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../provider/novelai/novelai-models';
 import { resolvePromptMacros } from './macro-resolver';
 import { cleanTagSegments } from './material-definitions';
 import { stripThinkingAndComments } from './prompt-injector';
@@ -44,6 +48,267 @@ function findMatchingParen(src: string, startIdx: number): number {
         }
     }
     return -1;
+}
+
+/** 格式化权重数值为简洁字符串（最多保留 4 位小数，去除末尾无意义零） */
+function formatWeightNumber(weight: number): string {
+    return Number(weight.toFixed(4)).toString();
+}
+
+/** 计算 NovelAI V3 单层花/方括号数量（官方单层倍率约为 1.05） */
+function computeV3BracketCount(weight: number): number {
+    if (!Number.isFinite(weight) || weight <= 0 || Math.abs(weight - 1.0) < 1e-6) {
+        return 0;
+    }
+    const rawCount = Math.round(Math.abs(Math.log(weight) / Math.log(1.05)));
+    return Math.max(1, Math.min(5, rawCount));
+}
+
+/** 将内容包装为 NovelAI V3 `{...}` 或 `[...]` 语法（`weight <= 0` 时返回空串安全剔除） */
+function formatV3WeightSyntax(inner: string, weight: number): string {
+    const trimmed = inner.trim();
+    if (!trimmed || !Number.isFinite(weight)) {
+        return trimmed;
+    }
+    if (weight <= 0) {
+        return '';
+    }
+    if (Math.abs(weight - 1.0) < 1e-6) {
+        return trimmed;
+    }
+    const count = computeV3BracketCount(weight);
+    if (count === 0) {
+        return trimmed;
+    }
+    return weight > 1.0
+        ? '{'.repeat(count) + trimmed + '}'.repeat(count)
+        : '['.repeat(count) + trimmed + ']'.repeat(count);
+}
+
+/**
+ * 判断起始索引处的 `(` 是否构成多层纯嵌套裸括号 `((tag))`（无 `:weight` 后缀且内外括号一一成对包拢）。
+ */
+function matchNestedBareParens(
+    src: string,
+    startIdx: number,
+    outerCloseIdx: number
+): { depth: number; innerText: string } | null {
+    let depth = 0;
+    while (startIdx + depth < outerCloseIdx && src[startIdx + depth] === '(') {
+        depth++;
+    }
+    if (depth < 2) {
+        return null;
+    }
+    for (let k = 1; k < depth; k++) {
+        if (findMatchingParen(src, startIdx + k) !== outerCloseIdx - k) {
+            return null;
+        }
+    }
+    const innerText = src.slice(startIdx + depth, outerCloseIdx - depth + 1);
+    if (!innerText.trim() || /:[-+]?\d+(?:\.\d+)?$/.test(innerText.trim())) {
+        return null;
+    }
+    return { depth, innerText };
+}
+
+/**
+ * 将 WebUI / SD 权重语法转换为 NovelAI 对应模型架构的原生权重语法：
+ * - V4 / V4.5 / V5 默认模式：将 `(tag:1.2)`、`(tag:-1)` 与双层及以上裸括号 `((tag))` 转为 `weight::tag::`，
+ *   保留单层消歧括号（如 `dino (dinoartforame)`）与既有 `weight::tag::` 区块；
+ * - V3 兼容模式：将 `(tag:weight)`、`((tag))` 及 V4 `weight::tag::` 统一转换为以 1.05 倍率校准的 `{tag}` / `[tag]`。
+ */
+export function convertNovelAIWeightSyntax(
+    text: string,
+    modelFamily: 'v3' | 'v4' | 'v5' = 'v4'
+): string {
+    if (!text) return '';
+
+    const isV3 = modelFamily === 'v3';
+    let out = '';
+    let i = 0;
+
+    while (i < text.length) {
+        if (text[i] === '\\' && i + 1 < text.length) {
+            out += text.slice(i, i + 2);
+            i += 2;
+            continue;
+        }
+
+        // 检测既有 `weight::...::` 权重区块（仅当前导位于边界或上一组 `::` 之后）
+        const rest = text.slice(i);
+        const colonOpenMatch = rest.match(/^([-+]?\d+(?:\.\d+)?)::/);
+        if (
+            colonOpenMatch &&
+            (i === 0 || /(?:^|[,\s]|::)$/.test(text.slice(Math.max(0, i - 2), i)))
+        ) {
+            const openLen = colonOpenMatch[0].length;
+            const closeColonIdx = text.indexOf('::', i + openLen);
+            if (closeColonIdx !== -1) {
+                const fullBlock = text.slice(i, closeColonIdx + 2);
+                if (!isV3) {
+                    out += fullBlock;
+                } else {
+                    const weight = parseFloat(colonOpenMatch[1]);
+                    const rawInner = text.slice(i + openLen, closeColonIdx);
+                    const convertedInner = convertNovelAIWeightSyntax(rawInner, 'v3').trim();
+                    out += formatV3WeightSyntax(convertedInner, weight);
+                }
+                i = closeColonIdx + 2;
+                continue;
+            }
+        }
+
+        if (text[i] === '(') {
+            const closeIdx = findMatchingParen(text, i);
+            if (closeIdx > i) {
+                const nestedBare = matchNestedBareParens(text, i, closeIdx);
+                if (nestedBare) {
+                    const weight = Number(Math.pow(1.1, nestedBare.depth).toFixed(2));
+                    const convertedInner = convertNovelAIWeightSyntax(
+                        nestedBare.innerText,
+                        modelFamily
+                    ).trim();
+                    if (convertedInner) {
+                        out += isV3
+                            ? formatV3WeightSyntax(convertedInner, weight)
+                            : `${formatWeightNumber(weight)}::${convertedInner}::`;
+                    }
+                    i = closeIdx + 1;
+                    continue;
+                }
+
+                const inner = text.slice(i + 1, closeIdx);
+                const weightMatch = inner.match(/^([\s\S]*):([-+]?\d+(?:\.\d+)?)$/);
+                if (weightMatch) {
+                    const convertedInner = convertNovelAIWeightSyntax(
+                        weightMatch[1],
+                        modelFamily
+                    ).trim();
+                    const weight = parseFloat(weightMatch[2]);
+                    if (!convertedInner) {
+                        i = closeIdx + 1;
+                        continue;
+                    }
+                    if (!Number.isFinite(weight)) {
+                        out += `(${convertNovelAIWeightSyntax(inner, modelFamily)})`;
+                        i = closeIdx + 1;
+                        continue;
+                    }
+                    if (isV3) {
+                        out += formatV3WeightSyntax(convertedInner, weight);
+                    } else if (Math.abs(weight - 1.0) < 1e-6) {
+                        out += convertedInner;
+                    } else {
+                        out += `${formatWeightNumber(weight)}::${convertedInner}::`;
+                    }
+                    i = closeIdx + 1;
+                    continue;
+                }
+
+                out += `(${convertNovelAIWeightSyntax(inner, modelFamily)})`;
+                i = closeIdx + 1;
+                continue;
+            }
+        }
+
+        out += text[i];
+        i++;
+    }
+
+    return out;
+}
+
+/** 提示词轮询候选池解析结果 */
+export interface ResolvedPromptPollingResult {
+    readonly isPolling: boolean;
+    readonly hasExplicitPool: boolean;
+    readonly candidates: PresetItem<PromptPresetData>[];
+    readonly missingEntries: PromptPollingPoolItem[];
+}
+
+/**
+ * 统一解析指定绘图预设的提示词轮询候选预设列表与失效项（供预处理管线、资产校验与 UI 共用）。
+ */
+export function resolvePromptPollingCandidates(
+    store: Pick<SettingsStore, 'getPresets'>,
+    provider: ProviderType,
+    drawingPreset?: DrawingPresetData | null
+): ResolvedPromptPollingResult {
+    const isPolling = drawingPreset?.promptPresetId === PROMPT_POLLING_PRESET_ID;
+    const pool = Array.isArray(drawingPreset?.promptPollingPool)
+        ? drawingPreset.promptPollingPool
+        : [];
+    const hasExplicitPool = pool.length > 0;
+    const allPrompts =
+        typeof store.getPresets === 'function'
+            ? store.getPresets<PromptPresetData>('prompts', provider)
+            : [];
+
+    if (!isPolling) {
+        return { isPolling: false, hasExplicitPool, candidates: [], missingEntries: [] };
+    }
+
+    if (!hasExplicitPool) {
+        return {
+            isPolling: true,
+            hasExplicitPool: false,
+            candidates: [...allPrompts],
+            missingEntries: [],
+        };
+    }
+
+    const byId = new Map(allPrompts.map((p) => [p.id, p]));
+    const byName = new Map(
+        allPrompts
+            .filter((p) => Boolean(p.name?.trim()))
+            .map((p) => [normalizePresetNameKey(p.name), p])
+    );
+
+    const candidates: PresetItem<PromptPresetData>[] = [];
+    const seenIds = new Set<string>();
+    const missingEntries: PromptPollingPoolItem[] = [];
+
+    for (const entry of pool) {
+        if (!entry) continue;
+        const matched =
+            byId.get(entry.presetId) ??
+            (entry.presetName ? byName.get(normalizePresetNameKey(entry.presetName)) : undefined);
+        if (!matched) {
+            missingEntries.push(entry);
+            continue;
+        }
+        if (entry.enabled !== false && !seenIds.has(matched.id)) {
+            seenIds.add(matched.id);
+            candidates.push(matched);
+        }
+    }
+
+    return {
+        isPolling: true,
+        hasExplicitPool: true,
+        candidates,
+        missingEntries,
+    };
+}
+
+/**
+ * 解析当前生效绘图预设用于资产/LoRA 校验的关联提示词预设列表（统一支持固定预设与轮询模式）。
+ */
+export function resolveEffectivePromptPresetsForValidation(
+    store: Pick<SettingsStore, 'getPreset' | 'getPresets'>,
+    provider: ProviderType,
+    drawingPreset?: DrawingPresetData | null
+): PromptPresetData[] {
+    const pid = drawingPreset?.promptPresetId;
+    if (!pid) return [];
+    if (pid === PROMPT_POLLING_PRESET_ID) {
+        return resolvePromptPollingCandidates(store, provider, drawingPreset).candidates.map(
+            (item) => item.data
+        );
+    }
+    const pp = store.getPreset<PromptPresetData>('prompts', pid, provider);
+    return pp ? [pp.data] : [];
 }
 
 /**
@@ -410,6 +675,7 @@ export interface BuildPromptOptions {
  */
 export class PromptPipeline {
     private readonly _settingsStore: SettingsStore;
+    private readonly _lastPolledByProvider = new Map<ProviderType, string>();
 
     public constructor(settingsStoreInstance?: SettingsStore) {
         this._settingsStore = settingsStoreInstance ?? settingsStore;
@@ -477,10 +743,15 @@ export class PromptPipeline {
         positive = applyMaterialMacros(positive);
         negative = applyMaterialMacros(negative);
 
-        // 4. 解析绑定的提示词预设 (PromptPresetData)
+        // 4. 解析绑定的提示词预设 (支持固定预设与轮询候选池随机触发)
         let promptPreset: PromptPresetData | undefined;
         let drawingPreset: DrawingPresetData | undefined;
-        let promptPresetId = params.promptPresetId as string | undefined;
+        let resolvedPromptPresetId: string | undefined;
+        let resolvedPromptPresetName: string | undefined;
+        let promptPresetId =
+            typeof params.promptPresetId === 'string' && params.promptPresetId.trim()
+                ? params.promptPresetId.trim()
+                : undefined;
         if (provider) {
             const explicitDrawingId =
                 typeof params.drawingPresetId === 'string' && params.drawingPresetId.trim()
@@ -495,12 +766,40 @@ export class PromptPipeline {
                 promptPresetId = drawingPreset?.promptPresetId;
             }
         }
-        if (promptPresetId) {
+        if (promptPresetId === PROMPT_POLLING_PRESET_ID) {
+            if (provider) {
+                const pollingInfo = resolvePromptPollingCandidates(
+                    this._settingsStore,
+                    provider,
+                    drawingPreset
+                );
+                if (pollingInfo.hasExplicitPool && pollingInfo.candidates.length === 0) {
+                    throw new Error(
+                        '提示词轮询池中暂无已启用的有效预设，请在生图设置的轮询面板中勾选至少一项提示词预设'
+                    );
+                }
+                if (pollingInfo.candidates.length > 0) {
+                    const lastId = this._lastPolledByProvider.get(provider);
+                    const pickPool =
+                        pollingInfo.candidates.length >= 2 && lastId
+                            ? pollingInfo.candidates.filter((c) => c.id !== lastId)
+                            : pollingInfo.candidates;
+                    const poolToUse = pickPool.length > 0 ? pickPool : pollingInfo.candidates;
+                    const chosen = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+                    this._lastPolledByProvider.set(provider, chosen.id);
+                    promptPreset = chosen.data;
+                    resolvedPromptPresetId = chosen.id;
+                    resolvedPromptPresetName = chosen.name;
+                }
+            }
+        } else if (promptPresetId) {
             const pp = this._settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId, provider);
             if (!pp) {
                 throw new Error(`关联的提示词预设已失效或不存在 (ID: ${promptPresetId})，请重新选择预设`);
             }
             promptPreset = pp.data;
+            resolvedPromptPresetId = pp.id;
+            resolvedPromptPresetName = pp.name;
         }
 
         // 5. 应用提示词预设（前缀、后缀、负向词基底，同样支持本地素材宏展开）
@@ -553,13 +852,15 @@ export class PromptPipeline {
             logger.warn(`未找到角色/服装宏定义：${uniqueUnresolved.map((m) => `$${m}$`).join(', ')}`);
         }
 
-        // 7. 若为 NovelAI，按需将圆括号权重语法 (tag:1.2) 转换为花括号/方括号语法
+        // 7. 若为 NovelAI，按模型族转换权重语法（V4/V4.5/V5 默认转为原生 weight::tag::；V3 兼容转为 {}/[]）
         if (provider === 'novelai') {
             const enableConvertSyntax = (params.convertSyntax ?? drawingPreset?.convertSyntax) !== false;
             if (enableConvertSyntax) {
-                positive = convertWeightToBrackets(positive);
+                const resolvedModel = resolveNovelAIModelName(params, drawingPreset);
+                const modelFamily = resolveNovelAIModelFamily(resolvedModel);
+                positive = convertNovelAIWeightSyntax(positive, modelFamily);
                 if (negative) {
-                    negative = convertWeightToBrackets(negative);
+                    negative = convertNovelAIWeightSyntax(negative, modelFamily);
                 }
             }
         }
@@ -583,6 +884,8 @@ export class PromptPipeline {
             rawNegativePrompt: rawNegativeInput || undefined,
             sourceImage: options.sourceImage ?? (params.sourceImage as Blob | string | undefined),
             maskImage: options.maskImage ?? (params.maskImage as Blob | string | undefined),
+            resolvedPromptPresetId,
+            resolvedPromptPresetName,
             parameters: options.parameters,
         };
     }
