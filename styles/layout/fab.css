@@ -78,10 +78,10 @@
     box-sizing: border-box;
 }
 
-/* 星光环绕轨道容器（仅在 is-busy + starlight 时显示） */
+/* 星光拖尾环绕轨道容器（与 ::before 保持同心半径与同周期旋转，仅在 is-busy + starlight 时显示） */
 .da-fab-effects {
     position: absolute;
-    inset: -7px;
+    inset: -3px;
     border-radius: 50%;
     pointer-events: none;
     opacity: 0;
@@ -89,7 +89,9 @@
 }
 
 .da-fab-orbit {
-    position: relative;
+    position: absolute;
+    inset: 0;
+    display: block;
     width: 100%;
     height: 100%;
     border-radius: 50%;
@@ -109,42 +111,71 @@
         0% 50%,
         38% 38%
     );
-    filter: drop-shadow(0 0 4px rgba(var(--da-accent-rgb, 203, 166, 247), 0.85));
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 3px rgba(var(--da-accent-rgb, 203, 166, 247), 0.9));
 }
 
 .da-fab-star--1 {
-    top: 2px;
+    top: 2%;
     left: 50%;
-    width: 11px;
-    height: 11px;
-    animation: da-fab-star-twinkle 1.6s var(--da-ease) infinite;
+    width: 9px;
+    height: 9px;
+    opacity: 1;
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) infinite;
 }
 
 .da-fab-star--2 {
-    top: 74%;
-    left: 11%;
-    width: 8px;
-    height: 8px;
+    top: 4.35%;
+    left: 35.17%;
+    width: 6px;
+    height: 6px;
+    opacity: 0.88;
     background: var(--da-accent-color, #cba6f7);
-    animation: da-fab-star-twinkle 1.6s var(--da-ease) 0.53s infinite;
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.25s infinite;
 }
 
 .da-fab-star--3 {
-    top: 74%;
-    left: 89%;
-    width: 7px;
-    height: 7px;
+    top: 11.17%;
+    left: 21.79%;
+    width: 4.5px;
+    height: 4.5px;
+    opacity: 0.65;
     background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
-    animation: da-fab-star-twinkle 1.6s var(--da-ease) 1.06s infinite;
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.5s infinite;
 }
 
-/* 动效 1: 星光环绕 (starlight，默认) */
+.da-fab-star--4 {
+    top: 23.16%;
+    left: 10.21%;
+    width: 3.5px;
+    height: 3.5px;
+    opacity: 0.42;
+    background: var(--da-accent-secondary, var(--da-accent-color, #cba6f7));
+    animation: da-fab-star-twinkle 1.4s var(--da-ease) 0.75s infinite;
+}
+
+/* 动效 1: 星光环绕 (starlight，默认，贴合流光彗星尾 + 领航四星拖尾) */
 .da-fab-btn.is-busy[data-fab-effect="starlight"]::before,
 #da-fab-button.is-busy[data-fab-effect="starlight"]::before {
-    inset: -4px;
-    opacity: 0.72;
-    border: 1px dashed rgba(var(--da-accent-rgb, 203, 166, 247), 0.42);
-    animation: da-spin 9s linear infinite reverse;
+    inset: -3px;
+    padding: 2px;
+    border: none;
+    opacity: 0.95;
+    background: conic-gradient(
+        from 0deg,
+        var(--da-accent-hover, var(--da-accent-color, #cba6f7)) 0deg,
+        transparent 5deg,
+        transparent 165deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.16) 245deg,
+        rgba(var(--da-accent-rgb, 203, 166, 247), 0.58) 315deg,
+        var(--da-accent-color, #cba6f7) 348deg,
+        var(--da-accent-hover, var(--da-accent-color, #cba6f7)) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: da-spin 1.35s linear infinite;
 }
 
 .da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-effects,
@@ -154,7 +185,7 @@
 
 .da-fab-btn.is-busy[data-fab-effect="starlight"] .da-fab-orbit,
 #da-fab-button.is-busy[data-fab-effect="starlight"] .da-fab-orbit {
-    animation: da-spin 2.8s linear infinite;
+    animation: da-spin 1.35s linear infinite;
 }
 
 /* 动效 2: 流光环绕 (orbit-ring) */

@@ -74,6 +74,10 @@ export interface GenerationRequest {
     readonly sourceImage?: Blob | string;
     /** 局部重绘遮罩蒙版（Blob 二进制流或 Base64 字符串，白色重绘，黑色保留） */
     readonly maskImage?: Blob | string;
+    /** 本次预处理实际命中的提示词预设 ID（含轮询抽取结果） */
+    readonly resolvedPromptPresetId?: string;
+    /** 本次预处理实际命中的提示词预设名称（含轮询抽取结果） */
+    readonly resolvedPromptPresetName?: string;
     /** 单次调用的可选覆盖参数，常规超参数优先从预设加载 */
     readonly parameters?: GenerationParameters;
 }

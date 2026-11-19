@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "totalEntries": 150658,
+  "packs": [
+    {
+      "id": "general-meta-1",
+      "fileName": "general-meta-1.csv",
+      "displayName": "通用标签词库 1",
+      "entryCount": 6592
+    },
+    {
+      "id": "general-meta-2",
+      "fileName": "general-meta-2.csv",
+      "displayName": "通用标签词库 2",
+      "entryCount": 9889
+    },
+    {
+      "id": "general-meta-3",
+      "fileName": "general-meta-3.csv",
+      "displayName": "通用标签词库 3",
+      "entryCount": 16480
+    },
+    {
+      "id": "copyright",
+      "fileName": "copyright.csv",
+      "displayName": "作品出处词库",
+      "entryCount": 9965
+    },
+    {
+      "id": "character-1",
+      "fileName": "character-1.csv",
+      "displayName": "角色名称词库 1",
+      "entryCount": 8819
+    },
+    {
+      "id": "character-2",
+      "fileName": "character-2.csv",
+      "displayName": "角色名称词库 2",
+      "entryCount": 13229
+    },
+    {
+      "id": "character-3",
+      "fileName": "character-3.csv",
+      "displayName": "角色名称词库 3",
+      "entryCount": 22048
+    },
+    {
+      "id": "artist-1",
+      "fileName": "artist-1.csv",
+      "displayName": "画师名称词库 1",
+      "entryCount": 12727
+    },
+    {
+      "id": "artist-2",
+      "fileName": "artist-2.csv",
+      "displayName": "画师名称词库 2",
+      "entryCount": 19091
+    },
+    {
+      "id": "artist-3",
+      "fileName": "artist-3.csv",
+      "displayName": "画师名称词库 3",
+      "entryCount": 31818
+    }
+  ]
+}

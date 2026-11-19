@@ -19,6 +19,14 @@ export { FAB_BUILTIN_ICONS };
 
 export type FabAnimationType = 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
 
+const VALID_FAB_ANIMATIONS: ReadonlySet<string> = new Set<FabAnimationType>([
+    'starlight',
+    'orbit-ring',
+    'aurora-pulse',
+    'ripple',
+    'none',
+]);
+
 export interface FloatingActionButtonOptions {
     onClick?: () => void;
 }
@@ -77,7 +85,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.element.classList.add('da-fab-btn', 'da-fab-entry');
         }
 
-        // 1. 内部图标容器与星光环绕装饰层
+        // 1. 内部图标容器与星光拖尾装饰层
         this.iconContainer = document.createElement('div');
         this.iconContainer.className = 'da-fab-icon';
 
@@ -87,7 +95,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
             effectsLayer.setAttribute('aria-hidden', 'true');
             const orbit = document.createElement('span');
             orbit.className = 'da-fab-orbit';
-            for (let i = 1; i <= 3; i += 1) {
+            for (let i = 1; i <= 4; i += 1) {
                 const star = document.createElement('span');
                 star.className = `da-fab-star da-fab-star--${i}`;
                 orbit.appendChild(star);
@@ -350,7 +358,11 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.element.style.opacity = String(opacity);
 
         // 3. 绘图中动效类型
-        const effectType: FabAnimationType = fab.animationType ?? 'starlight';
+        const rawEffect = fab.animationType as string | undefined;
+        const effectType: FabAnimationType =
+            rawEffect && VALID_FAB_ANIMATIONS.has(rawEffect)
+                ? (rawEffect as FabAnimationType)
+                : 'starlight';
         this.element.setAttribute?.('data-fab-effect', effectType);
 
         // 4. 图标渲染

@@ -41,13 +41,15 @@ HAIR: blonde_hair, long_hair
 FACE: blue_eyes, delicate_face
 FEATURES:
 ACCESSORIES: hair_ribbon, gold_pendant
-CHEST: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae
-TORSO: slender_arms|[clothed]collarbone|[exposed]midriff, navel|[nude]bare_shoulders, narrow_waist, navel
+NECK_SHOULDERS: |[clothed]collarbone|[nude]bare_shoulders, collarbone
+BREASTS: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae
+ABDOMEN: |[exposed]midriff, navel|[nude]narrow_waist, navel
+ARMS: slender_arms|[nude]bare_arms
 HIPS: |[exposed]gentle_hips|[nude]gentle_hips
 HANDS: slender_fingers
 LEGS: slender_legs|[nude]bare_legs, slender_thighs
 FEET: |[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes
-PRIVATES: |[nude]pussy, trimmed_pubic_hair
+GENITALS: |[nude]pussy, trimmed_pubic_hair
 </character>`;
 
 export function getHostCharacterCards(): Array<{ id: string; name: string }> {

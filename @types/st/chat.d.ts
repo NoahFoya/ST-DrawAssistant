@@ -122,6 +122,10 @@ export interface ImageGenerationMetadata {
     readonly quality?: string;
     /** OpenAI 兼容接口画面风格选项 */
     readonly style?: string;
+    /** 本次生成实际使用的提示词预设 ID（含轮询随机抽取命中项） */
+    readonly resolvedPromptPresetId?: string;
+    /** 本次生成实际使用的提示词预设名称 */
+    readonly resolvedPromptPresetName?: string;
     /** 引擎扩展参数快照 */
     readonly [key: string]: unknown;
 }

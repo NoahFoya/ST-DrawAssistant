@@ -10,6 +10,7 @@ export * from './url-pool';
 export * from './image-storage';
 export * from './material-image-storage';
 export * from './static-preset-loader';
+export * from './static-lexicon-loader';
 export * from './local-lexicon-storage';
 export * from './settings-store';
 

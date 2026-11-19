@@ -56,6 +56,8 @@ const NON_REUSABLE_META_KEYS = new Set([
     'imageId',
     'chatId',
     'remotePath',
+    'resolvedPromptPresetId',
+    'resolvedPromptPresetName',
 ]);
 
 /** 已归类映射的已知元数据字段 */
@@ -417,6 +419,11 @@ export class ImageInfoModal implements Disposable {
             pushIfPresent(modelEntries, '附加模型', joined, { wide: true });
         }
         pushIfPresent(modelEntries, '工作流模板', metadata.workflowId);
+        pushIfPresent(
+            modelEntries,
+            '提示词预设',
+            metadata.resolvedPromptPresetName || metadata.resolvedPromptPresetId
+        );
 
         // 3. 重绘与引擎扩展参数
         const extEntries: ParamEntry[] = [];

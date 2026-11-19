@@ -92,25 +92,6 @@
     }
 }
 
-.da-lexicon-top-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    padding: 2px 0 6px 0;
-}
-
-
-
-.da-lexicon-summary-bar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
 .da-subsection-header {
     display: flex;
     align-items: center;
@@ -126,22 +107,6 @@
     font-weight: 600;
     color: var(--da-text-secondary, rgba(255, 255, 255, 0.72));
 }
-
-.da-extra-fields-editor,
-.da-lexicon-entries-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-
-.da-lexicon-top-badges {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 
 .da-lexicon-files-list {
     display: flex;
@@ -184,6 +149,7 @@
     display: flex;
     align-items: center;
     margin-left: auto;
+    flex-shrink: 0;
 }
 
 .da-lexicon-filter-bar {
@@ -506,4 +472,24 @@
     min-width: 175px;
     padding: 4px;
 }
+
+.da-lexicon-file-row--unloaded .da-lexicon-file-name {
+    color: var(--da-text-secondary);
+}
+
+.da-lexicon-file-meta {
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted);
+    white-space: nowrap;
+}
+
+.da-lexicon-preset-error-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
 

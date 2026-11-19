@@ -197,6 +197,179 @@ function escapeHtml(str: string): string {
         .replace(/'/g, '&#039;');
 }
 
+const COMFY_UI_LAYOUT_ERROR =
+    '检测到当前内容为 ComfyUI Web 界面格式 (UI Layout)，非生图引擎所需的 API Prompt 格式。请在 ComfyUI 设置中开启「Enable Dev mode Options」，通过「Save (API Format)」导出后重新操作。';
+
+const AUXILIARY_MODEL_LOADER_PATTERN =
+    /(upscale|controlnet|lora|detailer|yolo|sam|bbox|ipadapter|clipvision|stylemodel|gligen|hypernetwork|embedding|facerestore|pulid|instantid|reactor|insightface)/i;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isComfyNodeEntry(value: unknown): boolean {
+    if (!isPlainRecord(value)) return false;
+    if (typeof value.class_type !== 'string' || !value.class_type.trim()) return false;
+    return value.inputs === undefined || isPlainRecord(value.inputs);
+}
+
+function isComfyUiLayoutObject(obj: Record<string, unknown>): boolean {
+    return Array.isArray(obj.nodes) && (Array.isArray(obj.links) || obj.version !== undefined);
+}
+
+export interface ParsedComfyWorkflowResult {
+    ok: true;
+    workflow: Record<string, unknown>;
+    extractedName?: string;
+    extraData?: Record<string, unknown>;
+}
+
+export interface ParsedComfyWorkflowError {
+    ok: false;
+    error: string;
+}
+
+/**
+ * 统一解析 ComfyUI 工作流输入（支持原生 API Prompt JSON、{ prompt } 提交体以及插件导出的 { data: { workflow } } / { workflow } / { json } 包装格式）。
+ */
+export function parseComfyWorkflowInput(
+    raw: unknown,
+    options?: { requireNodes?: boolean }
+): ParsedComfyWorkflowResult | ParsedComfyWorkflowError {
+    let root: unknown = raw;
+    if (typeof root === 'string') {
+        const trimmed = root.trim();
+        if (!trimmed) {
+            return {
+                ok: false,
+                error: options?.requireNodes ? '工作流文件内容为空' : '工作流 JSON 内容为空',
+            };
+        }
+        try {
+            root = JSON.parse(trimmed);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { ok: false, error: `JSON 语法解析错误: ${message}` };
+        }
+    }
+
+    if (!isPlainRecord(root)) {
+        return {
+            ok: false,
+            error: '无效的工作流数据：根节点必须为包含节点 ID 的 JSON 对象',
+        };
+    }
+
+    if (isComfyUiLayoutObject(root)) {
+        return { ok: false, error: COMFY_UI_LAYOUT_ERROR };
+    }
+
+    let extractedName =
+        typeof root.name === 'string' && root.name.trim() ? root.name.trim() : undefined;
+    let extraData: Record<string, unknown> | undefined;
+    let target: unknown = root;
+
+    const parseJsonField = (val: unknown): { ok: true; value: unknown } | { ok: false; error: string } => {
+        if (typeof val === 'string') {
+            try {
+                return { ok: true, value: JSON.parse(val) };
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                return { ok: false, error: `解析嵌套工作流 JSON 失败: ${message}` };
+            }
+        }
+        return { ok: true, value: val };
+    };
+
+    // 1. 解包标准插件预设 { data: { workflow | json } } 或直包 { workflow | json | prompt }
+    if (isPlainRecord(root.data)) {
+        if ('workflow' in root.data) {
+            target = root.data.workflow;
+            const rest = { ...root.data };
+            delete rest.workflow;
+            if (Object.keys(rest).length > 0) extraData = rest;
+        } else if ('json' in root.data) {
+            const parsedNested = parseJsonField(root.data.json);
+            if (!parsedNested.ok) return parsedNested;
+            target = parsedNested.value;
+        } else {
+            return {
+                ok: false,
+                error: '工作流预设格式错误：data 中未包含有效的 workflow 定义',
+            };
+        }
+    } else if ('workflow' in root) {
+        target = root.workflow;
+    } else if ('json' in root) {
+        const parsedNested = parseJsonField(root.json);
+        if (!parsedNested.ok) return parsedNested;
+        target = parsedNested.value;
+    } else if (isPlainRecord(root.prompt) && !isComfyNodeEntry(root.prompt)) {
+        target = root.prompt;
+    }
+
+    if (!isPlainRecord(target)) {
+        return {
+            ok: false,
+            error: '无效的工作流数据：解析后的工作流必须为包含节点 ID 的 Object 字典结构',
+        };
+    }
+
+    if (isComfyUiLayoutObject(target)) {
+        return { ok: false, error: COMFY_UI_LAYOUT_ERROR };
+    }
+
+    const entries = Object.entries(target);
+    if (entries.length === 0) {
+        if (options?.requireNodes) {
+            return {
+                ok: false,
+                error: '工作流文件未包含任何节点定义',
+            };
+        }
+        return { ok: true, workflow: target, extractedName, extraData };
+    }
+
+    const nodeEntries = entries.filter(([, node]) => isComfyNodeEntry(node));
+    const hasUnrelatedConfigShape =
+        'entries' in target || 'accent' in target || 'characterRules' in target || 'providers' in target;
+
+    if (nodeEntries.length === 0 || hasUnrelatedConfigShape) {
+        return {
+            ok: false,
+            error: '工作流格式错误：未识别为 ComfyUI API Prompt 节点图（请使用 Save (API Format) 导出）',
+        };
+    }
+
+    return { ok: true, workflow: target, extractedName, extraData };
+}
+
+/**
+ * 判断工作流节点字段是否适合自动匹配或推荐绑定为指定模板变量。
+ *
+ * @remarks
+ * 避免 UpscaleModelLoader.model_name 抢占 %basemodel_name%，
+ * 并避免 UltimateSDUpscale 等后处理放大节点的 denoise 被 %denoise% 覆盖。
+ */
+export function isWorkflowFieldEligibleForVariable(
+    variable: string,
+    classType: string,
+    field: string
+): boolean {
+    const fieldLower = field.toLowerCase();
+    const classLower = (classType || '').toLowerCase();
+
+    if (variable === '%basemodel_name%' && fieldLower === 'model_name') {
+        return !AUXILIARY_MODEL_LOADER_PATTERN.test(classLower);
+    }
+
+    if (variable === '%denoise%' && fieldLower === 'denoise') {
+        return classLower.includes('sampler') && !classLower.includes('upscale');
+    }
+
+    return true;
+}
+
 /**
  * 快速检测给定工作流 JSON 中是否包含 WeiLin 扩展节点。
  *
@@ -204,32 +377,22 @@ function escapeHtml(str: string): string {
  * 客观限制说明：
  * ComfyUI 原生 API 提示词格式不支持直接解析 `<lora:...>` 文本语法动态加载模型。
  * 在 ComfyUI 流程中实现提示词文本级动态 LoRA 解析与权重调节，必须在工作流中接入
- * `ComfyUI-WeiLin` 节点插件（如 ComfyUI_WeiLin_Lora 等节点）。
+ * `WeiLin` 节点插件（如 `WeiLinPromptUI` / `weilin-comfyui-tools` 等节点）。
  * 本函数通过扫描节点的 class_type 与 title 是否包含 weilin 标识，判断是否需要对用户提示依赖安装。
  */
 export function hasWeilinNodeInWorkflow(jsonStr: string): boolean {
     if (!jsonStr || typeof jsonStr !== 'string') return false;
-    try {
-        const parsed = JSON.parse(jsonStr.trim()) as Record<string, unknown>;
-        if (!parsed || typeof parsed !== 'object') return false;
-        // 支持解包嵌套的 { data: { json } } 或 { json }
-        const target = (parsed.data as { json?: string })?.json
-            ? JSON.parse((parsed.data as { json: string }).json)
-            : parsed.json && typeof parsed.json === 'string'
-              ? JSON.parse(parsed.json)
-              : parsed;
+    const parsed = parseComfyWorkflowInput(jsonStr);
+    if (!parsed.ok) return false;
 
-        if (!target || typeof target !== 'object' || Array.isArray(target)) return false;
-
-        return Object.values(target).some((node) => {
-            if (!node || typeof node !== 'object') return false;
-            const classType = (node as { class_type?: string }).class_type || '';
-            const title = (node as { _meta?: { title?: string } })._meta?.title || '';
-            return /weilin/i.test(classType) || /weilin/i.test(title);
-        });
-    } catch {
-        return false;
-    }
+    return Object.values(parsed.workflow).some((node) => {
+        if (!isPlainRecord(node)) return false;
+        const classType = typeof node.class_type === 'string' ? node.class_type : '';
+        const title = isPlainRecord(node._meta) && typeof node._meta.title === 'string'
+            ? node._meta.title
+            : '';
+        return /weilin/i.test(classType) || /weilin/i.test(title);
+    });
 }
 
 /** 扫描与格式化 ComfyUI 工作流时的原始节点结构模型 */
@@ -252,83 +415,18 @@ interface WorkflowNodeItem {
  * 5. 单次绑定策略：每类宏变量优先绑定首个有效匹配节点，避免复合节点重复覆盖。
  */
 export function analyzeAndReplaceWorkflowVariables(jsonStr: string): WorkflowAnalysisResult {
-    let parsed: Record<string, unknown>;
-    try {
-        parsed = JSON.parse((jsonStr || '').trim()) as Record<string, unknown>;
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+    const parsedRes = parseComfyWorkflowInput(jsonStr);
+    if (!parsedRes.ok) {
         return {
             success: false,
-            error: `JSON 语法解析错误: ${message}`,
+            error: parsedRes.error,
             formattedJson: jsonStr,
             replaced: [],
             unmatched: []
         };
     }
 
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return {
-            success: false,
-            error: '无效的工作流数据：根节点必须为包含节点 ID 的 Object 结构',
-            formattedJson: jsonStr,
-            replaced: [],
-            unmatched: []
-        };
-    }
-
-    // 解包外层嵌套预设结构 (如 { data: { json: ... } } 或 { json: ... })
-    const parsedRecord = parsed as Record<string, unknown>;
-    const nestedData = parsedRecord.data as { json?: unknown } | undefined;
-    if (nestedData?.json && typeof nestedData.json === 'string') {
-        try {
-            parsed = JSON.parse(nestedData.json) as Record<string, unknown>;
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return {
-                success: false,
-                error: `解析嵌套工作流 JSON 失败: ${message}`,
-                formattedJson: jsonStr,
-                replaced: [],
-                unmatched: []
-            };
-        }
-    } else if (parsedRecord.json && typeof parsedRecord.json === 'string') {
-        try {
-            parsed = JSON.parse(parsedRecord.json) as Record<string, unknown>;
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return {
-                success: false,
-                error: `解析嵌套工作流 JSON 失败: ${message}`,
-                formattedJson: jsonStr,
-                replaced: [],
-                unmatched: []
-            };
-        }
-    }
-
-    // 二次解包校验
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return {
-            success: false,
-            error: '无效的工作流数据：解析后的根节点必须为包含节点 ID 的 Object 字典结构',
-            formattedJson: jsonStr,
-            replaced: [],
-            unmatched: []
-        };
-    }
-
-    // 检测是否为 ComfyUI Web UI 保存格式 (包含 nodes 与 links 布局数组)
-    const targetObj = parsed as Record<string, unknown>;
-    if (Array.isArray(targetObj.nodes) && (Array.isArray(targetObj.links) || targetObj.version !== undefined)) {
-        return {
-            success: false,
-            error: '检测到当前内容为 ComfyUI Web 界面格式 (UI Layout)，非生图引擎所需的 API Prompt 格式。请在 ComfyUI 设置中开启「Enable Dev mode Options」，通过「Save (API Format)」导出后重新粘贴。',
-            formattedJson: jsonStr,
-            replaced: [],
-            unmatched: []
-        };
-    }
+    const parsed = structuredClone(parsedRes.workflow);
 
     // 1. 建立采样节点的正负向条件连接索引，区分 text 输入项归属
     const positiveNodeIds = new Set<string>();
@@ -399,6 +497,10 @@ export function analyzeAndReplaceWorkflowVariables(jsonStr: string): WorkflowAna
                 // 若已判定极性偏好，跳过另一侧提示词变量
                 if (preferredVar && (item.variable === '%prompt%' || item.variable === '%negative_prompt%')) {
                     if (item.variable !== preferredVar) continue;
+                }
+
+                if (!isWorkflowFieldEligibleForVariable(item.variable, classType, field)) {
+                    continue;
                 }
 
                 const isMatch = item.matchKeys.some((k: string) => fieldLower === k.toLowerCase());
@@ -868,11 +970,10 @@ export class WorkflowCard implements UIComponent {
             this.onChangeCallback?.(this.currentData);
             mutatedState = true;
         } else if (action === 'save' || action === 'saveAs') {
-            try {
-                JSON.parse((this.currentData.json || '').trim() || '{}');
-            } catch {
+            const parsedRes = parseComfyWorkflowInput((this.currentData.json || '').trim() || '{}');
+            if (!parsedRes.ok) {
                 Toast.show(
-                    `工作流${action === 'saveAs' ? '另存为' : '保存'}失败：JSON 语法错误`,
+                    `工作流${action === 'saveAs' ? '另存为' : '保存'}失败：${parsedRes.error}`,
                     { level: 'error' }
                 );
                 return false;
@@ -912,6 +1013,9 @@ export class WorkflowCard implements UIComponent {
             }
             this.baselineJson = this.currentData.json;
             this.toolbar.setDirty(false);
+        } else if (action === 'saveAs') {
+            this.baselineJson = this.currentData.json;
+            this.toolbar.setDirty(false);
         }
         return true;
     }
@@ -922,7 +1026,7 @@ export class WorkflowCard implements UIComponent {
         this.weilinNoticeEl.style.display = hasWeilin ? 'flex' : 'none';
     }
 
-    /** 检查 JSON 语法状态并切换 invalid 样式类 */
+    /** 检查 JSON 语法与 ComfyUI API 工作流结构状态并切换 invalid 样式类 */
     private checkJsonState(val: string): void {
         const trimmed = (val || '').trim();
         if (!trimmed) {
@@ -931,14 +1035,13 @@ export class WorkflowCard implements UIComponent {
             return;
         }
 
-        try {
-            JSON.parse(trimmed);
+        const parsedRes = parseComfyWorkflowInput(trimmed);
+        if (parsedRes.ok) {
             this.textareaElement.classList.remove('is-invalid');
             this.textareaElement.removeAttribute('title');
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
+        } else {
             this.textareaElement.classList.add('is-invalid');
-            this.textareaElement.title = `已失效：JSON 语法错误 (${message})`;
+            this.textareaElement.title = `已失效：${parsedRes.error}`;
         }
     }
 

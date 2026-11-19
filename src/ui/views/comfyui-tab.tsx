@@ -17,6 +17,7 @@ import {
     DimensionPickerView,
     SamplerCardView,
     PresetToolbarView,
+    PromptPollingPanelView,
 } from '../framework';
 import { ProviderTabViewModel } from '../viewmodels';
 import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
@@ -179,6 +180,8 @@ export class ComfyUITabView extends ProviderTabView {
                         invalidFields={invalidFields}
                         onFieldChange={(key, val) => presetController.updateDraft(key, val)}
                     />
+
+                    <PromptPollingPanelView vm={this.vm} />
 
                     <div className="da-section-banner">
                         <span className="da-section-banner__title">模型配置</span>

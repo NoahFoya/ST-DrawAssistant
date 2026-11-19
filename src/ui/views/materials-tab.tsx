@@ -23,7 +23,13 @@ import type {
 } from '@types';
 import { PreactSettingsView, SegmentedControlView } from '../framework';
 import type { PresetActionType } from '../composite';
-import { PresetController } from '../viewmodels';
+import {
+    PresetController,
+    resolveUniquePresetName,
+    sanitizeImportedObject,
+    stripJsonExtension,
+    validatePresetPayloadForCategory,
+} from '../viewmodels';
 import { bindDelegatedTagAutocomplete } from '../composite/tag-autocomplete';
 import type { Disposable } from '../types';
 import { settingsStore, normalizePresetNameKey } from '../../store/settings-store';
@@ -317,10 +323,25 @@ export class MaterialsTabView extends PreactSettingsView {
         this.unlistenSettings = eventBus.on('settings:updated', (data) => {
             if (
                 !data.key ||
+                data.isReset ||
                 data.key === 'materialConfig' ||
                 data.keys?.includes('materialConfig')
             ) {
                 this.materialConfigSignal.value = settingsStore.get('materialConfig');
+            }
+            if (!data.key || data.isReset) {
+                for (const ctrl of [
+                    this.charController,
+                    this.outfitController,
+                    this.activationController,
+                    this.extractionController,
+                    this.formatController,
+                ]) {
+                    if (!ctrl.isDirty.value) {
+                        ctrl.reloadFromStore();
+                    }
+                }
+                this.syncVisibleAvatars();
             }
         });
 
@@ -413,6 +434,11 @@ export class MaterialsTabView extends PreactSettingsView {
 
     public override dispose(): void {
         this.isDisposedView = true;
+        this.charController.dispose();
+        this.outfitController.dispose();
+        this.activationController.dispose();
+        this.extractionController.dispose();
+        this.formatController.dispose();
         if (this.autocompleteDelegation) {
             this.autocompleteDelegation.dispose();
             this.autocompleteDelegation = null;
@@ -853,8 +879,10 @@ export class MaterialsTabView extends PreactSettingsView {
      */
     public async importMaterialJson(
         kind: 'character' | 'outfit',
-        rawJsonText: string
+        rawJsonText: string,
+        fallbackFileName?: string
     ): Promise<void> {
+        if (this.isDisposedView) return;
         let parsed: Record<string, unknown>;
         try {
             parsed = JSON.parse(rawJsonText) as Record<string, unknown>;
@@ -862,46 +890,72 @@ export class MaterialsTabView extends PreactSettingsView {
             const message = err instanceof Error ? err.message : String(err);
             throw new Error(`文件内容非有效 JSON 格式: ${message}`);
         }
-        if (!parsed || typeof parsed !== 'object' || !parsed.data || typeof parsed.data !== 'object') {
+        if (
+            !parsed ||
+            typeof parsed !== 'object' ||
+            Array.isArray(parsed) ||
+            !parsed.data ||
+            typeof parsed.data !== 'object' ||
+            Array.isArray(parsed.data)
+        ) {
             throw new Error('预设文件格式错误：缺少有效的 data 对象');
         }
 
-        const rawData = parsed.data as Record<string, unknown>;
+        const rawData = sanitizeImportedObject(parsed.data as Record<string, unknown>);
+        const validationError = validatePresetPayloadForCategory(
+            kind === 'character' ? 'characters' : 'outfits',
+            rawData
+        );
+        if (validationError) {
+            throw new Error(validationError);
+        }
+
         const embeddedDataUrl =
             typeof rawData[EMBEDDED_AVATAR_FIELD] === 'string'
                 ? (rawData[EMBEDDED_AVATAR_FIELD] as string)
                 : '';
 
         const ctrl = kind === 'character' ? this.charController : this.outfitController;
+        if (ctrl.isDirty.value) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '导入预设确认',
+                message:
+                    '当前档案存在未保存的修改，导入并切换新档案将放弃当前未保存修改。是否确定继续导入？',
+            });
+            if (!confirmed || this.isDisposedView) return;
+        }
+
         const list = ctrl.fetchPresetsList();
         const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
+        const cleanFileBase = stripJsonExtension(fallbackFileName);
+        const fallbackName = kind === 'character' ? '导入角色' : '导入服装';
         const baseName =
             (typeof parsed.name === 'string' && parsed.name.trim()) ||
             (typeof rawData.name === 'string' && rawData.name.trim()) ||
-            (kind === 'character' ? '导入角色' : '导入服装');
+            cleanFileBase ||
+            fallbackName;
 
-        let finalName = baseName;
-        if (existingNames.has(normalizePresetNameKey(baseName))) {
-            const negotiated = await ConfirmDialog.prompt({
-                title: '导入预设名称冲突',
-                message: `已存在同名预设「${baseName}」，请指定一个新名称:`,
-                defaultValue: `${baseName} (导入)`,
-                placeholder: '请输入唯一的预设名称',
-                validator: (val) =>
-                    existingNames.has(normalizePresetNameKey(val))
-                        ? '预设名称已存在，请换一个名称'
-                        : null,
-            });
-            if (!negotiated || !negotiated.trim()) return;
-            finalName = negotiated.trim();
-        }
+        const finalName = await resolveUniquePresetName(
+            baseName,
+            existingNames,
+            fallbackName
+        );
+        if (!finalName || this.isDisposedView) return;
 
         let resolvedAvatarId = '';
         if (embeddedDataUrl.startsWith('data:image/')) {
             resolvedAvatarId =
                 (await materialImageStorage.importAvatarFromDataUrl(embeddedDataUrl)) ?? '';
+            if (this.isDisposedView) {
+                if (resolvedAvatarId) {
+                    void materialImageStorage.deleteAvatar(resolvedAvatarId);
+                }
+                return;
+            }
         }
 
+        const unsavedDraftAvatar = ctrl.draftConfig.value?.avatarId || '';
+        const baseDraftAvatar = ctrl.baselineSnapshot.value?.avatarId || '';
         const newId = this.generateUniqueMaterialId(kind);
         try {
             if (kind === 'character') {
@@ -942,12 +996,18 @@ export class MaterialsTabView extends PreactSettingsView {
                 this.outfitController.applyActivePreset(newId);
             }
         } catch (err: unknown) {
+            if (resolvedAvatarId) {
+                void materialImageStorage.deleteAvatar(resolvedAvatarId);
+            }
             Toast.show(err instanceof Error ? err.message : '导入预设保存失败', {
                 level: 'error',
             });
             return;
         }
 
+        if (unsavedDraftAvatar && unsavedDraftAvatar !== baseDraftAvatar) {
+            this.releaseAvatarIfUnused(unsavedDraftAvatar);
+        }
         if (resolvedAvatarId) {
             this.ensureAvatarLoaded(resolvedAvatarId);
         }
@@ -964,14 +1024,17 @@ export class MaterialsTabView extends PreactSettingsView {
 
         const reader = new FileReader();
         reader.onload = () => {
-            void this.importMaterialJson(kind, String(reader.result || '')).catch(
+            if (this.isDisposedView) return;
+            void this.importMaterialJson(kind, String(reader.result || ''), file.name).catch(
                 (err: unknown) => {
+                    if (this.isDisposedView) return;
                     const message = err instanceof Error ? err.message : String(err);
                     Toast.show(`导入解析失败: ${message}`, { level: 'error' });
                 }
             );
         };
         reader.onerror = () => {
+            if (this.isDisposedView) return;
             Toast.show('读取导入文件失败', { level: 'error' });
         };
         reader.readAsText(file);

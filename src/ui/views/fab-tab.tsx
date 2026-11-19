@@ -124,7 +124,12 @@ export class FabTabView extends PreactSettingsView {
         const opacity = fab?.opacity ?? 0.95;
         const opacityPct = Math.round(opacity * 100);
         const currentIcon = (fab?.icon as string) || 'palette';
-        const currentAnim: FabAnimationOption = fab?.animationType ?? 'starlight';
+        const rawAnim = fab?.animationType as string | undefined;
+        const currentAnim: FabAnimationOption = FAB_ANIMATION_OPTIONS.some(
+            (opt) => opt.value === rawAnim
+        )
+            ? (rawAnim as FabAnimationOption)
+            : 'starlight';
         const isCustom = this.isCustomIcon(currentIcon);
 
         return (

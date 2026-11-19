@@ -11,7 +11,7 @@
 import { signal, type Signal } from '@preact/signals';
 import { useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
-import { PreactSettingsView, ButtonControl } from '../framework';
+import { PreactSettingsView, ButtonControl, OfficialPresetSyncCardView } from '../framework';
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
@@ -497,7 +497,13 @@ export class AboutTabView extends PreactSettingsView {
                     </div>
                 </div>
 
-                {/* 分组 2: 配置备份与恢复 */}
+                {/* 分组 2: 官方预设快速同步 */}
+                <div className="da-settings-section">
+                    <h3 className="da-settings-section__title">官方预设快速同步</h3>
+                    <OfficialPresetSyncCardView />
+                </div>
+
+                {/* 分组 3: 配置备份与恢复 */}
                 <div className="da-settings-section">
                     <h3 className="da-settings-section__title">配置备份与恢复</h3>
                     <div className="da-settings-group">

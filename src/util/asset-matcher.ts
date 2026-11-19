@@ -122,6 +122,8 @@ export interface ValidatePresetAssetsOptions {
     drawingPreset?: DrawingPresetData | null;
     /** 当前引用的提示词预设数据 */
     promptPreset?: PromptPresetData | null;
+    /** 多候选提示词预设列表（如轮询池，优先与 promptPreset 合并校验 LoRA） */
+    promptPresets?: ReadonlyArray<PromptPresetData | null | undefined>;
     /** 服务端已同步的资产缓存快照 */
     assetCache?: ProviderAssetCache | null;
     /** 当前激活的服务提供方类型 */
@@ -145,7 +147,7 @@ export interface PresetAssetValidationResult {
 export function validatePresetAssets(
     options: ValidatePresetAssetsOptions
 ): PresetAssetValidationResult {
-    const { drawingPreset, promptPreset, assetCache, providerType } = options;
+    const { drawingPreset, assetCache, providerType } = options;
     const missing: string[] = [];
 
     const knownCheckpoints = assetCache?.checkpoints || [];
@@ -187,14 +189,33 @@ export function validatePresetAssets(
         }
     }
 
-    // 4. LoRA 模型校验
-    if (promptPreset?.loras && promptPreset.loras.length > 0) {
+    // 4. LoRA 模型校验（合并单预设与轮询候选池）
+    const promptPresetsToCheck: PromptPresetData[] = [];
+    if (options.promptPreset) {
+        promptPresetsToCheck.push(options.promptPreset);
+    }
+    if (options.promptPresets) {
+        for (const p of options.promptPresets) {
+            if (p) promptPresetsToCheck.push(p);
+        }
+    }
+    if (promptPresetsToCheck.length > 0) {
         const knownLoras = assetCache?.loras;
         if (knownLoras && knownLoras.length > 0) {
-            for (const lora of promptPreset.loras) {
-                const loraModel = (lora.modelName || '').trim();
-                if (lora.enabled !== false && loraModel && !matchAssetText(loraModel, knownLoras)) {
-                    missing.push(`LoRA: ${loraModel}`);
+            const seenMissingLoras = new Set<string>();
+            for (const presetItem of promptPresetsToCheck) {
+                if (!presetItem.loras || presetItem.loras.length === 0) continue;
+                for (const lora of presetItem.loras) {
+                    const loraModel = (lora.modelName || '').trim();
+                    if (
+                        lora.enabled !== false &&
+                        loraModel &&
+                        !matchAssetText(loraModel, knownLoras) &&
+                        !seenMissingLoras.has(loraModel)
+                    ) {
+                        seenMissingLoras.add(loraModel);
+                        missing.push(`LoRA: ${loraModel}`);
+                    }
                 }
             }
         }

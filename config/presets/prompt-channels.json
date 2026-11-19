@@ -21,6 +21,28 @@
           }
         ]
       }
+    },
+    {
+      "id": "prompt_story_novelai",
+      "name": "NovelAI 故事插画预设 (V4/V4.5)",
+      "description": "面向 NovelAI Diffusion V4 / V4.5：兼容 Danbooru 词表与宏体系，支持场景自然短语与原生 weight::...:: 权重",
+      "data": {
+        "entries": [
+          {
+            "id": "story_core_rule_nai",
+            "name": "核心|NAI插图规则",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 10,
+            "content": "<image_generation_instruction>\n绘画指令：推进剧情时，根据画面需要为合适的场景（通常 1 至 3 处）输出插画。在对应剧情段落下方先输出闭合的 `<imagethink>...</imagethink>`，再另起一行输出 `image###...###`。\n\n## 1. 选图时机、景别与 `<imagethink>`\n- 优先选图时机：场景或氛围切换、角色首次登场或外貌穿搭变化、关键动作或情绪转折。\n- 景别参考：神态与面部或上半身互动优先用 `close-up` / `portrait` / `upper_body`；完整穿搭、动作或大场景优先用 `cowboy_shot` / `full_body` / `wide_shot`。\n- `<imagethink>` 依次写出四点：\n<imagethink>\n1. 构图与宏选型：确定人数（1girl / 2girls / 1girl, 1boy 等）与景别；若资料库已有该角色或服装，选定对应的 `$名称-宏-状态$`。\n2. 外貌与实时状态：确认外观与穿戴状态（整洁、敞开、撩起、半褪、湿身、破损等）及对应动态标签。\n3. 动作神情与视线：明确姿态、交互动作、表情与视线落点（looking_at_viewer / looking_away 等）。\n4. 机位、环境与光影：确定机位视角（from_above / from_below / from_side / from_behind / pov）、景别、地点道具与光线。\n</imagethink>\nimage###tag_1, tag_2, ...###\n\n## 2. 标签与权重格式\n- 优先选用词表与资料库中的标准 Danbooru 英文标签，全小写，标签间用 `, ` 分隔；原作角色与作品名保留官方写法（如 `ch'en_(arknights)`）。在描写复杂交互、特定环境与光线氛围时，可使用简洁自然的英文短语（如 `warm sunlight through windows`）。\n- 权重强调：需要重点突出或弱化特定画面元素时，采用数值权重语法 `权重::内容::`（如 `1.2::warm sunlight through windows::`、`0.8::motion blur::`）。\n- 排列顺序：`人数与作品 ➔ 外貌与穿着（或宏） ➔ 动作神情与视线 ➔ 景别与机位 ➔ 环境道具与光影`。\n- 多人同框：先写总人数与作品名，再用 `1girl` 或 `1boy` 领起各角色段落分别写外貌、穿着与独立动作，最后统一写双方交互、景别机位与环境光影。\n- 负向排除（可选）：需要临时排除特定元素时，在末尾用 ` | ` 分隔追加负向英文标签（如 `image###1girl, solo, ... | glasses, jacket###`）。\n\n## 3. 禁忌\n- 禁止输出 `masterpiece`、`best quality`、`absurdres`、`worst quality`、`lowres` 等通用画质词、年份词或 `artist:...` 画师标签。\n- 禁止中译英生造英文词；词表未收录时拆成基础 Danbooru 词根或自然短语。\n- 禁止在 `<imagethink>` 中复述剧情或罗列标签清单。\n\n## 4. 示例\n\n### 示例 1：单人七分身中景\n<imagethink>\n1. 构图与宏选型：单人七分身平视中景（1girl, solo, cowboy_shot），未调用资料库宏时以标准英文标签与环境短语描写。\n2. 外貌与实时状态：金发蓝眼少女，佩戴白色发箍与发带、金色吊坠，身着整洁的深蓝水手校服与百褶短裙。\n3. 动作神情与视线：怀抱书本，带着温和浅笑看向镜头。\n4. 机位、环境与光影：午后教学楼室内走廊，窗侧暖阳重点照亮画面。\n</imagethink>\nimage###1girl, solo, blonde_hair, long_hair, blue_eyes, hair_ribbon, gold_pendant, school_uniform, serafuku, white_headband, sailor_collar, white_shirt, red_neckerchief, blue_skirt, pleated_skirt, holding_book, light_smile, looking_at_viewer, cowboy_shot, indoor, corridor, 1.2::warm sunlight through windows::###\n\n### 示例 2：同人双人对峙\n<imagethink>\n1. 构图与宏选型：双人全身广角低机位仰拍（2girls, arknights, full_body, wide_shot, from_below）。\n2. 外貌与实时状态：陈（黑长发双丸子头、红瞳、龙角龙尾、蓝色警服外套）与塔露拉（银长发、金瞳、龙角龙尾、黑色大衣与黑裙）。\n3. 动作神情与视线：双方拔剑正面峙立、神情冷峻对视，摆出战斗架势。\n4. 机位、环境与光影：夜晚废墟场景，四周火光与飞散余烬配合强烈逆光勾勒剪影。\n</imagethink>\nimage###2girls, arknights, 1girl, ch'en_(arknights), black_hair, long_hair, double_bun, red_eyes, dragon_horns, dragon_tail, blue_jacket, police_uniform, holding_sword, fighting_stance, serious, 1girl, talulah_(arknights), silver_hair, long_hair, yellow_eyes, dragon_horns, dragon_tail, black_coat, black_dress, holding_sword, glare, confrontation, facing_another, full_body, wide_shot, from_below, night ruins, fire, flying embers, 1.25::dramatic backlighting::###\n</image_generation_instruction>"
+          }
+        ]
+      }
     }
   ],
   "prompt_character": [

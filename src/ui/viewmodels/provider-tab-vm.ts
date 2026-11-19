@@ -13,6 +13,7 @@ import { signal, computed, type Signal, type ReadonlySignal } from '@preact/sign
 import type {
     DrawingPresetData,
     PresetItem,
+    PromptPollingPoolItem,
     PromptPresetData,
     ProviderAssetCache,
     ProviderHealthResult,
@@ -20,14 +21,27 @@ import type {
     ProviderType,
     WorkflowPresetData,
 } from '@types';
+import { PROMPT_POLLING_PRESET_ID } from '../../config/constants';
+import { resolvePromptPollingCandidates } from '../../pipeline/prompt-pipeline';
 import type { Disposable } from '../types';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { AssetFetchResult, ConnectionCardData } from '../composite/connection-card';
 import type { PresetActionType } from '../composite/preset-toolbar';
 import type { PromptPresetCard, PromptCardData, PromptCardPresetItem } from '../composite/prompt-preset-card';
-import type { WorkflowCard, WorkflowCardData, WorkflowCardPresetItem } from '../composite/workflow-card';
-import { PresetController } from './preset-controller';
-import { settingsStore } from '../../store/settings-store';
+import {
+    parseComfyWorkflowInput,
+    type WorkflowCard,
+    type WorkflowCardData,
+    type WorkflowCardPresetItem,
+} from '../composite/workflow-card';
+import {
+    PresetController,
+    resolveUniquePresetName,
+    sanitizeImportedObject,
+    stripJsonExtension,
+    validatePresetPayloadForCategory,
+} from './preset-controller';
+import { normalizePresetNameKey, settingsStore } from '../../store/settings-store';
 import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { providerRegistry } from '../../provider/registry';
 import { hasProviderAssetSync } from '../../provider/base-provider';
@@ -83,6 +97,10 @@ export interface ProviderTabViewModelOptions {
     onPresetApplied?: (preset: PresetItem<DrawingPresetData> | null, draft: DrawingPresetData) => void;
     /** 草稿数据变更回调 */
     onDraftChanged?: (draft: DrawingPresetData) => void;
+}
+
+function isPlainRecord(val: unknown): val is Record<string, unknown> {
+    return Boolean(val && typeof val === 'object' && !Array.isArray(val));
 }
 
 /** 空资产缓存基准对象，用于清空或重置资产（显式将 updatedAt 设为 0，使 deepMerge 覆盖前一次同步时间戳） */
@@ -452,13 +470,21 @@ export class ProviderTabViewModel implements Disposable {
                     label: '未选择提示词预设',
                     value: '',
                 },
+                {
+                    label: '使用轮询 (随机抽取提示词预设)',
+                    value: PROMPT_POLLING_PRESET_ID,
+                },
                 ...prompts.map((p) => ({
                     label: p.name || '未命名提示词预设',
                     value: p.id,
                 })),
             ];
-            if (boundId && !prompts.some((p) => p.id === boundId)) {
-                opts.splice(1, 0, {
+            if (
+                boundId &&
+                boundId !== PROMPT_POLLING_PRESET_ID &&
+                !prompts.some((p) => p.id === boundId)
+            ) {
+                opts.splice(2, 0, {
                     label: `${boundId} (已失效)`,
                     value: boundId,
                 });
@@ -606,9 +632,18 @@ export class ProviderTabViewModel implements Disposable {
             invalid.add('clipName');
         }
 
-        // 4. 校验提示词预设绑定
+        // 4. 校验提示词预设绑定（'__polling__' 模式下校验显式池是否至少有一项有效启用条目）
         const prompts = this.promptPresets.value;
-        if (draft.promptPresetId && !prompts.some((p) => p.id === draft.promptPresetId)) {
+        if (draft.promptPresetId === PROMPT_POLLING_PRESET_ID) {
+            const pollingInfo = resolvePromptPollingCandidates(
+                settingsStore,
+                this.provider,
+                draft
+            );
+            if (pollingInfo.hasExplicitPool && pollingInfo.candidates.length === 0) {
+                invalid.add('promptPresetId');
+            }
+        } else if (draft.promptPresetId && !prompts.some((p) => p.id === draft.promptPresetId)) {
             invalid.add('promptPresetId');
         }
 
@@ -857,6 +892,16 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
+     * 更新当前绘图预设草稿的提示词轮询候选池配置。
+     */
+    public updatePromptPollingPool(pool: PromptPollingPoolItem[]): void {
+        this.presetController.updateDraft(
+            'promptPollingPool',
+            pool.map((item) => ({ ...item }))
+        );
+    }
+
+    /**
      * 刷新当前提供商专属提示词与全局工作流预设池信号。
      */
     public refreshAssetPools(): void {
@@ -890,6 +935,7 @@ export class ProviderTabViewModel implements Disposable {
         label: string;
         filePrefix: string;
         buildSaveData: (existing: TData) => TData | null;
+        buildExportData?: (existing: TData) => TData | null;
         buildNewData: () => TData;
         buildCloneData: () => TData | null;
     }, action: PresetActionType, id: string): Promise<boolean> {
@@ -911,7 +957,7 @@ export class ProviderTabViewModel implements Disposable {
             Toast.show(`${label} "${updated.name}" 已保存`, { level: 'success' });
         } else if (action === 'new' || action === 'saveAs') {
             const list = settingsStore.getPresets<TData>(category, providerScope);
-            const existingNames = new Set(list.map((p) => p.name));
+            const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
             const cur = action === 'saveAs' ? settingsStore.getPreset<TData>(category, id, providerScope) : undefined;
             const defaultName =
                 action === 'saveAs'
@@ -926,7 +972,9 @@ export class ProviderTabViewModel implements Disposable {
                 validator: (val) => {
                     const trimmed = val.trim();
                     if (!trimmed) return '预设名称不能为空';
-                    return existingNames.has(trimmed) ? '预设名称已存在，请换一个名称' : null;
+                    return existingNames.has(normalizePresetNameKey(trimmed))
+                        ? '预设名称已存在，请换一个名称'
+                        : null;
                 },
             });
             if (!newName || !newName.trim()) return false;
@@ -949,7 +997,9 @@ export class ProviderTabViewModel implements Disposable {
             if (!cur) return false;
 
             const list = settingsStore.getPresets<TData>(category, providerScope);
-            const otherNames = new Set(list.filter((p) => p.id !== id).map((p) => p.name));
+            const otherNames = new Set(
+                list.filter((p) => p.id !== id).map((p) => normalizePresetNameKey(p.name))
+            );
             const newName = await ConfirmDialog.prompt({
                 title: `重命名${label}`,
                 message: `请输入${label}新名称:`,
@@ -959,7 +1009,7 @@ export class ProviderTabViewModel implements Disposable {
                     const trimmed = val.trim();
                     if (!trimmed) return '预设名称不能为空';
                     if (trimmed === cur.name) return '新名称不能与当前名称相同';
-                    if (otherNames.has(trimmed)) return '预设名称已存在，请换一个名称';
+                    if (otherNames.has(normalizePresetNameKey(trimmed))) return '预设名称已存在，请换一个名称';
                     return null;
                 },
             });
@@ -975,8 +1025,15 @@ export class ProviderTabViewModel implements Disposable {
         } else if (action === 'export') {
             const cur = settingsStore.getPreset<TData>(category, id, providerScope);
             if (!cur) return false;
+            const exportData = cfg.buildExportData ? cfg.buildExportData(cur.data) : cur.data;
+            if (exportData === null) return false;
+            const exportPayload: PresetItem<TData> = {
+                ...cur,
+                data: exportData,
+                updatedAt: Date.now(),
+            };
             const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
-            downloadJsonFile(`${filePrefix}${safeName}.json`, cur);
+            downloadJsonFile(`${filePrefix}${safeName}.json`, exportPayload);
         } else if (action === 'delete') {
             const list = settingsStore.getPresets<TData>(category, providerScope);
             if (list.length <= 1) {
@@ -1013,6 +1070,7 @@ export class ProviderTabViewModel implements Disposable {
             draftField: 'promptPresetId' | 'txt2imgWorkflowId';
             idPrefix: string;
             label: string;
+            parsePayload?: (parsed: unknown, file: File) => { name: string; data: TData };
         }
     ): void {
         const reader = new FileReader();
@@ -1020,29 +1078,46 @@ export class ProviderTabViewModel implements Disposable {
             if (this.isDisposed) return;
             try {
                 const parsed = JSON.parse(reader.result as string);
-                if (!parsed || typeof parsed !== 'object' || !parsed.data) {
-                    throw new Error('预设文件格式错误：未包含有效的 data 配置项');
-                }
-                const list = settingsStore.getPresets<TData>(cfg.category, cfg.providerScope);
-                const existingNames = new Set(list.map((p) => p.name));
-                const baseName = parsed.name || `导入的${cfg.label}`;
+                let baseName: string;
+                let resolvedData: TData;
 
-                let finalName = baseName;
-                if (existingNames.has(baseName)) {
-                    const negotiated = await ConfirmDialog.prompt({
-                        title: '导入预设名称冲突',
-                        message: `已存在同名预设「${baseName}」，请为导入预设指定一个新名称:`,
-                        defaultValue: `${baseName} (导入)`,
-                        placeholder: '请输入唯一的预设名称',
-                        validator: (val) => {
-                    const trimmed = val.trim();
-                    if (!trimmed) return '预设名称不能为空';
-                    return existingNames.has(trimmed) ? '预设名称已存在，请换一个名称' : null;
-                },
-                    });
-                    if (!negotiated || !negotiated.trim()) return;
-                    finalName = negotiated.trim();
+                if (cfg.parsePayload) {
+                    const customRes = cfg.parsePayload(parsed, file);
+                    baseName = customRes.name;
+                    resolvedData = customRes.data;
+                } else {
+                    if (!isPlainRecord(parsed) || !isPlainRecord(parsed.data)) {
+                        throw new Error('预设文件格式错误：未包含有效的 data 配置对象');
+                    }
+                    baseName =
+                        (typeof parsed.name === 'string' && parsed.name.trim()) ||
+                        stripJsonExtension(file.name) ||
+                        `导入的${cfg.label}`;
+                    resolvedData = parsed.data as TData;
                 }
+
+                const targetCard =
+                    cfg.draftField === 'txt2imgWorkflowId'
+                        ? this.workflowCardRef
+                        : this.promptCardRef;
+                if (targetCard?.isDirty()) {
+                    const confirmed = await ConfirmDialog.confirm({
+                        title: `导入${cfg.label}确认`,
+                        message: `当前${cfg.label}存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
+                    });
+                    if (!confirmed || this.isDisposed) return;
+                }
+
+                const list = settingsStore.getPresets<TData>(cfg.category, cfg.providerScope);
+                const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
+                const fallbackName = `导入的${cfg.label}`;
+
+                const finalName = await resolveUniquePresetName(
+                    baseName,
+                    existingNames,
+                    fallbackName
+                );
+                if (!finalName || this.isDisposed) return;
 
                 const newId = this.generateAssetUniqueId(
                     cfg.category,
@@ -1052,7 +1127,7 @@ export class ProviderTabViewModel implements Disposable {
                 const importedItem: PresetItem<TData> = {
                     id: newId,
                     name: finalName,
-                    data: parsed.data as TData,
+                    data: sanitizeImportedObject(resolvedData),
                     updatedAt: Date.now(),
                 };
                 settingsStore.savePreset(cfg.category, importedItem, cfg.providerScope);
@@ -1060,11 +1135,13 @@ export class ProviderTabViewModel implements Disposable {
                 this.refreshAssetPools();
                 Toast.show(`已成功导入${cfg.label}: ${importedItem.name}`, { level: 'success' });
             } catch (err: unknown) {
+                if (this.isDisposed) return;
                 const msg = err instanceof Error ? err.message : String(err);
                 Toast.show(`导入${cfg.label}失败: ${msg}`, { level: 'error' });
             }
         };
         reader.onerror = () => {
+            if (this.isDisposed) return;
             Toast.show('读取预设文件失败', { level: 'error' });
         };
         reader.readAsText(file);
@@ -1108,6 +1185,8 @@ export class ProviderTabViewModel implements Disposable {
                 label: '提示词预设',
                 filePrefix: 'prompt_preset_',
                 buildSaveData: (existing) => buildPromptData(effectiveData, existing),
+                buildExportData: (existing) =>
+                    effectiveData ? buildPromptData(effectiveData, existing) : existing,
                 buildNewData: () => ({
                     positivePrefix: '',
                     positiveSuffix: '',
@@ -1132,6 +1211,25 @@ export class ProviderTabViewModel implements Disposable {
             draftField: 'promptPresetId',
             idPrefix: 'prompt_',
             label: '提示词预设',
+            parsePayload: (parsed, f) => {
+                if (!isPlainRecord(parsed) || !isPlainRecord(parsed.data)) {
+                    throw new Error('预设文件格式错误：未包含有效的 data 配置对象');
+                }
+                const sanitizedData = sanitizeImportedObject(
+                    parsed.data as Record<string, unknown>
+                );
+                const errMsg = validatePresetPayloadForCategory('prompts', sanitizedData);
+                if (errMsg) {
+                    throw new Error(errMsg);
+                }
+                return {
+                    name:
+                        (typeof parsed.name === 'string' && parsed.name.trim()) ||
+                        stripJsonExtension(f.name) ||
+                        '导入的提示词预设',
+                    data: sanitizedData as PromptPresetData,
+                };
+            },
         });
     }
 
@@ -1155,22 +1253,31 @@ export class ProviderTabViewModel implements Disposable {
                 label: '工作流预设',
                 filePrefix: 'workflow_preset_',
                 buildSaveData: (existing) => {
-                    try {
-                        const parsed = JSON.parse(effectiveData!.json);
-                        return { ...existing, workflow: parsed };
-                    } catch {
-                        Toast.show('工作流保存失败：JSON 语法错误', { level: 'error' });
+                    const res = parseComfyWorkflowInput(effectiveData!.json);
+                    if (!res.ok) {
+                        Toast.show(`工作流保存失败：${res.error}`, { level: 'error' });
                         return null;
                     }
+                    return { ...existing, workflow: res.workflow };
+                },
+                buildExportData: (existing) => {
+                    if (effectiveData?.json === undefined) return existing;
+                    const res = parseComfyWorkflowInput(effectiveData.json);
+                    if (!res.ok) {
+                        Toast.show(`工作流导出失败：${res.error}`, { level: 'error' });
+                        return null;
+                    }
+                    return { ...existing, workflow: res.workflow };
                 },
                 buildNewData: () => ({ workflow: {} }),
                 buildCloneData: () => {
-                    try {
-                        return { workflow: effectiveData?.json ? JSON.parse(effectiveData.json) : {} };
-                    } catch {
-                        Toast.show('工作流另存失败：JSON 语法错误', { level: 'error' });
+                    if (!effectiveData?.json) return { workflow: {} };
+                    const res = parseComfyWorkflowInput(effectiveData.json);
+                    if (!res.ok) {
+                        Toast.show(`工作流另存失败：${res.error}`, { level: 'error' });
                         return null;
                     }
+                    return { workflow: res.workflow };
                 },
             },
             action,
@@ -1188,7 +1295,7 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
-     * 解析并导入外部工作流预设 JSON 文件。
+     * 解析并导入外部工作流预设 JSON 文件（兼容插件预设 JSON 与 ComfyUI 原生 Save (API Format) JSON）。
      */
     public handleWorkflowImportFile(file: File): void {
         this.runAssetPresetImportFile<WorkflowPresetData>(file, {
@@ -1196,6 +1303,21 @@ export class ProviderTabViewModel implements Disposable {
             draftField: 'txt2imgWorkflowId',
             idPrefix: 'workflow_',
             label: '工作流预设',
+            parsePayload: (parsed, f) => {
+                const res = parseComfyWorkflowInput(parsed, { requireNodes: true });
+                if (!res.ok) {
+                    throw new Error(res.error);
+                }
+                const resolvedName =
+                    res.extractedName || stripJsonExtension(f.name) || '导入的工作流预设';
+                return {
+                    name: resolvedName,
+                    data: {
+                        ...(res.extraData || {}),
+                        workflow: res.workflow,
+                    },
+                };
+            },
         });
     }
 
@@ -1276,6 +1398,12 @@ export class ProviderTabViewModel implements Disposable {
                     payload.keys?.includes('presets')
                 ) {
                     this.refreshAssetPools();
+                    if (
+                        !this.presetController.isDirty.value &&
+                        (payload?.isReset || payload?.keys?.includes('presets'))
+                    ) {
+                        this.presetController.reloadFromStore();
+                    }
                 }
             });
         }
@@ -1310,6 +1438,7 @@ export class ProviderTabViewModel implements Disposable {
      */
     public dispose(): void {
         this.isDisposed = true;
+        this.presetController.dispose();
         this.deactivate();
     }
 }

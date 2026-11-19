@@ -15,7 +15,11 @@ import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
 import { openFloatingSurface, type FloatingMenuEntry } from '../layout/floating-sheet';
 import { logger } from '../../util/logger';
-import { COMFYUI_VARIABLE_DEFINITIONS } from '../composite/workflow-card';
+import {
+    COMFYUI_VARIABLE_DEFINITIONS,
+    isWorkflowFieldEligibleForVariable,
+    parseComfyWorkflowInput,
+} from '../composite/workflow-card';
 
 export interface WorkflowNodeData {
     class_type: string;
@@ -73,15 +77,15 @@ export class BlueprintModal implements Disposable {
      */
     public open(workflowJsonStr: string, onSave?: BlueprintSaveCallback): boolean {
         let parsed: WorkflowJsonObj = {};
-        try {
-            const trimmed = workflowJsonStr.trim();
-            if (trimmed) {
-                parsed = JSON.parse(trimmed) as WorkflowJsonObj;
+        const trimmed = (workflowJsonStr || '').trim();
+        if (trimmed) {
+            const res = parseComfyWorkflowInput(trimmed);
+            if (!res.ok) {
+                logger.warn('蓝图编辑器打开失败:', res.error);
+                Toast.error(res.error);
+                return false;
             }
-        } catch (err) {
-            logger.warn('蓝图编辑器打开失败: 工作流 JSON 存在语法错误', err);
-            Toast.error('当前工作流 JSON 存在语法错误，无法打开蓝图编辑器');
-            return false;
+            parsed = structuredClone(res.workflow) as WorkflowJsonObj;
         }
 
         this.workflowData = parsed;
@@ -362,6 +366,7 @@ export class BlueprintModal implements Disposable {
         let visibleCount = 0;
 
         for (const [nodeId, nodeData] of nodeEntries) {
+            if (!nodeData || typeof nodeData !== 'object') continue;
             const meta = this.classifyNode(nodeId, nodeData);
 
             // 分类过滤
@@ -646,16 +651,33 @@ export class BlueprintModal implements Disposable {
                 const controlGroup = document.createElement('div');
                 controlGroup.className = 'da-blueprint-field-control-group';
 
-                const isLongText = typeof val === 'string' && (key.toLowerCase().includes('text') || key.toLowerCase().includes('prompt') || val.length > 50);
+                const isObjectVal = typeof val === 'object' && val !== null;
+                const isLongText =
+                    (typeof val === 'string' &&
+                        (key.toLowerCase().includes('text') || key.toLowerCase().includes('prompt') || val.length > 50)) ||
+                    (isObjectVal && JSON.stringify(val).length > 50);
 
                 let inputEl: HTMLInputElement | HTMLTextAreaElement;
                 if (isLongText) {
                     const strInput = document.createElement('textarea');
                     strInput.className = 'da-textarea da-blueprint-textarea-field';
-                    strInput.rows = typeof val === 'string' && val.length > 80 ? 4 : 2;
-                    strInput.value = String(val ?? '');
+                    const serialized = isObjectVal ? JSON.stringify(val, null, 2) : String(val ?? '');
+                    strInput.rows = serialized.length > 80 ? 4 : 2;
+                    strInput.value = serialized;
                     strInput.setAttribute('data-input-field-key', key);
                     strInput.addEventListener('input', () => {
+                        if (isObjectVal) {
+                            try {
+                                const parsedObj = JSON.parse(strInput.value);
+                                if (parsedObj && typeof parsedObj === 'object') {
+                                    node.inputs[key] = parsedObj;
+                                    this.markNodeDirty(nodeId);
+                                    return;
+                                }
+                            } catch {
+                                // 编辑过程暂不成合法 JSON 时先按字符串保留，等待继续输入
+                            }
+                        }
                         node.inputs[key] = strInput.value;
                         this.markNodeDirty(nodeId);
                     });
@@ -664,10 +686,23 @@ export class BlueprintModal implements Disposable {
                     const txtInput = document.createElement('input');
                     txtInput.type = 'text';
                     txtInput.className = 'da-input da-blueprint-input-field';
-                    txtInput.value = val !== undefined && val !== null ? String(val) : '';
+                    txtInput.value = isObjectVal
+                        ? JSON.stringify(val)
+                        : val !== undefined && val !== null
+                          ? String(val)
+                          : '';
                     txtInput.setAttribute('data-input-field-key', key);
                     txtInput.addEventListener('input', () => {
                         const raw = txtInput.value.trim();
+                        if (isObjectVal && (raw.startsWith('{') || raw.startsWith('['))) {
+                            try {
+                                node.inputs[key] = JSON.parse(raw);
+                                this.markNodeDirty(nodeId);
+                                return;
+                            } catch {
+                                // 忽略未闭合 JSON 输入
+                            }
+                        }
                         if (/^-?\d+(\.\d+)?$/.test(raw)) {
                             const parsed = Number(raw);
                             // 超出安全整数范围的 64 位 seed 等大整数保留原文本，防止 IEEE-754 精度丢失
@@ -852,6 +887,9 @@ export class BlueprintModal implements Disposable {
         // 2. 字段名精准映射
         for (const def of COMFYUI_VARIABLE_DEFINITIONS) {
             if (def.variable === '%prompt%' || def.variable === '%negative_prompt%') {
+                continue;
+            }
+            if (!isWorkflowFieldEligibleForVariable(def.variable, node.class_type || '', fieldKey)) {
                 continue;
             }
             if (def.matchKeys.some((k) => k.toLowerCase() === keyLower)) {
