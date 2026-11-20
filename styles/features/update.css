@@ -2,95 +2,30 @@
  * ST-DrawAssistant 更新与版本说明样式表 (Update & Changelog Stylesheet)。
  *
  * @remarks
- * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏更新提示小红点。
+ * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏版本更新提示胶囊。
  */
 
-/* 1. 更新说明模态窗背景与外壳（布局定位继承自 .da-modal-backdrop） */
-.da-modal-backdrop.da-changelog-backdrop {
-    z-index: var(--da-z-secondary-modal, 10020);
-    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.7));
-    backdrop-filter: blur(var(--da-blur-modal, 8px));
-    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
-}
-
-.da-changelog-modal-panel {
-    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
-    max-height: calc(var(--da-vvh, 100dvh) - 24px);
-    padding: 18px 24px;
-    border-radius: var(--da-radius-large, 16px);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    background: var(--da-bg-secondary, #1e1e24);
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
-    box-shadow: var(--da-shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
-    box-sizing: border-box;
-    overflow: hidden;
-    animation: da-modal-slide-in 0.2s var(--da-ease);
-}
-
-@media (max-width: 640px) {
-    .da-changelog-modal-panel {
-        padding: 14px 16px;
-        gap: 10px;
-    }
-}
-
-/* 2. 模态窗顶栏 */
-.da-changelog-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
-    padding-bottom: 12px;
-}
-
+/* 1. 更新说明模态窗背景与外壳（布局与圆角/顶底栏继承自 .da-submodal-*） */
 .da-changelog-empty {
     padding: 32px 0;
     text-align: center;
-    color: var(--da-text-muted, rgba(255, 255, 255, 0.4));
-}
-
-.da-changelog-title-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.da-changelog-title {
-    margin: 0;
-    font-size: 1.15em;
-    font-weight: 700;
-    color: var(--da-text-primary, #ffffff);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.da-changelog-subtitle {
-    font-size: 0.85em;
-    color: var(--da-text-secondary, rgba(255, 255, 255, 0.65));
+    color: var(--da-text-muted);
 }
 
 /* 3. 滚动版本日志列表 */
 .da-changelog-content {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding-right: 4px;
+    gap: 14px;
 }
 
 .da-changelog-version-card {
-    background: var(--da-bg-card, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
+    background: var(--da-bg-card);
+    border: 1px solid var(--da-border-color);
     border-radius: var(--da-radius-md, 10px);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s var(--da-ease);
 }
 
 .da-changelog-version-card:hover {
@@ -113,22 +48,22 @@
 
 .da-changelog-badge {
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: var(--da-radius-sm, 6px);
     font-size: 0.8em;
     font-weight: 600;
-    background: var(--da-accent-color, #4a88f7);
-    color: var(--da-text-on-accent, #ffffff);
+    background: var(--da-accent-color);
+    color: var(--da-text-on-accent);
 }
 
 .da-changelog-date {
     font-size: 0.82em;
-    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    color: var(--da-text-muted);
 }
 
 .da-changelog-version-title {
     font-size: 0.95em;
     font-weight: 600;
-    color: var(--da-text-primary, #ffffff);
+    color: var(--da-text-primary);
 }
 
 .da-changelog-items-list {
@@ -142,16 +77,12 @@
 .da-changelog-item {
     font-size: 0.88em;
     line-height: 1.5;
-    color: var(--da-text-secondary, rgba(255, 255, 255, 0.8));
+    color: var(--da-text-secondary);
 }
 
-/* 4. 模态窗底栏操作动作 */
+/* 4. 模态窗底栏右对齐操作动作 */
 .da-changelog-footer {
-    display: flex;
     justify-content: flex-end;
-    align-items: center;
-    border-top: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
-    padding-top: 10px;
 }
 
 /* 5. 关于页版本标签与状态指示 */
@@ -378,31 +309,25 @@
     border: 1px solid var(--da-border-color);
 }
 
-/* 8. 顶栏版本徽标更新提示红点 */
-.da-header-badge-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
+/* 8. 顶栏版本徽标更新提示态 */
+.da-header-badge--has-update {
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.14);
+    border-color: rgba(var(--da-accent-rgb), 0.38);
+    font-weight: 600;
 }
 
-.da-update-indicator-dot {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--da-color-error);
-    box-shadow: 0 0 6px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.8);
-    display: none;
+.da-header-badge--has-update:hover {
+    background: rgba(var(--da-accent-rgb), 0.22);
+    border-color: rgba(var(--da-accent-rgb), 0.55);
 }
 
-.da-update-indicator-dot--active {
-    display: block;
-    animation: da-pulse 2s infinite;
+.da-header-badge:focus-visible {
+    outline: 2px solid var(--da-accent-color);
+    outline-offset: 2px;
 }
 
-/* 9. 官方预设快速同步卡片 (.da-sync-card) */
+/* 9. 官方预设更新卡片 (.da-sync-card) */
 .da-changelog-versions {
     display: flex;
     flex-direction: column;
@@ -538,6 +463,148 @@
 }
 
 .da-sync-card__hint {
+    font-size: 12px;
+    color: var(--da-text-secondary);
+}
+
+.da-sync-card__category-item--readonly {
+    cursor: default;
+}
+
+/* 10. 官方预设选择性同步独立弹窗 (.da-sync-modal-*) */
+.da-sync-modal-panel {
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+}
+
+.da-sync-modal-body {
+    gap: 12px;
+}
+
+.da-sync-modal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-sync-modal-toolbar__label {
+    font-size: 12px;
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+.da-sync-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-sync-modal-group {
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-md, 10px);
+    background: var(--da-bg-secondary);
+    overflow: hidden;
+}
+
+.da-sync-modal-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-sync-modal-group__title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-sync-modal-group__stat {
+    font-size: 11.5px;
+    color: var(--da-text-muted);
+}
+
+.da-sync-modal-group__items {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    gap: 4px;
+}
+
+.da-sync-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--da-radius-input, 6px);
+    background: var(--da-bg-input);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.da-sync-modal-item:hover {
+    border-color: var(--da-border-highlight);
+}
+
+.da-sync-modal-item__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-sync-modal-item__name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    word-break: break-word;
+}
+
+.da-sync-modal-item__meta {
+    font-size: 11.5px;
+    color: var(--da-text-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.da-sync-modal-tag {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 999px);
+    border: 1px solid var(--da-border-color);
+    white-space: nowrap;
+}
+
+.da-sync-modal-tag--add {
+    color: var(--da-color-success);
+    background: rgba(var(--da-color-success-rgb, 16, 185, 129), 0.14);
+    border-color: rgba(var(--da-color-success-rgb, 16, 185, 129), 0.36);
+}
+
+.da-sync-modal-tag--update {
+    color: var(--da-color-warn, #f59e0b);
+    background: var(--da-color-warn-subtle, rgba(245, 158, 11, 0.14));
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.36);
+}
+
+.da-sync-modal-empty {
+    padding: 24px 16px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--da-text-secondary);
+}
+
+.da-sync-modal-footer__summary {
     font-size: 12px;
     color: var(--da-text-secondary);
 }

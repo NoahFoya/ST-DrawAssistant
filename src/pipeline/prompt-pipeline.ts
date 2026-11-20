@@ -312,61 +312,6 @@ export function resolveEffectivePromptPresetsForValidation(
 }
 
 /**
- * 将 WebUI 权重语法 `(tag:1.2)` 或 `(tag:0.8)` 转换为 NovelAI `{tag}` / `[tag]` 语法。
- * 支持词条内部含成对圆括号或冒号的标准标签（如 `(ch'en_(arknights):1.2)`、`(rem_(re:zero):1.2)`）。
- */
-export function convertWeightToBrackets(text: string): string {
-    if (!text) return '';
-
-    let out = '';
-    let i = 0;
-    while (i < text.length) {
-        if (text[i] === '\\' && i + 1 < text.length) {
-            out += text.slice(i, i + 2);
-            i += 2;
-            continue;
-        }
-        if (text[i] === '(') {
-            const closeIdx = findMatchingParen(text, i);
-            if (closeIdx > i) {
-                const inner = text.slice(i + 1, closeIdx);
-                const weightMatch = inner.match(/^([\s\S]*):(\d+(?:\.\d+)?)$/);
-                if (weightMatch) {
-                    const convertedInner = convertWeightToBrackets(weightMatch[1]).trim();
-                    const weight = parseFloat(weightMatch[2]);
-                    if (!convertedInner) {
-                        i = closeIdx + 1;
-                        continue;
-                    }
-                    if (!Number.isFinite(weight)) {
-                        out += `(${convertWeightToBrackets(inner)})`;
-                        i = closeIdx + 1;
-                        continue;
-                    }
-                    const count = Math.round(Math.abs(weight - 1.0) / 0.1);
-                    if (count === 0) {
-                        out += convertedInner;
-                    } else {
-                        const clamped = Math.min(5, count);
-                        out += weight > 1.0
-                            ? '{'.repeat(clamped) + convertedInner + '}'.repeat(clamped)
-                            : '['.repeat(clamped) + convertedInner + ']'.repeat(clamped);
-                    }
-                    i = closeIdx + 1;
-                    continue;
-                }
-                out += `(${convertWeightToBrackets(inner)})`;
-                i = closeIdx + 1;
-                continue;
-            }
-        }
-        out += text[i];
-        i++;
-    }
-    return out;
-}
-
-/**
  * 合并预设通用负向提示词与用户自定义负向提示词并去重。
  *
  * @param presetNegative 预设通用负向提示词

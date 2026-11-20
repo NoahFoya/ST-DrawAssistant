@@ -4,7 +4,7 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持官方/自定义预设切换与 Bearer Token)；
- * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView)、采样控制 (SamplerCardView) 与 CFG Rescale；
+ * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、轮询候选池入口行 (PromptPollingPanelView)、画幅尺寸 (DimensionPickerView)、采样与调度控制 (SamplerCardView) 与 CFG Rescale；
  * 3. V3 模型采样增强选项卡片 (SchemaCard，仅 V3 系列模型时渲染 SMEA 与 Decrisper 选项)；
  * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false)。
  */
@@ -57,12 +57,19 @@ const SMEA_MODE_OPTIONS = [
 ];
 
 const NOVELAI_SAMPLER_OPTIONS = [
-    { label: 'k_euler', value: 'k_euler' },
     { label: 'k_euler_ancestral', value: 'k_euler_ancestral' },
+    { label: 'k_euler', value: 'k_euler' },
     { label: 'k_dpmpp_2s_ancestral', value: 'k_dpmpp_2s_ancestral' },
     { label: 'k_dpmpp_2m', value: 'k_dpmpp_2m' },
     { label: 'k_dpmpp_sde', value: 'k_dpmpp_sde' },
     { label: 'ddim', value: 'ddim' },
+];
+
+const NOVELAI_SCHEDULER_OPTIONS = [
+    { label: 'karras (推荐)', value: 'karras' },
+    { label: 'native', value: 'native' },
+    { label: 'exponential', value: 'exponential' },
+    { label: 'polyexponential', value: 'polyexponential' },
 ];
 
 const CFG_RESCALE_FIELD: FieldSchema<DrawingPresetData> = {
@@ -110,6 +117,7 @@ export class NovelAITabView extends ProviderTabView {
                 },
             },
             defaultSamplers: NOVELAI_SAMPLER_OPTIONS,
+            defaultSchedulers: NOVELAI_SCHEDULER_OPTIONS,
             validateRequired: (cfg) => {
                 const missing: string[] = [];
                 const effectiveModel =
@@ -137,6 +145,8 @@ export class NovelAITabView extends ProviderTabView {
                 label: '生图模型',
                 type: 'select',
                 options: () => this.vm.effectiveModelOptions.value,
+                tooltip:
+                    '选择 NovelAI 官方生图模型。Full 完整模型数据集更广，适合多样化构图与多画师串风格融合；Curated 精选模型倾向标准简洁画风，搭配复杂画师串时建议优先选用 Full 模型。',
                 transform: {
                     toView: (v) => (v as string) || 'nai-diffusion-4-5-full',
                     fromView: (v) => String(v),
@@ -160,6 +170,8 @@ export class NovelAITabView extends ProviderTabView {
                 type: 'select',
                 placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
+                tooltip:
+                    '选择生图时自动拼接的正负向提示词预设（或启用多预设随机轮询）。内置预设已对齐官方 V4.5 Full / Curated 画质词与 Heavy / Light / Human Focus UC 基底；使用画师串预设时建议配合 Full 模型与 karras 调度器。',
                 invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
             {
@@ -216,6 +228,7 @@ export class NovelAITabView extends ProviderTabView {
         const isDimsDirty = dirtyFields.has('width') || dirtyFields.has('height');
         const isSamplerDirty =
             dirtyFields.has('samplerName') ||
+            dirtyFields.has('scheduler') ||
             dirtyFields.has('steps') ||
             dirtyFields.has('cfgScale') ||
             dirtyFields.has('seed');
@@ -285,12 +298,14 @@ export class NovelAITabView extends ProviderTabView {
 
                     <SamplerCardView
                         embedded={true}
-                        showScheduler={false}
+                        showScheduler={true}
                         rangeConfig={NOVELAI_RANGE_CONFIG}
                         samplers={this.vm.samplerOptions.value}
+                        schedulers={this.vm.schedulerOptions.value}
                         dirty={isSamplerDirty}
                         data={{
-                            samplerName: draft.samplerName || 'k_euler',
+                            samplerName: draft.samplerName || 'k_euler_ancestral',
+                            scheduler: draft.scheduler || 'karras',
                             steps: draft.steps ?? 28,
                             cfgScale: draft.cfgScale ?? 5.0,
                             seed: draft.seed ?? -1,
@@ -298,6 +313,7 @@ export class NovelAITabView extends ProviderTabView {
                         onChange={(s) =>
                             presetController.patchDraft({
                                 samplerName: s.samplerName,
+                                scheduler: s.scheduler,
                                 steps: s.steps,
                                 cfgScale: s.cfgScale,
                                 seed: s.seed,

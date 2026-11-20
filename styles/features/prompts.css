@@ -9,12 +9,12 @@
     gap: var(--da-space-card-gap, 14px);
 }
 
-/* 原生世界书导入与导出弹窗（定位与安全区滚动继承自 .da-modal-backdrop） */
-.da-modal-backdrop.da-prompt-import-backdrop,
+/* 原生世界书导入与导出弹窗（定位、圆角与模糊度继承自 .da-modal-backdrop / .da-submodal-backdrop） */
 .da-modal-backdrop.da-prompt-export-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
-    background: var(--da-bg-mask-medium);
-    backdrop-filter: blur(4px);
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
 }
 
 .da-prompt-import-panel {
@@ -25,6 +25,7 @@
 .da-prompt-export-panel {
     width: min(460px, calc(var(--da-vvw, 100vw) - 24px));
     max-height: calc(var(--da-vvh, 100dvh) - 24px);
+    border-radius: var(--da-radius-modal, 16px);
 }
 
 .da-prompt-import-body {

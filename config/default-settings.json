@@ -79,7 +79,7 @@
       "serviceId": "novelai-official",
       "serverUrl": "https://image.novelai.net",
       "apiKey": "",
-      "activeDrawingPresetId": "novelai_v45_curated"
+      "activeDrawingPresetId": "novelai_v45_full"
     },
     "openai": {
       "serviceId": "openai-official",

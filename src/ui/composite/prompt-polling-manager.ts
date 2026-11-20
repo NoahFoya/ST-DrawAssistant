@@ -10,6 +10,7 @@
 
 import type { PresetItem, PromptPollingPoolItem, PromptPresetData } from '@types';
 import type { Disposable, UIComponent } from '../types';
+import type { BadgeVariant } from '../components/badge';
 import { Button } from '../components/button';
 import { Select } from '../components/select';
 import { Switch } from '../components/switch';
@@ -23,8 +24,82 @@ export interface PromptPollingManagerOptions {
     initialItems?: PromptPollingPoolItem[];
     /** 候选池内容变更回调 */
     onChange?: (items: PromptPollingPoolItem[]) => void;
+    /** 是否嵌入在独立弹窗等外层容器中（启用后隐藏外框、冗余标题与顶栏清空按钮） */
+    embedded?: boolean;
     /** 附加类名 */
     className?: string;
+}
+
+export interface PromptPollingPoolSummary {
+    readonly validEnabledCount: number;
+    readonly hasInvalidEntries: boolean;
+    readonly isInvalid: boolean;
+    readonly managerLabel: string;
+    readonly entryLabel: string;
+    readonly badgeVariant: BadgeVariant;
+}
+
+/** 按预设 ID 或规范化名称匹配当前可用的提示词预设 */
+export function resolvePollingPoolPreset(
+    entry: PromptPollingPoolItem,
+    availablePresets: readonly PresetItem<PromptPresetData>[]
+): PresetItem<PromptPresetData> | undefined {
+    const byId = availablePresets.find((p) => p.id === entry.presetId);
+    if (byId) return byId;
+    if (entry.presetName) {
+        const nameKey = normalizePresetNameKey(entry.presetName);
+        return availablePresets.find((p) => normalizePresetNameKey(p.name) === nameKey);
+    }
+    return undefined;
+}
+
+/** 汇总轮询候选池的启用统计与徽标语义状态 */
+export function summarizePromptPollingPool(
+    items: readonly PromptPollingPoolItem[] | undefined,
+    availablePresets: readonly PresetItem<PromptPresetData>[]
+): PromptPollingPoolSummary {
+    const list = Array.isArray(items) ? items : [];
+    let validEnabledCount = 0;
+    let hasInvalidEntries = false;
+    for (const entry of list) {
+        const matched = resolvePollingPoolPreset(entry, availablePresets);
+        if (!matched) {
+            hasInvalidEntries = true;
+        } else if (entry.enabled !== false) {
+            validEnabledCount++;
+        }
+    }
+
+    if (list.length === 0) {
+        return {
+            validEnabledCount: 0,
+            hasInvalidEntries: false,
+            isInvalid: false,
+            managerLabel: `未指定池 · 自动轮询全部 (${availablePresets.length} 项)`,
+            entryLabel: `默认轮询全部 (${availablePresets.length})`,
+            badgeVariant: 'neutral',
+        };
+    }
+
+    if (validEnabledCount === 0) {
+        return {
+            validEnabledCount: 0,
+            hasInvalidEntries,
+            isInvalid: true,
+            managerLabel: '已配置但无启用项 (将拦截生成)',
+            entryLabel: '无可用启用项',
+            badgeVariant: 'danger',
+        };
+    }
+
+    return {
+        validEnabledCount,
+        hasInvalidEntries,
+        isInvalid: false,
+        managerLabel: `已启用 ${validEnabledCount} / ${list.length} 项${hasInvalidEntries ? ' · 含失效项' : ''}`,
+        entryLabel: `已启用 ${validEnabledCount} / ${list.length} 项${hasInvalidEntries ? ' (含失效)' : ''}`,
+        badgeVariant: hasInvalidEntries ? 'warning' : 'primary',
+    };
 }
 
 /** 截断提示词摘要文本，避免长串画师标签撑破条目行 */
@@ -62,8 +137,16 @@ export class PromptPollingManager implements UIComponent, Disposable {
             : [];
         this.onChangeCallback = options.onChange;
 
+        const isEmbedded = Boolean(options.embedded);
+
         this.element = document.createElement('div');
-        this.element.className = ['da-polling-panel', options.className].filter(Boolean).join(' ');
+        this.element.className = [
+            'da-polling-panel',
+            isEmbedded ? 'da-polling-panel--embedded' : '',
+            options.className,
+        ]
+            .filter(Boolean)
+            .join(' ');
 
         // 1. 面板头部标题与快捷批量操作
         const header = document.createElement('div');
@@ -72,10 +155,12 @@ export class PromptPollingManager implements UIComponent, Disposable {
         const titleWrap = document.createElement('div');
         titleWrap.className = 'da-polling-title-wrap';
 
-        const titleEl = document.createElement('span');
-        titleEl.className = 'da-polling-title';
-        titleEl.textContent = '轮询候选池';
-        titleWrap.appendChild(titleEl);
+        if (!isEmbedded) {
+            const titleEl = document.createElement('span');
+            titleEl.className = 'da-polling-title';
+            titleEl.textContent = '轮询候选池';
+            titleWrap.appendChild(titleEl);
+        }
 
         this.statusBadgeEl = document.createElement('span');
         this.statusBadgeEl.className = 'da-polling-badge';
@@ -106,7 +191,9 @@ export class PromptPollingManager implements UIComponent, Disposable {
 
         quickActions.appendChild(this.addAllBtn.element);
         quickActions.appendChild(this.toggleAllBtn.element);
-        quickActions.appendChild(this.clearBtn.element);
+        if (!isEmbedded) {
+            quickActions.appendChild(this.clearBtn.element);
+        }
         header.appendChild(quickActions);
         this.element.appendChild(header);
 
@@ -172,14 +259,19 @@ export class PromptPollingManager implements UIComponent, Disposable {
         this.renderAll();
     }
 
+    /** 获取当前候选池条目快照 */
+    public getItems(): PromptPollingPoolItem[] {
+        return this.items.map((it) => ({ ...it }));
+    }
+
+    /** 替换当前候选池条目并刷新界面（不触发 onChange） */
+    public setItems(items: PromptPollingPoolItem[]): void {
+        this.items = Array.isArray(items) ? items.map((it) => ({ ...it })) : [];
+        this.renderAll();
+    }
+
     private resolvePresetForEntry(entry: PromptPollingPoolItem): PresetItem<PromptPresetData> | undefined {
-        const byId = this.availablePresets.find((p) => p.id === entry.presetId);
-        if (byId) return byId;
-        if (entry.presetName) {
-            const nameKey = normalizePresetNameKey(entry.presetName);
-            return this.availablePresets.find((p) => normalizePresetNameKey(p.name) === nameKey);
-        }
-        return undefined;
+        return resolvePollingPoolPreset(entry, this.availablePresets);
     }
 
     private emitChange(): void {
@@ -266,29 +358,15 @@ export class PromptPollingManager implements UIComponent, Disposable {
         this.toggleAllBtn.setDisabled(this.items.length === 0);
         this.clearBtn.setDisabled(this.items.length === 0);
 
-        // 统计有效启用条目
-        let validEnabledCount = 0;
-        let hasInvalidEntries = false;
-        for (const entry of this.items) {
-            const matched = this.resolvePresetForEntry(entry);
-            if (!matched) {
-                hasInvalidEntries = true;
-            } else if (entry.enabled !== false) {
-                validEnabledCount++;
-            }
-        }
-
+        // 统计有效启用条目并更新状态徽标
+        const summary = summarizePromptPollingPool(this.items, this.availablePresets);
+        this.statusBadgeEl.textContent = summary.managerLabel;
         if (this.items.length === 0) {
-            this.statusBadgeEl.textContent = `未指定池 · 自动轮询全部 (${this.availablePresets.length} 项)`;
             this.statusBadgeEl.className = 'da-polling-badge';
-        } else if (validEnabledCount === 0) {
-            this.statusBadgeEl.textContent = '已配置但无启用项 (将拦截生成)';
+        } else if (summary.validEnabledCount === 0 || summary.hasInvalidEntries) {
             this.statusBadgeEl.className = 'da-polling-badge da-polling-badge--warn';
         } else {
-            this.statusBadgeEl.textContent = `已启用 ${validEnabledCount} / ${this.items.length} 项${hasInvalidEntries ? ' · 含失效项' : ''}`;
-            this.statusBadgeEl.className = hasInvalidEntries
-                ? 'da-polling-badge da-polling-badge--warn'
-                : 'da-polling-badge da-polling-badge--active';
+            this.statusBadgeEl.className = 'da-polling-badge da-polling-badge--active';
         }
 
         if (this.items.length === 0) {
