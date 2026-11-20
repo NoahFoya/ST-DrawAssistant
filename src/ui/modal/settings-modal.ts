@@ -754,7 +754,7 @@ export class SettingsModal implements Disposable {
         this.syncProviderSubItemsPlacement();
     }
 
-    /** 同步顶栏版本徽标文案与更新可用态（不使用红点，直接融入胶囊提示） */
+    /** 同步顶栏版本徽标文案与更新可用态 */
     private syncVersionBadgeState(hasUpdate: boolean): void {
         if (!this.versionBadgeElement) return;
         this.versionBadgeElement.textContent = hasUpdate

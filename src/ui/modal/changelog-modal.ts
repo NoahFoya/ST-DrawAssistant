@@ -81,7 +81,7 @@ export class ChangelogModal implements Disposable {
         header.appendChild(closeBtn);
         panel.appendChild(header);
 
-        // 4. 内容区域（内嵌官方预设快速同步面板 + 版本日志列表）
+        // 4. 内容区域（内嵌官方预设更新卡片 + 版本日志列表）
         const content = document.createElement('div');
         content.className = 'da-submodal-body da-changelog-content';
         panel.appendChild(content);

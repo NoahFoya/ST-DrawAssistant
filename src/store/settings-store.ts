@@ -46,7 +46,7 @@ import {
     type LoadStaticPresetsOptions,
 } from './static-preset-loader';
 
-/** 官方预设快速同步分组 */
+/** 官方预设更新同步分组 */
 export type OfficialPresetSyncCategory =
     | 'prompts'
     | 'drawing'
@@ -54,7 +54,7 @@ export type OfficialPresetSyncCategory =
     | 'materialsAndThemes'
     | 'injectionAndRules';
 
-/** 全部官方预设快速同步分组列表（按依赖先后排列） */
+/** 全部官方预设更新同步分组列表（按依赖先后排列） */
 export const ALL_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[] = [
     'prompts',
     'workflows',
@@ -2273,12 +2273,12 @@ export class SettingsStore {
     }
 
     /**
-     * 非破坏性覆盖式同步官方最新预设：
-     * 1. 仅按名称匹配并覆盖更新同名的官方预设（保留原有本地 ID 以维持关联不断裂）；
-     * 2. 自动补充本地尚未收录的官方预设；
-     * 3. 完整保留用户自建、改名副本或本地留存的历史其他预设，不做任何删除或改动。
+     * 非破坏性同步官方最新预设：
+     * 1. 按「官方 ID 优先 + 规范化名称回退」匹配已有预设，支持 `mode: 'add-only'`（仅补充新增项，绝不覆盖）与 `selectedItemKeys` 逐条选择性同步；
+     * 2. 自动补充本地尚未收录的官方预设（或仅补充勾选的新增项）；
+     * 3. 完整保留未被勾选的已有预设以及用户自建、改名副本，不做任何删除或改动。
      *
-     * @param options 同步范围与静态加载选项
+     * @param options 同步范围、模式、逐条勾选清单与静态加载选项
      * @returns 实际执行的变更数量统计
      */
     public async syncOfficialPresets(

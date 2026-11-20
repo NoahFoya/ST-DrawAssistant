@@ -2,7 +2,7 @@
  * ST-DrawAssistant 更新与版本说明样式表 (Update & Changelog Stylesheet)。
  *
  * @remarks
- * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏更新提示小红点。
+ * 包含版本状态胶囊、更新说明弹窗卡片、时间线要点及顶栏版本更新提示胶囊。
  */
 
 /* 1. 更新说明模态窗背景与外壳（布局与圆角/顶底栏继承自 .da-submodal-*） */
@@ -309,7 +309,7 @@
     border: 1px solid var(--da-border-color);
 }
 
-/* 8. 顶栏版本徽标更新提示态（无红点，直接融入版本胶囊） */
+/* 8. 顶栏版本徽标更新提示态 */
 .da-header-badge--has-update {
     color: var(--da-accent-color);
     background: rgba(var(--da-accent-rgb), 0.14);
@@ -327,7 +327,7 @@
     outline-offset: 2px;
 }
 
-/* 9. 官方预设快速同步卡片 (.da-sync-card) */
+/* 9. 官方预设更新卡片 (.da-sync-card) */
 .da-changelog-versions {
     display: flex;
     flex-direction: column;

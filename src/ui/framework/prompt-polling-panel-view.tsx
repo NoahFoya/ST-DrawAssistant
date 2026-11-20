@@ -75,7 +75,7 @@ export interface OfficialPresetSyncCardViewProps {
 }
 
 /**
- * 官方预设快速同步卡片的 Preact 包装视图。
+ * 官方预设更新摘要卡片的 Preact 包装视图。
  */
 export function OfficialPresetSyncCardView(props: OfficialPresetSyncCardViewProps): VNode {
     const hostRef = useRef<HTMLDivElement | null>(null);
