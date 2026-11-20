@@ -63,6 +63,26 @@ export const ALL_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[]
     'injectionAndRules',
 ];
 
+/** 官方预设差异条目类型 */
+export type OfficialPresetDiffKind = 'add' | 'update';
+
+/** 官方预设同步执行模式 */
+export type OfficialPresetSyncMode = 'add-only' | 'selected';
+
+/** 单条官方预设差异明细 */
+export interface OfficialPresetDiffItem {
+    readonly key: string;
+    readonly category: OfficialPresetSyncCategory;
+    readonly bucketLabel: string;
+    readonly kind: OfficialPresetDiffKind;
+    readonly officialId: string;
+    readonly officialName: string;
+    readonly localId?: string;
+    readonly localName?: string;
+    readonly renamed: boolean;
+    readonly description?: string;
+}
+
 /** 官方预设快速同步分组差异统计 */
 export interface OfficialPresetCategoryDiff {
     readonly category: OfficialPresetSyncCategory;
@@ -70,6 +90,7 @@ export interface OfficialPresetCategoryDiff {
     readonly overwriteCount: number;
     readonly addCount: number;
     readonly customPreservedCount: number;
+    readonly items: readonly OfficialPresetDiffItem[];
 }
 
 /** 官方预设预览或同步结果统计 */
@@ -84,6 +105,10 @@ export interface OfficialPresetSyncResult {
 export interface SyncOfficialPresetsOptions {
     /** 需要同步的分组清单，未传时同步全部分组 */
     readonly categories?: readonly OfficialPresetSyncCategory[];
+    /** 同步模式：'add-only' 仅补充新增项、绝不覆盖；'selected' 按 selectedItemKeys（未传时默认全选）同步 */
+    readonly mode?: OfficialPresetSyncMode;
+    /** 显式勾选同步的差异条目 key 列表 */
+    readonly selectedItemKeys?: readonly string[];
     /** 静态预设加载附加选项（如强制刷新或测试注入 fetcher） */
     readonly loaderOptions?: LoadStaticPresetsOptions;
 }
@@ -454,14 +479,16 @@ function resolveSafeUniquePresetId(preferredId: string, usedIds: Set<string>): s
     return candidate;
 }
 
-/** 基于当前列表与官方列表构建官方 ID -> 实际本地 ID 映射（用于跨分类关联重映射） */
+/** 基于当前列表与官方列表构建官方 ID -> 实际本地 ID 映射（ID 优先，规范化名称回退） */
 function buildOfficialIdMap<T>(
     effectiveList: readonly PresetItem<T>[],
     officialList: readonly PresetItem<T>[]
 ): Map<string, string> {
     const map = new Map<string, string>();
+    const byId = new Set<string>();
     const byName = new Map<string, PresetItem<T>>();
     for (const item of effectiveList) {
+        if (item?.id) byId.add(item.id);
         if (!item?.name) continue;
         const key = normalizePresetNameKey(item.name);
         if (key && !byName.has(key)) {
@@ -470,27 +497,50 @@ function buildOfficialIdMap<T>(
     }
     for (const off of officialList) {
         if (!off?.id) continue;
+        if (byId.has(off.id)) {
+            map.set(off.id, off.id);
+            continue;
+        }
         const matched = byName.get(normalizePresetNameKey(off.name || ''));
         if (matched) {
             map.set(off.id, matched.id);
-        } else if (effectiveList.some((item) => item.id === off.id)) {
-            map.set(off.id, off.id);
         }
     }
     return map;
 }
 
+const PROVIDER_BUCKET_LABELS: Readonly<Record<string, string>> = {
+    comfyui: 'ComfyUI',
+    sdwebui: 'SD-WebUI',
+    novelai: 'NovelAI',
+    openai: 'OpenAI 兼容',
+};
+
+const INJECTION_BUCKET_LABELS: Readonly<Record<string, string>> = {
+    material_activations: '素材启用规则',
+    material_extractions: '楼层提取规则',
+    material_formats: '格式与宏定义',
+    prompt_story: '故事插画',
+    prompt_character: '素材创作',
+    prompt_vocab: '词汇指导',
+    prompt_material: '素材注入',
+};
+
 /**
- * 纯函数：按归一化名称对单个预设数组执行覆盖式合并。
- * - 同名官方预设：覆盖 `name` / `description` / `data`，保留用户原有的 `id` 与 `createdAt`；
- * - 全新官方预设：深拷贝追加至末尾（若 ID 与用户改名副本冲突则安全去重）；
- * - 非同名用户自建预设或改名副本：完全保留原有顺序与原始内容。
+ * 纯函数：按「官方 ID 优先 + 规范化名称回退」匹配并合并单个预设数组。
+ * - 支持 `mode: 'add-only'`（仅新增缺失项）与 `selectedKeys`（逐条精细勾选）。
+ * - 未被选中的已有预设与所有用户自建/非匹配预设完整保留。
  */
 function mergePresetListByName<T>(
     localList: readonly PresetItem<T>[],
     officialList: readonly PresetItem<T>[],
-    options?: {
+    options: {
         readonly now?: number;
+        readonly category: OfficialPresetSyncCategory;
+        readonly bucketKey: string;
+        readonly bucketLabel: string;
+        readonly mode?: OfficialPresetSyncMode;
+        readonly selectedKeys?: ReadonlySet<string>;
         readonly transformData?: (data: T, officialItem: PresetItem<T>) => T;
     }
 ): {
@@ -498,19 +548,28 @@ function mergePresetListByName<T>(
     readonly overwriteCount: number;
     readonly addCount: number;
     readonly customPreservedCount: number;
+    readonly diffItems: OfficialPresetDiffItem[];
 } {
-    const now = options?.now ?? Date.now();
+    const now = options.now ?? Date.now();
+    const mode = options.mode ?? 'selected';
+    const selectedKeys = options.selectedKeys;
     const safeLocal = Array.isArray(localList) ? localList : [];
     const safeOfficial = Array.isArray(officialList) ? officialList : [];
 
     const nextList = safeLocal.map((item) => structuredClone(item));
+    const indexById = new Map<string, number>();
     const indexByName = new Map<string, number>();
     const usedIds = new Set<string>();
     const matchedLocalIndices = new Set<number>();
 
     for (let idx = 0; idx < nextList.length; idx++) {
         const item = nextList[idx];
-        if (item?.id) usedIds.add(item.id);
+        if (item?.id) {
+            usedIds.add(item.id);
+            if (!indexById.has(item.id)) {
+                indexById.set(item.id, idx);
+            }
+        }
         const key = item?.name ? normalizePresetNameKey(item.name) : '';
         if (key && !indexByName.has(key)) {
             indexByName.set(key, idx);
@@ -519,48 +578,88 @@ function mergePresetListByName<T>(
 
     let overwriteCount = 0;
     let addCount = 0;
+    const diffItems: OfficialPresetDiffItem[] = [];
 
     for (const off of safeOfficial) {
         if (!off?.name) continue;
         const nameKey = normalizePresetNameKey(off.name);
         if (!nameKey) continue;
 
-        const transformedData = options?.transformData
+        const itemKey = `${options.category}:${options.bucketKey}:${off.id || nameKey}`;
+        const transformedData = options.transformData
             ? options.transformData(structuredClone(off.data), off)
             : structuredClone(off.data);
 
-        const existingIdx = indexByName.get(nameKey);
+        const idIdx = off.id ? indexById.get(off.id) : undefined;
+        const nameIdx = indexByName.get(nameKey);
+        const existingIdx = idIdx !== undefined ? idIdx : nameIdx;
+
         if (existingIdx !== undefined) {
             matchedLocalIndices.add(existingIdx);
             const localItem = nextList[existingIdx];
             if (!isPresetContentEqual(localItem, off.name, off.description, transformedData)) {
-                overwriteCount += 1;
-                nextList[existingIdx] = {
-                    ...localItem,
-                    name: off.name,
-                    ...(off.description !== undefined ? { description: off.description } : {}),
-                    data: transformedData,
-                    updatedAt: now,
-                };
+                const renamed = Boolean(
+                    localItem.name && normalizePresetNameKey(localItem.name) !== nameKey
+                );
+                diffItems.push({
+                    key: itemKey,
+                    category: options.category,
+                    bucketLabel: options.bucketLabel,
+                    kind: 'update',
+                    officialId: off.id || nameKey,
+                    officialName: off.name,
+                    localId: localItem.id,
+                    localName: localItem.name,
+                    renamed,
+                    description: off.description,
+                });
+
+                const shouldApply =
+                    mode !== 'add-only' && (!selectedKeys || selectedKeys.has(itemKey));
+                if (shouldApply) {
+                    overwriteCount += 1;
+                    nextList[existingIdx] = {
+                        ...localItem,
+                        name: off.name,
+                        ...(off.description !== undefined ? { description: off.description } : {}),
+                        data: transformedData,
+                        updatedAt: now,
+                    };
+                }
             }
         } else {
-            addCount += 1;
-            const nextId = resolveSafeUniquePresetId(off.id, usedIds);
-            usedIds.add(nextId);
-            const addedItem: PresetItem<T> = {
-                ...structuredClone(off),
-                id: nextId,
-                data: transformedData,
-                createdAt: off.createdAt ?? now,
-                updatedAt: now,
-            };
-            indexByName.set(nameKey, nextList.length);
-            nextList.push(addedItem);
+            diffItems.push({
+                key: itemKey,
+                category: options.category,
+                bucketLabel: options.bucketLabel,
+                kind: 'add',
+                officialId: off.id || nameKey,
+                officialName: off.name,
+                renamed: false,
+                description: off.description,
+            });
+
+            const shouldApply = !selectedKeys || selectedKeys.has(itemKey);
+            if (shouldApply) {
+                addCount += 1;
+                const nextId = resolveSafeUniquePresetId(off.id, usedIds);
+                usedIds.add(nextId);
+                const addedItem: PresetItem<T> = {
+                    ...structuredClone(off),
+                    id: nextId,
+                    data: transformedData,
+                    createdAt: off.createdAt ?? now,
+                    updatedAt: now,
+                };
+                indexById.set(nextId, nextList.length);
+                indexByName.set(nameKey, nextList.length);
+                nextList.push(addedItem);
+            }
         }
     }
 
     const customPreservedCount = Math.max(0, safeLocal.length - matchedLocalIndices.size);
-    return { nextList, overwriteCount, addCount, customPreservedCount };
+    return { nextList, overwriteCount, addCount, customPreservedCount, diffItems };
 }
 
 interface OfficialSyncPlan {
@@ -572,9 +671,17 @@ interface OfficialSyncPlan {
 function planOfficialPresetSync(
     current: PresetSettings,
     official: PresetSettings,
-    selectedCategories: readonly OfficialPresetSyncCategory[]
+    selectedCategories: readonly OfficialPresetSyncCategory[],
+    options?: {
+        readonly mode?: OfficialPresetSyncMode;
+        readonly selectedItemKeys?: readonly string[];
+    }
 ): OfficialSyncPlan {
     const selectedSet = new Set<OfficialPresetSyncCategory>(selectedCategories);
+    const mode: OfficialPresetSyncMode = options?.mode ?? 'selected';
+    const selectedKeys = options?.selectedItemKeys
+        ? new Set<string>(options.selectedItemKeys)
+        : undefined;
     const nextPresets = structuredClone(current);
     const now = Date.now();
     const diffs: OfficialPresetCategoryDiff[] = [];
@@ -584,6 +691,7 @@ function planOfficialPresetSync(
         let overwriteCount = 0;
         let addCount = 0;
         let customPreservedCount = 0;
+        const items: OfficialPresetDiffItem[] = [];
         const providerKeys = new Set([
             ...Object.keys(nextPresets.prompts || {}),
             ...Object.keys(official.prompts || {}),
@@ -592,11 +700,19 @@ function planOfficialPresetSync(
             const localArr = nextPresets.prompts?.[provKey] || [];
             const offArr = official.prompts?.[provKey] || [];
             if (selectedSet.has('prompts')) {
-                const merged = mergePresetListByName(localArr, offArr, { now });
+                const merged = mergePresetListByName(localArr, offArr, {
+                    now,
+                    category: 'prompts',
+                    bucketKey: provKey,
+                    bucketLabel: PROVIDER_BUCKET_LABELS[provKey] || provKey,
+                    mode,
+                    selectedKeys,
+                });
                 nextPresets.prompts[provKey] = merged.nextList;
                 overwriteCount += merged.overwriteCount;
                 addCount += merged.addCount;
                 customPreservedCount += merged.customPreservedCount;
+                items.push(...merged.diffItems);
             }
         }
         if (selectedSet.has('prompts')) {
@@ -606,6 +722,7 @@ function planOfficialPresetSync(
                 overwriteCount,
                 addCount,
                 customPreservedCount,
+                items,
             });
         }
     }
@@ -615,7 +732,14 @@ function planOfficialPresetSync(
         const merged = mergePresetListByName(
             nextPresets.workflows || [],
             official.workflows || [],
-            { now }
+            {
+                now,
+                category: 'workflows',
+                bucketKey: 'workflows',
+                bucketLabel: 'ComfyUI 工作流',
+                mode,
+                selectedKeys,
+            }
         );
         nextPresets.workflows = merged.nextList;
         diffs.push({
@@ -624,6 +748,7 @@ function planOfficialPresetSync(
             overwriteCount: merged.overwriteCount,
             addCount: merged.addCount,
             customPreservedCount: merged.customPreservedCount,
+            items: merged.diffItems,
         });
     }
 
@@ -636,6 +761,7 @@ function planOfficialPresetSync(
         let overwriteCount = 0;
         let addCount = 0;
         let customPreservedCount = 0;
+        const items: OfficialPresetDiffItem[] = [];
         const providerKeys = new Set([
             ...Object.keys(nextPresets.drawing || {}),
             ...Object.keys(official.drawing || {}),
@@ -649,6 +775,11 @@ function planOfficialPresetSync(
             );
             const merged = mergePresetListByName(localArr, offArr, {
                 now,
+                category: 'drawing',
+                bucketKey: provKey,
+                bucketLabel: PROVIDER_BUCKET_LABELS[provKey] || provKey,
+                mode,
+                selectedKeys,
                 transformData: (data) => {
                     const remapped = { ...data };
                     if (
@@ -681,6 +812,7 @@ function planOfficialPresetSync(
             overwriteCount += merged.overwriteCount;
             addCount += merged.addCount;
             customPreservedCount += merged.customPreservedCount;
+            items.push(...merged.diffItems);
         }
         diffs.push({
             category: 'drawing',
@@ -688,6 +820,7 @@ function planOfficialPresetSync(
             overwriteCount,
             addCount,
             customPreservedCount,
+            items,
         });
     }
 
@@ -696,7 +829,14 @@ function planOfficialPresetSync(
         const outfitsMerged = mergePresetListByName(
             nextPresets.outfits || [],
             official.outfits || [],
-            { now }
+            {
+                now,
+                category: 'materialsAndThemes',
+                bucketKey: 'outfits',
+                bucketLabel: '服装档案',
+                mode,
+                selectedKeys,
+            }
         );
         nextPresets.outfits = outfitsMerged.nextList;
         const outfitIdMap = buildOfficialIdMap(nextPresets.outfits, official.outfits || []);
@@ -706,6 +846,11 @@ function planOfficialPresetSync(
             official.characters || [],
             {
                 now,
+                category: 'materialsAndThemes',
+                bucketKey: 'characters',
+                bucketLabel: '角色档案',
+                mode,
+                selectedKeys,
                 transformData: (data) => {
                     if (!Array.isArray(data.boundOutfitIds)) return data;
                     return {
@@ -720,7 +865,14 @@ function planOfficialPresetSync(
         const themesMerged = mergePresetListByName(
             nextPresets.themes || [],
             official.themes || [],
-            { now }
+            {
+                now,
+                category: 'materialsAndThemes',
+                bucketKey: 'themes',
+                bucketLabel: '界面主题',
+                mode,
+                selectedKeys,
+            }
         );
         nextPresets.themes = themesMerged.nextList;
 
@@ -736,6 +888,11 @@ function planOfficialPresetSync(
                 outfitsMerged.customPreservedCount +
                 charsMerged.customPreservedCount +
                 themesMerged.customPreservedCount,
+            items: [
+                ...outfitsMerged.diffItems,
+                ...charsMerged.diffItems,
+                ...themesMerged.diffItems,
+            ],
         });
     }
 
@@ -754,15 +911,24 @@ function planOfficialPresetSync(
         let overwriteCount = 0;
         let addCount = 0;
         let customPreservedCount = 0;
+        const items: OfficialPresetDiffItem[] = [];
 
         for (const key of ruleKeys) {
             const localArr = (nextPresets[key] as PresetItem<unknown>[]) || [];
             const offArr = (official[key] as PresetItem<unknown>[]) || [];
-            const merged = mergePresetListByName(localArr, offArr, { now });
+            const merged = mergePresetListByName(localArr, offArr, {
+                now,
+                category: 'injectionAndRules',
+                bucketKey: key,
+                bucketLabel: INJECTION_BUCKET_LABELS[key] || key,
+                mode,
+                selectedKeys,
+            });
             (nextPresets as unknown as Record<string, unknown>)[key] = merged.nextList;
             overwriteCount += merged.overwriteCount;
             addCount += merged.addCount;
             customPreservedCount += merged.customPreservedCount;
+            items.push(...merged.diffItems);
         }
 
         diffs.push({
@@ -771,6 +937,7 @@ function planOfficialPresetSync(
             overwriteCount,
             addCount,
             customPreservedCount,
+            items,
         });
     }
 
@@ -2122,7 +2289,10 @@ export class SettingsStore {
             options?.categories && options.categories.length > 0
                 ? options.categories
                 : ALL_OFFICIAL_SYNC_CATEGORIES;
-        const plan = planOfficialPresetSync(this._settings.presets, official, categories);
+        const plan = planOfficialPresetSync(this._settings.presets, official, categories, {
+            mode: options?.mode,
+            selectedItemKeys: options?.selectedItemKeys,
+        });
 
         if (plan.result.totalOverwriteCount > 0 || plan.result.totalAddCount > 0) {
             this._settings = {

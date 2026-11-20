@@ -14,6 +14,7 @@ export * from './archive-confirm-modal';
 export * from './worldbook-import-modal';
 export * from './reset-factory-modal';
 export * from './changelog-modal';
+export * from './official-preset-sync-modal';
 export * from './onboarding-guide-modal';
 
 

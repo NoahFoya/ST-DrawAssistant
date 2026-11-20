@@ -309,28 +309,22 @@
     border: 1px solid var(--da-border-color);
 }
 
-/* 8. 顶栏版本徽标更新提示红点 */
-.da-header-badge-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
+/* 8. 顶栏版本徽标更新提示态（无红点，直接融入版本胶囊） */
+.da-header-badge--has-update {
+    color: var(--da-accent-color);
+    background: rgba(var(--da-accent-rgb), 0.14);
+    border-color: rgba(var(--da-accent-rgb), 0.38);
+    font-weight: 600;
 }
 
-.da-update-indicator-dot {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--da-color-error);
-    box-shadow: 0 0 6px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.8);
-    display: none;
+.da-header-badge--has-update:hover {
+    background: rgba(var(--da-accent-rgb), 0.22);
+    border-color: rgba(var(--da-accent-rgb), 0.55);
 }
 
-.da-update-indicator-dot--active {
-    display: block;
-    animation: da-pulse 2s infinite;
+.da-header-badge:focus-visible {
+    outline: 2px solid var(--da-accent-color);
+    outline-offset: 2px;
 }
 
 /* 9. 官方预设快速同步卡片 (.da-sync-card) */
@@ -469,6 +463,148 @@
 }
 
 .da-sync-card__hint {
+    font-size: 12px;
+    color: var(--da-text-secondary);
+}
+
+.da-sync-card__category-item--readonly {
+    cursor: default;
+}
+
+/* 10. 官方预设选择性同步独立弹窗 (.da-sync-modal-*) */
+.da-sync-modal-panel {
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+}
+
+.da-sync-modal-body {
+    gap: 12px;
+}
+
+.da-sync-modal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.da-sync-modal-toolbar__label {
+    font-size: 12px;
+    color: var(--da-text-secondary);
+    font-weight: 500;
+}
+
+.da-sync-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.da-sync-modal-group {
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-md, 10px);
+    background: var(--da-bg-secondary);
+    overflow: hidden;
+}
+
+.da-sync-modal-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--da-border-color);
+}
+
+.da-sync-modal-group__title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+}
+
+.da-sync-modal-group__stat {
+    font-size: 11.5px;
+    color: var(--da-text-muted);
+}
+
+.da-sync-modal-group__items {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    gap: 4px;
+}
+
+.da-sync-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--da-radius-input, 6px);
+    background: var(--da-bg-input);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.da-sync-modal-item:hover {
+    border-color: var(--da-border-highlight);
+}
+
+.da-sync-modal-item__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.da-sync-modal-item__name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--da-text-primary);
+    word-break: break-word;
+}
+
+.da-sync-modal-item__meta {
+    font-size: 11.5px;
+    color: var(--da-text-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.da-sync-modal-tag {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--da-radius-pill, 999px);
+    border: 1px solid var(--da-border-color);
+    white-space: nowrap;
+}
+
+.da-sync-modal-tag--add {
+    color: var(--da-color-success);
+    background: rgba(var(--da-color-success-rgb, 16, 185, 129), 0.14);
+    border-color: rgba(var(--da-color-success-rgb, 16, 185, 129), 0.36);
+}
+
+.da-sync-modal-tag--update {
+    color: var(--da-color-warn, #f59e0b);
+    background: var(--da-color-warn-subtle, rgba(245, 158, 11, 0.14));
+    border-color: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.36);
+}
+
+.da-sync-modal-empty {
+    padding: 24px 16px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--da-text-secondary);
+}
+
+.da-sync-modal-footer__summary {
     font-size: 12px;
     color: var(--da-text-secondary);
 }
