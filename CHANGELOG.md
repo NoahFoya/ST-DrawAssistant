@@ -4,6 +4,16 @@
 
 ---
 
+## [1.2.0] - 2026-11-20
+
+### 功能重构、NovelAI 官方对齐与内置预设梳理
+- **提示词轮询池独立管理弹窗**：将原本内联展开的 `PromptPollingPanelView` 重构为标准摘要表单行（仅在提示词预设选为「使用轮询」时显示状态徽标与「管理轮询池」按钮），点击打开独立 `PromptPollingModal` 进行批量操作与单项启停，点击「应用配置」统一回写草稿，取消/关闭则放弃弹窗内改动。
+- **对齐 NovelAI V4.5 官方参数与请求规范**：默认显式携带 `noise_schedule: "karras"`、`prefer_brownian: true`、`deliberate_euler_ancestral_bug: false` 与 `qualityToggle: false` 等 V4+ 标准参数，按模型族区分空负向 `ucPreset`（V3 发送 `3`、V4+ 发送 `4`）；开放调度器下拉选择，默认采样器与默认激活生图预设分别对齐为 `k_euler_ancestral` 与「NAI V4.5 全能旗舰 (Full)」，并为「NAI V4.5 动漫精选 (Curated)」匹配专属官方预设。
+- **对齐官方 UC / 质量后缀、故事插画预设与法典画师串**：将 V4.5 Full / Curated 官方质量词置于提示词末尾 (`positiveSuffix`)，并逐字对齐官方 Heavy / Light / Human Focus UC 原文；按官方推荐顺序与原生正负数值权重语法重写「NovelAI V4.5 故事插画预设」（保持下划线标准 Danbooru 标签）；4 组内置画师串原样引自法典图鉴（`W.O.F_画风` #0060 / #0146 / #0360 / #0052）并统一匹配官方 Full Heavy UC 基底。
+- **二级弹窗样式统一、管线修复与预设维护**：统一提取 `.da-submodal-*` 共享模态外壳样式并清理 `lora-card.css` 冗余大括号与过时 `convertWeightToBrackets` 函数；修复 `splitTopLevelTags` 连续权重重设切分边界并恢复故事插画预设第 1 步指令完整性；去重 `vocab-guidance.json` 中 48 项重复标签，补全 `material-activations.json` 示例校服条目及术语/预设完整性自动化校验。
+
+---
+
 ## [1.1.0] - 2026-11-19
 
 ### 功能更新与体验优化

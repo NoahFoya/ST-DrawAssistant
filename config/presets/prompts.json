@@ -49,62 +49,98 @@
   ],
   "novelai": [
     {
-      "id": "prompt_nai_v45_light",
-      "name": "NAI V4.5 官方动漫 (Light UC)",
+      "id": "prompt_nai_v45_heavy",
+      "name": "NAI V4.5 官方 · Heavy UC (Full)",
+      "description": "严格对齐 NovelAI V4.5 Full 官方质量后缀与 Heavy 负向预设原文（禁用服务端隐式叠加，所见即所得）",
       "data": {
-        "positivePrefix": "no text, very aesthetic, masterpiece, best quality, absurdres",
-        "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks",
+        "positivePrefix": "",
+        "positiveSuffix": "location, very aesthetic, masterpiece, no text",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     },
     {
-      "id": "prompt_nai_v45_heavy",
-      "name": "NAI V4.5 精细控制 (Heavy UC)",
+      "id": "prompt_nai_v45_light",
+      "name": "NAI V4.5 官方 · Light UC (Full)",
+      "description": "严格对齐 NovelAI V4.5 Full 官方质量后缀与 Light 负向预设原文，抑制较少、保留更丰富的环境材质",
       "data": {
-        "positivePrefix": "no text, very aesthetic, masterpiece, best quality, absurdres",
-        "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, @_@, mismatched pupils, glowing eyes, bad anatomy, bad hands, blurry",
+        "positivePrefix": "",
+        "positiveSuffix": "location, very aesthetic, masterpiece, no text",
+        "negativePrompt": "lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_v45_human_focus",
+      "name": "NAI V4.5 官方 · Human Focus UC (Full)",
+      "description": "严格对齐 NovelAI V4.5 Full 官方 Human Focus 负向预设原文，额外强化人像肢体与瞳孔细节约束",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "location, very aesthetic, masterpiece, no text",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy",
+        "loraSyntaxMode": "standard",
+        "loras": []
+      }
+    },
+    {
+      "id": "prompt_nai_v45_curated_heavy",
+      "name": "NAI V4.5 官方 · Heavy UC (Curated)",
+      "description": "严格对齐 NovelAI V4.5 Curated 官方质量后缀与 Heavy 负向预设原文，适配 Curated 精选模型",
+      "data": {
+        "positivePrefix": "",
+        "positiveSuffix": "location, masterpiece, no text, -0.8::feet::, rating:general",
+        "negativePrompt": "blurry, lowres, upscaled, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     },
     {
       "id": "prompt_nai_artist_impasto_glossy",
-      "name": "画师串 · 厚涂油润肌理",
+      "name": "画师串 · 油润水光厚涂 (W.O.F 0060)",
+      "description": "原样引自法典图鉴 NovelAI v4.5 画师词典 W.O.F_画风 #0060（modare / askzy / mako 等，无描边油润水光肌厚涂）+ 官方 Full Heavy UC",
       "data": {
-        "positivePrefix": "1.4::artist:haoni::, 1.2::artist:xiaoluo_xl::, 1.2::artist:rororo::, 1.1::artist:misaka12003-gou::, 1.1::artist:houkisei::, 0.8::artist:dishwasher1910::, 0.7::artist:thirty8ght::, 0.6::artist:pottsness::, 0.2::artist:qiandaiyiyu::, 0.9::artist:dino_(dinoartforame), artist:wanke, artist:liduke::, year 2025, 1.3::shiny skin, glossy skin, subsurface scattering::, 1.2::soft lighting, rim light, volumetric lighting::, 1.2::intricate details, impasto::, 1.4::very aesthetic, masterpiece, best quality, absurdres::, -2::flat color, anime coloring::",
+        "positivePrefix": "1.5::amazing quality, 4k, very aesthetic, absurdres::, 1.5::masterpiece::, year 2025, {{year 2024}}, 1.5::ai-generated, ai-assisted::, 2.0::official art, game_cg::, 0.7::artist: modare::, 0.9::artist: kamidan::, 0.9::artist:ask (askzy)::, 0.4::artist: amagai tarou::, 1.2::artist: mako_(makoda)::, -0.5::muted color::, 3::thin drawing lines::, 1.3::no lineart::, -0.5::anime coloring::, 1.2::oiled::, 2.0::shiny skin::",
         "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, 1.3::artist collaboration::, 1.2::bad anatomy, bad hands, extra digits, fewer digits, polydactyly, fused toes, bad feet, mismatched pupils, glowing eyes::, 1.3::plastic skin, mannequin, porcelain doll, airbrushed, cloned face::",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     },
     {
       "id": "prompt_nai_artist_kafka_mame",
       "name": "画师串 · 细腻插画质感",
+      "description": "原样引自法典图鉴 NovelAI v4.5 画师词典 W.O.F_画风 #0146（john_kafka / ningen_mame / 96yottea / freng）+ 官方 Full Heavy UC",
       "data": {
-        "positivePrefix": "year 2025, year 2024, very aesthetic, masterpiece, best quality, absurdres, 1.4::artist:john_kafka::, 0.7::artist:freng::, 0.5::artist:au_(d_elete)::, 0.5::artist:qiandaiyiyu::, 1.7::artist:ningen_mame::, 2.2::artist:96yottea::, shiny skin, intricate details",
-        "positiveSuffix": "-2::text, Japanese text::, -1.5::simple illustration::",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
+        "positivePrefix": "motion lines, motion blur, 3d, realistic, shiny skin, year2025, year2024, year2023, high detail, best quality, highres, best illustration, novel illustration, commission, very aesthetic, masterpiece, 1.4::artist:john_kafka::, 0.7::artist:freng::, 0.5::artist:au_(d_elete)::, 0.5::artist:qiandaiyiyu::, 1.7::artist:ningen_mame::, 2.2::artist:96yottea::, -5::text, Japanese text::, -2::simple illustration::, -3::artist collaboration, blurry::",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     },
     {
       "id": "prompt_nai_artist_kimeb_quasar",
       "name": "画师串 · 华丽光影精绘",
+      "description": "原样引自法典图鉴 NovelAI v4.5 画师词典 W.O.F_画风 #0360（kim eb / quasarcake / bm94199 / torino aqua 等华丽精绘串）+ 官方 Full Heavy UC",
       "data": {
-        "positivePrefix": "1.8::artist:kim eb::, 1.65::artist:quasarcake::, 1.6::artist:bm94199::, 1.6::artist:torino aqua::, 1.6::artist:yoya yogurt::, 1.3::artist:qiandaiyiyu::, 1.1::artist:dishwasher1910::, 1.1::artist:96yottea::, 1.1::artist:freng::, 0.6::artist:cutesexyrobutts::, 0.4::artist:henriiku (ahemaru)::, 0.3::artist:mx2j::, year 2025, year 2024",
-        "positiveSuffix": "1.2::ambient occlusion::, 1.1::volumetric lighting, subsurface scattering::, 1.1::intricate linework, natural shadows, subtle bloom, soft shading, smooth gradients, crisp outlines, vibrant colors, balanced contrast::, very aesthetic, masterpiece, best quality, absurdres",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
+        "positivePrefix": "1.8::artist:kim eb ::, 1.65::artist:quasarcake ::, 1.6::artist:bm94199 ::, 1.6::artist:torino aqua ::, 1.6::artist:yoya yogurt ::, 1.3::artist:qiandaiyiyu ::, 1.1::artist:dishwasher1910 ::, 1.1::artist:96yottea ::, 1.1::artist:freng ::, 0.6::artist:cutesexyrobutts ::, 0.4::artist:henriiku (ahemaru) ::, 0.3::artist:mx2j, -2::tall, curvy ::, 1::extremely detailed 8k wallpaper, 1.3::8k wallpaper ::, 1.1::ultra detailed ::, best quality, amazing quality, high resolution, masterpiece, incredibly absurdres, intricate details, highres, 5::4k ::, stunning composition, 1.2::ambient occlusion ::, ray tracing reflections, 1::subsurface scattering ::, 1.1::volumetric lighting ::, micro details, realistic shading, complex lighting, {intricate linework, realistic textures, fine details, natural shadows, subtle bloom, soft shading, smooth gradients, crisp outlines, vibrant colors, rich saturation, color harmony, balanced contrast, very aesthetic, amazing quality, absurdres, masterpiece, amazing, best quality}, -6::artist collaboration::",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     },
     {
       "id": "prompt_nai_artist_anime_ethereal",
-      "name": "画师串 · 唯美日系平涂光影",
+      "name": "画师串 · 柔和日系平涂 (W.O.F 0052)",
+      "description": "原样引自法典图鉴 NovelAI v4.5 画师词典 W.O.F_画风 #0052（hoshi / chen_bin / amashiro_natsuki / rurudo，柔和低饱和平涂）+ 官方 Full Heavy UC",
       "data": {
-        "positivePrefix": "year 2024, very aesthetic, masterpiece, best quality, absurdres, 1.2::artist:rella::, 1.1::artist:torino aqua::, 0.9::artist:ask (askzy)::, 0.7::artist:qiandaiyiyu::",
-        "positiveSuffix": "1.1::cinematic lighting, glowing light, soft shading::",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, artist collaboration, bad anatomy, bad hands, blurry",
+        "positivePrefix": "1.3::artist:hoshi_(snacherubi)::, 0.9::artist:chen_bin::, 0.7::artist:amashiro_natsuki::, 0.8::sonao::, 0.8::sparrowl::, 1::parsley::, 1::lunch_(shin_new)::, 0.9::artist:rurudo::, 1::gaou_(umaiyo_puyoman)::, 1::lakilolom::, year 2025, year 2024, anime coloring, 2::Masterpiece, best illustration, hyper detail, 8k render, no text, low saturation, soft colors, warm gentle palette, best quality, amazing quality, highres, absurdres::, -3::simple illustration::",
+        "positiveSuffix": "",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+        "loraSyntaxMode": "standard",
         "loras": []
       }
     }

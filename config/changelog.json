@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.0",
+    "date": "2026-11-20",
+    "title": "v1.2.0 轮询池独立弹窗、NovelAI 官方对齐与内置预设梳理",
+    "items": [
+      "重构提示词轮询池交互体验：将原先内联展开的轮询面板收纳为标准摘要表单行，仅在选择「使用轮询」时展示状态徽标与「管理轮询池」按钮；点击按钮打开独立管理弹窗，支持在弹窗内增删、启停或清空条目，点击「应用配置」后统一生效。",
+      "对齐 NovelAI V4.5 官方参数与请求规范：补齐 noise_schedule: \"karras\"、prefer_brownian: true、deliberate_euler_ancestral_bug: false 与 qualityToggle: false 等标准字段，按模型族发送空负向 ucPreset（V3 发送 3，V4+ 发送 4），在「采样与步数」开放调度器切换并将默认采样器与默认激活生图预设分别对齐为 k_euler_ancestral 与「NAI V4.5 全能旗舰 (Full)」。",
+      "官方对齐 NovelAI 提示词预设、故事预设与法典画师串：逐字对齐 V4.5 Full / Curated 官方质量后缀（置于末尾）及 Heavy / Light / Human Focus UC 原文；重写「NovelAI V4.5 故事插画预设」（保留下划线标签、对齐官方排布顺序与 V4.5 原生正负数值权重）；4 组内置画师串原样引自法典图鉴 W.O.F_画风词条并统一匹配官方 Full Heavy UC 基底。",
+      "统一二级模态弹窗风格与代码清理：提取并复用 .da-submodal-* 共享弹窗壳层样式，统一毛玻璃模糊、圆角、回退色、焦点环及纯图标关闭按钮；修复连续权重切分边界（splitTopLevelTags）、清除样式表冗余大括号并移除过时权重转换残留函数；完成词汇指导 48 项重复标签去重与术语检查扩展。"
+    ]
+  },
+  {
     "version": "1.1.0",
     "date": "2026-11-19",
     "title": "v1.1.0 功能更新与体验优化",

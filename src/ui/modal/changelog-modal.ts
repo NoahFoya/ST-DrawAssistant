@@ -12,6 +12,7 @@ import type { Disposable } from '../types';
 import type { ChangelogItem } from '@types';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { OfficialPresetSyncCard } from '../composite/official-preset-sync-card';
+import { renderIcon } from '../components/icons';
 import { updateService } from '../../pipeline/update-service';
 import { logger } from '../../util/logger';
 
@@ -42,46 +43,47 @@ export class ChangelogModal implements Disposable {
             return;
         }
 
-        // 1. 弹窗遮罩外壳（复用 .da-modal-backdrop 居中弹性层）
+        // 1. 弹窗遮罩外壳（复用 .da-modal-backdrop 与 .da-submodal-backdrop 统一样式）
         const backdrop = document.createElement('div');
-        backdrop.className = 'da-modal-backdrop da-changelog-backdrop st-da-root';
+        backdrop.className = 'da-modal-backdrop da-submodal-backdrop da-changelog-backdrop st-da-root';
         this.backdropEl = backdrop;
 
         // 2. 居中面板容器
         const panel = document.createElement('div');
-        panel.className = 'da-changelog-modal-panel';
+        panel.className = 'da-modal-shell da-submodal-panel da-changelog-modal-panel';
         backdrop.appendChild(panel);
 
         // 3. 头部顶栏
         const header = document.createElement('div');
-        header.className = 'da-changelog-header';
+        header.className = 'da-submodal-header da-changelog-header';
 
         const titleGroup = document.createElement('div');
-        titleGroup.className = 'da-changelog-title-group';
+        titleGroup.className = 'da-submodal-title-group da-changelog-title-group';
 
         const title = document.createElement('h3');
-        title.className = 'da-changelog-title';
+        title.className = 'da-submodal-title da-changelog-title';
         title.textContent = '版本更新说明';
         titleGroup.appendChild(title);
 
         const subtitle = document.createElement('div');
-        subtitle.className = 'da-changelog-subtitle';
+        subtitle.className = 'da-submodal-subtitle da-changelog-subtitle';
         subtitle.textContent = '查看 ST-DrawAssistant 版本更新与变更记录';
         titleGroup.appendChild(subtitle);
         header.appendChild(titleGroup);
 
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
-        closeBtn.className = 'da-btn da-btn--ghost da-btn--sm';
-        closeBtn.textContent = '✕';
+        closeBtn.className = 'da-btn da-btn--ghost da-submodal-close';
+        closeBtn.innerHTML = renderIcon('close', 16);
         closeBtn.title = '关闭 (Esc)';
+        closeBtn.setAttribute('aria-label', '关闭弹窗');
         closeBtn.onclick = () => this.handleClose(options.onClose);
         header.appendChild(closeBtn);
         panel.appendChild(header);
 
         // 4. 内容区域（内嵌官方预设快速同步面板 + 版本日志列表）
         const content = document.createElement('div');
-        content.className = 'da-changelog-content';
+        content.className = 'da-submodal-body da-changelog-content';
         panel.appendChild(content);
 
         this.syncCard = new OfficialPresetSyncCard({
@@ -95,7 +97,7 @@ export class ChangelogModal implements Disposable {
 
         // 5. 底栏操作动作
         const footer = document.createElement('div');
-        footer.className = 'da-changelog-footer';
+        footer.className = 'da-submodal-footer da-changelog-footer';
 
         const okBtn = document.createElement('button');
         okBtn.type = 'button';

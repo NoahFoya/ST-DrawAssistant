@@ -9,9 +9,9 @@
    复用 .da-modal-backdrop 的动态可视视口与滚动防裁切能力，使用最高模态层 --da-z-dialog。 */
 .da-modal-backdrop.da-dialog-backdrop {
     z-index: var(--da-z-dialog, 10060);
-    background: var(--da-bg-overlay-modal, rgba(0, 0, 0, 0.65));
-    backdrop-filter: blur(var(--da-blur-modal, 8px));
-    -webkit-backdrop-filter: blur(var(--da-blur-modal, 8px));
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
 }
 
 .da-portal-host {
@@ -88,12 +88,12 @@
 }
 
 .da-dialog-input.is-invalid {
-    border-color: var(--da-color-error, #ef4444);
+    border-color: var(--da-color-error, #f43f5e);
 }
 
 .da-dialog-error {
     font-size: var(--da-font-size-xs, 0.76rem);
-    color: var(--da-color-error, #ef4444);
+    color: var(--da-color-error, #f43f5e);
     line-height: 1.3;
 }
 

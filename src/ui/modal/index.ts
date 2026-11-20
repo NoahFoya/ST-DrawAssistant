@@ -9,6 +9,7 @@
 export * from './settings-modal';
 export * from './blueprint-modal';
 export * from './lora-modal';
+export * from './prompt-polling-modal';
 export * from './archive-confirm-modal';
 export * from './worldbook-import-modal';
 export * from './reset-factory-modal';

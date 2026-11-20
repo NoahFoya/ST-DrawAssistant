@@ -29,7 +29,7 @@
           "depth": 7,
           "role": 0,
           "order": 202,
-          "content": "<danbooru_tags category=\"extended_details\">\n\n## 选词范围与使用规范\n- 收录范围：细粒度扩展标签（特殊发型与瞳孔、亚文化与职业服饰、护甲战术装、特殊机位构图、冷热兵器、魔法特效、机械与幻想种族、环境粒子、极端天气与手持道具），在基础表粒度不足时选用。\n- 书写规范：仅提取英文标签本体写入生图提示词，括号内中文释义仅供语义检索参考。\n\n## 小众发型与特殊特征\n\n### 特殊卷发/造型\n- drill_hair\n- twin_drills\n- ringlets\n- asymmetrical_hair\n- bowl_cut\n- crown_braid\n- pageboy_cut\n\n### 特殊刘海/分区\n- centre_parting\n- side_parting\n- comb_over\n- swept_bangs\n- curtain_bangs\n- baby_hairs\n\n### 特殊瞳孔/眼部表现\n- star_pupils\n- heart_pupils\n- spiral_eyes\n- symbol_in_eyes\n- shadow_over_eyes\n- cross_eyed\n- blank_eyes\n\n## 亚文化与特殊服装\n\n### 亚文化/机能风\n- techwear\n- cyberpunk\n- steampunk\n- gothic_fashion\n- lolita_fashion\n- decora\n- mori_girl\n\n### 职业/制服类\n- military_uniform\n- police_uniform\n- idol_clothes\n- magical_girl\n- adventurer_outfit\n- track_suit\n- nun_habit\n- flight_attendant_uniform\n\n### 传统/民族服饰\n- miko\n- dirndl（德式传统裙）\n- juunihitoe（十二单衣）\n- court_dress\n- ball_gown\n- sari（纱丽）\n- hanbok（韩服）\n\n### 服装细节\n- oversized_clothes\n- cropped_clothes\n- layered_clothes\n- ripped_clothes\n- distressed_clothing\n\n## 战斗装备与护甲\n\n### 护甲类\n- plate_armor\n- pauldrons\n- gauntlets\n- greaves\n- chainmail\n- cuirass\n\n### 战术装备类\n- tactical_clothes\n- tactical_harness\n- bulletproof_vest\n- holster\n- ammo_pouch\n- webbing\n\n## 进阶镜头与极端构图\n\n### 特殊镜头/透视\n- fisheye_lens\n- dutch_angle\n- panoramic\n- vanishing_point\n- forced_perspective\n- dramatically_angled_camera\n- wide-angle\n- macro_perspective\n- tilt-shift\n\n### 构图技巧\n- framing（前景构图）\n- blurry_foreground\n- foreground\n- out_of_frame\n- vignetting\n- silhouette\n- split_screen\n- rule_of_thirds\n- leading_lines\n- negative_space\n- low_angle\n- high_angle\n\n## 武器类\n\n### 冷兵器\n- katana\n- scythe\n- broadsword\n- rapier\n- spear\n- staff\n- bow_and_arrow\n- shield\n- dagger\n- axe\n- halberd（戟）\n- flail（连枷）\n- whip\n- nunchaku（双节棍）\n- sai（十手/钗）\n\n### 热兵器\n- handgun\n- assault_rifle\n- sniper_rifle\n- shotgun\n- submachine_gun\n- machine_gun\n- revolver\n- rifle\n- cannon\n- rocket_launcher\n\n### 武器附件与状态\n- bayonet（刺刀）\n- scope（瞄准镜）\n- suppressor（消音器）\n- magazine_(weapon)（弹匣）\n- holstered\n- drawn_weapon\n\n## 魔法与视觉特效\n\n### 魔法阵/法术\n- magic_circle\n- spell_effect\n- energy_ball\n- glowing_runes\n- aura\n- mana\n\n### 元素特效\n- lightning\n- flames\n- ice_crystals\n- wind\n- water\n- earth\n- light_particles\n- darkness\n\n## 机娘与幻想种族\n\n### 机械/赛博类\n- mecha_musume\n- cybernetics\n- mechanical_arms\n- mechanical_wings\n- visor\n- exoskeleton\n- android\n- cyborg\n\n### 幻想种族 — 半人半兽\n- centaur\n- mermaid\n- harpy\n- lamia\n- arachne\n- slime_girl\n- nekomata（猫又）\n- kitsune（狐妖）\n- inugami（犬神）\n\n### 兽耳/兽尾\n- cat_ears\n- fox_ears\n- dog_ears\n- wolf_ears\n- rabbit_ears\n- cat_tail\n- fox_tail\n- dog_tail\n- multiple_tails\n\n### 角/翼/光环\n- dragon_horns\n- demon_tail\n- feathered_wings\n- bat_wings\n- dragon_wings\n- halo\n- demon_horns\n- angel_wings\n\n### 其他幻想特征\n- elf_ears\n- fangs\n- claws\n- tail\n\n## 环境粒子与极端天气\n\n### 环境粒子\n- fireflies\n- cherry_blossoms\n- falling_leaves\n- embers\n- floating_feathers\n- bubbles\n- steam（热气/水汽）\n- dust_particles\n- water_splashes\n- neon_lights\n- sparkles\n\n### 极端天气/天象\n- thunderstorm\n- sandstorm\n- blizzard\n- aurora\n- eclipse\n- meteor_shower\n- rainbow\n- tornado\n- heat_haze\n\n## 手持物与道具\n\n### 饮食类\n- holding_cup\n- holding_glass\n- holding_bottle\n- holding_food\n\n### 文具/纸质品\n- holding_book\n- holding_paper\n- holding_umbrella\n\n### 电子/科技类\n- holding_smartphone\n- holding_tablet\n- holding_camera\n- holding_headphones\n\n### 音乐类\n- holding_guitar\n- holding_microphone\n\n### 其他道具\n- holding_flower\n- holding_bag\n- holding_gift\n\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"extended_details\">\n\n## 选词范围与使用规范\n- 收录范围：细粒度扩展标签（特殊发型与瞳孔、亚文化与职业服饰、护甲战术装、特殊机位构图、冷热兵器、魔法特效、机械与幻想种族、环境粒子、极端天气与手持道具），在基础表粒度不足时选用。\n- 书写规范：仅提取英文标签本体写入生图提示词，括号内中文释义仅供语义检索参考。\n\n## 小众发型与特殊特征\n\n### 特殊卷发/造型\n- drill_hair\n- twin_drills\n- ringlets\n- asymmetrical_hair\n- bowl_cut\n- crown_braid\n- pageboy_cut\n\n### 特殊刘海/分区\n- centre_parting\n- side_parting\n- comb_over\n- swept_bangs\n- curtain_bangs\n- baby_hairs\n\n### 特殊瞳孔/眼部表现\n- star_pupils\n- heart_pupils\n- spiral_eyes\n- symbol_in_eyes\n- shadow_over_eyes\n- cross_eyed\n- blank_eyes\n\n## 亚文化与特殊服装\n\n### 亚文化/机能风\n- techwear\n- cyberpunk\n- steampunk\n- gothic_fashion\n- lolita_fashion\n- decora\n- mori_girl\n\n### 职业/制服类\n- military_uniform\n- police_uniform\n- idol_clothes\n- magical_girl\n- adventurer_outfit\n- track_suit\n- nun_habit\n- flight_attendant_uniform\n\n### 传统/民族服饰\n- miko\n- dirndl（德式传统裙）\n- juunihitoe（十二单衣）\n- court_dress\n- ball_gown\n- sari（纱丽）\n- hanbok（韩服）\n\n### 服装细节\n- oversized_clothes\n- cropped_clothes\n- layered_clothes\n- ripped_clothes\n- distressed_clothing\n\n## 战斗装备与护甲\n\n### 护甲类\n- plate_armor\n- pauldrons\n- gauntlets\n- greaves\n- chainmail\n- cuirass\n\n### 战术装备类\n- tactical_clothes\n- tactical_harness\n- bulletproof_vest\n- holster\n- ammo_pouch\n- webbing\n\n## 进阶镜头与极端构图\n\n### 特殊镜头/透视\n- fisheye_lens\n- dutch_angle\n- panoramic\n- vanishing_point\n- forced_perspective\n- dramatically_angled_camera\n- wide-angle\n- macro_perspective\n- tilt-shift\n\n### 构图技巧\n- framing（前景构图）\n- blurry_foreground\n- foreground\n- out_of_frame\n- vignetting\n- silhouette\n- split_screen\n- rule_of_thirds\n- leading_lines\n- negative_space\n- low_angle\n- high_angle\n\n## 武器类\n\n### 冷兵器\n- katana\n- scythe\n- broadsword\n- rapier\n- spear\n- staff\n- bow_and_arrow\n- shield\n- dagger\n- axe\n- halberd（戟）\n- flail（连枷）\n- whip\n- nunchaku（双节棍）\n- sai（十手/钗）\n\n### 热兵器\n- handgun\n- assault_rifle\n- sniper_rifle\n- shotgun\n- submachine_gun\n- machine_gun\n- revolver\n- rifle\n- cannon\n- rocket_launcher\n\n### 武器附件与状态\n- bayonet（刺刀）\n- scope（瞄准镜）\n- suppressor（消音器）\n- magazine_(weapon)（弹匣）\n- holstered\n- drawn_weapon\n\n## 魔法与视觉特效\n\n### 魔法阵/法术\n- magic_circle\n- spell_effect\n- energy_ball\n- glowing_runes\n- aura\n- mana\n\n### 元素特效\n- lightning\n- flames\n- ice_crystals\n- wind\n- water\n- earth\n- light_particles\n- darkness\n\n## 机娘与幻想种族\n\n### 机械/赛博类\n- mecha_musume\n- cybernetics\n- mechanical_arms\n- mechanical_wings\n- visor\n- exoskeleton\n- android\n- cyborg\n\n### 幻想种族 — 半人半兽\n- centaur\n- mermaid\n- harpy\n- lamia\n- arachne\n- slime_girl\n- nekomata（猫又）\n- kitsune（狐妖）\n- inugami（犬神）\n\n### 兽耳/兽尾\n- cat_ears\n- fox_ears\n- dog_ears\n- wolf_ears\n- rabbit_ears\n- cat_tail\n- fox_tail\n- dog_tail\n- multiple_tails\n\n### 角/翼/光环\n- dragon_horns\n- demon_tail\n- feathered_wings\n- bat_wings\n- dragon_wings\n- halo\n- demon_horns\n- angel_wings\n\n### 其他幻想特征\n- elf_ears\n- fangs\n- claws\n- tail\n\n## 环境粒子与极端天气\n\n### 环境粒子\n- fireflies\n- cherry_blossoms\n- falling_leaves\n- embers\n- floating_feathers\n- bubbles\n- steam（热气/水汽）\n- dust_particles\n- water_splashes\n- neon_lights\n- sparkles\n\n### 极端天气/天象\n- thunderstorm\n- sandstorm\n- blizzard\n- aurora\n- eclipse\n- meteor_shower\n- rainbow\n- tornado\n- heat_haze\n\n## 手持物与道具\n\n### 饮食类\n- holding_cup\n- holding_glass\n- holding_bottle\n- holding_food\n\n### 文具/纸质品\n- holding_paper\n- holding_umbrella\n\n### 电子/科技类\n- holding_smartphone\n- holding_tablet\n- holding_camera\n- holding_headphones\n\n### 音乐类\n- holding_guitar\n- holding_microphone\n\n### 其他道具\n- holding_flower\n- holding_bag\n- holding_gift\n\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_31",
@@ -42,7 +42,7 @@
           "depth": 7,
           "role": 0,
           "order": 301,
-          "content": "<danbooru_tags category=\"intimate_and_bodily\">\n\n## 选词范围与使用规范\n- 收录范围：人物生理构造细节、贴身与特殊服饰、穿脱露肤状态、道具器具、局部特写视角、情动神态及亲密互动与体液标签。\n- 书写规范：仅提取英文标签本体写入生图提示词，括号内中文释义仅供语义检索参考。\n\n## 人数与角色体态\n- 1girl\n- 1boy\n- 2girls\n- 2boys\n- hetero（男女互动）\n- shortstack（矮小丰满体型）\n- tomboy\n- chibi\n\n## 身体与私密特征\n\n### 女性生殖器与乳房\n- pussy\n- visible_pussy\n- labia（阴唇）\n- clitoris（阴蒂）\n- spread_pussy（掰开阴部）\n- pubic_mound（阴阜）\n- cervix（宫颈）\n- nipples\n- visible_nipples\n- erect_nipples\n- inverted_nipples（凹陷乳头）\n- puffy_nipples（乳晕凸起）\n- areolae（乳晕）\n- sideboob（侧乳）\n- underboob（乳下缘）\n- cleavage（乳沟）\n\n### 男性生殖器与后穴\n- penis\n- erection\n- large_penis\n- testicles（睾丸）\n- foreskin（包皮）\n- circumcised（包皮环切）\n- glans（龟头）\n- anus\n- visible_anus\n- spread_anus（掰开肛门）\n- spread_buttcheeks（掰开臀瓣）\n- hip_vent（臀下线）\n\n### 扶她特征\n- futanari（扶她）\n\n### 妊娠状态\n- pregnant（怀孕）\n\n### 阴毛与体表修饰\n- pubic_hair（阴毛）\n- shaved（剃毛）\n- hairless_pussy（无阴毛）\n- shaved_pubic_hair（剃光阴毛）\n- trimmed_pubic_hair（修剪阴毛）\n- nipple_piercing（乳环/乳钉）\n- body_piercing（体环/体钉）\n- womb_tattoo（淫纹/子宫纹）\n\n## 成人服饰与裸露状态\n\n### 成人内衣与恋物服饰\n- lingerie（情趣内衣）\n- micro_bikini（微型比基尼）\n- bunny_suit（兔女郎装）\n- garter_belt（吊袜带）\n- garter_straps（吊袜带束带）\n- fishnets（渔网袜）\n- micro_panties（微型内裤）\n- thong（丁字裤）\n- c_string（C字内裤）\n- pasties（乳贴）\n- leotard（紧身连体衣）\n- highleg（高叉）\n- virgin_killer_sweater（童贞杀手毛衣）\n\n### 衣着穿脱与裸露状态\n- partially_undressed（半脱衣）\n- clothes_lift（掀起衣物）\n- clothes_pull（拉扯衣物）\n- skirt_lift（掀起裙子）\n- shirt_lift（掀起上衣）\n- bra_lift（掀起胸罩）\n- bra_pulled_down（拉下胸罩）\n- panties_aside（内裤拨到一边）\n- panties_pulled_aside（拉偏内裤）\n- panties_down（内裤褪下）\n- flashing（闪露）\n- open_shirt（敞开衬衫）\n- transparent_clothes（透视）\n- wet_clothes（湿衣）\n- nipples_visible_through_clothes（透点）\n- cameltoe（骆驼趾/压痕）\n- crossdressing（异装/穿异性服装）\n- nude（裸体）\n- completely_nude（全裸）\n\n## 情趣器具与拘束\n\n### 常用玩具与拘束\n- sex_toy（情趣玩具）\n- vibrator（振动棒/跳蛋）\n- dildo（假阳具）\n- anal_plug（肛塞）\n- collar（项圈）\n- leash（牵引绳）\n- handcuffs（手铐）\n- rope（绳索）\n- blindfold（眼罩）\n- chastity_belt（贞操带）\n- chastity_cage（贞操锁/鸟笼）\n\n## 视角与构图特写\n\n### 窥视与局部特写\n- upskirt（裙底视角）\n- downblouse（俯视乳沟）\n- crotch_shot（胯部特写）\n- pov（第一人称视角）\n- genital_focus（生殖器焦点）\n- ass_focus（臀部焦点）\n- breast_focus（乳房焦点）\n- spread_legs（张开双腿）\n- from_below（仰视）\n\n### 构图焦点\n- female_focus（女性焦点）\n- male_focus（男性焦点）\n- solo_focus（单人焦点）\n\n### 展示姿态\n- presenting（主动展示）\n- presenting_pussy（主动展示阴部）\n- presenting_ass（主动展示臀部）\n- ass_up（翘臀）\n- face_down_ass_up（脸朝下臀朝上）\n\n## 情动与生理反应\n\n### 面部与生理反应\n- blush（脸红）\n- heavy_blush（深度脸红）\n- flushed_face（面部潮红）\n- heart_pupils（心形瞳孔）\n- open_mouth（张嘴）\n- parted_lips（双唇微张）\n- tongue_out（吐舌）\n- drooling（流口水）\n\n## 常见体位与体液\n\n### 插入与口交体位\n- missionary（传统体位/传教士）\n- doggystyle（后入式）\n- cowgirl_position（女上位）\n- reverse_cowgirl_position（反向女上位）\n- prone_bone（俯卧后入）\n- spooning（侧卧后入/汤匙式）\n- standing_sex（站立性交）\n- sitting_sex（坐姿性交）\n- behind_sex（从后方性交）\n- after_sex（事后）\n- handjob（手交）\n- fingering（指交/抠摸）\n- footjob（足交）\n- paizuri（乳交）\n- cleavage_sex（乳沟性交）\n- fellatio（口交/吹箫）\n- cunnilingus（舔阴）\n- deepthroat（深喉）\n- 69\n\n### 基础体液表现\n- cum（精液）\n- facial（颜射）\n- cum_in_mouth（口内射精）\n- cum_on_breasts（胸射）\n- cum_on_body（身体射精）\n- cum_on_ass（臀射）\n- cum_on_pussy（阴部射精）\n- dripping_cum（精液滴落）\n- creampie（内射/中出）\n- anal_creampie（肛门内射）\n- pussy_juice（爱液/淫水）\n- dripping_pussy_juice（爱液滴落）\n- saliva（唾液）\n- sweat（汗水）\n\n</danbooru_tags>",
+          "content": "<danbooru_tags category=\"intimate_and_bodily\">\n\n## 选词范围与使用规范\n- 收录范围：人物生理构造细节、贴身与特殊服饰、穿脱露肤状态、道具器具、局部特写视角、情动神态及亲密互动与体液标签。\n- 书写规范：仅提取英文标签本体写入生图提示词，括号内中文释义仅供语义检索参考。\n\n## 人数与角色体态\n- 2boys\n- hetero（男女互动）\n- shortstack（矮小丰满体型）\n\n## 身体与私密特征\n\n### 女性生殖器与乳房\n- pussy\n- visible_pussy\n- labia（阴唇）\n- clitoris（阴蒂）\n- spread_pussy（掰开阴部）\n- pubic_mound（阴阜）\n- cervix（宫颈）\n- nipples\n- visible_nipples\n- erect_nipples\n- inverted_nipples（凹陷乳头）\n- puffy_nipples（乳晕凸起）\n- areolae（乳晕）\n- sideboob（侧乳）\n- underboob（乳下缘）\n\n### 男性生殖器与后穴\n- penis\n- erection\n- large_penis\n- testicles（睾丸）\n- foreskin（包皮）\n- circumcised（包皮环切）\n- glans（龟头）\n- anus\n- visible_anus\n- spread_anus（掰开肛门）\n- spread_buttcheeks（掰开臀瓣）\n- hip_vent（臀下线）\n\n### 扶她特征\n- futanari（扶她）\n\n### 妊娠状态\n- pregnant（怀孕）\n\n### 阴毛与体表修饰\n- pubic_hair（阴毛）\n- shaved（剃毛）\n- hairless_pussy（无阴毛）\n- shaved_pubic_hair（剃光阴毛）\n- trimmed_pubic_hair（修剪阴毛）\n- nipple_piercing（乳环/乳钉）\n- body_piercing（体环/体钉）\n- womb_tattoo（淫纹/子宫纹）\n\n## 成人服饰与裸露状态\n\n### 成人内衣与恋物服饰\n- lingerie（情趣内衣）\n- micro_bikini（微型比基尼）\n- bunny_suit（兔女郎装）\n- garter_belt（吊袜带）\n- garter_straps（吊袜带束带）\n- fishnets（渔网袜）\n- micro_panties（微型内裤）\n- thong（丁字裤）\n- c_string（C字内裤）\n- pasties（乳贴）\n- highleg（高叉）\n- virgin_killer_sweater（童贞杀手毛衣）\n\n### 衣着穿脱与裸露状态\n- partially_undressed（半脱衣）\n- clothes_lift（掀起衣物）\n- clothes_pull（拉扯衣物）\n- bra_lift（掀起胸罩）\n- bra_pulled_down（拉下胸罩）\n- panties_aside（内裤拨到一边）\n- panties_pulled_aside（拉偏内裤）\n- panties_down（内裤褪下）\n- flashing（闪露）\n- open_shirt（敞开衬衫）\n- transparent_clothes（透视）\n- wet_clothes（湿衣）\n- nipples_visible_through_clothes（透点）\n- cameltoe（骆驼趾/压痕）\n- crossdressing（异装/穿异性服装）\n- nude（裸体）\n- completely_nude（全裸）\n\n## 情趣器具与拘束\n\n### 常用玩具与拘束\n- sex_toy（情趣玩具）\n- vibrator（振动棒/跳蛋）\n- dildo（假阳具）\n- anal_plug（肛塞）\n- collar（项圈）\n- leash（牵引绳）\n- handcuffs（手铐）\n- rope（绳索）\n- blindfold（眼罩）\n- chastity_belt（贞操带）\n- chastity_cage（贞操锁/鸟笼）\n\n## 视角与构图特写\n\n### 窥视与局部特写\n- upskirt（裙底视角）\n- downblouse（俯视乳沟）\n- crotch_shot（胯部特写）\n- genital_focus（生殖器焦点）\n- ass_focus（臀部焦点）\n- breast_focus（乳房焦点）\n- spread_legs（张开双腿）\n\n### 构图焦点\n- female_focus（女性焦点）\n- male_focus（男性焦点）\n- solo_focus（单人焦点）\n\n### 展示姿态\n- presenting（主动展示）\n- presenting_pussy（主动展示阴部）\n- presenting_ass（主动展示臀部）\n- ass_up（翘臀）\n- face_down_ass_up（脸朝下臀朝上）\n\n## 情动与生理反应\n\n### 面部与生理反应\n- flushed_face（面部潮红）\n- tongue_out（吐舌）\n- drooling（流口水）\n\n## 常见体位与体液\n\n### 插入与口交体位\n- missionary（传统体位/传教士）\n- doggystyle（后入式）\n- cowgirl_position（女上位）\n- reverse_cowgirl_position（反向女上位）\n- prone_bone（俯卧后入）\n- spooning（侧卧后入/汤匙式）\n- standing_sex（站立性交）\n- sitting_sex（坐姿性交）\n- behind_sex（从后方性交）\n- after_sex（事后）\n- handjob（手交）\n- fingering（指交/抠摸）\n- footjob（足交）\n- paizuri（乳交）\n- cleavage_sex（乳沟性交）\n- fellatio（口交/吹箫）\n- cunnilingus（舔阴）\n- deepthroat（深喉）\n- 69\n\n### 基础体液表现\n- cum（精液）\n- facial（颜射）\n- cum_in_mouth（口内射精）\n- cum_on_breasts（胸射）\n- cum_on_body（身体射精）\n- cum_on_ass（臀射）\n- cum_on_pussy（阴部射精）\n- dripping_cum（精液滴落）\n- creampie（内射/中出）\n- anal_creampie（肛门内射）\n- pussy_juice（爱液/淫水）\n- dripping_pussy_juice（爱液滴落）\n- saliva（唾液）\n- sweat（汗水）\n\n</danbooru_tags>",
           "matchWholeWords": true
         },
         {
@@ -56,7 +56,7 @@
           "depth": 7,
           "role": 0,
           "order": 500,
-          "content": "<danbooru_tags category=\"optics_framing\">\n  ## 视角构图\n- over_the_shoulder（过肩视角）\n- top-down_and_bottom-up（上下双视角）\n- between_breasts（双乳之间视角）\n- between_legs（双腿之间视角）\n- upskirt（裙底视角）\n- from_below（从下方仰拍）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"optics_framing\">\n  ## 视角构图\n- over_the_shoulder（过肩视角）\n- top-down_and_bottom-up（上下双视角）\n- between_breasts（双乳之间视角）\n- between_legs（双腿之间视角）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_51",
@@ -69,7 +69,7 @@
           "depth": 7,
           "role": 0,
           "order": 501,
-          "content": "<danbooru_tags category=\"apparel_dislocation\">\n  ## 衣着破损\n- panties_around_one_leg（内裤挂单腿）\n- panties_around_one_ankle（内裤挂脚踝）\n- panties_pulled_aside（内裤拉偏）\n- bra_pushed_up_above_breasts（胸罩推至乳上）\n- bra_pulled_down（胸罩拉下）\n- sleeve_pulled_down（袖子拉下）\n- skirt_held_in_mouth（嘴咬裙摆）\n- shirt_held_in_mouth（嘴咬上衣）\n- bra_strap_held_in_mouth（嘴咬胸罩带）\n- skirt_lift_from_behind（从后方掀裙）\n- shirt_rolled_up（上衣卷起）\n- clothes_unbuttoned（解开的衣物）\n- ripped_clothes（破衣）\n- ripped_shirt（破衬衫）\n- clothing_destruction（爆衣）\n- crotchless_pantyhose（开裆连裤袜）\n- torn_pantyhose（撕破连裤袜）\n- torn_stockings（撕破长筒袜）\n- transparent_clothes（透明衣物）\n- reverse_bunny_suit（反向兔女郎装）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"apparel_dislocation\">\n  ## 衣着破损\n- panties_around_one_leg（内裤挂单腿）\n- panties_around_one_ankle（内裤挂脚踝）\n- bra_pushed_up_above_breasts（胸罩推至乳上）\n- sleeve_pulled_down（袖子拉下）\n- skirt_held_in_mouth（嘴咬裙摆）\n- shirt_held_in_mouth（嘴咬上衣）\n- bra_strap_held_in_mouth（嘴咬胸罩带）\n- skirt_lift_from_behind（从后方掀裙）\n- shirt_rolled_up（上衣卷起）\n- clothes_unbuttoned（解开的衣物）\n- ripped_shirt（破衬衫）\n- clothing_destruction（爆衣）\n- crotchless_pantyhose（开裆连裤袜）\n- torn_pantyhose（撕破连裤袜）\n- torn_stockings（撕破长筒袜）\n- reverse_bunny_suit（反向兔女郎装）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_52",
@@ -82,7 +82,7 @@
           "depth": 7,
           "role": 0,
           "order": 502,
-          "content": "<danbooru_tags category=\"climax_expressions\">\n  ## 高潮表情\n- ahegao（阿黑颜）\n- rolling_eyes（翻白眼）\n- cross-eyed（对眼）\n- tears（泪水）\n- tongue_out（吐舌）\n- drooling（流口水）\n- empty_eyes（空洞眼神）\n- vacant_eyes（失神眼神）\n- mind_break（精神崩溃）\n- convulsions（抽搐）\n- overstimulation（过度刺激）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"climax_expressions\">\n  ## 高潮表情\n- ahegao（阿黑颜）\n- rolling_eyes（翻白眼）\n- cross-eyed（对眼）\n- empty_eyes（空洞眼神）\n- vacant_eyes（失神眼神）\n- mind_break（精神崩溃）\n- convulsions（抽搐）\n- overstimulation（过度刺激）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_53",
@@ -108,7 +108,7 @@
           "depth": 7,
           "role": 0,
           "order": 504,
-          "content": "<danbooru_tags category=\"manual_fingering\">\n  ## 手交与指交\n- double_handjob（双手手交）\n- reverse_handjob（反向手交）\n- ball_rubbing（揉捏睾丸）\n- ball_sucking（吸吮睾丸）\n- ball_cupping（托握睾丸）\n- fingering（指交）\n- anal_fingering（肛门指交）\n- double_fingering（双指交）\n- two_fingers_in_pussy（两指入穴）\n- three_fingers_in_pussy（三指入穴）\n- fisting（拳交）\n- anal_fisting（肛门拳交）\n- pussy_spread_fingering（掰开指交）\n- claw_hand（爪手握法）\n- finger_sucking（吸吮手指）\n- fingering_from_behind（从后方指交）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"manual_fingering\">\n  ## 手交与指交\n- double_handjob（双手手交）\n- reverse_handjob（反向手交）\n- ball_rubbing（揉捏睾丸）\n- ball_sucking（吸吮睾丸）\n- ball_cupping（托握睾丸）\n- anal_fingering（肛门指交）\n- double_fingering（双指交）\n- two_fingers_in_pussy（两指入穴）\n- three_fingers_in_pussy（三指入穴）\n- fisting（拳交）\n- anal_fisting（肛门拳交）\n- pussy_spread_fingering（掰开指交）\n- claw_hand（爪手握法）\n- finger_sucking（吸吮手指）\n- fingering_from_behind（从后方指交）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_55",
@@ -121,7 +121,7 @@
           "depth": 7,
           "role": 0,
           "order": 505,
-          "content": "<danbooru_tags category=\"footjob_hosiery\">\n  ## 足交与鞋袜\n- footjob（足交）\n- double_footjob（双足交）\n- sole_rub（脚底摩擦）\n- toe_pinch（脚趾夹住）\n- toe_gap_rub（趾缝摩擦）\n- toe_sucking（吸吮脚趾）\n- toe_licking（舔脚趾）\n- licking_sole（舔脚底）\n- heel_press（脚后跟踩压）\n- foot_sandwich（脚夹合）\n- stocking_footjob（丝袜足交）\n- high_heels_footjob（高跟鞋足交）\n- shoejob（鞋交）\n- bare_feet_footjob（赤足足交）\n- foot_worship（足崇拜）\n- stepping_on_penis（脚踩阴茎）\n- toe_curling（脚趾弯曲）\n- ankle_grab（抓握脚踝）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"footjob_hosiery\">\n  ## 足交与鞋袜\n- double_footjob（双足交）\n- sole_rub（脚底摩擦）\n- toe_pinch（脚趾夹住）\n- toe_gap_rub（趾缝摩擦）\n- toe_sucking（吸吮脚趾）\n- toe_licking（舔脚趾）\n- licking_sole（舔脚底）\n- heel_press（脚后跟踩压）\n- foot_sandwich（脚夹合）\n- stocking_footjob（丝袜足交）\n- high_heels_footjob（高跟鞋足交）\n- shoejob（鞋交）\n- bare_feet_footjob（赤足足交）\n- foot_worship（足崇拜）\n- stepping_on_penis（脚踩阴茎）\n- toe_curling（脚趾弯曲）\n- ankle_grab（抓握脚踝）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_56",
@@ -134,7 +134,7 @@
           "depth": 7,
           "role": 0,
           "order": 506,
-          "content": "<danbooru_tags category=\"paizuri_nipple\">\n  ## 乳交与胸部\n- paizuri（乳交）\n- cleavage_sex（乳沟性交）\n- paizuri_under_clothes（隔衣乳交）\n- hands_free_paizuri（无手乳交）\n- reverse_paizuri（反向乳交）\n- cross_paizuri（交叉乳交）\n- double_paizuri（双人乳交）\n- nipple_tweak（拧捏乳头）\n- nipple_fuck（乳头插入）\n- nipple_sucking（吸吮乳头）\n- nipple_biting（咬乳头）\n- nipple_pull（拉扯乳头）\n- lactating（哺乳/喷乳）\n- breast_press（压胸摩擦）\n- breast_grab（抓捏乳房）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"paizuri_nipple\">\n  ## 乳交与胸部\n- paizuri_under_clothes（隔衣乳交）\n- hands_free_paizuri（无手乳交）\n- reverse_paizuri（反向乳交）\n- cross_paizuri（交叉乳交）\n- double_paizuri（双人乳交）\n- nipple_tweak（拧捏乳头）\n- nipple_fuck（乳头插入）\n- nipple_sucking（吸吮乳头）\n- nipple_biting（咬乳头）\n- nipple_pull（拉扯乳头）\n- lactating（哺乳/喷乳）\n- breast_press（压胸摩擦）\n- breast_grab（抓捏乳房）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_57",
@@ -147,7 +147,7 @@
           "depth": 7,
           "role": 0,
           "order": 507,
-          "content": "<danbooru_tags category=\"fellatio_oral\">\n  ## 口交与深喉\n- fellatio（口交）\n- cunnilingus（舔阴）\n- deepthroat（深喉）\n- irrumatio（深喉/深喉打桩）\n- anilingus（舔肛）\n- facesitting（颜面骑乘）\n- oral_cumshot（口内射精）\n- gagging（呕吐反射）\n- licking_penis（舔舐阴茎）\n- spitroast（前后双管齐下）\n- cum_in_mouth（口内射精）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"fellatio_oral\">\n  ## 口交与深喉\n- irrumatio（深喉/深喉打桩）\n- anilingus（舔肛）\n- facesitting（颜面骑乘）\n- oral_cumshot（口内射精）\n- gagging（呕吐反射）\n- licking_penis（舔舐阴茎）\n- spitroast（前后双管齐下）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_58",
@@ -173,7 +173,7 @@
           "depth": 7,
           "role": 0,
           "order": 509,
-          "content": "<danbooru_tags category=\"fluid_details\">\n  ## 体液表现\n- cum_string（精液拉丝）\n- cum_pool（精液积潭）\n- cum_splatter（精液飞溅）\n- saliva_trail（唾液拉丝）\n- pussy_juice_drip（爱液拉丝/滴落）\n- pussy_juice_puddle（爱液积潭）\n- sweat_dripping（汗水滴落）\n- flushed_face（面部潮红）\n- goosebumps（鸡皮疙瘩）\n- squirting（潮吹）\n- facial（颜射）\n- cum_on_breasts（胸射）\n- cum_on_body（身体射精）\n- cum_on_ass（臀射）\n- bukkake（颜面群射）\n- cum_overflow（精液溢出）\n- cum_in_clothes（衣内射精）\n- cum_through_clothes（透衣射精）\n- cum_drip_pussy（精液从阴部滴落）\n- tally_marks（正字计数）\n- body_writing（身体涂鸦）\n- cum_on_face（脸部射精）\n- felching（吞精/舔食精液）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"fluid_details\">\n  ## 体液表现\n- cum_string（精液拉丝）\n- cum_pool（精液积潭）\n- cum_splatter（精液飞溅）\n- saliva_trail（唾液拉丝）\n- pussy_juice_drip（爱液拉丝/滴落）\n- pussy_juice_puddle（爱液积潭）\n- sweat_dripping（汗水滴落）\n- goosebumps（鸡皮疙瘩）\n- squirting（潮吹）\n- bukkake（颜面群射）\n- cum_overflow（精液溢出）\n- cum_in_clothes（衣内射精）\n- cum_through_clothes（透衣射精）\n- cum_drip_pussy（精液从阴部滴落）\n- tally_marks（正字计数）\n- body_writing（身体涂鸦）\n- cum_on_face（脸部射精）\n- felching（吞精/舔食精液）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_60",
@@ -186,7 +186,7 @@
           "depth": 7,
           "role": 0,
           "order": 510,
-          "content": "<danbooru_tags category=\"internal_view\">\n  ## 断面透视\n- creampie（内射）\n- anal_creampie（肛门内射）\n- cross-section（剖面图）\n- internal_view（内部视图）\n- internal_cumshot（体内射精）\n- x-ray（X光透视）\n- cervical_penetration（宫颈触碰）\n- stomach_bulge（小腹顶出）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"internal_view\">\n  ## 断面透视\n- cross-section（剖面图）\n- internal_view（内部视图）\n- internal_cumshot（体内射精）\n- x-ray（X光透视）\n- cervical_penetration（宫颈触碰）\n- stomach_bulge（小腹顶出）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_61",
@@ -212,7 +212,7 @@
           "depth": 7,
           "role": 0,
           "order": 512,
-          "content": "<danbooru_tags category=\"bdsm_sensory\">\n  ## 情趣调教\n- ball_gag（口塞球）\n- bit_gag（衔铁口塞）\n- ring_gag（环口塞）\n- spider_gag（蜘蛛口塞）\n- blindfold（眼罩）\n- nipple_clamps（乳夹）\n- clover_clamps（三叶草乳夹）\n- collar（项圈）\n- leash（牵引绳）\n- spanking（打屁股）\n- flogging（鞭打）\n- caning（藤条抽打）\n- wax_play（滴蜡）\n- electric_stimulation（电击）\n- humiliation（羞辱）\n- human_furniture（人体家具）\n- chastity_belt（贞操带）\n- chastity_cage（贞操锁）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"bdsm_sensory\">\n  ## 情趣调教\n- ball_gag（口塞球）\n- bit_gag（衔铁口塞）\n- ring_gag（环口塞）\n- spider_gag（蜘蛛口塞）\n- nipple_clamps（乳夹）\n- clover_clamps（三叶草乳夹）\n- spanking（打屁股）\n- flogging（鞭打）\n- caning（藤条抽打）\n- wax_play（滴蜡）\n- electric_stimulation（电击）\n- humiliation（羞辱）\n- human_furniture（人体家具）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_63",
@@ -303,7 +303,7 @@
           "depth": 7,
           "role": 0,
           "order": 519,
-          "content": "<danbooru_tags category=\"crossdress_genderswap\">\n  ## 性别转换\n- crossdressing（异装）\n- otoko_no_ko（伪娘/男の娘）\n- genderswap（性别转换）\n- mtf（男变女）\n- ftm（女变男）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"crossdress_genderswap\">\n  ## 性别转换\n- otoko_no_ko（伪娘/男の娘）\n- genderswap（性别转换）\n- mtf（男变女）\n- ftm（女变男）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_70",
@@ -316,7 +316,7 @@
           "depth": 7,
           "role": 0,
           "order": 520,
-          "content": "<danbooru_tags category=\"pregnancy_maternity\">\n  ## 妊娠与孕期\n- pregnant（怀孕）\n- belly_bulge（腹部隆起）\n</danbooru_tags>"
+          "content": "<danbooru_tags category=\"pregnancy_maternity\">\n  ## 妊娠与孕期\n- belly_bulge（腹部隆起）\n</danbooru_tags>"
         },
         {
           "id": "vocab_uid_71",

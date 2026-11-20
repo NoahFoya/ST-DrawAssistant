@@ -67,33 +67,37 @@
   ],
   "novelai": [
     {
-      "id": "novelai_v45_curated",
-      "name": "NAI V4.5 动漫精选 (Curated)",
-      "description": "NovelAI V4.5 Curated 旗舰二次元模型，默认绑定基础画质提示词预设，可在下方按需切换为画师串轮询",
-      "data": {
-        "baseModel": "nai-diffusion-4-5-curated",
-        "width": 832,
-        "height": 1216,
-        "steps": 28,
-        "cfgScale": 5,
-        "samplerName": "k_euler",
-        "convertSyntax": true,
-        "promptPresetId": "prompt_nai_v45_light"
-      }
-    },
-    {
       "id": "novelai_v45_full",
       "name": "NAI V4.5 全能旗舰 (Full)",
-      "description": "NovelAI V4.5 Full 完整模型，题材泛化更广，适合多样化构图与高精细度画师串表现",
+      "description": "NovelAI V4.5 Full 完整模型（官方推荐 28 步 / CFG 5 / k_euler_ancestral / karras），默认绑定官方 Full Heavy UC",
       "data": {
         "baseModel": "nai-diffusion-4-5-full",
         "width": 832,
         "height": 1216,
         "steps": 28,
         "cfgScale": 5,
-        "samplerName": "k_euler",
+        "samplerName": "k_euler_ancestral",
+        "scheduler": "karras",
+        "cfgRescale": 0,
         "convertSyntax": true,
-        "promptPresetId": "prompt_nai_v45_light"
+        "promptPresetId": "prompt_nai_v45_heavy"
+      }
+    },
+    {
+      "id": "novelai_v45_curated",
+      "name": "NAI V4.5 动漫精选 (Curated)",
+      "description": "NovelAI V4.5 Curated 精选二次元模型（官方推荐 28 步 / CFG 5 / k_euler_ancestral / karras），默认绑定官方 Curated Heavy UC",
+      "data": {
+        "baseModel": "nai-diffusion-4-5-curated",
+        "width": 832,
+        "height": 1216,
+        "steps": 28,
+        "cfgScale": 5,
+        "samplerName": "k_euler_ancestral",
+        "scheduler": "karras",
+        "cfgRescale": 0,
+        "convertSyntax": true,
+        "promptPresetId": "prompt_nai_v45_curated_heavy"
       }
     }
   ],
