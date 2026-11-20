@@ -53,26 +53,26 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
 
     // 1. 全屏遮罩外壳
     const backdrop = document.createElement('div');
-    backdrop.className = 'da-modal-backdrop st-da-root da-lora-modal-backdrop';
+    backdrop.className = 'da-modal-backdrop st-da-root da-submodal-backdrop da-lora-modal-backdrop';
 
     // 2. 居中模态面板
     const panel = document.createElement('div');
-    panel.className = 'da-modal-shell da-lora-modal-panel';
+    panel.className = 'da-modal-shell da-submodal-panel da-lora-modal-panel';
 
     // 3. 头部顶栏
     const header = document.createElement('div');
-    header.className = 'da-lora-modal-header';
+    header.className = 'da-submodal-header da-lora-modal-header';
 
     const titleBox = document.createElement('div');
-    titleBox.className = 'da-lora-modal-title-group';
+    titleBox.className = 'da-submodal-title-group da-lora-modal-title-group';
 
     const titleText = document.createElement('span');
-    titleText.className = 'da-lora-modal-title';
+    titleText.className = 'da-submodal-title da-lora-modal-title';
     titleText.textContent = 'LoRA 模型与权重配置';
     titleBox.appendChild(titleText);
 
     const subtitleText = document.createElement('span');
-    subtitleText.className = 'da-lora-modal-subtitle';
+    subtitleText.className = 'da-submodal-subtitle da-lora-modal-subtitle';
     subtitleText.textContent = '从已同步的服务端模型列表中输入关键词联想选择并添加，关闭单条开关可停用该模型';
     titleBox.appendChild(subtitleText);
 
@@ -80,7 +80,7 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
 
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
-    closeBtn.className = 'da-lora-modal-close';
+    closeBtn.className = 'da-submodal-close da-lora-modal-close';
     closeBtn.innerHTML = renderIcon('close', 16);
     closeBtn.title = '关闭 (Esc)';
     closeBtn.setAttribute('aria-label', '关闭弹窗');
@@ -89,7 +89,7 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
 
     // 4. 内容主体区域（内嵌 LoraManager，包含模式选择表单行、联想下拉框与已挂载列表）
     const body = document.createElement('div');
-    body.className = 'da-lora-modal-body';
+    body.className = 'da-submodal-body da-lora-modal-body';
 
     const clearAllBtn = document.createElement('button');
     clearAllBtn.type = 'button';
@@ -112,10 +112,10 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
 
     // 5. 底部操作栏
     const footer = document.createElement('div');
-    footer.className = 'da-lora-modal-footer';
+    footer.className = 'da-submodal-footer da-lora-modal-footer';
 
     const footerLeft = document.createElement('div');
-    footerLeft.className = 'da-lora-modal-footer__left';
+    footerLeft.className = 'da-submodal-footer__left da-lora-modal-footer__left';
 
     clearAllBtn.onclick = () => {
         loraManager.setItems([]);
@@ -124,7 +124,7 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
     footer.appendChild(footerLeft);
 
     const footerRight = document.createElement('div');
-    footerRight.className = 'da-lora-modal-footer__right';
+    footerRight.className = 'da-submodal-footer__right da-lora-modal-footer__right';
 
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';

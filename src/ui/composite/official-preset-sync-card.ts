@@ -1,19 +1,17 @@
 /**
- * 官方预设快速同步复合卡片 (OfficialPresetSyncCard)。
+ * 官方预设更新摘要卡片 (OfficialPresetSyncCard)。
  *
  * @remarks
- * 共用于更新说明弹窗 (ChangelogModal) 与「关于与维护」选项卡：
- * 1. 基于 `settingsStore.previewOfficialPresetSync()` 实时计算 5 大分类的差异统计；
- * 2. 支持按分类勾选同步（保护已微调的本地绘图参数等），默认全部勾选；
- * 3. 执行非破坏性覆盖式同步：仅覆盖同名官方预设与补充新增官方项，完整保留用户自建与改名副本。
+ * 共用于更新说明弹窗 (ChangelogModal) 与「关于与支持」选项卡：
+ * 1. 基于 `settingsStore.previewOfficialPresetSync()` 实时汇总 5 大分类的「新增」与「官方有更新」统计；
+ * 2. 提供一键「补充新增」（仅补充本地缺失的新官方预设，绝不覆盖用户已微调的参数）；
+ * 3. 提供「查看差异并选择性更新...」打开独立弹窗，逐条勾选需要覆盖更新或新增的官方预设（与「恢复出厂设置」职责分离）。
  */
 
 import type { Disposable, UIComponent } from '../types';
 import {
-    ALL_OFFICIAL_SYNC_CATEGORIES,
     settingsStore,
     type OfficialPresetCategoryDiff,
-    type OfficialPresetSyncCategory,
     type OfficialPresetSyncResult,
 } from '../../store/settings-store';
 import { updateService } from '../../pipeline/update-service';
@@ -21,6 +19,7 @@ import { eventBus } from '../../util/event-bus';
 import { Button } from '../components/button';
 import { Toast } from '../feedback/toast';
 import { logger } from '../../util/logger';
+import { openOfficialPresetSyncModal } from '../modal/official-preset-sync-modal';
 
 export interface OfficialPresetSyncCardOptions {
     /** 卡片标题 */
@@ -35,8 +34,8 @@ export interface OfficialPresetSyncCardOptions {
 
 function formatDiffSummary(diff: OfficialPresetCategoryDiff): string {
     const parts: string[] = [];
-    if (diff.overwriteCount > 0) parts.push(`覆盖同名 ${diff.overwriteCount} 项`);
     if (diff.addCount > 0) parts.push(`新增 ${diff.addCount} 项`);
+    if (diff.overwriteCount > 0) parts.push(`可更新 ${diff.overwriteCount} 项`);
     if (parts.length === 0) return '已是最新';
     return parts.join(' · ');
 }
@@ -44,9 +43,6 @@ function formatDiffSummary(diff: OfficialPresetCategoryDiff): string {
 export class OfficialPresetSyncCard implements UIComponent, Disposable {
     public readonly element: HTMLElement;
 
-    private readonly selectedCategories = new Set<OfficialPresetSyncCategory>(
-        ALL_OFFICIAL_SYNC_CATEGORIES
-    );
     private latestPreview: OfficialPresetSyncResult | null = null;
     private isLoadingPreview = false;
     private isSyncing = false;
@@ -54,7 +50,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
 
     private readonly summaryBadgeEl: HTMLElement;
     private readonly categoriesContainer: HTMLElement;
-    private readonly syncBtn: Button;
+    private readonly addOnlyBtn: Button;
+    private readonly manageBtn: Button;
     private readonly refreshBtn: Button;
     private readonly options: OfficialPresetSyncCardOptions;
     private unlistenSettings: (() => void) | null = null;
@@ -79,13 +76,13 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
 
         const titleEl = document.createElement('div');
         titleEl.className = 'da-sync-card__title';
-        titleEl.textContent = options.title || '官方预设快速同步（覆盖同名 + 补充新增）';
+        titleEl.textContent = options.title || '官方预设更新（增量补充与选择性同步）';
         titleWrap.appendChild(titleEl);
 
         const descEl = document.createElement('div');
         descEl.className = 'da-sync-card__desc';
         descEl.textContent =
-            '仅覆盖更新与官方同名的默认预设并补充新增官方项（保留现有绑定 ID），不会删除或改动您的其他自定义预设。';
+            '「补充新增」仅导入缺失的新增官方预设，不改动您已调整的参数；若需更新已有官方预设，请点击「选择性更新」逐条勾选。';
         titleWrap.appendChild(descEl);
 
         header.appendChild(titleWrap);
@@ -104,12 +101,19 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
         const footer = document.createElement('div');
         footer.className = 'da-sync-card__actions';
 
-        this.syncBtn = new Button({
-            label: '快速同步选中预设',
+        this.addOnlyBtn = new Button({
+            label: '补充新增预设',
             variant: 'primary',
             size: 'sm',
             disabled: true,
-            onClick: () => void this.handleSync(),
+            onClick: () => void this.handleAddOnlySync(),
+        });
+        this.manageBtn = new Button({
+            label: '查看差异并选择性更新...',
+            variant: 'secondary',
+            size: 'sm',
+            disabled: true,
+            onClick: () => this.handleOpenSyncModal(),
         });
         this.refreshBtn = new Button({
             label: '重新检测',
@@ -118,7 +122,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
             onClick: () => void this.refreshPreview(true),
         });
 
-        footer.appendChild(this.syncBtn.element);
+        footer.appendChild(this.addOnlyBtn.element);
+        footer.appendChild(this.manageBtn.element);
         footer.appendChild(this.refreshBtn.element);
         this.element.appendChild(footer);
 
@@ -169,21 +174,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
         }
 
         for (const diff of this.latestPreview.categories) {
-            const row = document.createElement('label');
-            row.className = 'da-sync-card__category-item';
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'da-sync-card__checkbox';
-            checkbox.checked = this.selectedCategories.has(diff.category);
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    this.selectedCategories.add(diff.category);
-                } else {
-                    this.selectedCategories.delete(diff.category);
-                }
-                this.updateControlsState();
-            });
+            const row = document.createElement('div');
+            row.className = 'da-sync-card__category-item da-sync-card__category-item--readonly';
 
             const labelText = document.createElement('span');
             labelText.className = 'da-sync-card__category-label';
@@ -196,7 +188,6 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
                     : 'da-sync-card__category-stat';
             statText.textContent = formatDiffSummary(diff);
 
-            row.appendChild(checkbox);
             row.appendChild(labelText);
             row.appendChild(statText);
             this.categoriesContainer.appendChild(row);
@@ -207,7 +198,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
         if (this.isLoadingPreview) {
             this.summaryBadgeEl.textContent = '正在检测差异...';
             this.summaryBadgeEl.className = 'da-sync-card__badge';
-            this.syncBtn.setDisabled(true);
+            this.addOnlyBtn.setDisabled(true);
+            this.manageBtn.setDisabled(true);
             this.refreshBtn.setDisabled(true);
             return;
         }
@@ -217,58 +209,68 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
         if (!this.latestPreview) {
             this.summaryBadgeEl.textContent = '检测失败';
             this.summaryBadgeEl.className = 'da-sync-card__badge';
-            this.syncBtn.setDisabled(true);
+            this.addOnlyBtn.setDisabled(true);
+            this.manageBtn.setDisabled(true);
             return;
         }
 
-        let selectedOverwrite = 0;
-        let selectedAdd = 0;
-        for (const diff of this.latestPreview.categories) {
-            if (this.selectedCategories.has(diff.category)) {
-                selectedOverwrite += diff.overwriteCount;
-                selectedAdd += diff.addCount;
-            }
-        }
-        const hasPendingChanges = selectedOverwrite + selectedAdd > 0;
+        const addCount = this.latestPreview.totalAddCount;
+        const updateCount = this.latestPreview.totalOverwriteCount;
         const preserved = this.latestPreview.totalCustomPreservedCount;
+        const totalDiffs = addCount + updateCount;
 
         if (this.isSyncing) {
-            this.syncBtn.setLabel('正在同步...');
-            this.syncBtn.setDisabled(true);
+            this.addOnlyBtn.setLabel('正在补充...');
+            this.addOnlyBtn.setDisabled(true);
+            this.manageBtn.setDisabled(true);
             return;
         }
 
-        if (this.latestPreview.totalOverwriteCount + this.latestPreview.totalAddCount === 0) {
+        if (totalDiffs === 0) {
             this.summaryBadgeEl.textContent = `全部官方预设已最新${preserved > 0 ? ` · 保留自建 ${preserved} 项` : ''}`;
             this.summaryBadgeEl.className = 'da-sync-card__badge da-sync-card__badge--ok';
-            this.syncBtn.setLabel('官方预设已是最新');
-            this.syncBtn.setDisabled(true);
-        } else if (!hasPendingChanges) {
-            this.summaryBadgeEl.textContent = '未勾选存在变更的分类';
-            this.summaryBadgeEl.className = 'da-sync-card__badge';
-            this.syncBtn.setLabel('请选择需同步的分类');
-            this.syncBtn.setDisabled(true);
+            this.addOnlyBtn.setLabel('暂无新增预设');
+            this.addOnlyBtn.setDisabled(true);
+            this.manageBtn.setLabel('查看差异明细');
+            this.manageBtn.setDisabled(true);
         } else {
-            this.summaryBadgeEl.textContent = `待更新 ${selectedOverwrite} 项 · 新增 ${selectedAdd} 项${preserved > 0 ? ` · 保留自建 ${preserved} 项` : ''}`;
+            const badgeParts: string[] = [];
+            if (addCount > 0) badgeParts.push(`新增 ${addCount} 项`);
+            if (updateCount > 0) badgeParts.push(`可更新 ${updateCount} 项`);
+            if (preserved > 0) badgeParts.push(`保留自建 ${preserved} 项`);
+            this.summaryBadgeEl.textContent = badgeParts.join(' · ');
             this.summaryBadgeEl.className = 'da-sync-card__badge da-sync-card__badge--pending';
-            this.syncBtn.setLabel(`快速同步 (${selectedOverwrite + selectedAdd} 项变更)`);
-            this.syncBtn.setDisabled(false);
+
+            this.addOnlyBtn.setLabel(addCount > 0 ? `补充新增 (${addCount} 项)` : '暂无新增预设');
+            this.addOnlyBtn.setDisabled(addCount === 0);
+            this.manageBtn.setLabel(`查看差异并选择性更新 (${totalDiffs})`);
+            this.manageBtn.setDisabled(false);
         }
     }
 
-    private async handleSync(): Promise<void> {
-        if (this.isSyncing || this.selectedCategories.size === 0) return;
+    private handleOpenSyncModal(): void {
+        openOfficialPresetSyncModal({
+            initialPreview: this.latestPreview,
+            onSyncComplete: (result) => {
+                this.options.onSyncComplete?.(result);
+                void this.refreshPreview(false);
+            },
+        });
+    }
+
+    private async handleAddOnlySync(): Promise<void> {
+        if (this.isSyncing || !this.latestPreview || this.latestPreview.totalAddCount === 0) return;
         this.isSyncing = true;
         this.updateControlsState();
 
         try {
             const result = await settingsStore.syncOfficialPresets({
-                categories: Array.from(this.selectedCategories),
+                mode: 'add-only',
                 loaderOptions: { forceReload: true },
             });
             updateService.markChangelogAsSeen();
             Toast.show(
-                `同步完成：覆盖同名 ${result.totalOverwriteCount} 项，补充新增 ${result.totalAddCount} 项（已保留自建 ${result.totalCustomPreservedCount} 项）`,
+                `已安全补充 ${result.totalAddCount} 项新增官方预设（未覆盖任何已有预设）`,
                 {
                     level: 'success',
                     duration: 4000,
@@ -278,8 +280,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
             await this.refreshPreview(false);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            logger.error('[OfficialPresetSyncCard] 同步官方预设失败:', err);
-            Toast.show(`同步官方预设失败: ${msg}`, { level: 'error' });
+            logger.error('[OfficialPresetSyncCard] 补充新增官方预设失败:', err);
+            Toast.show(`补充官方预设失败: ${msg}`, { level: 'error' });
         } finally {
             this.isSyncing = false;
             if (!this.isDisposed) {
@@ -295,7 +297,8 @@ export class OfficialPresetSyncCard implements UIComponent, Disposable {
             this.unlistenSettings();
             this.unlistenSettings = null;
         }
-        this.syncBtn.dispose();
+        this.addOnlyBtn.dispose();
+        this.manageBtn.dispose();
         this.refreshBtn.dispose();
         this.element.parentElement?.removeChild(this.element);
     }

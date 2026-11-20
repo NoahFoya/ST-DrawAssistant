@@ -61,6 +61,16 @@ export function resolveNovelAIEndpoint(serverUrl: string): string {
     return `${trimmed}${NOVELAI_GENERATE_ENDPOINT}`;
 }
 
+/**
+ * 返回 NovelAI 对应模型架构下禁用内置 Undesired Content 预设（None）的 `ucPreset` 枚举值。
+ *
+ * @remarks
+ * V3 架构中 `3` 代表 None；V4 / V4.5 / V5 架构调整为 `0 Heavy / 1 Light / 2 Furry Focus / 3 Human Focus / 4 None`。
+ */
+export function resolveNovelAIUcPresetNone(modelFamily: 'v3' | 'v4' | 'v5'): number {
+    return modelFamily === 'v3' ? 3 : 4;
+}
+
 /** 响应体负载格式识别结果 */
 type ResponseBodyType = 'zip' | 'json' | 'image' | 'unknown';
 
@@ -663,7 +673,14 @@ export class NovelAIProvider extends BaseGenerationProvider {
 
         const resolvedSteps = (params.steps ?? drawingPreset?.steps ?? 28) as number;
         const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale ?? 5.0) as number;
-        const resolvedSampler = (params.samplerName ?? drawingPreset?.samplerName ?? 'k_euler') as string;
+        const resolvedSampler = (params.samplerName ?? drawingPreset?.samplerName ?? 'k_euler_ancestral') as string;
+        const rawScheduler = (params.scheduler ?? params.noise_schedule ?? drawingPreset?.scheduler) as
+            | string
+            | undefined;
+        const resolvedScheduler =
+            typeof rawScheduler === 'string' && rawScheduler.trim()
+                ? rawScheduler.trim()
+                : 'karras';
         const resolvedSeed =
             typeof params.seed === 'number' && Number.isFinite(params.seed) && params.seed >= 0
                 ? Math.floor(params.seed)
@@ -674,33 +691,44 @@ export class NovelAIProvider extends BaseGenerationProvider {
                   : Math.floor(Math.random() * 2 ** 32);
 
         // 5. 组装 NovelAI 专有生成参数
-        // 固定携带 ucPreset: 3 (None) 禁用意外预设追加，负向词完全由本地提示词预设与指令管理
+        // 禁用服务端内置 UC 预设，负向词完全由本地提示词预设与指令管理
         const generationParams: Record<string, unknown> = {
             width: resolvedWidth,
             height: resolvedHeight,
             steps: resolvedSteps,
             scale: resolvedCfgScale,
             sampler: resolvedSampler,
+            noise_schedule: resolvedScheduler,
             seed: resolvedSeed,
             n_samples: 1,
-            ucPreset: 3,
+            ucPreset: resolveNovelAIUcPresetNone(modelFamily),
         };
 
         // 引导重缩放 (CFG Rescale)
         const rawCfgRescale = (params.cfgRescale ?? drawingPreset?.cfgRescale) as number | undefined;
         const resolvedCfgRescale =
             typeof rawCfgRescale === 'number' && rawCfgRescale > 0 ? rawCfgRescale : undefined;
-        if (resolvedCfgRescale !== undefined) {
-            generationParams['cfg_rescale'] = resolvedCfgRescale;
-        }
 
         let resolvedSmeaMode: string | undefined;
         let resolvedDecrisper: boolean | undefined;
 
         // 依据模型家族分流构造核心请求体
         if (isV4OrHigher) {
-            // V4/V4.5/V5 官方要求提供 params_version 与结构化 v4_prompt / v4_negative_prompt
+            // V4/V4.5/V5 官方要求提供 params_version、标准采样控制标识与结构化 v4_prompt / v4_negative_prompt
             generationParams['params_version'] = isV5 ? 4 : 3;
+            generationParams['qualityToggle'] = false;
+            generationParams['autoSmea'] = false;
+            generationParams['dynamic_thresholding'] = false;
+            generationParams['controlnet_strength'] = 1;
+            generationParams['legacy'] = false;
+            generationParams['add_original_image'] = true;
+            generationParams['cfg_rescale'] = resolvedCfgRescale ?? 0;
+            generationParams['legacy_v3_extend'] = false;
+            generationParams['skip_cfg_above_sigma'] = null;
+            generationParams['use_coords'] = false;
+            generationParams['characterPrompts'] = [];
+            generationParams['deliberate_euler_ancestral_bug'] = false;
+            generationParams['prefer_brownian'] = true;
             generationParams['v4_prompt'] = {
                 caption: {
                     base_caption: resolvedPrompt,
@@ -718,7 +746,10 @@ export class NovelAIProvider extends BaseGenerationProvider {
             };
             generationParams['negative_prompt'] = resolvedNegative;
         } else {
-            // V3 经典架构：扁平 negative_prompt，支持 SMEA 与 Decrisper
+            // V3 经典架构：扁平 negative_prompt，支持 CFG Rescale、SMEA 与 Decrisper
+            if (resolvedCfgRescale !== undefined) {
+                generationParams['cfg_rescale'] = resolvedCfgRescale;
+            }
             generationParams['negative_prompt'] = resolvedNegative;
 
             const smeaMode = (params.smeaMode ?? drawingPreset?.smeaMode ?? 'smea_dyn') as string;
@@ -863,6 +894,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             negativePrompt: resolvedNegative || undefined,
             seed: resolvedSeed,
             sampler: resolvedSampler,
+            scheduler: resolvedScheduler,
             steps: resolvedSteps,
             cfgScale: resolvedCfgScale,
             cfgRescale: resolvedCfgRescale,

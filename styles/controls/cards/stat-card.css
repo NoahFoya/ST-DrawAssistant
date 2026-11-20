@@ -60,7 +60,7 @@
 
 /* 状态修饰符 */
 .da-stat-card--success .da-stat-card__val {
-    color: var(--da-color-success, #30d158);
+    color: var(--da-color-success, #10b981);
 }
 
 .da-stat-card--warn .da-stat-card__val {
@@ -68,7 +68,7 @@
 }
 
 .da-stat-card--danger .da-stat-card__val {
-    color: var(--da-color-error, #ef4444);
+    color: var(--da-color-error, #f43f5e);
 }
 
 .da-stat-card--fav {
@@ -185,11 +185,11 @@
 }
 
 .da-stat-legend-dot--bar {
-    background: var(--da-accent-color, #6366f1);
+    background: var(--da-accent-color, #cba6f7);
 }
 
 .da-stat-legend-dot--line {
-    background: var(--da-accent-secondary, #38bdf8);
+    background: var(--da-accent-secondary, #89b4fa);
     border-radius: 50%;
 }
 

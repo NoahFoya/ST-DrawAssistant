@@ -497,9 +497,9 @@ export class AboutTabView extends PreactSettingsView {
                     </div>
                 </div>
 
-                {/* 分组 2: 官方预设快速同步 */}
+                {/* 分组 2: 官方预设更新 */}
                 <div className="da-settings-section">
-                    <h3 className="da-settings-section__title">官方预设快速同步</h3>
+                    <h3 className="da-settings-section__title">官方预设更新</h3>
                     <OfficialPresetSyncCardView />
                 </div>
 

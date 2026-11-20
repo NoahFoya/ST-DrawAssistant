@@ -103,25 +103,25 @@ export function openWorldbookImportModal(options: WorldbookImportModalOptions): 
 
     // 1. 遮罩与面板容器
     const backdrop = document.createElement('div');
-    backdrop.className = 'da-modal-backdrop st-da-root da-prompt-import-backdrop';
+    backdrop.className = 'da-modal-backdrop st-da-root da-submodal-backdrop da-prompt-import-backdrop';
 
     const panel = document.createElement('div');
-    panel.className = 'da-modal-shell da-lora-modal-panel da-prompt-import-panel';
+    panel.className = 'da-modal-shell da-submodal-panel da-prompt-import-panel';
 
     // 2. 顶栏
     const header = document.createElement('div');
-    header.className = 'da-lora-modal-header';
+    header.className = 'da-submodal-header';
 
     const titleGroup = document.createElement('div');
-    titleGroup.className = 'da-lora-modal-title-group';
+    titleGroup.className = 'da-submodal-title-group';
 
     const titleEl = document.createElement('span');
-    titleEl.className = 'da-lora-modal-title';
+    titleEl.className = 'da-submodal-title';
     titleEl.textContent = `导入酒馆原生世界书：${options.parsed.name}`;
     titleGroup.appendChild(titleEl);
 
     const subtitleEl = document.createElement('span');
-    subtitleEl.className = 'da-lora-modal-subtitle';
+    subtitleEl.className = 'da-submodal-subtitle';
     subtitleEl.textContent = `共解析 ${items.length} 条世界书条目（完整保留原书分隔线与注释项），请勾选需要导入的条目`;
     titleGroup.appendChild(subtitleEl);
 
@@ -129,15 +129,16 @@ export function openWorldbookImportModal(options: WorldbookImportModalOptions): 
 
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
-    closeBtn.className = 'da-lora-modal-close';
+    closeBtn.className = 'da-submodal-close';
     closeBtn.innerHTML = renderIcon('close', 16);
     closeBtn.title = '关闭 (Esc)';
+    closeBtn.setAttribute('aria-label', '关闭弹窗');
     header.appendChild(closeBtn);
     panel.appendChild(header);
 
     // 3. 主体区：导入模式配置 + 快捷勾选工具栏 + 条目勾选列表
     const body = document.createElement('div');
-    body.className = 'da-lora-modal-body da-prompt-import-body';
+    body.className = 'da-submodal-body da-prompt-import-body';
 
     const topControls = document.createElement('div');
     topControls.className = 'da-prompt-import-controls';
@@ -275,14 +276,14 @@ export function openWorldbookImportModal(options: WorldbookImportModalOptions): 
 
     // 4. 底栏
     const footer = document.createElement('div');
-    footer.className = 'da-lora-modal-footer';
+    footer.className = 'da-submodal-footer';
 
     const footerLeft = document.createElement('div');
-    footerLeft.className = 'da-lora-modal-footer__left da-prompt-import-count';
+    footerLeft.className = 'da-submodal-footer__left da-prompt-import-count';
     footer.appendChild(footerLeft);
 
     const footerRight = document.createElement('div');
-    footerRight.className = 'da-lora-modal-footer__right';
+    footerRight.className = 'da-submodal-footer__right';
 
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';

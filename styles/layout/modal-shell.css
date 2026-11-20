@@ -31,9 +31,9 @@ html.da-has-active-modal body {
     left: var(--da-vv-left, 0px);
     width: var(--da-vvw, 100vw);
     height: var(--da-vvh, 100dvh);
-    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.78));
-    backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--da-blur-modal, 14px)) saturate(140%);
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px)) saturate(140%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -86,7 +86,7 @@ html.da-has-active-modal body {
     overflow: hidden;
     background: var(--da-bg-modal);
     border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-modal, 12px);
+    border-radius: var(--da-radius-modal, 16px);
     box-shadow: var(--da-shadow-modal);
     animation: da-modal-slide-in 0.22s var(--da-ease);
     box-sizing: border-box;
@@ -113,7 +113,9 @@ html.da-has-active-modal body {
 /* 4. 独立恢复出厂设置细分模态弹窗 (.da-reset-factory-panel) */
 .da-modal-backdrop.da-reset-factory-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
-    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
 }
 
 .da-reset-factory-panel {
@@ -121,10 +123,10 @@ html.da-has-active-modal body {
     max-height: calc(var(--da-vvh, 100dvh) - 24px);
     display: flex;
     flex-direction: column;
-    background: var(--da-bg-modal, #18191f);
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-modal, 12px);
-    box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.6));
+    background: var(--da-bg-modal, #1e1e2e);
+    border: 1px solid var(--da-border-color);
+    border-radius: var(--da-radius-modal, 16px);
+    box-shadow: var(--da-shadow-modal);
     overflow: hidden;
     box-sizing: border-box;
     animation: da-modal-slide-in 0.2s var(--da-ease);
@@ -135,29 +137,29 @@ html.da-has-active-modal body {
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    padding: 16px 20px 14px 20px;
-    border-bottom: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    background: var(--da-bg-modal, #18191f);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
     flex-shrink: 0;
 }
 
 .da-reset-factory-title-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
 }
 
 .da-reset-factory-title {
-    font-size: 1.1em;
+    font-size: var(--da-font-size-md, 15px);
     font-weight: 600;
-    color: var(--da-text-primary, #ffffff);
+    color: var(--da-text-primary);
     margin: 0;
 }
 
 .da-reset-factory-subtitle {
-    font-size: 0.8em;
-    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
-    line-height: 1.4;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    line-height: 1.45;
 }
 
 .da-reset-factory-close {
@@ -169,16 +171,21 @@ html.da-has-active-modal body {
     border-radius: var(--da-radius-sm, 6px);
     background: transparent;
     border: none;
-    color: var(--da-text-muted, rgba(255, 255, 255, 0.45));
+    color: var(--da-text-secondary);
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s var(--da-ease), color 0.15s var(--da-ease);
     flex-shrink: 0;
     padding: 0;
 }
 
 .da-reset-factory-close:hover {
-    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
-    color: var(--da-text-primary, #ffffff);
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-reset-factory-close:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
 .da-reset-factory-body {
@@ -493,6 +500,140 @@ html.da-has-active-modal body {
     .da-floating-menu-item {
         min-height: 44px;
         padding: 10px 12px;
-        border-radius: var(--da-radius-md, 8px);
+        border-radius: var(--da-radius-md, 10px);
+    }
+}
+
+/* 6. 统一次级功能模态弹窗骨架 (.da-submodal-*)
+   供 LoRA 管理、提示词轮询池、原生世界书导入、版本更新说明等次级弹窗共享同一外观与交互规格。 */
+.da-modal-backdrop.da-submodal-backdrop {
+    z-index: var(--da-z-secondary-modal, 10020);
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
+}
+
+.da-submodal-panel {
+    width: min(680px, calc(var(--da-vvw, 100vw) - 24px));
+    max-height: calc(var(--da-vvh, 100dvh) - 24px);
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-modal);
+    border-radius: var(--da-radius-modal, 16px);
+    border: 1px solid var(--da-border-color);
+    box-shadow: var(--da-shadow-modal);
+    overflow: hidden;
+    box-sizing: border-box;
+    animation: da-modal-slide-in 0.2s var(--da-ease);
+}
+
+.da-submodal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+    flex-shrink: 0;
+}
+
+.da-submodal-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.da-submodal-title {
+    margin: 0;
+    font-size: var(--da-font-size-md, 15px);
+    font-weight: 600;
+    color: var(--da-text-primary);
+    line-height: 1.35;
+}
+
+.da-submodal-subtitle {
+    margin: 0;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-secondary);
+    line-height: 1.45;
+}
+
+.st-da-root .da-submodal-close,
+.da-submodal-header .da-submodal-close {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    border-radius: var(--da-radius-sm, 6px);
+    background: transparent;
+    border: none;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: none;
+    transition: background-color 0.15s var(--da-ease), color 0.15s var(--da-ease);
+}
+
+.st-da-root .da-submodal-close:hover,
+.da-submodal-header .da-submodal-close:hover {
+    background: var(--da-bg-hover);
+    border-color: transparent;
+    color: var(--da-text-primary);
+}
+
+.st-da-root .da-submodal-close:focus-visible,
+.da-submodal-header .da-submodal-close:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
+}
+
+.da-submodal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.da-submodal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--da-border-color);
+    background: var(--da-bg-surface-subtle);
+    flex-shrink: 0;
+}
+
+.da-submodal-footer__left,
+.da-submodal-footer__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+@media (max-width: 640px) {
+    .da-submodal-header {
+        padding: 12px 14px;
+    }
+
+    .da-submodal-body {
+        padding: 12px 14px;
+    }
+
+    .da-submodal-footer {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 }

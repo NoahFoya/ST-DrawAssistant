@@ -90,7 +90,7 @@
     .da-inspect-modal {
         width: calc(var(--da-vvw) - 24px);
         max-height: calc(var(--da-vvh) - 24px);
-        border-radius: var(--da-radius-modal, 12px);
+        border-radius: var(--da-radius-modal, 16px);
     }
 
     /* 详情主体网格由左右双列（1fr 340px）切换为纵向单列流式堆叠 */

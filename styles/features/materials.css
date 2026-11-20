@@ -1127,11 +1127,12 @@
     display: flex;
     flex-direction: column;
     background: var(--da-bg-modal);
-    border-radius: var(--da-radius-modal, 14px);
+    border-radius: var(--da-radius-modal, 16px);
     border: 1px solid var(--da-border-color);
     box-shadow: var(--da-shadow-modal);
     overflow: hidden;
     box-sizing: border-box;
+    animation: da-modal-slide-in 0.2s var(--da-ease);
 }
 
 .da-archive-confirm-header {
@@ -1185,6 +1186,11 @@
 .da-archive-confirm-close:hover {
     background: var(--da-bg-hover);
     color: var(--da-text-primary);
+}
+
+.da-archive-confirm-close:focus-visible {
+    outline: none;
+    box-shadow: var(--da-focus-visible-ring, 0 0 0 2px var(--da-bg-primary), 0 0 0 4px var(--da-accent-color));
 }
 
 /* 多对象独立 Tab 切换条 */

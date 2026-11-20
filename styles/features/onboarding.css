@@ -7,9 +7,9 @@
 
 .da-modal-backdrop.da-onboarding-backdrop {
     z-index: var(--da-z-secondary-modal, 10020);
-    background: var(--da-bg-overlay-modal, rgba(4, 5, 8, 0.82));
-    backdrop-filter: blur(var(--da-blur-modal, 12px));
-    -webkit-backdrop-filter: blur(var(--da-blur-modal, 12px));
+    background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
+    backdrop-filter: blur(var(--da-blur-modal, 20px));
+    -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
 }
 
 .da-onboarding-panel {
@@ -17,9 +17,9 @@
     max-height: min(640px, calc(var(--da-vvh, 100dvh) - 24px));
     display: flex;
     flex-direction: column;
-    background: var(--da-bg-modal, #18191f);
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
-    border-radius: var(--da-radius-modal, 12px);
+    background: var(--da-bg-modal, #1e1e2e);
+    border: 1px solid var(--da-border-color, rgba(205, 214, 244, 0.1));
+    border-radius: var(--da-radius-modal, 16px);
     box-shadow: var(--da-shadow-modal, 0 18px 48px rgba(0, 0, 0, 0.55));
     overflow: hidden;
     box-sizing: border-box;

@@ -42,6 +42,7 @@
 @import url('./controls/cards/card.css');
 @import url('./controls/cards/generation-controls.css');
 @import url('./controls/cards/lora-card.css');
+@import url('./controls/cards/polling-modal.css');
 @import url('./controls/cards/stat-card.css');
 
 /* (4) 工具栏与复合控制栏 (Toolbars) */

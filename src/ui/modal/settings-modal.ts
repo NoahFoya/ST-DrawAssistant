@@ -153,13 +153,13 @@ export class SettingsModal implements Disposable {
     private onVisibilityChangeHandler: (() => void) | null = null;
     private abortController: AbortController | null = null;
 
-    // 全局事件解绑函数与更新指示器
+    // 全局事件解绑函数与更新状态徽标
     private unlistenSettings: (() => void) | null = null;
     private unlistenUpdate: (() => void) | null = null;
     private unlistenViewport: (() => void) | null = null;
     private removeOverlayEntry: (() => void) | null = null;
     private removeBackdropDismiss: (() => void) | null = null;
-    private updateDotElement: HTMLElement | null = null;
+    private versionBadgeElement: HTMLElement | null = null;
     private activeGuideModal: OnboardingGuideModal | null = null;
     private activeChangelogModal: Disposable | null = null;
     private isPromptingClose = false;
@@ -169,14 +169,9 @@ export class SettingsModal implements Disposable {
             this.activeTabId = options.defaultTab;
         }
 
-        // 监听版本更新状态变更，同步顶栏提示红点
+        // 监听版本更新状态变更，同步顶栏版本胶囊提示
         this.unlistenUpdate = eventBus.on('update:status-changed', (state) => {
-            if (this.updateDotElement) {
-                this.updateDotElement.classList.toggle(
-                    'da-update-indicator-dot--active',
-                    Boolean(state.hasUpdate)
-                );
-            }
+            this.syncVersionBadgeState(Boolean(state.hasUpdate));
         });
 
         // 监听配置中心变更，响应活跃提供方与主题同步
@@ -276,6 +271,9 @@ export class SettingsModal implements Disposable {
         // 启动底栏连通性检测（重置连续失败计数器）
         this.consecutiveHealthFailures = 0;
         void this.checkActiveProviderHealth();
+
+        // 打开设置面板时自动静默检查一次更新（受 UpdateService 内置冷却时间保护）
+        void updateService.checkUpdate({ force: false });
 
         this.options.onOpen?.();
 
@@ -674,7 +672,7 @@ export class SettingsModal implements Disposable {
             this.unlistenViewport();
             this.unlistenViewport = null;
         }
-        this.updateDotElement = null;
+        this.versionBadgeElement = null;
 
         // 释放已缓存的 Tab 视图实例
         for (const [tabId, view] of this.viewsCache.entries()) {
@@ -756,6 +754,21 @@ export class SettingsModal implements Disposable {
         this.syncProviderSubItemsPlacement();
     }
 
+    /** 同步顶栏版本徽标文案与更新可用态 */
+    private syncVersionBadgeState(hasUpdate: boolean): void {
+        if (!this.versionBadgeElement) return;
+        this.versionBadgeElement.textContent = hasUpdate
+            ? `v${EXTENSION_VERSION} · 可更新`
+            : `v${EXTENSION_VERSION}`;
+        this.versionBadgeElement.classList.toggle('da-header-badge--has-update', hasUpdate);
+        this.versionBadgeElement.setAttribute(
+            'title',
+            hasUpdate
+                ? '检测到新版本，点击前往「关于与支持」查看并更新'
+                : '点击查看关于与诊断信息'
+        );
+    }
+
     private buildHeaderBar(): HTMLElement {
         const header = document.createElement('div');
         header.className = 'da-header-bar';
@@ -780,24 +793,12 @@ export class SettingsModal implements Disposable {
             title.textContent = EXTENSION_TITLE;
         }
 
-        const badgeWrapper = document.createElement('div');
-        badgeWrapper.className = 'da-header-badge-wrapper';
-
         const versionBadge = document.createElement('span');
         versionBadge.className = 'da-badge da-header-badge';
-        versionBadge.textContent = `v${EXTENSION_VERSION}`;
         versionBadge.setAttribute('role', 'button');
         versionBadge.setAttribute('tabindex', '0');
-        versionBadge.setAttribute('title', '点击查看关于与诊断信息');
-
-        const updateDot = document.createElement('span');
-        updateDot.className = 'da-update-indicator-dot';
-        const isUpdateAvailable = Boolean(updateService.getState().hasUpdate);
-        updateDot.classList.toggle('da-update-indicator-dot--active', isUpdateAvailable);
-        this.updateDotElement = updateDot;
-
-        badgeWrapper.appendChild(versionBadge);
-        badgeWrapper.appendChild(updateDot);
+        this.versionBadgeElement = versionBadge;
+        this.syncVersionBadgeState(Boolean(updateService.getState().hasUpdate));
 
         const onVersionClick = () => {
             this.switchTab('about');
@@ -811,7 +812,7 @@ export class SettingsModal implements Disposable {
         });
 
         left.appendChild(title);
-        left.appendChild(badgeWrapper);
+        left.appendChild(versionBadge);
 
         // 2. 右侧快捷换肤下拉与关闭按钮
         const right = document.createElement('div');

@@ -788,9 +788,10 @@ function splitTopLevelTags(line: string): string[] {
             continue;
         }
 
-        // 检测 NovelAI 数值权重定界符 `1.2::tag1, tag2::`（同时兼容 `1.4::a::1.2::b::` 连写）
+        // 检测 NovelAI 数值权重定界符 `1.2::tag1, tag2::`（同时兼容 `1.4::a::1.2::b::` 与连续重设 `0.3::a, -2::b::`）
         if (ch === ':' && line[i + 1] === ':') {
-            if (!inWeightColon && /(?:^|[,\s]|::)[-+]?\d+(?:\.\d+)?$/.test(current)) {
+            const isWeightOpener = /(?:^|[,\s]|::)[-+]?\d+(?:\.\d+)?$/.test(current);
+            if (isWeightOpener) {
                 inWeightColon = true;
             } else if (inWeightColon) {
                 inWeightColon = false;
