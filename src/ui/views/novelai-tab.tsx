@@ -168,10 +168,9 @@ export class NovelAITabView extends ProviderTabView {
                 key: 'promptPresetId',
                 label: '提示词预设',
                 type: 'select',
-                placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
                 tooltip:
-                    '选择生图时自动拼接的正负向提示词预设（或启用多预设随机轮询）。内置预设已对齐官方 V4.5 Full / Curated 画质词与 Heavy / Light / Human Focus UC 基底；使用画师串预设时建议配合 Full 模型与 karras 调度器。',
+                    '选择生图时自动拼接的正负向提示词预设（或启用多预设随机轮询）；搭配画师串预设时建议选用 Full 模型与 karras 调度器。',
                 invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
             {
@@ -257,7 +256,7 @@ export class NovelAITabView extends ProviderTabView {
                         activePresetId={presetController.activePresetId.value}
                         dirty={presetController.isDirty.value}
                         onAction={(action, id) => presetController.handleAction(action, id)}
-                        onImportFile={(file) => presetController.handleImportFile(file)}
+                        onImportFiles={(files) => void presetController.handleImportFiles(files)}
                     />
 
                     <div className="da-section-banner">
@@ -282,7 +281,6 @@ export class NovelAITabView extends ProviderTabView {
                         embedded={true}
                         width={draft.width || 832}
                         height={draft.height || 1216}
-                        alignMultiple={64}
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({

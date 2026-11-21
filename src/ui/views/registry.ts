@@ -12,6 +12,8 @@ import { ComfyUITabView } from './comfyui-tab';
 import { SDWebUITabView } from './sdwebui-tab';
 import { NovelAITabView } from './novelai-tab';
 import { OpenAITabView } from './openai-tab';
+import { GeminiTabView } from './gemini-tab';
+import { GrokTabView } from './grok-tab';
 import { LogsStatsTabView } from './logs-stats-tab';
 import { AboutTabView } from './about-tab';
 import { ThemeTabView } from './theme-tab';
@@ -41,6 +43,12 @@ export function registerDefaultViews(modal: SettingsModal): void {
 
     // 5. OpenAI 兼容专属生图服务设置选项卡
     modal.registerViewFactory('openai', () => new OpenAITabView());
+
+    // 6. Google Gemini 原生生图服务设置选项卡
+    modal.registerViewFactory('gemini', () => new GeminiTabView());
+
+    // 7. xAI Grok 原生生图服务设置选项卡
+    modal.registerViewFactory('grok', () => new GrokTabView());
 
     // 6. 日志与统计选项卡
     modal.registerViewFactory('logs', () => new LogsStatsTabView());

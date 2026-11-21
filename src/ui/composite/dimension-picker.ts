@@ -2,9 +2,9 @@
  * 画幅比例与尺寸选择复合卡片 (DimensionPicker)。
  *
  * @remarks
- * 为生图提供方（SD-WebUI/Forge、ComfyUI、NovelAI、OpenAI 等）提供统一且轻量的画幅尺寸控制外壳：
+ * 为生图提供方（ComfyUI、SD-WebUI/Forge、NovelAI、OpenAI 等）提供统一且轻量的画幅尺寸控制外壳：
  * 1. 黄金画幅比例下拉框（1:1 方形、9:16 手机竖屏、16:9 电脑宽屏、3:4 半身、4:3 横幅等），一键填入推荐分辨率；
- * 2. 紧凑型双段像素数值输入框（宽 × 高），默认以 8 倍数对齐（支持按提供方覆写，如 64 或 1）；
+ * 2. 紧凑型双段像素数值输入框（宽 × 高），支持自由输入整数像素分辨率；
  * 3. 严格对齐 240px 标准表单控件宽度，居中排版；
  * 4. 实时像素量与比例状态指示（如 832 × 1216 · 1.01 MP）；
  * 5. 全生命周期级联注销与事件安全释放。
@@ -50,8 +50,6 @@ export interface DimensionPickerOptions {
     subtitle?: string;
     /** 初始数据 */
     initialData?: Partial<DimensionPickerData>;
-    /** 像素强制对齐倍数，默认 8 (符合 SD / ComfyUI 潜空间通用基准) */
-    alignMultiple?: number;
     /** 允许的最小尺寸，默认 64 */
     minDimension?: number;
     /** 允许的最大尺寸，默认 4096 */
@@ -83,13 +81,19 @@ export const OPENAI_ASPECT_RATIOS: AspectRatioPreset[] = [
     { id: '16:9', label: '16:9 宽屏 (1792×1024)', width: 1792, height: 1024, ratio: 1792 / 1024 },
 ];
 
+/** OpenAI GPT Image (gpt-image-1 / 1.5) 官方规范画幅比例列表 */
+export const GPT_IMAGE_ASPECT_RATIOS: AspectRatioPreset[] = [
+    { id: '1:1', label: '1:1 正方形 (1024×1024)', width: 1024, height: 1024, ratio: 1.0 },
+    { id: '2:3', label: '2:3 竖屏 (1024×1536)', width: 1024, height: 1536, ratio: 1024 / 1536 },
+    { id: '3:2', label: '3:2 宽屏 (1536×1024)', width: 1536, height: 1024, ratio: 1536 / 1024 },
+];
+
 export class DimensionPicker implements UIComponent, Disposable {
     public readonly element: HTMLElement;
     public readonly card?: Card;
 
     private readonly data: DimensionPickerData;
     private readonly options: DimensionPickerOptions;
-    private readonly alignMultiple: number;
     private readonly minDimension: number;
     private readonly maxDimension: number;
     private readonly aspectRatios: AspectRatioPreset[];
@@ -105,14 +109,13 @@ export class DimensionPicker implements UIComponent, Disposable {
 
     constructor(options: DimensionPickerOptions = {}) {
         this.options = options;
-        this.alignMultiple = options.alignMultiple ?? 8;
         this.minDimension = options.minDimension ?? 64;
         this.maxDimension = options.maxDimension ?? 4096;
         this.aspectRatios = options.aspectRatios ?? DEFAULT_ASPECT_RATIOS;
 
-        // 1. 初始化尺寸状态并强制倍数对齐
-        const initialWidth = this.snapToMultiple(options.initialData?.width ?? 1024);
-        const initialHeight = this.snapToMultiple(options.initialData?.height ?? 1024);
+        // 1. 初始化尺寸状态并钳制在允许范围内
+        const initialWidth = this.clampDimension(options.initialData?.width ?? 1024);
+        const initialHeight = this.clampDimension(options.initialData?.height ?? 1024);
         const initialRatio = this.detectRatio(initialWidth, initialHeight);
 
         this.data = {
@@ -165,10 +168,10 @@ export class DimensionPicker implements UIComponent, Disposable {
             value: this.data.width,
             min: this.minDimension,
             max: this.maxDimension,
-            step: this.alignMultiple,
+            step: 1,
             unit: 'px',
             onChange: (val) => {
-                const nextWidth = this.snapToMultiple(val);
+                const nextWidth = this.clampDimension(val);
                 if (nextWidth !== this.data.width) {
                     this.updateDimensionsInternal(nextWidth, this.data.height);
                 } else if (nextWidth !== val) {
@@ -182,10 +185,10 @@ export class DimensionPicker implements UIComponent, Disposable {
             value: this.data.height,
             min: this.minDimension,
             max: this.maxDimension,
-            step: this.alignMultiple,
+            step: 1,
             unit: 'px',
             onChange: (val) => {
-                const nextHeight = this.snapToMultiple(val);
+                const nextHeight = this.clampDimension(val);
                 if (nextHeight !== this.data.height) {
                     this.updateDimensionsInternal(this.data.width, nextHeight);
                 } else if (nextHeight !== val) {
@@ -207,10 +210,9 @@ export class DimensionPicker implements UIComponent, Disposable {
 
         sizeGroup.appendChild(this.heightInput.element);
 
-        const alignDesc = this.alignMultiple > 1 ? ` (自动按 ${this.alignMultiple} 像素倍数对齐)` : '';
         this.sizeFormField = new FormField({
             label: '画幅尺寸',
-            tooltip: `设置出图宽高分辨率${alignDesc}。主流扩散模型建议将宽和高对齐为 8 或 64 的整数倍，避免边缘黑边或异常伪影。`,
+            tooltip: '设置出图宽高像素分辨率，支持自由输入任意合法尺寸（范围 64~4096）。',
             control: sizeGroup,
         });
         this.disposables.push(this.sizeFormField);
@@ -250,10 +252,10 @@ export class DimensionPicker implements UIComponent, Disposable {
      */
     public setData(partial: Partial<DimensionPickerData>, options?: { silent?: boolean }): void {
         const nextWidth = partial.width !== undefined
-            ? this.snapToMultiple(partial.width)
+            ? this.clampDimension(partial.width)
             : this.data.width;
         const nextHeight = partial.height !== undefined
-            ? this.snapToMultiple(partial.height)
+            ? this.clampDimension(partial.height)
             : this.data.height;
 
         this.updateDimensionsInternal(nextWidth, nextHeight, options);
@@ -267,9 +269,9 @@ export class DimensionPicker implements UIComponent, Disposable {
      * @param options 配置选项
      */
     public setDimensions(width: number, height: number, options?: { silent?: boolean }): void {
-        const snappedWidth = this.snapToMultiple(width);
-        const snappedHeight = this.snapToMultiple(height);
-        this.updateDimensionsInternal(snappedWidth, snappedHeight, options);
+        const clampedWidth = this.clampDimension(width);
+        const clampedHeight = this.clampDimension(height);
+        this.updateDimensionsInternal(clampedWidth, clampedHeight, options);
     }
 
     /**
@@ -309,15 +311,11 @@ export class DimensionPicker implements UIComponent, Disposable {
     }
 
     /**
-     * 将数值对齐至配置的倍数，并截断在允许区间内。
+     * 将数值取整并截断在允许区间内。
      */
-    private snapToMultiple(val: number): number {
-        const clamped = Math.max(this.minDimension, Math.min(this.maxDimension, val));
-        if (this.alignMultiple <= 1) {
-            return clamped;
-        }
-        const snapped = Math.round(clamped / this.alignMultiple) * this.alignMultiple;
-        return Math.max(this.minDimension, Math.min(this.maxDimension, snapped));
+    private clampDimension(val: number): number {
+        const rounded = Math.round(Number.isFinite(val) ? val : 1024);
+        return Math.max(this.minDimension, Math.min(this.maxDimension, rounded));
     }
 
     /**

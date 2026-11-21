@@ -73,7 +73,7 @@ const GUIDE_STEPS: readonly GuideStepSpec[] = [
                 title: '需结合用户实际运行环境完成基础配置',
                 highlight: true,
                 badge: '使用前置',
-                text: '插件无法替你预设本机硬件与服务环境。首次使用前，请先在「常规设置」与左侧对应「生图引擎」页面中，根据你实际使用的后端（ComfyUI / SD-WebUI / NovelAI / OpenAI 兼容）填写接口地址或密钥，确定浏览器直连或酒馆代理方式，并同步你本地实际安装的模型、LoRA 或工作流节点。',
+                text: '插件无法替你预设本机硬件与服务环境。首次使用前，请先在「常规设置」与左侧对应「生图引擎」页面中，根据你实际使用的后端（ComfyUI / SD-WebUI / NovelAI / OpenAI 兼容 / Google Gemini / xAI Grok）填写接口地址或密钥，确定浏览器直连或酒馆代理方式，并同步你本地实际安装的模型、LoRA 或工作流节点。',
             },
             {
                 title: '默认预设均为可参照修改的起始模板',

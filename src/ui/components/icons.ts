@@ -4,7 +4,7 @@
  * @remarks
  * 提供全插件统一规格的内联 SVG 矢量图标：
  * - 严格区分保存（`save`，软盘图标）与下载（`download`，下箭头指向托盘）；
- * - 预设导入导出采用标准对称托盘箭头对（`import` / `upload` 向上箭头导入，`export` / `download` 向下箭头导出）；
+ * - 预设导入导出使用文件语义图标（`fileImport` 导入、`fileExport` 导出当前、`batchExport` 批量导出）；
  * - 元信息统一使用圆圈感叹号（`info`，`!` 图标）；
  * - 收藏统一使用星标描边（`star`）与星标实心（`starFilled`）。
  */
@@ -28,6 +28,9 @@ const SVG_PATHS = {
     /** 文件导出图标（向外箭头离开文件，与 SillyTavern fa-file-export 风格一致） */
     fileExport:
         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M12 15h10"></path><path d="m18 11 4 4-4 4"></path>',
+    /** 批量导出图标（双层叠文件 + 向外导出箭头） */
+    batchExport:
+        '<path d="M16 4h2a2 2 0 0 1 2 2v4"></path><path d="M4 8V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M14 22H6a2 2 0 0 1-2-2V10"></path><path d="M12 15h10"></path><path d="m18 11 4 4-4 4"></path>',
     /** 元信息感叹号 `!` 图标（圆圈内感叹号） */
     info: '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>',
     /** 帮助问号 `?` 图标（圆圈内问号，用于使用引导与规则说明） */
@@ -140,6 +143,7 @@ export const ICONS: Readonly<Record<IconName, string>> = {
     export: renderIcon('export', 14),
     fileImport: renderIcon('fileImport', 14),
     fileExport: renderIcon('fileExport', 14),
+    batchExport: renderIcon('batchExport', 14),
     info: renderIcon('info', 14),
     helpCircle: renderIcon('helpCircle', 14),
     help: renderIcon('help', 14),

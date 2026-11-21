@@ -22,6 +22,8 @@ function formatBackendLabel(engine: string): string {
     if (lower.includes('novel')) return 'NovelAI';
     if (lower.includes('forge')) return 'Forge';
     if (lower.includes('sd') || lower.includes('webui') || lower.includes('a1111')) return 'SD-WebUI';
+    if (lower.includes('gemini')) return 'Gemini';
+    if (lower.includes('grok')) return 'Grok';
     if (lower.includes('openai') || lower.includes('dall')) return 'OpenAI';
     return engine || '其他';
 }

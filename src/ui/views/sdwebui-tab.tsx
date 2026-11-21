@@ -132,7 +132,6 @@ export class SDWebUITabView extends ProviderTabView {
                 key: 'promptPresetId',
                 label: '提示词预设',
                 type: 'select',
-                placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
                 invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
@@ -241,7 +240,7 @@ export class SDWebUITabView extends ProviderTabView {
                         activePresetId={presetController.activePresetId.value}
                         dirty={presetController.isDirty.value}
                         onAction={(action, id) => presetController.handleAction(action, id)}
-                        onImportFile={(file) => presetController.handleImportFile(file)}
+                        onImportFiles={(files) => void presetController.handleImportFiles(files)}
                     />
 
                     <div className="da-section-banner">
@@ -266,7 +265,6 @@ export class SDWebUITabView extends ProviderTabView {
                         embedded={true}
                         width={draft.width || 832}
                         height={draft.height || 1216}
-                        alignMultiple={8}
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({

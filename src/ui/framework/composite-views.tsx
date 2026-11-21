@@ -150,7 +150,7 @@ export interface PresetToolbarViewProps {
         action: PresetActionType,
         presetId: string
     ) => void | boolean | Promise<void | boolean>;
-    onImportFile?: (file: File) => void;
+    onImportFiles?: (files: File[]) => void;
     className?: string;
 }
 
@@ -169,7 +169,9 @@ export function PresetToolbarView(props: PresetToolbarViewProps): VNode {
                 className: props.className,
                 onAction: (action, presetId) =>
                     callbacksRef.current.onAction(action, presetId),
-                onImportFile: (file) => callbacksRef.current.onImportFile?.(file),
+                onImportFiles: (files) => {
+                    callbacksRef.current.onImportFiles?.(files);
+                },
             }),
         (instance) => {
             const nextKey = JSON.stringify({
@@ -317,8 +319,8 @@ export function PromptPresetCardView(props: PromptPresetCardViewProps): VNode {
                 ...props,
                 onAction: (action, presetId, data) =>
                     callbacksRef.current.onAction?.(action, presetId, data),
-                onImportFile: (file) => {
-                    callbacksRef.current.onImportFile?.(file);
+                onImportFiles: (files) => {
+                    callbacksRef.current.onImportFiles?.(files);
                 },
                 onChange: (data) => {
                     callbacksRef.current.onChange?.(data);
@@ -366,8 +368,8 @@ export function WorkflowCardView(props: WorkflowCardViewProps): VNode {
                 ...props,
                 onAction: (action, presetId, data) =>
                     callbacksRef.current.onAction?.(action, presetId, data),
-                onImportFile: (file) => {
-                    callbacksRef.current.onImportFile?.(file);
+                onImportFiles: (files) => {
+                    callbacksRef.current.onImportFiles?.(files);
                 },
                 onChange: (data) => {
                     callbacksRef.current.onChange?.(data);

@@ -5,13 +5,14 @@
  * 基于 Preact JSX 构建：
  * 1. 顶栏产品身份标识、版本状态胶囊与独立操作工具行；
  * 2. 运行环境与系统诊断（支持生成并复制 Issue 诊断报告）；
- * 3. 配置备份导入与恢复出厂设置。
+ * 3. 本地预设按需管理（按分类折叠展示内置预设，支持逐条/整类载入与卸载）；
+ * 4. 配置备份导入与恢复出厂设置。
  */
 
 import { signal, type Signal } from '@preact/signals';
 import { useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
-import { PreactSettingsView, ButtonControl, OfficialPresetSyncCardView } from '../framework';
+import { PreactSettingsView, ButtonControl, StaticPresetManagerCardView } from '../framework';
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
@@ -497,10 +498,10 @@ export class AboutTabView extends PreactSettingsView {
                     </div>
                 </div>
 
-                {/* 分组 2: 官方预设更新 */}
-                <div className="da-settings-section">
-                    <h3 className="da-settings-section__title">官方预设更新</h3>
-                    <OfficialPresetSyncCardView />
+                {/* 分组 2: 本地预设管理 */}
+                <div id="da-about-static-presets" className="da-settings-section">
+                    <h3 className="da-settings-section__title">本地预设管理</h3>
+                    <StaticPresetManagerCardView />
                 </div>
 
                 {/* 分组 3: 配置备份与恢复 */}

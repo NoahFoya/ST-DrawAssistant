@@ -38,7 +38,7 @@ export interface ActivationPanelProps {
     activationController: PresetController<MaterialActivationPresetData>;
     materialConfigSignal: Signal<MaterialLibraryConfig>;
     onAction: (action: PresetActionType, id?: string) => Promise<boolean>;
-    onImportFile: (file: File) => void;
+    onImportFiles?: (files: File[]) => void;
 }
 
 export function ActivationPanel(props: ActivationPanelProps): VNode {
@@ -48,7 +48,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
         activationController,
         materialConfigSignal,
         onAction,
-        onImportFile,
+        onImportFiles,
     } = props;
 
     const characters = charController.presets.value;
@@ -211,7 +211,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                     activePresetId={activationController.activePresetId.value}
                     dirty={activationController.isDirty.value}
                     onAction={(action, id) => onAction(action, id)}
-                    onImportFile={onImportFile}
+                    onImportFiles={onImportFiles}
                 />
             </div>
 
@@ -264,9 +264,9 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                             return (
                                 <SelectControl
                                     value={selectedCardVal}
-                                    placeholder="-- 未关联角色卡 (手动选择) --"
                                     onChange={(val) => updateBoundCard(val)}
                                     options={[
+                                        { value: '', label: '-- 未关联角色卡 --' },
                                         ...(primaryBoundCard && !matchedHost
                                             ? [
                                                   {

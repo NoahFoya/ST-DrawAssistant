@@ -30,6 +30,7 @@ import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { eventBus, type TaskStatusEventData } from '../../util/event-bus';
 import { sessionLifecycle } from '../../pipeline/session-lifecycle';
 import { logger } from '../../util/logger';
+import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
 import {
     buildFloorSlotKey,
     replaceCommandsWithFloorSlots,
@@ -1145,6 +1146,20 @@ export class MessageDecorator implements Disposable {
         imgEl.alt = 'AI 生成图像';
         imgEl.loading = 'lazy';
 
+        const resolveSlotBlob = async (): Promise<Blob | null> => {
+            if (slotState.imageId) {
+                const stored = await imageStorage.getImageBlob(slotState.imageId);
+                if (stored && stored.size > 0) return stored;
+            }
+            if (slotState.displayUrl) {
+                const res = await fetch(slotState.displayUrl);
+                if (res.ok) return await res.blob();
+            }
+            return null;
+        };
+        const dragFileBase = `st_draw_${slotState.imageId ? slotState.imageId.slice(0, 8) : messageId}`;
+        const detachDrag = attachImageDragFile(imgEl, resolveSlotBlob, dragFileBase);
+
         let justLongPressed = false;
 
         if (isLightboxEnabled) {
@@ -1268,7 +1283,12 @@ export class MessageDecorator implements Disposable {
 
             imageBox.addEventListener('touchcancel', cancelTouch, { passive: true });
 
-            this.activeSlotCleanups.set(containerKey, cancelAllGestures);
+            this.activeSlotCleanups.set(containerKey, () => {
+                detachDrag();
+                cancelAllGestures();
+            });
+        } else {
+            this.activeSlotCleanups.set(containerKey, detachDrag);
         }
 
         imageBox.appendChild(imgEl);
@@ -1340,7 +1360,29 @@ export class MessageDecorator implements Disposable {
         });
         actionsContainer.appendChild(infoBtn);
 
-        // 3.3 下载图片按钮 (下箭头)
+        // 3.3 复制图片按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'da-floor-image__action-btn';
+        copyBtn.title = '复制图片';
+        copyBtn.innerHTML = renderIcon('copy', 14);
+        copyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const blob = await resolveSlotBlob();
+            if (!blob) {
+                Toast.error('获取图片数据失败');
+                return;
+            }
+            const ok = await copyImageBlobToClipboard(blob);
+            if (ok) {
+                Toast.success('已复制图片到剪贴板');
+            } else {
+                Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
+            }
+        });
+        actionsContainer.appendChild(copyBtn);
+
+        // 3.4 下载图片按钮 (下箭头)
         const downloadBtn = document.createElement('button');
         downloadBtn.type = 'button';
         downloadBtn.className = 'da-floor-image__action-btn';

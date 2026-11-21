@@ -55,8 +55,8 @@ export interface PromptPresetCardOptions {
         presetId: string,
         data?: PromptCardData
     ) => void | boolean | Promise<void | boolean>;
-    /** 导入文件自定义解析回调 */
-    onImportFile?: (file: File) => void;
+    /** 批量/多文件导入自定义解析回调 */
+    onImportFiles?: (files: File[]) => void;
     /** 表单内容变更回调 */
     onChange?: (data: PromptCardData) => void;
     /** 附加 CSS 类名 */
@@ -140,7 +140,7 @@ export class PromptPresetCard implements UIComponent {
             presets: this.buildToolbarItems(this.rawPresets),
             activePresetId: this.activePresetId,
             onAction: (action, presetId) => this.handlePresetAction(action, presetId),
-            onImportFile: options.onImportFile
+            onImportFiles: options.onImportFiles
         });
         this.card.appendContent(this.toolbar.element);
 

@@ -28,6 +28,8 @@ const ENGINE_FILTER_OPTIONS = [
     { label: 'SD-WebUI / Forge', value: 'sdwebui' },
     { label: 'NovelAI', value: 'novelai' },
     { label: 'OpenAI 兼容', value: 'openai' },
+    { label: 'Google Gemini', value: 'gemini' },
+    { label: 'xAI Grok', value: 'grok' },
 ];
 
 const SORT_MODE_OPTIONS = [

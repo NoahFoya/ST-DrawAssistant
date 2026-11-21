@@ -19,6 +19,7 @@ import {
 } from '../framework';
 import { PresetController } from '../viewmodels';
 import { settingsStore } from '../../store/settings-store';
+import { eventBus } from '../../util/event-bus';
 import { themeService } from '../theme/theme-service';
 
 /** 轻量双模拾色组件：支持点击色块调用原生拾色器与输入框键入十六进制/RGBA */
@@ -61,6 +62,7 @@ export class ThemeTabView extends PreactSettingsView {
     public readonly title = '主题设置';
 
     public readonly presetController: PresetController<ThemePresetData>;
+    private unlistenSettings: (() => void) | null = null;
 
     public constructor() {
         super('da-tab-pane da-view-theme');
@@ -114,6 +116,34 @@ export class ThemeTabView extends PreactSettingsView {
             },
         });
 
+        this.unlistenSettings = eventBus.on('settings:updated', (data) => {
+            if (
+                !data.key ||
+                data.isReset ||
+                data.key === 'activeThemePresetId' ||
+                data.key === 'presets.themes' ||
+                data.keys?.includes('activeThemePresetId') ||
+                data.keys?.includes('presets')
+            ) {
+                const storedId = themeService.getActiveThemeId();
+                if (!this.presetController.isDirty.value) {
+                    if (
+                        !data.isReset &&
+                        data.key === 'activeThemePresetId' &&
+                        this.presetController.activePresetId.value === storedId
+                    ) {
+                        return;
+                    }
+                    this.presetController.applyActivePreset(storedId, {
+                        persist: false,
+                        silent: true,
+                    });
+                } else {
+                    this.presetController.refreshPresets();
+                }
+            }
+        });
+
         this.mountPreact();
     }
 
@@ -132,7 +162,7 @@ export class ThemeTabView extends PreactSettingsView {
                         activePresetId={activeThemeId}
                         dirty={isDirty}
                         onAction={(action, id) => this.presetController.handleAction(action, id)}
-                        onImportFile={(file) => this.presetController.handleImportFile(file)}
+                        onImportFiles={(files) => void this.presetController.handleImportFiles(files)}
                     />
                 </CardView>
 
@@ -335,6 +365,10 @@ export class ThemeTabView extends PreactSettingsView {
     }
 
     public override dispose(): void {
+        if (this.unlistenSettings) {
+            this.unlistenSettings();
+            this.unlistenSettings = null;
+        }
         this.presetController.dispose();
         super.dispose();
     }

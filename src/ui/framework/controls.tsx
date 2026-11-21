@@ -7,7 +7,7 @@
  */
 
 import type { ComponentChildren } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef, useEffect, useLayoutEffect } from 'preact/hooks';
 import type { FormFieldControlWidth } from '../components/form-field';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { SegmentedControlOption } from '../components/segmented-control';
@@ -203,6 +203,21 @@ export interface SelectControlProps {
 
 export function SelectControl(props: SelectControlProps) {
     const val = props.value ?? '';
+    const selectRef = useRef<HTMLSelectElement | null>(null);
+    const hasEmptyValueOption = props.options.some((item) =>
+        'options' in item
+            ? item.options.some((sub) => sub.value === '')
+            : item.value === ''
+    );
+    const showPlaceholder = Boolean(props.placeholder) && !hasEmptyValueOption;
+
+    // 选项动态替换或分组重排后，确保原生 <select> DOM 的选中值始终与受控 val 同步
+    useLayoutEffect(() => {
+        const el = selectRef.current;
+        if (el && el.value !== val) {
+            el.value = val;
+        }
+    }, [val, props.options, props.placeholder]);
 
     const wrapperClasses = [
         'da-select-wrapper',
@@ -218,9 +233,12 @@ export function SelectControl(props: SelectControlProps) {
         .filter(Boolean)
         .join(' ');
 
+    const seenTopValues = new Map<string, number>();
+
     return (
         <div className={wrapperClasses}>
             <select
+                ref={selectRef}
                 className={selectClasses}
                 value={val}
                 disabled={props.disabled}
@@ -239,7 +257,7 @@ export function SelectControl(props: SelectControlProps) {
                     }
                 }}
             >
-                {props.placeholder && (
+                {showPlaceholder && (
                     <option value="" disabled>
                         {props.placeholder}
                     </option>
@@ -247,7 +265,7 @@ export function SelectControl(props: SelectControlProps) {
                 {props.options.map((item, idx) => {
                     if ('options' in item) {
                         return (
-                            <optgroup key={`group_${idx}_${item.label}`} label={item.label}>
+                            <optgroup key={`group_${item.label}_${idx}`} label={item.label}>
                                 {item.options.map((sub) => (
                                     <option
                                         key={sub.value}
@@ -260,9 +278,12 @@ export function SelectControl(props: SelectControlProps) {
                             </optgroup>
                         );
                     }
+                    const count = (seenTopValues.get(item.value) ?? 0) + 1;
+                    seenTopValues.set(item.value, count);
+                    const optKey = count === 1 ? item.value : `${item.value}__${count}`;
                     return (
                         <option
-                            key={`${item.value}_${idx}`}
+                            key={optKey}
                             value={item.value}
                             disabled={item.disabled}
                         >
