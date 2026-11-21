@@ -38,7 +38,7 @@ export interface CharacterPanelProps {
     charGroupExpanded: Signal<Record<string, boolean>>;
     selectedOutfitToBind: Signal<string>;
     onAction: (action: PresetActionType, id?: string) => Promise<boolean>;
-    onImportFile: (file: File) => void;
+    onImportFiles?: (files: File[]) => void;
     onUploadAvatar: (file: File) => Promise<string>;
     onRemoveAvatar: () => void;
     onEnsureAvatarLoaded: (avatarId: string) => void;
@@ -52,7 +52,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
         charGroupExpanded,
         selectedOutfitToBind,
         onAction,
-        onImportFile,
+        onImportFiles,
         onUploadAvatar,
         onRemoveAvatar,
         onEnsureAvatarLoaded,
@@ -121,7 +121,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                     activePresetId={activeId}
                     dirty={isDirty}
                     onAction={(action, id) => onAction(action, id)}
-                    onImportFile={onImportFile}
+                    onImportFiles={onImportFiles}
                 />
             </div>
 

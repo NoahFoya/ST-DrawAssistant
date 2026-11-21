@@ -587,7 +587,7 @@ export class LexiconTabView extends PreactSettingsView {
     }
 
     /**
-     * 按需下载并载入单个预置词库分片至本地 IndexedDB。
+     * 按需下载并载入单个本地词库分片至本地 IndexedDB。
      */
     public async loadPresetPack(pack: StaticLexiconPackMeta): Promise<void> {
         if (this.viewDisposed || this.busyPresetPackIds.value.has(pack.id)) {
@@ -621,7 +621,7 @@ export class LexiconTabView extends PreactSettingsView {
     }
 
     /**
-     * 卸载指定已载入的预置词库分片并释放本地存储空间。
+     * 卸载指定已载入的本地词库分片并释放本地存储空间。
      */
     public async unloadPresetPack(pack: StaticLexiconPackMeta): Promise<void> {
         if (this.viewDisposed || this.busyPresetPackIds.value.has(pack.id)) {
@@ -649,6 +649,74 @@ export class LexiconTabView extends PreactSettingsView {
         }
     }
 
+    /**
+     * 一键载入全部尚未载入的本地词库分片。
+     */
+    public async loadAllPresetPacks(): Promise<void> {
+        const manifest = this.presetManifest.value;
+        if (this.viewDisposed || !manifest) return;
+        const loadedIds = new Set(
+            this.filesMeta.value.map((f) => f.presetPackId).filter(Boolean) as string[]
+        );
+        const pending = manifest.packs.filter((p) => !loadedIds.has(p.id));
+        if (pending.length === 0) return;
+
+        let loadedCount = 0;
+        let failedCount = 0;
+        for (const pack of pending) {
+            if (this.viewDisposed) return;
+            this.setPackBusy(pack.id, true);
+            try {
+                const rawCsv = await fetchStaticLexiconShardText(pack.fileName);
+                if (this.viewDisposed) return;
+                await this._storage.importLexiconFile(pack.displayName, rawCsv, {
+                    presetPackId: pack.id,
+                });
+                loadedCount += 1;
+            } catch {
+                failedCount += 1;
+            } finally {
+                this.setPackBusy(pack.id, false);
+            }
+        }
+        if (this.viewDisposed) return;
+        await this.reloadFromStorage();
+        Toast.show(
+            failedCount === 0
+                ? `已一键载入 ${loadedCount} 个本地词库`
+                : `本地词库载入完成：成功 ${loadedCount} 个，失败 ${failedCount} 个`,
+            { level: failedCount > 0 ? 'warning' : 'success' }
+        );
+    }
+
+    /**
+     * 一键卸载全部已载入的本地词库分片（不影响用户自导入的本地词表）。
+     */
+    public async unloadAllPresetPacks(): Promise<void> {
+        const manifest = this.presetManifest.value;
+        if (this.viewDisposed || !manifest) return;
+        const loadedIds = new Set(
+            this.filesMeta.value.map((f) => f.presetPackId).filter(Boolean) as string[]
+        );
+        const targets = manifest.packs.filter((p) => loadedIds.has(p.id));
+        if (targets.length === 0) return;
+
+        let removedCount = 0;
+        for (const pack of targets) {
+            if (this.viewDisposed) return;
+            this.setPackBusy(pack.id, true);
+            try {
+                const removed = await this._storage.uninstallPresetPack(pack.id);
+                if (removed) removedCount += 1;
+            } finally {
+                this.setPackBusy(pack.id, false);
+            }
+        }
+        if (this.viewDisposed) return;
+        await this.reloadFromStorage();
+        Toast.show(`已卸载 ${removedCount} 个本地词库`, { level: 'info' });
+    }
+
     private renderFilesSubPanel(): VNode {
         const files = this.filesMeta.value;
         const manifest = this.presetManifest.value;
@@ -670,14 +738,35 @@ export class LexiconTabView extends PreactSettingsView {
         );
         const isAllEmpty =
             !manifestLoading && customOrExtraFiles.length === 0 && presetPacks.length === 0;
+        const hasUnloadedPresetPacks = presetPacks.some((p) => !loadedPresetMap.has(p.id));
+        const hasLoadedPresetPacks = presetPacks.some((p) => loadedPresetMap.has(p.id));
+        const isAnyPackBusy = busySet.size > 0;
 
         return (
             <CardView
                 className="da-card--padded"
                 title={`词汇文件 (${files.length})`}
-                subtitle="按需载入预置词库或导入本地词表用于输入联想（支持 Tagcomplete CSV、双列中英及 JSON）"
+                subtitle="按需载入本地词库或导入自定义词表用于输入联想（支持 CSV / TSV / JSON）"
                 actions={
                     <div className="da-extra-fields-toolbar">
+                        {presetPacks.length > 0 && hasUnloadedPresetPacks && (
+                            <ButtonControl
+                                label="一键载入"
+                                variant="secondary"
+                                size="sm"
+                                disabled={isAnyPackBusy}
+                                onClick={() => void this.loadAllPresetPacks()}
+                            />
+                        )}
+                        {presetPacks.length > 0 && hasLoadedPresetPacks && (
+                            <ButtonControl
+                                label="一键卸载"
+                                variant="secondary"
+                                size="sm"
+                                disabled={isAnyPackBusy}
+                                onClick={() => void this.unloadAllPresetPacks()}
+                            />
+                        )}
                         {files.length > 0 && (
                             <ButtonControl
                                 label="清空全部"
@@ -712,7 +801,7 @@ export class LexiconTabView extends PreactSettingsView {
             >
                 {manifestError && !manifest && (
                     <div className="da-empty-hint da-lexicon-preset-error-bar">
-                        <span>预置词库清单读取失败：{manifestError}</span>
+                        <span>本地词库清单读取失败：{manifestError}</span>
                         <ButtonControl
                             label="重试"
                             variant="secondary"
@@ -723,7 +812,7 @@ export class LexiconTabView extends PreactSettingsView {
                 )}
 
                 {manifestLoading && !manifest && (
-                    <div className="da-empty-hint">正在读取预置词库清单...</div>
+                    <div className="da-empty-hint">正在读取本地词库清单...</div>
                 )}
 
                 {isAllEmpty ? (

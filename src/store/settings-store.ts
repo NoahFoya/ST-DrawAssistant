@@ -16,10 +16,14 @@ import type {
     ComfyUIProviderConfig,
     NovelAIProviderConfig,
     OpenAIProviderConfig,
+    GeminiProviderConfig,
+    GrokProviderConfig,
     PresetCategory,
     PresetItem,
     PresetSettings,
     DrawingPresetData,
+    PromptPresetData,
+    WorkflowPresetData,
     MaterialLibraryConfig,
     MaterialActivationPresetData,
     MaterialItemActivationRule,
@@ -113,6 +117,27 @@ export interface SyncOfficialPresetsOptions {
     readonly loaderOptions?: LoadStaticPresetsOptions;
 }
 
+/** 静态预设目录单条目（用于关于页按需载入/卸载管理） */
+export interface StaticPresetCatalogItem {
+    readonly key: string;
+    readonly category: OfficialPresetSyncCategory;
+    readonly bucketLabel: string;
+    readonly officialId: string;
+    readonly officialName: string;
+    readonly description?: string;
+    readonly loaded: boolean;
+    readonly localId?: string;
+}
+
+/** 静态预设目录按分类汇总 */
+export interface StaticPresetCatalogCategory {
+    readonly category: OfficialPresetSyncCategory;
+    readonly label: string;
+    readonly loadedCount: number;
+    readonly totalCount: number;
+    readonly items: readonly StaticPresetCatalogItem[];
+}
+
 /** 配置导入结果结构 */
 export interface SettingsImportResult {
     readonly success: boolean;
@@ -190,6 +215,8 @@ export interface DrawAssistantSettings {
         sdwebui: SDWebUIProviderConfig;
         novelai: NovelAIProviderConfig;
         openai: OpenAIProviderConfig;
+        gemini: GeminiProviderConfig;
+        grok: GrokProviderConfig;
         [key: string]: unknown;
     };
     ui: {
@@ -418,8 +445,147 @@ function mergeEmptyPresetCategories(
     return next;
 }
 
+/** 清理绘图预设中失效的提示词预设绑定及轮询候选池条目 */
+function pruneDrawingPromptRefs(
+    dpList: readonly PresetItem<DrawingPresetData>[],
+    isRemovedPrompt: (id: string) => boolean,
+    fallbackPromptId: string
+): { readonly list: PresetItem<DrawingPresetData>[]; readonly changed: boolean } {
+    let changed = false;
+    const list = dpList.map((dp) => {
+        if (!dp?.data) return dp;
+        const pid = dp.data.promptPresetId;
+        const clearPrompt =
+            typeof pid === 'string' &&
+            pid.length > 0 &&
+            pid !== PROMPT_POLLING_PRESET_ID &&
+            isRemovedPrompt(pid);
+        const rawPool = dp.data.promptPollingPool;
+        const filteredPool = Array.isArray(rawPool)
+            ? rawPool.filter((entry) => entry && !isRemovedPrompt(entry.presetId))
+            : undefined;
+        const poolChanged = Array.isArray(rawPool) && filteredPool!.length !== rawPool.length;
+        if (!clearPrompt && !poolChanged) return dp;
+        changed = true;
+        return {
+            ...dp,
+            data: {
+                ...dp.data,
+                ...(clearPrompt ? { promptPresetId: fallbackPromptId } : {}),
+                ...(poolChanged ? { promptPollingPool: filteredPool } : {}),
+            },
+        };
+    });
+    return { list, changed };
+}
+
+/** 清理绘图预设映射表中失效的工作流 / 局部重绘引用 */
+function pruneDrawingWorkflowRefs(
+    drawingMap: PresetSettings['drawing'],
+    isRemovedWorkflow: (id: string) => boolean
+): { readonly map: PresetSettings['drawing']; readonly changed: boolean } {
+    if (!isPlainObject(drawingMap)) {
+        return { map: drawingMap, changed: false };
+    }
+    const nextMap: Record<string, PresetItem<DrawingPresetData>[]> = {};
+    let changed = false;
+    for (const [provKey, dpList] of Object.entries(drawingMap)) {
+        if (!Array.isArray(dpList)) continue;
+        nextMap[provKey] = dpList.map((dp) => {
+            if (!dp?.data) return dp;
+            const clearTxt = Boolean(dp.data.txt2imgWorkflowId && isRemovedWorkflow(dp.data.txt2imgWorkflowId));
+            const clearInp = Boolean(dp.data.inpaintPresetId && isRemovedWorkflow(dp.data.inpaintPresetId));
+            if (!clearTxt && !clearInp) return dp;
+            changed = true;
+            return {
+                ...dp,
+                data: {
+                    ...dp.data,
+                    ...(clearTxt ? { txt2imgWorkflowId: '' } : {}),
+                    ...(clearInp ? { inpaintPresetId: '' } : {}),
+                },
+            };
+        });
+    }
+    return { map: changed ? (nextMap as PresetSettings['drawing']) : drawingMap, changed };
+}
+
+/** 从角色档案列表的 `boundOutfitIds` 中移除已失效的服装 ID */
+function pruneCharacterOutfitRefs<TChar extends PresetItem<{ boundOutfitIds?: string[] }>>(
+    characters: TChar[] | undefined,
+    isRemovedOutfit: (id: string) => boolean
+): { readonly list: TChar[] | undefined; readonly changed: boolean } {
+    if (!Array.isArray(characters)) {
+        return { list: characters, changed: false };
+    }
+    let changed = false;
+    const list = characters.map((char) => {
+        const boundIds = char?.data?.boundOutfitIds;
+        if (!Array.isArray(boundIds)) return char;
+        const filtered = boundIds.filter((bid) => !isRemovedOutfit(bid));
+        if (filtered.length === boundIds.length) return char;
+        changed = true;
+        return { ...char, data: { ...char.data, boundOutfitIds: filtered } };
+    });
+    return { list: changed ? list : characters, changed };
+}
+
+/** 从素材启用预设中移除已失效的角色或服装激活规则 */
+function pruneActivationMaterialRefs(
+    activations: PresetItem<MaterialActivationPresetData>[] | undefined,
+    isRemovedChar: ((id: string) => boolean) | null,
+    isRemovedOutfit: ((id: string) => boolean) | null
+): { readonly list: PresetItem<MaterialActivationPresetData>[] | undefined; readonly changed: boolean } {
+    if (!Array.isArray(activations) || activations.length === 0) {
+        return { list: activations, changed: false };
+    }
+    let changed = false;
+    const pruneRuleMap = (
+        rules: Record<string, MaterialItemActivationRule> | undefined,
+        isRemoved: (id: string) => boolean
+    ): Record<string, MaterialItemActivationRule> | undefined => {
+        if (!rules) return rules;
+        const nextRules: Record<string, MaterialItemActivationRule> = {};
+        let ruleChanged = false;
+        for (const [id, rule] of Object.entries(rules)) {
+            if (isRemoved(id)) {
+                ruleChanged = true;
+            } else {
+                nextRules[id] = rule;
+            }
+        }
+        if (ruleChanged) {
+            changed = true;
+            return nextRules;
+        }
+        return rules;
+    };
+
+    const list = activations.map((act) => {
+        if (!act?.data) return act;
+        const nextCharRules = isRemovedChar
+            ? pruneRuleMap(act.data.characterRules, isRemovedChar)
+            : act.data.characterRules;
+        const nextOutfitRules = isRemovedOutfit
+            ? pruneRuleMap(act.data.outfitRules, isRemovedOutfit)
+            : act.data.outfitRules;
+        if (nextCharRules === act.data.characterRules && nextOutfitRules === act.data.outfitRules) {
+            return act;
+        }
+        return {
+            ...act,
+            data: {
+                ...act.data,
+                ...(nextCharRules !== act.data.characterRules ? { characterRules: nextCharRules } : {}),
+                ...(nextOutfitRules !== act.data.outfitRules ? { outfitRules: nextOutfitRules } : {}),
+            },
+        };
+    });
+    return { list: changed ? list : activations, changed };
+}
+
 const OFFICIAL_SYNC_CATEGORY_LABELS: Readonly<Record<OfficialPresetSyncCategory, string>> = {
-    prompts: '提示词预设（含画师串）',
+    prompts: '提示词预设',
     workflows: '工作流预设 (ComfyUI)',
     drawing: '绘图参数预设',
     materialsAndThemes: '角色 / 服装 / 主题外观',
@@ -509,11 +675,22 @@ function buildOfficialIdMap<T>(
     return map;
 }
 
+const ALL_PROVIDERS: readonly ProviderType[] = [
+    'comfyui',
+    'sdwebui',
+    'novelai',
+    'openai',
+    'gemini',
+    'grok',
+] as const;
+
 const PROVIDER_BUCKET_LABELS: Readonly<Record<string, string>> = {
     comfyui: 'ComfyUI',
     sdwebui: 'SD-WebUI',
     novelai: 'NovelAI',
     openai: 'OpenAI 兼容',
+    gemini: 'Google Gemini',
+    grok: 'xAI Grok',
 };
 
 const INJECTION_BUCKET_LABELS: Readonly<Record<string, string>> = {
@@ -1015,14 +1192,32 @@ export class SettingsStore {
                     activeThemePresetId: resolvedThemePreset,
                     presets: mergedPresets,
                 };
+                this.reconcileActivePresetPointers();
                 this.saveToHost();
                 eventBus.emit('settings:updated', {
-                    keys: ['isInitialized', 'presets', 'activeThemePresetId'],
+                    keys: [
+                        'isInitialized',
+                        'presets',
+                        'activeThemePresetId',
+                        'promptInjection',
+                        'materialConfig',
+                        'providers',
+                    ],
                 });
             } catch (err) {
                 logger.error('[SettingsStore] 初始化加载默认静态预设失败:', err);
                 throw err;
             }
+        } else if (this.reconcileActivePresetPointers()) {
+            this.saveToHost();
+            eventBus.emit('settings:updated', {
+                keys: [
+                    'activeThemePresetId',
+                    'promptInjection',
+                    'materialConfig',
+                    'providers',
+                ],
+            });
         }
     }
 
@@ -1031,12 +1226,9 @@ export class SettingsStore {
      */
     public async importOfficialPresets(loaderOptions?: LoadStaticPresetsOptions): Promise<void> {
         const officialPresets = await loadOfficialStaticPresets(loaderOptions);
+        const prevThemePreset = this._settings.activeThemePresetId;
         const resolvedThemePreset =
-            this._settings.activeThemePresetId || officialPresets.themes[0]?.id || '';
-        const updateKeys = ['presets', 'isInitialized'];
-        if (resolvedThemePreset !== this._settings.activeThemePresetId) {
-            updateKeys.push('activeThemePresetId');
-        }
+            prevThemePreset || officialPresets.themes[0]?.id || '';
 
         this._settings = {
             ...this._settings,
@@ -1044,6 +1236,11 @@ export class SettingsStore {
             activeThemePresetId: resolvedThemePreset,
             presets: officialPresets,
         };
+        const reconciled = this.reconcileActivePresetPointers();
+        const updateKeys = ['presets', 'isInitialized'];
+        if (reconciled || resolvedThemePreset !== prevThemePreset) {
+            updateKeys.push('activeThemePresetId', 'promptInjection', 'materialConfig', 'providers');
+        }
 
         eventBus.emit('settings:updated', { keys: updateKeys });
         this.saveToHost();
@@ -1501,33 +1698,17 @@ export class SettingsStore {
             // 若删除的是提示词预设，对齐固定绑定并从轮询候选池清理该失效 ID（保留 '__polling__' 特殊绑定）
             if (category === 'prompts' && updatedDrawingPresets?.[providerKey]) {
                 const fallbackPromptId = nextList[0]?.id || '';
-                const currentDrawings = updatedDrawingPresets[providerKey] || [];
-                const patchedDrawings = currentDrawings.map((dp) => {
-                    if (!dp?.data) return dp;
-                    const clearPromptId = dp.data.promptPresetId === id;
-                    const rawPool = dp.data.promptPollingPool;
-                    const hasInPool =
-                        Array.isArray(rawPool) && rawPool.some((item) => item?.presetId === id);
-                    if (!clearPromptId && !hasInPool) return dp;
-                    return {
-                        ...dp,
-                        data: {
-                            ...dp.data,
-                            ...(clearPromptId ? { promptPresetId: fallbackPromptId } : {}),
-                            ...(hasInPool
-                                ? {
-                                      promptPollingPool: rawPool.filter(
-                                          (item) => item?.presetId !== id
-                                      ),
-                                  }
-                                : {}),
-                        },
+                const pruned = pruneDrawingPromptRefs(
+                    updatedDrawingPresets[providerKey] || [],
+                    (pid) => pid === id,
+                    fallbackPromptId
+                );
+                if (pruned.changed) {
+                    updatedDrawingPresets = {
+                        ...updatedDrawingPresets,
+                        [providerKey]: pruned.list,
                     };
-                });
-                updatedDrawingPresets = {
-                    ...updatedDrawingPresets,
-                    [providerKey]: patchedDrawings,
-                };
+                }
             } else if (
                 category === 'drawing' &&
                 updatedProviders?.[providerKey] &&
@@ -1577,77 +1758,27 @@ export class SettingsStore {
                 : '';
 
         // 1. 删除工作流时，清理绘图预设内的 txt2imgWorkflowId / inpaintPresetId 失效引用
-        let nextDrawingPresets = this._settings.presets.drawing;
-        if (category === 'workflows' && isPlainObject(nextDrawingPresets)) {
-            const patchedDrawingMap: Record<string, PresetItem<DrawingPresetData>[]> = {};
-            let drawingChanged = false;
-            for (const [provKey, dpList] of Object.entries(nextDrawingPresets)) {
-                if (!Array.isArray(dpList)) continue;
-                patchedDrawingMap[provKey] = dpList.map((dp) => {
-                    if (!dp?.data) return dp;
-                    const clearTxt2Img = dp.data.txt2imgWorkflowId === id;
-                    const clearInpaint = dp.data.inpaintPresetId === id;
-                    if (!clearTxt2Img && !clearInpaint) return dp;
-                    drawingChanged = true;
-                    return {
-                        ...dp,
-                        data: {
-                            ...dp.data,
-                            ...(clearTxt2Img ? { txt2imgWorkflowId: '' } : {}),
-                            ...(clearInpaint ? { inpaintPresetId: '' } : {}),
-                        },
-                    };
-                });
-            }
-            if (drawingChanged) {
-                nextDrawingPresets = patchedDrawingMap as PresetSettings['drawing'];
-            }
-        }
+        const nextDrawingPresets =
+            category === 'workflows'
+                ? pruneDrawingWorkflowRefs(this._settings.presets.drawing, (wid) => wid === id).map
+                : this._settings.presets.drawing;
 
         // 2. 同步清理素材启用预设中的激活规则引用
-        let nextActivations = this._settings.presets.material_activations;
-        if (
-            (category === 'characters' || category === 'outfits') &&
-            Array.isArray(nextActivations) &&
-            nextActivations.length > 0
-        ) {
-            const mapKey = category === 'characters' ? 'characterRules' : 'outfitRules';
-            nextActivations = nextActivations.map((act) => {
-                if (!act?.data?.[mapKey] || !(id in act.data[mapKey])) {
-                    return act;
-                }
-                const clonedRules = { ...act.data[mapKey] };
-                delete clonedRules[id];
-                return {
-                    ...act,
-                    data: {
-                        ...act.data,
-                        [mapKey]: clonedRules,
-                    },
-                };
-            });
-        }
+        const nextActivations =
+            category === 'characters' || category === 'outfits'
+                ? pruneActivationMaterialRefs(
+                      this._settings.presets.material_activations,
+                      category === 'characters' ? (cid) => cid === id : null,
+                      category === 'outfits' ? (oid) => oid === id : null
+                  ).list
+                : this._settings.presets.material_activations;
 
         // 3. 删除服装时，同步清理角色预设中的专属服装绑定引用
-        let nextCharacters = this._settings.presets.characters;
-        if (category === 'outfits' && Array.isArray(nextCharacters)) {
-            nextCharacters = nextCharacters.map((char) => {
-                if (
-                    char.data?.boundOutfitIds &&
-                    Array.isArray(char.data.boundOutfitIds) &&
-                    char.data.boundOutfitIds.includes(id)
-                ) {
-                    return {
-                        ...char,
-                        data: {
-                            ...char.data,
-                            boundOutfitIds: char.data.boundOutfitIds.filter((bid) => bid !== id),
-                        },
-                    };
-                }
-                return char;
-            });
-        }
+        const nextCharacters =
+            category === 'outfits'
+                ? pruneCharacterOutfitRefs(this._settings.presets.characters, (oid) => oid === id)
+                      .list
+                : this._settings.presets.characters;
 
         // 4. 素材类激活项回退：角色 / 服装 / 启用 / 解析 / 格式
         let nextMaterialConfig = this._settings.materialConfig;
@@ -1963,7 +2094,16 @@ export class SettingsStore {
                 if (o?.data?.avatarId) oldAvatarIds.push(o.data.avatarId);
             }
 
-            this.update(parsed);
+            const patchKeys = new Set<string>(Object.keys(parsed));
+            this._settings = deepMerge(this._settings, parsed);
+            if (this._settings.isInitialized && this.reconcileActivePresetPointers()) {
+                patchKeys.add('activeThemePresetId');
+                patchKeys.add('promptInjection');
+                patchKeys.add('materialConfig');
+                patchKeys.add('providers');
+            }
+            eventBus.emit('settings:updated', { keys: Array.from(patchKeys), patch: parsed });
+            this.saveToHost(parsed.providers !== undefined);
             if (oldAvatarIds.length > 0) {
                 this.cleanupUnusedMaterialAvatars(oldAvatarIds);
             }
@@ -2094,7 +2234,7 @@ export class SettingsStore {
                 officialPresets.material_activations
             );
             this._settings.materialConfig.activeActivationPresetId =
-                officialPresets.material_activations[0]?.id || 'mat_act_default';
+                officialPresets.material_activations[0]?.id || 'material_activation_default';
         }
 
         // 11. 楼层解析与提取预设
@@ -2103,7 +2243,7 @@ export class SettingsStore {
                 officialPresets.material_extractions
             );
             this._settings.materialConfig.activeExtractionPresetId =
-                officialPresets.material_extractions[0]?.id || 'ext_default';
+                officialPresets.material_extractions[0]?.id || 'material_extraction_default';
         }
 
         // 12. 格式与宏规则预设
@@ -2112,7 +2252,7 @@ export class SettingsStore {
                 officialPresets.material_formats
             );
             this._settings.materialConfig.activeFormatPresetId =
-                officialPresets.material_formats[0]?.id || 'format_default';
+                officialPresets.material_formats[0]?.id || 'material_format_default';
         }
 
         // 级联清理跨分类的失效引用 ID（例如单独恢复提示词/工作流/角色/服装预设后）
@@ -2122,51 +2262,25 @@ export class SettingsStore {
                 if (!Array.isArray(dpList)) continue;
                 const validPromptIds = new Set((promptsByProvider[provKey] || []).map((p) => p.id));
                 const fallbackPromptId = promptsByProvider[provKey]?.[0]?.id || '';
-                this._settings.presets.drawing[provKey] = dpList.map((dp) => {
-                    if (!dp?.data) return dp;
-                    const pid = dp.data.promptPresetId;
-                    const needResetPrompt =
-                        typeof pid === 'string' &&
-                        pid.length > 0 &&
-                        pid !== PROMPT_POLLING_PRESET_ID &&
-                        !validPromptIds.has(pid);
-                    const rawPool = dp.data.promptPollingPool;
-                    const filteredPool = Array.isArray(rawPool)
-                        ? rawPool.filter((entry) => entry && validPromptIds.has(entry.presetId))
-                        : undefined;
-                    const poolChanged =
-                        Array.isArray(rawPool) && filteredPool!.length !== rawPool.length;
-                    if (!needResetPrompt && !poolChanged) return dp;
-                    return {
-                        ...dp,
-                        data: {
-                            ...dp.data,
-                            ...(needResetPrompt ? { promptPresetId: fallbackPromptId } : {}),
-                            ...(poolChanged ? { promptPollingPool: filteredPool } : {}),
-                        },
-                    };
-                });
+                const pruned = pruneDrawingPromptRefs(
+                    dpList,
+                    (pid) => !validPromptIds.has(pid),
+                    fallbackPromptId
+                );
+                if (pruned.changed) {
+                    this._settings.presets.drawing[provKey] = pruned.list;
+                }
             }
         }
 
         if (options.workflowPresets && !options.drawingPresets && isPlainObject(this._settings.presets.drawing)) {
             const validWorkflowIds = new Set((this._settings.presets.workflows || []).map((w) => w.id));
-            for (const [provKey, dpList] of Object.entries(this._settings.presets.drawing)) {
-                if (!Array.isArray(dpList)) continue;
-                this._settings.presets.drawing[provKey] = dpList.map((dp) => {
-                    if (!dp?.data) return dp;
-                    const clearTxt = Boolean(dp.data.txt2imgWorkflowId && !validWorkflowIds.has(dp.data.txt2imgWorkflowId));
-                    const clearInp = Boolean(dp.data.inpaintPresetId && !validWorkflowIds.has(dp.data.inpaintPresetId));
-                    if (!clearTxt && !clearInp) return dp;
-                    return {
-                        ...dp,
-                        data: {
-                            ...dp.data,
-                            ...(clearTxt ? { txt2imgWorkflowId: '' } : {}),
-                            ...(clearInp ? { inpaintPresetId: '' } : {}),
-                        },
-                    };
-                });
+            const pruned = pruneDrawingWorkflowRefs(
+                this._settings.presets.drawing,
+                (wid) => !validWorkflowIds.has(wid)
+            );
+            if (pruned.changed) {
+                this._settings.presets.drawing = pruned.map;
             }
         }
 
@@ -2174,34 +2288,23 @@ export class SettingsStore {
             const validCharIds = new Set((this._settings.presets.characters || []).map((c) => c.id));
             const validOutfitIds = new Set((this._settings.presets.outfits || []).map((o) => o.id));
             if (options.outfitPresets && !options.characterPresets) {
-                this._settings.presets.characters = (this._settings.presets.characters || []).map((char) => {
-                    const boundIds = char.data?.boundOutfitIds;
-                    if (!Array.isArray(boundIds)) return char;
-                    const filtered = boundIds.filter((bid) => validOutfitIds.has(bid));
-                    if (filtered.length === boundIds.length) return char;
-                    return { ...char, data: { ...char.data, boundOutfitIds: filtered } };
-                });
+                const prunedChars = pruneCharacterOutfitRefs(
+                    this._settings.presets.characters,
+                    (oid) => !validOutfitIds.has(oid)
+                );
+                if (prunedChars.changed && prunedChars.list) {
+                    this._settings.presets.characters = prunedChars.list;
+                }
             }
-            if (!options.materialActivationPresets && Array.isArray(this._settings.presets.material_activations)) {
-                this._settings.presets.material_activations = this._settings.presets.material_activations.map((act) => {
-                    if (!act?.data) return act;
-                    let nextData = act.data;
-                    if (options.characterPresets && act.data.characterRules) {
-                        const filteredCharRules: Record<string, MaterialItemActivationRule> = {};
-                        for (const [cid, rule] of Object.entries(act.data.characterRules)) {
-                            if (validCharIds.has(cid)) filteredCharRules[cid] = rule;
-                        }
-                        nextData = { ...nextData, characterRules: filteredCharRules };
-                    }
-                    if (options.outfitPresets && nextData.outfitRules) {
-                        const filteredOutfitRules: Record<string, MaterialItemActivationRule> = {};
-                        for (const [oid, rule] of Object.entries(nextData.outfitRules)) {
-                            if (validOutfitIds.has(oid)) filteredOutfitRules[oid] = rule;
-                        }
-                        nextData = { ...nextData, outfitRules: filteredOutfitRules };
-                    }
-                    return nextData === act.data ? act : { ...act, data: nextData };
-                });
+            if (!options.materialActivationPresets) {
+                const prunedActs = pruneActivationMaterialRefs(
+                    this._settings.presets.material_activations,
+                    options.characterPresets ? (cid) => !validCharIds.has(cid) : null,
+                    options.outfitPresets ? (oid) => !validOutfitIds.has(oid) : null
+                );
+                if (prunedActs.changed && prunedActs.list) {
+                    this._settings.presets.material_activations = prunedActs.list;
+                }
             }
         }
 
@@ -2247,12 +2350,140 @@ export class SettingsStore {
         }
 
         this._settings.isInitialized = true;
+        this.reconcileActivePresetPointers();
         this.saveToHost(Boolean(options.providers));
 
         eventBus.emit('settings:updated', {
             isReset: true,
             keys: Object.keys(this._settings),
         });
+    }
+
+    /**
+     * 对齐所有指向预设 ID 的激活指针（主题、各引擎绘图预设、提示词四通道、素材配置），
+     * 若当前指针不在对应预设池中，则自动回退至该分类首项或置空。
+     *
+     * @returns 是否发生任意指针修正
+     */
+    private reconcileActivePresetPointers(): boolean {
+        let changed = false;
+        const presets = this._settings.presets;
+
+        let nextThemePresetId = this._settings.activeThemePresetId;
+        const themes = presets.themes || [];
+        if (!themes.some((t) => t.id === nextThemePresetId)) {
+            const candidate = themes[0]?.id || '';
+            if (candidate !== nextThemePresetId) {
+                nextThemePresetId = candidate;
+                changed = true;
+            }
+        }
+
+        let nextProviders = this._settings.providers;
+        for (const prov of ALL_PROVIDERS) {
+            const provCfg = (nextProviders as Record<string, unknown> | undefined)?.[prov] as
+                | ({ activeDrawingPresetId?: string } & Record<string, unknown>)
+                | undefined;
+            const list = presets.drawing?.[prov] || [];
+            if (provCfg && typeof provCfg === 'object') {
+                const cur = provCfg.activeDrawingPresetId || '';
+                if (!list.some((d) => d.id === cur)) {
+                    const nextId = list[0]?.id || '';
+                    if (nextId !== cur) {
+                        if (nextProviders === this._settings.providers) {
+                            nextProviders = { ...this._settings.providers };
+                        }
+                        (nextProviders as Record<string, unknown>)[prov] = {
+                            ...provCfg,
+                            activeDrawingPresetId: nextId,
+                        };
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        const channelCategories: ReadonlyArray<
+            readonly [
+                keyof PromptInjectionConfig,
+                'prompt_story' | 'prompt_character' | 'prompt_vocab' | 'prompt_material',
+            ]
+        > = [
+            ['story', 'prompt_story'],
+            ['character', 'prompt_character'],
+            ['vocab', 'prompt_vocab'],
+            ['material', 'prompt_material'],
+        ];
+        let nextPromptInjection = this._settings.promptInjection;
+        if (nextPromptInjection) {
+            for (const [channelKey, presetKey] of channelCategories) {
+                const channelCfg = nextPromptInjection[channelKey];
+                if (!channelCfg) continue;
+                const list = presets[presetKey] || [];
+                const cur = channelCfg.activePresetId || '';
+                if (!list.some((p) => p.id === cur)) {
+                    const nextId = list[0]?.id || '';
+                    if (nextId !== cur) {
+                        if (nextPromptInjection === this._settings.promptInjection) {
+                            nextPromptInjection = { ...this._settings.promptInjection };
+                        }
+                        nextPromptInjection = {
+                            ...nextPromptInjection,
+                            [channelKey]: {
+                                ...channelCfg,
+                                activePresetId: nextId,
+                            },
+                        };
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        let nextMaterialConfig = this._settings.materialConfig;
+        if (nextMaterialConfig) {
+            const alignMaterialField = (
+                field:
+                    | 'activeCharacterPresetId'
+                    | 'activeOutfitPresetId'
+                    | 'activeActivationPresetId'
+                    | 'activeExtractionPresetId'
+                    | 'activeFormatPresetId',
+                list: ReadonlyArray<PresetItem<unknown>>,
+                allowEmptyWhenPopulated: boolean
+            ) => {
+                const cur = nextMaterialConfig[field] || '';
+                if (allowEmptyWhenPopulated && !cur) return;
+                if (!list.some((item) => item.id === cur)) {
+                    const nextId = list[0]?.id || '';
+                    if (nextId !== cur) {
+                        if (nextMaterialConfig === this._settings.materialConfig) {
+                            nextMaterialConfig = { ...this._settings.materialConfig };
+                        }
+                        nextMaterialConfig[field] = nextId;
+                        changed = true;
+                    }
+                }
+            };
+
+            alignMaterialField('activeCharacterPresetId', presets.characters || [], true);
+            alignMaterialField('activeOutfitPresetId', presets.outfits || [], true);
+            alignMaterialField('activeActivationPresetId', presets.material_activations || [], false);
+            alignMaterialField('activeExtractionPresetId', presets.material_extractions || [], false);
+            alignMaterialField('activeFormatPresetId', presets.material_formats || [], false);
+        }
+
+        if (changed) {
+            this._settings = {
+                ...this._settings,
+                activeThemePresetId: nextThemePresetId,
+                providers: nextProviders,
+                promptInjection: nextPromptInjection,
+                materialConfig: nextMaterialConfig,
+            };
+        }
+
+        return changed;
     }
 
     /**
@@ -2299,14 +2530,350 @@ export class SettingsStore {
                 ...this._settings,
                 presets: plan.nextPresets,
             };
+            if (this._settings.isInitialized) {
+                this.reconcileActivePresetPointers();
+            }
             this.saveToHost(false);
             eventBus.emit('settings:updated', {
                 isReset: true,
-                keys: ['presets'],
+                keys: [
+                    'presets',
+                    'activeThemePresetId',
+                    'promptInjection',
+                    'materialConfig',
+                    'providers',
+                ],
             });
         }
 
         return plan.result;
+    }
+
+    /**
+     * 枚举全部内置静态预设目录及其在本地预设池中的载入状态（用于「关于与支持」按需载入/卸载）。
+     */
+    public async getStaticPresetCatalog(
+        loaderOptions?: LoadStaticPresetsOptions
+    ): Promise<StaticPresetCatalogCategory[]> {
+        const official = await loadOfficialStaticPresets(loaderOptions);
+        const local = this._settings.presets;
+
+        const bucketsForCategory = (
+            category: OfficialPresetSyncCategory
+        ): Array<{
+            bucketKey: string;
+            bucketLabel: string;
+            officialList: PresetItem<unknown>[];
+            localList: PresetItem<unknown>[];
+        }> => {
+            switch (category) {
+                case 'prompts':
+                    return ALL_PROVIDERS.map((prov) => ({
+                        bucketKey: prov,
+                        bucketLabel: PROVIDER_BUCKET_LABELS[prov] || prov,
+                        officialList: (official.prompts?.[prov] || []) as PresetItem<unknown>[],
+                        localList: (local.prompts?.[prov] || []) as PresetItem<unknown>[],
+                    }));
+                case 'workflows':
+                    return [
+                        {
+                            bucketKey: 'workflows',
+                            bucketLabel: 'ComfyUI 工作流',
+                            officialList: (official.workflows || []) as PresetItem<unknown>[],
+                            localList: (local.workflows || []) as PresetItem<unknown>[],
+                        },
+                    ];
+                case 'drawing':
+                    return ALL_PROVIDERS.map((prov) => ({
+                        bucketKey: prov,
+                        bucketLabel: PROVIDER_BUCKET_LABELS[prov] || prov,
+                        officialList: (official.drawing?.[prov] || []) as PresetItem<unknown>[],
+                        localList: (local.drawing?.[prov] || []) as PresetItem<unknown>[],
+                    }));
+                case 'materialsAndThemes':
+                    return [
+                        {
+                            bucketKey: 'themes',
+                            bucketLabel: '界面主题',
+                            officialList: (official.themes || []) as PresetItem<unknown>[],
+                            localList: (local.themes || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'characters',
+                            bucketLabel: '角色档案',
+                            officialList: (official.characters || []) as PresetItem<unknown>[],
+                            localList: (local.characters || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'outfits',
+                            bucketLabel: '服装档案',
+                            officialList: (official.outfits || []) as PresetItem<unknown>[],
+                            localList: (local.outfits || []) as PresetItem<unknown>[],
+                        },
+                    ];
+                case 'injectionAndRules':
+                    return [
+                        {
+                            bucketKey: 'prompt_story',
+                            bucketLabel: '故事插画通道',
+                            officialList: (official.prompt_story || []) as PresetItem<unknown>[],
+                            localList: (local.prompt_story || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'prompt_vocab',
+                            bucketLabel: '词汇指导通道',
+                            officialList: (official.prompt_vocab || []) as PresetItem<unknown>[],
+                            localList: (local.prompt_vocab || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'prompt_character',
+                            bucketLabel: '角色创作通道',
+                            officialList: (official.prompt_character || []) as PresetItem<unknown>[],
+                            localList: (local.prompt_character || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'prompt_material',
+                            bucketLabel: '素材注入通道',
+                            officialList: (official.prompt_material || []) as PresetItem<unknown>[],
+                            localList: (local.prompt_material || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'material_activations',
+                            bucketLabel: '素材启用预设',
+                            officialList: (official.material_activations || []) as PresetItem<unknown>[],
+                            localList: (local.material_activations || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'material_extractions',
+                            bucketLabel: '档案提取规则',
+                            officialList: (official.material_extractions || []) as PresetItem<unknown>[],
+                            localList: (local.material_extractions || []) as PresetItem<unknown>[],
+                        },
+                        {
+                            bucketKey: 'material_formats',
+                            bucketLabel: '变量与宏格式',
+                            officialList: (official.material_formats || []) as PresetItem<unknown>[],
+                            localList: (local.material_formats || []) as PresetItem<unknown>[],
+                        },
+                    ];
+            }
+        };
+
+        return ALL_OFFICIAL_SYNC_CATEGORIES.map((category) => {
+            const items: StaticPresetCatalogItem[] = [];
+            for (const bucket of bucketsForCategory(category)) {
+                const idMap = buildOfficialIdMap(bucket.localList, bucket.officialList);
+                for (const offItem of bucket.officialList) {
+                    const localId = idMap.get(offItem.id);
+                    const nameKey = normalizePresetNameKey(offItem.name || '');
+                    items.push({
+                        key: `${category}:${bucket.bucketKey}:${offItem.id || nameKey}`,
+                        category,
+                        bucketLabel: bucket.bucketLabel,
+                        officialId: offItem.id,
+                        officialName: offItem.name,
+                        description: offItem.description,
+                        loaded: Boolean(localId),
+                        localId,
+                    });
+                }
+            }
+            const loadedCount = items.filter((i) => i.loaded).length;
+            return {
+                category,
+                label: OFFICIAL_SYNC_CATEGORY_LABELS[category],
+                loadedCount,
+                totalCount: items.length,
+                items,
+            };
+        });
+    }
+
+    /**
+     * 按 key 清单载入（或重新导入）指定的内置静态预设条目，不弹出覆盖确认。
+     */
+    public async loadStaticPresetItems(
+        itemKeys: readonly string[],
+        loaderOptions?: LoadStaticPresetsOptions
+    ): Promise<number> {
+        if (itemKeys.length === 0) return 0;
+        const result = await this.syncOfficialPresets({
+            mode: 'selected',
+            selectedItemKeys: itemKeys,
+            loaderOptions,
+        });
+        return result.totalAddCount + result.totalOverwriteCount;
+    }
+
+    /**
+     * 按 key 清单从本地预设池卸载指定的内置静态预设条目，不影响用户自定义预设。
+     */
+    public async unloadStaticPresetItems(
+        itemKeys: readonly string[],
+        loaderOptions?: LoadStaticPresetsOptions
+    ): Promise<number> {
+        if (itemKeys.length === 0) return 0;
+        const catalog = await this.getStaticPresetCatalog(loaderOptions);
+        const targetSet = new Set(itemKeys);
+        const removeIdsByBucket = new Map<string, Set<string>>();
+
+        for (const cat of catalog) {
+            for (const item of cat.items) {
+                if (!targetSet.has(item.key) || !item.loaded || !item.localId) continue;
+                const parts = item.key.split(':');
+                const bucketScopeKey =
+                    cat.category === 'prompts' || cat.category === 'drawing'
+                        ? `${cat.category}:${parts[1]}`
+                        : parts[1];
+                let idSet = removeIdsByBucket.get(bucketScopeKey);
+                if (!idSet) {
+                    idSet = new Set<string>();
+                    removeIdsByBucket.set(bucketScopeKey, idSet);
+                }
+                idSet.add(item.localId);
+            }
+        }
+
+        if (removeIdsByBucket.size === 0) return 0;
+
+        const nextPresets = structuredClone(this._settings.presets);
+        let removedCount = 0;
+
+        const filterBucket = (
+            bucketKey: string,
+            list: PresetItem<unknown>[] | undefined
+        ): PresetItem<unknown>[] => {
+            const arr = list || [];
+            const ids = removeIdsByBucket.get(bucketKey);
+            if (!ids || ids.size === 0) return arr;
+            const filtered = arr.filter((p) => !ids.has(p.id));
+            removedCount += arr.length - filtered.length;
+            return filtered;
+        };
+
+        for (const prov of ALL_PROVIDERS) {
+            nextPresets.prompts[prov] = filterBucket(
+                `prompts:${prov}`,
+                nextPresets.prompts[prov] as PresetItem<unknown>[]
+            ) as PresetItem<PromptPresetData>[];
+            nextPresets.drawing[prov] = filterBucket(
+                `drawing:${prov}`,
+                nextPresets.drawing[prov] as PresetItem<unknown>[]
+            ) as PresetItem<DrawingPresetData>[];
+        }
+        nextPresets.workflows = filterBucket(
+            'workflows',
+            nextPresets.workflows as PresetItem<unknown>[]
+        ) as PresetItem<WorkflowPresetData>[];
+
+        for (const key of [
+            'themes',
+            'characters',
+            'outfits',
+            'prompt_story',
+            'prompt_vocab',
+            'prompt_character',
+            'prompt_material',
+            'material_activations',
+            'material_extractions',
+            'material_formats',
+        ] as const) {
+            (nextPresets as unknown as Record<string, unknown>)[key] = filterBucket(
+                key,
+                nextPresets[key] as PresetItem<unknown>[]
+            );
+        }
+
+        if (removedCount > 0) {
+            const removedWorkflowIds = removeIdsByBucket.get('workflows');
+            const removedCharIds = removeIdsByBucket.get('characters');
+            const removedOutfitIds = removeIdsByBucket.get('outfits');
+            const candidateAvatarIds: string[] = [];
+
+            if (removedCharIds?.size) {
+                for (const c of this._settings.presets.characters || []) {
+                    if (removedCharIds.has(c.id) && c?.data?.avatarId) {
+                        candidateAvatarIds.push(c.data.avatarId);
+                    }
+                }
+            }
+            if (removedOutfitIds?.size) {
+                for (const o of this._settings.presets.outfits || []) {
+                    if (removedOutfitIds.has(o.id) && o?.data?.avatarId) {
+                        candidateAvatarIds.push(o.data.avatarId);
+                    }
+                }
+            }
+
+            // 1. 清理提示词预设被卸载后绘图预设里的失效绑定与轮询池条目
+            for (const prov of ALL_PROVIDERS) {
+                const removedPromptIds = removeIdsByBucket.get(`prompts:${prov}`);
+                if (!removedPromptIds?.size || !Array.isArray(nextPresets.drawing[prov])) continue;
+                const fallbackPromptId = nextPresets.prompts[prov]?.[0]?.id || '';
+                const pruned = pruneDrawingPromptRefs(
+                    nextPresets.drawing[prov],
+                    (pid) => removedPromptIds.has(pid),
+                    fallbackPromptId
+                );
+                if (pruned.changed) {
+                    nextPresets.drawing[prov] = pruned.list;
+                }
+            }
+
+            // 2. 清理工作流被卸载后绘图预设里的失效工作流引用
+            if (removedWorkflowIds?.size) {
+                const pruned = pruneDrawingWorkflowRefs(
+                    nextPresets.drawing,
+                    (wid) => removedWorkflowIds.has(wid)
+                );
+                if (pruned.changed) {
+                    nextPresets.drawing = pruned.map;
+                }
+            }
+
+            // 3. 清理服装/角色被卸载后的专属绑定与启用规则引用
+            if (removedOutfitIds?.size) {
+                const prunedChars = pruneCharacterOutfitRefs(
+                    nextPresets.characters,
+                    (oid) => removedOutfitIds.has(oid)
+                );
+                if (prunedChars.changed && prunedChars.list) {
+                    nextPresets.characters = prunedChars.list;
+                }
+            }
+            if (removedCharIds?.size || removedOutfitIds?.size) {
+                const prunedActs = pruneActivationMaterialRefs(
+                    nextPresets.material_activations,
+                    removedCharIds?.size ? (cid) => removedCharIds.has(cid) : null,
+                    removedOutfitIds?.size ? (oid) => removedOutfitIds.has(oid) : null
+                );
+                if (prunedActs.changed && prunedActs.list) {
+                    nextPresets.material_activations = prunedActs.list;
+                }
+            }
+
+            this._settings = {
+                ...this._settings,
+                presets: nextPresets,
+            };
+            this.reconcileActivePresetPointers();
+            if (candidateAvatarIds.length > 0) {
+                this.cleanupUnusedMaterialAvatars(candidateAvatarIds);
+            }
+            this.saveToHost(false);
+            eventBus.emit('settings:updated', {
+                isReset: true,
+                keys: [
+                    'presets',
+                    'activeThemePresetId',
+                    'promptInjection',
+                    'materialConfig',
+                    'providers',
+                ],
+            });
+        }
+
+        return removedCount;
     }
 
     /**

@@ -11,7 +11,6 @@
 import type { Disposable } from '../types';
 import type { ChangelogItem } from '@types';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
-import { OfficialPresetSyncCard } from '../composite/official-preset-sync-card';
 import { renderIcon } from '../components/icons';
 import { updateService } from '../../pipeline/update-service';
 import { logger } from '../../util/logger';
@@ -21,13 +20,14 @@ export interface ChangelogModalOptions {
     readonly items?: ChangelogItem[];
     /** 关闭回调 */
     readonly onClose?: () => void;
+    /** 点击「前往预设管理」跳转回调 */
+    readonly onNavigateToPresetManager?: () => void;
 }
 
 export class ChangelogModal implements Disposable {
     private static activeInstance: ChangelogModal | null = null;
     private isDisposed = false;
     private backdropEl?: HTMLElement;
-    private syncCard?: OfficialPresetSyncCard;
     private readonly disposers: (() => void)[] = [];
 
     public constructor(options: ChangelogModalOptions = {}) {
@@ -81,15 +81,10 @@ export class ChangelogModal implements Disposable {
         header.appendChild(closeBtn);
         panel.appendChild(header);
 
-        // 4. 内容区域（内嵌官方预设更新卡片 + 版本日志列表）
+        // 4. 内容区域（版本日志列表）
         const content = document.createElement('div');
         content.className = 'da-submodal-body da-changelog-content';
         panel.appendChild(content);
-
-        this.syncCard = new OfficialPresetSyncCard({
-            compact: true,
-        });
-        content.appendChild(this.syncCard.element);
 
         const versionsContainer = document.createElement('div');
         versionsContainer.className = 'da-changelog-versions';
@@ -98,6 +93,19 @@ export class ChangelogModal implements Disposable {
         // 5. 底栏操作动作
         const footer = document.createElement('div');
         footer.className = 'da-submodal-footer da-changelog-footer';
+
+        if (options.onNavigateToPresetManager) {
+            const gotoBtn = document.createElement('button');
+            gotoBtn.type = 'button';
+            gotoBtn.className = 'da-btn da-btn--secondary da-btn--sm da-changelog-goto-presets-btn';
+            gotoBtn.textContent = '前往预设管理';
+            gotoBtn.onclick = () => {
+                const navigate = options.onNavigateToPresetManager;
+                this.handleClose(options.onClose);
+                navigate?.();
+            };
+            footer.appendChild(gotoBtn);
+        }
 
         const okBtn = document.createElement('button');
         okBtn.type = 'button';
@@ -206,9 +214,6 @@ export class ChangelogModal implements Disposable {
             return;
         }
         this.isDisposed = true;
-
-        this.syncCard?.dispose();
-        this.syncCard = undefined;
 
         overlayStack.remove('changelog-modal');
         if (ChangelogModal.activeInstance === this) {

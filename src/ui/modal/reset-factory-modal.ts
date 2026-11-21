@@ -61,7 +61,7 @@ interface ResetGroupDef {
 const RESET_GROUPS: ResetGroupDef[] = [
     {
         title: '核心配置与预设',
-        subtitle: '共 12 项设置与预设，选定项目将恢复为出厂默认值并重载内置默认预设',
+        subtitle: '选定项目将恢复为默认值并重载对应本地预设',
         options: [
             {
                 key: 'general',
@@ -72,7 +72,7 @@ const RESET_GROUPS: ResetGroupDef[] = [
             {
                 key: 'providers',
                 label: '生图后端服务配置',
-                desc: 'SD-WebUI / ComfyUI / NovelAI / OpenAI 服务的连接地址与参数',
+                desc: 'SD-WebUI / ComfyUI / NovelAI / OpenAI / Gemini / Grok 服务的连接地址与参数',
                 defaultChecked: true,
             },
             {
@@ -84,43 +84,43 @@ const RESET_GROUPS: ResetGroupDef[] = [
             {
                 key: 'themePresets',
                 label: '界面主题预设',
-                desc: '重置内置 8 套经典主题预设并恢复默认配色方案',
+                desc: '重置本地主题预设并恢复默认配色方案',
                 defaultChecked: true,
             },
             {
                 key: 'drawingPresets',
                 label: '生图参数预设',
-                desc: '内置初始采样器、CFG、步数、分辨率等参考生图参数预设',
+                desc: '本地采样器、CFG、步数、分辨率等默认生图参数预设',
                 defaultChecked: true,
             },
             {
                 key: 'promptPresets',
                 label: '提示词模板预设',
-                desc: '正向/负向提示词参考模板与默认 LoRA 挂载规则',
+                desc: '正向/负向提示词模板与默认 LoRA 挂载规则',
                 defaultChecked: true,
             },
             {
                 key: 'workflowPresets',
                 label: 'ComfyUI 工作流预设',
-                desc: '内置参考 ComfyUI 工作流 API 图结构与节点映射',
+                desc: '本地 ComfyUI 工作流 API 图结构与节点映射',
                 defaultChecked: true,
             },
             {
                 key: 'promptChannels',
                 label: '提示词四大通道预设',
-                desc: '包含故事插画、词汇指导、素材创作与素材注入四大通道参考模板与启用状态',
+                desc: '故事插画、词汇指导、素材创作与素材注入通道模板与启用状态',
                 defaultChecked: true,
             },
             {
                 key: 'characterPresets',
                 label: '角色档案库',
-                desc: '内置示例角色档案、基础特征与各部位标签模板',
+                desc: '本地示例角色档案、基础特征与各部位标签模板',
                 defaultChecked: true,
             },
             {
                 key: 'outfitPresets',
                 label: '服装档案库',
-                desc: '内置示例服装档案、基础特征与各部位标签模板',
+                desc: '本地示例服装档案、基础特征与各部位标签模板',
                 defaultChecked: true,
             },
             {

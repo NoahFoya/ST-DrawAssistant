@@ -31,7 +31,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '故事插画',
         defaultDepth: 0,
         defaultOrder: 10,
-        desc: '默认开启的主通道。四个提示词通道共享同一套条目触发、深度与动态模板变量机制，拆分为多个分类仅便于整理与独立开关；若你已挂载外部绘画世界书，可直接关闭本通道或自由修改内置预设内容。',
+        desc: '默认开启的主通道。四个通道共用同一套触发与变量机制；若已挂载外部世界书，可关闭本通道或自由修改预设内容。',
     },
     {
         id: 'vocab',
@@ -219,8 +219,41 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                         const channelCfg = injectionConfig[c.id];
                         const isEnabled = Boolean(channelCfg?.enabled);
                         const presets = getChannelPresets(c.category);
+                        const rawActiveId = (channelCfg?.activePresetId || '').trim();
+                        const hasMatched = Boolean(
+                            rawActiveId && presets.some((p) => p.id === rawActiveId)
+                        );
+                        const isDanglingId = Boolean(rawActiveId && !hasMatched);
                         const currentActiveId =
-                            channelCfg?.activePresetId || presets[0]?.id || '';
+                            presets.length === 0
+                                ? rawActiveId
+                                : hasMatched
+                                  ? rawActiveId
+                                  : isDanglingId
+                                    ? rawActiveId
+                                    : presets[0].id;
+                        const selectOptions =
+                            presets.length === 0
+                                ? [
+                                      {
+                                          label: rawActiveId || '暂无可用预设',
+                                          value: rawActiveId,
+                                      },
+                                  ]
+                                : [
+                                      ...(isDanglingId
+                                          ? [
+                                                {
+                                                    label: rawActiveId,
+                                                    value: rawActiveId,
+                                                },
+                                            ]
+                                          : []),
+                                      ...presets.map((p) => ({
+                                          label: p.name,
+                                          value: p.id,
+                                      })),
+                                  ];
 
                         return (
                             <div
@@ -260,10 +293,13 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                                                 className="da-channel-preset-select"
                                                 value={currentActiveId}
                                                 disabled={presets.length === 0}
-                                                options={presets.map((p) => ({
-                                                    label: p.name,
-                                                    value: p.id,
-                                                }))}
+                                                invalid={isDanglingId}
+                                                tooltip={
+                                                    isDanglingId
+                                                        ? `关联的通道预设不存在或已失效 (ID: ${rawActiveId})，请重新选择预设`
+                                                        : undefined
+                                                }
+                                                options={selectOptions}
                                                 onChange={(newId) =>
                                                     props.onSelectChannelPreset?.(c.id, newId)
                                                 }

@@ -20,14 +20,18 @@
       "comfyui": [],
       "sdwebui": [],
       "novelai": [],
-      "openai": []
+      "openai": [],
+      "gemini": [],
+      "grok": []
     },
     "workflows": [],
     "drawing": {
       "comfyui": [],
       "sdwebui": [],
       "novelai": [],
-      "openai": []
+      "openai": [],
+      "gemini": [],
+      "grok": []
     },
     "characters": [],
     "outfits": [],
@@ -42,50 +46,62 @@
   "promptInjection": {
     "story": {
       "enabled": true,
-      "activePresetId": "prompt_story_default"
+      "activePresetId": "prompt_story_standard"
     },
     "character": {
       "enabled": false,
-      "activePresetId": "prompt_character_default"
+      "activePresetId": "prompt_character_standard"
     },
     "vocab": {
       "enabled": false,
-      "activePresetId": "prompt_vocab_default"
+      "activePresetId": "prompt_vocab_danbooru"
     },
     "material": {
       "enabled": false,
-      "activePresetId": "prompt_material_default",
+      "activePresetId": "prompt_material_standard",
       "hideWhenEmpty": true
     }
   },
   "materialConfig": {
     "activeCharacterPresetId": "",
     "activeOutfitPresetId": "",
-    "activeActivationPresetId": "mat_act_default",
-    "activeExtractionPresetId": "ext_default",
-    "activeFormatPresetId": "format_default",
+    "activeActivationPresetId": "material_activation_default",
+    "activeExtractionPresetId": "material_extraction_default",
+    "activeFormatPresetId": "material_format_default",
     "autoSwitchByCard": false
   },
   "providers": {
     "comfyui": {
       "serverUrl": "http://127.0.0.1:8188",
-      "activeDrawingPresetId": "comfyui_anime"
+      "activeDrawingPresetId": "drawing_comfyui_anime"
     },
     "sdwebui": {
       "serverUrl": "http://127.0.0.1:7860",
-      "activeDrawingPresetId": "sdwebui_anime"
+      "activeDrawingPresetId": "drawing_sdwebui_anime"
     },
     "novelai": {
       "serviceId": "novelai-official",
       "serverUrl": "https://image.novelai.net",
       "apiKey": "",
-      "activeDrawingPresetId": "novelai_v45_full"
+      "activeDrawingPresetId": "drawing_novelai_v45_full"
     },
     "openai": {
       "serviceId": "openai-official",
       "serverUrl": "https://api.openai.com/v1",
       "apiKey": "",
-      "activeDrawingPresetId": "openai_dalle3_vivid"
+      "activeDrawingPresetId": "drawing_openai_dalle3_vivid"
+    },
+    "gemini": {
+      "serviceId": "gemini-official",
+      "serverUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "apiKey": "",
+      "activeDrawingPresetId": "drawing_gemini_25_flash"
+    },
+    "grok": {
+      "serviceId": "grok-official",
+      "serverUrl": "https://api.x.ai/v1",
+      "apiKey": "",
+      "activeDrawingPresetId": "drawing_grok_imagine"
     }
   },
   "ui": {

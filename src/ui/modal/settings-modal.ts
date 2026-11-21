@@ -14,7 +14,7 @@ import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 import { themeService } from '../theme/theme-service';
 import { providerRegistry } from '../../provider/registry';
-import { renderIcon } from '../components/icons';
+import { ICONS, renderIcon } from '../components/icons';
 import { tooltipService } from '../feedback/tooltip-service';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
@@ -96,6 +96,8 @@ const PROVIDER_DEFINITIONS: ProviderItemDefinition[] = [
     { id: 'sdwebui', name: 'SD-WebUI' },
     { id: 'novelai', name: 'NovelAI' },
     { id: 'openai', name: 'OpenAI 兼容' },
+    { id: 'gemini', name: 'Google Gemini' },
+    { id: 'grok', name: 'xAI Grok' },
 ];
 
 /** 侧边栏非服务普通选项卡定义 */
@@ -137,7 +139,7 @@ export class SettingsModal implements Disposable {
     private statusDotElement: HTMLElement | null = null;
     private statusTextElement: HTMLElement | null = null;
     private providerTitleTextElement: HTMLElement | null = null;
-    private providerExpandTrigger: HTMLElement | null = null;
+    private providerDrawerToggle: HTMLButtonElement | null = null;
     private providerSubItemsContainer: HTMLElement | null = null;
     private quickThemeSelectElement: HTMLSelectElement | null = null;
 
@@ -431,9 +433,9 @@ export class SettingsModal implements Disposable {
         const resolvedTabId =
             tabId === 'provider-main' ? this.getActiveProviderType() : tabId;
 
-        // 切换至任意生图引擎时自动展开分组，确保兄弟引擎子项立即可见
+        // 若切换到收纳在服务抽屉中的非当前生效生图引擎，自动展开抽屉以高亮对应子项
         const isProviderTab = PROVIDER_DEFINITIONS.some((p) => p.id === resolvedTabId);
-        if (isProviderTab) {
+        if (isProviderTab && resolvedTabId !== this.getActiveProviderType()) {
             this.toggleProviderExpanded(true);
         }
 
@@ -478,14 +480,15 @@ export class SettingsModal implements Disposable {
     public toggleProviderExpanded(force?: boolean): void {
         this.isServiceExpanded = typeof force === 'boolean' ? force : !this.isServiceExpanded;
 
-        if (this.providerExpandTrigger) {
-            if (this.isServiceExpanded) {
-                this.providerExpandTrigger.classList.add('is-expanded');
-                this.providerExpandTrigger.setAttribute('aria-expanded', 'true');
-            } else {
-                this.providerExpandTrigger.classList.remove('is-expanded');
-                this.providerExpandTrigger.setAttribute('aria-expanded', 'false');
-            }
+        this.sidebarItems
+            .get('provider-main')
+            ?.classList.toggle('is-expanded', this.isServiceExpanded);
+        if (this.providerDrawerToggle) {
+            this.providerDrawerToggle.classList.toggle('is-expanded', this.isServiceExpanded);
+            this.providerDrawerToggle.setAttribute(
+                'aria-expanded',
+                this.isServiceExpanded ? 'true' : 'false'
+            );
         }
 
         this.syncProviderSubItemsPlacement();
@@ -702,7 +705,7 @@ export class SettingsModal implements Disposable {
         this.statusDotElement = null;
         this.statusTextElement = null;
         this.providerTitleTextElement = null;
-        this.providerExpandTrigger = null;
+        this.providerDrawerToggle = null;
         this.providerSubItemsContainer = null;
         this.quickThemeSelectElement = null;
         this.sidebarItems.clear();
@@ -916,56 +919,62 @@ export class SettingsModal implements Disposable {
         const generalItem = this.createSidebarItem('general', '常规设置');
         sidebar.appendChild(generalItem);
 
-        // 2. 生图服务主条目（直接展示当前生效引擎）
-        const providerMainItem = document.createElement('button');
-        providerMainItem.className = 'da-sidebar-item';
-        providerMainItem.type = 'button';
+        // 2. 生图服务主条目 + 抽屉下拉触发按钮（单行分体触发：名称切换生效服务页，箭头展开/收起服务抽屉）
+        const providerMainItem = document.createElement('div');
+        providerMainItem.className = 'da-sidebar-item da-sidebar-provider-item';
         providerMainItem.setAttribute('data-tab-id', 'provider-main');
+        providerMainItem.classList.toggle('is-expanded', this.isServiceExpanded);
+
+        const providerMainBtn = document.createElement('button');
+        providerMainBtn.className = 'da-sidebar-provider-trigger';
+        providerMainBtn.type = 'button';
+        providerMainBtn.addEventListener('click', () => {
+            this.switchTab('provider-main');
+        });
 
         this.providerTitleTextElement = document.createElement('span');
         this.providerTitleTextElement.className = 'da-sidebar-item__label';
         this.updateProviderTitleText();
+        providerMainBtn.appendChild(this.providerTitleTextElement);
 
-        this.providerExpandTrigger = document.createElement('span');
-        this.providerExpandTrigger.className = 'da-sidebar-item__expand-trigger';
-        this.providerExpandTrigger.textContent = '▾';
-        this.providerExpandTrigger.setAttribute('role', 'button');
-        this.providerExpandTrigger.setAttribute('tabindex', '0');
-        this.providerExpandTrigger.setAttribute('aria-label', '展开或收起其他生图引擎');
-        this.providerExpandTrigger.setAttribute('aria-expanded', this.isServiceExpanded ? 'true' : 'false');
-        this.providerExpandTrigger.setAttribute('title', '展开/收起更多生图引擎');
-        this.providerExpandTrigger.addEventListener('click', (e) => {
+        const drawerToggle = document.createElement('button');
+        drawerToggle.className = 'da-sidebar-drawer-toggle';
+        drawerToggle.type = 'button';
+        drawerToggle.setAttribute('aria-expanded', this.isServiceExpanded ? 'true' : 'false');
+        drawerToggle.classList.toggle('is-expanded', this.isServiceExpanded);
+        drawerToggle.setAttribute('aria-label', '展开或收起生图服务抽屉');
+
+        const mobileBars = document.createElement('span');
+        mobileBars.className = 'da-sidebar-drawer-toggle__bars';
+        mobileBars.setAttribute('aria-hidden', 'true');
+
+        const chevron = document.createElement('span');
+        chevron.className = 'da-sidebar-drawer-toggle__chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        chevron.innerHTML = ICONS.chevronDown;
+
+        drawerToggle.appendChild(mobileBars);
+        drawerToggle.appendChild(chevron);
+        drawerToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleProviderExpanded();
         });
-        this.providerExpandTrigger.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleProviderExpanded();
+
+        providerMainItem.appendChild(providerMainBtn);
+        providerMainItem.appendChild(drawerToggle);
+        providerMainItem.addEventListener('click', (e) => {
+            const target = e.target as Node | null;
+            if (target && (drawerToggle.contains(target) || providerMainBtn.contains(target))) {
+                return;
             }
+            this.switchTab('provider-main');
         });
 
-        providerMainItem.appendChild(this.providerTitleTextElement);
-        providerMainItem.appendChild(this.providerExpandTrigger);
-
-        // 单击：若已处于当前引擎视图则切换折叠，否则切换至该引擎并自动展开兄弟引擎
-        providerMainItem.addEventListener('click', () => {
-            const activeType = this.getActiveProviderType();
-            if (this.activeTabId === activeType) {
-                this.toggleProviderExpanded();
-            } else {
-                this.switchTab('provider-main');
-            }
-        });
-        providerMainItem.addEventListener('dblclick', () => {
-            this.toggleProviderExpanded();
-        });
-
+        this.providerDrawerToggle = drawerToggle;
         sidebar.appendChild(providerMainItem);
         this.sidebarItems.set('provider-main', providerMainItem);
 
-        // 3. 其余 3 大引擎子项容器（默认按需收拢；使用锚点保持桌面端与移动端移动宿主可逆切换）
+        // 3. 其余生图引擎子项抽屉容器（桌面端置于下方缩进列表；移动端挂入第二行横向胶囊宿主）
         this.providerSubAnchor = document.createComment('da-provider-sub-anchor');
         sidebar.appendChild(this.providerSubAnchor);
 
@@ -1144,17 +1153,49 @@ export class SettingsModal implements Disposable {
         }
 
         const select = this.quickThemeSelectElement;
+        const wrapper = select.parentElement;
         const availableThemes = themeService.getAvailableThemes();
-        const activeThemeId = themeService.getActiveThemeId();
+        const activeThemeId = ((settingsStore.get('activeThemePresetId') as string) || '').trim();
+        const isDangling = Boolean(
+            activeThemeId && !availableThemes.some((item) => item.id === activeThemeId)
+        );
 
         select.innerHTML = '';
-        for (const item of availableThemes) {
+        if (availableThemes.length === 0) {
             const opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = item.name;
+            if (isDangling) {
+                opt.value = activeThemeId;
+                opt.textContent = activeThemeId;
+            } else {
+                opt.value = '';
+                opt.textContent = '暂无可用主题';
+                opt.disabled = true;
+            }
             select.appendChild(opt);
+            select.disabled = true;
+            select.value = isDangling ? activeThemeId : '';
+        } else {
+            select.disabled = false;
+            if (isDangling) {
+                const missingOpt = document.createElement('option');
+                missingOpt.value = activeThemeId;
+                missingOpt.textContent = activeThemeId;
+                select.appendChild(missingOpt);
+            }
+            for (const item of availableThemes) {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name;
+                select.appendChild(opt);
+            }
+            select.value = activeThemeId || availableThemes[0].id;
         }
-        select.value = activeThemeId;
+
+        wrapper?.classList.toggle('is-invalid', isDangling);
+        select.classList.toggle('is-invalid', isDangling);
+        select.title = isDangling
+            ? `当前主题预设不存在或已失效 (ID: ${activeThemeId})`
+            : '快捷切换界面主题';
     }
 
     private updateProviderLabels(): void {
@@ -1262,6 +1303,14 @@ export class SettingsModal implements Disposable {
         this.activeChangelogModal = openChangelogModal({
             onClose: () => {
                 this.activeChangelogModal = null;
+            },
+            onNavigateToPresetManager: () => {
+                this.switchTab('about');
+                requestAnimationFrame(() => {
+                    document
+                        .getElementById('da-about-static-presets')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
             },
         });
     }

@@ -22,8 +22,14 @@ import {
     type BaseProviderOptions,
     type InFlightAssetSlot,
 } from '../base-provider';
-import { logger } from '../../util/logger';
 import { base64ToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
+import {
+    extractHttpErrorMessage,
+    hashKeyFingerprint,
+    parseCustomBodyObject,
+    resolveCloudModelId,
+} from '../cloud-provider-utils';
+import { resolveOpenAIModelCapabilities } from './openai-models';
 
 /**
  * 将 width/height 组装为 OpenAI images/generations 的 size 字符串。
@@ -48,17 +54,16 @@ export function buildSizeString(width?: number, height?: number): string | undef
  *
  * @remarks
  * 按常见图像模型 ID 关键词过滤（不区分大小写）。
- * 自动剥离部分服务商返回的 models/ 前缀（如 Google Gemini）。
  * 不支持 /v1/models 的后端返回空数组，不报错。
  *
  * @param models 服务端模型列表条目
  * @returns 过滤并规整后的图像模型标识数组
  */
 export function filterImageModels(models: Array<{ id?: string } | null | undefined>): string[] {
-    const IMAGE_KEYWORDS = ['image', 'dall-e', 'dalle', 'flux', 'kolors', 'stable-diffusion', 'grok-2-image', 'imagine'];
+    const IMAGE_KEYWORDS = ['image', 'dall-e', 'dalle', 'flux', 'kolors', 'stable-diffusion'];
     return models
         .filter((m): m is { id: string } => typeof m?.id === 'string' && m.id.trim().length > 0)
-        .map((m) => m.id.trim().replace(/^models\//, ''))
+        .map((m) => m.id.trim())
         .filter((id) =>
             IMAGE_KEYWORDS.some((kw) => id.toLowerCase().includes(kw))
         );
@@ -66,39 +71,12 @@ export function filterImageModels(models: Array<{ id?: string } | null | undefin
 
 /**
  * 解析 OpenAI 兼容服务的目标模型标识符。
- *
- * @remarks
- * 优先级：单次覆盖参数 model > 单次覆盖参数 customModel > 预设 customModel > 预设 baseModel > 默认模型 (dall-e-3)。
- * 自动规整并剔除 models/ 前缀。
- *
- * @param parameters 单次任务覆盖参数
- * @param preset 当前绘图预设数据
- * @returns 解析得到的有效模型名称
  */
 export function resolveOpenAIModel(
     parameters?: Record<string, unknown>,
     preset?: DrawingPresetData
 ): string {
-    const readTrimmed = (val: unknown): string =>
-        typeof val === 'string' ? val.trim() : '';
-
-    const raw =
-        readTrimmed(parameters?.model) ||
-        readTrimmed(parameters?.customModel) ||
-        readTrimmed(preset?.customModel) ||
-        readTrimmed(preset?.baseModel) ||
-        'dall-e-3';
-    return raw.replace(/^models\//, '');
-}
-
-function hashKeyFingerprint(apiKey?: string): string {
-    if (!apiKey) return 'anon';
-    let hash = 2166136261;
-    for (let i = 0; i < apiKey.length; i++) {
-        hash ^= apiKey.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-    return `${apiKey.length}:${(hash >>> 0).toString(16)}`;
+    return resolveCloudModelId(parameters, preset, 'dall-e-3');
 }
 
 /**
@@ -158,13 +136,13 @@ export class OpenAIProvider extends BaseGenerationProvider {
      *
      * @remarks
      * 规整用户输入服务地址：
-     * - 若输入已包含 /v1（如 "https://api.openai.com/v1"）或兼容协议路由（如 Google "https://generativelanguage.googleapis.com/v1beta/openai" 等），规整后直接返回；
+     * - 若输入已包含版本路由（如 "https://api.openai.com/v1"），规整后直接返回；
      * - 若未包含版本路由（如 "https://api.openai.com"），自动追加 "/v1"；
      * 确保下游各接口拼接时不会发生双重 "/v1/v1" 导致 404 故障。
      */
     public getV1BaseUrl(): string {
         const base = this.getServerUrl().replace(/\/images\/generations$/i, '');
-        if (/\/v[0-9]+(?:[a-z]*)?(?:\/openai)?$/i.test(base)) {
+        if (/\/v[0-9]+(?:[a-z]*)?$/i.test(base)) {
             return base;
         }
         return `${base}/v1`;
@@ -322,47 +300,31 @@ export class OpenAIProvider extends BaseGenerationProvider {
 
         const resolvedPrompt = request.prompt;
         const resolvedModel = resolveOpenAIModel(params, drawingPreset);
-        const lowerModel = resolvedModel.toLowerCase();
-        const isDalle3 = lowerModel.includes('dall-e-3');
-        const isGptImage = lowerModel.includes('gpt-image');
+        const capabilities = resolveOpenAIModelCapabilities(resolvedModel);
         const isSiliconFlow =
             config?.serviceId === 'siliconflow' ||
             /(?:^|[./])siliconflow\.cn(?:[:/]|$)/i.test(v1Base);
 
         const resolvedWidth = (params.width ?? drawingPreset?.width) as number | undefined;
         const resolvedHeight = (params.height ?? drawingPreset?.height) as number | undefined;
+        const sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
 
-        let sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
-        if (!isSiliconFlow && isGptImage && resolvedWidth && resolvedHeight) {
-            // gpt-image-* 仅接受 1024x1024 / 1536x1024 / 1024x1536，按宽高比规整以免 DALL-E 3 尺寸触发 400
-            if (resolvedWidth > resolvedHeight) {
-                sizeStr = '1536x1024';
-            } else if (resolvedHeight > resolvedWidth) {
-                sizeStr = '1024x1536';
-            } else {
-                sizeStr = '1024x1024';
-            }
-        }
-
-        // 按模型家族映射或门控 quality / style，避免 DALL-E 3 预设残留字段触发兼容端点 400
-        let resolvedQuality = (params.quality ?? (isDalle3 ? drawingPreset?.quality : undefined)) as
-            | string
-            | undefined;
-        if (isGptImage) {
-            const rawGptQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
-            if (rawGptQuality === 'hd') {
-                resolvedQuality = 'high';
-            } else if (rawGptQuality === 'standard') {
-                resolvedQuality = 'medium';
-            } else if (rawGptQuality) {
-                resolvedQuality = rawGptQuality;
-            }
-        }
-        const resolvedStyle = isGptImage
-            ? undefined
-            : ((params.style ?? (isDalle3 ? drawingPreset?.style : undefined)) as
-                  | string
-                  | undefined);
+        const rawQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
+        const resolvedQuality =
+            capabilities.supportsQuality &&
+            typeof rawQuality === 'string' &&
+            capabilities.qualityOptions.includes(rawQuality)
+                ? rawQuality
+                : undefined;
+        const resolvedStyle = capabilities.supportsStyle
+            ? ((params.style ?? drawingPreset?.style) as string | undefined)
+            : undefined;
+        const resolvedBackground = capabilities.supportsBackground
+            ? ((params.background ?? drawingPreset?.background) as string | undefined)
+            : undefined;
+        const resolvedOutputFormat = capabilities.supportsOutputFormat
+            ? ((params.outputFormat ?? drawingPreset?.outputFormat) as string | undefined)
+            : undefined;
 
         // 2. 装配标准生成请求体（接口不支持独立的负向提示词字段，仅发送正向提示词）
         const requestBody: Record<string, unknown> = {
@@ -374,9 +336,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
             requestBody['n'] = 1;
         }
 
-        // 仅在 DALL-E 与 Google Gemini（含带供应商前缀如 openai/dall-e-3、google/gemini-*）模型上默认携带 response_format: 'b64_json'，
-        // 避免 gpt-image 或第三方兼容服务商因未知参数返回 400 Bad Request
-        if (!lowerModel || lowerModel.includes('dall-e') || lowerModel.includes('gemini')) {
+        if (capabilities.sendResponseFormatB64) {
             requestBody['response_format'] = 'b64_json';
         }
 
@@ -390,24 +350,23 @@ export class OpenAIProvider extends BaseGenerationProvider {
         }
         if (resolvedQuality) requestBody['quality'] = resolvedQuality;
         if (resolvedStyle) requestBody['style'] = resolvedStyle;
+        if (resolvedBackground && resolvedBackground !== 'auto') {
+            requestBody['background'] = resolvedBackground;
+        }
+        if (resolvedOutputFormat) requestBody['output_format'] = resolvedOutputFormat;
 
         // 3. 自定义 JSON 请求体合并扩展
-        const customBodyJson = (params.customBodyJson ?? drawingPreset?.customBodyJson) as string | undefined;
-        if (customBodyJson && typeof customBodyJson === 'string' && customBodyJson.trim()) {
-            try {
-                const customObj = JSON.parse(customBodyJson.trim());
-                if (customObj && typeof customObj === 'object' && !Array.isArray(customObj)) {
-                    Object.assign(requestBody, customObj);
-                    // 确保核心必要参数优先级
-                    requestBody['prompt'] = resolvedPrompt;
-                    if (isSiliconFlow) {
-                        requestBody['batch_size'] = 1;
-                    } else {
-                        requestBody['n'] = 1;
-                    }
-                }
-            } catch (err) {
-                logger.warn('[OpenAIProvider] 自定义请求体 JSON 解析失败，跳过附加参数:', err);
+        const customObj = parseCustomBodyObject(
+            params.customBodyJson ?? drawingPreset?.customBodyJson,
+            '[OpenAIProvider]'
+        );
+        if (customObj) {
+            Object.assign(requestBody, customObj);
+            requestBody['prompt'] = resolvedPrompt;
+            if (isSiliconFlow) {
+                requestBody['batch_size'] = 1;
+            } else {
+                requestBody['n'] = 1;
             }
         }
 
@@ -429,26 +388,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                let errorDetail = `HTTP ${err.status}`;
-                const details = err.details;
-                if (details && typeof details === 'object') {
-                    const record = details as Record<string, unknown>;
-                    const nestedError = typeof record.error === 'object' && record.error !== null
-                        ? (record.error as Record<string, unknown>)
-                        : undefined;
-                    const errorMsg = typeof record.error === 'string' ? record.error : nestedError?.message;
-                    if (typeof errorMsg === 'string' && errorMsg.trim()) {
-                        errorDetail = errorMsg.trim();
-                    } else if (typeof record.message === 'string' && record.message.trim()) {
-                        errorDetail = record.message.trim();
-                    } else if (typeof record.detail === 'string' && record.detail.trim()) {
-                        errorDetail = record.detail.trim();
-                    }
-                } else if (typeof details === 'string' && details.trim()) {
-                    errorDetail = details.trim();
-                }
-
-                // 429 速率限制与安全拒绝区分处理
+                const errorDetail = extractHttpErrorMessage(err);
                 if (err.status === 429) {
                     throw new Error(`请求被限速，请稍后重试: ${errorDetail}`);
                 }
@@ -526,6 +466,14 @@ export class OpenAIProvider extends BaseGenerationProvider {
             typeof requestBody['style'] === 'string' && requestBody['style'].trim()
                 ? requestBody['style'].trim()
                 : resolvedStyle || undefined;
+        const finalBackground =
+            typeof requestBody['background'] === 'string' && requestBody['background'].trim()
+                ? requestBody['background'].trim()
+                : resolvedBackground || undefined;
+        const finalOutputFormat =
+            typeof requestBody['output_format'] === 'string' && requestBody['output_format'].trim()
+                ? requestBody['output_format'].trim()
+                : resolvedOutputFormat || undefined;
 
         const durationMs = Date.now() - startTime;
         const metadata: ImageGenerationMetadata = {
@@ -540,6 +488,8 @@ export class OpenAIProvider extends BaseGenerationProvider {
             height: finalHeight,
             quality: finalQuality,
             style: finalStyle,
+            background: finalBackground,
+            outputFormat: finalOutputFormat,
         };
 
         return {

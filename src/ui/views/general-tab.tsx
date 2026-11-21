@@ -58,6 +58,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                     { label: 'SD-WebUI / Forge', value: 'sdwebui' },
                     { label: 'NovelAI', value: 'novelai' },
                     { label: 'OpenAI 兼容', value: 'openai' },
+                    { label: 'Google Gemini', value: 'gemini' },
+                    { label: 'xAI Grok', value: 'grok' },
                 ],
             },
             {

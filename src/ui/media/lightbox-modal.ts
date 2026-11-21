@@ -17,6 +17,7 @@ import { overlayStack } from '../framework/overlay-stack';
 import { imageInfoModal } from './image-info-modal';
 import { Toast } from '../feedback/toast';
 import { logger } from '../../util/logger';
+import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
 
 /** 灯箱条目数据接口 */
 export interface LightboxItem {
@@ -77,6 +78,7 @@ export class LightboxModal implements Disposable {
     private favBtnEl?: HTMLButtonElement;
     private infoBtnEl?: HTMLButtonElement;
     private editBtnEl?: HTMLButtonElement;
+    private detachDragShare?: () => void;
 
     // 全局事件解绑器与灯箱自建回退 URL 管理列表（独立于楼层会话 urlPool）
     private readonly disposers: (() => void)[] = [];
@@ -197,7 +199,19 @@ export class LightboxModal implements Disposable {
         });
         headerActions.appendChild(infoBtn);
 
-        // 3. 原图下载按钮 (下箭头矢量图标)
+        // 3. 复制图片按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'da-lightbox-btn';
+        copyBtn.title = '复制图片';
+        copyBtn.innerHTML = renderIcon('copy', 17);
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            void this.copyCurrent();
+        });
+        headerActions.appendChild(copyBtn);
+
+        // 4. 原图下载按钮 (下箭头矢量图标)
         const downloadBtn = document.createElement('button');
         downloadBtn.type = 'button';
         downloadBtn.className = 'da-lightbox-btn';
@@ -589,6 +603,13 @@ export class LightboxModal implements Disposable {
 
         if (this.imgEl) {
             this.imgEl.src = item.url;
+            this.detachDragShare?.();
+            const fileBase = `st_draw_${item.imageId ? item.imageId.slice(0, 8) : Date.now()}`;
+            this.detachDragShare = attachImageDragFile(
+                this.imgEl,
+                () => this.resolveCurrentBlob(),
+                fileBase
+            );
         }
 
         const total = this.items.length;
@@ -619,6 +640,34 @@ export class LightboxModal implements Disposable {
         }
 
         this.updateFavButtonState(item);
+    }
+
+    private async resolveCurrentBlob(): Promise<Blob | null> {
+        const item = this.items[this.currentIndex];
+        if (!item) return null;
+        if (item.imageId) {
+            const stored = await imageStorage.getImageBlob(item.imageId);
+            if (stored && stored.size > 0) return stored;
+        }
+        if (item.url) {
+            const res = await fetch(item.url);
+            if (res.ok) return await res.blob();
+        }
+        return null;
+    }
+
+    private async copyCurrent(): Promise<void> {
+        const blob = await this.resolveCurrentBlob();
+        if (!blob) {
+            Toast.error('获取图片数据失败');
+            return;
+        }
+        const ok = await copyImageBlobToClipboard(blob);
+        if (ok) {
+            Toast.success('已复制图片到剪贴板');
+        } else {
+            Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
+        }
     }
 
     /**
@@ -757,6 +806,8 @@ export class LightboxModal implements Disposable {
     public close(): void {
         this.isOpenState = false;
         this.openGeneration += 1;
+        this.detachDragShare?.();
+        this.detachDragShare = undefined;
         overlayStack.remove('lightbox-modal');
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';

@@ -9,3 +9,5 @@ export * from './sdwebui';
 export * from './comfyui';
 export * from './novelai';
 export * from './openai';
+export * from './gemini';
+export * from './grok';

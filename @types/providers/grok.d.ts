@@ -1,0 +1,21 @@
+/**
+ * xAI Grok 原生绘图服务提供方私有配置模型。
+ */
+
+import type { CommonServiceProfile, ProviderAssetCache } from '../provider';
+
+/** xAI Grok 原生绘图服务提供方私有配置 */
+export interface GrokProviderConfig {
+    /** 服务端基础接口地址（默认官方 https://api.x.ai/v1） */
+    readonly serverUrl: string;
+    /** 访问认证密钥 (Bearer Token) */
+    readonly apiKey: string;
+    /** 选用的具体上游服务商标识 */
+    readonly serviceId?: string;
+    /** 当前激活的绘图预设标识符 */
+    readonly activeDrawingPresetId?: string;
+    /** 当前生效的服务端模型列表缓存 */
+    readonly assetCache?: ProviderAssetCache;
+    /** 各服务商切换时暂存的连接信息与模型缓存映射字典 */
+    readonly serviceProfiles?: Record<string, CommonServiceProfile>;
+}

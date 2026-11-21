@@ -1,8 +1,8 @@
 [
   {
-    "id": "comfyui_checkpoint_default",
-    "name": "默认-全量模型文生图",
-    "description": "基于单个 Checkpoint 大模型的通用文生图工作流，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "id": "workflow_comfyui_checkpoint",
+    "name": "ComfyUI · 全量模型文生图",
+    "description": "基于单个 Checkpoint 模型的文生图工作流，含 WeiLinPromptUI 节点以支持动态多 LoRA",
     "data": {
       "workflow": {
         "8": {
@@ -125,9 +125,9 @@
     }
   },
   {
-    "id": "comfyui_split_default",
-    "name": "默认-分立模型文生图",
-    "description": "基于 UNet、CLIP 与 VAE 独立分立加载的进阶文生图工作流，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "id": "workflow_comfyui_split",
+    "name": "ComfyUI · 分立模型文生图",
+    "description": "基于 UNet、CLIP 与 VAE 分立加载的文生图工作流，含 WeiLinPromptUI 节点以支持动态多 LoRA",
     "data": {
       "workflow": {
         "8": {
@@ -271,9 +271,9 @@
     }
   },
   {
-    "id": "comfyui_inpaint_default",
-    "name": "默认局部重绘预设",
-    "description": "基于单个 Checkpoint 大模型的局部重绘工作流，内置图像加载与重绘 VAE 编码器，支持通过 WeiLin 节点实现动态多 LoRA 加载",
+    "id": "workflow_comfyui_inpaint",
+    "name": "ComfyUI · 局部重绘",
+    "description": "基于单个 Checkpoint 模型的局部重绘工作流，含图像与遮罩加载、重绘编码器及 WeiLinPromptUI 节点",
     "data": {
       "workflow": {
         "8": {

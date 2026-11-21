@@ -30,6 +30,12 @@ import {
 import type { PresetActionType } from '../composite';
 import { PromptEntriesManager } from '../composite/prompt-entries-manager';
 import {
+    formatBatchImportSummary,
+    parsePresetBatchJson,
+    readFileAsText,
+    resolveBatchUniquePresetName,
+} from '../viewmodels/preset-batch-io';
+import {
     PromptsPreviewPanel,
     PROMPT_CHANNELS,
     type PromptChannelMeta,
@@ -65,7 +71,7 @@ function createDefaultEntryForChannel(
 ): PromptInjectionEntry {
     const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
 
-    // 素材注入通道新建空白预设时，优先与官方静态预设保持同源模板
+    // 素材注入通道新建空白预设时，优先与本地默认预设保持同源模板
     if (channelId === 'material') {
         const officialEntry =
             getCachedOfficialPresets()?.prompt_material?.[0]?.data?.entries?.[index];
@@ -168,6 +174,9 @@ export class PromptsTabView extends PreactSettingsView {
         };
 
         this.unlistenSettings = eventBus.on('settings:updated', (data) => {
+            const matchedPromptCategory = PROMPT_CHANNELS.find(
+                (meta) => data.key === `presets.${meta.category}`
+            );
             if (
                 !data.key ||
                 data.isReset ||
@@ -178,15 +187,28 @@ export class PromptsTabView extends PreactSettingsView {
                 data.key === 'presets.material_activations' ||
                 data.key === 'presets.material_extractions' ||
                 data.key === 'presets.material_formats' ||
+                Boolean(matchedPromptCategory) ||
                 data.keys?.includes('promptInjection') ||
                 data.keys?.includes('materialConfig') ||
                 data.keys?.includes('presets')
             ) {
-                if (data.isReset || data.keys?.includes('presets')) {
+                if (
+                    data.isReset ||
+                    data.key === 'promptInjection' ||
+                    data.keys?.includes('presets') ||
+                    data.keys?.includes('promptInjection')
+                ) {
                     for (const meta of PROMPT_CHANNELS) {
                         if (!this.controllers[meta.id].isDirty.value) {
                             this.controllers[meta.id].reloadFromStore();
                         }
+                    }
+                } else if (matchedPromptCategory) {
+                    const ctrl = this.controllers[matchedPromptCategory.id];
+                    if (!ctrl.isDirty.value) {
+                        ctrl.reloadFromStore();
+                    } else {
+                        ctrl.refreshPresets();
                     }
                 }
                 this.promptInjectionSignal.value = settingsStore.get('promptInjection');
@@ -433,23 +455,98 @@ export class PromptsTabView extends PreactSettingsView {
         });
     }
 
-    private handleImportFile(channelId: PromptChannelId, file: File): void {
-        const reader = new FileReader();
-        reader.onload = () => {
-            if (this.isDisposedView) return;
+    private async handleImportFiles(channelId: PromptChannelId, files: File[]): Promise<void> {
+        if (this.isDisposedView || files.length === 0) return;
+        const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
+        const controller = this.controllers[channelId];
+
+        if (files.length === 1) {
             try {
-                const parsed = JSON.parse(String(reader.result || ''));
-                void this.importParsedJsonForChannel(channelId, parsed, file.name);
+                const rawText = await readFileAsText(files[0]);
+                if (this.isDisposedView) return;
+                const parsed: unknown = JSON.parse(rawText);
+                const isBundle =
+                    Array.isArray(parsed) ||
+                    (Boolean(parsed) &&
+                        typeof parsed === 'object' &&
+                        Array.isArray((parsed as Record<string, unknown>).presets));
+                if (!isBundle) {
+                    await this.importParsedJsonForChannel(channelId, parsed, files[0].name);
+                    return;
+                }
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 Toast.show(`解析 JSON 文件失败: ${message}`, { level: 'error' });
+                return;
             }
-        };
-        reader.onerror = () => {
-            if (this.isDisposedView) return;
-            Toast.show('读取导入文件失败', { level: 'error' });
-        };
-        reader.readAsText(file);
+        }
+
+        if (controller.isDirty.value) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '导入预设确认',
+                message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
+            });
+            if (!confirmed || this.isDisposedView) return;
+        }
+
+        const existingNames = new Set(
+            controller.fetchPresetsList().map((p) => normalizePresetNameKey(p.name))
+        );
+        const fallbackName = `导入${meta.label}预设`;
+        let importedCount = 0;
+        let failedCount = 0;
+        let firstError: string | undefined;
+        let lastId = '';
+
+        for (const file of files) {
+            try {
+                const rawText = await readFileAsText(file);
+                if (this.isDisposedView) return;
+                const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
+                if (skippedErrors.length > 0) {
+                    failedCount += skippedErrors.length;
+                    firstError ??= skippedErrors[0];
+                }
+                for (const candidate of candidates) {
+                    const normalized = normalizePluginPromptChannelPreset(
+                        { name: candidate.name, data: candidate.data },
+                        candidate.name
+                    );
+                    if (!normalized) {
+                        failedCount += 1;
+                        firstError ??= '预设缺少 entries 数组';
+                        continue;
+                    }
+                    const finalName = resolveBatchUniquePresetName(
+                        normalized.name,
+                        existingNames,
+                        fallbackName
+                    );
+                    const newId = `${channelId}_${Date.now()}_${Math.random()
+                        .toString(36)
+                        .slice(2, 6)}`;
+                    settingsStore.savePreset(meta.category, {
+                        id: newId,
+                        name: finalName,
+                        data: { entries: structuredClone(normalized.data.entries) },
+                        updatedAt: Date.now(),
+                    });
+                    lastId = newId;
+                    importedCount += 1;
+                }
+            } catch (err: unknown) {
+                failedCount += 1;
+                firstError ??= err instanceof Error ? err.message : String(err);
+            }
+        }
+
+        if (lastId) {
+            controller.applyActivePreset(lastId);
+            void promptInjector.scheduleSyncToHost();
+        }
+        Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
+            level: importedCount === 0 ? 'error' : failedCount > 0 ? 'warning' : 'success',
+        });
     }
 
     private updateChannelEntries(
@@ -524,7 +621,7 @@ export class PromptsTabView extends PreactSettingsView {
                         onAction={(action, id) =>
                             this.handleToolbarAction(meta.id, action, id)
                         }
-                        onImportFile={(file) => this.handleImportFile(meta.id, file)}
+                        onImportFiles={(files) => void this.handleImportFiles(meta.id, files)}
                     />
                 </div>
                 <CardView className="da-prompt-channel-card">

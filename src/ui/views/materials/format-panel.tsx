@@ -410,7 +410,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
                 activePresetId={formatController.activePresetId.value}
                 dirty={formatController.isDirty.value}
                 onAction={(action, id) => formatController.handleAction(action, id)}
-                onImportFile={(file) => formatController.handleImportFile(file)}
+                onImportFiles={(files) => void formatController.handleImportFiles(files)}
             />
 
             {/* 卡片 1: 独立实时渲染效果预览 (优先预览) */}

@@ -91,6 +91,11 @@ const KNOWN_REUSABLE_META_KEYS = new Set([
     'decrisper',
     'quality',
     'style',
+    'background',
+    'outputFormat',
+    'aspectRatio',
+    'imageSize',
+    'resolution',
 ]);
 
 function formatEngineDisplay(engine?: string): string | undefined {
@@ -459,6 +464,10 @@ export class ImageInfoModal implements Disposable {
         }
         pushIfPresent(extEntries, '生成画质', metadata.quality);
         pushIfPresent(extEntries, '画面风格', metadata.style);
+        pushIfPresent(extEntries, '背景模式', metadata.background);
+        pushIfPresent(extEntries, '输出格式', metadata.outputFormat);
+        pushIfPresent(extEntries, '画幅比例', metadata.aspectRatio);
+        pushIfPresent(extEntries, '分辨率档位', metadata.imageSize ?? metadata.resolution);
 
         // 附加未知的引擎自定义可复用字段（自动排除非复用及已归类字段）
         for (const [key, val] of Object.entries(metadata)) {

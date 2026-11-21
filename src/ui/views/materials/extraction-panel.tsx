@@ -60,7 +60,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
                 activePresetId={extractionController.activePresetId.value}
                 dirty={extractionController.isDirty.value}
                 onAction={(action, id) => extractionController.handleAction(action, id)}
-                onImportFile={(file) => extractionController.handleImportFile(file)}
+                onImportFiles={(files) => void extractionController.handleImportFiles(files)}
             />
 
             {/* 卡片 1: 楼层档案提取设置 */}

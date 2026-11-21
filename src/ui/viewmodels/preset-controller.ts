@@ -13,6 +13,13 @@ import { normalizePresetNameKey, settingsStore } from '../../store/settings-stor
 import { Toast } from '../feedback/toast';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { downloadJsonFile } from '../../util/browser-io';
+import {
+    buildPresetBundlePayload,
+    formatBatchImportSummary,
+    parsePresetBatchJson,
+    readFileAsText,
+    resolveBatchUniquePresetName,
+} from './preset-batch-io';
 
 const FORBIDDEN_IMPORT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -492,23 +499,27 @@ export class PresetController<TData extends Record<string, unknown>> {
                 return true;
             }
 
-            case 'new': {
-                // 若当前预设存在未保存修改，拦截二次确认防止误触放弃草稿
-                if (this.isDirty.value) {
-                    const confirmed = await ConfirmDialog.confirm({
-                        title: '新建预设确认',
-                        message: '当前预设存在未保存的修改，新建将放弃未保存的修改。是否确定继续新建？',
-                    });
-                    if (!confirmed) return false;
+            case 'new':
+            case 'saveAs': {
+                if (this.options.validateRequired) {
+                    const missing = this.options.validateRequired(this.draftConfig.value);
+                    if (missing.length > 0) {
+                        Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
+                        return false;
+                    }
                 }
-
+                const cur = this.currentPreset.value;
                 const list = this.fetchPresetsList();
                 const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
-                const promptMsg = this.options.promptMessageForNew ?? '请输入新预设名称:';
-                const defaultName = this.options.defaultNewName ?? '新建预设';
+                const defaultName = cur
+                    ? `${cur.name || '预设'} (副本)`
+                    : (this.options.defaultNewName ?? '新建预设');
+                const promptMsg = cur
+                    ? (this.options.promptMessageForSaveAs ?? '请输入新预设名称:')
+                    : (this.options.promptMessageForNew ?? '请输入新预设名称:');
 
-                const newName = await ConfirmDialog.prompt({
-                    title: '新建预设',
+                const targetName = await ConfirmDialog.prompt({
+                    title: '新建 / 另存为预设',
                     message: promptMsg,
                     defaultValue: defaultName,
                     placeholder: '请输入预设名称',
@@ -523,24 +534,27 @@ export class PresetController<TData extends Record<string, unknown>> {
                         return null;
                     },
                 });
-                if (!newName || !newName.trim()) return false;
+                if (!targetName || !targetName.trim()) return false;
 
-                const cleanNewName = newName.trim();
+                const cleanTargetName = targetName.trim();
                 const newId = this.generateUniqueId();
-                const initialData = this.options.defaultTemplate
-                    ? this.options.defaultTemplate()
-                    : (list[0]?.data ? structuredClone(list[0].data) : ({} as TData));
+                const baseData =
+                    cur || this.isDirty.value
+                        ? structuredClone(this.draftConfig.value)
+                        : this.options.defaultTemplate
+                          ? this.options.defaultTemplate()
+                          : structuredClone(this.draftConfig.value);
 
-                const newPreset: PresetItem<TData> = {
+                const created: PresetItem<TData> = {
                     id: newId,
-                    name: cleanNewName,
-                    data: this.syncMaterialInnerName(structuredClone(initialData), cleanNewName),
+                    name: cleanTargetName,
+                    data: this.syncMaterialInnerName(baseData, cleanTargetName),
                     updatedAt: Date.now(),
                 };
-                settingsStore.savePreset(this.options.category, newPreset, this.options.provider);
+                settingsStore.savePreset(this.options.category, created, this.options.provider);
                 this.applyActivePreset(newId);
                 if (this.options.showToast) {
-                    Toast.show(`已新建预设: ${newPreset.name}`, { level: 'success' });
+                    Toast.show(`已创建预设: ${cleanTargetName}`, { level: 'success' });
                 }
                 return true;
             }
@@ -610,59 +624,6 @@ export class PresetController<TData extends Record<string, unknown>> {
                     Toast.show('已成功保存修改', { level: 'success' });
                 }
                 return true;
-            }
-
-            case 'saveAs': {
-                if (this.options.validateRequired) {
-                    const missing = this.options.validateRequired(this.draftConfig.value);
-                    if (missing.length > 0) {
-                        Toast.show(`请先填写必填项：${missing.join('、')}`, { level: 'warning' });
-                        return false;
-                    }
-                }
-                const cur = this.currentPreset.value;
-                if (!cur) return false;
-
-                const defaultCloneName = `${cur.name || '预设'} (副本)`;
-                const list = this.fetchPresetsList();
-                const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
-                const promptMsg = this.options.promptMessageForSaveAs ?? '请输入另存预设的新名称:';
-
-                const targetName = await ConfirmDialog.prompt({
-                    title: '另存为新预设',
-                    message: promptMsg,
-                    defaultValue: defaultCloneName,
-                    placeholder: '请输入预设名称',
-                    validator: (val) => {
-                        const trimmed = val.trim();
-                        if (!trimmed) {
-                            return '预设名称不能为空';
-                        }
-                        if (existingNames.has(normalizePresetNameKey(trimmed))) {
-                            return '预设名称已存在，请换一个名称';
-                        }
-                        return null;
-                    },
-                });
-                if (!targetName || !targetName.trim()) return false;
-
-                const cleanTargetName = targetName.trim();
-                const newId = this.generateUniqueId();
-                const cloned: PresetItem<TData> = {
-                    id: newId,
-                    name: cleanTargetName,
-                    data: this.syncMaterialInnerName(
-                        structuredClone(this.draftConfig.value),
-                        cleanTargetName
-                    ),
-                    updatedAt: Date.now(),
-                };
-                settingsStore.savePreset(this.options.category, cloned, this.options.provider);
-                this.applyActivePreset(newId);
-                if (this.options.showToast) {
-                    Toast.show(`已另存预设: ${cleanTargetName}`, { level: 'success' });
-                }
-                break;
             }
 
             case 'rename': {
@@ -742,6 +703,27 @@ export class PresetController<TData extends Record<string, unknown>> {
                     `${this.options.provider || this.options.category}_preset_`;
                 const safeName = (cur.name || cur.id).replace(/\s+/g, '_');
                 downloadJsonFile(`${prefix}${safeName}.json`, exportPayload);
+                break;
+            }
+
+            case 'exportAll': {
+                const list = this.fetchPresetsList();
+                if (list.length === 0) {
+                    Toast.show('当前分类下没有可导出的预设', { level: 'warning' });
+                    return false;
+                }
+                const bundle = buildPresetBundlePayload(
+                    this.options.category,
+                    list,
+                    this.options.provider
+                );
+                const prefix =
+                    this.options.exportFilenamePrefix ??
+                    `${this.options.provider || this.options.category}_preset_`;
+                downloadJsonFile(`${prefix}all_${list.length}.json`, bundle);
+                if (this.options.showToast) {
+                    Toast.show(`已批量导出 ${list.length} 项预设`, { level: 'success' });
+                }
                 break;
             }
 
@@ -828,90 +810,110 @@ export class PresetController<TData extends Record<string, unknown>> {
     }
 
     /**
-     * 解析并导入外部 JSON 预设文件。
+     * 批量解析并导入一个或多个外部 JSON 预设文件（支持单预设及合集数组格式）。
      */
-    public handleImportFile(file: File): void {
-        const reader = new FileReader();
-        reader.onload = async () => {
-            if (this.isDisposed) return;
+    public async handleImportFiles(files: File[]): Promise<void> {
+        if (this.isDisposed || files.length === 0) return;
+
+        const list = this.fetchPresetsList();
+        const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
+        const fallbackName =
+            this.options.defaultImportName ||
+            `导入的 ${this.options.provider || this.options.category} 预设`;
+
+        const validCandidates: Array<{ name: string; data: Record<string, unknown> }> = [];
+        let failedCount = 0;
+        let firstError: string | undefined;
+
+        for (const file of files) {
             try {
-                const parsed = JSON.parse(reader.result as string);
-                if (
-                    !parsed ||
-                    typeof parsed !== 'object' ||
-                    Array.isArray(parsed) ||
-                    !parsed.data ||
-                    typeof parsed.data !== 'object' ||
-                    Array.isArray(parsed.data)
-                ) {
-                    throw new Error('预设文件格式错误：未包含有效的 data 配置对象');
+                const rawText = await readFileAsText(file);
+                if (this.isDisposed) return;
+                const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
+                if (skippedErrors.length > 0) {
+                    failedCount += skippedErrors.length;
+                    firstError ??= skippedErrors[0];
                 }
-                const sanitizedData = sanitizeImportedObject(
-                    parsed.data as Record<string, unknown>
-                );
-                const validationError = validatePresetPayloadForCategory(
-                    this.options.category,
-                    sanitizedData
-                );
-                if (validationError) {
-                    throw new Error(validationError);
+                for (const candidate of candidates) {
+                    const validationError = validatePresetPayloadForCategory(
+                        this.options.category,
+                        candidate.data
+                    );
+                    if (validationError) {
+                        failedCount += 1;
+                        firstError ??= validationError;
+                        continue;
+                    }
+                    validCandidates.push(candidate);
                 }
+            } catch (err: unknown) {
+                failedCount += 1;
+                firstError ??= err instanceof Error ? err.message : String(err);
+            }
+        }
 
-                if (this.isDirty.value) {
-                    const confirmed = await ConfirmDialog.confirm({
-                        title: '导入预设确认',
-                        message:
-                            '当前预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？',
-                    });
-                    if (!confirmed || this.isDisposed) return;
-                }
+        if (validCandidates.length === 0) {
+            Toast.show(formatBatchImportSummary(0, failedCount, firstError), { level: 'error' });
+            return;
+        }
 
-                const list = this.fetchPresetsList();
-                const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
-                const fileBaseName = stripJsonExtension(file?.name);
-                const fallbackName =
-                    this.options.defaultImportName ||
-                    `导入的 ${this.options.provider || this.options.category} 预设`;
-                const baseName = String(
-                    (typeof parsed.name === 'string' && parsed.name.trim()) ||
-                        fileBaseName ||
-                        fallbackName
-                ).trim();
+        if (this.isDirty.value) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '导入预设确认',
+                message:
+                    '当前预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？',
+            });
+            if (!confirmed || this.isDisposed) return;
+        }
 
-                const finalName = await resolveUniquePresetName(
-                    baseName,
+        const isSingleInteractive = validCandidates.length === 1 && files.length === 1;
+        let lastImportedId = '';
+        let lastImportedName = '';
+        let importedCount = 0;
+
+        for (const candidate of validCandidates) {
+            let finalName: string | null = null;
+            if (isSingleInteractive) {
+                finalName = await resolveUniquePresetName(
+                    candidate.name,
                     existingNames,
                     fallbackName
                 );
                 if (!finalName || this.isDisposed) return;
-
-                const newId = this.generateUniqueId();
-                const importedItem: PresetItem<TData> = {
-                    id: newId,
-                    name: finalName,
-                    data: this.syncMaterialInnerName(sanitizedData as TData, finalName),
-                    updatedAt: Date.now(),
-                };
-                settingsStore.savePreset(
-                    this.options.category,
-                    importedItem,
-                    this.options.provider
+            } else {
+                finalName = resolveBatchUniquePresetName(
+                    candidate.name,
+                    existingNames,
+                    fallbackName
                 );
-                this.applyActivePreset(newId);
-                if (this.options.showToast) {
-                    Toast.show(`已成功导入预设: ${importedItem.name}`, { level: 'success' });
-                }
-            } catch (err: unknown) {
-                if (this.isDisposed) return;
-                const message = err instanceof Error ? err.message : String(err);
-                Toast.show(`导入预设解析失败: ${message}`, { level: 'error' });
             }
-        };
-        reader.onerror = () => {
-            if (this.isDisposed) return;
-            Toast.show('读取预设文件失败', { level: 'error' });
-        };
-        reader.readAsText(file);
+
+            const newId = this.generateUniqueId();
+            const importedItem: PresetItem<TData> = {
+                id: newId,
+                name: finalName,
+                data: this.syncMaterialInnerName(candidate.data as TData, finalName),
+                updatedAt: Date.now(),
+            };
+            settingsStore.savePreset(this.options.category, importedItem, this.options.provider);
+            lastImportedId = newId;
+            lastImportedName = finalName;
+            importedCount += 1;
+        }
+
+        if (lastImportedId) {
+            this.applyActivePreset(lastImportedId);
+        }
+
+        if (importedCount === 1 && failedCount === 0) {
+            if (this.options.showToast) {
+                Toast.show(`已成功导入预设: ${lastImportedName}`, { level: 'success' });
+            }
+        } else {
+            Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
+                level: failedCount > 0 ? 'warning' : 'success',
+            });
+        }
     }
 
     private generateUniqueId(): string {

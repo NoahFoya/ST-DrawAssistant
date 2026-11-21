@@ -2,7 +2,7 @@
  * 生图服务选项卡共享布局骨架组件 (ProviderTabLayout)。
  *
  * @remarks
- * 为 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容服务视图提供统一的声明式 JSX 结构：
+ * 为 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容、Google Gemini 与 xAI Grok 服务视图提供统一的声明式 JSX 结构：
  * 1. 顶部服务连接与连通性检测卡片 (ConnectionCardView)；
  * 2. 中部由各提供商声明式注入的生图配置大卡片 (children，内含置顶预设工具栏、模型、尺寸与采样)；
  * 3. 底部按需挂载的工作流管理器 (WorkflowCardView) 与提示词预设卡片 (PromptPresetCardView)。
@@ -65,6 +65,10 @@ export interface ProviderTabLayoutProps {
     urlPlaceholder?: string;
     /** 是否显示 API Key 鉴权输入框 */
     showApiKey?: boolean;
+    /** API Key 输入框占位提示 */
+    apiKeyPlaceholder?: string;
+    /** API Key 输入框悬浮说明 */
+    apiKeyTooltip?: string;
     /** 服务商端点预设列表（如 OpenAI / SiliconFlow） */
     providerPresets?: ProviderPreset[];
     /** 服务商下拉的字段标签 */
@@ -97,6 +101,8 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 subtitle={props.connectionSubtitle}
                 urlPlaceholder={props.urlPlaceholder}
                 showApiKey={props.showApiKey}
+                apiKeyPlaceholder={props.apiKeyPlaceholder}
+                apiKeyTooltip={props.apiKeyTooltip}
                 providerPresets={props.providerPresets}
                 presetLabel={props.presetLabel}
                 presetTooltip={props.presetTooltip}
@@ -124,7 +130,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                     onAction={(action, wfId, data) =>
                         vm.handleWorkflowAssetAction(action, wfId, data)
                     }
-                    onImportFile={(file) => vm.handleWorkflowImportFile(file)}
+                    onImportFiles={(files) => void vm.handleWorkflowImportFiles(files)}
                     onOpenBlueprint={(currentJson, resolvedWorkflowId) => {
                         const targetWorkflowId =
                             resolvedWorkflowId || activeWorkflowId || workflowPresets[0]?.id || '';
@@ -152,7 +158,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 mode={vm.provider === 'comfyui' ? 'weilin' : 'standard'}
                 availableModels={vm.serverLoras.value}
                 onAction={(action, pId, data) => vm.handlePromptAssetAction(action, pId, data)}
-                onImportFile={(file) => vm.handlePromptImportFile(file)}
+                onImportFiles={(files) => void vm.handlePromptImportFiles(files)}
             />
         </>
     );

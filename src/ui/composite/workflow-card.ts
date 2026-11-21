@@ -77,8 +77,8 @@ export interface WorkflowCardOptions {
         presetId: string,
         data?: WorkflowCardData
     ) => void | boolean | Promise<void | boolean>;
-    /** 导入文件自定义解析回调 */
-    onImportFile?: (file: File) => void;
+    /** 批量/多文件导入自定义解析回调 */
+    onImportFiles?: (files: File[]) => void;
     /** 工作流内容变更回调 */
     onChange?: (data: WorkflowCardData) => void;
     /** 打开蓝图编辑器回调 */
@@ -728,7 +728,7 @@ export class WorkflowCard implements UIComponent {
             presets: this.buildToolbarItems(this.rawPresets),
             activePresetId: this.activePresetId,
             onAction: (action, presetId) => this.handlePresetAction(action, presetId),
-            onImportFile: options.onImportFile
+            onImportFiles: options.onImportFiles
         });
         this.card.appendContent(this.toolbar.element);
 

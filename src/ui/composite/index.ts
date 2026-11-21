@@ -19,5 +19,5 @@ export * from './storage-bar';
 export * from './media-card';
 export * from './prompt-entries-manager';
 export * from './prompt-polling-manager';
-export * from './official-preset-sync-card';
+export * from './static-preset-manager-card';
 

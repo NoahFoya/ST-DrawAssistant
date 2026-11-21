@@ -11,6 +11,8 @@ import { ComfyUIProvider } from './comfyui/comfyui-provider';
 import { SdWebUIProvider } from './sdwebui/sdwebui-provider';
 import { NovelAIProvider } from './novelai/novelai-provider';
 import { OpenAIProvider } from './openai/openai-provider';
+import { GeminiProvider } from './gemini/gemini-provider';
+import { GrokProvider } from './grok/grok-provider';
 
 /**
  * 绘图服务提供方注册中心默认实现类。
@@ -59,5 +61,7 @@ export const providerRegistry: ProviderRegistry = (() => {
     registry.registerProvider(new SdWebUIProvider());
     registry.registerProvider(new NovelAIProvider());
     registry.registerProvider(new OpenAIProvider());
+    registry.registerProvider(new GeminiProvider());
+    registry.registerProvider(new GrokProvider());
     return registry;
 })();
