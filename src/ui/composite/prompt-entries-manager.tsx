@@ -494,7 +494,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                         ? '常驻注入 (每轮生效)'
                                                         : '条件触发 (关键词命中时生效)'
                                                 }
-                                                value={entry.triggerMode}
+                                                value={entry.triggerMode || 'keyword'}
                                                 onChange={(val) =>
                                                     handlePatchEntry(entry.id, {
                                                         triggerMode: val as ActivationTriggerMode,

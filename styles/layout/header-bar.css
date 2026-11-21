@@ -111,6 +111,16 @@
     box-shadow: 0 0 10px rgba(var(--da-accent-rgb), 0.25);
 }
 
+.da-quick-theme-selector.is-invalid {
+    border-color: var(--da-color-error);
+    background-color: rgba(var(--da-color-error-rgb, 244, 63, 94), 0.08);
+    box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25);
+}
+
+.da-quick-theme-selector.is-invalid .da-quick-theme-select {
+    color: var(--da-color-error);
+}
+
 /* 胶囊内原生下拉选择器 */
 .da-quick-theme-select,
 select.da-quick-theme-select {

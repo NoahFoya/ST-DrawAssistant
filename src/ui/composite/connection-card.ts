@@ -2,9 +2,9 @@
  * 通用服务连接卡片 (ConnectionCard)。
  *
  * @remarks
- * 为生图服务提供方（ComfyUI、SD-WebUI/Forge、NovelAI、OpenAI 兼容协议）提供统一的服务连接卡片：
+ * 为生图服务提供方（ComfyUI、SD-WebUI/Forge、NovelAI、OpenAI 兼容、Google Gemini、xAI Grok）提供统一的服务连接卡片：
  * 1. 服务地址 (Base URL) 与可选鉴权密钥 (API Key/Token) 受控表单输入；
- * 2. 可选的服务商预设模板切换 (OpenAI/SiliconFlow/Grok 等)；
+ * 2. 可选的服务商预设模板切换 (如 OpenAI/SiliconFlow/Gemini/Grok 官方或自定义中转)；
  * 3. 连通性检测 (checkHealth) 与 RTT 延迟状态徽标反馈；
  * 4. 可重载的模型列表拉取扩展函数 (fetchAssetList)；
  * 5. 全生命周期级联注销与请求中止防护。
@@ -57,6 +57,8 @@ export interface ConnectionCardOptions {
     showApiKey?: boolean;
     /** API Key 输入框占位提示 */
     apiKeyPlaceholder?: string;
+    /** API Key 输入框悬浮说明 */
+    apiKeyTooltip?: string;
     /** 可选的服务商预设模板列表 */
     providerPresets?: ProviderPreset[];
     /** 服务商下拉的字段标签，默认 "服务商" */
@@ -86,6 +88,7 @@ export class ConnectionCard implements UIComponent, Disposable {
 
     private readonly statusBadge: Badge;
     private presetSelect?: Select;
+    private presetOptions: SelectOption[] = [];
     private readonly urlInput: TextInput;
     private readonly urlFormField: FormField;
     private apiKeyInput?: TextInput;
@@ -156,8 +159,14 @@ export class ConnectionCard implements UIComponent, Disposable {
             if (!presetOptions.some((p) => p.value === 'custom')) {
                 presetOptions.push({ value: 'custom', label: '自定义服务' });
             }
+            this.presetOptions = presetOptions;
 
-            const initialPreset = this.data.activePresetId || presetOptions[0].value;
+            const initialPreset = this.resolveValidPresetId(
+                this.data.activePresetId,
+                this.presetOptions,
+                this.data.serverUrl
+            );
+            this.data.activePresetId = initialPreset;
             this.presetSelect = new Select({
                 value: initialPreset,
                 options: presetOptions,
@@ -227,6 +236,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.apiKeyFormField = new FormField({
                 label: 'API Key',
                 tooltip:
+                    options.apiKeyTooltip ??
                     '访问受保护云端接口所需的认证凭证（如 Bearer Token / API Key）。在向后端发送请求时自动附加在 Authorization 请求头中。',
                 control: this.apiKeyInput,
             });
@@ -270,11 +280,42 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.apiKeyInput.setValue(data.apiKey);
         }
         if (data.activePresetId !== undefined && this.presetSelect) {
-            this.data.activePresetId = data.activePresetId;
-            this.presetSelect.setValue(data.activePresetId);
+            const resolvedPresetId = this.resolveValidPresetId(
+                data.activePresetId,
+                this.presetOptions,
+                this.data.serverUrl
+            );
+            this.data.activePresetId = resolvedPresetId;
+            this.presetSelect.setValue(resolvedPresetId);
         }
         this.applyPresetState();
         this.resetStatusToIdle();
+    }
+
+    private resolveValidPresetId(
+        candidateId: string | undefined,
+        presetOptions: ReadonlyArray<{ id?: string; value?: string; defaultUrl?: string }>,
+        serverUrl: string
+    ): string {
+        const ids = presetOptions
+            .map((p) => p.id ?? p.value ?? '')
+            .filter((v) => v.length > 0);
+        if (candidateId && ids.includes(candidateId)) {
+            return candidateId;
+        }
+        const normalizedUrl = serverUrl.trim().replace(/\/+$/, '');
+        if (normalizedUrl && this.options.providerPresets) {
+            const byUrl = this.options.providerPresets.find(
+                (p) => p.defaultUrl && p.defaultUrl.replace(/\/+$/, '') === normalizedUrl
+            );
+            if (byUrl) {
+                return byUrl.id;
+            }
+        }
+        if (ids.includes('custom')) {
+            return 'custom';
+        }
+        return ids[0] ?? '';
     }
 
     /**

@@ -342,7 +342,16 @@ export function stripLoraSyntax(text: string): string {
     if (!text) {
         return '';
     }
-    return text.replace(/<(?:lora|wlr):[^>]+>/gi, ' ').trim();
+    if (!/<(?:lora|wlr):[^>]+>/i.test(text)) {
+        return text.trim();
+    }
+    // 剥离 LoRA 语法标签后同时折叠残留空逗号与多余空白，避免自然语言后端跳过切片清洗时留下 `, ,`
+    return text
+        .replace(/<(?:lora|wlr):[^>]+>/gi, ' ')
+        .replace(/,\s*,+/g, ', ')
+        .replace(/^\s*,\s*|\s*,\s*$/g, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
 }
 
 /**
@@ -404,6 +413,50 @@ export function sanitizeMessageText(rawText: string): string {
  */
 export function cleanPromptText(rawPrompt: string, deduplicate = false): string {
     return cleanTagSegments(rawPrompt, { deduplicate });
+}
+
+/**
+ * 判断指定服务提供方是否采用自然语言描述式提示词（而非 Danbooru 标签串）。
+ */
+export function isNaturalLanguageProvider(provider?: ProviderType): boolean {
+    return provider === 'openai' || provider === 'gemini' || provider === 'grok';
+}
+
+/**
+ * 判断指定服务提供方是否支持 LoRA 提示词语法标签（`<lora:...>` / `<wlr:...>`）。
+ */
+export function supportsLoraSyntax(provider?: ProviderType): boolean {
+    return provider === 'sdwebui' || provider === 'comfyui';
+}
+
+/**
+ * 规整自然语言提示词文本：保留完整英文句式、标点与段落结构，仅修剪首尾空白并压缩多余空行。
+ */
+export function cleanNaturalLanguagePrompt(rawPrompt: string): string {
+    if (!rawPrompt || typeof rawPrompt !== 'string') {
+        return '';
+    }
+    return rawPrompt
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+/**
+ * 自然语言提示词片段拼接：若前段以句末/分隔标点结尾则直接空格连接，否则补逗号后连接。
+ */
+export function joinNaturalLanguageSegment(head: string, tail: string): string {
+    const a = head.trim();
+    const b = tail.trim();
+    if (!a) return b;
+    if (!b) return a;
+    if (/[.,;:!?'"\-\n]$/.test(a)) {
+        return `${a} ${b}`;
+    }
+    return `${a}, ${b}`;
 }
 
 /** 楼层中提取出的生图指令描述 */
@@ -748,20 +801,25 @@ export class PromptPipeline {
         }
 
         // 5. 应用提示词预设（前缀、后缀、负向词基底，同样支持本地素材宏展开）
+        const useNaturalLanguage = isNaturalLanguageProvider(provider);
         if (promptPreset) {
             const prefix = applyMaterialMacros((promptPreset.positivePrefix || '').trim());
             const suffix = applyMaterialMacros((promptPreset.positiveSuffix || '').trim());
             const defaultNeg = applyMaterialMacros((promptPreset.negativePrompt || '').trim());
 
             if (prefix) {
-                positive = positive ? `${prefix}, ${positive}` : prefix;
+                positive = useNaturalLanguage
+                    ? joinNaturalLanguageSegment(prefix, positive)
+                    : positive
+                      ? `${prefix}, ${positive}`
+                      : prefix;
             }
 
             // 6. 依据 ProviderType 能力分流组装 LoRA 词条 (置于主体后、后缀前)
             const normalizedPositive = positive.replace(/\\/g, '/');
             const normalizedSuffix = suffix.replace(/\\/g, '/');
             if (Array.isArray(promptPreset.loras) && promptPreset.loras.length > 0) {
-                if (provider === 'sdwebui' || provider === 'comfyui') {
+                if (supportsLoraSyntax(provider)) {
                     // SD-WebUI 强制标准双权重语法；ComfyUI 遵从预设配置的语法模式 ('standard' 或 'weilin')
                     const syntaxMode = provider === 'sdwebui' ? 'standard' : (promptPreset.loraSyntaxMode ?? 'standard');
                     for (const lora of promptPreset.loras) {
@@ -781,11 +839,15 @@ export class PromptPipeline {
                         }
                     }
                 }
-                // openai 与 novelai 不支持 lora 提示词语法，跳过组装
+                // 不支持 LoRA 提示词语法的后端跳过组装，统一在下方剥离残留标签
             }
 
             if (suffix) {
-                positive = positive ? `${positive}, ${suffix}` : suffix;
+                positive = useNaturalLanguage
+                    ? joinNaturalLanguageSegment(positive, suffix)
+                    : positive
+                      ? `${positive}, ${suffix}`
+                      : suffix;
             }
             if (supportsNegative && defaultNeg) {
                 negative = mergeNegativePrompts(defaultNeg, negative, shouldDeduplicate);
@@ -810,17 +872,21 @@ export class PromptPipeline {
             }
         }
 
-        // 8. 针对不支持 LoRA 语法标签的后端（NovelAI、OpenAI），自动剥离残留的 <lora:...> 与 <wlr:...>
-        if (provider === 'novelai' || provider === 'openai') {
+        // 8. 针对不支持 LoRA 语法标签的后端（NovelAI、OpenAI、Gemini、Grok），自动剥离残留的 <lora:...> 与 <wlr:...>
+        if (provider && !supportsLoraSyntax(provider)) {
             positive = stripLoraSyntax(positive);
             if (negative) {
                 negative = stripLoraSyntax(negative);
             }
         }
 
-        // 9. 规整文本标点并按配置执行保序标签去重
-        const cleanPositive = cleanPromptText(positive, shouldDeduplicate);
-        const cleanNegative = cleanPromptText(negative, shouldDeduplicate);
+        // 9. 规整文本：自然语言引擎保留完整句式与段落，标签型引擎按配置执行保序标签去重
+        const cleanPositive = useNaturalLanguage
+            ? cleanNaturalLanguagePrompt(positive)
+            : cleanPromptText(positive, shouldDeduplicate);
+        const cleanNegative = useNaturalLanguage
+            ? cleanNaturalLanguagePrompt(negative)
+            : cleanPromptText(negative, shouldDeduplicate);
 
         return {
             prompt: cleanPositive,

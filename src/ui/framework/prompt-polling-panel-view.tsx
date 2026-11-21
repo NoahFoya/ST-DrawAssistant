@@ -1,12 +1,12 @@
 /**
- * 声明式 Preact 包装视图：提示词预设轮询摘要表单行 (PromptPollingPanelView) 与官方预设同步卡片 (OfficialPresetSyncCardView)。
+ * 声明式 Preact 包装视图：提示词预设轮询摘要表单行 (PromptPollingPanelView) 与本地预设管理卡片 (StaticPresetManagerCardView)。
  */
 
 import { useEffect, useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
 import { PROMPT_POLLING_PRESET_ID } from '../../config/constants';
-import { OfficialPresetSyncCard } from '../composite';
-import type { OfficialPresetSyncCardOptions } from '../composite/official-preset-sync-card';
+import { StaticPresetManagerCard } from '../composite';
+import type { StaticPresetManagerCardOptions } from '../composite/static-preset-manager-card';
 import { summarizePromptPollingPool } from '../composite/prompt-polling-manager';
 import { openPromptPollingModal } from '../modal/prompt-polling-modal';
 import type { ProviderTabViewModel } from '../viewmodels/provider-tab-vm';
@@ -70,22 +70,22 @@ export function PromptPollingPanelView(props: PromptPollingPanelViewProps): VNod
     );
 }
 
-export interface OfficialPresetSyncCardViewProps {
-    readonly options?: OfficialPresetSyncCardOptions;
+export interface StaticPresetManagerCardViewProps {
+    readonly options?: StaticPresetManagerCardOptions;
 }
 
 /**
- * 官方预设更新摘要卡片的 Preact 包装视图。
+ * 本地预设按需管理卡片的 Preact 包装视图。
  */
-export function OfficialPresetSyncCardView(props: OfficialPresetSyncCardViewProps): VNode {
+export function StaticPresetManagerCardView(props: StaticPresetManagerCardViewProps): VNode {
     const hostRef = useRef<HTMLDivElement | null>(null);
-    const cardRef = useRef<OfficialPresetSyncCard | null>(null);
+    const cardRef = useRef<StaticPresetManagerCard | null>(null);
 
     useEffect(() => {
         const container = hostRef.current;
         if (!container) return;
 
-        const card = new OfficialPresetSyncCard(props.options);
+        const card = new StaticPresetManagerCard(props.options);
         cardRef.current = card;
         container.appendChild(card.element);
 

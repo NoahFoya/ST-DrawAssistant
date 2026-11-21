@@ -30,6 +30,13 @@ import {
     stripJsonExtension,
     validatePresetPayloadForCategory,
 } from '../viewmodels';
+import {
+    buildPresetBundlePayload,
+    formatBatchImportSummary,
+    parsePresetBatchJson,
+    readFileAsText,
+    resolveBatchUniquePresetName,
+} from '../viewmodels/preset-batch-io';
 import { bindDelegatedTagAutocomplete } from '../composite/tag-autocomplete';
 import type { Disposable } from '../types';
 import { settingsStore, normalizePresetNameKey } from '../../store/settings-store';
@@ -215,7 +222,8 @@ export class MaterialsTabView extends PreactSettingsView {
             showToast: true,
             defaultTemplate: () => structuredClone(DEFAULT_MATERIAL_EXTRACTION_CONFIG),
             getActiveId: () =>
-                settingsStore.get('materialConfig')?.activeExtractionPresetId || 'ext_default',
+                settingsStore.get('materialConfig')?.activeExtractionPresetId ||
+                'material_extraction_default',
             setActiveId: (id) => {
                 const cur = settingsStore.get('materialConfig');
                 const next: MaterialLibraryConfig = {
@@ -259,7 +267,8 @@ export class MaterialsTabView extends PreactSettingsView {
                 outfitMacros: [],
             }),
             getActiveId: () =>
-                settingsStore.get('materialConfig')?.activeFormatPresetId || 'format_default',
+                settingsStore.get('materialConfig')?.activeFormatPresetId ||
+                'material_format_default',
             setActiveId: (id) => {
                 const cur = settingsStore.get('materialConfig');
                 const next: MaterialLibraryConfig = {
@@ -329,7 +338,7 @@ export class MaterialsTabView extends PreactSettingsView {
             ) {
                 this.materialConfigSignal.value = settingsStore.get('materialConfig');
             }
-            if (!data.key || data.isReset) {
+            if (!data.key || data.isReset || data.keys?.includes('presets')) {
                 for (const ctrl of [
                     this.charController,
                     this.outfitController,
@@ -342,6 +351,25 @@ export class MaterialsTabView extends PreactSettingsView {
                     }
                 }
                 this.syncVisibleAvatars();
+            } else if (data.key) {
+                const ctrlMap: Record<string, typeof this.charController | typeof this.outfitController | typeof this.activationController | typeof this.extractionController | typeof this.formatController> = {
+                    'presets.characters': this.charController,
+                    'presets.outfits': this.outfitController,
+                    'presets.material_activations': this.activationController,
+                    'presets.material_extractions': this.extractionController,
+                    'presets.material_formats': this.formatController,
+                };
+                const targetCtrl = ctrlMap[data.key];
+                if (targetCtrl) {
+                    if (!targetCtrl.isDirty.value) {
+                        targetCtrl.reloadFromStore();
+                    } else {
+                        targetCtrl.refreshPresets();
+                    }
+                    if (data.key === 'presets.characters' || data.key === 'presets.outfits') {
+                        this.syncVisibleAvatars();
+                    }
+                }
             }
         });
 
@@ -686,18 +714,53 @@ export class MaterialsTabView extends PreactSettingsView {
             return true;
         }
 
+        if (action === 'exportAll') {
+            const list = ctrl.fetchPresetsList();
+            if (list.length === 0) {
+                Toast.show(`当前没有可导出的${kind === 'character' ? '角色' : '服装'}预设`, {
+                    level: 'warning',
+                });
+                return false;
+            }
+            const exportedPresets = await Promise.all(
+                list.map(async (item) => {
+                    const data = structuredClone(item.data) as unknown as Record<string, unknown>;
+                    const avatarId = typeof data.avatarId === 'string' ? data.avatarId : '';
+                    if (avatarId) {
+                        const dataUrl = await materialImageStorage.exportAvatarAsDataUrl(avatarId);
+                        if (dataUrl) {
+                            data[EMBEDDED_AVATAR_FIELD] = dataUrl;
+                        }
+                    }
+                    return {
+                        ...item,
+                        data,
+                    };
+                })
+            );
+            const category = kind === 'character' ? 'characters' : 'outfits';
+            const bundle = buildPresetBundlePayload(category, exportedPresets);
+            const prefix = kind === 'character' ? 'st-draw-character-' : 'st-draw-outfit-';
+            downloadJsonFile(`${prefix}all_${list.length}.json`, bundle);
+            Toast.show(`已批量导出 ${list.length} 项预设`, { level: 'success' });
+            return true;
+        }
+
         if (action === 'saveAs') {
             const cur = ctrl.currentPreset.value;
-            if (!cur) return false;
             const list = ctrl.fetchPresetsList();
             const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
             const targetName = await ConfirmDialog.prompt({
-                title: '另存为新预设',
+                title: '新建 / 另存为预设',
                 message:
                     kind === 'character'
-                        ? '请输入角色另存名称:'
-                        : '请输入服装另存名称:',
-                defaultValue: `${cur.name || '档案'} (副本)`,
+                        ? '请输入角色名称:'
+                        : '请输入服装名称:',
+                defaultValue: cur
+                    ? `${cur.name || '档案'} (副本)`
+                    : kind === 'character'
+                      ? '新角色档案'
+                      : '新服装档案',
                 placeholder: '请输入唯一的预设名称',
                 validator: (val) =>
                     existingNames.has(normalizePresetNameKey(val))
@@ -1016,28 +1079,152 @@ export class MaterialsTabView extends PreactSettingsView {
         Toast.show(`已成功导入预设: ${finalName}`, { level: 'success' });
     }
 
-    private handleMaterialImportFile(kind: 'character' | 'outfit' | 'activation', file: File): void {
+    private async handleMaterialImportFiles(
+        kind: 'character' | 'outfit' | 'activation',
+        files: File[]
+    ): Promise<void> {
+        if (this.isDisposedView || files.length === 0) return;
+
         if (kind === 'activation') {
-            this.activationController.handleImportFile(file);
+            await this.activationController.handleImportFiles(files);
+            this.materialConfigSignal.value = { ...settingsStore.get('materialConfig') };
+            void promptInjector.scheduleSyncToHost();
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = () => {
-            if (this.isDisposedView) return;
-            void this.importMaterialJson(kind, String(reader.result || ''), file.name).catch(
-                (err: unknown) => {
-                    if (this.isDisposedView) return;
-                    const message = err instanceof Error ? err.message : String(err);
-                    Toast.show(`导入解析失败: ${message}`, { level: 'error' });
+        if (files.length === 1) {
+            try {
+                const rawText = await readFileAsText(files[0]);
+                if (this.isDisposedView) return;
+                const parsed: unknown = JSON.parse(rawText);
+                const isBundle =
+                    Array.isArray(parsed) ||
+                    (Boolean(parsed) &&
+                        typeof parsed === 'object' &&
+                        Array.isArray((parsed as Record<string, unknown>).presets));
+                if (!isBundle) {
+                    await this.importMaterialJson(kind, rawText, files[0].name);
+                    return;
                 }
-            );
-        };
-        reader.onerror = () => {
-            if (this.isDisposedView) return;
-            Toast.show('读取导入文件失败', { level: 'error' });
-        };
-        reader.readAsText(file);
+            } catch (err: unknown) {
+                if (this.isDisposedView) return;
+                const message = err instanceof Error ? err.message : String(err);
+                Toast.show(`导入解析失败: ${message}`, { level: 'error' });
+                return;
+            }
+        }
+
+        const ctrl = kind === 'character' ? this.charController : this.outfitController;
+        if (ctrl.isDirty.value) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '导入预设确认',
+                message:
+                    '当前档案存在未保存的修改，导入并切换新档案将放弃当前未保存修改。是否确定继续导入？',
+            });
+            if (!confirmed || this.isDisposedView) return;
+        }
+
+        const existingNames = new Set(
+            ctrl.fetchPresetsList().map((p) => normalizePresetNameKey(p.name))
+        );
+        const fallbackName = kind === 'character' ? '导入角色' : '导入服装';
+        let importedCount = 0;
+        let failedCount = 0;
+        let firstError: string | undefined;
+        let lastNewId = '';
+        let lastAvatarId = '';
+
+        for (const file of files) {
+            try {
+                const rawText = await readFileAsText(file);
+                if (this.isDisposedView) return;
+                const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
+                if (skippedErrors.length > 0) {
+                    failedCount += skippedErrors.length;
+                    firstError ??= skippedErrors[0];
+                }
+                for (const candidate of candidates) {
+                    const rawData = candidate.data;
+                    const errMsg = validatePresetPayloadForCategory(
+                        kind === 'character' ? 'characters' : 'outfits',
+                        rawData
+                    );
+                    if (errMsg) {
+                        failedCount += 1;
+                        firstError ??= errMsg;
+                        continue;
+                    }
+                    const embeddedAvatar =
+                        typeof rawData[EMBEDDED_AVATAR_FIELD] === 'string'
+                            ? rawData[EMBEDDED_AVATAR_FIELD]
+                            : '';
+                    delete rawData[EMBEDDED_AVATAR_FIELD];
+
+                    const finalName = resolveBatchUniquePresetName(
+                        candidate.name ||
+                            (typeof rawData.name === 'string' ? rawData.name : '') ||
+                            fallbackName,
+                        existingNames,
+                        fallbackName
+                    );
+
+                    let resolvedAvatarId = '';
+                    if (embeddedAvatar) {
+                        try {
+                            resolvedAvatarId =
+                                (await materialImageStorage.importAvatarFromDataUrl(
+                                    embeddedAvatar
+                                )) || '';
+                        } catch {
+                            resolvedAvatarId = '';
+                        }
+                    }
+
+                    const newId = this.generateUniqueMaterialId(kind);
+                    if (kind === 'character') {
+                        const normalized = normalizeCharacterData(rawData);
+                        normalized.name = finalName;
+                        normalized.avatarId = resolvedAvatarId;
+                        settingsStore.savePreset('characters', {
+                            id: newId,
+                            name: finalName,
+                            description: normalized.description,
+                            data: normalized,
+                            updatedAt: Date.now(),
+                        });
+                    } else {
+                        const normalized = normalizeOutfitData(rawData);
+                        normalized.name = finalName;
+                        normalized.avatarId = resolvedAvatarId;
+                        settingsStore.savePreset('outfits', {
+                            id: newId,
+                            name: finalName,
+                            description: normalized.description,
+                            data: normalized,
+                            updatedAt: Date.now(),
+                        });
+                    }
+                    this.syncActivationRuleSnapshot(kind, newId, 'add');
+                    lastNewId = newId;
+                    lastAvatarId = resolvedAvatarId;
+                    importedCount += 1;
+                }
+            } catch (err: unknown) {
+                failedCount += 1;
+                firstError ??= err instanceof Error ? err.message : String(err);
+            }
+        }
+
+        if (lastNewId) {
+            ctrl.applyActivePreset(lastNewId);
+            if (lastAvatarId) {
+                this.ensureAvatarLoaded(lastAvatarId);
+            }
+            void promptInjector.scheduleSyncToHost();
+        }
+        Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
+            level: importedCount === 0 ? 'error' : failedCount > 0 ? 'warning' : 'success',
+        });
     }
 
     public updateMacroRules(
@@ -1081,8 +1268,8 @@ export class MaterialsTabView extends PreactSettingsView {
                         onAction={(action, id) =>
                             this.handleMaterialToolbarAction('character', action, id)
                         }
-                        onImportFile={(file) =>
-                            this.handleMaterialImportFile('character', file)
+                        onImportFiles={(files) =>
+                            void this.handleMaterialImportFiles('character', files)
                         }
                         onUploadAvatar={(file) => this.uploadAvatar('character', file)}
                         onRemoveAvatar={() => this.removeDraftAvatar('character')}
@@ -1099,8 +1286,8 @@ export class MaterialsTabView extends PreactSettingsView {
                         onAction={(action, id) =>
                             this.handleMaterialToolbarAction('outfit', action, id)
                         }
-                        onImportFile={(file) =>
-                            this.handleMaterialImportFile('outfit', file)
+                        onImportFiles={(files) =>
+                            void this.handleMaterialImportFiles('outfit', files)
                         }
                         onUploadAvatar={(file) => this.uploadAvatar('outfit', file)}
                         onRemoveAvatar={() => this.removeDraftAvatar('outfit')}
@@ -1118,8 +1305,8 @@ export class MaterialsTabView extends PreactSettingsView {
                         onAction={(action, id) =>
                             this.handleMaterialToolbarAction('activation', action, id)
                         }
-                        onImportFile={(file) =>
-                            this.handleMaterialImportFile('activation', file)
+                        onImportFiles={(files) =>
+                            void this.handleMaterialImportFiles('activation', files)
                         }
                     />
                 )}

@@ -2,10 +2,10 @@
  * 预设管理工具栏 (PresetToolbar)。
  *
  * @remarks
- * 组合预设受控下拉框与 8 项标准图标操作（新建、保存、另存为、重命名、导入、导出、重置、删除）：
+ * 组合预设受控下拉框与 8 项标准图标操作（保存、新建/另存为、重命名、重置、导入、导出当前、批量导出、删除）：
  * 1. 状态感知响应：配置脏状态驱动保存高亮与重置使能；
  * 2. 未保存修改确认：在预设切换或删除前要求二次确认；
- * 3. 规范文件导入：支持文件选择并触发解析回调。
+ * 3. 规范文件导入：支持多选文件及合集 JSON 批量导入，并触发解析回调。
  */
 
 import type { UIComponent } from '../types';
@@ -22,6 +22,7 @@ export type PresetActionType =
     | 'rename'
     | 'import'
     | 'export'
+    | 'exportAll'
     | 'reset'
     | 'delete';
 
@@ -44,8 +45,8 @@ export interface PresetToolbarOptions {
         action: PresetActionType,
         presetId: string
     ) => void | boolean | Promise<void | boolean>;
-    /** 导入文件自定义解析回调（未提供时触发 onAction('import', presetId)） */
-    onImportFile?: (file: File) => void;
+    /** 批量/多文件导入自定义解析回调 */
+    onImportFiles?: (files: File[]) => void;
     /** 附加 CSS 类名 */
     className?: string;
 }
@@ -55,13 +56,13 @@ export class PresetToolbar implements UIComponent {
     public readonly selectWrapper: HTMLElement;
     public readonly selectComponent: Select;
 
-    public readonly newButton: Button;
     public readonly saveButton: Button;
     public readonly saveAsButton: Button;
     public readonly renameButton: Button;
+    public readonly resetButton: Button;
     public readonly importButton: Button;
     public readonly exportButton: Button;
-    public readonly resetButton: Button;
+    public readonly exportAllButton: Button;
     public readonly deleteButton: Button;
 
     private readonly fileInput: HTMLInputElement;
@@ -72,14 +73,14 @@ export class PresetToolbar implements UIComponent {
         action: PresetActionType,
         presetId: string
     ) => void | boolean | Promise<void | boolean>;
-    private readonly onImportFileCallback?: (file: File) => void;
+    private readonly onImportFilesCallback?: (files: File[]) => void;
     private readonly fileChangeListener: () => void;
 
     constructor(options: PresetToolbarOptions) {
         this.currentPresets = [...options.presets];
         this.activeId = options.activePresetId;
         this.onActionCallback = options.onAction;
-        this.onImportFileCallback = options.onImportFile;
+        this.onImportFilesCallback = options.onImportFiles;
 
         // 1. 根容器
         this.element = document.createElement('div');
@@ -100,23 +101,15 @@ export class PresetToolbar implements UIComponent {
             value: this.activeId,
             onChange: (newId) => this.handleSelectChange(newId)
         });
+        this.syncSelectInvalidState(this.currentPresets);
 
         this.selectWrapper.appendChild(this.selectComponent.element);
         leftSlot.appendChild(this.selectWrapper);
         this.element.appendChild(leftSlot);
 
-        // 3. 右侧 8 键图标操作族
+        // 3. 右侧 8 键图标操作族（编辑组 → 流转组 → 危险组）
         const rightSlot = document.createElement('div');
         rightSlot.className = 'da-preset-toolbar-right';
-
-        this.newButton = new Button({
-            variant: 'icon',
-            tooltip: '新建预设',
-            icon: ICONS.plus,
-            onClick: () => {
-                void this.onActionCallback('new', this.activeId);
-            }
-        });
 
         this.saveButton = new Button({
             variant: 'icon',
@@ -130,8 +123,8 @@ export class PresetToolbar implements UIComponent {
 
         this.saveAsButton = new Button({
             variant: 'icon',
-            tooltip: '另存为新预设',
-            icon: ICONS.copy,
+            tooltip: '新建 / 另存为新预设',
+            icon: ICONS.plus,
             onClick: () => {
                 void this.onActionCallback('saveAs', this.activeId);
             }
@@ -146,17 +139,28 @@ export class PresetToolbar implements UIComponent {
             }
         });
 
-        // 隐藏文件选择器用于导入 JSON 预设
+        this.resetButton = new Button({
+            variant: 'icon',
+            tooltip: '重置修改 (放弃草稿并恢复为当前预设初始值)',
+            icon: ICONS.refresh,
+            disabled: true,
+            onClick: () => {
+                void this.onActionCallback('reset', this.activeId);
+            }
+        });
+
+        // 隐藏文件选择器用于单/多选导入 JSON 预设
         this.fileInput = document.createElement('input');
         this.fileInput.type = 'file';
-        this.fileInput.accept = '.json';
+        this.fileInput.accept = '.json,application/json';
+        this.fileInput.multiple = true;
         this.fileInput.style.display = 'none';
 
         this.fileChangeListener = () => {
-            const file = this.fileInput.files?.[0];
-            if (file) {
-                if (this.onImportFileCallback) {
-                    this.onImportFileCallback(file);
+            const files = this.fileInput.files ? Array.from(this.fileInput.files) : [];
+            if (files.length > 0) {
+                if (this.onImportFilesCallback) {
+                    this.onImportFilesCallback(files);
                 } else {
                     void this.onActionCallback('import', this.activeId);
                 }
@@ -167,27 +171,26 @@ export class PresetToolbar implements UIComponent {
 
         this.importButton = new Button({
             variant: 'icon',
-            tooltip: '导入预设 (JSON)',
-            icon: ICONS.import,
+            tooltip: '导入预设 (支持多选 / 合集 JSON)',
+            icon: ICONS.fileImport,
             onClick: () => this.fileInput.click()
         });
 
         this.exportButton = new Button({
             variant: 'icon',
             tooltip: '导出当前预设 (JSON)',
-            icon: ICONS.export,
+            icon: ICONS.fileExport,
             onClick: () => {
                 void this.onActionCallback('export', this.activeId);
             }
         });
 
-        this.resetButton = new Button({
+        this.exportAllButton = new Button({
             variant: 'icon',
-            tooltip: '重置修改 (放弃草稿并恢复为当前预设初始值)',
-            icon: ICONS.refresh,
-            disabled: true,
+            tooltip: '批量导出全部预设 (JSON)',
+            icon: ICONS.batchExport,
             onClick: () => {
-                void this.onActionCallback('reset', this.activeId);
+                void this.onActionCallback('exportAll', this.activeId);
             }
         });
 
@@ -201,13 +204,13 @@ export class PresetToolbar implements UIComponent {
             }
         });
 
-        rightSlot.appendChild(this.newButton.element);
         rightSlot.appendChild(this.saveButton.element);
         rightSlot.appendChild(this.saveAsButton.element);
         rightSlot.appendChild(this.renameButton.element);
+        rightSlot.appendChild(this.resetButton.element);
         rightSlot.appendChild(this.importButton.element);
         rightSlot.appendChild(this.exportButton.element);
-        rightSlot.appendChild(this.resetButton.element);
+        rightSlot.appendChild(this.exportAllButton.element);
         rightSlot.appendChild(this.deleteButton.element);
         rightSlot.appendChild(this.fileInput);
 
@@ -222,9 +225,10 @@ export class PresetToolbar implements UIComponent {
         const hasActive = Boolean(this.activeId && this.currentPresets.some((p) => p.id === this.activeId));
         // 无激活预设时（例如空预设列表或草稿编辑状态），允许通过保存按钮直接引导新建保存预设
         this.saveButton.setDisabled(!hasActive && this.currentPresets.length > 0 && !this.isCurrentlyDirty);
-        this.saveAsButton.setDisabled(!hasActive);
+        this.saveAsButton.setDisabled(false);
         this.renameButton.setDisabled(!hasActive);
         this.exportButton.setDisabled(!hasActive);
+        this.exportAllButton.setDisabled(this.currentPresets.length === 0);
         this.deleteButton.setDisabled(!hasActive);
         this.resetButton.setDisabled(!hasActive || !this.isCurrentlyDirty);
     }
@@ -243,6 +247,7 @@ export class PresetToolbar implements UIComponent {
 
         this.selectComponent.setOptions(this.buildSelectOptions(this.currentPresets));
         this.selectComponent.setValue(this.activeId);
+        this.syncSelectInvalidState(this.currentPresets);
         this.updateActionButtonsState();
     }
 
@@ -285,13 +290,13 @@ export class PresetToolbar implements UIComponent {
      */
     public dispose(): void {
         this.selectComponent.dispose();
-        this.newButton.dispose();
         this.saveButton.dispose();
         this.saveAsButton.dispose();
         this.renameButton.dispose();
+        this.resetButton.dispose();
         this.importButton.dispose();
         this.exportButton.dispose();
-        this.resetButton.dispose();
+        this.exportAllButton.dispose();
         this.deleteButton.dispose();
 
         this.fileInput.removeEventListener('change', this.fileChangeListener);
@@ -325,29 +330,33 @@ export class PresetToolbar implements UIComponent {
         this.updateActionButtonsState();
     }
 
+    /** 依据当前激活 ID 与预设列表同步 Select 控件的失效警示状态 */
+    private syncSelectInvalidState(items: PresetToolbarItem[]): void {
+        if (this.activeId && !items.some((p) => p.id === this.activeId)) {
+            this.selectComponent.setInvalid(true, `预设不存在或已失效 (ID: ${this.activeId})`);
+        } else {
+            this.selectComponent.setInvalid(false);
+        }
+    }
+
     /** 将内部预设列表映射为 Select 控件所需的选项列表 */
     private buildSelectOptions(items: PresetToolbarItem[]): SelectOption[] {
         if (items.length === 0) {
             if (this.activeId) {
-                this.selectComponent?.setInvalid(true, `预设不存在或已失效 (ID: ${this.activeId})`);
                 return [{ label: this.activeId, value: this.activeId }];
             }
-            this.selectComponent?.setInvalid(false);
             return [{ label: '未选择预设', value: '' }];
         }
         const options: SelectOption[] = items.map((p) => ({
             label: p.name,
             value: p.id
         }));
-        // 若当前激活 ID 不在有效列表中且非空，首部直接显示原始 ID，通过描边泛红与悬浮提示表达失效
+        // 若当前激活 ID 不在有效列表中且非空，首部直接显示原始 ID，配合 setInvalid 表达失效
         if (this.activeId && !items.some((p) => p.id === this.activeId)) {
             options.unshift({
                 label: this.activeId,
                 value: this.activeId
             });
-            this.selectComponent?.setInvalid(true, `预设不存在或已失效 (ID: ${this.activeId})`);
-        } else {
-            this.selectComponent?.setInvalid(false);
         }
         return options;
     }

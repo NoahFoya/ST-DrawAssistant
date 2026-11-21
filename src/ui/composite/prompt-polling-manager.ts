@@ -2,7 +2,7 @@
  * 提示词预设轮询候选池管理组件 (PromptPollingManager)。
  *
  * @remarks
- * 参照 LoraManager 交互规范构建，供四大生图服务视图在「提示词预设 = 使用轮询」时共享复用：
+ * 参照 LoraManager 交互规范构建，供各生图服务视图在「提示词预设 = 使用轮询」时共享复用：
  * 1. 顶部工具栏：支持一键添加全部当前服务预设、全部启用/停用、清空候选池；
  * 2. 添加行：通过下拉框选择提示词预设并添加至当前绘画预设的专属轮询池；
  * 3. 条目列表：展示每项预设的启用开关、名称、正向前缀摘要及失效警示，支持单项移除。
@@ -418,7 +418,7 @@ export class PromptPollingManager implements UIComponent, Disposable {
             previewRow.className = 'da-polling-item__preview';
             previewRow.textContent = matched
                 ? summarizePromptPreset(matched)
-                : '该提示词预设已不存在，建议移除或重新同步官方预设';
+                : '该提示词预设已不存在，建议移除或重新载入本地预设';
             info.appendChild(previewRow);
 
             const removeBtn = document.createElement('button');

@@ -1,8 +1,8 @@
 {
   "prompt_story": [
     {
-      "id": "prompt_story_default",
-      "name": "默认故事插画预设",
+      "id": "prompt_story_standard",
+      "name": "故事插画 · 标准标签",
       "description": "核心插画创作规范：包含 <imagethink> 画面构思、纯英文 Danbooru 标签格式与多角色特征分段写法",
       "data": {
         "entries": [
@@ -24,7 +24,7 @@
     },
     {
       "id": "prompt_story_novelai",
-      "name": "NovelAI V4.5 故事插画预设",
+      "name": "故事插画 · NovelAI V4.5",
       "description": "面向 NovelAI Diffusion V4.5：采用下划线标准 Danbooru 标签与简短英文自然短语混排，对齐官方开头排布与原生正负数值权重语法",
       "data": {
         "entries": [
@@ -43,12 +43,34 @@
           }
         ]
       }
+    },
+    {
+      "id": "prompt_story_natural",
+      "name": "故事插画 · 自然语言",
+      "description": "面向 OpenAI / Gemini / Grok 等多模态生图模型：使用连贯流畅的英文自然语言画面描述，不使用标签堆砌与权重括号",
+      "data": {
+        "entries": [
+          {
+            "id": "story_core_rule_natural",
+            "name": "核心|自然语言插图规则",
+            "enabled": true,
+            "triggerMode": "always",
+            "keywords": "",
+            "scanDepth": 2,
+            "position": 1,
+            "depth": 0,
+            "role": 0,
+            "order": 10,
+            "content": "<image_generation_instruction>\n绘画指令：推进剧情时，根据画面需要为合适的场景（通常 1 至 3 处）输出插画。在对应剧情段落下方先输出闭合的 `<imagethink>...</imagethink>`，再另起一行输出 `image###...###`。\n\n## 1. 选图时机与 `<imagethink>`\n- 优先选图时机：场景或氛围切换、角色首次登场或外貌穿搭变化、关键动作或情绪转折。\n- `<imagethink>` 依次梳理四点：\n<imagethink>\n1. 构图与视角：明确主体人数、景别（特写、半身、七分身、全身、广角远景）与机位角度。\n2. 人物外貌与穿搭：若上方已注入 `<image_database>` 且收录了该角色或服装，记录对应 `$名称-宏-状态$`；否则直接描写外貌特征与实时穿戴状态。\n3. 动作神情与互动：明确人物姿态、手中物件、面部神情、视线方向与角色间的空间互动。\n4. 环境光影与氛围：明确地点细节、时段光线来源、色彩基调与画面质感。\n</imagethink>\nimage###Natural-language English scene description...###\n\n## 2. 自然语言编写规范\n- 使用流畅、画面感强的英文自然语言完整句子进行描写，按「整体构图与景别 ➔ 主体人物外貌与服饰 ➔ 动作神情与互动关系 ➔ 场景细节、光线与氛围」自然衔接。\n- 若启用了素材库且目标角色已收录，可在描写主体外貌服饰处嵌入 `$名称-宏-状态$`，再用自然语言衔接动作、神情与环境。\n- 禁止堆砌逗号分隔的 Danbooru 孤立词条，禁止使用 `(tag:1.2)`、`{...}`、`[...]`、`权重::内容::` 等任何权重括号语法。\n- 需要排除某元素时，直接用自然语言表达（如 `without glasses`、`free of any text or watermarks`），不要依赖负向分隔符。\n\n## 3. 禁忌\n- 禁止输出 `masterpiece`、`best quality`、`highres`、`worst quality`、`8k` 等标签式画质词。\n- 禁止在 `image###...###` 中出现中文。\n- 禁止在 `<imagethink>` 中复述剧情原文。\n\n## 4. 示例\n\n### 示例 1：单人室内中景\n<imagethink>\n1. 构图与视角：单人七分身平视中景，略微偏侧构图。\n2. 人物外貌与穿搭：金发蓝眼少女，佩戴白色发箍、发带与金色吊坠，身着整洁的深蓝水手校服与百褶短裙。\n3. 动作神情与互动：怀抱课本停步走廊，带着温和浅笑望向镜头。\n4. 环境光影与氛围：午后教学楼室内走廊，窗侧暖阳斜射照亮发丝与桌面反光。\n</imagethink>\nimage###A medium three-quarter shot of a teenage girl with long blonde hair and blue eyes standing in a sunlit school hallway. She wears a crisp white headband with a hair ribbon, a delicate gold pendant, and a neat dark-blue sailor school uniform with a white shirt, red neckerchief, and pleated skirt. Cradling a stack of books against her chest, she offers a gentle smile while looking toward the camera. Warm afternoon sunlight streams through the tall corridor windows on the side, casting soft highlights across her hair and the polished floor.###\n\n### 示例 2：双人对峙广角场景\n<imagethink>\n1. 构图与视角：双人全身低机位广角仰拍，增强压迫与张力。\n2. 人物外貌与穿搭：陈（黑长发双丸子头、红瞳、龙角龙尾、蓝色警服外套）与塔露拉（银长发、金瞳、龙角龙尾、黑色大衣与黑裙）。\n3. 动作神情与互动：两人在废墟两侧拔剑相对，神情冷峻对视，剑拔弩张。\n4. 环境光影与氛围：夜晚残破街道，熊熊火光与飘散余烬形成强烈逆光轮廓。\n</imagethink>\nimage###A dramatic low-angle wide shot capturing a tense confrontation between two draconic women standing on opposite sides of shattered night ruins. On one side, a black-haired woman with twin buns, crimson eyes, dark dragon horns and tail wears a blue police jacket and grips her sword in a guarded combat stance. Facing her across the rubble, a silver-haired woman with golden eyes, dragon horns and tail dressed in a long black coat and dark dress levels her blade with a cold glare. Blazing fires and drifting embers behind them cast intense warm backlighting and sharp silhouettes against the smoke-filled night sky.###\n</image_generation_instruction>"
+          }
+        ]
+      }
     }
   ],
   "prompt_character": [
     {
-      "id": "prompt_character_default",
-      "name": "默认素材创作预设",
+      "id": "prompt_character_standard",
+      "name": "素材创作 · 标准档案规范",
       "description": "在 <designthink> 中梳理设定要点，并输出规范的 <character> 与 <outfit> 结构化档案",
       "data": {
         "entries": [
@@ -71,8 +93,8 @@
   ],
   "prompt_material": [
     {
-      "id": "prompt_material_default",
-      "name": "默认素材注入预设",
+      "id": "prompt_material_standard",
+      "name": "素材注入 · 标准库与宏",
       "description": "向推理上下文注入已激活的角色与服装档案，并提供固定格式素材宏调用规则",
       "data": {
         "entries": [

@@ -4,12 +4,11 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持服务商模板与 Bearer Token)；
- * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 专属 quality/style；
+ * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 / GPT Image 专属参数；
  * 3. 自定义请求参数 JSON 扩展卡片（支持实时语法校验，非法时标红 .is-invalid 并拦截保存）；
  * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false, showNegativeInPromptManager: false)。
  */
 
-import { signal, type Signal } from '@preact/signals';
 import type { VNode } from 'preact';
 import type { DrawingPresetData } from '@types';
 import type { ProviderPreset } from '../composite/connection-card';
@@ -17,30 +16,46 @@ import {
     CardView,
     SchemaFieldsView,
     SchemaFieldRenderer,
-    TextareaControl,
     type FieldSchema,
     DimensionPickerView,
     PresetToolbarView,
     PromptPollingPanelView,
 } from '../framework';
-import { OPENAI_ASPECT_RATIOS } from '../composite';
-import { Toast } from '../feedback/toast';
+import {
+    DEFAULT_ASPECT_RATIOS,
+    GPT_IMAGE_ASPECT_RATIOS,
+    OPENAI_ASPECT_RATIOS,
+} from '../composite';
 import { ProviderTabViewModel } from '../viewmodels';
 import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
-
-const OPENAI_MODEL_OPTIONS = [
-    { label: 'dall-e-3', value: 'dall-e-3' },
-    { label: 'dall-e-2', value: 'dall-e-2' },
-    { label: 'gpt-image-1', value: 'gpt-image-1' },
-    { label: 'gemini-2.5-flash-image', value: 'gemini-2.5-flash-image' },
-    { label: 'black-forest-labs/FLUX.1-schnell', value: 'black-forest-labs/FLUX.1-schnell' },
-    { label: 'black-forest-labs/FLUX.1-dev', value: 'black-forest-labs/FLUX.1-dev' },
-    { label: 'Kwai-Kolors/Kolors', value: 'Kwai-Kolors/Kolors' },
-];
+import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
+import {
+    OPENAI_MODEL_OPTIONS,
+    resolveOpenAIModelCapabilities,
+} from '../../provider/openai/openai-models';
 
 const OPENAI_QUALITY_OPTIONS = [
     { label: 'standard (标准)', value: 'standard' },
     { label: 'hd (高清)', value: 'hd' },
+];
+
+const GPT_IMAGE_QUALITY_OPTIONS = [
+    { label: 'auto (自动)', value: 'auto' },
+    { label: 'low (低)', value: 'low' },
+    { label: 'medium (中)', value: 'medium' },
+    { label: 'high (高)', value: 'high' },
+];
+
+const GPT_IMAGE_BACKGROUND_OPTIONS = [
+    { label: 'auto (自动)', value: 'auto' },
+    { label: 'transparent (透明背景)', value: 'transparent' },
+    { label: 'opaque (不透明)', value: 'opaque' },
+];
+
+const GPT_IMAGE_OUTPUT_FORMAT_OPTIONS = [
+    { label: 'png', value: 'png' },
+    { label: 'jpeg', value: 'jpeg' },
+    { label: 'webp', value: 'webp' },
 ];
 
 const OPENAI_STYLE_OPTIONS = [
@@ -55,17 +70,51 @@ const OPENAI_PROVIDER_PRESETS: ProviderPreset[] = [
         defaultUrl: 'https://api.openai.com/v1',
     },
     {
-        id: 'google-gemini',
-        label: 'Google Gemini',
-        defaultUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    },
-    {
         id: 'siliconflow',
         label: 'SiliconFlow 硅基流动',
         defaultUrl: 'https://api.siliconflow.cn/v1',
     },
     { id: 'custom', label: '自定义服务', defaultUrl: '' },
 ];
+
+const GPT_IMAGE_QUALITY_FIELD: FieldSchema<DrawingPresetData> = {
+    key: 'quality',
+    label: '生成画质 (Quality)',
+    type: 'select',
+    options: GPT_IMAGE_QUALITY_OPTIONS,
+    tooltip: 'GPT Image 系列模型画质档位（auto / low / medium / high）。',
+    transform: {
+        toView: (v) => {
+            const s = String(v || '');
+            return ['auto', 'low', 'medium', 'high'].includes(s) ? s : 'medium';
+        },
+        fromView: (v) => String(v),
+    },
+};
+
+const GPT_IMAGE_BACKGROUND_FIELD: FieldSchema<DrawingPresetData> = {
+    key: 'background',
+    label: '背景模式 (Background)',
+    type: 'select',
+    options: GPT_IMAGE_BACKGROUND_OPTIONS,
+    tooltip: 'GPT Image 支持生成透明背景图像（需配合 png 或 webp 输出格式）。',
+    transform: {
+        toView: (v) => (v as string) || 'auto',
+        fromView: (v) => String(v),
+    },
+};
+
+const GPT_IMAGE_OUTPUT_FORMAT_FIELD: FieldSchema<DrawingPresetData> = {
+    key: 'outputFormat',
+    label: '输出格式 (Output Format)',
+    type: 'segmented',
+    options: GPT_IMAGE_OUTPUT_FORMAT_OPTIONS,
+    tooltip: 'GPT Image 返回图像编码格式（png / jpeg / webp）。',
+    transform: {
+        toView: (v) => (v as string) || 'png',
+        fromView: (v) => String(v),
+    },
+};
 
 const QUALITY_FIELD: FieldSchema<DrawingPresetData> = {
     key: 'quality',
@@ -75,7 +124,10 @@ const QUALITY_FIELD: FieldSchema<DrawingPresetData> = {
     tooltip:
         'DALL-E 3 官方画质选项。hd（超清）在面部轮廓、文字细节与微小纹理上具有更高的解析度与一致性，单张计费约为标准版两倍；standard（标准）兼顾生成速度与经济性。',
     transform: {
-        toView: (v) => (v as string) || 'standard',
+        toView: (v) => {
+            const s = String(v || '');
+            return s === 'standard' || s === 'hd' ? s : 'standard';
+        },
         fromView: (v) => String(v),
     },
 };
@@ -99,17 +151,10 @@ export class OpenAITabView extends ProviderTabView {
 
     public readonly vm: ProviderTabViewModel;
     private readonly modelFields: FieldSchema<DrawingPresetData>[];
-
-    /** 自定义请求体文本框当前输入内容 */
-    private readonly rawJsonInput: Signal<string>;
-    /** 自定义请求体 JSON 语法是否有效 */
-    private readonly isJsonValid: Signal<boolean>;
+    private readonly customBodyJson: CustomBodyJsonController;
 
     public constructor() {
         super('da-tab-pane da-view-openai');
-
-        this.rawJsonInput = signal<string>('');
-        this.isJsonValid = signal<boolean>(true);
 
         this.vm = new ProviderTabViewModel({
             provider: 'openai',
@@ -127,13 +172,18 @@ export class OpenAITabView extends ProviderTabView {
             promptMessageForNew: '请输入新生图预设名称:',
             defaultNewName: '新建预设',
             defaultModels: OPENAI_MODEL_OPTIONS,
+            defaultDraftTemplate: () => ({
+                baseModel: 'dall-e-3',
+                width: 1024,
+                height: 1024,
+                quality: 'standard',
+                style: 'vivid',
+            }),
             onPresetApplied: (_preset, draft) => {
-                const nextJson = (draft.customBodyJson as string) || '';
-                this.rawJsonInput.value = nextJson;
-                this.checkJsonValidity(nextJson);
+                this.customBodyJson?.syncFromDraft((draft.customBodyJson as string) || '');
             },
             canPerformAction: (action) => {
-                if ((action === 'save' || action === 'saveAs') && !this.isJsonValid.value) {
+                if ((action === 'save' || action === 'saveAs') && this.customBodyJson && !this.customBodyJson.isValid.value) {
                     return {
                         allowed: false,
                         message:
@@ -161,11 +211,7 @@ export class OpenAITabView extends ProviderTabView {
             },
         });
 
-        // 初始化同步当前预设的 customBodyJson
-        const initialJson =
-            (this.vm.presetController.draftConfig.value.customBodyJson as string) || '';
-        this.rawJsonInput.value = initialJson;
-        this.checkJsonValidity(initialJson);
+        this.customBodyJson = new CustomBodyJsonController(this.vm.presetController);
 
         this.modelFields = [
             {
@@ -194,40 +240,12 @@ export class OpenAITabView extends ProviderTabView {
                 key: 'promptPresetId',
                 label: '提示词预设',
                 type: 'select',
-                placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
                 invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
         ];
 
         this.mountPreact();
-    }
-
-    private checkJsonValidity(raw: string): boolean {
-        const trimmed = raw.trim();
-        if (!trimmed) {
-            this.isJsonValid.value = true;
-            this.vm.presetController.setFieldInvalid('customBodyJson', false);
-            return true;
-        }
-        try {
-            const parsed: unknown = JSON.parse(trimmed);
-            const isPlainObject =
-                parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
-            this.isJsonValid.value = isPlainObject;
-            this.vm.presetController.setFieldInvalid('customBodyJson', !isPlainObject);
-            return isPlainObject;
-        } catch {
-            this.isJsonValid.value = false;
-            this.vm.presetController.setFieldInvalid('customBodyJson', true);
-            return false;
-        }
-    }
-
-    private handleJsonInput(raw: string): void {
-        this.rawJsonInput.value = raw;
-        this.checkJsonValidity(raw);
-        this.vm.presetController.updateDraft('customBodyJson', raw.trim());
     }
 
     protected renderContent(): VNode {
@@ -238,11 +256,11 @@ export class OpenAITabView extends ProviderTabView {
 
         const effectiveModel =
             (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'dall-e-3';
-        const isDallE3 = effectiveModel.toLowerCase().includes('dall-e-3');
+        const capabilities = resolveOpenAIModelCapabilities(effectiveModel);
+        const isDallE3 = capabilities.family === 'dall-e-3';
+        const isGptImage = capabilities.family === 'gpt-image';
 
         const isDimsDirty = dirtyFields.has('width') || dirtyFields.has('height');
-        const isJsonDirty = dirtyFields.has('customBodyJson');
-        const isJsonInvalid = !this.isJsonValid.value || invalidFields.has('customBodyJson');
 
         return (
             <ProviderTabLayout
@@ -259,7 +277,7 @@ export class OpenAITabView extends ProviderTabView {
                         activePresetId={presetController.activePresetId.value}
                         dirty={presetController.isDirty.value}
                         onAction={(action, id) => presetController.handleAction(action, id)}
-                        onImportFile={(file) => presetController.handleImportFile(file)}
+                        onImportFiles={(files) => void presetController.handleImportFiles(files)}
                     />
 
                     <div className="da-section-banner">
@@ -281,11 +299,17 @@ export class OpenAITabView extends ProviderTabView {
                     </div>
 
                     <DimensionPickerView
+                        key={capabilities.family}
                         embedded={true}
                         width={draft.width ?? 1024}
                         height={draft.height ?? 1024}
-                        aspectRatios={OPENAI_ASPECT_RATIOS}
-                        alignMultiple={8}
+                        aspectRatios={
+                            isGptImage
+                                ? GPT_IMAGE_ASPECT_RATIOS
+                                : isDallE3
+                                    ? OPENAI_ASPECT_RATIOS
+                                    : DEFAULT_ASPECT_RATIOS
+                        }
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({
@@ -321,52 +345,65 @@ export class OpenAITabView extends ProviderTabView {
                             />
                         </>
                     )}
+
+                    {isGptImage && (
+                        <>
+                            <div className="da-section-banner">
+                                <span className="da-section-banner__title">GPT Image 专属参数</span>
+                            </div>
+
+                            <SchemaFieldRenderer
+                                schema={GPT_IMAGE_QUALITY_FIELD}
+                                model={draft}
+                                dirty={dirtyFields.has('quality')}
+                                invalid={invalidFields.has('quality')}
+                                onChange={(val) =>
+                                    presetController.updateDraft('quality', val as DrawingPresetData['quality'])
+                                }
+                            />
+                            <SchemaFieldRenderer
+                                schema={GPT_IMAGE_BACKGROUND_FIELD}
+                                model={draft}
+                                dirty={dirtyFields.has('background')}
+                                invalid={invalidFields.has('background')}
+                                onChange={(val) =>
+                                    presetController.updateDraft('background', val as DrawingPresetData['background'])
+                                }
+                            />
+                            <SchemaFieldRenderer
+                                schema={GPT_IMAGE_OUTPUT_FORMAT_FIELD}
+                                model={draft}
+                                dirty={dirtyFields.has('outputFormat')}
+                                invalid={invalidFields.has('outputFormat')}
+                                onChange={(val) =>
+                                    presetController.updateDraft('outputFormat', val as DrawingPresetData['outputFormat'])
+                                }
+                            />
+                        </>
+                    )}
                 </CardView>
 
-                <CardView title="自定义请求参数 (JSON)">
-                    <div className="da-textarea-row">
-                        <div className="da-textarea-header">
-                            <label className="da-field-label">JSON 附加参数</label>
-                            <span className="da-field-help">
-                                可选填入合法 JSON 对象，生图请求时将合并至请求体顶层
-                            </span>
-                        </div>
-                        <TextareaControl
-                            className="da-custom-body-json"
-                            monospace
-                            rows={4}
-                            dirty={isJsonDirty}
-                            invalid={isJsonInvalid}
-                            placeholder={'{\n  "response_format": "b64_json"\n}'}
-                            value={this.rawJsonInput.value}
-                            onChange={(val) => this.handleJsonInput(val)}
-                            onBlur={(val) => this.handleJsonInput(val)}
-                        />
-                    </div>
-                </CardView>
+                <CustomBodyJsonCard
+                    controller={this.customBodyJson}
+                    dirtyFields={dirtyFields}
+                    invalidFields={invalidFields}
+                    placeholder={'{\n  "response_format": "b64_json"\n}'}
+                />
             </ProviderTabLayout>
         );
     }
 
     public override activate(): void {
         super.activate();
-        const draftJson =
-            (this.vm.presetController.draftConfig.value.customBodyJson as string) || '';
-        if (!this.vm.presetController.isDirty.value) {
-            this.rawJsonInput.value = draftJson;
-            this.checkJsonValidity(draftJson);
-        } else {
-            this.checkJsonValidity(this.rawJsonInput.value);
-        }
+        this.customBodyJson.syncOnActivate();
     }
 
     public override hasUnsavedChanges(): boolean {
-        return super.hasUnsavedChanges() || !this.isJsonValid.value;
+        return super.hasUnsavedChanges() || !this.customBodyJson.isValid.value;
     }
 
     public override async saveUnsavedChanges(): Promise<boolean> {
-        if (!this.isJsonValid.value) {
-            Toast.show('自定义请求参数 (JSON) 语法无效，请修正后再保存', { level: 'error' });
+        if (!this.customBodyJson.validateBeforeSave()) {
             return false;
         }
         return await super.saveUnsavedChanges();
@@ -374,8 +411,6 @@ export class OpenAITabView extends ProviderTabView {
 
     public override discardUnsavedChanges(): void {
         super.discardUnsavedChanges();
-        const restored = this.vm.presetController.draftConfig.value.customBodyJson || '';
-        this.rawJsonInput.value = restored;
-        this.checkJsonValidity(restored);
+        this.customBodyJson.syncFromDraft();
     }
 }

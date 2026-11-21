@@ -11,6 +11,9 @@
 
 import type { UIComponent } from '../types';
 import { renderIcon } from '../components/icons';
+import { Toast } from '../feedback/toast';
+import { imageStorage } from '../../store/image-storage';
+import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
 
 /** 媒体条目生命周期状态 */
 export type MediaCardStatus = 'generating' | 'ready' | 'failed';
@@ -225,6 +228,8 @@ export class MediaCard implements UIComponent {
     public dispose(): void {
         if (this.isDisposed) return;
         this.isDisposed = true;
+        this.detachDragShare?.();
+        this.detachDragShare = undefined;
         this.element.removeEventListener('click', this.cardClickHandler);
         this.element.remove();
     }
@@ -264,7 +269,29 @@ export class MediaCard implements UIComponent {
             overlay.appendChild(infoBtn);
         }
 
-        // 3. 下载图片按钮 (下箭头矢量图标)
+        // 3. 复制图片按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'da-media-card__action-btn da-media-card__action-btn--copy';
+        copyBtn.title = '复制图片';
+        copyBtn.innerHTML = renderIcon('copy', 14);
+        copyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const blob = await this.resolveItemBlob();
+            if (!blob) {
+                Toast.error('获取图片数据失败');
+                return;
+            }
+            const ok = await copyImageBlobToClipboard(blob);
+            if (ok) {
+                Toast.success('已复制图片到剪贴板');
+            } else {
+                Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
+            }
+        });
+        overlay.appendChild(copyBtn);
+
+        // 4. 下载图片按钮 (下箭头矢量图标)
         this.downloadBtnEl = document.createElement('button');
         this.downloadBtnEl.type = 'button';
         this.downloadBtnEl.className = 'da-media-card__action-btn da-media-card__action-btn--download';
@@ -289,6 +316,8 @@ export class MediaCard implements UIComponent {
 
     private renderStateContent(): void {
         // 清理旧主体 DOM 节点
+        this.detachDragShare?.();
+        this.detachDragShare = undefined;
         this.imgEl?.remove();
         this.imgEl = undefined;
         this.stateBoxEl?.remove();
@@ -324,6 +353,11 @@ export class MediaCard implements UIComponent {
         this.imgEl.src = this.item.url;
         this.imgEl.alt = '生成图片';
         this.imgEl.loading = 'lazy';
+        this.detachDragShare = attachImageDragFile(
+            this.imgEl,
+            () => this.resolveItemBlob(),
+            `st_draw_${this.item.id.slice(0, 8)}`
+        );
 
         // 图像加载异常时委托上层视图模型尝试恢复，未恢复则切换为失败重试状态
         this.imgEl.addEventListener('error', () => {
@@ -417,5 +451,19 @@ export class MediaCard implements UIComponent {
         }
 
         this.element.appendChild(this.stateBoxEl);
+    }
+
+    private detachDragShare?: () => void;
+
+    private async resolveItemBlob(): Promise<Blob | null> {
+        if (this.item.id) {
+            const stored = await imageStorage.getImageBlob(this.item.id);
+            if (stored && stored.size > 0) return stored;
+        }
+        if (this.item.url) {
+            const res = await fetch(this.item.url);
+            if (res.ok) return await res.blob();
+        }
+        return null;
     }
 }

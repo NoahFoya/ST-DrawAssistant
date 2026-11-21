@@ -9,7 +9,7 @@
 import type { ImageGenerationMetadata } from './st/chat';
 
 /** 绘图服务提供方类型标识 */
-export type ProviderType = 'sdwebui' | 'comfyui' | 'novelai' | 'openai';
+export type ProviderType = 'sdwebui' | 'comfyui' | 'novelai' | 'openai' | 'gemini' | 'grok';
 
 /** 请求传输模式：direct 为浏览器直连，relay 为宿主后端中继 */
 export type TransportMode = 'direct' | 'relay';
@@ -155,7 +155,7 @@ export interface ProviderStoredConfig {
  * 绘图服务提供方标准接口。
  *
  * @remarks
- * 包含 SD-WebUI、ComfyUI、NovelAI 及 OpenAI 兼容服务等具体实现。
+ * 包含 SD-WebUI、ComfyUI、NovelAI、OpenAI 兼容、Google Gemini 及 xAI Grok 等具体实现。
  */
 export interface GenerationProvider {
     /** 绘图服务提供方唯一类型标识 */

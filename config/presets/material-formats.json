@@ -1,7 +1,7 @@
 [
   {
-    "id": "format_default",
-    "name": "默认变量与宏预设",
+    "id": "material_format_default",
+    "name": "格式与宏 · 默认模板",
     "data": {
       "characterTemplate": "{{name}}:\n  - 别名: {{aliases}}\n  - 描述: {{description}}\n  - 专属服装:\n{{outfits}}",
       "outfitTemplate": "[{{name}}]\n  - 别名: {{aliases}}\n  - 描述: {{description}}",

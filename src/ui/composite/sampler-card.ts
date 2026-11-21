@@ -146,6 +146,8 @@ export class SamplerCard implements UIComponent, Disposable {
     private readonly seedFormField: FormField;
     private capabilityGen = 0;
     private isDisposed = false;
+    private baseSamplers: Array<{ value: string; label: string }>;
+    private baseSchedulers: Array<{ value: string; label: string }>;
 
     constructor(options: SamplerCardOptions = {}) {
         this.options = options;
@@ -192,9 +194,9 @@ export class SamplerCard implements UIComponent, Disposable {
         };
 
         // 4. 构建采样器选择器
-        const samplerOptions = options.initialSamplers ?? DEFAULT_OFFLINE_SAMPLERS;
+        this.baseSamplers = [...(options.initialSamplers ?? DEFAULT_OFFLINE_SAMPLERS)];
         this.samplerSelect = new Select({
-            options: samplerOptions,
+            options: this.mergeOptionWithCurrent(this.baseSamplers, this.data.samplerName),
             value: this.data.samplerName,
             onChange: (val) => {
                 this.data.samplerName = val;
@@ -210,11 +212,11 @@ export class SamplerCard implements UIComponent, Disposable {
         this.disposables.push(this.samplerSelect, this.samplerFormField);
 
         // 5. 构建调度器选择器（可选）
+        this.baseSchedulers = [...(options.initialSchedulers ?? DEFAULT_OFFLINE_SCHEDULERS)];
         const showScheduler = options.showScheduler ?? true;
         if (showScheduler) {
-            const schedulerOptions = options.initialSchedulers ?? DEFAULT_OFFLINE_SCHEDULERS;
             this.schedulerSelect = new Select({
-                options: schedulerOptions,
+                options: this.mergeOptionWithCurrent(this.baseSchedulers, this.data.scheduler ?? 'normal'),
                 value: this.data.scheduler ?? 'normal',
                 onChange: (val) => {
                     this.data.scheduler = val;
@@ -379,10 +381,12 @@ export class SamplerCard implements UIComponent, Disposable {
     public setData(partial: Partial<SamplerCardData>, options?: { silent?: boolean }): void {
         if (partial.samplerName !== undefined) {
             this.data.samplerName = partial.samplerName;
+            this.samplerSelect.setOptions(this.mergeOptionWithCurrent(this.baseSamplers, partial.samplerName));
             this.samplerSelect.setValue(partial.samplerName, { silent: true });
         }
         if (partial.scheduler !== undefined && this.schedulerSelect) {
             this.data.scheduler = partial.scheduler;
+            this.schedulerSelect.setOptions(this.mergeOptionWithCurrent(this.baseSchedulers, partial.scheduler));
             this.schedulerSelect.setValue(partial.scheduler, { silent: true });
         }
         if (partial.steps !== undefined) {
@@ -412,7 +416,8 @@ export class SamplerCard implements UIComponent, Disposable {
      */
     public setSamplers(samplers: Array<{ value: string; label: string }>): void {
         this.capabilityGen += 1;
-        this.samplerSelect.setOptions(samplers);
+        this.baseSamplers = [...samplers];
+        this.samplerSelect.setOptions(this.mergeOptionWithCurrent(this.baseSamplers, this.data.samplerName));
     }
 
     /**
@@ -422,8 +427,20 @@ export class SamplerCard implements UIComponent, Disposable {
      */
     public setSchedulers(schedulers: Array<{ value: string; label: string }>): void {
         this.capabilityGen += 1;
+        this.baseSchedulers = [...schedulers];
         if (!this.schedulerSelect) return;
-        this.schedulerSelect.setOptions(schedulers);
+        this.schedulerSelect.setOptions(this.mergeOptionWithCurrent(this.baseSchedulers, this.data.scheduler ?? ''));
+    }
+
+    private mergeOptionWithCurrent(
+        base: ReadonlyArray<{ value: string; label: string }>,
+        current: string
+    ): Array<{ value: string; label: string }> {
+        const list = [...base];
+        if (current && !list.some((opt) => opt.value === current)) {
+            list.unshift({ value: current, label: current });
+        }
+        return list;
     }
 
     /**
@@ -471,10 +488,18 @@ export class SamplerCard implements UIComponent, Disposable {
                 return;
             }
             if (result.samplers && result.samplers.length > 0) {
-                this.samplerSelect.setOptions(result.samplers);
+                this.baseSamplers = [...result.samplers];
+                this.samplerSelect.setOptions(
+                    this.mergeOptionWithCurrent(this.baseSamplers, this.data.samplerName)
+                );
             }
-            if (result.schedulers && result.schedulers.length > 0 && this.schedulerSelect) {
-                this.schedulerSelect.setOptions(result.schedulers);
+            if (result.schedulers && result.schedulers.length > 0) {
+                this.baseSchedulers = [...result.schedulers];
+                if (this.schedulerSelect) {
+                    this.schedulerSelect.setOptions(
+                        this.mergeOptionWithCurrent(this.baseSchedulers, this.data.scheduler ?? '')
+                    );
+                }
             }
         } catch (err) {
             if (!this.isDisposed && reqGen === this.capabilityGen) {

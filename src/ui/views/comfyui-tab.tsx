@@ -95,7 +95,6 @@ export class ComfyUITabView extends ProviderTabView {
                 key: 'inpaintPresetId',
                 label: '默认局部重绘预设 (Inpaint)',
                 type: 'select',
-                placeholder: '选择局部重绘预设',
                 options: () => this.vm.inpaintPresetOptions.value,
                 invalidTooltip: (m) => `关联的局部重绘预设不存在或已失效 (ID: ${m.inpaintPresetId || ''})`,
             },
@@ -103,7 +102,6 @@ export class ComfyUITabView extends ProviderTabView {
                 key: 'promptPresetId',
                 label: '提示词预设',
                 type: 'select',
-                placeholder: '选择关联提示词预设',
                 options: () => this.vm.promptPresetOptions.value,
                 invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
             },
@@ -166,7 +164,7 @@ export class ComfyUITabView extends ProviderTabView {
                         activePresetId={presetController.activePresetId.value}
                         dirty={presetController.isDirty.value}
                         onAction={(action, id) => presetController.handleAction(action, id)}
-                        onImportFile={(file) => presetController.handleImportFile(file)}
+                        onImportFiles={(files) => void presetController.handleImportFiles(files)}
                     />
 
                     <div className="da-section-banner">
@@ -203,7 +201,6 @@ export class ComfyUITabView extends ProviderTabView {
                         embedded={true}
                         width={draft.width || 1024}
                         height={draft.height || 1024}
-                        alignMultiple={8}
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({
