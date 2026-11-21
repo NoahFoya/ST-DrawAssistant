@@ -84,13 +84,23 @@ export interface DrawingPresetData {
     hiresSteps?: number;
     /** 高清修复重绘幅度 (SD-WebUI) */
     hiresDenoise?: number;
-    /** OpenAI 兼容生图画质档位 (如 standard / hd) */
+    /** OpenAI 兼容生图画质档位 (如 standard / hd / low / medium / high / auto) */
     quality?: string;
     /** OpenAI 兼容生图画面风格 (如 vivid / natural) */
     style?: string;
-    /** OpenAI 兼容自定义模型标识 */
+    /** OpenAI GPT Image 背景透明控制 (auto / transparent / opaque) */
+    background?: string;
+    /** OpenAI GPT Image 输出图像格式 (png / jpeg / webp) */
+    outputFormat?: string;
+    /** 原生画幅比例标识 (Gemini aspectRatio / Grok aspect_ratio，如 '1:1' | '16:9') */
+    aspectRatio?: string;
+    /** Gemini 原生图像分辨率档位 ('512' | '1K' | '2K' | '4K') */
+    imageSize?: string;
+    /** Grok 原生图像分辨率档位 ('1k' | '2k') */
+    resolution?: string;
+    /** 云端服务自定义模型标识（覆盖基础下拉选择） */
     customModel?: string;
-    /** OpenAI 兼容自定义请求体 JSON 字符串 */
+    /** 云端服务自定义请求体 JSON 字符串 */
     customBodyJson?: string;
     /** NovelAI 是否启用权重语法自动转换（V4+ 转为 weight::tag::，V3 兼容转为 {}/[]） */
     convertSyntax?: boolean;

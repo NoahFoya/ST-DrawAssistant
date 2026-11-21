@@ -122,6 +122,16 @@ export interface ImageGenerationMetadata {
     readonly quality?: string;
     /** OpenAI 兼容接口画面风格选项 */
     readonly style?: string;
+    /** OpenAI GPT Image 背景透明模式 */
+    readonly background?: string;
+    /** OpenAI GPT Image 输出格式 */
+    readonly outputFormat?: string;
+    /** 原生画幅比例标识 (Gemini / Grok) */
+    readonly aspectRatio?: string;
+    /** Gemini 原生图像分辨率档位 */
+    readonly imageSize?: string;
+    /** Grok 原生图像分辨率档位 */
+    readonly resolution?: string;
     /** 本次生成实际使用的提示词预设 ID（含轮询随机抽取命中项） */
     readonly resolvedPromptPresetId?: string;
     /** 本次生成实际使用的提示词预设名称 */

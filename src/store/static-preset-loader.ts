@@ -85,6 +85,8 @@ export function createEmptyPresetSettings(): PresetSettings {
             sdwebui: [],
             novelai: [],
             openai: [],
+            gemini: [],
+            grok: [],
         },
         workflows: [],
         drawing: {
@@ -92,6 +94,8 @@ export function createEmptyPresetSettings(): PresetSettings {
             sdwebui: [],
             novelai: [],
             openai: [],
+            gemini: [],
+            grok: [],
         },
         characters: [],
         outfits: [],
