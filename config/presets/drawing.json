@@ -1,9 +1,9 @@
 {
   "comfyui": [
     {
-      "id": "comfyui_anime",
-      "name": "二次元插画 (动漫/推荐)",
-      "description": "二次元动漫插画预设，采用主流竖屏比例，搭配默认全量模型工作流（支持三权重动态 LoRA）",
+      "id": "drawing_comfyui_anime",
+      "name": "ComfyUI · 二次元插画",
+      "description": "832×1216 竖屏比例，28 步 euler_ancestral / CFG 6，搭配全量模型文生图工作流",
       "data": {
         "baseModel": "",
         "width": 832,
@@ -12,15 +12,15 @@
         "cfgScale": 6,
         "samplerName": "euler_ancestral",
         "scheduler": "normal",
-        "txt2imgWorkflowId": "comfyui_checkpoint_default",
-        "inpaintPresetId": "comfyui_inpaint_default",
+        "txt2imgWorkflowId": "workflow_comfyui_checkpoint",
+        "inpaintPresetId": "workflow_comfyui_inpaint",
         "promptPresetId": ""
       }
     },
     {
-      "id": "comfyui_realistic",
-      "name": "写实摄影 (真人/风景)",
-      "description": "高画质写实摄影与真实人像预设，搭配默认全量模型工作流",
+      "id": "drawing_comfyui_realistic",
+      "name": "ComfyUI · 写实摄影",
+      "description": "1024×1024 方图比例，30 步 dpmpp_2m_sde / karras / CFG 5，搭配全量模型文生图工作流",
       "data": {
         "baseModel": "",
         "width": 1024,
@@ -29,17 +29,17 @@
         "cfgScale": 5,
         "samplerName": "dpmpp_2m_sde",
         "scheduler": "karras",
-        "txt2imgWorkflowId": "comfyui_checkpoint_default",
-        "inpaintPresetId": "comfyui_inpaint_default",
+        "txt2imgWorkflowId": "workflow_comfyui_checkpoint",
+        "inpaintPresetId": "workflow_comfyui_inpaint",
         "promptPresetId": ""
       }
     }
   ],
   "sdwebui": [
     {
-      "id": "sdwebui_anime",
-      "name": "二次元插画 (动漫/推荐)",
-      "description": "主流二次元动漫精细生图预设，适配 Illustrious / Animagine 等主流动漫大模型",
+      "id": "drawing_sdwebui_anime",
+      "name": "SD-WebUI · 二次元插画",
+      "description": "832×1216 竖屏比例，28 步 Euler a / CFG 5.5",
       "data": {
         "baseModel": "",
         "width": 832,
@@ -51,9 +51,9 @@
       }
     },
     {
-      "id": "sdwebui_realistic",
-      "name": "写实摄影 (真人/风景)",
-      "description": "SDXL 真人摄影、电影质感与高精人像出图预设",
+      "id": "drawing_sdwebui_realistic",
+      "name": "SD-WebUI · 写实摄影",
+      "description": "896×1152 竖屏比例，30 步 DPM++ 2M Karras / CFG 6",
       "data": {
         "baseModel": "",
         "width": 896,
@@ -67,9 +67,9 @@
   ],
   "novelai": [
     {
-      "id": "novelai_v45_full",
-      "name": "NAI V4.5 全能旗舰 (Full)",
-      "description": "NovelAI V4.5 Full 完整模型（官方推荐 28 步 / CFG 5 / k_euler_ancestral / karras），默认绑定官方 Full Heavy UC",
+      "id": "drawing_novelai_v45_full",
+      "name": "NovelAI · V4.5 Full",
+      "description": "使用 nai-diffusion-4-5-full 模型（832×1216，28 步 / CFG 5 / k_euler_ancestral / karras），绑定 Heavy UC",
       "data": {
         "baseModel": "nai-diffusion-4-5-full",
         "width": 832,
@@ -80,13 +80,13 @@
         "scheduler": "karras",
         "cfgRescale": 0,
         "convertSyntax": true,
-        "promptPresetId": "prompt_nai_v45_heavy"
+        "promptPresetId": "prompt_novelai_v45_heavy"
       }
     },
     {
-      "id": "novelai_v45_curated",
-      "name": "NAI V4.5 动漫精选 (Curated)",
-      "description": "NovelAI V4.5 Curated 精选二次元模型（官方推荐 28 步 / CFG 5 / k_euler_ancestral / karras），默认绑定官方 Curated Heavy UC",
+      "id": "drawing_novelai_v45_curated",
+      "name": "NovelAI · V4.5 Curated",
+      "description": "使用 nai-diffusion-4-5-curated 模型（832×1216，28 步 / CFG 5 / k_euler_ancestral / karras），绑定 Curated Heavy UC",
       "data": {
         "baseModel": "nai-diffusion-4-5-curated",
         "width": 832,
@@ -97,35 +97,72 @@
         "scheduler": "karras",
         "cfgRescale": 0,
         "convertSyntax": true,
-        "promptPresetId": "prompt_nai_v45_curated_heavy"
+        "promptPresetId": "prompt_novelai_v45_curated_heavy"
       }
     }
   ],
   "openai": [
     {
-      "id": "openai_dalle3_vivid",
-      "name": "DALL-E 3 质感插画",
-      "description": "色彩绚丽饱满、层次生动富有戏剧张力的插画创作预设",
+      "id": "drawing_openai_gpt_image_1",
+      "name": "OpenAI · GPT-Image 1 (竖屏)",
+      "description": "gpt-image-1 模型（1024×1536 竖屏），绑定「OpenAI · 日系二次元」提示词预设",
+      "data": {
+        "baseModel": "gpt-image-1",
+        "width": 1024,
+        "height": 1536,
+        "quality": "medium",
+        "background": "auto",
+        "outputFormat": "png",
+        "promptPresetId": "prompt_openai_anime"
+      }
+    },
+    {
+      "id": "drawing_openai_dalle3_vivid",
+      "name": "OpenAI · DALL-E 3 (方图)",
+      "description": "dall-e-3 模型（1024×1024，standard 画质，vivid 风格），绑定「OpenAI · 通用高清」提示词预设",
       "data": {
         "baseModel": "dall-e-3",
         "width": 1024,
         "height": 1024,
         "quality": "standard",
         "style": "vivid",
-        "promptPresetId": ""
+        "promptPresetId": "prompt_openai_general"
+      }
+    }
+  ],
+  "gemini": [
+    {
+      "id": "drawing_gemini_25_flash",
+      "name": "Gemini · 2.5 Flash Image",
+      "description": "gemini-2.5-flash-image 原生模型（1:1 比例），绑定「Gemini · 通用高清」提示词预设",
+      "data": {
+        "baseModel": "gemini-2.5-flash-image",
+        "aspectRatio": "1:1",
+        "promptPresetId": "prompt_gemini_general"
       }
     },
     {
-      "id": "openai_dalle3_natural",
-      "name": "DALL-E 3 真实摄影",
-      "description": "柔和自然光影、逼真细节的真实写实摄影预设",
+      "id": "drawing_gemini_3_pro",
+      "name": "Gemini · 3 Pro Image (2K)",
+      "description": "gemini-3-pro-image-preview 原生模型（1:1 比例，2K 分辨率），绑定「Gemini · 日系二次元」提示词预设",
       "data": {
-        "baseModel": "dall-e-3",
-        "width": 1024,
-        "height": 1792,
-        "quality": "standard",
-        "style": "natural",
-        "promptPresetId": ""
+        "baseModel": "gemini-3-pro-image-preview",
+        "aspectRatio": "1:1",
+        "imageSize": "2K",
+        "promptPresetId": "prompt_gemini_anime"
+      }
+    }
+  ],
+  "grok": [
+    {
+      "id": "drawing_grok_imagine",
+      "name": "Grok · Imagine Image",
+      "description": "grok-imagine-image 原生模型（1:1 比例，1k 分辨率），绑定「Grok · 通用高清」提示词预设",
+      "data": {
+        "baseModel": "grok-imagine-image",
+        "aspectRatio": "1:1",
+        "resolution": "1k",
+        "promptPresetId": "prompt_grok_general"
       }
     }
   ]

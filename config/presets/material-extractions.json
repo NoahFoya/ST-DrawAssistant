@@ -1,7 +1,7 @@
 [
   {
-    "id": "ext_default",
-    "name": "默认解析预设",
+    "id": "material_extraction_default",
+    "name": "楼层提取 · 默认规则",
     "description": "默认楼层角色与服装档案提取解析预设",
     "data": {
       "enabled": true,

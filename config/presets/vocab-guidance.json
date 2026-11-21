@@ -1,7 +1,7 @@
 [
   {
-    "id": "prompt_vocab_default",
-    "name": "标准 Danbooru 词汇指导",
+    "id": "prompt_vocab_danbooru",
+    "name": "词汇指导 · 标准 Danbooru",
     "description": "注入推理上下文的 Danbooru 分类词表参考（SFW 常驻基础表 + 关键词按需触发扩展表）",
     "data": {
       "entries": [
