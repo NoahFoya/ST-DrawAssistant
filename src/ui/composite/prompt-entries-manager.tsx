@@ -18,10 +18,7 @@ import type {
     ActivationTriggerMode,
 } from '@types';
 import { bindDelegatedTagAutocomplete } from './tag-autocomplete';
-import {
-    splitKeywordTokens,
-    validateKeywordRegexToken,
-} from '../../pipeline/material-definitions';
+import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
 import { ICONS } from '../components/icons';
 import { SelectControl, SwitchControl } from '../framework/controls';
 
@@ -253,17 +250,6 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
         handlePatchEntry(entryId, { [field]: clamped } as Partial<PromptInjectionEntry>);
     };
 
-    const collectRegexErrors = (rawKeywords?: string): string[] => {
-        if (!rawKeywords) return [];
-        const errors: string[] = [];
-        for (const token of splitKeywordTokens(rawKeywords)) {
-            if (!token.startsWith('/')) continue;
-            const err = validateKeywordRegexToken(token);
-            if (err) errors.push(`${token}: ${err}`);
-        }
-        return errors;
-    };
-
     const handleAddEntry = () => {
         const id = createUniqueEntryId();
         const defaultDepth = channelId === 'vocab' ? 7 : 0;
@@ -431,10 +417,10 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                 numDrafts[`${entry.id}:scanDepth`] ??
                                 String(entry.scanDepth ?? 2);
                             const mainKwErrors = !isAlwaysMode
-                                ? collectRegexErrors(entry.keywords)
+                                ? collectKeywordRegexErrors(entry.keywords)
                                 : [];
                             const filterKwErrors = !isAlwaysMode
-                                ? collectRegexErrors(entry.secondaryKeywords)
+                                ? collectKeywordRegexErrors(entry.secondaryKeywords)
                                 : [];
 
                             return (

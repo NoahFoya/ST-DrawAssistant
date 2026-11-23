@@ -4,7 +4,7 @@
  * @remarks
  * 负责提示词与 LoRA 预设的管理与编辑：
  * 1. 管理正向提示词前缀、后缀与负向提示词；
- * 2. 内嵌 LoRA 模型列表与权重设置；
+ * 2. 呈现已挂载 LoRA 模型的胶囊概要（含常驻/关键词触发状态）并提供独立管理弹窗入口；
  * 3. 响应配置变更并驱动预设工具栏的保存与重置。
  */
 
@@ -41,7 +41,7 @@ export interface PromptPresetCardOptions {
     activePresetId: string;
     /** 初始表单数据覆盖 */
     value?: Partial<PromptCardData>;
-    /** 是否展示内嵌的 LoRA 管理器，默认 true */
+    /** 是否展示 LoRA 挂载概要与管理入口，默认 true */
     showLora?: boolean;
     /** 是否展示负向提示词输入框，针对 OpenAI 兼容等无负向词特性的后端可配置为 false，默认 true */
     showNegativePrompt?: boolean;
@@ -523,9 +523,14 @@ export class PromptPresetCard implements UIComponent {
             if (isMissing) chipClasses += ' is-missing';
             chip.className = chipClasses;
 
+            const isKeywordTrigger = lora.triggerMode === 'keyword';
             let tooltip = isEnabled
                 ? `点击停用: ${lora.modelName} (Model: ${lora.modelWeight}, CLIP: ${lora.clipWeight})`
                 : `已停用（点击重新启用）: ${lora.modelName}`;
+            if (isKeywordTrigger) {
+                const kwDesc = (lora.keywords || '').trim() || '未填写关键词';
+                tooltip += ` [关键词触发: ${kwDesc}]`;
+            }
             if (isMissing) {
                 tooltip += ` [服务端未检测到此模型]`;
             }
@@ -558,6 +563,13 @@ export class PromptPresetCard implements UIComponent {
             toggleArea.appendChild(dot);
             toggleArea.appendChild(nameSpan);
             toggleArea.appendChild(weightSpan);
+
+            if (isKeywordTrigger) {
+                const triggerBadge = document.createElement('span');
+                triggerBadge.className = 'da-lora-chip__trigger';
+                triggerBadge.textContent = '关键词';
+                toggleArea.appendChild(triggerBadge);
+            }
 
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
@@ -607,6 +619,8 @@ export class PromptPresetCard implements UIComponent {
             if (c.id !== b.id || c.enabled !== b.enabled || c.modelName !== b.modelName) return true;
             if (c.modelWeight !== b.modelWeight || c.clipWeight !== b.clipWeight) return true;
             if (c.triggerWeight !== b.triggerWeight) return true;
+            if ((c.triggerMode ?? 'always') !== (b.triggerMode ?? 'always')) return true;
+            if ((c.keywords ?? '') !== (b.keywords ?? '')) return true;
         }
 
         return false;

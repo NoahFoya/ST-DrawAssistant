@@ -18,7 +18,6 @@ import {
     FormFieldView,
     SwitchControl,
     SelectControl,
-    SliderControl,
     NumberInputControl,
     TextInputControl,
     TextareaControl,
@@ -29,7 +28,6 @@ import {
 export type SchemaFieldType =
     | 'switch'
     | 'select'
-    | 'slider'
     | 'number'
     | 'text'
     | 'textarea'
@@ -252,23 +250,6 @@ export function SchemaFieldRenderer<TModel extends object = Record<string, unkno
                                 : schema.invalidTooltip
                             : undefined
                     }
-                    onChange={handleValueChange}
-                />
-            );
-            break;
-
-        case 'slider':
-            controlNode = (
-                <SliderControl
-                    value={Number(viewValue ?? schema.defaultValue ?? schema.min ?? 0)}
-                    min={schema.min}
-                    max={schema.max}
-                    step={schema.step}
-                    defaultValue={typeof schema.defaultValue === 'number' ? schema.defaultValue : undefined}
-                    precision={schema.precision}
-                    unit={schema.unit}
-                    disabled={isDisabled}
-                    dirty={isDirty}
                     onChange={handleValueChange}
                 />
             );

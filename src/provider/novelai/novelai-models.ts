@@ -66,7 +66,7 @@ type NovelAIModelFamily = 'v3' | 'v4' | 'v5';
  * `params.customModel` > `preset.customModel` > `params.baseModel` > `preset.baseModel` > {@link DEFAULT_NOVELAI_MODEL}。
  *
  * @param params 运行时参数覆写字典
- * @param preset 当前生效的绘图预设数据
+ * @param preset 当前生效的生图参数预设数据
  * @returns 最终模型标识符
  */
 export function resolveNovelAIModelName(

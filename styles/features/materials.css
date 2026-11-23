@@ -1,5 +1,5 @@
 /**
- * 素材库系统专用样式 (Materials)。
+ * 素材管理与本地素材库专用样式 (Materials)。
  * 涵盖：素材预设工具栏与预设卡片、上置居中参考图与基础字段区、多服装绑定、全宽部位 Tag 文本域堆叠栈、5 组部位折叠面板。
  */
 
@@ -7,6 +7,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--da-space-card-gap, 14px);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .da-extra-fields-toolbar {
@@ -16,66 +20,6 @@
     gap: 6px;
     flex-wrap: wrap;
 }
-
-
-.da-extra-fields-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.da-extra-field-row {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px;
-    border-radius: var(--da-radius-input, 8px);
-    background: var(--da-bg-input, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-}
-
-.da-extra-field-row__top {
-    display: grid;
-    grid-template-columns: 160px 1fr auto;
-    gap: 8px;
-    align-items: center;
-}
-
-.da-material-rule-row,
-.da-format-rule-row {
-    display: grid;
-    grid-template-columns: auto minmax(100px, 140px) 1fr 1fr auto;
-    gap: 8px;
-    align-items: center;
-}
-
-@media (max-width: 768px) {
-    .da-material-rule-row,
-    .da-format-rule-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-}
-
-.da-extra-field-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.da-chip-selector-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.da-inline-pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
 
 /* 素材检视双列抽屉 */
 .da-material-inspect-accordion {
@@ -137,9 +81,8 @@
     word-break: break-word;
 }
 
-/* 素材库子面板统一容器样式 */
-.da-material-subpanel,
-.da-material-manage-workspace {
+/* 素材管理子面板统一容器样式 */
+.da-material-subpanel {
     display: flex;
     flex-direction: column;
     gap: var(--da-space-card-gap, 14px);
@@ -291,14 +234,6 @@
     opacity: 0.7;
 }
 
-.da-material-identity-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-    height: 100%;
-}
-
 .da-material-single-field {
     display: flex;
     flex-direction: column;
@@ -358,21 +293,6 @@
     max-width: 360px;
 }
 
-.da-format-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.da-format-topbar__pills {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 .da-material-compact-label {
     font-size: 12px;
     font-weight: 500;
@@ -387,86 +307,6 @@
 
 .da-required-mark {
     color: var(--da-color-error, #f87171);
-}
-
-/* 固定标签核心分组卡片 */
-.da-fixed-tags-group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 14px;
-    background: var(--da-bg-card, rgba(255, 255, 255, 0.02));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.08));
-    border-radius: var(--da-radius-card, 8px);
-    margin-bottom: 12px;
-}
-
-.da-fixed-tags-group__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
-}
-
-.da-fixed-tags-group__title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--da-text-primary, #f8fafc);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.da-fixed-tags-group__badge {
-    font-size: 11px;
-    font-weight: 400;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--da-bg-subtle, rgba(99, 102, 241, 0.15));
-    color: var(--da-accent-color, #818cf8);
-    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
-}
-
-/* 中部 Token 用量统计条 */
-.da-token-summary-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    padding: 10px 16px;
-    background: var(--da-bg-surface-subtle);
-    border-top: 1px solid var(--da-border-color);
-    border-bottom: 1px solid var(--da-border-color);
-}
-
-[data-theme-mode="dark"] .da-token-summary-bar {
-    background: var(--da-bg-input);
-}
-
-.da-token-summary-bar__title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--da-text-primary);
-}
-
-.da-token-summary-bar__shortcuts {
-    font-size: 11.5px;
-    font-weight: 400;
-    color: var(--da-text-secondary);
-}
-
-.da-token-summary-bar__stats {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
 }
 
 .da-token-stat-pill {
@@ -519,28 +359,9 @@
     font-weight: 600;
 }
 
-.da-shot-group-accordion__suffix {
-    font-size: 11px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(var(--da-accent-rgb), 0.14);
-    border: 1px solid rgba(var(--da-accent-rgb), 0.25);
-    color: var(--da-accent-color, #93c5fd);
-}
-
 .da-shot-group-accordion__badge {
     font-size: 11px;
     color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
-}
-
-.da-shot-group-accordion__badge--warn {
-    color: var(--da-color-warn, #f59e0b) !important;
-    background: var(--da-color-warn-subtle);
-    border: 1px solid rgba(var(--da-color-warn-rgb), 0.28);
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-size: 10.5px;
-    font-weight: 500;
 }
 
 .da-shot-group-accordion__body {
@@ -658,50 +479,12 @@
     cursor: help;
 }
 
-/* 启用设置扩展行：绑定角色卡 */
-.da-activation-char-bind-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    margin-top: 4px;
-    font-size: 12px;
-    background: var(--da-bg-input);
-    border-radius: var(--da-radius-sm, 4px);
-    border-left: 2px solid var(--da-accent-color, #3b82f6);
-}
-
-.da-activation-char-bind-select {
-    flex: 1;
-    max-width: 260px;
-    height: 28px;
-    font-size: 12px;
-}
-
 /* 提示词单行渲染模板精炼布局 (Format Template) */
 .da-format-template-section {
     display: flex;
     flex-direction: column;
     gap: 8px;
     width: 100%;
-}
-
-.da-format-input-box {
-    width: 100%;
-}
-
-.da-format-input-box__textarea {
-    width: 100%;
-    min-height: 52px;
-    line-height: 1.5;
-    padding: 8px 10px;
-    box-sizing: border-box;
-    font-size: 13px;
-    font-family: var(--da-font-family);
-    background: var(--da-bg-input, rgba(0, 0, 0, 0.04));
-    border: 1px solid var(--da-border-color);
-    border-radius: var(--da-radius-input, 6px);
-    resize: vertical;
 }
 
 .da-format-templates-body {
@@ -815,49 +598,6 @@
     box-sizing: border-box;
 }
 
-/* 宏规则配置列表 (.da-macro-rules-list) */
-.da-macro-rules-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* 实时渲染预览效果卡片 (Live Preview Box) */
-.da-format-preview-box {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 12px;
-    background: var(--da-bg-surface-subtle);
-    border: 1px dashed var(--da-border-color);
-    border-radius: var(--da-radius-md, 8px);
-    box-sizing: border-box;
-    font-size: 12px;
-}
-
-[data-theme-mode="dark"] .da-format-preview-box {
-    background: rgba(0, 0, 0, 0.2);
-}
-
-.da-format-preview-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--da-text-secondary);
-    white-space: nowrap;
-    padding-top: 2px;
-    user-select: none;
-}
-
-.da-format-preview-text {
-    flex: 1;
-    font-family: var(--da-font-mono, monospace);
-    font-size: 11.5px;
-    color: var(--da-text-primary);
-    line-height: 1.45;
-    word-break: break-all;
-    white-space: pre-wrap;
-}
-
 .da-card-header-stats {
     display: inline-flex;
     align-items: center;
@@ -969,24 +709,6 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-}
-
-.da-activation-thumb {
-    width: 28px;
-    height: 36px;
-    border-radius: 4px;
-    object-fit: cover;
-    flex-shrink: 0;
-    background: var(--da-bg-input, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.1));
-}
-
-.da-activation-thumb--empty {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    color: var(--da-text-secondary, rgba(255, 255, 255, 0.5));
 }
 
 .da-activation-name {
@@ -1906,21 +1628,12 @@
 }
 
 @media (max-width: 520px) {
-    .da-inline-pair,
     .da-tag-affix-group {
         grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 640px) {
-    .da-extra-field-row__top {
-        grid-template-columns: 1fr auto;
-    }
-
-    .da-extra-field-row__top > :first-child {
-        grid-column: 1 / -1;
-    }
-
     .da-macro-accordion-header {
         flex-wrap: wrap;
         gap: 6px;

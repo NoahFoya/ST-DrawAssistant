@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责插件配置与预设的管理与持久化：
- * 1. 集中管理通用设置、提供商配置、素材库与提示词四通道预设；
+ * 1. 集中管理插件设置、服务商配置、本地素材库与提示词四通道预设；
  * 2. 运行时加载大型预设：首次初始化或恢复默认设置时，从 `config/presets/` 异步读取静态 JSON 预设文件；
  * 3. 深拷贝快照保护：外部读取接口返回深拷贝快照，避免状态被外部直接修改；
  * 4. 宿主防抖持久化与凭据隔离：API Key 等敏感凭据隔离存放于本地 `localStorage`，同步给宿主的副本自动脱敏。
@@ -28,6 +28,7 @@ import type {
     MaterialActivationPresetData,
     MaterialItemActivationRule,
     ActivationTriggerMode,
+    ThinkingDisplayMode,
     PromptInjectionConfig,
     ImageStorageQuality,
 } from '@types';
@@ -182,9 +183,9 @@ export interface SavePresetOptions {
 /** 默认单任务超时时间（毫秒） */
 export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
 
-/** 绘制预设解析选项 */
+/** 生图参数预设解析选项 */
 export interface ResolveDrawingPresetOptions {
-    /** 显式指定的绘图预设 ID */
+    /** 显式指定的生图参数预设 ID */
     explicitPresetId?: string;
     /** 隐式读取配置中的激活预设但未命中时是否抛出异常，默认 false（预处理阶段回退 undefined；实际后端执行传 true） */
     throwOnMissingActive?: boolean;
@@ -204,6 +205,10 @@ export interface DrawAssistantSettings {
     imageQuality: ImageStorageQuality;
     autoGenerate: boolean;
     cleanPrompt: boolean;
+    normalizeChinesePunctuation: boolean;
+    thinkingDisplayMode: ThinkingDisplayMode;
+    cleanHistoryThinking: boolean;
+    cleanHistoryMarkup: boolean;
     promptStartTag: string;
     promptEndTag: string;
     activeThemePresetId: string;
@@ -225,6 +230,8 @@ export interface DrawAssistantSettings {
             opacity: number;
             icon: string;
             animationType?: 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
+            quickPanelEnabled?: boolean;
+            hoverTrigger?: boolean;
         };
         lightbox: {
             enabled: boolean;
@@ -243,6 +250,12 @@ export interface DrawAssistantSettings {
             rounded: boolean;
             autoBlur: boolean;
         };
+        seenGuides?: {
+            plugin?: boolean;
+            prompts?: boolean;
+            providers?: Partial<Record<ProviderType, boolean>>;
+        };
+        dismissWeilinNotice?: boolean;
     };
 }
 
@@ -445,7 +458,7 @@ function mergeEmptyPresetCategories(
     return next;
 }
 
-/** 清理绘图预设中失效的提示词预设绑定及轮询候选池条目 */
+/** 清理生图参数预设中失效的提示词预设绑定及轮询候选池条目 */
 function pruneDrawingPromptRefs(
     dpList: readonly PresetItem<DrawingPresetData>[],
     isRemovedPrompt: (id: string) => boolean,
@@ -479,7 +492,7 @@ function pruneDrawingPromptRefs(
     return { list, changed };
 }
 
-/** 清理绘图预设映射表中失效的工作流 / 局部重绘引用 */
+/** 清理生图参数预设映射表中失效的工作流 / 局部重绘引用 */
 function pruneDrawingWorkflowRefs(
     drawingMap: PresetSettings['drawing'],
     isRemovedWorkflow: (id: string) => boolean
@@ -587,7 +600,7 @@ function pruneActivationMaterialRefs(
 const OFFICIAL_SYNC_CATEGORY_LABELS: Readonly<Record<OfficialPresetSyncCategory, string>> = {
     prompts: '提示词预设',
     workflows: '工作流预设 (ComfyUI)',
-    drawing: '绘图参数预设',
+    drawing: '生图参数预设',
     materialsAndThemes: '角色 / 服装 / 主题外观',
     injectionAndRules: '提示词通道与素材规则',
 };
@@ -1377,7 +1390,7 @@ export class SettingsStore {
     }
 
     /**
-     * 解析指定服务提供方当前生效的绘图预设。
+     * 解析指定生图服务提供方当前生效的生图参数预设。
      *
      * @remarks
      * 解析优先级：显式传入 `explicitPresetId` > 服务配置 `activeDrawingPresetId`。
@@ -1422,11 +1435,11 @@ export class SettingsStore {
         }
 
         if (explicitId) {
-            throw new Error(`关联的生图预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
+            throw new Error(`关联的生图参数预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
         }
 
         if (options.throwOnMissingActive) {
-            throw new Error(`当前激活的绘图预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
+            throw new Error(`当前激活的生图参数预设已失效或不存在 (ID: ${effectiveId})，请重新选择预设`);
         }
 
         return {};
@@ -1669,8 +1682,8 @@ export class SettingsStore {
 
     /**
      * 删除指定预设，并同步清理依赖它的关联引用：
-     * 1. 删除提示词预设时，将引用它的绘图预设 `promptPresetId` 重置为可用首项或空串；
-     * 2. 删除工作流预设时，清理绘图预设中失效的 `txt2imgWorkflowId` / `inpaintPresetId` 引用；
+     * 1. 删除提示词预设时，将引用它的生图参数预设 `promptPresetId` 重置为可用首项或空串；
+     * 2. 删除工作流预设时，清理生图参数预设中失效的 `txt2imgWorkflowId` / `inpaintPresetId` 引用；
      * 3. 删除角色或服装时，从各素材启用预设中移除对应规则；
      * 4. 删除服装时，从所有角色的 `boundOutfitIds` 中移除该服装 ID；
      * 5. 删除当前激活的主题或提示词通道预设时，回退至剩余列表首项或默认预设。
@@ -1694,7 +1707,6 @@ export class SettingsStore {
             const safeMap = isPlainObject(existingMap) ? { ...existingMap } : {};
 
             let updatedDrawingPresets = this._settings.presets.drawing;
-            let updatedProviders = this._settings.providers;
             // 若删除的是提示词预设，对齐固定绑定并从轮询候选池清理该失效 ID（保留 '__polling__' 特殊绑定）
             if (category === 'prompts' && updatedDrawingPresets?.[providerKey]) {
                 const fallbackPromptId = nextList[0]?.id || '';
@@ -1709,24 +1721,10 @@ export class SettingsStore {
                         [providerKey]: pruned.list,
                     };
                 }
-            } else if (
-                category === 'drawing' &&
-                updatedProviders?.[providerKey] &&
-                (updatedProviders[providerKey] as { activeDrawingPresetId?: string })
-                    .activeDrawingPresetId === id
-            ) {
-                updatedProviders = {
-                    ...updatedProviders,
-                    [providerKey]: {
-                        ...(updatedProviders[providerKey] as Record<string, unknown>),
-                        activeDrawingPresetId: nextList[0]?.id || '',
-                    },
-                } as DrawAssistantSettings['providers'];
             }
 
             this._settings = {
                 ...this._settings,
-                providers: updatedProviders,
                 presets: {
                     ...this._settings.presets,
                     [category]: {
@@ -1736,6 +1734,7 @@ export class SettingsStore {
                     ...(category === 'prompts' ? { drawing: updatedDrawingPresets } : {}),
                 },
             };
+            this.reconcileActivePresetPointers();
             eventBus.emit('settings:updated', {
                 key: `presets.${category}`,
                 value: { deletedId: id },
@@ -1757,7 +1756,7 @@ export class SettingsStore {
                 ? ((targetItem.data as Record<string, unknown>).avatarId as string)
                 : '';
 
-        // 1. 删除工作流时，清理绘图预设内的 txt2imgWorkflowId / inpaintPresetId 失效引用
+        // 1. 删除工作流时，清理生图参数预设内的 txt2imgWorkflowId / inpaintPresetId 失效引用
         const nextDrawingPresets =
             category === 'workflows'
                 ? pruneDrawingWorkflowRefs(this._settings.presets.drawing, (wid) => wid === id).map
@@ -1780,83 +1779,8 @@ export class SettingsStore {
                       .list
                 : this._settings.presets.characters;
 
-        // 4. 素材类激活项回退：角色 / 服装 / 启用 / 解析 / 格式
-        let nextMaterialConfig = this._settings.materialConfig;
-        if (
-            category === 'characters' &&
-            nextMaterialConfig.activeCharacterPresetId === id
-        ) {
-            nextMaterialConfig = {
-                ...nextMaterialConfig,
-                activeCharacterPresetId: nextList[0]?.id || '',
-            };
-        } else if (
-            category === 'outfits' &&
-            nextMaterialConfig.activeOutfitPresetId === id
-        ) {
-            nextMaterialConfig = {
-                ...nextMaterialConfig,
-                activeOutfitPresetId: nextList[0]?.id || '',
-            };
-        } else if (
-            category === 'material_activations' &&
-            nextMaterialConfig.activeActivationPresetId === id
-        ) {
-            nextMaterialConfig = {
-                ...nextMaterialConfig,
-                activeActivationPresetId: nextList[0]?.id || '',
-            };
-        } else if (
-            category === 'material_extractions' &&
-            nextMaterialConfig.activeExtractionPresetId === id
-        ) {
-            nextMaterialConfig = {
-                ...nextMaterialConfig,
-                activeExtractionPresetId: nextList[0]?.id || '',
-            };
-        } else if (
-            category === 'material_formats' &&
-            nextMaterialConfig.activeFormatPresetId === id
-        ) {
-            nextMaterialConfig = {
-                ...nextMaterialConfig,
-                activeFormatPresetId: nextList[0]?.id || '',
-            };
-        }
-
-        // 5. 提示词通道激活项对齐：若删除项为激活预设，自动对齐为剩余列表首项
-        const channelKeyMap: Record<string, keyof PromptInjectionConfig> = {
-            prompt_story: 'story',
-            prompt_character: 'character',
-            prompt_vocab: 'vocab',
-            prompt_material: 'material',
-        };
-        const channelKey = channelKeyMap[category];
-        let nextPromptInjection = this._settings.promptInjection;
-        if (channelKey && nextPromptInjection?.[channelKey]) {
-            if (nextPromptInjection[channelKey].activePresetId === id) {
-                const fallbackId = nextList[0]?.id || '';
-                nextPromptInjection = {
-                    ...nextPromptInjection,
-                    [channelKey]: {
-                        ...nextPromptInjection[channelKey],
-                        activePresetId: fallbackId,
-                    },
-                };
-            }
-        }
-
-        // 6. 主题预设激活项对齐：若删除项为当前激活主题，自动对齐为剩余主题首项
-        let nextThemePreset = this._settings.activeThemePresetId;
-        if (category === 'themes' && nextThemePreset === id) {
-            nextThemePreset = nextList[0]?.id || '';
-        }
-
         this._settings = {
             ...this._settings,
-            activeThemePresetId: nextThemePreset,
-            promptInjection: nextPromptInjection,
-            materialConfig: nextMaterialConfig,
             presets: {
                 ...this._settings.presets,
                 [category]: nextList,
@@ -1871,6 +1795,7 @@ export class SettingsStore {
                     : {}),
             },
         };
+        this.reconcileActivePresetPointers();
 
         if (removedAvatarId) {
             this.cleanupUnusedMaterialAvatars([removedAvatarId]);
@@ -2008,6 +1933,10 @@ export class SettingsStore {
                 'imageQuality',
                 'autoGenerate',
                 'cleanPrompt',
+                'normalizeChinesePunctuation',
+                'thinkingDisplayMode',
+                'cleanHistoryThinking',
+                'cleanHistoryMarkup',
                 'promptStartTag',
                 'promptEndTag',
                 'activeThemePresetId',
@@ -2153,6 +2082,10 @@ export class SettingsStore {
             this._settings.imageQuality = baseDefaults.imageQuality;
             this._settings.autoGenerate = baseDefaults.autoGenerate;
             this._settings.cleanPrompt = baseDefaults.cleanPrompt;
+            this._settings.normalizeChinesePunctuation = baseDefaults.normalizeChinesePunctuation;
+            this._settings.thinkingDisplayMode = baseDefaults.thinkingDisplayMode;
+            this._settings.cleanHistoryThinking = baseDefaults.cleanHistoryThinking;
+            this._settings.cleanHistoryMarkup = baseDefaults.cleanHistoryMarkup;
             this._settings.promptStartTag = baseDefaults.promptStartTag;
             this._settings.promptEndTag = baseDefaults.promptEndTag;
             this._settings.materialConfig.autoSwitchByCard =
@@ -2360,7 +2293,7 @@ export class SettingsStore {
     }
 
     /**
-     * 对齐所有指向预设 ID 的激活指针（主题、各引擎绘图预设、提示词四通道、素材配置），
+     * 对齐所有指向预设 ID 的激活指针（主题、各服务生图参数预设、提示词四通道、素材配置），
      * 若当前指针不在对应预设池中，则自动回退至该分类首项或置空。
      *
      * @returns 是否发生任意指针修正
@@ -2550,7 +2483,7 @@ export class SettingsStore {
     }
 
     /**
-     * 枚举全部内置静态预设目录及其在本地预设池中的载入状态（用于「关于与支持」按需载入/卸载）。
+     * 枚举全部内置静态预设目录及其在本地预设池中的载入状态（用于「关于」按需载入/卸载）。
      */
     public async getStaticPresetCatalog(
         loaderOptions?: LoadStaticPresetsOptions
@@ -2805,7 +2738,7 @@ export class SettingsStore {
                 }
             }
 
-            // 1. 清理提示词预设被卸载后绘图预设里的失效绑定与轮询池条目
+            // 1. 清理提示词预设被卸载后生图参数预设里的失效绑定与轮询池条目
             for (const prov of ALL_PROVIDERS) {
                 const removedPromptIds = removeIdsByBucket.get(`prompts:${prov}`);
                 if (!removedPromptIds?.size || !Array.isArray(nextPresets.drawing[prov])) continue;
@@ -2820,7 +2753,7 @@ export class SettingsStore {
                 }
             }
 
-            // 2. 清理工作流被卸载后绘图预设里的失效工作流引用
+            // 2. 清理工作流被卸载后生图参数预设里的失效工作流引用
             if (removedWorkflowIds?.size) {
                 const pruned = pruneDrawingWorkflowRefs(
                     nextPresets.drawing,

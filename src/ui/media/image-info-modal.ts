@@ -409,7 +409,7 @@ export class ImageInfoModal implements Disposable {
         pushIfPresent(coreEntries, '采样算法', metadata.sampler);
         pushIfPresent(coreEntries, '调度器', metadata.scheduler);
         pushIfPresent(coreEntries, '采样步数', metadata.steps);
-        pushIfPresent(coreEntries, 'CFG Scale', metadata.cfgScale);
+        pushIfPresent(coreEntries, '引导系数 (CFG)', metadata.cfgScale);
         pushIfPresent(coreEntries, '随机种子', metadata.seed);
 
         // 2. 模型与工作流
@@ -418,7 +418,7 @@ export class ImageInfoModal implements Disposable {
         pushIfPresent(modelEntries, '主模型', baseModel, { wide: Boolean(baseModel && baseModel.length > 36) });
         pushIfPresent(modelEntries, 'CLIP 模型', metadata.clipName);
         pushIfPresent(modelEntries, 'VAE 模型', metadata.vaeName);
-        pushIfPresent(modelEntries, 'CLIP 跳过层', metadata.clipSkip);
+        pushIfPresent(modelEntries, 'CLIP 跳过层数', metadata.clipSkip);
         if (Array.isArray(metadata.extraModels) && metadata.extraModels.length > 0) {
             const joined = metadata.extraModels.map((m) => String(m)).filter(Boolean).join(', ');
             pushIfPresent(modelEntries, '附加模型', joined, { wide: true });
@@ -430,7 +430,7 @@ export class ImageInfoModal implements Disposable {
             metadata.resolvedPromptPresetName || metadata.resolvedPromptPresetId
         );
 
-        // 3. 重绘与引擎扩展参数
+        // 3. 重绘与服务扩展参数
         const extEntries: ParamEntry[] = [];
         pushIfPresent(extEntries, '重绘幅度', metadata.denoiseStrength);
         if (hasDisplayValue(metadata.maskBlur)) {
@@ -449,18 +449,18 @@ export class ImageInfoModal implements Disposable {
                 copyValue: String(metadata.hiresScale),
             });
         }
-        pushIfPresent(extEntries, '高修步数', metadata.hiresSteps);
-        pushIfPresent(extEntries, '高修重绘幅度', metadata.hiresDenoise);
+        pushIfPresent(extEntries, '高清修复步数', metadata.hiresSteps);
+        pushIfPresent(extEntries, '高清修复重绘幅度', metadata.hiresDenoise);
         pushIfPresent(extEntries, 'CFG 重缩放', metadata.cfgRescale);
         if (hasDisplayValue(metadata.smeaMode)) {
             const rawSmea = String(metadata.smeaMode);
-            pushIfPresent(extEntries, 'SMEA 模式', rawSmea, {
+            pushIfPresent(extEntries, 'SMEA 采样增强', rawSmea, {
                 display: formatSmeaDisplay(rawSmea),
                 copyValue: rawSmea,
             });
         }
         if (metadata.decrisper === true) {
-            extEntries.push({ label: '防过曝 (Decrisper)', value: '开启', copyValue: 'true' });
+            extEntries.push({ label: '焦黑抑制 (Decrisper)', value: '开启', copyValue: 'true' });
         }
         pushIfPresent(extEntries, '生成画质', metadata.quality);
         pushIfPresent(extEntries, '画面风格', metadata.style);
@@ -491,7 +491,7 @@ export class ImageInfoModal implements Disposable {
         const sections: ParamSection[] = [];
         if (coreEntries.length > 0) sections.push({ title: '核心生成参数', entries: coreEntries });
         if (modelEntries.length > 0) sections.push({ title: '模型与工作流', entries: modelEntries });
-        if (extEntries.length > 0) sections.push({ title: '重绘与引擎扩展参数', entries: extEntries });
+        if (extEntries.length > 0) sections.push({ title: '重绘与服务扩展参数', entries: extEntries });
         return sections;
     }
 

@@ -4,7 +4,7 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView)；
- * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与网络架构字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
+ * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型与网络架构字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
  * 3. 高清修复 (Hires. fix) 级联声明式卡片 (SchemaCard，子项通过 disabledWhen 联动)；
  * 4. 底部提示词与通用 LoRA 预设卡片 (PromptPresetCardView)。
  */
@@ -67,7 +67,7 @@ export class SDWebUITabView extends ProviderTabView {
             provider: 'sdwebui',
             defaultServerUrl: 'http://127.0.0.1:7860',
             idPrefix: 'sdwebui_preset_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultSamplers: SDWEBUI_DEFAULT_SAMPLERS,
             defaultSchedulers: SDWEBUI_DEFAULT_SCHEDULERS,
@@ -114,8 +114,8 @@ export class SDWebUITabView extends ProviderTabView {
             },
             {
                 key: 'clipSkip',
-                label: 'CLIP 跳过层数 (Clip Skip)',
-                type: 'slider',
+                label: 'CLIP 跳过层数 (CLIP Skip)',
+                type: 'number',
                 min: 1,
                 max: 4,
                 step: 1,
@@ -159,7 +159,7 @@ export class SDWebUITabView extends ProviderTabView {
             {
                 key: 'hiresScale',
                 label: '放大倍率 (Upscale by)',
-                type: 'slider',
+                type: 'number',
                 min: 1.0,
                 max: 4.0,
                 step: 0.05,
@@ -175,7 +175,7 @@ export class SDWebUITabView extends ProviderTabView {
             {
                 key: 'hiresSteps',
                 label: '高清修复步数 (Hires steps)',
-                type: 'slider',
+                type: 'number',
                 min: 0,
                 max: 50,
                 step: 1,
@@ -192,7 +192,7 @@ export class SDWebUITabView extends ProviderTabView {
             {
                 key: 'hiresDenoise',
                 label: '重绘幅度 (Denoise)',
-                type: 'slider',
+                type: 'number',
                 min: 0.0,
                 max: 1.0,
                 step: 0.01,

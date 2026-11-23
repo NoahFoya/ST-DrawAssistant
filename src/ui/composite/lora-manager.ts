@@ -10,7 +10,7 @@
  */
 
 import type { UIComponent, Disposable } from '../types';
-import type { LoraSyntaxMode } from '@types';
+import type { ActivationTriggerMode, LoraSyntaxMode } from '@types';
 import { Card } from '../components/card';
 import { FormField } from '../components/form-field';
 import { SegmentedControl } from '../components/segmented-control';
@@ -22,6 +22,7 @@ import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { computeAnchoredPosition, viewportService } from '../layout/viewport';
 import { formatLoraTag, type FormatLoraTagInput } from '../../pipeline/prompt-pipeline';
+import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
 
 export type { LoraSyntaxMode, FormatLoraTagInput };
 export { formatLoraTag };
@@ -39,6 +40,10 @@ export interface LoraEntryItem {
     clipWeight: number;
     /** 触发权重，默认 1.00，仅在 weilin 模式下生效 */
     triggerWeight?: number;
+    /** 触发方式：'always' 常驻挂载（默认） | 'keyword' 关键词命中当次生图提示词时挂载 */
+    triggerMode?: ActivationTriggerMode;
+    /** 以 | 或逗号分隔的触发关键词（支持 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
+    keywords?: string;
 }
 
 /** LoRA 管理器组件配置选项 */
@@ -87,7 +92,11 @@ class LoraItemRow implements Disposable {
     private readonly nameTextEl: HTMLElement;
     private readonly missingBadgeEl: HTMLElement;
     private readonly tagPreviewEl: HTMLElement;
+    private readonly triggerSegmented: SegmentedControl;
     private readonly deleteBadge: HTMLButtonElement;
+    private readonly keywordsRow: HTMLElement;
+    private readonly keywordsInput: HTMLInputElement;
+    private readonly keywordsErrorEl: HTMLElement;
     private readonly paramsRow: HTMLElement;
 
     private modelWeightInput!: NumberInput;
@@ -153,7 +162,33 @@ class LoraItemRow implements Disposable {
         identityBox.appendChild(titleWrap);
         headerRow.appendChild(identityBox);
 
-        // 右侧移除按钮
+        // 右侧操作组：触发模式切换 [常驻 | 关键词] + 移除按钮
+        const actionsGroup = document.createElement('div');
+        actionsGroup.classList.add('da-lora-item__actions');
+
+        const initialTriggerMode: ActivationTriggerMode =
+            this.item.triggerMode === 'keyword' ? 'keyword' : 'always';
+        this.item.triggerMode = initialTriggerMode;
+
+        this.triggerSegmented = new SegmentedControl({
+            value: initialTriggerMode,
+            disabled: !this.item.enabled,
+            className: 'da-lora-item__trigger-seg',
+            options: [
+                { label: '常驻', value: 'always' },
+                { label: '关键词', value: 'keyword' },
+            ],
+            onChange: (val) => {
+                const nextTrigger: ActivationTriggerMode =
+                    val === 'keyword' ? 'keyword' : 'always';
+                this.item.triggerMode = nextTrigger;
+                this.syncKeywordsRowVisibility();
+                this.options.onUpdate(this.item.id, { triggerMode: nextTrigger });
+            },
+        });
+        this.disposables.push(this.triggerSegmented);
+        actionsGroup.appendChild(this.triggerSegmented.element);
+
         this.deleteBadge = document.createElement('button');
         this.deleteBadge.type = 'button';
         this.deleteBadge.classList.add('da-lora-item__delete-badge', 'da-lora-item__remove-btn');
@@ -168,8 +203,48 @@ class LoraItemRow implements Disposable {
         this.disposables.push({
             dispose: () => this.deleteBadge.removeEventListener('click', onDeleteClick),
         });
-        headerRow.appendChild(this.deleteBadge);
+        actionsGroup.appendChild(this.deleteBadge);
+        headerRow.appendChild(actionsGroup);
         this.element.appendChild(headerRow);
+
+        // 2.5 关键词触发配置行（仅在 triggerMode === 'keyword' 时展开）
+        this.keywordsRow = document.createElement('div');
+        this.keywordsRow.classList.add('da-lora-item__row--keywords');
+
+        const kwFieldWrap = document.createElement('div');
+        kwFieldWrap.classList.add('da-lora-kw-field');
+
+        const kwLabel = document.createElement('label');
+        kwLabel.classList.add('da-lora-param-label');
+        kwLabel.textContent = '触发关键词 (当次生图提示词命中任一词或正则时挂载该 LoRA)';
+        kwFieldWrap.appendChild(kwLabel);
+
+        this.keywordsInput = document.createElement('input');
+        this.keywordsInput.type = 'text';
+        this.keywordsInput.classList.add('da-input', 'da-lora-kw-input');
+        this.keywordsInput.placeholder = '输入触发关键词或 /正则/i（多个用 | 或 , 分隔）...';
+        this.keywordsInput.value = this.item.keywords || '';
+        this.keywordsInput.disabled = !this.item.enabled;
+
+        this.keywordsErrorEl = document.createElement('div');
+        this.keywordsErrorEl.classList.add('da-lora-kw-error', 'da-hidden');
+
+        const onKwInput = () => {
+            const val = this.keywordsInput.value;
+            this.item.keywords = val;
+            this.validateKeywordsInput();
+            this.options.onUpdate(this.item.id, { keywords: val });
+        };
+        this.keywordsInput.addEventListener('input', onKwInput);
+        this.disposables.push({
+            dispose: () => this.keywordsInput.removeEventListener('input', onKwInput),
+        });
+
+        kwFieldWrap.appendChild(this.keywordsInput);
+        kwFieldWrap.appendChild(this.keywordsErrorEl);
+        this.keywordsRow.appendChild(kwFieldWrap);
+        this.element.appendChild(this.keywordsRow);
+        this.syncKeywordsRowVisibility();
 
         // 3. 次行：自适应网格参数步进器容器 (.da-lora-item__row--params)
         this.paramsRow = document.createElement('div');
@@ -303,9 +378,39 @@ class LoraItemRow implements Disposable {
     /** 更新启用/停用状态 */
     public updateDisabledState(disabled: boolean): void {
         this.element.classList.toggle('is-disabled', disabled);
+        this.triggerSegmented.setDisabled(disabled);
+        this.keywordsInput.disabled = disabled;
         this.modelWeightInput.setDisabled(disabled);
         this.clipWeightInput.setDisabled(disabled);
         this.triggerWeightInput?.setDisabled(disabled);
+    }
+
+    /** 同步关键词输入行的显隐与正则语法校验状态 */
+    private syncKeywordsRowVisibility(): void {
+        const isKeywordMode = this.item.triggerMode === 'keyword';
+        this.keywordsRow.classList.toggle('da-hidden', !isKeywordMode);
+        if (isKeywordMode) {
+            this.validateKeywordsInput();
+        } else {
+            this.keywordsInput.classList.remove('is-invalid');
+            this.keywordsErrorEl.classList.add('da-hidden');
+            this.keywordsErrorEl.textContent = '';
+        }
+    }
+
+    /** 校验关键词输入框中的 /pattern/flags 正则字面量合法性 */
+    private validateKeywordsInput(): void {
+        const errors = collectKeywordRegexErrors(this.item.keywords);
+        const firstError = errors[0] ?? null;
+        if (firstError) {
+            this.keywordsInput.classList.add('is-invalid');
+            this.keywordsErrorEl.textContent = firstError;
+            this.keywordsErrorEl.classList.remove('da-hidden');
+        } else {
+            this.keywordsInput.classList.remove('is-invalid');
+            this.keywordsErrorEl.textContent = '';
+            this.keywordsErrorEl.classList.add('da-hidden');
+        }
     }
 
     public dispose(): void {
@@ -855,6 +960,8 @@ export class LoraManager implements UIComponent, Disposable {
             modelWeight: partial?.modelWeight ?? 0.8,
             clipWeight: partial?.clipWeight ?? 0.8,
             triggerWeight: partial?.triggerWeight ?? (this.mode === 'weilin' ? 1.0 : undefined),
+            triggerMode: partial?.triggerMode === 'keyword' ? 'keyword' : 'always',
+            keywords: partial?.keywords ?? '',
         };
 
         this.items.push(newItem);

@@ -1,5 +1,5 @@
 /**
- * 素材库 - 服装管理子面板。
+ * 素材管理 - 服装管理子面板。
  */
 
 import type { VNode } from 'preact';

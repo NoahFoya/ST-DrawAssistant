@@ -4,7 +4,7 @@
  * @remarks
  * 负责主设置面板的布局渲染、选项卡切换与生命周期管理：
  * 1. 顶栏：标题、版本号、使用引导帮助按钮、主题切换与关闭按钮；
- * 2. 侧边栏：常规设置、各生图服务选项卡及扩展功能导航；
+ * 2. 侧边栏：插件设置、各生图服务选项卡及扩展功能导航；
  * 3. 内容区：按需加载并缓存各选项卡视图；
  * 4. 底栏：当前生效生图服务的连通性状态与延迟检测。
  */
@@ -23,7 +23,12 @@ import { updateService } from '../../pipeline/update-service';
 import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 import { isCompactMobileViewport, viewportService } from '../layout/viewport';
-import { openOnboardingGuideModal, type OnboardingGuideModal } from './onboarding-guide-modal';
+import {
+    openOnboardingGuideModal,
+    type GuideSectionId,
+    type OnboardingGuideModal,
+    type OnboardingGuideModalOptions,
+} from './onboarding-guide-modal';
 import { openChangelogModal } from './changelog-modal';
 import type { ProviderType } from '@types';
 
@@ -109,9 +114,9 @@ interface NormalTabDefinition {
 }
 
 const NORMAL_TABS: NormalTabDefinition[] = [
-    { id: 'general', title: '常规设置' },
+    { id: 'general', title: '插件设置' },
     { id: 'prompts', title: '提示词' },
-    { id: 'materials', title: '素材库' },
+    { id: 'materials', title: '素材管理' },
     { id: 'lexicon', title: '词库' },
     { id: 'divider-1', title: '', isDivider: true },
     { id: 'gallery', title: '本地图库' },
@@ -266,9 +271,12 @@ export class SettingsModal implements Disposable {
             document.addEventListener('visibilitychange', this.onVisibilityChangeHandler);
         }
 
+        // 判断是否存在尚未阅读的版本升级说明（存在时不与页面首次引导叠加弹窗）
+        const shouldShowChangelog = updateService.hasPendingChangelogNotice();
+
         // 切换至目标选项卡
         const targetTab = tabId || this.activeTabId || this.options.defaultTab || 'general';
-        this.switchTab(targetTab);
+        this.switchTab(targetTab, { suppressGuide: shouldShowChangelog });
 
         // 启动底栏连通性检测（重置连续失败计数器）
         this.consecutiveHealthFailures = 0;
@@ -279,13 +287,7 @@ export class SettingsModal implements Disposable {
 
         this.options.onOpen?.();
 
-        // 首次安装初始化完成后首次打开设置面板时，自动弹出使用引导并写入当前更新标志（避免叠加弹窗）
-        if (Boolean(settingsStore.get('isInitialized')) && !settingsStore.get('hasSeenGuide')) {
-            settingsStore.set('hasSeenGuide', true);
-            updateService.markChangelogAsSeen();
-            this.openOnboardingGuide();
-        } else if (updateService.hasPendingChangelogNotice()) {
-            // 已安装用户升级后首次主动打开悬浮球进入设置面板时，自动弹出更新说明
+        if (shouldShowChangelog) {
             this.openChangelogPopup();
         }
     }
@@ -427,16 +429,19 @@ export class SettingsModal implements Disposable {
      *
      * @param tabId 目标选项卡 ID
      */
-    public switchTab(tabId: string): void {
+    public switchTab(tabId: string, options?: { readonly suppressGuide?: boolean }): void {
         tooltipService.hide();
         // 若点击的是生图服务主条目，则重定向至当前生效的具体服务
         const resolvedTabId =
             tabId === 'provider-main' ? this.getActiveProviderType() : tabId;
 
-        // 若切换到收纳在服务抽屉中的非当前生效生图引擎，自动展开抽屉以高亮对应子项
+        // 若切换到收纳在服务抽屉中的非当前生效生图服务，自动展开抽屉以高亮对应子项；
+        // 在紧凑移动端切换至非生图服务选项卡时则收起二级胶囊栏，释放内容区视高
         const isProviderTab = PROVIDER_DEFINITIONS.some((p) => p.id === resolvedTabId);
         if (isProviderTab && resolvedTabId !== this.getActiveProviderType()) {
             this.toggleProviderExpanded(true);
+        } else if (!isProviderTab && isCompactMobileViewport() && this.isServiceExpanded) {
+            this.toggleProviderExpanded(false);
         }
 
         // 停用先前视图
@@ -470,6 +475,11 @@ export class SettingsModal implements Disposable {
 
         // 更新侧边栏高亮状态
         this.updateSidebarHighlight(resolvedTabId);
+
+        // 首次进入对应页面时自动弹出所属部分的新手引导
+        if (!options?.suppressGuide) {
+            this.checkAndTriggerContextualGuide(resolvedTabId);
+        }
     }
 
     /**
@@ -767,7 +777,7 @@ export class SettingsModal implements Disposable {
         this.versionBadgeElement.setAttribute(
             'title',
             hasUpdate
-                ? '检测到新版本，点击前往「关于与支持」查看并更新'
+                ? '检测到新版本，点击前往「关于」查看并更新'
                 : '点击查看关于与诊断信息'
         );
     }
@@ -893,7 +903,7 @@ export class SettingsModal implements Disposable {
         // 左侧导航侧边栏 (桌面端 190px；移动端折叠为顶部横向胶囊条)
         const sidebar = this.buildSidebarTabs();
 
-        // 移动端生图引擎二级胶囊宿主，仅在紧凑竖屏且引擎组展开时显隐
+        // 移动端生图服务二级胶囊宿主，仅在紧凑竖屏且服务抽屉展开时显隐
         this.mobileSubHostElement = document.createElement('div');
         this.mobileSubHostElement.className = 'da-sidebar-mobile-sub-host';
 
@@ -915,8 +925,8 @@ export class SettingsModal implements Disposable {
 
         this.sidebarItems.clear();
 
-        // 1. 常规设置项（置顶主要设置）
-        const generalItem = this.createSidebarItem('general', '常规设置');
+        // 1. 插件设置项（置顶主要设置）
+        const generalItem = this.createSidebarItem('general', '插件设置');
         sidebar.appendChild(generalItem);
 
         // 2. 生图服务主条目 + 抽屉下拉触发按钮（单行分体触发：名称切换生效服务页，箭头展开/收起服务抽屉）
@@ -974,7 +984,7 @@ export class SettingsModal implements Disposable {
         sidebar.appendChild(providerMainItem);
         this.sidebarItems.set('provider-main', providerMainItem);
 
-        // 3. 其余生图引擎子项抽屉容器（桌面端置于下方缩进列表；移动端挂入第二行横向胶囊宿主）
+        // 3. 其余生图服务子项抽屉容器（桌面端置于下方缩进列表；移动端挂入第二行横向胶囊宿主）
         this.providerSubAnchor = document.createComment('da-provider-sub-anchor');
         sidebar.appendChild(this.providerSubAnchor);
 
@@ -1274,13 +1284,110 @@ export class SettingsModal implements Disposable {
     }
 
     /**
-     * 打开或重开初次使用引导弹窗（幂等防重复堆叠）。
+     * 按当前所在选项卡推导出所属新手引导定位参数。
      */
-    public openOnboardingGuide(): void {
+    private resolveGuideContextForTab(tabId: string): {
+        readonly section: GuideSectionId;
+        readonly provider: ProviderType;
+    } {
+        if (PROVIDER_DEFINITIONS.some((p) => p.id === tabId)) {
+            return { section: 'provider', provider: tabId as ProviderType };
+        }
+        if (tabId === 'prompts' || tabId === 'materials') {
+            return { section: 'prompts', provider: this.getActiveProviderType() };
+        }
+        return { section: 'plugin', provider: this.getActiveProviderType() };
+    }
+
+    /**
+     * 首次进入指定页面（插件设置 / 各自服务端 / 提示词或素材管理）时自动触发对应部分的新手引导。
+     */
+    private checkAndTriggerContextualGuide(resolvedTabId: string): void {
+        if (
+            !this.isOpenState ||
+            !Boolean(settingsStore.get('isInitialized')) ||
+            this.activeGuideModal ||
+            this.activeChangelogModal
+        ) {
+            return;
+        }
+
+        const uiCfg = settingsStore.get('ui');
+        const seenGuides = uiCfg?.seenGuides ?? {};
+
+        if (resolvedTabId === 'general') {
+            if (Boolean(settingsStore.get('hasSeenGuide')) || Boolean(seenGuides.plugin)) {
+                return;
+            }
+            settingsStore.set('hasSeenGuide', true);
+            settingsStore.set('ui', {
+                ...uiCfg,
+                seenGuides: {
+                    ...seenGuides,
+                    plugin: true,
+                },
+            });
+            updateService.markChangelogAsSeen();
+            this.openOnboardingGuide({
+                section: 'plugin',
+                provider: this.getActiveProviderType(),
+            });
+            return;
+        }
+
+        if (resolvedTabId === 'prompts' || resolvedTabId === 'materials') {
+            if (Boolean(seenGuides.prompts)) {
+                return;
+            }
+            settingsStore.set('ui', {
+                ...uiCfg,
+                seenGuides: {
+                    ...seenGuides,
+                    prompts: true,
+                },
+            });
+            this.openOnboardingGuide({
+                section: 'prompts',
+                provider: this.getActiveProviderType(),
+            });
+            return;
+        }
+
+        if (PROVIDER_DEFINITIONS.some((p) => p.id === resolvedTabId)) {
+            const prov = resolvedTabId as ProviderType;
+            if (Boolean(seenGuides.providers?.[prov])) {
+                return;
+            }
+            settingsStore.set('ui', {
+                ...uiCfg,
+                seenGuides: {
+                    ...seenGuides,
+                    providers: {
+                        ...(seenGuides.providers ?? {}),
+                        [prov]: true,
+                    },
+                },
+            });
+            this.openOnboardingGuide({
+                section: 'provider',
+                provider: prov,
+            });
+        }
+    }
+
+    /**
+     * 打开或重开分场景使用引导弹窗（幂等防重复堆叠；默认按当前所在页自动定位对应部分）。
+     */
+    public openOnboardingGuide(
+        overrideOptions?: Pick<OnboardingGuideModalOptions, 'section' | 'provider'>
+    ): void {
         if (this.activeGuideModal) {
             return;
         }
+        const resolved = this.resolveGuideContextForTab(this.activeTabId);
         this.activeGuideModal = openOnboardingGuideModal({
+            section: overrideOptions?.section ?? resolved.section,
+            provider: overrideOptions?.provider ?? resolved.provider,
             onClose: () => {
                 this.activeGuideModal = null;
             },

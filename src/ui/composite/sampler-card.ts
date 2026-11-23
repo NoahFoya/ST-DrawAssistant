@@ -4,7 +4,7 @@
  * @remarks
  * 为生图提供方（ComfyUI、SD-WebUI/Forge、NovelAI 等）提供统一的核心采样控制外壳：
  * 1. 采样算法 (Sampler) 与调度规则 (Scheduler) 选项列表，支持运行时动态拉取与离线缺省备选；
- * 2. 采样步数 (Steps) 与引导系数 (CFG Scale) 滑块，支持根据模型架构（SD 传统 vs Flux/蒸馏）动态自适应区间；
+ * 2. 采样步数 (Steps) 与引导系数 (CFG Scale) 步进数值输入，支持根据模型架构（SD 传统 vs Flux/蒸馏）动态自适应区间；
  * 3. 随机种子 (Seed) 控制器，支持 -1 动态随机与固定种子自由切换、一键随机骰子与快速重置；
  * 4. 级联生命周期注销与事件安全释放。
  */
@@ -12,7 +12,7 @@
 import type { UIComponent, Disposable } from '../types';
 import { Card } from '../components/card';
 import { Select } from '../components/select';
-import { Slider } from '../components/slider';
+import { NumberInput } from '../components/number-input';
 import { TextInput } from '../components/text-input';
 import { Button } from '../components/button';
 import { Badge, type BadgeVariant } from '../components/badge';
@@ -27,7 +27,7 @@ export interface SamplerCapabilities {
     readonly schedulers?: Array<{ value: string; label: string }>;
 }
 
-/** 滑块区间参数定义 */
+/** 参数区间边界定义 */
 export interface RangeConfigItem {
     readonly min: number;
     readonly max: number;
@@ -35,7 +35,7 @@ export interface RangeConfigItem {
     readonly defaultValue?: number;
 }
 
-/** 采样参数滑块区间配置集合 */
+/** 采样参数区间配置集合 */
 export interface SamplerRangeConfig {
     readonly steps?: RangeConfigItem;
     readonly cfgScale?: RangeConfigItem;
@@ -71,7 +71,7 @@ export interface SamplerCardOptions {
     initialSamplers?: Array<{ value: string; label: string }>;
     /** 初始调度规则候选列表（不传则使用内置预置列表） */
     initialSchedulers?: Array<{ value: string; label: string }>;
-    /** 初始滑块范围配置（默认使用 SD 传统配置） */
+    /** 初始参数范围配置（默认使用 SD 传统配置） */
     initialRangeConfig?: SamplerRangeConfig;
     /** 动态能力拉取处理函数 */
     onFetchCapabilities?: () => Promise<SamplerCapabilities>;
@@ -131,8 +131,8 @@ export class SamplerCard implements UIComponent, Disposable {
     private readonly seedBadge: Badge;
     private readonly samplerSelect: Select;
     private readonly schedulerSelect?: Select;
-    private readonly stepsSlider: Slider;
-    private readonly cfgScaleSlider: Slider;
+    private readonly stepsInput: NumberInput;
+    private readonly cfgScaleInput: NumberInput;
     private readonly seedInput: TextInput;
     private readonly randomSeedButton: Button;
     private readonly resetSeedButton: Button;
@@ -232,13 +232,13 @@ export class SamplerCard implements UIComponent, Disposable {
             this.disposables.push(this.schedulerSelect, this.schedulerFormField);
         }
 
-        // 6. 构建步数滑块 (Steps)
+        // 6. 构建采样步数输入框 (Steps)
         const stepsCfg = rangeConfig.steps ?? { min: 1, max: 100, step: 1, defaultValue: 25 };
-        this.stepsSlider = new Slider({
+        this.stepsInput = new NumberInput({
             min: stepsCfg.min,
             max: stepsCfg.max,
             step: stepsCfg.step,
-            defaultValue: stepsCfg.defaultValue,
+            precision: 0,
             value: this.data.steps,
             onChange: (val) => {
                 this.data.steps = Math.round(val);
@@ -248,18 +248,18 @@ export class SamplerCard implements UIComponent, Disposable {
         this.stepsFormField = new FormField({
             label: '采样步数 (Steps)',
             tooltip: '画面生成的迭代轮次。步数过低会导致画面模糊且细节未成型，过高则生成耗时倍增且可能引入杂质伪影。推荐区间：SD 1.5 为 20~28 步，SDXL 为 25~35 步，Flux Schnell 仅需 4 步，Flux Dev 为 20~28 步。',
-            control: this.stepsSlider
+            control: this.stepsInput
         });
         append(this.stepsFormField.element);
-        this.disposables.push(this.stepsSlider, this.stepsFormField);
+        this.disposables.push(this.stepsInput, this.stepsFormField);
 
-        // 7. 构建引导系数滑块 (CFG Scale)
+        // 7. 构建引导系数输入框 (CFG Scale)
         const cfgScaleCfg = rangeConfig.cfgScale ?? { min: 0.0, max: 20.0, step: 0.1, defaultValue: 7.0 };
-        this.cfgScaleSlider = new Slider({
+        this.cfgScaleInput = new NumberInput({
             min: cfgScaleCfg.min,
             max: cfgScaleCfg.max,
             step: cfgScaleCfg.step,
-            defaultValue: cfgScaleCfg.defaultValue,
+            precision: 1,
             value: this.data.cfgScale,
             onChange: (val) => {
                 this.data.cfgScale = val;
@@ -269,10 +269,10 @@ export class SamplerCard implements UIComponent, Disposable {
         this.cfgScaleFormField = new FormField({
             label: '提示词引导系数 (CFG Scale)',
             tooltip: '控制画面贴合提示词的约束程度（CFG Scale）。数值越高越严格遵循提示词，但过高（>9.0）易产生色彩过饱和与肢体崩坏；数值过低画面自由度更高。动漫通常推荐 6.0~7.5，写实推荐 4.5~6.0，Flux / Pony 等专属模型推荐 1.0~3.5。',
-            control: this.cfgScaleSlider
+            control: this.cfgScaleInput
         });
         append(this.cfgScaleFormField.element);
-        this.disposables.push(this.cfgScaleSlider, this.cfgScaleFormField);
+        this.disposables.push(this.cfgScaleInput, this.cfgScaleFormField);
 
         // 8. 构建随机种子控制器 (Seed Controller)
         const seedContainer = document.createElement('div');
@@ -391,11 +391,11 @@ export class SamplerCard implements UIComponent, Disposable {
         }
         if (partial.steps !== undefined) {
             this.data.steps = partial.steps;
-            this.stepsSlider.setValue(partial.steps, { silent: true });
+            this.stepsInput.setValue(partial.steps, { silent: true });
         }
         if (partial.cfgScale !== undefined) {
             this.data.cfgScale = partial.cfgScale;
-            this.cfgScaleSlider.setValue(partial.cfgScale, { silent: true });
+            this.cfgScaleInput.setValue(partial.cfgScale, { silent: true });
         }
         if (partial.seed !== undefined) {
             this.data.seed = partial.seed;
@@ -444,28 +444,28 @@ export class SamplerCard implements UIComponent, Disposable {
     }
 
     /**
-     * 根据模型架构动态更新滑块参数取值范围。
+     * 根据模型架构动态更新采样参数取值范围。
      *
-     * @param config 新的滑块区间配置
+     * @param config 新的参数区间配置
      */
     public setRangeConfig(config: SamplerRangeConfig): void {
         if (config.steps) {
-            this.stepsSlider.setRange(
+            this.stepsInput.setRange(
                 config.steps.min,
                 config.steps.max,
                 config.steps.step,
                 config.steps.defaultValue
             );
-            this.data.steps = Math.round(this.stepsSlider.getValue());
+            this.data.steps = Math.round(this.stepsInput.getValue());
         }
         if (config.cfgScale) {
-            this.cfgScaleSlider.setRange(
+            this.cfgScaleInput.setRange(
                 config.cfgScale.min,
                 config.cfgScale.max,
                 config.cfgScale.step,
                 config.cfgScale.defaultValue
             );
-            this.data.cfgScale = this.cfgScaleSlider.getValue();
+            this.data.cfgScale = this.cfgScaleInput.getValue();
         }
     }
 

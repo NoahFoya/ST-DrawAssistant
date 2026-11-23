@@ -137,7 +137,12 @@ export interface LoraConfigItem {
     clipWeight?: number;
     /** 触发权重（仅用于三权重模式） */
     triggerWeight?: number;
+    /** 是否启用该条目 */
     enabled?: boolean;
+    /** 触发方式：'always' 常驻挂载（默认） | 'keyword' 关键词命中当次生图提示词时挂载 */
+    triggerMode?: ActivationTriggerMode;
+    /** 以 | 或逗号分隔的触发关键词（支持 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
+    keywords?: string;
 }
 
 /** 提示词预设数据模型 */
@@ -197,6 +202,9 @@ export interface ThemePresetData {
 
 /** 提示词条目或素材注入触发模式 */
 export type ActivationTriggerMode = 'always' | 'keyword';
+
+/** 绘图与设计思维链显示模式：'show' 原样显示 | 'collapse' 折叠栏 | 'hide' 隐藏 */
+export type ThinkingDisplayMode = 'show' | 'collapse' | 'hide';
 
 /** 角色部位固定状态后缀 */
 export type CharacterPartState = 'clothed' | 'exposed' | 'nude';
@@ -583,9 +591,9 @@ export interface LocalCustomWordItem {
 
 /** 预设池整体持久化结构 */
 export interface PresetSettings {
-    /** 绘图预设字典，按绘图服务提供方划分独立命名空间 */
+    /** 生图参数预设字典，按生图服务提供方划分独立命名空间 */
     drawing: Record<ProviderType | string, PresetItem<DrawingPresetData>[]>;
-    /** 生图正负向提示词预设字典，按绘图服务提供方划分独立命名空间 */
+    /** 生图正负向提示词预设字典，按生图服务提供方划分独立命名空间 */
     prompts: Record<ProviderType | string, PresetItem<PromptPresetData>[]>;
     /** 工作流模板列表 */
     workflows: PresetItem<WorkflowPresetData>[];

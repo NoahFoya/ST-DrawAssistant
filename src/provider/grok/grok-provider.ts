@@ -40,6 +40,7 @@ import {
     HttpError,
     imageInputToBase64,
 } from '../../util/http-client';
+import { logger } from '../../util/logger';
 
 const GROK_DEFAULT_MODEL = 'grok-imagine-image';
 
@@ -180,6 +181,11 @@ export class GrokProvider extends BaseGenerationProvider {
                     ) {
                         throw err;
                     }
+                    if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
+                        logger.debug(`[GrokProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
+                    } else {
+                        logger.warn(`[GrokProvider] 拉取模型列表 (${url}) 失败:`, err);
+                    }
                     return [];
                 }
             },
@@ -238,6 +244,8 @@ export class GrokProvider extends BaseGenerationProvider {
         if (request.sourceImage) {
             const b64 = await imageInputToBase64(request.sourceImage, {
                 signal,
+                timeoutMs: maxTimeoutMs,
+                transport,
             });
             const mimeType =
                 request.sourceImage instanceof Blob && request.sourceImage.type

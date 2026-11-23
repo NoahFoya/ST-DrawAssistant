@@ -273,7 +273,7 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
     }
 
     /**
-     * 解析当前任务生效的绘图预设。
+     * 解析当前任务生效的生图参数预设。
      *
      * @remarks
      * 优先使用请求参数快照 `params.drawingPresetId`；缺省时回退读取当前激活预设，

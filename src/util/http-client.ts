@@ -251,6 +251,35 @@ function isLoopbackHost(urlStr: string): boolean {
 }
 
 /**
+ * 大小写不敏感地向请求头字典写入键值（自动覆盖同名不同大小写的旧键）。
+ */
+function setHeaderCaseInsensitive(
+    target: Record<string, string>,
+    key: string,
+    value: string
+): void {
+    const lower = key.toLowerCase();
+    for (const existingKey of Object.keys(target)) {
+        if (existingKey.toLowerCase() === lower && existingKey !== key) {
+            delete target[existingKey];
+        }
+    }
+    target[key] = value;
+}
+
+/**
+ * 大小写不敏感地从请求头字典删除指定键。
+ */
+function deleteHeaderCaseInsensitive(target: Record<string, string>, key: string): void {
+    const lower = key.toLowerCase();
+    for (const existingKey of Object.keys(target)) {
+        if (existingKey.toLowerCase() === lower) {
+            delete target[existingKey];
+        }
+    }
+}
+
+/**
  * 浏览器端 HTTP 请求客户端。
  *
  * @remarks
@@ -284,11 +313,20 @@ export class HttpClient {
      * 支持超时控制与瞬态网络故障退避重试。
      */
     public async fetchExternal(url: string, options: HttpRequestOptions = {}): Promise<Response> {
+        const isProxied = url.startsWith('/proxy/http:') || url.startsWith('/proxy/https:');
+        const displayUrl = isProxied ? url.slice('/proxy/'.length) : url;
+        const isRelayMode = isProxied || options.transport === 'relay';
+
         // 显式拦截 Mixed Content：HTTPS 宿主页面直连非安全外部 HTTP 服务时由浏览器安全策略直接阻断
-        if (typeof window !== 'undefined' && window.location?.protocol === 'https:' && url.startsWith('http:')) {
+        if (
+            !isRelayMode &&
+            typeof window !== 'undefined' &&
+            window.location?.protocol === 'https:' &&
+            url.startsWith('http:')
+        ) {
             if (!isLoopbackHost(url)) {
                 throw new Error(
-                    `网络请求受阻 (Mixed Content): 当前 SillyTavern 宿主页面为 HTTPS 协议，浏览器安全策略禁止直接请求非安全 HTTP 服务 [${url}]。请在常规设置中将“连接方式”切换为“酒馆代理”，或为后端服务配置 HTTPS。`
+                    `网络请求受阻 (Mixed Content): 当前 SillyTavern 宿主页面为 HTTPS 协议，浏览器安全策略禁止直接请求非安全 HTTP 服务 [${url}]。请在「插件设置」中将“连接方式”切换为“酒馆代理”，或为后端服务配置 HTTPS。`
                 );
             }
         }
@@ -329,8 +367,21 @@ export class HttpClient {
                     if (response.status === 404 && rawText.includes('CORS proxy is disabled')) {
                         throw new HttpError(
                             404,
-                            '酒馆 CORS 代理未开启：请在 SillyTavern 根目录的 config.yaml 中将 enableCorsProxy 设为 true 后重启酒馆，或在常规设置中切换为“浏览器直连 (Direct)”模式',
-                            url,
+                            '酒馆 CORS 代理未开启：请在 SillyTavern 根目录的 config.yaml 中将 enableCorsProxy 设为 true 后重启酒馆，或在「插件设置」中切换为“浏览器直连 (Direct)”模式',
+                            displayUrl,
+                            details
+                        );
+                    }
+
+                    if (
+                        isRelayMode &&
+                        response.status === 403 &&
+                        /csrf|forbidden/i.test(rawText || response.statusText)
+                    ) {
+                        throw new HttpError(
+                            403,
+                            `酒馆宿主 CSRF 校验失败或会话已过期 (HTTP 403)：请刷新 SillyTavern 页面后重试 [${displayUrl}]`,
+                            displayUrl,
                             details
                         );
                     }
@@ -341,15 +392,18 @@ export class HttpClient {
                         rawText.includes('ENOTFOUND') ||
                         rawText.includes('Failed to connect');
                     if (isConnectionRefused) {
+                        const prefix = isProxied
+                            ? '酒馆代理转发失败，后端服务未启动或连接被拒绝 (ECONNREFUSED)'
+                            : '后端服务未启动或连接被拒绝 (ECONNREFUSED)';
                         throw new HttpError(
                             response.status,
-                            `后端服务未启动或连接被拒绝 (ECONNREFUSED): 请检查生图服务是否在目标端口正常运行 [${url}]`,
-                            url,
+                            `${prefix}: 请检查生图服务是否在目标端口正常运行 [${displayUrl}]`,
+                            displayUrl,
                             details
                         );
                     }
 
-                    const error = new HttpError(response.status, response.statusText, url, details);
+                    const error = new HttpError(response.status, response.statusText, displayUrl, details);
 
                     // 判断是否属于可重试的瞬态状态
                     if (attempt < maxAttempts - 1 && TRANSIENT_STATUSES.has(response.status)) {
@@ -376,10 +430,12 @@ export class HttpClient {
                     throw err;
                 }
 
-                // 统一包装浏览器底层 Failed to fetch，转化为可定位排查的技术错误
+                // 统一包装浏览器底层 Failed to fetch，区分酒馆代理与浏览器直连给出准确排查指引
                 if (err instanceof TypeError && err.message?.includes('fetch')) {
                     const enhancedError = new Error(
-                        `网络连接失败 (Failed to fetch): 无法访问服务地址 [${url}]。请确认后端服务是否已正常启动、地址与端口是否正确，或检查是否存在跨域 (CORS) 限制。如需规避跨域可在常规设置中切换为“酒馆代理”。`
+                        isRelayMode
+                            ? `网络连接失败 (Failed to fetch): 无法连接酒馆宿主代理接口 [${url}]（目标地址: ${displayUrl}）。请确认 SillyTavern 服务端正在运行且网络连接正常。`
+                            : `网络连接失败 (Failed to fetch): 无法访问服务地址 [${url}]。请确认后端服务是否已正常启动、地址与端口是否正确，或检查是否存在跨域 (CORS) 限制。如需规避跨域可在「插件设置」中切换为“酒馆代理”。`
                     );
                     lastError = enhancedError;
                     if (attempt >= maxAttempts - 1) {
@@ -411,43 +467,61 @@ export class HttpClient {
      * 安全凭据与中继机制：
      * 1. 宿主同源路径（如 /api/...）：自动合并宿主环境 CSRF 认证头；
      * 2. 外部跨域目标（http:// 或 https://）：通过宿主 /proxy/:url 路由安全代理中转，并附带访问宿主所需的 CSRF 凭据，
-     *    避免向第三方服务泄露宿主 CSRF 令牌。
+     *    避免向第三方服务泄露宿主 CSRF 令牌；
+     * 3. 请求头大小写归一化合并，且在无请求体（GET / HEAD）或 FormData 时自动剔除宿主默认附带的 Content-Type。
      */
     public async fetchHost(endpoint: string, options: HttpRequestOptions = {}): Promise<Response> {
-        const isHostOrigin = isHostOriginEndpoint(endpoint);
+        const alreadyProxied =
+            endpoint.startsWith('/proxy/http:') || endpoint.startsWith('/proxy/https:');
+        const isHostOrigin = alreadyProxied || isHostOriginEndpoint(endpoint);
         let targetUrl = endpoint;
         const mergedHeaders: Record<string, string> = {};
 
         if (isHostOrigin) {
-            Object.assign(mergedHeaders, getHostRequestHeaders());
+            for (const [k, v] of Object.entries(getHostRequestHeaders())) {
+                setHeaderCaseInsensitive(mergedHeaders, k, v);
+            }
         } else if (endpoint.startsWith('http:') || endpoint.startsWith('https:')) {
             targetUrl = `/proxy/${endpoint}`;
-            Object.assign(mergedHeaders, getHostRequestHeaders());
-        }
-
-        // 调用方显式请求头覆盖宿主默认头（支持 Headers 实例与普通键值对象）
-        if (options.headers) {
-            if (typeof Headers !== 'undefined' && options.headers instanceof Headers) {
-                options.headers.forEach((value, key) => {
-                    mergedHeaders[key] = value;
-                });
-            } else if (Array.isArray(options.headers)) {
-                for (const [key, value] of options.headers) {
-                    mergedHeaders[key] = value;
-                }
-            } else {
-                Object.assign(mergedHeaders, options.headers as Record<string, string>);
+            for (const [k, v] of Object.entries(getHostRequestHeaders())) {
+                setHeaderCaseInsensitive(mergedHeaders, k, v);
             }
         }
 
-        // FormData 请求必须由浏览器自动生成含 boundary 的 multipart/form-data，避免宿主默认 JSON 头破坏二进制上传
+        // 无请求体的 GET/HEAD 请求不保留宿主 getRequestHeaders() 默认附带的 Content-Type: application/json
+        const methodUpper = (options.method || 'GET').toUpperCase();
+        if (
+            (options.body === undefined || options.body === null) &&
+            (methodUpper === 'GET' || methodUpper === 'HEAD')
+        ) {
+            deleteHeaderCaseInsensitive(mergedHeaders, 'Content-Type');
+        }
+
+        // 调用方显式请求头大小写不敏感覆盖宿主默认头（支持 Headers 实例、二维数组与普通键值对象）
+        if (options.headers) {
+            if (typeof Headers !== 'undefined' && options.headers instanceof Headers) {
+                options.headers.forEach((value, key) => {
+                    setHeaderCaseInsensitive(mergedHeaders, key, value);
+                });
+            } else if (Array.isArray(options.headers)) {
+                for (const [key, value] of options.headers) {
+                    setHeaderCaseInsensitive(mergedHeaders, key, value);
+                }
+            } else {
+                for (const [key, value] of Object.entries(options.headers as Record<string, string>)) {
+                    setHeaderCaseInsensitive(mergedHeaders, key, value);
+                }
+            }
+        }
+
+        // FormData 请求必须由浏览器自动生成含 boundary 的 multipart/form-data，避免默认 JSON 头破坏二进制上传
         if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
-            delete mergedHeaders['Content-Type'];
-            delete mergedHeaders['content-type'];
+            deleteHeaderCaseInsensitive(mergedHeaders, 'Content-Type');
         }
 
         return this.fetchExternal(targetUrl, {
             ...options,
+            transport: 'relay',
             headers: mergedHeaders,
         });
     }

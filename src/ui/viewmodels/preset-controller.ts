@@ -125,7 +125,7 @@ export function validatePresetPayloadForCategory(
             'charStartTag' in data ||
             ('accent' in data && 'bgPrimary' in data)
         ) {
-            return '导入文件属于其他类别预设，与当前「生图预设」不兼容';
+            return '导入文件属于其他类别预设，与当前「生图参数预设」不兼容';
         }
     }
     return null;
@@ -187,7 +187,7 @@ export interface PresetControllerOptions<TData extends Record<string, unknown>> 
     exportFilenamePrefix?: string;
     /** 新建预设时的干净初始默认模板生成函数。未提供时使用首个基准预设的数据克隆或空对象 */
     defaultTemplate?: () => TData;
-    /** 删除时要求至少保留的预设数量（如主题要求至少保留 1 套，生图预设允许删空为 0） */
+    /** 删除时要求至少保留的预设数量（如主题要求至少保留 1 套，生图参数预设允许删空为 0） */
     minRemainingOnDelete?: number;
     /** 删除受阻时的提示消息 */
     minRemainingWarning?: string;
@@ -432,7 +432,7 @@ export class PresetController<TData extends Record<string, unknown>> {
     }
 
     /**
-     * 统一响应 PresetToolbar 的预设切换与 8 项工具栏操作动作。
+     * 统一响应 PresetToolbar 的预设切换与工具栏操作动作。
      */
     public async handleAction(
         action: PresetActionType,

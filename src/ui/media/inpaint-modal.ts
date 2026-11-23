@@ -3,15 +3,15 @@
  *
  * @remarks
  * 基于 Soft UI 规范提供 Canvas 遮罩涂抹与局部重绘参数配置能力：
- * 1. 采用双栏工作台布局：左侧承载画布舞台、工具条与快捷键指示；右侧承载重绘参数与提示词检查器；
+ * 1. 采用双栏工作台布局：左侧承载画布舞台、工具条、缩放控制与快捷键指示；右侧承载重绘参数与提示词检查器；
  * 2. 离屏输出标准二值掩码（黑色底景 #000000 代表保留，白色选区 #ffffff 代表重绘）；
- * 3. 具备实时随动画笔光圈、滚轮调节画笔大小、画笔与橡皮擦分段切换、一键清空及即时参数记忆；
+ * 3. 具备实时随动画笔光圈、画布缩放/平移（滚轮、空格拖拽、中/右键与双指手势）、20 步撤销/重做及空蒙版拦截；
  * 4. 支持 Ctrl+Enter 快捷提交与 Esc 退出，并在销毁时安全注销所有监听与引用。
  */
 
 import type { Disposable } from '../types';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
-import { Slider } from '../components/slider';
+import { NumberInput } from '../components/number-input';
 import { SegmentedControl } from '../components/segmented-control';
 import { renderIcon } from '../components/icons';
 import { Toast } from '../feedback/toast';
@@ -104,9 +104,28 @@ export class InpaintModal implements Disposable {
     private isDisposed = false;
     private isSubmitting = false;
     private isDrawing = false;
-    private isEraser = false;
+    private toolMode: 'brush' | 'eraser' | 'pan' = 'brush';
     private cursorRingRafId: number | null = null;
     private pendingCursorEvent: MouseEvent | null = null;
+
+    // 视图缩放与平移状态
+    private zoom = 1;
+    private panX = 0;
+    private panY = 0;
+    private isPanning = false;
+    private isSpacePressed = false;
+    private panStartClientX = 0;
+    private panStartClientY = 0;
+    private panStartX = 0;
+    private panStartY = 0;
+    private pinchStartDist = 0;
+    private pinchStartZoom = 1;
+    private pinchLastCenter: { x: number; y: number } | null = null;
+
+    // 蒙版历史快照栈（上限 20 步）
+    private historyStack: Array<{ overlay: ImageData; mask: ImageData }> = [];
+    private historyIndex = -1;
+    private readonly maxHistory = 20;
 
     // 参数状态
     private brushSize: number;
@@ -119,7 +138,11 @@ export class InpaintModal implements Disposable {
     private backdropEl?: HTMLElement;
     private badgeEl?: HTMLElement;
     private confirmBtnEl?: HTMLButtonElement;
+    private stageEl?: HTMLElement;
     private canvasContainerEl?: HTMLElement;
+    private zoomLabelEl?: HTMLElement;
+    private undoBtnEl?: HTMLButtonElement;
+    private redoBtnEl?: HTMLButtonElement;
     private bgCanvas?: HTMLCanvasElement;
     private maskCanvas?: HTMLCanvasElement;
     private overlayCanvas?: HTMLCanvasElement;
@@ -129,9 +152,13 @@ export class InpaintModal implements Disposable {
 
     // 子组件引用
     private toolControl?: SegmentedControl;
-    private brushSlider?: Slider;
-    private denoiseSlider?: Slider;
-    private blurSlider?: Slider;
+    private brushInput?: NumberInput;
+    private denoiseInput?: NumberInput;
+    private blurInput?: NumberInput;
+
+    private get isEraser(): boolean {
+        return this.toolMode === 'eraser';
+    }
 
     // 全局事件解绑器列表
     private readonly disposers: (() => void)[] = [];
@@ -206,13 +233,15 @@ export class InpaintModal implements Disposable {
 
         // 模式切换胶囊分段条
         this.toolControl = new SegmentedControl({
-            value: this.isEraser ? 'eraser' : 'brush',
+            value: this.toolMode,
             options: [
                 { value: 'brush', label: '画笔' },
                 { value: 'eraser', label: '橡皮擦' },
+                { value: 'pan', label: '平移' },
             ],
             onChange: (val) => {
-                this.isEraser = val === 'eraser';
+                this.toolMode = val as 'brush' | 'eraser' | 'pan';
+                this.updateStageCursor();
                 this.updateCursorRing();
             },
         });
@@ -222,7 +251,7 @@ export class InpaintModal implements Disposable {
         divider.className = 'da-inpaint-toolbar-divider';
         toolGroupLeft.appendChild(divider);
 
-        // 画笔大小调节滑块
+        // 画笔大小调节数值框
         const brushControl = document.createElement('div');
         brushControl.className = 'da-inpaint-brush-control da-inpaint-tool-label';
         const brushLabel = document.createElement('span');
@@ -230,11 +259,11 @@ export class InpaintModal implements Disposable {
         brushLabel.textContent = '大小';
         brushControl.appendChild(brushLabel);
 
-        this.brushSlider = new Slider({
+        this.brushInput = new NumberInput({
             min: 4,
             max: 160,
             step: 1,
-            defaultValue: 25,
+            precision: 0,
             unit: 'px',
             value: this.brushSize,
             onChange: (val) => {
@@ -242,23 +271,50 @@ export class InpaintModal implements Disposable {
                 this.updateCursorRing();
             },
         });
-        brushControl.appendChild(this.brushSlider.element);
+        brushControl.appendChild(this.brushInput.element);
         toolGroupLeft.appendChild(brushControl);
         toolbar.appendChild(toolGroupLeft);
 
-        // 清空蒙版按钮
+        // 工具栏右侧动作组（撤销 / 重做 / 清空蒙版）
+        const toolGroupRight = document.createElement('div');
+        toolGroupRight.className = 'da-inpaint-tool-actions';
+
+        const undoBtn = document.createElement('button');
+        undoBtn.type = 'button';
+        undoBtn.className = 'da-btn da-btn--ghost da-btn--sm';
+        undoBtn.title = '撤销 (Ctrl+Z)';
+        undoBtn.setAttribute('aria-label', '撤销');
+        undoBtn.disabled = true;
+        undoBtn.innerHTML = `${renderIcon('undo', 13)}<span>撤销</span>`;
+        undoBtn.onclick = () => this.undo();
+        this.undoBtnEl = undoBtn;
+        toolGroupRight.appendChild(undoBtn);
+
+        const redoBtn = document.createElement('button');
+        redoBtn.type = 'button';
+        redoBtn.className = 'da-btn da-btn--ghost da-btn--sm';
+        redoBtn.title = '重做 (Ctrl+Y / Ctrl+Shift+Z)';
+        redoBtn.setAttribute('aria-label', '重做');
+        redoBtn.disabled = true;
+        redoBtn.innerHTML = `${renderIcon('redo', 13)}<span>重做</span>`;
+        redoBtn.onclick = () => this.redo();
+        this.redoBtnEl = redoBtn;
+        toolGroupRight.appendChild(redoBtn);
+
         const clearBtn = document.createElement('button');
         clearBtn.type = 'button';
         clearBtn.className = 'da-btn da-btn--ghost da-btn--sm';
         clearBtn.innerHTML = `${renderIcon('trash', 13)}<span>清空蒙版</span>`;
         clearBtn.onclick = () => this.clearMask();
-        toolbar.appendChild(clearBtn);
+        toolGroupRight.appendChild(clearBtn);
 
+        toolbar.appendChild(toolGroupRight);
         workbench.appendChild(toolbar);
 
         // 4.1.2 画布舞台容器
         const stage = document.createElement('div');
         stage.className = 'da-inpaint-stage';
+        this.stageEl = stage;
 
         const canvasContainer = document.createElement('div');
         canvasContainer.className = 'da-inpaint-canvas-container';
@@ -274,19 +330,63 @@ export class InpaintModal implements Disposable {
         this.overlayCanvas = overlayCanvas;
         canvasContainer.appendChild(overlayCanvas);
 
-        // 随动光圈光标
+        stage.appendChild(canvasContainer);
+
+        // 随动光圈光标置于舞台外层，避免随画布缩放发生描边加粗
         const cursorRing = document.createElement('div');
         cursorRing.className = 'da-inpaint-cursor-ring';
         this.cursorRingEl = cursorRing;
-        canvasContainer.appendChild(cursorRing);
+        stage.appendChild(cursorRing);
 
-        stage.appendChild(canvasContainer);
+        // 右下角视图缩放控制胶囊
+        const zoomCapsule = document.createElement('div');
+        zoomCapsule.className = 'da-inpaint-zoom-capsule';
+
+        const zoomOutBtn = document.createElement('button');
+        zoomOutBtn.type = 'button';
+        zoomOutBtn.className = 'da-inpaint-zoom-btn';
+        zoomOutBtn.title = '缩小视图';
+        zoomOutBtn.setAttribute('aria-label', '缩小视图');
+        zoomOutBtn.innerHTML = renderIcon('zoomOut', 12);
+        zoomOutBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.adjustZoom(-0.25);
+        };
+        zoomCapsule.appendChild(zoomOutBtn);
+
+        const zoomResetBtn = document.createElement('button');
+        zoomResetBtn.type = 'button';
+        zoomResetBtn.className = 'da-inpaint-zoom-btn da-inpaint-zoom-btn--reset';
+        zoomResetBtn.title = '重置 100% 视图';
+        zoomResetBtn.setAttribute('aria-label', '重置视图');
+        zoomResetBtn.textContent = '100%';
+        zoomResetBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.resetView();
+        };
+        this.zoomLabelEl = zoomResetBtn;
+        zoomCapsule.appendChild(zoomResetBtn);
+
+        const zoomInBtn = document.createElement('button');
+        zoomInBtn.type = 'button';
+        zoomInBtn.className = 'da-inpaint-zoom-btn';
+        zoomInBtn.title = '放大视图';
+        zoomInBtn.setAttribute('aria-label', '放大视图');
+        zoomInBtn.innerHTML = renderIcon('zoomIn', 12);
+        zoomInBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.adjustZoom(0.25);
+        };
+        zoomCapsule.appendChild(zoomInBtn);
+
+        stage.appendChild(zoomCapsule);
         workbench.appendChild(stage);
 
         // 4.1.3 底部快捷键指示
         const hint = document.createElement('div');
         hint.className = 'da-inpaint-stage-hint';
-        hint.textContent = '鼠标左键涂抹选区 · 滚轮调画笔 · Ctrl+Enter 提交 · Esc 退出';
+        hint.textContent =
+            '左键涂抹 · 滚轮缩放画布 · Alt/Shift+滚轮调画笔 · 空格拖拽/中右键平移 · Ctrl+Z/Y 撤销重做 · Ctrl+Enter 提交';
         workbench.appendChild(hint);
 
         body.appendChild(workbench);
@@ -322,18 +422,17 @@ export class InpaintModal implements Disposable {
         denoiseHeader.appendChild(denoiseNote);
         denoiseGroup.appendChild(denoiseHeader);
 
-        this.denoiseSlider = new Slider({
+        this.denoiseInput = new NumberInput({
             min: 0.05,
-            max: 1.00,
+            max: 1.0,
             step: 0.01,
             precision: 2,
-            defaultValue: 0.75,
             value: this.denoiseStrength,
             onChange: (val) => {
                 this.denoiseStrength = val;
             },
         });
-        denoiseGroup.appendChild(this.denoiseSlider.element);
+        denoiseGroup.appendChild(this.denoiseInput.element);
         paramsSection.appendChild(denoiseGroup);
 
         // 蒙版羽化
@@ -351,18 +450,18 @@ export class InpaintModal implements Disposable {
         blurHeader.appendChild(blurNote);
         blurGroup.appendChild(blurHeader);
 
-        this.blurSlider = new Slider({
+        this.blurInput = new NumberInput({
             min: 0,
             max: 32,
             step: 1,
-            defaultValue: 4,
+            precision: 0,
             unit: 'px',
             value: this.maskBlur,
             onChange: (val) => {
                 this.maskBlur = val;
             },
         });
-        blurGroup.appendChild(this.blurSlider.element);
+        blurGroup.appendChild(this.blurInput.element);
         paramsSection.appendChild(blurGroup);
 
         inspectorContent.appendChild(paramsSection);
@@ -458,15 +557,70 @@ export class InpaintModal implements Disposable {
         // 9. 遮罩背景点击退出
         this.disposers.push(bindBackdropDismiss(backdrop, () => this.handleCancel()));
 
-        // 10. 绑定全局快捷键 Ctrl+Enter
+        // 10. 绑定全局快捷键 Ctrl+Enter、Ctrl+Z/Y 撤销重做与空格临时平移
         const onKeyDown = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
                 void this.handleConfirm();
+                return;
+            }
+            const target = e.target as HTMLElement | null;
+            const isEditingText =
+                target instanceof HTMLTextAreaElement ||
+                target instanceof HTMLInputElement ||
+                Boolean(target?.isContentEditable);
+            if (isEditingText) {
+                return;
+            }
+            const keyLower = e.key.toLowerCase();
+            if ((e.ctrlKey || e.metaKey) && keyLower === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this.redo();
+                } else {
+                    this.undo();
+                }
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && keyLower === 'y') {
+                e.preventDefault();
+                this.redo();
+                return;
+            }
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                if (!this.isSpacePressed) {
+                    this.isSpacePressed = true;
+                    this.updateStageCursor();
+                    this.updateCursorRing();
+                }
             }
         };
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.code === 'Space' || e.key === ' ') {
+                if (this.isSpacePressed) {
+                    this.isSpacePressed = false;
+                    this.updateStageCursor();
+                    this.updateCursorRing();
+                }
+            }
+        };
+        const onWindowBlur = () => {
+            this.isSpacePressed = false;
+            this.isPanning = false;
+            this.isDrawing = false;
+            this.lastPos = null;
+            this.updateStageCursor();
+            this.updateCursorRing();
+        };
         window.addEventListener('keydown', onKeyDown);
-        this.disposers.push(() => window.removeEventListener('keydown', onKeyDown));
+        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('blur', onWindowBlur);
+        this.disposers.push(() => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('blur', onWindowBlur);
+        });
     }
 
     /**
@@ -518,6 +672,12 @@ export class InpaintModal implements Disposable {
                 overlayCtx.clearRect(0, 0, width, height);
             }
 
+            // 重置历史快照并写入初始干净状态，同时重置缩放视角
+            this.historyStack = [];
+            this.historyIndex = -1;
+            this.pushHistorySnapshot();
+            this.resetView();
+
             // 依据画布实际显示尺寸同步顶层覆盖层样式
             this.syncCanvasLayout();
         };
@@ -556,24 +716,130 @@ export class InpaintModal implements Disposable {
     }
 
     /**
-     * 同步顶层交互画布与底层展示画布的视口布局坐标。
+     * 同步顶层交互画布与底层展示画布的未缩放视口布局尺寸。
      */
     private syncCanvasLayout(): void {
         if (!this.bgCanvas || !this.overlayCanvas) return;
-        const rect = this.bgCanvas.getBoundingClientRect();
-        this.overlayCanvas.style.width = `${rect.width}px`;
-        this.overlayCanvas.style.height = `${rect.height}px`;
+        const w = this.bgCanvas.clientWidth;
+        const h = this.bgCanvas.clientHeight;
+        if (w > 0 && h > 0) {
+            this.overlayCanvas.style.width = `${w}px`;
+            this.overlayCanvas.style.height = `${h}px`;
+        }
         this.updateCursorRing();
+    }
+
+    private updateStageCursor(): void {
+        if (!this.stageEl) return;
+        const panMode = this.toolMode === 'pan' || this.isSpacePressed;
+        this.stageEl.classList.toggle('is-pan-mode', panMode);
+        this.stageEl.classList.toggle('is-panning', this.isPanning);
+    }
+
+    private applyViewTransform(): void {
+        if (this.canvasContainerEl) {
+            const maxX = Math.max(240, (this.canvasContainerEl.offsetWidth || 400) * this.zoom * 0.85);
+            const maxY = Math.max(240, (this.canvasContainerEl.offsetHeight || 400) * this.zoom * 0.85);
+            this.panX = Math.max(-maxX, Math.min(maxX, this.panX));
+            this.panY = Math.max(-maxY, Math.min(maxY, this.panY));
+            this.canvasContainerEl.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0) scale(${this.zoom})`;
+        }
+        if (this.zoomLabelEl) {
+            this.zoomLabelEl.textContent = `${Math.round(this.zoom * 100)}%`;
+        }
+    }
+
+    private setZoomAtPoint(nextZoom: number, clientX?: number, clientY?: number): void {
+        const clamped = Math.max(0.5, Math.min(5.0, Math.round(nextZoom * 1000) / 1000));
+        if (clientX !== undefined && clientY !== undefined && this.stageEl && this.zoom > 0) {
+            const stageRect = this.stageEl.getBoundingClientRect();
+            const ox = clientX - (stageRect.left + stageRect.width / 2);
+            const oy = clientY - (stageRect.top + stageRect.height / 2);
+            const ratio = clamped / this.zoom;
+            this.panX = ox - (ox - this.panX) * ratio;
+            this.panY = oy - (oy - this.panY) * ratio;
+        }
+        this.zoom = clamped;
+        this.applyViewTransform();
+        this.updateCursorRing();
+    }
+
+    private adjustZoom(delta: number): void {
+        const target = Math.round((this.zoom + delta) * 100) / 100;
+        this.setZoomAtPoint(target);
+    }
+
+    private resetView(): void {
+        this.zoom = 1;
+        this.panX = 0;
+        this.panY = 0;
+        this.applyViewTransform();
+        this.updateCursorRing();
+    }
+
+    private updateHistoryButtons(): void {
+        if (this.undoBtnEl) {
+            this.undoBtnEl.disabled = this.historyIndex <= 0;
+        }
+        if (this.redoBtnEl) {
+            this.redoBtnEl.disabled = this.historyIndex >= this.historyStack.length - 1;
+        }
+    }
+
+    private pushHistorySnapshot(): void {
+        if (!this.overlayCanvas || !this.maskCanvas) return;
+        const w = this.overlayCanvas.width;
+        const h = this.overlayCanvas.height;
+        if (w <= 0 || h <= 0) return;
+
+        const overlayCtx = this.overlayCanvas.getContext('2d');
+        const maskCtx = this.maskCanvas.getContext('2d');
+        if (!overlayCtx || !maskCtx) return;
+
+        const overlay = overlayCtx.getImageData(0, 0, w, h);
+        const mask = maskCtx.getImageData(0, 0, w, h);
+        if (this.historyIndex < this.historyStack.length - 1) {
+            this.historyStack.length = this.historyIndex + 1;
+        }
+        this.historyStack.push({ overlay, mask });
+        if (this.historyStack.length > this.maxHistory) {
+            this.historyStack.shift();
+        }
+        this.historyIndex = this.historyStack.length - 1;
+        this.updateHistoryButtons();
+    }
+
+    private applyHistorySnapshot(index: number): void {
+        const snap = this.historyStack[index];
+        if (!snap || !this.overlayCanvas || !this.maskCanvas) return;
+        const overlayCtx = this.overlayCanvas.getContext('2d');
+        const maskCtx = this.maskCanvas.getContext('2d');
+        if (!overlayCtx || !maskCtx) return;
+
+        overlayCtx.putImageData(snap.overlay, 0, 0);
+        maskCtx.putImageData(snap.mask, 0, 0);
+        this.historyIndex = index;
+        this.updateHistoryButtons();
+    }
+
+    private undo(): void {
+        if (this.historyIndex <= 0) return;
+        this.applyHistorySnapshot(this.historyIndex - 1);
+    }
+
+    private redo(): void {
+        if (this.historyIndex >= this.historyStack.length - 1) return;
+        this.applyHistorySnapshot(this.historyIndex + 1);
     }
 
     /**
      * 更新随动光圈光标的位置、直径与显示状态。
      */
     private updateCursorRing(e?: MouseEvent): void {
-        if (!this.cursorRingEl || !this.overlayCanvas || !this.canvasContainerEl) return;
+        if (!this.cursorRingEl || !this.overlayCanvas || !this.stageEl) return;
 
         if (e) {
-            const rect = this.canvasContainerEl.getBoundingClientRect();
+            const rect = this.stageEl.getBoundingClientRect();
             const relX = e.clientX - rect.left;
             const relY = e.clientY - rect.top;
             this.cursorRingEl.style.left = `${relX}px`;
@@ -587,11 +853,11 @@ export class InpaintModal implements Disposable {
         this.cursorRingEl.style.width = `${displayDiameter}px`;
         this.cursorRingEl.style.height = `${displayDiameter}px`;
 
-        if (this.isEraser) {
-            this.cursorRingEl.classList.add('is-eraser');
-        } else {
-            this.cursorRingEl.classList.remove('is-eraser');
-        }
+        this.cursorRingEl.classList.toggle('is-eraser', this.isEraser);
+        this.cursorRingEl.classList.toggle(
+            'is-pan-hidden',
+            this.toolMode === 'pan' || this.isPanning || this.isSpacePressed
+        );
     }
 
     /**
@@ -611,16 +877,18 @@ export class InpaintModal implements Disposable {
                 maskCtx.fillRect(0, 0, this.maskCanvas.width, this.maskCanvas.height);
             }
         }
+        this.pushHistorySnapshot();
         Toast.info('已清空重绘涂抹选区');
     }
 
     /**
-     * 绑定画布鼠标、滚轮与触屏涂抹事件。
+     * 绑定画布鼠标、滚轮、缩放平移与触屏涂抹事件。
      */
     private bindCanvasEvents(): void {
-        if (!this.overlayCanvas) return;
+        if (!this.overlayCanvas || !this.stageEl) return;
 
         const canvas = this.overlayCanvas;
+        const stage = this.stageEl;
 
         const getPos = (e: MouseEvent | Touch): { x: number; y: number } => {
             const rect = canvas.getBoundingClientRect();
@@ -633,6 +901,9 @@ export class InpaintModal implements Disposable {
         };
 
         const handlePointerDown = (pos: { x: number; y: number }) => {
+            if (this.historyStack.length === 0) {
+                this.pushHistorySnapshot();
+            }
             this.isDrawing = true;
             this.lastPos = pos;
             this.drawStroke(pos, pos);
@@ -645,12 +916,34 @@ export class InpaintModal implements Disposable {
         };
 
         const handlePointerUp = () => {
+            if (!this.isDrawing) return;
             this.isDrawing = false;
             this.lastPos = null;
+            this.pushHistorySnapshot();
         };
 
-        // 鼠标事件
+        // 鼠标事件（画布绘制 + 中右键/空格/移动模式拖拽平移）
         const onMouseDown = (e: MouseEvent) => {
+            if ((e.target as HTMLElement | null)?.closest('.da-inpaint-zoom-capsule')) {
+                return;
+            }
+            const shouldPan =
+                this.toolMode === 'pan' ||
+                this.isSpacePressed ||
+                e.button === 1 ||
+                e.button === 2;
+            if (shouldPan) {
+                if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+                e.preventDefault();
+                this.isPanning = true;
+                this.panStartClientX = e.clientX;
+                this.panStartClientY = e.clientY;
+                this.panStartX = this.panX;
+                this.panStartY = this.panY;
+                this.updateStageCursor();
+                this.updateCursorRing();
+                return;
+            }
             if (e.button !== 0) return;
             handlePointerDown(getPos(e));
         };
@@ -666,9 +959,20 @@ export class InpaintModal implements Disposable {
                     }
                 });
             }
+            if (this.isPanning) {
+                this.panX = this.panStartX + (e.clientX - this.panStartClientX);
+                this.panY = this.panStartY + (e.clientY - this.panStartClientY);
+                this.applyViewTransform();
+                return;
+            }
             handlePointerMove(getPos(e));
         };
         const onMouseUp = () => {
+            if (this.isPanning) {
+                this.isPanning = false;
+                this.updateStageCursor();
+                this.updateCursorRing();
+            }
             handlePointerUp();
         };
 
@@ -678,23 +982,32 @@ export class InpaintModal implements Disposable {
         const onMouseLeave = () => {
             this.cursorRingEl?.classList.remove('is-visible');
         };
-
-        // 滚轮缩放画笔大小
-        const onWheel = (e: WheelEvent) => {
+        const onContextMenu = (e: MouseEvent) => {
             e.preventDefault();
-            const delta = e.deltaY > 0 ? -2 : 2;
-            const nextVal = Math.max(4, Math.min(160, this.brushSize + delta));
-            if (nextVal !== this.brushSize) {
-                this.brushSize = nextVal;
-                this.brushSlider?.setValue(nextVal, { silent: true });
-                this.updateCursorRing();
-            }
         };
 
-        canvas.addEventListener('mousedown', onMouseDown);
-        canvas.addEventListener('mouseenter', onMouseEnter);
-        canvas.addEventListener('mouseleave', onMouseLeave);
-        canvas.addEventListener('wheel', onWheel, { passive: false });
+        // 滚轮缩放画布，Alt/Shift + 滚轮微调画笔尺寸
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            if (e.altKey || e.shiftKey) {
+                const delta = e.deltaY > 0 ? -2 : 2;
+                const nextVal = Math.max(4, Math.min(160, this.brushSize + delta));
+                if (nextVal !== this.brushSize) {
+                    this.brushSize = nextVal;
+                    this.brushInput?.setValue(nextVal, { silent: true });
+                    this.updateCursorRing();
+                }
+                return;
+            }
+            const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+            this.setZoomAtPoint(this.zoom * factor, e.clientX, e.clientY);
+        };
+
+        stage.addEventListener('mousedown', onMouseDown);
+        stage.addEventListener('mouseenter', onMouseEnter);
+        stage.addEventListener('mouseleave', onMouseLeave);
+        stage.addEventListener('contextmenu', onContextMenu);
+        stage.addEventListener('wheel', onWheel, { passive: false });
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
 
@@ -704,39 +1017,101 @@ export class InpaintModal implements Disposable {
                 this.cursorRingRafId = null;
             }
             this.pendingCursorEvent = null;
-            canvas.removeEventListener('mousedown', onMouseDown);
-            canvas.removeEventListener('mouseenter', onMouseEnter);
-            canvas.removeEventListener('mouseleave', onMouseLeave);
-            canvas.removeEventListener('wheel', onWheel);
+            stage.removeEventListener('mousedown', onMouseDown);
+            stage.removeEventListener('mouseenter', onMouseEnter);
+            stage.removeEventListener('mouseleave', onMouseLeave);
+            stage.removeEventListener('contextmenu', onContextMenu);
+            stage.removeEventListener('wheel', onWheel);
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
         });
 
-        // 触屏事件
+        // 触屏单指涂抹/平移与双指捏合缩放
+        const getTouchCenterAndDist = (t1: Touch, t2: Touch) => ({
+            dist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+            center: {
+                x: (t1.clientX + t2.clientX) / 2,
+                y: (t1.clientY + t2.clientY) / 2,
+            },
+        });
+
         const onTouchStart = (e: TouchEvent) => {
+            if ((e.target as HTMLElement | null)?.closest('.da-inpaint-zoom-capsule')) {
+                return;
+            }
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                handlePointerUp();
+                this.isPanning = false;
+                this.updateStageCursor();
+                const { dist, center } = getTouchCenterAndDist(e.touches[0], e.touches[1]);
+                this.pinchStartDist = Math.max(1, dist);
+                this.pinchStartZoom = this.zoom;
+                this.pinchLastCenter = center;
+                return;
+            }
             if (e.touches.length === 1) {
                 e.preventDefault();
-                handlePointerDown(getPos(e.touches[0]));
+                const t = e.touches[0];
+                if (this.toolMode === 'pan') {
+                    this.isPanning = true;
+                    this.panStartClientX = t.clientX;
+                    this.panStartClientY = t.clientY;
+                    this.panStartX = this.panX;
+                    this.panStartY = this.panY;
+                    this.updateStageCursor();
+                } else {
+                    handlePointerDown(getPos(t));
+                }
             }
         };
         const onTouchMove = (e: TouchEvent) => {
+            if (e.touches.length === 2 && this.pinchLastCenter) {
+                e.preventDefault();
+                const { dist, center } = getTouchCenterAndDist(e.touches[0], e.touches[1]);
+                this.panX += center.x - this.pinchLastCenter.x;
+                this.panY += center.y - this.pinchLastCenter.y;
+                this.pinchLastCenter = center;
+                const nextZoom = this.pinchStartZoom * (dist / Math.max(1, this.pinchStartDist));
+                this.setZoomAtPoint(nextZoom, center.x, center.y);
+                return;
+            }
             if (e.touches.length === 1) {
                 e.preventDefault();
-                handlePointerMove(getPos(e.touches[0]));
+                const t = e.touches[0];
+                if (this.isPanning) {
+                    this.panX = this.panStartX + (t.clientX - this.panStartClientX);
+                    this.panY = this.panStartY + (t.clientY - this.panStartClientY);
+                    this.applyViewTransform();
+                } else {
+                    handlePointerMove(getPos(t));
+                }
             }
         };
-        const onTouchEnd = () => {
-            handlePointerUp();
+        const onTouchEnd = (e: TouchEvent) => {
+            if (e.touches.length < 2) {
+                this.pinchStartDist = 0;
+                this.pinchLastCenter = null;
+            }
+            if (e.touches.length === 0) {
+                if (this.isPanning) {
+                    this.isPanning = false;
+                    this.updateStageCursor();
+                }
+                handlePointerUp();
+            }
         };
 
-        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        stage.addEventListener('touchstart', onTouchStart, { passive: false });
         window.addEventListener('touchmove', onTouchMove, { passive: false });
         window.addEventListener('touchend', onTouchEnd);
+        window.addEventListener('touchcancel', onTouchEnd);
 
         this.disposers.push(() => {
-            canvas.removeEventListener('touchstart', onTouchStart);
+            stage.removeEventListener('touchstart', onTouchStart);
             window.removeEventListener('touchmove', onTouchMove);
             window.removeEventListener('touchend', onTouchEnd);
+            window.removeEventListener('touchcancel', onTouchEnd);
         });
 
         // 窗口与画布容器尺寸变化同步
@@ -810,6 +1185,27 @@ export class InpaintModal implements Disposable {
     }
 
     /**
+     * 校验当前离屏蒙版画布是否存在至少一个非全黑有效涂抹像素。
+     */
+    private hasPaintedMask(): boolean {
+        if (!this.maskCanvas || !this.bgCanvas) return false;
+        const ctx = this.maskCanvas.getContext('2d');
+        if (!ctx) {
+            return true;
+        }
+        if (this.maskCanvas.width <= 0 || this.maskCanvas.height <= 0) {
+            return false;
+        }
+        const data = ctx.getImageData(0, 0, this.maskCanvas.width, this.maskCanvas.height).data;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 0 || data[i + 1] > 0 || data[i + 2] > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 确认并导出重绘数据。
      */
     private async handleConfirm(): Promise<void> {
@@ -825,6 +1221,11 @@ export class InpaintModal implements Disposable {
 
         if (!prompt) {
             Toast.warning('重绘正向提示词不能为空');
+            return;
+        }
+
+        if (!this.hasPaintedMask()) {
+            Toast.warning('请先在画布上涂抹需要重绘的区域');
             return;
         }
 
@@ -909,17 +1310,17 @@ export class InpaintModal implements Disposable {
             this.toolControl.dispose();
             this.toolControl = undefined;
         }
-        if (this.brushSlider) {
-            this.brushSlider.dispose();
-            this.brushSlider = undefined;
+        if (this.brushInput) {
+            this.brushInput.dispose();
+            this.brushInput = undefined;
         }
-        if (this.denoiseSlider) {
-            this.denoiseSlider.dispose();
-            this.denoiseSlider = undefined;
+        if (this.denoiseInput) {
+            this.denoiseInput.dispose();
+            this.denoiseInput = undefined;
         }
-        if (this.blurSlider) {
-            this.blurSlider.dispose();
-            this.blurSlider = undefined;
+        if (this.blurInput) {
+            this.blurInput.dispose();
+            this.blurInput = undefined;
         }
 
         if (this.backdropEl && this.backdropEl.parentNode) {
@@ -927,11 +1328,18 @@ export class InpaintModal implements Disposable {
         }
         this.backdropEl = undefined;
         this.badgeEl = undefined;
+        this.confirmBtnEl = undefined;
+        this.stageEl = undefined;
         this.canvasContainerEl = undefined;
+        this.zoomLabelEl = undefined;
+        this.undoBtnEl = undefined;
+        this.redoBtnEl = undefined;
         this.cursorRingEl = undefined;
         this.bgCanvas = undefined;
         this.maskCanvas = undefined;
         this.overlayCanvas = undefined;
+        this.historyStack = [];
+        this.historyIndex = -1;
     }
 }
 

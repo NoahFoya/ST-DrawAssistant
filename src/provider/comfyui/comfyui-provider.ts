@@ -539,7 +539,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 1. 读取激活的绘图预设（优先使用队列快照固定的 drawingPresetId）
+        // 1. 读取激活的生图参数预设（优先使用队列快照固定的 drawingPresetId）
         const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         const isInpaintMode = params.mode === 'inpaint';
@@ -565,7 +565,9 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             if (isInpaintMode) {
                 resolvedWorkflowId = (params.inpaintPresetId ?? drawingPreset?.inpaintPresetId) as string | undefined;
                 if (!resolvedWorkflowId) {
-                    throw new Error('当前预设未绑定局部重绘预设，请前往设置中心-ComfyUI 绑定局部重绘预设');
+                    throw new Error(
+                        '当前预设未选择局部重绘工作流，请前往「ComfyUI → 工作流模板」导入或选择包含蒙版节点的工作流'
+                    );
                 }
             } else {
                 resolvedWorkflowId =
@@ -681,6 +683,33 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         }
 
         const injectedWorkflow = buildWorkflow(rawWorkflow, variables);
+
+        // 提交前校验分立模型工作流是否已选择所需的外置 CLIP / VAE 模型，避免将空字符串直接发往服务端
+        for (const node of Object.values(injectedWorkflow)) {
+            if (!node || typeof node !== 'object') continue;
+            const nodeObj = node as { class_type?: unknown; inputs?: Record<string, unknown> };
+            const classType = typeof nodeObj.class_type === 'string' ? nodeObj.class_type : '';
+            const inputs = nodeObj.inputs;
+            if (!inputs || typeof inputs !== 'object') continue;
+
+            if (classType === 'CLIPLoader') {
+                const clipVal = typeof inputs.clip_name === 'string' ? inputs.clip_name.trim() : '';
+                if (!clipVal) {
+                    throw new Error('当前 UNet 工作流尚未选择 CLIP 模型，请前往「ComfyUI → 模型配置」指定 CLIP 模型文件');
+                }
+            } else if (classType === 'DualCLIPLoader') {
+                const clip1 = typeof inputs.clip_name1 === 'string' ? inputs.clip_name1.trim() : '';
+                const clip2 = typeof inputs.clip_name2 === 'string' ? inputs.clip_name2.trim() : '';
+                if (!clip1 || !clip2) {
+                    throw new Error('当前 UNet 工作流尚未完整选择双 CLIP 模型，请前往「ComfyUI → 模型配置」或在工作流蓝图中指定');
+                }
+            } else if (classType === 'VAELoader') {
+                const vaeVal = typeof inputs.vae_name === 'string' ? inputs.vae_name.trim() : '';
+                if (!vaeVal) {
+                    throw new Error('当前 UNet 工作流尚未选择 VAE 模型，请前往「ComfyUI → 模型配置」指定 VAE 模型文件');
+                }
+            }
+        }
 
         // 4. 提交工作流至 POST /prompt 端点并校验 node_errors
         const promptPayload = {

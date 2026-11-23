@@ -1,5 +1,5 @@
 /**
- * 关于与支持专属选项卡视图 (AboutTabView)。
+ * 关于选项卡视图 (AboutTabView)。
  *
  * @remarks
  * 基于 Preact JSX 构建：
@@ -38,7 +38,7 @@ interface EnvSummaryState {
 
 export class AboutTabView extends PreactSettingsView {
     public readonly id = 'about';
-    public readonly title = '关于与支持';
+    public readonly title = '关于';
 
     private readonly envState: Signal<EnvSummaryState>;
     private readonly copyLabel: Signal<string>;
@@ -102,7 +102,7 @@ export class AboutTabView extends PreactSettingsView {
         await this.refreshEnvState();
         const env = this.envState.value;
 
-        return [
+        const lines = [
             `### ${EXTENSION_TITLE} 系统诊断报告`,
             `- **插件版本**: v${EXTENSION_VERSION}`,
             `- **代码提交**: ${
@@ -114,11 +114,26 @@ export class AboutTabView extends PreactSettingsView {
             }`,
             `- **生成时间**: ${new Date().toISOString()}`,
             `- **SillyTavern 宿主**: ${env.hasST ? '已集成' : '未检测到宿主'}`,
-            `- **生图引擎**: ${env.activeProvider}`,
+            `- **生图服务**: ${env.activeProvider}`,
             `- **连接方式**: ${env.transport}`,
             `- **存储空间**: ${env.usedMb} MB / ${env.quotaMb} MB (${env.usagePercent}%)`,
             `- **用户代理**: \`${env.userAgent}\``,
-        ].join('\n');
+        ];
+
+        const recentIssues = logger
+            .getRecentLogs(200)
+            .filter((entry) => entry.level === 'error' || entry.level === 'warn')
+            .slice(-10);
+
+        if (recentIssues.length > 0) {
+            lines.push('', '#### 最近警告与错误日志');
+            for (const entry of recentIssues) {
+                const timeStr = new Date(entry.timestamp).toISOString();
+                lines.push(`- \`[${timeStr}] [${entry.level.toUpperCase()}]\` ${entry.message}`);
+            }
+        }
+
+        return lines.join('\n');
     }
 
     private async handleCopyDiagnosticReport(): Promise<void> {
@@ -417,11 +432,11 @@ export class AboutTabView extends PreactSettingsView {
                             </div>
                         </div>
 
-                        {/* 行 2: 生图引擎与网络连接 */}
+                        {/* 行 2: 生图服务与网络连接 */}
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span>当前生效生图引擎</span>
+                                    <span>当前生效生图服务</span>
                                 </div>
                                 <div className="da-settings-row__desc">
                                     当前选定且生效的生成服务提供商与网络连接方式

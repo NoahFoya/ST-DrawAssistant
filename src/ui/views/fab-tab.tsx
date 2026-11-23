@@ -3,7 +3,7 @@
  *
  * @remarks
  * 基于 Preact JSX 与 ReactiveSettingsBridge 声明式构建：
- * 1. 基础配置卡片：常驻显隐开关、不透明度滑块与停靠位置重置按钮；
+ * 1. 基础配置卡片：常驻显隐开关、启用快捷面板开关、不透明度数值输入与停靠位置重置按钮；
  * 2. 图标与外观卡片：预设图标切换、自定义圆形头像本地上传与绘图动效选择。
  */
 
@@ -15,7 +15,7 @@ import {
     CardView,
     FormFieldView,
     SwitchControl,
-    SliderControl,
+    NumberInputControl,
     SelectControl,
     ButtonControl,
 } from '../framework';
@@ -74,13 +74,22 @@ export class FabTabView extends PreactSettingsView {
     }
 
     private updateFabSettings(
-        patch: Partial<{ visible: boolean; opacity: number; icon: string; animationType: FabAnimationOption }>
+        patch: Partial<{
+            visible: boolean;
+            opacity: number;
+            icon: string;
+            animationType: FabAnimationOption;
+            quickPanelEnabled: boolean;
+            hoverTrigger: boolean;
+        }>
     ): void {
         const currentFab = this.bridge.get('ui')?.fab || {
             visible: true,
             opacity: 0.95,
             icon: 'palette',
             animationType: 'starlight' as FabAnimationOption,
+            quickPanelEnabled: false,
+            hoverTrigger: true,
         };
         this.bridge.updateUi({
             fab: {
@@ -123,6 +132,8 @@ export class FabTabView extends PreactSettingsView {
         const visible = fab?.visible ?? true;
         const opacity = fab?.opacity ?? 0.95;
         const opacityPct = Math.round(opacity * 100);
+        const quickPanelEnabled = Boolean(fab?.quickPanelEnabled);
+        const hoverTrigger = fab?.hoverTrigger ?? true;
         const currentIcon = (fab?.icon as string) || 'palette';
         const rawAnim = fab?.animationType as string | undefined;
         const currentAnim: FabAnimationOption = FAB_ANIMATION_OPTIONS.some(
@@ -149,10 +160,11 @@ export class FabTabView extends PreactSettingsView {
                         label="悬浮球不透明度"
                         width="w-240"
                     >
-                        <SliderControl
+                        <NumberInputControl
                             min={20}
                             max={100}
                             step={5}
+                            precision={0}
                             value={opacityPct}
                             unit="%"
                             onChange={(val) =>
@@ -172,6 +184,33 @@ export class FabTabView extends PreactSettingsView {
                                 eventBus.emit('ui:reset-fab-position');
                                 Toast.show('已重置悬浮球停靠位置', { level: 'info' });
                             }}
+                        />
+                    </FormFieldView>
+
+                    <FormFieldView
+                        label="启用快捷面板"
+                        width="w-toggle"
+                        tooltip="开启后单击或长按悬浮球可展开快捷面板，快速切换生图服务、预设与高频开关；双击悬浮球或点击面板顶栏「主设置」可直接打开主设置窗口。"
+                    >
+                        <SwitchControl
+                            value={quickPanelEnabled}
+                            onChange={(checked) =>
+                                this.updateFabSettings({ quickPanelEnabled: checked })
+                            }
+                        />
+                    </FormFieldView>
+
+                    <FormFieldView
+                        label="鼠标悬停自动展开"
+                        width="w-toggle"
+                        tooltip="桌面端鼠标在悬浮球上悬停约 0.25 秒时自动呼出快捷面板，移出面板区域后自动收起。"
+                    >
+                        <SwitchControl
+                            value={hoverTrigger}
+                            disabled={!quickPanelEnabled}
+                            onChange={(checked) =>
+                                this.updateFabSettings({ hoverTrigger: checked })
+                            }
                         />
                     </FormFieldView>
                 </CardView>

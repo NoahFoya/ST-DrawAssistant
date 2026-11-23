@@ -334,7 +334,7 @@ export class GenerationOrchestrator {
             (this._settingsStore.get('activeProvider') as ProviderType) ??
             'comfyui';
 
-        // 1. 预处理提示词并固化当前生效的绘图预设快照，确保排队期间切换预设不导致参数错配
+        // 1. 预处理提示词并固化当前生效的生图参数预设快照，确保排队期间切换预设不导致参数错配
         const explicitDrawingId =
             typeof options.parameters?.drawingPresetId === 'string'
                 ? options.parameters.drawingPresetId
@@ -393,7 +393,12 @@ export class GenerationOrchestrator {
         this._tasks.set(taskId, task);
         this._queue.push(taskId);
 
-        logger.info(`生图任务已入队: ${taskId} (资产: ${imageId}, 会话: ${options.target.chatId}, 楼层 #${options.target.messageId})`);
+        const transport = this._settingsStore.get('transport') || 'direct';
+        const promptPresetLabel =
+            request.resolvedPromptPresetName || request.resolvedPromptPresetId || '无';
+        logger.info(
+            `生图任务已入队: ${taskId} (资产: ${imageId}, 引擎: ${providerType}, 通道: ${transport}, 提示词预设: ${promptPresetLabel}, 会话: ${options.target.chatId}, 楼层 #${options.target.messageId})`
+        );
         this.transitionTaskStatus(taskId, 'pending');
 
         // 3. 驱动队列消费
@@ -666,7 +671,13 @@ export class GenerationOrchestrator {
             if (!isCrossSession) {
                 this._eventBus.emit('image:ready', { imageId, target: task.target });
             }
-            logger.info(`生图任务执行成功: ${taskId} (资产 ID: ${imageId})`);
+            const dimSummary =
+                finalizedMetadata.width && finalizedMetadata.height
+                    ? `${finalizedMetadata.width}×${finalizedMetadata.height}`
+                    : finalizedMetadata.aspectRatio || '--';
+            logger.info(
+                `生图任务执行成功: ${taskId} (资产 ID: ${imageId}, 引擎: ${task.providerType}, 模型: ${finalizedMetadata.baseModel || '默认'}, 规格: ${dimSummary}, 耗时: ${finalizedMetadata.durationMs ?? '-'}ms)`
+            );
         } catch (err: unknown) {
             if (this.isTaskCancelled(taskId)) {
                 logger.info(`已取消任务异常退出: ${taskId}`);
@@ -675,19 +686,19 @@ export class GenerationOrchestrator {
 
             if (isTimedOut) {
                 const timeoutSec = Math.round(timeoutMs / 1000);
-                this.finalizeFailure(taskId, `生图服务响应超时 (${timeoutSec}s)`);
+                this.finalizeFailure(taskId, `生图服务响应超时 (${timeoutSec}s)`, err);
                 return;
             }
 
             if (controller.signal.aborted) {
                 if (!this._isDisposed) {
-                    this.finalizeFailure(taskId, '生图任务已中止');
+                    this.finalizeFailure(taskId, '生图任务已中止', err);
                 }
                 return;
             }
 
             const errorMsg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '生图服务执行异常');
-            this.finalizeFailure(taskId, errorMsg);
+            this.finalizeFailure(taskId, errorMsg, err);
         } finally {
             // 清理控制器与定时器
             if (timeoutTimer !== null) {
@@ -713,11 +724,15 @@ export class GenerationOrchestrator {
      * 失败任务仅保留在内存任务表，不写入 IndexedDB；
      * 仅在内存状态机中流转并广播 task:status 供 UI 展示重试状态。
      */
-    private finalizeFailure(taskId: string, errorMsg: string): void {
+    private finalizeFailure(taskId: string, errorMsg: string, rawError?: unknown): void {
         const task = this._tasks.get(taskId);
         if (task && task.status !== 'cancelled' && task.status !== 'completed') {
             this.transitionTaskStatus(taskId, 'failed', { error: errorMsg, imageId: task.imageId });
-            logger.error(`生图任务失败 [${taskId}]: ${errorMsg}`);
+            if (rawError !== undefined) {
+                logger.error(`生图任务失败 [${taskId}] (${task.providerType}): ${errorMsg}`, rawError);
+            } else {
+                logger.error(`生图任务失败 [${taskId}] (${task.providerType}): ${errorMsg}`);
+            }
         }
     }
 

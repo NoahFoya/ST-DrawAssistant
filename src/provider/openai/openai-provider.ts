@@ -23,6 +23,7 @@ import {
     type InFlightAssetSlot,
 } from '../base-provider';
 import { base64ToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
+import { logger } from '../../util/logger';
 import {
     extractHttpErrorMessage,
     hashKeyFingerprint,
@@ -261,7 +262,11 @@ export class OpenAIProvider extends BaseGenerationProvider {
                     if (internalSignal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
                         throw err;
                     }
-                    // 后端不支持 /v1/models 时静默返回空数组
+                    if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
+                        logger.debug(`[OpenAIProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
+                    } else {
+                        logger.warn(`[OpenAIProvider] 拉取模型列表 (${url}) 失败:`, err);
+                    }
                     return [];
                 }
             },

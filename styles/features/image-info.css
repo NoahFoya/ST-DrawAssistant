@@ -135,13 +135,6 @@
     color: var(--da-accent-color);
 }
 
-.da-inspect-token-count {
-    font-size: 0.8em;
-    color: var(--da-text-muted);
-    font-weight: normal;
-    margin-left: 4px;
-}
-
 .da-inspect-prompt-text {
     font-size: 0.88em;
     line-height: 1.55;

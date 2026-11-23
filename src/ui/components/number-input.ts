@@ -40,21 +40,24 @@ export class NumberInput implements ControlHandle<number> {
     private readonly plusBtn: HTMLButtonElement;
 
     private currentValue: number;
-    private readonly min?: number;
-    private readonly max?: number;
-    private readonly step: number;
-    private readonly precision: number;
+    private min?: number;
+    private max?: number;
+    private step: number;
+    private precision: number;
+    private readonly explicitPrecision?: number;
 
     private readonly changeCallbacks = new Set<ControlChangeCallback<number>>();
     private readonly minusListener: () => void;
     private readonly plusListener: () => void;
     private readonly changeListener: () => void;
     private readonly blurListener: () => void;
+    private readonly keydownListener: (e: KeyboardEvent) => void;
 
     constructor(options: NumberInputOptions = {}) {
         this.min = options.min;
         this.max = options.max;
         this.step = options.step ?? 1;
+        this.explicitPrecision = options.precision;
         this.precision = options.precision ?? this.inferPrecision(this.step);
 
         const rawValue = options.value ?? (this.min ?? 0);
@@ -106,9 +109,21 @@ export class NumberInput implements ControlHandle<number> {
             this.updateValue(fallback, true);
             this.inputElement.value = this.currentValue.toFixed(this.precision);
         };
+        this.keydownListener = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.inputElement.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.setInvalidState(false);
+                this.inputElement.value = this.currentValue.toFixed(this.precision);
+                this.inputElement.blur();
+            }
+        };
 
         this.inputElement.addEventListener('input', this.changeListener);
         this.inputElement.addEventListener('blur', this.blurListener);
+        this.inputElement.addEventListener('keydown', this.keydownListener);
         this.element.appendChild(this.inputElement);
 
         // 4. 加号按钮
@@ -168,6 +183,40 @@ export class NumberInput implements ControlHandle<number> {
         if (this.inputElement.disabled) return;
         const target = this.currentValue - this.step;
         this.updateValue(target, true);
+    }
+
+    /**
+     * 动态更新数值边界与步长（如切换模型架构时调整采样区间）。
+     */
+    public setRange(min?: number, max?: number, step?: number, defaultValue?: number): void {
+        this.min = min;
+        this.max = max;
+        if (step !== undefined) {
+            this.step = step;
+            this.inputElement.step = String(step);
+            if (this.explicitPrecision === undefined) {
+                this.precision = this.inferPrecision(this.step);
+            }
+        }
+
+        if (min !== undefined) {
+            this.inputElement.min = String(min);
+        } else {
+            this.inputElement.removeAttribute('min');
+        }
+        if (max !== undefined) {
+            this.inputElement.max = String(max);
+        } else {
+            this.inputElement.removeAttribute('max');
+        }
+
+        const sourceVal = Number.isFinite(this.currentValue)
+            ? this.currentValue
+            : (defaultValue ?? min ?? 0);
+        this.currentValue = this.clampAndFormat(sourceVal);
+        this.inputElement.value = this.currentValue.toFixed(this.precision);
+        this.setInvalidState(false);
+        this.updateBtnStates();
     }
 
     public setDisabled(disabled: boolean): void {
@@ -233,12 +282,8 @@ export class NumberInput implements ControlHandle<number> {
 
     private updateBtnStates(): void {
         if (this.inputElement.disabled) return;
-        if (this.min !== undefined) {
-            this.minusBtn.disabled = this.currentValue <= this.min;
-        }
-        if (this.max !== undefined) {
-            this.plusBtn.disabled = this.currentValue >= this.max;
-        }
+        this.minusBtn.disabled = this.min !== undefined ? this.currentValue <= this.min : false;
+        this.plusBtn.disabled = this.max !== undefined ? this.currentValue >= this.max : false;
     }
 
     private dispatchChange(value: number): void {
@@ -256,6 +301,7 @@ export class NumberInput implements ControlHandle<number> {
         this.plusBtn.removeEventListener('click', this.plusListener);
         this.inputElement.removeEventListener('input', this.changeListener);
         this.inputElement.removeEventListener('blur', this.blurListener);
+        this.inputElement.removeEventListener('keydown', this.keydownListener);
         this.changeCallbacks.clear();
         this.element.parentElement?.removeChild(this.element);
     }

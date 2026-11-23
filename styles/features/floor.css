@@ -114,11 +114,6 @@
     box-shadow: 0 0 8px rgba(var(--da-accent-rgb, 99, 102, 241), 0.15);
 }
 
-.da-floor-action-btn__timer {
-    font-variant-numeric: tabular-nums;
-    color: var(--da-text-secondary);
-}
-
 /* 2. 楼层图片呈现容器 */
 .da-floor-image-container {
     position: relative;

@@ -8,6 +8,7 @@ export * from './material-definitions';
 export * from './archive-extractor';
 export * from './worldbook-converter';
 export * from './prompt-injector';
+export * from './host-regex-service';
 export * from './lexicon-index-service';
 export * from './generation-orchestrator';
 export * from './session-lifecycle';

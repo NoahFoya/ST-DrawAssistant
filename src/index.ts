@@ -28,6 +28,7 @@ import { viewportService } from './ui/layout';
 import { generationOrchestrator } from './pipeline/generation-orchestrator';
 import { lexiconIndexService } from './pipeline/lexicon-index-service';
 import { promptInjector } from './pipeline/prompt-injector';
+import { hostRegexService } from './pipeline/host-regex-service';
 import { AssetSyncCoordinator } from './pipeline/asset-sync-coordinator';
 import { eventBus } from './util/event-bus';
 import { logger } from './util/logger';
@@ -385,11 +386,13 @@ export async function initOnce(): Promise<void> {
                         messageDecorator.clearCurrentButtons();
                     }
                 }
+                hostRegexService.syncToHost({ reloadChatOnDisplayChange: true });
                 void promptInjector.scheduleSyncToHost();
             });
             hostEventCleanups.push(unbindSettingsSync);
 
-            // 启动时序补偿：宿主会话载入与插件脚本激活为异步并发，初始化就绪后主动触发初次全量扫描与提示词注入，保证首屏同步
+            // 启动时序补偿：宿主会话载入与插件脚本激活为异步并发，初始化就绪后主动触发初次全量扫描、宿主全局正则同步与提示词注入，保证首屏同步
+            hostRegexService.syncToHost();
             messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
             void promptInjector.scheduleSyncToHost();
 

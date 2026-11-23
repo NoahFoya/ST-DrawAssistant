@@ -681,7 +681,7 @@ export class MessageDecorator implements Disposable {
                         if (!check.valid) {
                             const confirmed = await ConfirmDialog.confirm({
                                 title: '模型缺失确认',
-                                message: `当前生图预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
+                                message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
                                 confirmText: '继续生图',
                                 cancelText: '取消',
                             });
@@ -1207,7 +1207,7 @@ export class MessageDecorator implements Disposable {
                 );
             });
 
-            // 移动端长按手势呼出图片操作面板 (500ms，带手势防误触与点击穿透防护)
+            // 移动端长按手势呼出图片操作面板 (500ms，带手势防误触与松手后误触发点击防护)
             let touchTimer: ReturnType<typeof setTimeout> | null = null;
             let clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
             let touchStartX = 0;
@@ -1888,7 +1888,7 @@ export class MessageDecorator implements Disposable {
         if (!check.valid) {
             const confirmed = await ConfirmDialog.confirm({
                 title: '模型缺失确认',
-                message: `当前生图预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
+                message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
                 confirmText: '继续生图',
                 cancelText: '取消',
             });

@@ -1,5 +1,5 @@
 /**
- * 常规设置选项卡视图 (GeneralTabView)。
+ * 插件设置选项卡视图 (GeneralTabView)。
  *
  * @remarks
  * 基于 Preact JSX 与 SchemaForm 声明式构建常规配置卡片，
@@ -8,10 +8,11 @@
  */
 
 import type { VNode } from 'preact';
-import type { ImageStorageQuality, ProviderType, TransportMode } from '@types';
+import type { ImageStorageQuality, ProviderType, ThinkingDisplayMode, TransportMode } from '@types';
 import { PreactSettingsView, SchemaForm, type CardSchema } from '../framework';
 import { ReactiveSettingsBridge } from '../viewmodels';
 import { promptInjector } from '../../pipeline/prompt-injector';
+import { hostRegexService } from '../../pipeline/host-regex-service';
 
 interface GeneralFormModel {
     enabled: boolean;
@@ -26,6 +27,10 @@ interface GeneralFormModel {
     imageActionPanelEnabled: boolean;
     lightboxEnabled: boolean;
     cleanPrompt: boolean;
+    normalizeChinesePunctuation: boolean;
+    thinkingDisplayMode: ThinkingDisplayMode;
+    cleanHistoryThinking: boolean;
+    cleanHistoryMarkup: boolean;
     align: 'center' | 'flex-start' | 'flex-end';
     objectFit: 'contain' | 'cover' | 'none';
     maxWidthPct: number;
@@ -158,7 +163,45 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '提交生成前自动清理多余逗号、空格及重复标签，同时保留 <lora:...> 语法。',
+                    '默认开启。提交生成前按英文逗号自动清理多余空白逗号及重复标签（如预设前后缀与触发词重合），同时保留 <lora:...> 语法。',
+            },
+            {
+                key: 'normalizeChinesePunctuation',
+                label: '中文标点转英文逗号',
+                type: 'switch',
+                width: 'w-toggle',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '默认关闭（信任并保留模型原生输出的中文「，」「、」，适配 MOSS 等中文自然语义模型）。开启后，清洗提示词时会将中文全角逗号与顿号统一转为英文半角逗号「, 」。',
+            },
+            {
+                key: 'thinkingDisplayMode',
+                label: '绘图与设计思考',
+                type: 'segmented',
+                width: 'w-240',
+                tooltip:
+                    '控制消息中 <imagethink> 与 <designthink> 思维链的前端显示效果：选择「折叠」或「隐藏」时将直接同步写入酒馆原生全局正则（仅格式化显示），即使禁用本插件依然持久生效。',
+                options: [
+                    { label: '显示', value: 'show' },
+                    { label: '折叠', value: 'collapse' },
+                    { label: '隐藏', value: 'hide' },
+                ],
+            },
+            {
+                key: 'cleanHistoryThinking',
+                label: '清理历史绘图与设计思考',
+                type: 'switch',
+                width: 'w-toggle',
+                tooltip:
+                    '开启后将向酒馆原生全局正则写入历史思考清洗规则（仅格式化提示词，最小深度 0）：发送给 AI 时自动剥离历史消息中的 <imagethink> 与 <designthink> 思维链，节省上下文 Token，插件禁用后依然有效。',
+            },
+            {
+                key: 'cleanHistoryMarkup',
+                label: '清理历史生图与档案标记',
+                type: 'switch',
+                width: 'w-toggle',
+                tooltip:
+                    '开启后将向酒馆原生全局正则写入历史标记清洗规则（仅格式化提示词，最小深度 0）：发送给 AI 时自动剥离历史消息中的生图指令标记（如 image###...###）与角色/服装档案块（<character>/<outfit>），不影响前端楼层生图按钮与已出图片，插件禁用后依然有效。',
             },
         ],
     },
@@ -195,7 +238,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             {
                 key: 'maxWidthPct',
                 label: '最大宽度',
-                type: 'slider',
+                type: 'number',
                 width: 'w-240',
                 min: 10,
                 max: 100,
@@ -206,7 +249,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             {
                 key: 'maxHeight',
                 label: '最大高度',
-                type: 'slider',
+                type: 'number',
                 width: 'w-240',
                 min: 100,
                 max: 2048,
@@ -243,7 +286,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '原始格式保留完整像素与 EXIF 绘图参数元数据；WebP 格式可明显减少本地 IndexedDB 存储占用。',
+                    '原始格式保留完整像素与 EXIF 绘图参数信息；WebP 格式可明显减少浏览器本地存储占用。',
                 options: [
                     { label: '原始格式 (无损)', value: 'original' },
                     { label: 'WebP 高质量 (90%)', value: 'webp-high' },
@@ -265,7 +308,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
 
 export class GeneralTabView extends PreactSettingsView {
     public readonly id = 'general';
-    public readonly title = '常规设置';
+    public readonly title = '插件设置';
 
     private readonly bridge: ReactiveSettingsBridge;
 
@@ -296,6 +339,10 @@ export class GeneralTabView extends PreactSettingsView {
             imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
             lightboxEnabled: lightbox?.enabled ?? true,
             cleanPrompt: s.cleanPrompt ?? true,
+            normalizeChinesePunctuation: Boolean(s.normalizeChinesePunctuation),
+            thinkingDisplayMode: (s.thinkingDisplayMode || 'show') as ThinkingDisplayMode,
+            cleanHistoryThinking: Boolean(s.cleanHistoryThinking),
+            cleanHistoryMarkup: Boolean(s.cleanHistoryMarkup),
             align: (img?.align || 'center') as GeneralFormModel['align'],
             objectFit: (img?.objectFit || 'contain') as GeneralFormModel['objectFit'],
             maxWidthPct: img?.maxWidthPct ?? 100,
@@ -360,6 +407,21 @@ export class GeneralTabView extends PreactSettingsView {
                 break;
             case 'cleanPrompt':
                 this.bridge.set('cleanPrompt', Boolean(val));
+                break;
+            case 'normalizeChinesePunctuation':
+                this.bridge.set('normalizeChinesePunctuation', Boolean(val));
+                break;
+            case 'thinkingDisplayMode':
+                this.bridge.set('thinkingDisplayMode', val as ThinkingDisplayMode);
+                hostRegexService.syncToHost({ reloadChatOnDisplayChange: true });
+                break;
+            case 'cleanHistoryThinking':
+                this.bridge.set('cleanHistoryThinking', Boolean(val));
+                hostRegexService.syncToHost();
+                break;
+            case 'cleanHistoryMarkup':
+                this.bridge.set('cleanHistoryMarkup', Boolean(val));
+                hostRegexService.syncToHost();
                 break;
             case 'align':
                 this.updateImageDisplay({

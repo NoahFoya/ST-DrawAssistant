@@ -1,5 +1,5 @@
 /**
- * 素材库视图共享类型与公共辅助渲染方法。
+ * 素材管理视图共享类型与公共辅助渲染方法。
  */
 
 import { useEffect, useRef } from 'preact/hooks';

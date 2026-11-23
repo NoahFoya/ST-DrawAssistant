@@ -536,7 +536,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
                     pingResult.error ||
                     (pingResult.status !== undefined
                         ? `连接失败 (HTTP ${pingResult.status})`
-                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在常规设置开启“酒馆代理”或改用自定义反代）'),
+                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在「插件设置」开启“酒馆代理”或改用自定义反代）'),
             };
         }
 
@@ -652,7 +652,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const params = request.parameters ?? {};
         const maxTimeoutMs = this.getTimeoutMs();
 
-        // 2. 读取激活的绘图预设（优先使用队列快照固定的 drawingPresetId）
+        // 2. 读取激活的生图参数预设（优先使用队列快照固定的 drawingPresetId）
         const drawingPreset = this.resolveDrawingPreset<DrawingPresetData>(params);
 
         // 3. 解析提示词与模型规格
@@ -674,7 +674,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const resolvedSteps = (params.steps ?? drawingPreset?.steps ?? 28) as number;
         const resolvedCfgScale = (params.cfgScale ?? drawingPreset?.cfgScale ?? 5.0) as number;
         const resolvedSampler = (params.samplerName ?? drawingPreset?.samplerName ?? 'k_euler_ancestral') as string;
-        const rawScheduler = (params.scheduler ?? params.noise_schedule ?? drawingPreset?.scheduler) as
+        const rawScheduler = (params.scheduler ?? drawingPreset?.scheduler) as
             | string
             | undefined;
         const resolvedScheduler =

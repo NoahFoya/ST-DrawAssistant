@@ -1,5 +1,5 @@
 /**
- * 素材库选项卡视图 (MaterialsTabView)。
+ * 素材管理选项卡视图 (MaterialsTabView)。
  *
  * @remarks
  * 基于顶部分段导航划分为五个子面板：
@@ -85,7 +85,7 @@ export {
 
 export class MaterialsTabView extends PreactSettingsView {
     public readonly id = 'materials';
-    public readonly title = '素材库';
+    public readonly title = '素材管理';
 
     public readonly subTab = signal<MaterialsSubTab>('characters');
     public readonly charController: PresetController<CharacterPresetData>;

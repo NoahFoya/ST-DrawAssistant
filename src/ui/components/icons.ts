@@ -59,11 +59,15 @@ const SVG_PATHS = {
     /** 刷新/重置/重新生成 */
     refresh:
         '<polyline points="22 5 22 10 17 10"></polyline><polyline points="2 19 2 14 7 14"></polyline><path d="M4.2 9.2a8.2 8.2 0 0 1 13.7-3.1L22 10M2 14l4.1 3.9A8.2 8.2 0 0 0 19.8 14.8"></path>',
+    /** 撤销 */
+    undo: '<path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>',
+    /** 重做 */
+    redo: '<path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>',
     /** 删除垃圾桶 */
     trash: '<polyline points="4 7 6 7 20 7"></polyline><path d="M19 7v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7m3 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>',
     /** 关闭叉号 */
     close: '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>',
-    /** 参数调节/微调重绘滑杆 */
+    /** 参数调节/微调重绘控制 */
     sliders:
         '<line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="2" y1="14" x2="6" y2="14"></line><line x1="10" y1="8" x2="14" y2="8"></line><line x1="18" y1="16" x2="22" y2="16"></line>',
     /** 画笔/涂抹工具 */
@@ -156,6 +160,8 @@ export const ICONS: Readonly<Record<IconName, string>> = {
     edit: renderIcon('edit', 14),
     external: renderIcon('external', 14),
     refresh: renderIcon('refresh', 14),
+    undo: renderIcon('undo', 14),
+    redo: renderIcon('redo', 14),
     trash: renderIcon('trash', 14),
     close: renderIcon('close', 14),
     sliders: renderIcon('sliders', 14),

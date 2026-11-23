@@ -4,7 +4,7 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持官方/自定义预设切换与 Bearer Token)；
- * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、轮询候选池入口行 (PromptPollingPanelView)、画幅尺寸 (DimensionPickerView)、采样与调度控制 (SamplerCardView) 与 CFG Rescale；
+ * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、轮询候选池入口行 (PromptPollingPanelView)、画幅尺寸 (DimensionPickerView)、采样与调度控制 (SamplerCardView) 与 CFG Rescale；
  * 3. V3 模型采样增强选项卡片 (SchemaCard，仅 V3 系列模型时渲染 SMEA 与 Decrisper 选项)；
  * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false)。
  */
@@ -53,7 +53,7 @@ const NOVELAI_PROVIDER_PRESETS: ProviderPreset[] = [
 const SMEA_MODE_OPTIONS = [
     { label: 'SMEA + DYN (动态增强)', value: 'smea_dyn' },
     { label: 'SMEA (采样增强)', value: 'smea' },
-    { label: 'None (关闭)', value: 'none' },
+    { label: '关闭', value: 'none' },
 ];
 
 const NOVELAI_SAMPLER_OPTIONS = [
@@ -75,7 +75,7 @@ const NOVELAI_SCHEDULER_OPTIONS = [
 const CFG_RESCALE_FIELD: FieldSchema<DrawingPresetData> = {
     key: 'cfgRescale',
     label: 'CFG 重缩放 (CFG Rescale)',
-    type: 'slider',
+    type: 'number',
     min: 0.0,
     max: 1.0,
     step: 0.02,
@@ -105,7 +105,7 @@ export class NovelAITabView extends ProviderTabView {
             defaultServerUrl: NOVELAI_IMAGE_HOST,
             defaultServiceId: NOVELAI_OFFICIAL_SERVICE_ID,
             idPrefix: 'novelai_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultModels: OFFICIAL_NOVELAI_MODELS.map((id) => ({
                 label: formatNovelAIModelLabel(id),
@@ -156,7 +156,7 @@ export class NovelAITabView extends ProviderTabView {
                 key: 'customModel',
                 label: '自定义模型标识',
                 type: 'text',
-                placeholder: '可选填写第三方端点模型标识（若填写将覆盖上述下拉选项）',
+                placeholder: '可选填写第三方接口模型标识（若填写将覆盖上述下拉选项）',
                 tooltip:
                     '第三方反向代理或第三方兼容服务端自建的模型标识名。若填写，将覆盖默认预置下拉选项并以此名称向服务端发起请求。',
                 transform: {
@@ -189,7 +189,7 @@ export class NovelAITabView extends ProviderTabView {
         this.advancedFields = [
             {
                 key: 'smeaMode',
-                label: 'SMEA 采样增强 (SMEA)',
+                label: 'SMEA 采样增强',
                 type: 'select',
                 options: SMEA_MODE_OPTIONS,
                 tooltip:
@@ -245,7 +245,7 @@ export class NovelAITabView extends ProviderTabView {
                 showApiKey={true}
                 providerPresets={NOVELAI_PROVIDER_PRESETS}
                 presetLabel="服务商"
-                presetTooltip="选择使用 NovelAI 官方云端服务或第三方反代/中转端点"
+                presetTooltip="选择使用 NovelAI 官方云端服务或第三方反代/中转服务地址"
                 urlPlaceholder="例如 https://example.com/novelai"
                 showWorkflowManager={false}
                 showLoraInPromptManager={false}

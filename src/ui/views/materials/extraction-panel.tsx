@@ -1,5 +1,5 @@
 /**
- * 素材库 - 解析设置子面板。
+ * 素材管理 - 解析设置子面板。
  */
 
 import type { VNode } from 'preact';

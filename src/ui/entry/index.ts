@@ -7,4 +7,5 @@
  */
 
 export * from './fab';
+export * from './fab-quick-panel';
 export * from './drawer-entry';

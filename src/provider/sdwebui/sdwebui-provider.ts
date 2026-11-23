@@ -23,6 +23,7 @@ import {
     type InFlightAssetSlot,
 } from '../base-provider';
 import { base64ToBlob, ensureValidImageBlob, HttpError, imageInputToBase64 } from '../../util/http-client';
+import { logger } from '../../util/logger';
 
 /** 提取 SD-WebUI HttpError 详情文本 */
 function extractSdWebUiError(details: unknown): string | undefined {
@@ -191,6 +192,11 @@ export class SdWebUIProvider extends BaseGenerationProvider {
                         throw err;
                     }
                     if (degradeOnError) {
+                        if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
+                            logger.debug(`[SD-WebUI] 服务端未实现 ${endpointPath} 接口 (HTTP ${err.status})，跳过拉取`);
+                        } else {
+                            logger.warn(`[SD-WebUI] 拉取 ${assetType} (${endpointPath}) 失败，已降级为空列表:`, err);
+                        }
                         return [];
                     }
                     throw err;
@@ -268,7 +274,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
      * 执行 SD-WebUI 图像生成任务（支持 txt2img 与局部重绘 img2img）。
      *
      * 包含以下流程：
-     * 1. 读取绘图预设与调用参数，装配请求体与 override_settings；
+     * 1. 读取生图参数预设与调用参数，装配请求体与 override_settings；
      * 2. 发起 txt2img 或 img2img 请求并等待生成结果；
      * 3. 将响应的 Base64 图片转换为 PNG Blob 并封装元数据返回。
      *

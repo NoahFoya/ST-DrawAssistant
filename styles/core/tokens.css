@@ -79,11 +79,11 @@
     --da-bg-mask-medium: rgba(0, 0, 0, 0.65);
     --da-bg-mask-heavy: rgba(0, 0, 0, 0.85);
     --da-toggle-track-bg: rgba(255, 255, 255, 0.12);
-    --da-slider-thumb-bg: #ffffff;
+    --da-switch-thumb-bg: #ffffff;
     --da-color-workflow-accent: #c084fc;
     --da-color-workflow-accent-subtle: rgba(168, 85, 247, 0.15);
 
-    /* 6. 调试日志语法高亮与工作流参数节点标识颜色 */
+    /* 6. 调试日志语法高亮与工作流模型节点标识颜色 */
     --da-terminal-bg: #101014;
     --da-terminal-text: #e6edf3;
     --da-terminal-muted: #71717a;
@@ -93,18 +93,8 @@
     --da-terminal-yellow: #fbbf24;
     --da-terminal-red: #fb7185;
 
-    --da-node-prompt: #c084fc;
-    --da-node-prompt-rgb: 192, 132, 252;
-    --da-node-sampler: #fb923c;
-    --da-node-sampler-rgb: 251, 146, 60;
     --da-node-model: #60a5fa;
     --da-node-model-rgb: 96, 165, 250;
-    --da-node-size: #34d399;
-    --da-node-size-rgb: 52, 211, 153;
-    --da-node-output: #38bdf8;
-    --da-node-output-rgb: 56, 189, 248;
-    --da-node-lora: #f43f5e;
-    --da-node-lora-rgb: 244, 63, 94;
 
     /* 7. 基础间距标度 */
     --da-space-2xs: 2px;
@@ -201,7 +191,7 @@
     --da-border-highlight: rgba(var(--da-accent-rgb), 0.45);
     --da-separator: rgba(0, 0, 0, 0.06);
     --da-toggle-track-bg: rgba(0, 0, 0, 0.12);
-    --da-slider-thumb-bg: #ffffff;
+    --da-switch-thumb-bg: #ffffff;
     --da-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.02);
     --da-shadow-md: 0 3px 8px -1px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
     --da-shadow-lg: 0 8px 20px -4px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.02);

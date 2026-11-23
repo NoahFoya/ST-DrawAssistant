@@ -84,70 +84,11 @@
     background: linear-gradient(90deg, var(--da-color-error), rgba(var(--da-color-error-rgb), 0.7));
 }
 
-/* 4. 存储统计指标卡片网格与操作条带 (.da-storage-stats-grid)
-   3 列等宽网格，内嵌 stat-card 指标展示 */
-.da-storage-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--da-space-sm, 8px);
-    width: 100%;
-}
-
 .da-storage-actions-toolbar {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
     padding-top: 2px;
-}
-
-/* 5. 紧凑模式 (.da-storage-bar--compact) */
-.da-storage-bar--compact {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--da-space-md, 12px);
-    padding: 8px 12px;
-    background: var(--da-bg-secondary);
-    border: 1px solid var(--da-separator);
-    border-radius: var(--da-radius-sm, 8px);
-    flex-wrap: wrap;
-}
-
-.da-storage-bar--compact .da-storage-compact-info {
-    display: flex;
-    align-items: center;
-    gap: var(--da-space-sm, 8px);
-    flex: 1;
-    min-width: 240px;
-}
-
-.da-storage-bar--compact .da-storage-track {
-    width: 90px;
-    height: 6px;
-    flex-shrink: 0;
-}
-
-.da-storage-bar--compact .da-storage-summary-text {
-    font-size: var(--da-font-size-xs, 0.78rem);
-    color: var(--da-text-secondary);
-    white-space: nowrap;
-}
-
-.da-storage-bar--compact .da-storage-actions-toolbar {
-    margin-top: 0;
-    gap: 6px;
-}
-
-/* 存储配额异常或超限错误提示条 */
-.da-storage-error-hint {
-    color: var(--da-color-error);
-    font-size: var(--da-font-size-xs, 0.76rem);
-    padding: 6px 10px;
-    background: rgba(var(--da-color-error-rgb), 0.08);
-    border: 1px solid rgba(var(--da-color-error-rgb), 0.25);
-    border-radius: var(--da-radius-sm, 6px);
-    text-align: center;
 }
 

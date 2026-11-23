@@ -71,7 +71,7 @@ export class GeminiTabView extends ProviderTabView {
                 ),
             },
             idPrefix: 'gemini_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultModels: GEMINI_MODEL_OPTIONS,
             defaultDraftTemplate: () => ({
@@ -94,7 +94,7 @@ export class GeminiTabView extends ProviderTabView {
                 const missing: string[] = [];
                 const effectiveModel = getEffectiveModel(cfg);
                 if (!effectiveModel) missing.push('模型标识 (预置或自定义)');
-                if (!cfg.aspectRatio) missing.push('画幅比例 (aspectRatio)');
+                if (!cfg.aspectRatio) missing.push('画幅比例');
                 return missing;
             },
         });
@@ -133,7 +133,7 @@ export class GeminiTabView extends ProviderTabView {
                 label: '自定义模型标识',
                 type: 'text',
                 placeholder: '可选填写模型 ID（如 gemini-3.1-flash-image-preview）',
-                tooltip: '若填写，将覆盖上方下拉选择并直接拼接至 :generateContent 端点路径。',
+                tooltip: '若填写，将覆盖上方下拉选择并直接使用该模型名称发起请求。',
                 transform: {
                     toView: (v) => (v as string) || '',
                     fromView: (v) => String(v || '').trim(),
@@ -152,7 +152,7 @@ export class GeminiTabView extends ProviderTabView {
         this.imageConfigFields = [
             {
                 key: 'aspectRatio',
-                label: '画幅比例 (aspectRatio)',
+                label: '画幅比例',
                 type: 'select',
                 options: ASPECT_RATIO_OPTIONS,
                 tooltip: 'Gemini 原生 imageConfig.aspectRatio 参数，直接由模型按比例生成构图。',
@@ -163,7 +163,7 @@ export class GeminiTabView extends ProviderTabView {
             },
             {
                 key: 'imageSize',
-                label: '分辨率档位 (imageSize)',
+                label: '分辨率档位',
                 type: 'segmented',
                 options: (m) => {
                     const capabilities = resolveGeminiModelCapabilities(getEffectiveModel(m));

@@ -2,7 +2,7 @@
  * Preact 声明式基础控件库 (Controls)。
  *
  * @remarks
- * 将设计系统中的卡片、表单行、开关、下拉框、滑块、数值步进器、文本框、分段选择器与按钮
+ * 将设计系统中的卡片、表单行、开关、下拉框、数值步进器、文本框、分段选择器与按钮
  * 封装为无状态/受控 Preact 函数组件，保持 .da-* 样式类名与原生交互事件一致。
  */
 
@@ -302,86 +302,10 @@ export function SelectControl(props: SelectControlProps) {
     );
 }
 
-// 5. 连续范围滑块组件 (SliderControl)
-
-export interface SliderControlProps {
-    value: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    defaultValue?: number;
-    showValue?: boolean;
-    unit?: string;
-    precision?: number;
-    disabled?: boolean;
-    dirty?: boolean;
-    className?: string;
-    onChange?: (value: number) => void;
-}
-
 function inferStepPrecision(step: number): number {
     const str = String(step);
     const dotIndex = str.indexOf('.');
     return dotIndex === -1 ? 0 : str.length - dotIndex - 1;
-}
-
-function clampSliderValue(val: number, min: number, max: number, precision: number): number {
-    if (Number.isNaN(val)) return min;
-    const clamped = Math.min(max, Math.max(min, val));
-    return Number(clamped.toFixed(precision));
-}
-
-export function SliderControl(props: SliderControlProps) {
-    const min = props.min ?? 0;
-    const max = props.max ?? 100;
-    const step = props.step ?? 1;
-    const precision = props.precision ?? inferStepPrecision(step);
-    const unit = props.unit ?? '';
-    const showValue = props.showValue ?? true;
-
-    const raw = props.value ?? props.defaultValue ?? min;
-    const currentValue = clampSliderValue(raw, min, max, precision);
-    const displayStr = `${currentValue.toFixed(precision)}${unit}`;
-
-    const wrapperClasses = [
-        'da-slider-wrapper',
-        props.disabled ? 'da-slider-wrapper--disabled' : '',
-        props.dirty ? 'da-slider-wrapper--dirty is-dirty' : '',
-        props.className || '',
-    ]
-        .filter(Boolean)
-        .join(' ');
-
-    const handleInput = (e: Event) => {
-        const parsed = parseFloat((e.currentTarget as HTMLInputElement).value);
-        const nextVal = clampSliderValue(parsed, min, max, precision);
-        props.onChange?.(nextVal);
-    };
-
-    const handleDblClick = () => {
-        if (props.defaultValue !== undefined && !props.disabled) {
-            const resetVal = clampSliderValue(props.defaultValue, min, max, precision);
-            props.onChange?.(resetVal);
-        }
-    };
-
-    return (
-        <div className={wrapperClasses}>
-            <input
-                type="range"
-                className="da-slider"
-                min={String(min)}
-                max={String(max)}
-                step={String(step)}
-                value={String(currentValue)}
-                disabled={props.disabled}
-                onInput={handleInput}
-                onChange={handleInput}
-                onDblClick={handleDblClick}
-            />
-            {showValue && <span className="da-slider__value">{displayStr}</span>}
-        </div>
-    );
 }
 
 // 6. 数值步进微调组件 (NumberInputControl)
@@ -499,6 +423,17 @@ export function NumberInputControl(props: NumberInputControlProps) {
                     inputEl.value = clamped.toFixed(precision);
                     if (clamped !== currentValue) {
                         props.onChange?.(clamped);
+                    }
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        (e.currentTarget as HTMLInputElement).blur();
+                    } else if (e.key === 'Escape') {
+                        setRawInput(null);
+                        setIsInvalid(false);
+                        const inputEl = e.currentTarget as HTMLInputElement;
+                        inputEl.value = currentValue.toFixed(precision);
+                        inputEl.blur();
                     }
                 }}
             />

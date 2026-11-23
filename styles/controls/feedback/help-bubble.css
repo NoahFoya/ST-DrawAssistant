@@ -59,16 +59,6 @@
     word-break: break-word;
 }
 
-.da-help-bubble-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-    font-weight: 600;
-    color: var(--da-accent-color);
-    font-size: var(--da-font-size-sm, 0.82rem);
-}
-
 .da-help-bubble-body {
     color: var(--da-text-secondary);
     font-size: var(--da-font-size-xs, 0.76rem);

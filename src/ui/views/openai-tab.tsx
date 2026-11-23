@@ -4,7 +4,7 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持服务商模板与 Bearer Token)；
- * 2. 生图预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 / GPT Image 专属参数；
+ * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 / GPT Image 专属参数；
  * 3. 自定义请求参数 JSON 扩展卡片（支持实时语法校验，非法时标红 .is-invalid 并拦截保存）；
  * 4. 底部提示词预设卡片 (PromptPresetCardView，showLoraInPromptManager: false, showNegativeInPromptManager: false)。
  */
@@ -169,7 +169,7 @@ export class OpenAITabView extends ProviderTabView {
                 ),
             },
             idPrefix: 'openai_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultModels: OPENAI_MODEL_OPTIONS,
             defaultDraftTemplate: () => ({
@@ -230,7 +230,7 @@ export class OpenAITabView extends ProviderTabView {
                 type: 'text',
                 placeholder: '可选填写非标或中转模型标识（若填写将覆盖上述下拉选项）',
                 tooltip:
-                    '第三方中转代理、聚合 API 或特殊微调模型的服务标识名（如硅基流动 FLUX、Kolors 等）。若填写，将覆盖默认下拉选择并直接写入请求体 model 字段。',
+                    '第三方中转代理、聚合 API 或特殊微调模型的服务标识名（如硅基流动 FLUX、Kolors 等）。若填写，将覆盖默认下拉选择并直接使用该模型名称发起请求。',
                 transform: {
                     toView: (v) => (v as string) || '',
                     fromView: (v) => String(v || '').trim(),

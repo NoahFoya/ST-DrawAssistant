@@ -176,7 +176,7 @@ export class GalleryTabView extends PreactSettingsView {
                                 />
                                 <div className="da-gallery-empty__title">暂无匹配的图像记录</div>
                                 <div className="da-gallery-empty__sub">
-                                    生成的图片将自动保存在本地图库中，支持按提示词、生图引擎或收藏状态检索
+                                    生成的图片将自动保存在本地图库中，支持按提示词、生图服务或收藏状态检索
                                 </div>
                             </div>
                         ) : (

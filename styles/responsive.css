@@ -16,10 +16,10 @@
         height: calc(var(--da-vvh) - 48px);
     }
 
-    /* 侧边栏适度收缩，将空间让渡给右侧内容区 */
+    /* 侧边栏适度收缩至 178px，保障长名称（如 Google Gemini）完整显示并将空间让渡给右侧内容区 */
     .da-sidebar-tabs {
-        width: 160px;
-        flex: 0 0 160px;
+        width: 178px;
+        flex: 0 0 178px;
     }
 
     /* 蓝图节点编辑器外壳弹性收缩 */
@@ -72,9 +72,11 @@
     }
 
     /* 属性检视面板位于下半部占据 55% 视高；
-       小屏垂直布局下以顶部边框分隔上方节点列表，保障长属性列表可独立滚动 */
+       解除桌面端 max-width: 40vw 限制，保证小屏垂直布局下完整占满容器宽度 */
     .da-blueprint-inspector-panel {
         width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
         flex: 1 1 55% !important;
         border-left: none !important;
         border-top: 1px solid var(--da-border-color) !important;
@@ -114,6 +116,29 @@
     /* 预览视窗在移动端限制最大高度为 280px，留出首屏下半部空间提示下方存在元数据 */
     .da-inspect-preview-box {
         max-height: 280px !important;
+    }
+
+    /* 大号二级子页标签条在平板及更窄视口（含 641px）约束宽度并启用横向滑动，防止 5 子页撑出内容区 */
+    .da-segmented--lg {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+        height: auto !important;
+        min-height: 36px !important;
+        overflow-x: auto !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        scroll-padding-inline: 10px;
+    }
+
+    .da-segmented--lg::-webkit-scrollbar {
+        display: none;
+    }
+
+    .da-segmented--lg .da-segmented__item {
+        flex: 1 0 auto !important;
+        padding: 0 9px !important;
     }
 }
 
@@ -222,29 +247,26 @@
      * 1. 容器转为纵向列排布，两端间距统一；
      * 2. 标签与控件均占满 100% 宽度；
      * 3. 控件区域清除 margin-left: auto，改为靠左自然流动并撑满整行；
-     * 4. 内部输入框、下拉框、滑块与分段器统一满宽；
-     * 5. 带有 .da-form-row--inline 的开关行显式维持单行两端对齐。
+     * 4. 内部输入框、下拉框、数值步进器与分段器统一满宽。
      */
-    .da-form-row:not(.da-form-row--inline),
-    .da-row:not(.da-form-row--inline) {
+    .da-form-row {
         flex-direction: column !important;
         align-items: stretch !important;
         gap: var(--da-space-xs, 4px) !important;
     }
 
-    .da-form-row:not(.da-form-row--inline) .da-form-row__label-slot,
-    .da-form-row:not(.da-form-row--inline) .da-field-label-group {
+    .da-form-row .da-field-label-group {
         width: 100% !important;
         max-width: 100% !important;
         flex: 0 0 auto !important;
         min-width: 0 !important;
     }
 
-    .da-form-row:not(.da-form-row--inline) .da-form-row__control,
-    .da-form-row:not(.da-form-row--inline) .da-slot--w-240,
-    .da-form-row:not(.da-form-row--inline) .da-slot--w-200,
-    .da-form-row:not(.da-form-row--inline) .da-slot--w-160,
-    .da-form-row:not(.da-form-row--inline) .da-slot--w-120 {
+    .da-form-row .da-form-row__control,
+    .da-form-row .da-slot--w-240,
+    .da-form-row .da-slot--w-200,
+    .da-form-row .da-slot--w-160,
+    .da-form-row .da-slot--w-120 {
         width: 100% !important;
         max-width: 100% !important;
         min-width: 0 !important;
@@ -253,21 +275,19 @@
         justify-content: flex-start !important;
     }
 
-    .da-form-row:not(.da-form-row--inline) .da-input,
-    .da-form-row:not(.da-form-row--inline) .da-select,
-    .da-form-row:not(.da-form-row--inline) .da-select-wrapper,
-    .da-form-row:not(.da-form-row--inline) .da-slider-wrapper,
-    .da-form-row:not(.da-form-row--inline) .da-segmented,
-    .da-form-row:not(.da-form-row--inline) .da-input-unit-wrapper,
-    .da-form-row:not(.da-form-row--inline) .da-dimension-picker__size-group,
-    .da-form-row:not(.da-form-row--inline) .da-number-input {
+    .da-form-row .da-input,
+    .da-form-row .da-select,
+    .da-form-row .da-select-wrapper,
+    .da-form-row .da-segmented,
+    .da-form-row .da-dimension-picker__size-group,
+    .da-form-row .da-number-input {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
         flex: 1 1 auto !important;
     }
 
-    .da-form-row:not(.da-form-row--inline) .da-segmented__item {
+    .da-form-row .da-segmented__item {
         flex: 1 1 0%;
         padding: 3px 6px !important;
     }
@@ -277,48 +297,15 @@
         word-break: break-word;
     }
 
-    /* 紧凑内联行维持水平单行居中两端对齐，标签组按需折行避免挤压右侧开关 */
-    .da-form-row--inline {
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 10px !important;
-    }
-
-    .da-form-row--inline .da-field-label-group {
-        min-width: 0 !important;
-        flex: 1 1 auto !important;
-    }
-
-    .da-form-row--inline .da-form-row__control {
-        margin-left: auto !important;
-        flex: 0 0 auto !important;
-        min-width: 0 !important;
-    }
-
-    /* 大号二级子页标签条在窄屏下支持流畅横向滑动且保留可触控宽度 */
-    .da-segmented--lg {
-        height: auto !important;
-        min-height: 36px !important;
-        overflow-x: auto !important;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .da-segmented--lg::-webkit-scrollbar {
-        display: none;
-    }
-
+    /* 大号二级子页标签条在紧凑手机屏微调字阶与内边距，减少不必要滑动 */
     .da-segmented--lg .da-segmented__item {
-        flex: 1 0 auto !important;
-        padding: 0 10px !important;
-        font-size: 12px !important;
+        padding: 0 8px !important;
+        font-size: 11.5px !important;
         height: 32px !important;
         min-height: 32px !important;
     }
 
-    /* 存储信息条与预设栏解除桌面最小宽度约束 */
-    .da-storage-bar--compact .da-storage-compact-info,
+    /* 预设栏解除桌面最小宽度约束 */
     .da-preset-toolbar-left,
     .da-preset-select-wrapper {
         min-width: 0 !important;
@@ -327,9 +314,8 @@
 
 /* 4. 超窄屏幕与小屏手机适配 (max-width: 520px) */
 @media (max-width: 520px) {
-    /* 统计指标与存储容量格栅降级为单列排布 */
-    .da-stat-grid,
-    .da-storage-stats-grid {
+    /* 统计指标格栅降级为单列排布 */
+    .da-stat-grid {
         grid-template-columns: 1fr !important;
     }
 

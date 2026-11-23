@@ -4,7 +4,7 @@
  * @remarks
  * 采用 Soft UI 双栏专业工作台架构：
  * 1. 左侧画布工作台：画布舞台、快捷分段工具栏、实时随动画笔光圈与快捷键指示；
- * 2. 右侧属性检查器：Slider 受控参数、重绘提示词编辑框与底部操作栏；
+ * 2. 右侧属性检查器：数值步进受控参数、重绘提示词编辑框与底部操作栏；
  * 3. 移动端与小屏弹性适配，避免外层页面纵向撑高与视口溢出。
  */
 
@@ -119,6 +119,23 @@
     gap: 8px;
 }
 
+.da-inpaint-brush-control .da-number-input {
+    width: 132px;
+    height: 28px;
+}
+
+.da-inpaint-brush-control .da-number-input__field {
+    max-width: none;
+    font-size: 12px;
+}
+
+.da-inpaint-tool-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
 .da-inpaint-brush-label {
     font-size: 12px;
     font-weight: 500;
@@ -143,6 +160,16 @@
     background-size: 16px 16px;
     user-select: none;
     -webkit-user-select: none;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.da-inpaint-stage.is-pan-mode {
+    cursor: grab;
+}
+
+.da-inpaint-stage.is-panning {
+    cursor: grabbing;
 }
 
 .da-inpaint-canvas-container {
@@ -156,7 +183,8 @@
     border-radius: 4px;
     overflow: hidden;
     border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.12));
-    cursor: crosshair;
+    transform-origin: center center;
+    will-change: transform;
     touch-action: none;
 }
 
@@ -172,8 +200,8 @@
     display: block;
     position: absolute;
     inset: 0;
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     pointer-events: auto;
     touch-action: none;
@@ -197,9 +225,57 @@
     opacity: 1;
 }
 
+.da-inpaint-cursor-ring.is-pan-hidden {
+    opacity: 0 !important;
+}
+
 .da-inpaint-cursor-ring.is-eraser {
     border-color: var(--da-color-info, #38bdf8);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65), inset 0 0 4px rgba(var(--da-color-info-rgb, 56, 189, 248), 0.35);
+}
+
+/* 4.3.1 画布右下角缩放控制胶囊 */
+.da-inpaint-zoom-capsule {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: calc(var(--da-z-raised, 10) + 2);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--da-bg-secondary, rgba(20, 22, 29, 0.9));
+    border: 1px solid var(--da-border-color, rgba(255, 255, 255, 0.12));
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.da-inpaint-zoom-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    min-width: 24px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.75));
+    font-size: 11px;
+    font-family: var(--da-font-mono, monospace);
+    cursor: pointer;
+    transition: background-color 0.12s var(--da-ease), color 0.12s var(--da-ease);
+}
+
+.da-inpaint-zoom-btn:hover {
+    background: var(--da-bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--da-text-primary, #ffffff);
+}
+
+.da-inpaint-zoom-btn--reset {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 4.4 底部快捷键指示栏 */
@@ -260,6 +336,14 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+.da-inpaint-field-group .da-number-input {
+    width: 100%;
+}
+
+.da-inpaint-field-group .da-number-input__field {
+    max-width: none;
 }
 
 .da-inpaint-field-header {

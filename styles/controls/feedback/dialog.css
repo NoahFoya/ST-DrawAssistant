@@ -1,5 +1,5 @@
 /**
- * 模态确认对话框与 Portal 遮罩层样式。
+ * 模态确认对话框遮罩层与卡片样式。
  *
  * @remarks
  * 包含全屏模糊背景蒙层与紧凑居中操作卡片。
@@ -12,17 +12,6 @@
     background: var(--da-bg-overlay-modal, rgba(17, 17, 27, 0.78));
     backdrop-filter: blur(var(--da-blur-modal, 20px));
     -webkit-backdrop-filter: blur(var(--da-blur-modal, 20px));
-}
-
-.da-portal-host {
-    position: fixed;
-    inset: 0;
-    z-index: var(--da-z-popover, 10035);
-    pointer-events: none;
-}
-
-.da-portal-host > * {
-    pointer-events: auto;
 }
 
 /* 2. 对话框主体面板 (.da-dialog-panel)

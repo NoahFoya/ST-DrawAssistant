@@ -18,7 +18,7 @@ export type TransportMode = 'direct' | 'relay';
  * 单次调用的可选覆盖参数。
  */
 export interface GenerationParameters {
-    /** 指定使用的绘图预设标识符 */
+    /** 指定使用的生图参数预设标识符 */
     drawingPresetId?: string;
     /** 指定使用的提示词预设标识符 */
     promptPresetId?: string;
@@ -143,7 +143,7 @@ export interface ProviderStoredConfig {
     readonly apiKey?: string;
     /** 当前选用的服务商模板标识 */
     readonly serviceId?: string;
-    /** 当前激活的绘图预设 ID */
+    /** 当前激活的生图参数预设 ID */
     readonly activeDrawingPresetId?: string;
     /** 当前生效的服务端资产本地持久化缓存 */
     readonly assetCache?: ProviderAssetCache;

@@ -127,12 +127,6 @@
     border-color: rgba(var(--da-color-success-rgb), 0.35);
 }
 
-.da-macro-status-chip--inactive {
-    background: var(--da-color-warn-subtle);
-    color: var(--da-color-warn, #fbbf24);
-    border-color: rgba(var(--da-color-warn-rgb), 0.35);
-}
-
 .da-macro-status-chip--invalid {
     background: var(--da-color-error-subtle);
     color: var(--da-color-error, #f87171);

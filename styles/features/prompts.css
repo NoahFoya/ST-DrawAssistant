@@ -7,6 +7,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--da-space-card-gap, 14px);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* 原生世界书导入与导出弹窗（定位、圆角与模糊度继承自 .da-modal-backdrop / .da-submodal-backdrop） */
@@ -307,6 +311,9 @@ select.da-wi-filter-select {
 .da-wi-entry-wrapper {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     border-radius: var(--da-radius-sm, 6px);
     background: var(--da-bg-card);
     border: 1px solid var(--da-border-color);
@@ -730,7 +737,7 @@ select.da-wi-drawer-select {
     border-radius: var(--da-radius-sm, 6px);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
     .da-wi-header-labels {
         display: none;
     }
