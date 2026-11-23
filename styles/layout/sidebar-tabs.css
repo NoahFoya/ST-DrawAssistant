@@ -3,7 +3,7 @@
  *
  * @remarks
  * 声明弹窗左侧固定宽度（190px）导航栏（.da-sidebar-tabs），
- * 包含选项卡条目（.da-sidebar-item）、生图引擎按需子项（.da-sidebar-sub-item）、
+ * 包含选项卡条目（.da-sidebar-item）、生图服务按需子项（.da-sidebar-sub-item）、
  * 禁用预留态、细分割线与激活指示。
  */
 
@@ -217,6 +217,17 @@
     min-height: 30px;
 }
 
+@media (max-width: 900px) and (min-width: 641px) {
+    .da-sidebar-sub-items {
+        margin-left: 8px;
+        padding-left: 6px;
+    }
+
+    .da-sidebar-sub-item {
+        padding: 0 8px;
+    }
+}
+
 /* 6. 移动端双排胶囊子导航宿主与自适应降级 (max-width: 640px) */
 .da-sidebar-mobile-sub-host {
     display: none;
@@ -321,13 +332,16 @@
         align-items: center;
         gap: 6px;
         margin: 0;
-        padding-left: 0;
+        padding: 0 18px 0 0;
         border-left: none;
         width: 100%;
         overflow-x: auto;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        scroll-padding-inline: 14px;
+        -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+        mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
     }
 
     .da-sidebar-mobile-sub-host .da-sidebar-sub-items::-webkit-scrollbar {
@@ -348,12 +362,16 @@
 }
 
 /* 7. 共享二级标签导航栏 (.da-subtab-nav-bar)
-   用于提示词、素材库等子模块之间的紧凑切换导航。 */
+   用于提示词、素材管理等子模块之间的紧凑切换导航。 */
 .da-subtab-nav-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: 4px 0;
 }

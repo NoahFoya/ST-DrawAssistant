@@ -4,7 +4,7 @@
  * @remarks
  * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
  * 1. 顶部服务连接与状态检测卡片 (ProviderTabLayout 内置 ConnectionCardView)；
- * 2. 生图预设工具栏 (PresetToolbarView) 与统一配置卡片 (CardView)：包含模型/工作流字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
+ * 2. 生图参数预设工具栏 (PresetToolbarView) 与统一配置卡片 (CardView)：包含模型/工作流字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
  * 3. 底部工作流管理器 (WorkflowCardView) 与提示词/LoRA 预设卡片 (PromptPresetCardView)。
  */
 
@@ -57,7 +57,7 @@ export class ComfyUITabView extends ProviderTabView {
             provider: 'comfyui',
             defaultServerUrl: 'http://127.0.0.1:8188',
             idPrefix: 'comfyui_preset_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultSamplers: COMFY_SAMPLER_OPTIONS,
             defaultSchedulers: COMFY_SCHEDULER_OPTIONS,
@@ -88,15 +88,19 @@ export class ComfyUITabView extends ProviderTabView {
                 label: '文生图工作流 (txt2img)',
                 type: 'select',
                 placeholder: '选择文生图工作流',
+                tooltip:
+                    '选择出图使用的 API 格式工作流：单文件整合模型选「Checkpoint」，分立扩散模型（如 Flux / Qwen / MOSS）选「UNet」；如需在提示词中动态加载 LoRA，请安装 ComfyUI-WeiLin 插件并选用「WeiLin」版。',
                 options: () => this.vm.txt2imgWorkflowOptions.value,
                 invalidTooltip: (m) => `关联的文生图工作流不存在或已失效 (ID: ${m.txt2imgWorkflowId || ''})`,
             },
             {
                 key: 'inpaintPresetId',
-                label: '默认局部重绘预设 (Inpaint)',
+                label: '局部重绘工作流 (Inpaint)',
                 type: 'select',
+                tooltip:
+                    '画板局部重绘专用，需选用包含底图与蒙版输入节点的工作流。',
                 options: () => this.vm.inpaintPresetOptions.value,
-                invalidTooltip: (m) => `关联的局部重绘预设不存在或已失效 (ID: ${m.inpaintPresetId || ''})`,
+                invalidTooltip: (m) => `关联的局部重绘工作流不存在或已失效 (ID: ${m.inpaintPresetId || ''})`,
             },
             {
                 key: 'promptPresetId',
@@ -113,6 +117,8 @@ export class ComfyUITabView extends ProviderTabView {
                 label: '主模型',
                 type: 'select',
                 placeholder: '选择主模型文件',
+                tooltip:
+                    '整合型 Checkpoint 模型请搭配「Checkpoint 模型文生图」工作流；UNet / 扩散分立模型请搭配「UNet 模型文生图」工作流并指定下方 CLIP 与 VAE 模型。',
                 options: () => this.vm.effectiveModelOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该主模型 (${m.baseModel || ''})`,
             },
@@ -120,6 +126,8 @@ export class ComfyUITabView extends ProviderTabView {
                 key: 'clipName',
                 label: 'CLIP 模型',
                 type: 'select',
+                tooltip:
+                    'Checkpoint 整合模型通常已内置 CLIP，保持「使用模型内置」即可；使用 UNet 分立模型工作流时，必须在此明确指定对应的 CLIP 编码器文件。',
                 options: () => this.vm.effectiveClipOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该 CLIP (${m.clipName || ''})`,
             },
@@ -127,6 +135,8 @@ export class ComfyUITabView extends ProviderTabView {
                 key: 'vaeName',
                 label: 'VAE 模型',
                 type: 'select',
+                tooltip:
+                    'Checkpoint 整合模型大多内置烘焙 VAE，可保持「使用模型内置」；使用 UNet 分立模型工作流时，必须在此明确指定对应的 VAE 模型文件。',
                 options: () => this.vm.effectiveVaeOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该 VAE (${m.vaeName || ''})`,
             },

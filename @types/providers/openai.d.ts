@@ -15,7 +15,7 @@ export interface OpenAIProviderConfig {
     readonly apiKey: string;
     /** 选用的具体上游服务商标识 */
     readonly serviceId?: string;
-    /** 当前激活的绘图预设标识符 */
+    /** 当前激活的生图参数预设标识符 */
     readonly activeDrawingPresetId?: string;
     /** 当前生效的服务端模型列表缓存 */
     readonly assetCache?: ProviderAssetCache;

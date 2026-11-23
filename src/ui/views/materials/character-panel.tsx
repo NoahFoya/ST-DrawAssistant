@@ -1,5 +1,5 @@
 /**
- * 素材库 - 角色管理子面板。
+ * 素材管理 - 角色管理子面板。
  */
 
 import type { VNode } from 'preact';

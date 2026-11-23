@@ -6,7 +6,7 @@
  */
 
 /* 1. 生图历史指标卡片网格 (.da-stat-grid)
-   自适应 4 列或 3 列卡片网格，展示累计生成数、成功率、平均耗时与收藏总数等指标；
+   自适应卡片网格，展示累计生成数、成功率、平均耗时与收藏总数等指标；
    单个指标卡片采用垂直居中排布，数值采用等宽字体（font-family: var(--da-font-mono)）。 */
 .da-logs-stats-grid {
     display: flex;
@@ -16,25 +16,12 @@
     box-sizing: border-box;
 }
 
-.da-stat-dashboard {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 12px;
-}
-
 .da-stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
     width: 100%;
     box-sizing: border-box;
-}
-
-.da-stat-grid--3-cols {
-    grid-template-columns: repeat(3, 1fr);
 }
 
 .da-stat-card {
@@ -71,15 +58,6 @@
     color: var(--da-color-error, #f43f5e);
 }
 
-.da-stat-card--fav {
-    border-color: rgba(var(--da-color-warn-rgb), 0.35);
-}
-
-
-.da-stat-card--iso {
-    border-color: var(--da-border-color);
-}
-
 /* 指标内部子元素 */
 .da-stat-card__label {
     font-size: var(--da-font-size-xs, 0.74rem);
@@ -95,10 +73,6 @@
     color: var(--da-text-primary);
     line-height: 1.2;
     font-family: var(--da-font-mono, monospace);
-}
-
-.da-stat-card__val--accent {
-    color: var(--da-accent-color);
 }
 
 .da-stat-card__sub {
@@ -120,23 +94,7 @@
     box-sizing: border-box;
 }
 
-.da-stat-section__title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--da-text-primary);
-}
-
-/* 3. 统计面板操作栏 (.da-stat-dashboard__actions)
-   统计看板底部按钮栏，包含刷新统计、导出简报与清空记录等操作入口。 */
-.da-stat-dashboard__actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-}
-
-/* 4. 近 7 天双轨走势微图表与最近生图任务流水表 */
+/* 3. 近 7 天双轨走势微图表与最近生图任务流水表 */
 .da-stat-chart-container,
 .da-stat-tasks-container {
     display: flex;

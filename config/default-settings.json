@@ -11,6 +11,10 @@
   "imageQuality": "original",
   "autoGenerate": false,
   "cleanPrompt": true,
+  "normalizeChinesePunctuation": false,
+  "thinkingDisplayMode": "show",
+  "cleanHistoryThinking": false,
+  "cleanHistoryMarkup": false,
   "promptStartTag": "image###",
   "promptEndTag": "###",
   "activeThemePresetId": "catppuccin-mocha",
@@ -73,35 +77,35 @@
   "providers": {
     "comfyui": {
       "serverUrl": "http://127.0.0.1:8188",
-      "activeDrawingPresetId": "drawing_comfyui_anime"
+      "activeDrawingPresetId": "drawing_comfyui_default"
     },
     "sdwebui": {
       "serverUrl": "http://127.0.0.1:7860",
-      "activeDrawingPresetId": "drawing_sdwebui_anime"
+      "activeDrawingPresetId": "drawing_sdwebui_default"
     },
     "novelai": {
       "serviceId": "novelai-official",
       "serverUrl": "https://image.novelai.net",
       "apiKey": "",
-      "activeDrawingPresetId": "drawing_novelai_v45_full"
+      "activeDrawingPresetId": "drawing_novelai_default"
     },
     "openai": {
       "serviceId": "openai-official",
       "serverUrl": "https://api.openai.com/v1",
       "apiKey": "",
-      "activeDrawingPresetId": "drawing_openai_dalle3_vivid"
+      "activeDrawingPresetId": "drawing_openai_default"
     },
     "gemini": {
       "serviceId": "gemini-official",
       "serverUrl": "https://generativelanguage.googleapis.com/v1beta",
       "apiKey": "",
-      "activeDrawingPresetId": "drawing_gemini_25_flash"
+      "activeDrawingPresetId": "drawing_gemini_default"
     },
     "grok": {
       "serviceId": "grok-official",
       "serverUrl": "https://api.x.ai/v1",
       "apiKey": "",
-      "activeDrawingPresetId": "drawing_grok_imagine"
+      "activeDrawingPresetId": "drawing_grok_default"
     }
   },
   "ui": {
@@ -109,7 +113,9 @@
       "visible": true,
       "opacity": 0.95,
       "icon": "palette",
-      "animationType": "starlight"
+      "animationType": "starlight",
+      "quickPanelEnabled": false,
+      "hoverTrigger": true
     },
     "lightbox": {
       "enabled": true
@@ -127,6 +133,12 @@
       "maxWidthPct": 100,
       "rounded": true,
       "autoBlur": false
-    }
+    },
+    "seenGuides": {
+      "plugin": false,
+      "prompts": false,
+      "providers": {}
+    },
+    "dismissWeilinNotice": false
   }
 }

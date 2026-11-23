@@ -2,7 +2,7 @@
  * 布局系统基础容器与通用工具类。
  *
  * @remarks
- * 1. 结构划分：声明流式行（.da-row）、列（.da-col）、网格及表单占位槽等基础布局单元。
+ * 1. 结构划分：声明流式行（.da-row）与表单占位槽等基础布局单元。
  * 2. 样式解耦：容器仅负责空间划分与对齐排版，颜色等外观统一引用 var(--da-*) 设计令牌。
  */
 
@@ -37,7 +37,7 @@
 .da-hidden { display: none !important; }
 .da-text-danger { color: var(--da-color-error) !important; }
 
-/* 4. 空状态占位提示 (.da-empty-tip / .da-empty-hint / .da-tab-placeholder) */
+/* 4. 空状态占位提示 (.da-empty-hint / .da-tab-placeholder) */
 .da-empty-hint {
     padding: 24px 16px;
     border-radius: var(--da-radius-input, 8px);
@@ -47,38 +47,6 @@
     font-size: var(--da-font-size-xs, 12px);
     line-height: 1.6;
     text-align: center;
-}
-
-.da-empty-tip {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: var(--da-space-lg, 20px) var(--da-space-md, 12px);
-    color: var(--da-text-muted);
-    font-size: var(--da-font-size-xs, 0.76rem);
-    user-select: none;
-    box-sizing: border-box;
-    width: 100%;
-    grid-column: 1 / -1;
-    gap: var(--da-space-xs, 4px);
-}
-
-.da-empty-tip__icon {
-    font-size: 28px;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-
-.da-empty-tip__title {
-    font-weight: 600;
-    color: var(--da-text-secondary);
-}
-
-.da-empty-tip__sub {
-    font-size: 0.82em;
-    opacity: 0.75;
 }
 
 .da-tab-placeholder__title {

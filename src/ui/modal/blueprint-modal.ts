@@ -929,7 +929,7 @@ export class BlueprintModal implements Disposable {
 
         if (classType.includes('cliptextencode') || classType.includes('prompt')) {
             return {
-                title: customTitle || '文本特征编码 (Prompt)',
+                title: customTitle || '条件文本编码 (Prompt)',
                 badgeText: 'Prompt',
                 badgeClass: 'da-blueprint-badge--prompt',
                 category: 'PROMPT',
@@ -953,7 +953,7 @@ export class BlueprintModal implements Disposable {
             classType.includes('cliploader')
         ) {
             return {
-                title: customTitle || '模型载入 (Loader)',
+                title: customTitle || '模型加载器 (Loader)',
                 badgeText: 'Model',
                 badgeClass: 'da-blueprint-badge--model',
                 category: 'SAMPLER',

@@ -86,7 +86,7 @@ export interface ImageGenerationMetadata {
     readonly steps?: number;
     /** 提示词引导系数 CFG Scale */
     readonly cfgScale?: number;
-    /** 生图引擎标识符 */
+    /** 生图服务标识符 */
     readonly engine?: string;
     /** 生成耗时，单位毫秒 */
     readonly durationMs?: number;

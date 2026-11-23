@@ -24,21 +24,6 @@
     transition: background-color 0.12s var(--da-ease);
 }
 
-/* 垂直堆叠多行与全宽组件行自适应高度放开 */
-.da-form-row--stacked,
-.da-form-row--full {
-    height: auto !important;
-    min-height: 38px !important;
-    max-height: none !important;
-    padding: 8px 16px !important;
-}
-
-.da-form-row--stacked {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-}
-
 .da-form-row:last-child {
     border-bottom: none;
 }
@@ -99,13 +84,6 @@
     margin-left: auto;
 }
 
-/* 开关控件垂直居中对齐 */
-.da-form-row__control > .da-toggle {
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-}
-
 /* 脏状态指示点与行级强调 */
 .da-field-dirty-dot {
     width: 6px;
@@ -138,8 +116,8 @@
 .da-form-row__control .da-select-wrapper,
 .da-form-row .da-input-wrapper,
 .da-form-row__control .da-input-wrapper,
-.da-form-row .da-slider-wrapper,
-.da-form-row__control .da-slider-wrapper,
+.da-form-row__control:not(.da-slot--w-120):not(.da-slot--w-80) > .da-number-input,
+.da-slot--w-240 > .da-number-input,
 .da-form-row .da-segmented,
 .da-form-row__control .da-segmented,
 .da-form-row .da-dimension-picker__size-group,
@@ -153,13 +131,17 @@
 
 .da-form-row__control:has(.da-select-wrapper),
 .da-form-row__control:has(.da-input-wrapper),
-.da-form-row__control:has(.da-slider-wrapper),
+.da-form-row__control:not(.da-slot--w-120):not(.da-slot--w-80):has(> .da-number-input),
 .da-form-row__control:has(.da-segmented),
 .da-form-row__control:has(.da-dimension-picker__size-group) {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
     flex: 0 0 240px;
+}
+
+.da-slot--w-120 > .da-number-input {
+    width: 100%;
 }
 
 /* 分段选择器在表单行中各子项等分排布 */

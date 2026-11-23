@@ -3,7 +3,7 @@
  *
  * @remarks
  * 支持两种防循环嵌套工作模式：
- * 1. `lexicon-only`（素材库专用）：
+ * 1. `lexicon-only`（素材管理专用）：
  *    - 仅检索浏览器 IndexedDB 本地词库（「自定义词汇」+「已启用导入词汇文件」）；
  *    - 禁止触发 `$` 素材宏联想，并在失焦或补全时自动剥离任何 `$...$` 宏标记，防止素材词条循环嵌套。
  * 2. `prompt-with-macro`（生图提示词编辑框与重绘面板专用）：
@@ -33,7 +33,7 @@ export type TagAutocompleteMode = 'lexicon-only' | 'prompt-with-macro';
 
 /** 联想组件配置项 */
 export interface TagAutocompleteOptions {
-    /** 联想模式：素材库用 'lexicon-only'，生图编辑框用 'prompt-with-macro' */
+    /** 联想模式：素材管理用 'lexicon-only'，生图编辑框用 'prompt-with-macro' */
     readonly mode: TagAutocompleteMode;
     /** 候选列表最大展示条数（默认 15） */
     readonly limit?: number;

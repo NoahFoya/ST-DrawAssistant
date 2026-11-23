@@ -11,7 +11,7 @@ import type { ProviderAssetCache } from '../provider';
 export interface SDWebUIProviderConfig {
     /** 服务端基础接口地址 */
     readonly serverUrl: string;
-    /** 当前激活的绘图预设标识符 */
+    /** 当前激活的生图参数预设标识符 */
     readonly activeDrawingPresetId?: string;
     /** 服务端资产本地持久化缓存 */
     readonly assetCache?: ProviderAssetCache;

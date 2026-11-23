@@ -29,7 +29,7 @@ import { FabTabView } from './fab-tab';
  * @param modal 主设置模态外壳实例
  */
 export function registerDefaultViews(modal: SettingsModal): void {
-    // 1. 常规设置选项卡
+    // 1. 插件设置选项卡
     modal.registerViewFactory('general', () => new GeneralTabView());
 
     // 2. ComfyUI 专属生图服务设置选项卡
@@ -50,27 +50,27 @@ export function registerDefaultViews(modal: SettingsModal): void {
     // 7. xAI Grok 原生生图服务设置选项卡
     modal.registerViewFactory('grok', () => new GrokTabView());
 
-    // 6. 日志与统计选项卡
+    // 8. 日志与统计选项卡
     modal.registerViewFactory('logs', () => new LogsStatsTabView());
 
-    // 7. 关于与支持选项卡
+    // 9. 关于选项卡
     modal.registerViewFactory('about', () => new AboutTabView());
 
-    // 8. 主题设置选项卡
+    // 10. 主题设置选项卡
     modal.registerViewFactory('theme', () => new ThemeTabView());
 
-    // 9. 提示词多通道多深度注入选项卡
+    // 11. 提示词多通道多深度注入选项卡
     modal.registerViewFactory('prompts', () => new PromptsTabView());
 
-    // 10. 素材库管理选项卡
+    // 12. 素材管理选项卡
     modal.registerViewFactory('materials', () => new MaterialsTabView());
 
-    // 11. 本地联想词库选项卡
+    // 13. 本地联想词库选项卡
     modal.registerViewFactory('lexicon', () => new LexiconTabView());
 
-    // 12. 本地图库选项卡
+    // 14. 本地图库选项卡
     modal.registerViewFactory('gallery', () => new GalleryTabView());
 
-    // 13. 悬浮球快捷入口选项卡
+    // 15. 悬浮球快捷入口选项卡
     modal.registerViewFactory('fab', () => new FabTabView());
 }

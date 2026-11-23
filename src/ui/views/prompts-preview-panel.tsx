@@ -47,7 +47,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '素材创作',
         defaultDepth: 0,
         defaultOrder: 20,
-        desc: '默认关闭的分类通道，适合存放用于辅助 AI 梳理人物与服装设定的创作提示词，配合「素材库 → 解析设置」中的起止标记规则进行档案识别与收录。',
+        desc: '默认关闭的分类通道，适合存放用于辅助 AI 梳理人物与服装设定的创作提示词，配合「素材管理 → 解析设置」中的起止标记规则进行档案识别与收录。',
     },
     {
         id: 'material',
@@ -200,7 +200,7 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
         <div className="da-prompts-preview-panel">
             {/* 最上方卡片：4 通道统一启用设置 */}
             <CardView
-                title="提示词预设启用"
+                title="提示词启用设置"
                 actions={
                     <div className="da-preview-summary-badges">
                         <BadgeView

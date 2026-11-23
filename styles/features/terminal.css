@@ -42,8 +42,7 @@
     transition: background-color 0.15s ease;
 }
 
-.da-log-time,
-.da-log-timestamp {
+.da-log-time {
     color: var(--da-terminal-muted, #8b949e);
     flex-shrink: 0;
     white-space: nowrap;
@@ -55,8 +54,7 @@
     font-weight: 700;
 }
 
-.da-log-tag,
-.da-log-namespace {
+.da-log-tag {
     color: var(--da-terminal-blue, #58a6ff);
     flex-shrink: 0;
     white-space: nowrap;

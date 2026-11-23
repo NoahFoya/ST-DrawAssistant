@@ -14,6 +14,7 @@ import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 import { FAB_BUILTIN_ICONS } from '../views/fab-tab';
 import { getViewportRect } from '../layout/viewport';
+import { FabQuickPanel } from './fab-quick-panel';
 
 export { FAB_BUILTIN_ICONS };
 
@@ -39,6 +40,10 @@ export interface FabPositionState {
 
 const STORAGE_KEY_POSITION = 'st_draw_assistant_fab_position';
 const DEFAULT_FAB_RATIO: FabPositionState = { ratioX: 0.96, ratioY: 0.86 };
+const HOVER_OPEN_DELAY_MS = 250;
+const HOVER_CLOSE_DELAY_MS = 300;
+const LONG_PRESS_OPEN_DELAY_MS = 450;
+const DOUBLE_CLICK_THRESHOLD_MS = 280;
 
 function clampUnit(value: number): number {
     if (!Number.isFinite(value)) return 1;
@@ -47,6 +52,7 @@ function clampUnit(value: number): number {
 
 export class FloatingActionButton implements UIComponent, Disposable {
     public readonly element: HTMLElement;
+    public readonly quickPanel: FabQuickPanel;
     private readonly iconContainer: HTMLElement;
     private readonly clickHandler?: () => void;
 
@@ -59,16 +65,23 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private startElemY = 0;
     private cachedElemWidth = 48;
     private cachedElemHeight = 48;
+    private lastClickTimestamp = 0;
     private clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
     private snapTimer: ReturnType<typeof setTimeout> | null = null;
     private pulseTimer: ReturnType<typeof setTimeout> | null = null;
+    private hoverOpenTimer: ReturnType<typeof setTimeout> | null = null;
+    private hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
+    private longPressTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly activeTaskIds = new Set<string>();
 
     private currentRatioX: number = DEFAULT_FAB_RATIO.ratioX;
     private currentRatioY: number = DEFAULT_FAB_RATIO.ratioY;
 
     private readonly onPointerDownBound: (e: PointerEvent) => void;
+    private readonly onPointerEnterBound: (e: PointerEvent) => void;
+    private readonly onPointerLeaveBound: (e: PointerEvent) => void;
     private readonly onClickBound: (e: MouseEvent) => void;
+    private readonly onDblClickBound: (e: MouseEvent) => void;
     private readonly onPointerMoveBound: (e: PointerEvent) => void;
     private readonly onPointerUpBound: (e: PointerEvent) => void;
     private readonly onResetPositionBound: () => void;
@@ -108,9 +121,20 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
         this.clickHandler = options.onClick;
 
-        // 2. 绑定事件处理器引用
+        // 2. 初始化快捷设置浮层面板
+        this.quickPanel = new FabQuickPanel({
+            anchorElement: this.element,
+            onOpenMainSettings: () => this.openMainSettings(),
+            onPointerEnter: () => this.clearHoverCloseTimer(),
+            onPointerLeave: () => this.scheduleHoverClose(),
+        });
+
+        // 3. 绑定事件处理器引用
         this.onPointerDownBound = this.onPointerDown.bind(this);
+        this.onPointerEnterBound = this.onPointerEnter.bind(this);
+        this.onPointerLeaveBound = this.onPointerLeave.bind(this);
         this.onClickBound = this.onClick.bind(this);
+        this.onDblClickBound = this.onDblClick.bind(this);
         this.onPointerMoveBound = this.onPointerMove.bind(this);
         this.onPointerUpBound = this.onPointerUp.bind(this);
         this.onResetPositionBound = this.resetPosition.bind(this);
@@ -123,7 +147,10 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
     private bindEvents(): void {
         this.element.addEventListener?.('pointerdown', this.onPointerDownBound);
+        this.element.addEventListener?.('pointerenter', this.onPointerEnterBound);
+        this.element.addEventListener?.('pointerleave', this.onPointerLeaveBound);
         this.element.addEventListener?.('click', this.onClickBound);
+        this.element.addEventListener?.('dblclick', this.onDblClickBound);
 
         // 监听位置重置、配置更新及后台任务状态变更事件
         eventBus.on('ui:reset-fab-position', this.onResetPositionBound);
@@ -137,6 +164,80 @@ export class FloatingActionButton implements UIComponent, Disposable {
             }
             this.element.classList?.toggle('is-busy', this.activeTaskIds.size > 0);
         });
+    }
+
+    private isQuickPanelEnabled(): boolean {
+        return Boolean(settingsStore.get('ui')?.fab?.quickPanelEnabled);
+    }
+
+    private isHoverTriggerEnabled(): boolean {
+        const fab = settingsStore.get('ui')?.fab;
+        return Boolean(fab?.quickPanelEnabled) && fab?.hoverTrigger !== false;
+    }
+
+    private clearHoverOpenTimer(): void {
+        if (this.hoverOpenTimer !== null) {
+            clearTimeout(this.hoverOpenTimer);
+            this.hoverOpenTimer = null;
+        }
+    }
+
+    private clearHoverCloseTimer(): void {
+        if (this.hoverCloseTimer !== null) {
+            clearTimeout(this.hoverCloseTimer);
+            this.hoverCloseTimer = null;
+        }
+    }
+
+    private clearLongPressTimer(): void {
+        if (this.longPressTimer !== null) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+    }
+
+    private scheduleHoverClose(): void {
+        if (!this.isHoverTriggerEnabled() || !this.quickPanel.isOpen()) {
+            return;
+        }
+        this.clearHoverCloseTimer();
+        this.hoverCloseTimer = setTimeout(() => {
+            this.hoverCloseTimer = null;
+            this.quickPanel.close();
+        }, HOVER_CLOSE_DELAY_MS);
+    }
+
+    private onPointerEnter(e: PointerEvent): void {
+        if (e.pointerType && e.pointerType !== 'mouse') {
+            return;
+        }
+        this.clearHoverCloseTimer();
+        if (!this.isHoverTriggerEnabled() || this.isDragging || this.quickPanel.isOpen()) {
+            return;
+        }
+        this.clearHoverOpenTimer();
+        this.hoverOpenTimer = setTimeout(() => {
+            this.hoverOpenTimer = null;
+            if (!this.isDragging && this.isHoverTriggerEnabled()) {
+                this.quickPanel.open();
+            }
+        }, HOVER_OPEN_DELAY_MS);
+    }
+
+    private onPointerLeave(e: PointerEvent): void {
+        if (e.pointerType && e.pointerType !== 'mouse') {
+            return;
+        }
+        this.clearHoverOpenTimer();
+        this.scheduleHoverClose();
+    }
+
+    private openMainSettings(): void {
+        this.clearHoverOpenTimer();
+        this.clearHoverCloseTimer();
+        this.clearLongPressTimer();
+        this.quickPanel.close();
+        this.clickHandler?.();
     }
 
     /**
@@ -162,6 +263,9 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.isDragging = true;
         this.hasMoved = false;
         this.suppressNextClick = false;
+        this.clearHoverOpenTimer();
+        this.clearHoverCloseTimer();
+        this.clearLongPressTimer();
         if (this.clickSuppressionTimer !== null) {
             clearTimeout(this.clickSuppressionTimer);
             this.clickSuppressionTimer = null;
@@ -186,6 +290,18 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.startElemY = bounds.minTop + this.currentRatioY * bounds.travelY;
         }
 
+        // 触控长按展开快捷面板
+        if (e.pointerType !== 'mouse' && this.isQuickPanelEnabled()) {
+            this.longPressTimer = setTimeout(() => {
+                this.longPressTimer = null;
+                if (this.isDragging && !this.hasMoved && this.isQuickPanelEnabled()) {
+                    this.suppressNextClick = true;
+                    this.triggerClickPulse();
+                    this.quickPanel.open();
+                }
+            }, LONG_PRESS_OPEN_DELAY_MS);
+        }
+
         this.element.classList?.add('is-dragging');
 
         if (typeof window !== 'undefined') {
@@ -203,6 +319,8 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
         if (Math.hypot(dx, dy) > 4) {
             this.hasMoved = true;
+            this.clearHoverOpenTimer();
+            this.clearLongPressTimer();
         }
 
         const bounds = this.getSafeTravelBounds(this.cachedElemWidth, this.cachedElemHeight);
@@ -213,11 +331,15 @@ export class FloatingActionButton implements UIComponent, Disposable {
         const nextRatioY = bounds.travelY > 0 ? clampUnit((nextTop - bounds.minTop) / bounds.travelY) : this.currentRatioY;
 
         this.applyRatioPosition(nextRatioX, nextRatioY);
+        if (this.quickPanel.isOpen()) {
+            this.quickPanel.positionPanel();
+        }
     }
 
     private onPointerUp(): void {
         if (!this.isDragging) return;
         this.isDragging = false;
+        this.clearLongPressTimer();
         this.element.classList.remove('is-dragging');
 
         if (typeof window !== 'undefined') {
@@ -230,6 +352,9 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.hasMoved = false;
             this.suppressNextClick = true;
             this.clampAndSavePosition();
+            if (this.quickPanel.isOpen()) {
+                this.quickPanel.positionPanel();
+            }
             if (this.clickSuppressionTimer !== null) {
                 clearTimeout(this.clickSuppressionTimer);
             }
@@ -267,7 +392,30 @@ export class FloatingActionButton implements UIComponent, Disposable {
             return;
         }
         this.triggerClickPulse();
-        this.clickHandler?.();
+
+        if (!this.isQuickPanelEnabled()) {
+            this.openMainSettings();
+            return;
+        }
+
+        const now = Date.now();
+        if (now - this.lastClickTimestamp <= DOUBLE_CLICK_THRESHOLD_MS) {
+            this.lastClickTimestamp = 0;
+            this.openMainSettings();
+            return;
+        }
+        this.lastClickTimestamp = now;
+
+        this.clearHoverOpenTimer();
+        this.clearHoverCloseTimer();
+        this.quickPanel.toggle();
+    }
+
+    private onDblClick(e: MouseEvent): void {
+        e.preventDefault();
+        e.stopPropagation();
+        this.lastClickTimestamp = 0;
+        this.openMainSettings();
     }
 
     private applyRatioPosition(ratioX: number, ratioY: number): void {
@@ -352,6 +500,9 @@ export class FloatingActionButton implements UIComponent, Disposable {
         // 1. 显隐控制
         const isVisible = fab.visible ?? true;
         this.element.style.display = isVisible ? 'flex' : 'none';
+        if (!isVisible || !fab.quickPanelEnabled) {
+            this.quickPanel.close();
+        }
 
         // 2. 透明度控制 (0.2 ~ 1.0)
         const opacity = fab.opacity ?? 0.95;
@@ -383,7 +534,10 @@ export class FloatingActionButton implements UIComponent, Disposable {
      */
     public dispose(): void {
         this.element.removeEventListener?.('pointerdown', this.onPointerDownBound);
+        this.element.removeEventListener?.('pointerenter', this.onPointerEnterBound);
+        this.element.removeEventListener?.('pointerleave', this.onPointerLeaveBound);
         this.element.removeEventListener?.('click', this.onClickBound);
+        this.element.removeEventListener?.('dblclick', this.onDblClickBound);
 
         eventBus.off('ui:reset-fab-position', this.onResetPositionBound);
         eventBus.off('settings:updated', this.onSettingsUpdatedBound);
@@ -411,6 +565,10 @@ export class FloatingActionButton implements UIComponent, Disposable {
             clearTimeout(this.pulseTimer);
             this.pulseTimer = null;
         }
+        this.clearHoverOpenTimer();
+        this.clearHoverCloseTimer();
+        this.clearLongPressTimer();
+        this.quickPanel.dispose();
 
         this.element.parentElement?.removeChild(this.element);
     }

@@ -413,7 +413,7 @@ export class ConnectionCard implements UIComponent, Disposable {
         const formattedMsg = [
             `【请求地址】\n${url || '(未设置服务地址)'}`,
             `\n【错误详情】\n${message}`,
-            `\n【排查建议】\n1. 请检查生图服务（如 ComfyUI / SD-WebUI / Forge）是否已在后台启动；\n2. 检查上方服务地址与端口是否正确输入；\n3. 若在浏览器中遇到跨域 (CORS) 拦截，可在「常规设置」中开启“酒馆代理”模式。`,
+            `\n【排查建议】\n1. 请确认外部生图服务（ComfyUI / SD-WebUI / Forge）已启动，并在浏览器直接打开上方地址确认可访问；\n2. 浏览器直连需配置跨域启动参数并重启服务：ComfyUI 添加 --enable-cors-header *（局域网访问另加 --listen 0.0.0.0），SD-WebUI 添加 --api --cors-allow-origins=*；\n3. 若酒馆位于远程 HTTPS 域名而本地服务为 HTTP，请在「插件设置」切换为「酒馆代理」（需酒馆 config.yaml 开启 enableCorsProxy: true）。`,
         ].join('\n');
 
         void ConfirmDialog.info({

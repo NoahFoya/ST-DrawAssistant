@@ -41,6 +41,7 @@ import {
     HttpError,
     imageInputToBase64,
 } from '../../util/http-client';
+import { logger } from '../../util/logger';
 
 const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash-image';
 
@@ -235,6 +236,11 @@ export class GeminiProvider extends BaseGenerationProvider {
                     ) {
                         throw err;
                     }
+                    if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
+                        logger.debug(`[GeminiProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
+                    } else {
+                        logger.warn(`[GeminiProvider] 拉取模型列表 (${baseModelsUrl}) 失败:`, err);
+                    }
                     return [];
                 }
             },
@@ -292,6 +298,8 @@ export class GeminiProvider extends BaseGenerationProvider {
         if (request.sourceImage) {
             const b64 = await imageInputToBase64(request.sourceImage, {
                 signal,
+                timeoutMs: maxTimeoutMs,
+                transport,
             });
             const mimeType =
                 request.sourceImage instanceof Blob && request.sourceImage.type

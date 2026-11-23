@@ -69,7 +69,7 @@ export interface ProviderTabLayoutProps {
     apiKeyPlaceholder?: string;
     /** API Key 输入框悬浮说明 */
     apiKeyTooltip?: string;
-    /** 服务商端点预设列表（如 OpenAI / SiliconFlow） */
+    /** 服务商地址预设列表（如 OpenAI / SiliconFlow） */
     providerPresets?: ProviderPreset[];
     /** 服务商下拉的字段标签 */
     presetLabel?: string;

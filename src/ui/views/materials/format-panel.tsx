@@ -1,5 +1,5 @@
 /**
- * 素材库 - 变量与宏管理子面板。
+ * 素材管理 - 变量与宏管理子面板。
  */
 
 import type { VNode } from 'preact';

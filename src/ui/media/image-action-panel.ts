@@ -503,7 +503,7 @@ export class ImageActionPanel implements Disposable {
             this.inpaintBtnEl.disabled = !supportsInpaint;
             this.inpaintBtnEl.title = supportsInpaint
                 ? '打开局部重绘画板涂抹修改本图局部细节'
-                : '当前生图引擎不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
+                : '当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
         }
 
         for (const ac of this.autocompletes) {
@@ -559,7 +559,7 @@ export class ImageActionPanel implements Disposable {
 
         const { supportsInpaint } = this.getActiveProviderCapabilities();
         if (!supportsInpaint) {
-            Toast.warning('当前生图引擎不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
+            Toast.warning('当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
             return;
         }
 

@@ -1,5 +1,5 @@
 /**
- * 素材库 - 启用设置子面板。
+ * 素材管理 - 启用设置子面板。
  */
 
 import type { VNode } from 'preact';
@@ -220,7 +220,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                 <div className="da-form-grid">
                     <FormFieldView
                         label="随角色卡自动切换预设"
-                        tooltip="开启后，扩展将监听酒馆宿主的角色加载事件；当切换至不同角色卡时，自动将素材库启用预设切换为与该角色卡绑定的预设，自动同步切换专属服装与触发词。"
+                        tooltip="开启后，扩展将监听酒馆宿主的角色加载事件；当切换至不同角色卡时，自动将素材启用预设切换为与该角色卡绑定的预设，自动同步切换专属服装与触发词。"
                         width="w-toggle"
                     >
                         <SwitchControl

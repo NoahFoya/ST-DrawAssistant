@@ -77,7 +77,7 @@ export class GrokTabView extends ProviderTabView {
                 ),
             },
             idPrefix: 'grok_',
-            promptMessageForNew: '请输入新生图预设名称:',
+            promptMessageForNew: '请输入新生图参数预设名称:',
             defaultNewName: '新建预设',
             defaultModels: GROK_MODEL_OPTIONS,
             defaultDraftTemplate: () => ({
@@ -105,7 +105,7 @@ export class GrokTabView extends ProviderTabView {
                     resolveGrokModelCapabilities(effectiveModel).supportsAspectRatio &&
                     !cfg.aspectRatio
                 ) {
-                    missing.push('画幅比例 (aspect_ratio)');
+                    missing.push('画幅比例');
                 }
                 return missing;
             },
@@ -129,7 +129,7 @@ export class GrokTabView extends ProviderTabView {
                 label: '自定义模型标识',
                 type: 'text',
                 placeholder: '可选填写模型 ID（如 grok-imagine-image-pro）',
-                tooltip: '若填写，将覆盖上方下拉选择并直接写入请求体 model 字段。',
+                tooltip: '若填写，将覆盖上方下拉选择并直接使用该模型名称发起请求。',
                 transform: {
                     toView: (v) => (v as string) || '',
                     fromView: (v) => String(v || '').trim(),
@@ -147,7 +147,7 @@ export class GrokTabView extends ProviderTabView {
         this.imageConfigFields = [
             {
                 key: 'aspectRatio',
-                label: '画幅比例 (aspect_ratio)',
+                label: '画幅比例',
                 type: 'select',
                 options: ASPECT_RATIO_OPTIONS,
                 tooltip: 'xAI Grok Imagine 原生 aspect_ratio 参数。旧版 grok-2-image 不支持该参数。',
@@ -160,7 +160,7 @@ export class GrokTabView extends ProviderTabView {
             },
             {
                 key: 'resolution',
-                label: '分辨率档位 (resolution)',
+                label: '分辨率档位',
                 type: 'segmented',
                 options: RESOLUTION_OPTIONS,
                 tooltip: 'Grok Imagine 支持 1K 与 2K 分辨率档位输出。',

@@ -4,7 +4,7 @@
  * @remarks
  * 负责在提示词清洗前单层解析 `$名称-宏-状态$` 格式的素材宏引用：
  * 1. 严格固定格式 (`$名称-宏-状态$`):
- *    - 前段匹配素材库格式预设中的宏规则（如 `closeup` / `upper` / `cowboy` / `full` / `intimate` 等）；
+ *    - 前段匹配素材库格式预设中的宏规则（如 `closeup` / `upper` / `cowboy` / `full` / `bust` / `crotch` 等）；
  *    - 后段匹配该类型的固定状态后缀（角色: `clothed` / `exposed` / `nude`；服装: `intact` / `disheveled`）；
  *    - 展开时按标准部位顺序依次加载各选中部位的 `通用tags + [状态]tags` 并去重。
  * 2. 缺省状态降级 (`$名称-宏$`):

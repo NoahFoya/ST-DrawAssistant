@@ -77,15 +77,7 @@
     box-shadow: 0 0 0 1px var(--da-color-error), 0 0 8px rgba(var(--da-color-error-rgb, 244, 63, 94), 0.25) !important;
 }
 
-/* 3. 紧凑尺寸规格变体 */
-.da-select--sm {
-    height: 28px !important;
-    padding: 0 24px 0 8px !important;
-    font-size: var(--da-font-size-xs, 12px) !important;
-    background-position: right 6px center !important;
-}
-
-/* 4. 原生选项菜单 (option / optgroup) 排版 */
+/* 3. 原生选项菜单 (option / optgroup) 排版 */
 .da-select option {
     background-color: var(--da-bg-card, var(--da-bg-secondary));
     color: var(--da-text-primary);
@@ -110,7 +102,7 @@
     padding: 4px 6px;
 }
 
-/* 5. 下拉选择器包装外壳与定制箭头 (.da-select-wrapper) */
+/* 4. 下拉选择器包装外壳与定制箭头 (.da-select-wrapper) */
 .da-select-wrapper {
     position: relative;
     display: inline-flex;

@@ -118,7 +118,7 @@ export function matchAssetText(
 
 /** 校验预设资产参数选项 */
 export interface ValidatePresetAssetsOptions {
-    /** 当前激活的绘图预设数据 */
+    /** 当前激活的生图参数预设数据 */
     drawingPreset?: DrawingPresetData | null;
     /** 当前引用的提示词预设数据 */
     promptPreset?: PromptPresetData | null;
@@ -139,7 +139,7 @@ export interface PresetAssetValidationResult {
 }
 
 /**
- * 校验当前绘图预设与提示词预设引用的模型资产在服务端是否存在。
+ * 校验当前生图参数预设与提示词预设引用的模型资产在服务端是否存在。
  *
  * @param options 校验参数
  * @returns 校验结果与缺失资产列表

@@ -65,6 +65,9 @@ export interface SillyTavernContext {
     /** 获取当前活动会话 ID */
     getCurrentChatId?(): string | undefined;
 
+    /** 重新渲染并载入当前聊天会话视图 */
+    reloadCurrentChat?(): Promise<void> | void;
+
     // 3. UI 模板与正文渲染工具
 
     /**

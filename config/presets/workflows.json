@@ -1,8 +1,257 @@
 [
   {
-    "id": "workflow_comfyui_checkpoint",
-    "name": "ComfyUI · 全量模型文生图",
-    "description": "基于单个 Checkpoint 模型的文生图工作流，含 WeiLinPromptUI 节点以支持动态多 LoRA",
+    "id": "workflow_comfyui_native_checkpoint",
+    "name": "默认 Checkpoint 模型文生图 (原生)",
+    "description": "基于 Checkpoint 整合模型的原生 ComfyUI 文生图工作流，使用原生 CLIPTextEncode 节点，无需额外插件即可开箱即用",
+    "data": {
+      "workflow": {
+        "3": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "4",
+              0
+            ],
+            "positive": [
+              "6",
+              0
+            ],
+            "negative": [
+              "7",
+              0
+            ],
+            "latent_image": [
+              "5",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K 采样器"
+          }
+        },
+        "4": {
+          "inputs": {
+            "ckpt_name": "%basemodel_name%"
+          },
+          "class_type": "CheckpointLoaderSimple",
+          "_meta": {
+            "title": "Checkpoint 模型加载器"
+          }
+        },
+        "5": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空 Latent 图像"
+          }
+        },
+        "6": {
+          "inputs": {
+            "text": "%prompt%",
+            "clip": [
+              "4",
+              1
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "正向条件编码"
+          }
+        },
+        "7": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "4",
+              1
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "负向条件编码"
+          }
+        },
+        "8": {
+          "inputs": {
+            "samples": [
+              "3",
+              0
+            ],
+            "vae": [
+              "4",
+              2
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE 解码器"
+          }
+        },
+        "9": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "workflow_comfyui_native_unet",
+    "name": "默认 UNet 模型文生图 (原生)",
+    "description": "基于 UNet、CLIP 与 VAE 分立加载的原生 ComfyUI 文生图工作流，无需额外插件；Flux / SD3 / Qwen 等特定架构请在「打开蓝图」调整 CLIPLoader 类型",
+    "data": {
+      "workflow": {
+        "3": {
+          "inputs": {
+            "seed": "%seed%",
+            "steps": "%steps%",
+            "cfg": "%cfg%",
+            "sampler_name": "%sampler_name%",
+            "scheduler": "%scheduler%",
+            "denoise": 1,
+            "model": [
+              "4",
+              0
+            ],
+            "positive": [
+              "6",
+              0
+            ],
+            "negative": [
+              "7",
+              0
+            ],
+            "latent_image": [
+              "5",
+              0
+            ]
+          },
+          "class_type": "KSampler",
+          "_meta": {
+            "title": "K 采样器"
+          }
+        },
+        "4": {
+          "inputs": {
+            "unet_name": "%basemodel_name%",
+            "weight_dtype": "default"
+          },
+          "class_type": "UNETLoader",
+          "_meta": {
+            "title": "UNet 模型加载器"
+          }
+        },
+        "5": {
+          "inputs": {
+            "width": "%width%",
+            "height": "%height%",
+            "batch_size": 1
+          },
+          "class_type": "EmptyLatentImage",
+          "_meta": {
+            "title": "空 Latent 图像"
+          }
+        },
+        "6": {
+          "inputs": {
+            "text": "%prompt%",
+            "clip": [
+              "10",
+              0
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "正向条件编码"
+          }
+        },
+        "7": {
+          "inputs": {
+            "text": "%negative_prompt%",
+            "clip": [
+              "10",
+              0
+            ]
+          },
+          "class_type": "CLIPTextEncode",
+          "_meta": {
+            "title": "负向条件编码"
+          }
+        },
+        "8": {
+          "inputs": {
+            "samples": [
+              "3",
+              0
+            ],
+            "vae": [
+              "11",
+              0
+            ]
+          },
+          "class_type": "VAEDecode",
+          "_meta": {
+            "title": "VAE 解码器"
+          }
+        },
+        "9": {
+          "inputs": {
+            "filename_prefix": "ST-Draw-",
+            "images": [
+              "8",
+              0
+            ]
+          },
+          "class_type": "SaveImage",
+          "_meta": {
+            "title": "保存图像"
+          }
+        },
+        "10": {
+          "inputs": {
+            "clip_name": "%clip_name%",
+            "type": "stable_diffusion",
+            "device": "default"
+          },
+          "class_type": "CLIPLoader",
+          "_meta": {
+            "title": "CLIP 模型加载器"
+          }
+        },
+        "11": {
+          "inputs": {
+            "vae_name": "%vae_name%"
+          },
+          "class_type": "VAELoader",
+          "_meta": {
+            "title": "VAE 模型加载器"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "workflow_comfyui_weilin_checkpoint",
+    "name": "默认 Checkpoint 模型文生图 (WeiLin)",
+    "description": "基于 Checkpoint 整合模型并集成 WeiLinPromptUI 节点的文生图工作流，支持在提示词中通过 <wlr:...> / <lora:...> 动态加载 LoRA",
     "data": {
       "workflow": {
         "8": {
@@ -18,7 +267,7 @@
           },
           "class_type": "VAEDecode",
           "_meta": {
-            "title": "VAE解码"
+            "title": "VAE 解码器"
           }
         },
         "12": {
@@ -31,7 +280,7 @@
           },
           "class_type": "CLIPTextEncode",
           "_meta": {
-            "title": "CLIP文本编码器"
+            "title": "负向条件编码"
           }
         },
         "28": {
@@ -42,7 +291,7 @@
           },
           "class_type": "EmptyLatentImage",
           "_meta": {
-            "title": "空Latent"
+            "title": "空 Latent 图像"
           }
         },
         "63": {
@@ -72,7 +321,7 @@
           },
           "class_type": "KSampler",
           "_meta": {
-            "title": "K采样器"
+            "title": "K 采样器"
           }
         },
         "99": {
@@ -109,7 +358,7 @@
           },
           "class_type": "WeiLinPromptUI",
           "_meta": {
-            "title": "WeiLin 全能提示词编辑器"
+            "title": "WeiLin 提示词编辑器"
           }
         },
         "114": {
@@ -118,16 +367,16 @@
           },
           "class_type": "CheckpointLoaderSimple",
           "_meta": {
-            "title": "Checkpoint大模型加载器(简易)"
+            "title": "Checkpoint 模型加载器"
           }
         }
       }
     }
   },
   {
-    "id": "workflow_comfyui_split",
-    "name": "ComfyUI · 分立模型文生图",
-    "description": "基于 UNet、CLIP 与 VAE 分立加载的文生图工作流，含 WeiLinPromptUI 节点以支持动态多 LoRA",
+    "id": "workflow_comfyui_weilin_unet",
+    "name": "默认 UNet 模型文生图 (WeiLin)",
+    "description": "基于 UNet、CLIP 与 VAE 分立加载并集成 WeiLinPromptUI 节点的文生图工作流，支持动态 LoRA；Flux / SD3 / Qwen 等特定架构请在「打开蓝图」调整 CLIPLoader 类型",
     "data": {
       "workflow": {
         "8": {
@@ -143,7 +392,7 @@
           },
           "class_type": "VAEDecode",
           "_meta": {
-            "title": "VAE解码"
+            "title": "VAE 解码器"
           }
         },
         "12": {
@@ -156,7 +405,7 @@
           },
           "class_type": "CLIPTextEncode",
           "_meta": {
-            "title": "CLIP文本编码器"
+            "title": "负向条件编码"
           }
         },
         "15": {
@@ -165,7 +414,7 @@
           },
           "class_type": "VAELoader",
           "_meta": {
-            "title": "加载VAE"
+            "title": "VAE 模型加载器"
           }
         },
         "28": {
@@ -176,7 +425,7 @@
           },
           "class_type": "EmptyLatentImage",
           "_meta": {
-            "title": "空Latent"
+            "title": "空 Latent 图像"
           }
         },
         "44": {
@@ -186,7 +435,7 @@
           },
           "class_type": "UNETLoader",
           "_meta": {
-            "title": "UNET加载器"
+            "title": "UNet 模型加载器"
           }
         },
         "45": {
@@ -197,7 +446,7 @@
           },
           "class_type": "CLIPLoader",
           "_meta": {
-            "title": "加载CLIP"
+            "title": "CLIP 模型加载器"
           }
         },
         "63": {
@@ -227,7 +476,7 @@
           },
           "class_type": "KSampler",
           "_meta": {
-            "title": "K采样器"
+            "title": "K 采样器"
           }
         },
         "99": {
@@ -264,175 +513,7 @@
           },
           "class_type": "WeiLinPromptUI",
           "_meta": {
-            "title": "WeiLin 全能提示词编辑器"
-          }
-        }
-      }
-    }
-  },
-  {
-    "id": "workflow_comfyui_inpaint",
-    "name": "ComfyUI · 局部重绘",
-    "description": "基于单个 Checkpoint 模型的局部重绘工作流，含图像与遮罩加载、重绘编码器及 WeiLinPromptUI 节点",
-    "data": {
-      "workflow": {
-        "8": {
-          "inputs": {
-            "samples": [
-              "63",
-              0
-            ],
-            "vae": [
-              "114",
-              2
-            ]
-          },
-          "class_type": "VAEDecode",
-          "_meta": {
-            "title": "VAE解码"
-          }
-        },
-        "12": {
-          "inputs": {
-            "text": "%negative_prompt%",
-            "clip": [
-              "113",
-              2
-            ]
-          },
-          "class_type": "CLIPTextEncode",
-          "_meta": {
-            "title": "CLIP文本编码器"
-          }
-        },
-        "63": {
-          "inputs": {
-            "seed": "%seed%",
-            "steps": "%steps%",
-            "cfg": "%cfg%",
-            "sampler_name": "%sampler_name%",
-            "scheduler": "%scheduler%",
-            "denoise": "%denoise%",
-            "model": [
-              "113",
-              3
-            ],
-            "positive": [
-              "113",
-              1
-            ],
-            "negative": [
-              "12",
-              0
-            ],
-            "latent_image": [
-              "121",
-              0
-            ]
-          },
-          "class_type": "KSampler",
-          "_meta": {
-            "title": "K采样器"
-          }
-        },
-        "99": {
-          "inputs": {
-            "filename_prefix": "ST-Draw-Inpaint-",
-            "images": [
-              "8",
-              0
-            ]
-          },
-          "class_type": "SaveImage",
-          "_meta": {
-            "title": "保存图像"
-          }
-        },
-        "113": {
-          "inputs": {
-            "positive": "%prompt%",
-            "auto_random": false,
-            "lora_str": "",
-            "temp_str": "",
-            "temp_lora_str": "",
-            "random_template": "",
-            "打开提示词编辑器": null,
-            "打开Lora堆": "",
-            "opt_clip": [
-              "114",
-              1
-            ],
-            "opt_model": [
-              "114",
-              0
-            ]
-          },
-          "class_type": "WeiLinPromptUI",
-          "_meta": {
-            "title": "WeiLin 全能提示词编辑器"
-          }
-        },
-        "114": {
-          "inputs": {
-            "ckpt_name": "%basemodel_name%"
-          },
-          "class_type": "CheckpointLoaderSimple",
-          "_meta": {
-            "title": "Checkpoint大模型加载器(简易)"
-          }
-        },
-        "120": {
-          "inputs": {
-            "image": "%input_image%",
-            "upload": "image"
-          },
-          "class_type": "LoadImage",
-          "_meta": {
-            "title": "加载图像(重绘原图)"
-          }
-        },
-        "121": {
-          "inputs": {
-            "grow_mask_by": "%mask_blur%",
-            "pixels": [
-              "120",
-              0
-            ],
-            "vae": [
-              "114",
-              2
-            ],
-            "mask": [
-              "123",
-              0
-            ]
-          },
-          "class_type": "VAEEncodeForInpaint",
-          "_meta": {
-            "title": "VAE内补重绘编码"
-          }
-        },
-        "122": {
-          "inputs": {
-            "image": "%inpaint_mask%",
-            "upload": "image"
-          },
-          "class_type": "LoadImage",
-          "_meta": {
-            "title": "加载遮罩蒙版"
-          }
-        },
-        "123": {
-          "inputs": {
-            "channel": "red",
-            "image": [
-              "122",
-              0
-            ]
-          },
-          "class_type": "ImageToMask",
-          "_meta": {
-            "title": "遮罩图像转蒙版"
+            "title": "WeiLin 提示词编辑器"
           }
         }
       }

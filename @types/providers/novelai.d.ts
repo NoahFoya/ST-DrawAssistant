@@ -2,7 +2,7 @@
  * NovelAI 绘图服务提供方私有配置模型。
  *
  * @remarks
- * 包含 NovelAI 官方云端与第三方兼容端点的专有连接、API 密钥与绘图预设配置。
+ * 包含 NovelAI 官方云端与第三方兼容端点的专有连接、API 密钥与生图参数预设配置。
  */
 
 import type { ProviderAssetCache } from '../provider';
@@ -32,6 +32,6 @@ export interface NovelAIProviderConfig {
     readonly assetCache?: ProviderAssetCache;
     /** 各服务商切换时暂存的连接信息与模型缓存 */
     readonly serviceProfiles?: Partial<Record<NovelAIServiceId, NovelAIServiceProfile>>;
-    /** 当前激活的绘图预设标识符 */
+    /** 当前激活的生图参数预设标识符 */
     readonly activeDrawingPresetId?: string;
 }

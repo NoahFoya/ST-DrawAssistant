@@ -3,7 +3,7 @@
  *
  * @remarks
  * 统一封装 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容、Google Gemini 与 xAI Grok 各生图服务视图的数据状态与交互逻辑：
- * 1. 组合 PresetController<DrawingPresetData> 管理当前提供商的生图预设；
+ * 1. 组合 PresetController<DrawingPresetData> 管理当前服务商的生图参数预设；
  * 2. 独立维护服务通信配置 (serverUrl / apiKey / serviceId)，支持连通性检测与服务端模型/VAE/采样器拉取；
  * 3. 响应式派生主模型、VAE、提示词预设、ComfyUI 工作流预设的下拉选项，自动对缺失引用打上失效标记；
  * 4. 统一处理内嵌提示词预设管理器与工作流管理器的增删改查联动。
@@ -308,7 +308,7 @@ export class ProviderTabViewModel implements Disposable {
                 : options.defaultSchedulers ?? []
         );
 
-        // 按当前生图引擎加载对应的提示词预设列表
+        // 按当前生图服务加载对应的提示词预设列表
         this.promptPresets = signal<PresetItem<PromptPresetData>[]>(
             settingsStore.getPresets<PromptPresetData>('prompts', this.provider)
         );
@@ -320,10 +320,10 @@ export class ProviderTabViewModel implements Disposable {
             category: 'drawing',
             provider: this.provider,
             idPrefix: options.idPrefix ?? `${this.provider}_preset_`,
-            promptMessageForNew: options.promptMessageForNew ?? '请输入新生图预设名称:',
+            promptMessageForNew: options.promptMessageForNew ?? '请输入新生图参数预设名称:',
             defaultNewName: options.defaultNewName ?? '新建预设',
-            promptMessageForSaveAs: '请输入另存生图预设的新名称:',
-            promptMessageForRename: '请输入生图预设的新名称:',
+            promptMessageForSaveAs: '请输入另存生图参数预设的新名称:',
+            promptMessageForRename: '请输入生图参数预设的新名称:',
             defaultTemplate: () => {
                 const list = settingsStore.getPresets<DrawingPresetData>('drawing', this.provider);
                 if (list[0]?.data) {
@@ -523,12 +523,12 @@ export class ProviderTabViewModel implements Disposable {
             return opts;
         });
 
-        // 6. 派生局部重绘预设下拉选项
+        // 6. 派生局部重绘工作流下拉选项
         this.inpaintPresetOptions = computed(() => {
             const workflows = this.workflowPresets.value;
             const boundId = this.presetController.draftConfig.value.inpaintPresetId || '';
             const opts: SelectOption[] = [
-                { label: '未绑定局部重绘预设', value: '' },
+                { label: '未选择局部重绘工作流', value: '' },
                 ...workflows.map((w) => ({
                     label: w.name,
                     value: w.id,
@@ -560,6 +560,8 @@ export class ProviderTabViewModel implements Disposable {
                         modelWeight: l.modelWeight ?? 0.8,
                         clipWeight: l.clipWeight ?? l.modelWeight ?? 0.8,
                         triggerWeight: l.triggerWeight ?? 1.0,
+                        triggerMode: l.triggerMode === 'keyword' ? 'keyword' : 'always',
+                        keywords: l.keywords ?? '',
                     })),
                 },
             }))
@@ -906,7 +908,7 @@ export class ProviderTabViewModel implements Disposable {
     }
 
     /**
-     * 更新当前绘图预设草稿的提示词轮询候选池配置。
+     * 更新当前生图参数预设草稿的提示词轮询候选池配置。
      */
     public updatePromptPollingPool(pool: PromptPollingPoolItem[]): void {
         this.presetController.updateDraft(
@@ -1246,6 +1248,8 @@ export class ProviderTabViewModel implements Disposable {
                     clipWeight: l.clipWeight,
                     triggerWeight: l.triggerWeight,
                     enabled: l.enabled,
+                    triggerMode: l.triggerMode === 'keyword' ? 'keyword' : 'always',
+                    keywords: l.keywords ?? '',
                 })),
         });
 

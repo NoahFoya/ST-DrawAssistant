@@ -233,7 +233,8 @@ export function stripStTemplateComments(text: string): string {
     return text.replace(/\{\{\/\/[\s\S]*?\}\}/g, '');
 }
 
-const THINKING_TAG_PATTERN = 'think|thinking|imagethink|designthink';
+const MAIN_THINKING_TAG_PATTERN = 'think|thinking|thought';
+const DRAW_THINKING_TAG_PATTERN = 'imagethink|designthink';
 
 function escapeRegExpLiteral(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -247,8 +248,10 @@ export interface StripThinkingOptions {
 }
 
 /**
- * 剥离 HTML 注释与推理/设计思考块（`<think>` / `<thinking>` / `<imagethink>` / `<designthink>`），
- * 供提示词处理流程、指令/档案提取与关键词扫描共用。
+ * 剥离 HTML 注释与推理/设计思考块（`<think>` / `<thinking>` / `<thought>` / `<imagethink>` / `<designthink>`），
+ * 供提示词处理流程、指令/档案提取与关键词扫描共用：
+ * 1. 第一阶段先行剥离主思维链（`<think>` / `<thinking>` / `<thought>`），使其内部草稿标签一并清除；
+ * 2. 第二阶段剥离绘图与设计思考块（`<imagethink>` / `<designthink>`），带反引号排除与同级起始符止界保护。
  */
 export function stripThinkingAndComments(
     text: string,
@@ -259,37 +262,51 @@ export function stripThinkingAndComments(
     }
 
     const stopPatterns: string[] = [
-        `<(?:${THINKING_TAG_PATTERN})\\b`,
-        escapeRegExpLiteral('image###'),
-        '<(?:character|outfit)(?=[\\s>])',
+        `(?<!\`)<(?:${MAIN_THINKING_TAG_PATTERN}|${DRAW_THINKING_TAG_PATTERN})\\b`,
+        `(?<!\`)${escapeRegExpLiteral('image###')}(?!\`)`,
+        '(?<!`)<(?:character|outfit)(?=[\\s>])',
     ];
     const customPromptStart = options?.promptStartTag?.trim();
     if (customPromptStart && customPromptStart !== 'image###') {
-        stopPatterns.push(escapeRegExpLiteral(customPromptStart));
+        stopPatterns.push(`(?<!\`)${escapeRegExpLiteral(customPromptStart)}(?!\`)`);
     }
     if (Array.isArray(options?.archiveStartTags)) {
         for (const rawTag of options.archiveStartTags) {
             const tag = (rawTag || '').trim();
             if (tag && tag !== '<character>' && tag !== '<outfit>') {
-                stopPatterns.push(escapeRegExpLiteral(tag));
+                stopPatterns.push(`(?<!\`)${escapeRegExpLiteral(tag)}(?!\`)`);
             }
         }
     }
 
-    const closedThinkingRe = new RegExp(
-        `<(${THINKING_TAG_PATTERN})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`,
+    const stopBoundary = stopPatterns.join('|');
+
+    // 1. 阶段一：剥离主思维链（闭合块整体剥离，内部草稿标签一并清除；未闭合块遇到非反引号包裹的正式标签止界）
+    const closedMainThinkingRe = new RegExp(
+        `(?<!\`)<(${MAIN_THINKING_TAG_PATTERN})\\b[^>]*>(?:(?!<\\1\\b)[\\s\\S])*?<\\/\\1\\s*>(?!\`)`,
         'gi'
     );
-    // 未闭合的思考标签仅向后剥离到下一段思考/生图指令/档案起止符为止，避免误吞后续有效输出
-    const unclosedThinkingRe = new RegExp(
-        `<(${THINKING_TAG_PATTERN})\\b[^>]*>(?:(?!(?:${stopPatterns.join('|')}))[\\s\\S])*`,
+    const unclosedMainThinkingRe = new RegExp(
+        `(?<!\`)<(${MAIN_THINKING_TAG_PATTERN})\\b[^>]*>(?:(?!(?:${stopBoundary}))[\\s\\S])*`,
+        'gi'
+    );
+
+    // 2. 阶段二：剥离绘图与设计思考链（带防跨块负向断言与反引号排除）
+    const closedDrawThinkingRe = new RegExp(
+        `(?<!\`)<(${DRAW_THINKING_TAG_PATTERN})\\b[^>]*>(?:(?!<(?:${DRAW_THINKING_TAG_PATTERN})\\b)[\\s\\S])*?<\\/\\1\\s*>(?!\`)`,
+        'gi'
+    );
+    const unclosedDrawThinkingRe = new RegExp(
+        `(?<!\`)<(${DRAW_THINKING_TAG_PATTERN})\\b[^>]*>(?:(?!(?:${stopBoundary}))[\\s\\S])*`,
         'gi'
     );
 
     return text
         .replace(/<!--[\s\S]*?-->/g, ' ')
-        .replace(closedThinkingRe, ' ')
-        .replace(unclosedThinkingRe, ' ');
+        .replace(closedMainThinkingRe, ' ')
+        .replace(unclosedMainThinkingRe, ' ')
+        .replace(closedDrawThinkingRe, ' ')
+        .replace(unclosedDrawThinkingRe, ' ');
 }
 
 /**
@@ -363,7 +380,7 @@ function stripAiMarkupForKeywordScan(
 
 const PURE_ASCII_TOKEN_RE = /^[A-Za-z0-9_.\s'-]+$/;
 
-function matchKeywordToken(
+export function matchKeywordToken(
     rawToken: string,
     rawText: string,
     lowerText: string,
@@ -386,7 +403,8 @@ function matchKeywordToken(
             const re = new RegExp(regexMatch.pattern, flags);
             return re.test(rawText);
         } catch {
-            // 非法正则时退化为字面文本包含匹配
+            // 非法正则字面量直接返回不匹配，禁止隐性退化为字面文本匹配
+            return false;
         }
     }
 

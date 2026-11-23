@@ -481,14 +481,7 @@ export class LogTerminal implements UIComponent {
             detailsBlock = document.createElement('div');
             detailsBlock.className = 'da-log-details-block';
             detailsBlock.style.display = 'none';
-
-            try {
-                detailsBlock.textContent = typeof item.details === 'string'
-                    ? item.details
-                    : JSON.stringify(item.details, null, 2);
-            } catch {
-                detailsBlock.textContent = String(item.details);
-            }
+            detailsBlock.textContent = formatLogDetailsText(item.details);
 
             expandBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -545,11 +538,9 @@ export class LogTerminal implements UIComponent {
             let detailsMatch = false;
 
             if (item.details !== undefined && item.details !== null) {
-                try {
-                    detailsMatch = JSON.stringify(item.details).toLowerCase().includes(this.searchKeyword);
-                } catch {
-                    detailsMatch = String(item.details).toLowerCase().includes(this.searchKeyword);
-                }
+                detailsMatch = formatLogDetailsText(item.details)
+                    .toLowerCase()
+                    .includes(this.searchKeyword);
             }
 
             if (!msgMatch && !tagMatch && !detailsMatch) {
@@ -571,22 +562,56 @@ export class LogTerminal implements UIComponent {
         return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
-    private formatItemText(item: TerminalLogItem, includeDetails = false): string {
+    private formatItemText(item: TerminalLogItem, includeDetails = true): string {
         const time = this.formatTime(item.timestamp);
         const tag = item.namespace ? `[${item.namespace}] ` : '';
         let base = `${time} [${item.level.toUpperCase()}] ${tag}${item.message}`;
 
         if (includeDetails && item.details !== undefined && item.details !== null) {
-            try {
-                const detailStr = typeof item.details === 'string'
-                    ? item.details
-                    : JSON.stringify(item.details, null, 2);
+            const detailStr = formatLogDetailsText(item.details);
+            if (detailStr) {
                 base += `\n${detailStr}`;
-            } catch {
-                base += `\n${String(item.details)}`;
             }
         }
 
         return base;
+    }
+}
+
+/**
+ * 将日志附加详情（支持 Error / HttpError 实例、单元素数组解包与嵌套对象）格式化为可读文本。
+ */
+export function formatLogDetailsText(rawDetails: unknown): string {
+    if (rawDetails === undefined || rawDetails === null) {
+        return '';
+    }
+    const unwrapped =
+        Array.isArray(rawDetails) && rawDetails.length === 1 ? rawDetails[0] : rawDetails;
+    if (typeof unwrapped === 'string') {
+        return unwrapped;
+    }
+    try {
+        return JSON.stringify(
+            unwrapped,
+            (_key, val) => {
+                if (val instanceof Error) {
+                    const errRecord: Record<string, unknown> = {
+                        name: val.name,
+                        message: val.message,
+                    };
+                    for (const prop of Object.keys(val)) {
+                        errRecord[prop] = (val as unknown as Record<string, unknown>)[prop];
+                    }
+                    if (val.stack) {
+                        errRecord.stack = val.stack;
+                    }
+                    return errRecord;
+                }
+                return val;
+            },
+            2
+        );
+    } catch {
+        return String(unwrapped);
     }
 }

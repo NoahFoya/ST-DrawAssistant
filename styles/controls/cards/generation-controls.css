@@ -2,7 +2,7 @@
  * 生图参数复合控件样式 (DimensionPicker & SamplerCard)。
  *
  * @remarks
- * 统一承载生图引擎视图下的紧凑复合参数控件样式：
+ * 统一承载生图服务视图下的紧凑复合参数控件样式：
  * 1. 画幅比例与宽高尺寸对称复合控件（.da-dimension-picker）；
  * 2. 随机种子输入框与快捷操作栏（.da-sampler-card）。
  */

@@ -44,7 +44,7 @@ function isQuotaExceededError(err: unknown): boolean {
 }
 
 const QUOTA_ERROR_MESSAGE =
-    '浏览器本地存储配额已满（QuotaExceededError），请前往历史画廊清理旧图片，或在常规设置中开启图片压缩存储';
+    '浏览器本地存储配额已满（QuotaExceededError），请前往「本地图库」清理旧图片，或在「插件设置」中开启图片压缩存储';
 
 /**
  * 图像资产持久化存储服务实现类。

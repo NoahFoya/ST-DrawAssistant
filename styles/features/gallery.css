@@ -99,8 +99,7 @@
     box-sizing: border-box;
 }
 
-.da-gallery-toolbar .da-input-wrapper,
-.da-gallery-toolbar .da-input-group {
+.da-gallery-toolbar .da-input-wrapper {
     flex: 2 1 220px;
     min-width: 180px;
 }
@@ -331,11 +330,6 @@
 
 .da-media-card__action-btn--fav.is-active {
     color: var(--da-color-fav, #eab308);
-}
-
-.da-media-card__action-btn--danger:hover {
-    background: var(--da-color-error, #ef4444);
-    color: var(--da-text-on-accent, #ffffff);
 }
 
 /* 卡片状态辅助样式 (generating, ready, failed) */

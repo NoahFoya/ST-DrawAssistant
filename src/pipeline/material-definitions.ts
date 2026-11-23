@@ -180,7 +180,7 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
     {
         key: 'hair',
         label: '发型与发色',
-        hint: '发色、发长、发型、刘海与呆毛（支持状态分层，如 blonde_hair, long_hair|[nude]messy_hair）',
+        hint: '发色、发长、发型、刘海与呆毛（如 blonde_hair, long_hair, twintails）',
         placeholder: '例如: blonde_hair, long_hair, twintails, bangs',
         extractAliases: ['HAIR', 'HAIRSTYLE', '发型与发色', '发型', '发色'],
     },
@@ -208,35 +208,35 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
     {
         key: 'neck_shoulders',
         label: '颈肩与锁骨',
-        hint: '脖颈、锁骨、肩部线条；[clothed] 仅填外露锁骨，[exposed]/[nude] 补全裸肩（如 |[clothed]collarbone|[nude]bare_shoulders, collarbone）',
+        hint: '脖颈、锁骨与肩部线条特征（如 collarbone, bare_shoulders）',
         placeholder: '例如: |[clothed]collarbone|[nude]bare_shoulders, collarbone',
         extractAliases: ['NECK_SHOULDERS', 'NECK', 'SHOULDERS', 'COLLARBONE', '颈肩与锁骨', '颈肩', '锁骨', '肩膀'],
     },
     {
         key: 'breasts',
         label: '胸部/乳房',
-        hint: '胸围体型置前；[exposed]/[nude] 补充乳头与乳晕细节（如 medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae）',
+        hint: '胸围尺寸、胸型与胸部细节特征（如 medium_breasts, cleavage）',
         placeholder: '例如: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, puffy_nipples, areolae',
         extractAliases: ['BREASTS', 'CHEST', 'BUST', 'NIPPLES', '胸部/乳房', '胸部', '乳房', '胸围', '胸型'],
     },
     {
         key: 'upper_back',
         label: '背部',
-        hint: '肩胛、脊背线条、背部纹身或伤疤，仅用于背面视角（如 |[exposed]bare_back|[nude]bare_back, back_tattoo）',
+        hint: '肩胛、脊背线条、背部纹身或伤疤（如 bare_back, back_tattoo）',
         placeholder: '例如: |[exposed]bare_back|[nude]bare_back, spine',
         extractAliases: ['UPPER_BACK', 'BACK', 'SPINE', '背部', '后背', '脊背'],
     },
     {
         key: 'abdomen',
         label: '腰腹与肚脐',
-        hint: '腰线、小腹、马甲线与肚脐；[exposed]/[nude] 填写外露腰腹特征（如 |[exposed]midriff, navel|[nude]narrow_waist, flat_stomach, navel）',
+        hint: '腰线、小腹、马甲线与肚脐特征（如 narrow_waist, flat_stomach, navel）',
         placeholder: '例如: |[exposed]midriff, navel|[nude]narrow_waist, flat_stomach, navel',
         extractAliases: ['ABDOMEN', 'WAIST', 'STOMACH', 'BELLY', 'NAVEL', 'MIDRIFF', '腰腹与肚脐', '腰腹', '腹部', '腰身', '肚脐'],
     },
     {
         key: 'arms',
         label: '手臂',
-        hint: '大臂、小臂线条与上肢轮廓（如 slender_arms|[nude]bare_arms）',
+        hint: '大臂、小臂线条与上肢轮廓（如 slender_arms, bare_arms）',
         placeholder: '例如: slender_arms|[nude]bare_arms',
         extractAliases: ['ARMS', 'UPPER_ARMS', 'FOREARMS', '手臂', '胳膊'],
     },
@@ -250,21 +250,21 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
     {
         key: 'hips',
         label: '臀部',
-        hint: '臀部比例与曲线；[clothed] 通常留空，[exposed]/[nude] 填写详细臀型特征',
+        hint: '臀胯比例与曲线特征（如 wide_hips, round_ass）',
         placeholder: '例如: |[exposed]wide_hips|[nude]wide_hips, round_ass',
         extractAliases: ['HIPS', 'BUTT', 'ASS', 'PELVIS', '臀部', '臀胯'],
     },
     {
         key: 'genitals',
         label: '生殖器',
-        hint: '静态生殖构造与阴毛形态，仅填写于 [exposed]/[nude] 层（如 |[nude]pussy, trimmed_pubic_hair）',
+        hint: '静态生殖构造与阴毛形态（通常配置于 [exposed] 或 [nude] 状态层）',
         placeholder: '例如: |[nude]pussy, trimmed_pubic_hair（或 |[nude]penis, testicles）',
         extractAliases: ['GENITALS', 'PUSSY', 'PENIS', 'REPRODUCTIVE', '生殖器', '阴部'],
     },
     {
         key: 'anus',
         label: '肛门/后庭',
-        hint: '后庭与肛周特征，仅填写于 [exposed]/[nude] 层，供特写视角按需调用（如 |[nude]anus）',
+        hint: '后庭与肛周静态特征（通常配置于 [exposed] 或 [nude] 状态层）',
         placeholder: '例如: |[nude]anus',
         extractAliases: ['ANUS', 'ANAL', '肛门/后庭', '肛门', '后庭'],
     },
@@ -278,7 +278,7 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
     {
         key: 'feet',
         label: '足部',
-        hint: '脚踝、足弓与脚趾形态；日常穿鞋在 [clothed] 可留空，[exposed]/[nude] 填赤足细节',
+        hint: '脚踝、足弓与脚趾形态（如 barefoot, slender_ankles, toes）',
         placeholder: '例如: |[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes',
         extractAliases: ['FEET', 'FOOT', 'BARE_FEET', 'SOLES', '足部', '赤足', '脚掌'],
     },
@@ -303,7 +303,7 @@ export const OUTFIT_PART_DEFS: readonly MaterialPartDef<OutfitPartKey>[] = [
     {
         key: 'outerwear',
         label: '外套',
-        hint: '大衣、夹克、开衫、披肩等外搭服饰（支持 [intact] 穿好与 [disheveled] 敞开滑落）',
+        hint: '大衣、夹克、开衫、披肩等外搭服饰（如 black_cardigan, blazer）',
         placeholder: '例如: black_cardigan|[intact]buttoned|[disheveled]open_cardigan, off_shoulder',
         extractAliases: ['OUTERWEAR', 'JACKET', 'COAT', 'CARDIGAN', '外套', '外衣', '大衣'],
     },
@@ -324,14 +324,14 @@ export const OUTFIT_PART_DEFS: readonly MaterialPartDef<OutfitPartKey>[] = [
     {
         key: 'bra',
         label: '文胸/内衣上装',
-        hint: '文胸、抹胸、吊带内衬与乳贴（如 white_bra|[disheveled]bra_pulled_down）',
+        hint: '文胸、抹胸、吊带内衬与乳贴（如 white_bra, lace_bra）',
         placeholder: '例如: white_bra|[disheveled]bra_pulled_down',
         extractAliases: ['BRA', 'BRASSIERE', 'PASTIES', '文胸/内衣上装', '文胸', '胸罩', '抹胸'],
     },
     {
         key: 'panties',
         label: '内裤/底裤',
-        hint: '内裤、丁字裤、安全裤与吊袜带（如 white_panties|[disheveled]panties_aside）',
+        hint: '内裤、丁字裤、安全裤与吊袜带（如 white_panties, striped_panties）',
         placeholder: '例如: white_panties|[disheveled]panties_aside',
         extractAliases: ['PANTIES', 'BRIEFS', 'THONG', 'UNDERPANTS', '内裤/底裤', '内裤', '底裤'],
     },
@@ -623,6 +623,24 @@ export function validateKeywordRegexToken(rawToken: string): string | null {
     }
 }
 
+/**
+ * 扫描以 `|` 或逗号分隔的关键词字符串，收集所有非法 `/pattern/flags` 正则词元的错误信息。
+ */
+export function collectKeywordRegexErrors(rawKeywords?: string): string[] {
+    if (!rawKeywords) {
+        return [];
+    }
+    const errors: string[] = [];
+    for (const token of splitKeywordTokens(rawKeywords)) {
+        if (!token.startsWith('/')) continue;
+        const err = validateKeywordRegexToken(token);
+        if (err) {
+            errors.push(`${token}: ${err}`);
+        }
+    }
+    return errors;
+}
+
 function isKeywordSeparatorChar(ch: string | undefined): boolean {
     return (
         ch === undefined ||
@@ -765,7 +783,7 @@ export function resolveOutfitIdsFromRefs(
 }
 
 /** 按顶层逗号切分标签段，完整保留 `()` / `[]` / `{}` / `<>` 及 NovelAI `w::...::` 内部逗号 */
-function splitTopLevelTags(line: string): string[] {
+function splitTopLevelTags(line: string, normalizeChinesePunctuation = true): string[] {
     const parts: string[] = [];
     let current = '';
     let paren = 0;
@@ -810,8 +828,12 @@ function splitTopLevelTags(line: string): string[] {
         else if (ch === '<') angle++;
         else if (ch === '>') angle = Math.max(0, angle - 1);
 
+        const isDelimiter = normalizeChinesePunctuation
+            ? ch === ',' || ch === '，' || ch === '、'
+            : ch === ',';
+
         if (
-            (ch === ',' || ch === '，' || ch === '、') &&
+            isDelimiter &&
             paren === 0 &&
             square === 0 &&
             curly === 0 &&
@@ -837,13 +859,14 @@ function splitTopLevelTags(line: string): string[] {
  */
 export function cleanTagSegments(
     rawText: string,
-    options?: { readonly deduplicate?: boolean }
+    options?: { readonly deduplicate?: boolean; readonly normalizeChinesePunctuation?: boolean }
 ): string {
     if (!rawText || typeof rawText !== 'string') {
         return '';
     }
 
     const deduplicate = Boolean(options?.deduplicate);
+    const normalizeChinesePunctuation = options?.normalizeChinesePunctuation ?? true;
     const segments = rawText
         .split(/[\r\n]+/)
         .map((seg) => seg.trim())
@@ -853,7 +876,7 @@ export function cleanTagSegments(
     const seenTags = new Set<string>();
 
     for (const seg of segments) {
-        for (const trimmed of splitTopLevelTags(seg)) {
+        for (const trimmed of splitTopLevelTags(seg, normalizeChinesePunctuation)) {
             if (!trimmed) continue;
 
             if (deduplicate) {

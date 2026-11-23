@@ -15,6 +15,8 @@ import { renderIcon } from '../components/icons';
 import { PresetToolbar, type PresetToolbarItem, type PresetActionType } from './preset-toolbar';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
+import { settingsStore } from '../../store/settings-store';
+import { eventBus } from '../../util/event-bus';
 
 /** 替换变量信息 */
 export interface VariableReplacementInfo {
@@ -133,13 +135,13 @@ export const COMFYUI_VARIABLE_DEFINITIONS: readonly ComfyWorkflowVariableDefinit
     },
     {
         variable: '%cfg%',
-        label: '提示词相关性 (CFG Scale)',
+        label: '引导系数 (CFG Scale)',
         matchKeys: ['cfg', 'cfg_scale'],
         tip: '提示词引导系数 (通常位于 KSampler 节点)'
     },
     {
         variable: '%sampler_name%',
-        label: '采样方法 (Sampler)',
+        label: '采样算法 (Sampler)',
         matchKeys: ['sampler_name', 'sampler'],
         tip: '采样算法名称 (如 euler, dpmpp_2m)'
     },
@@ -169,7 +171,7 @@ export const COMFYUI_VARIABLE_DEFINITIONS: readonly ComfyWorkflowVariableDefinit
     },
     {
         variable: '%input_image%',
-        label: '参考原图',
+        label: '重绘原图',
         matchKeys: ['image'],
         tip: '图生图或局部重绘上传后的原图文件名 (通常位于 LoadImage 节点)'
     },
@@ -181,7 +183,7 @@ export const COMFYUI_VARIABLE_DEFINITIONS: readonly ComfyWorkflowVariableDefinit
     },
     {
         variable: '%mask_blur%',
-        label: '蒙版羽化扩展',
+        label: '蒙版羽化',
         matchKeys: ['grow_mask_by'],
         tip: '局部重绘蒙版边缘扩展像素 (通常位于 VAEEncodeForInpaint 节点)'
     }
@@ -198,7 +200,7 @@ function escapeHtml(str: string): string {
 }
 
 const COMFY_UI_LAYOUT_ERROR =
-    '检测到当前内容为 ComfyUI Web 界面格式 (UI Layout)，非生图引擎所需的 API Prompt 格式。请在 ComfyUI 设置中开启「Enable Dev mode Options」，通过「Save (API Format)」导出后重新操作。';
+    '检测到当前内容为 ComfyUI Web 界面格式 (UI Layout)，非生图服务所需的 API Prompt 格式。请在新版 ComfyUI 菜单点击「工作流 (Workflow) → 导出 (API) / Export (API)」，或在旧版设置开启「Enable Dev mode Options」后通过「Save (API Format)」导出。';
 
 const AUXILIARY_MODEL_LOADER_PATTERN =
     /(upscale|controlnet|lora|detailer|yolo|sam|bbox|ipadapter|clipvision|stylemodel|gligen|hypernetwork|embedding|facerestore|pulid|instantid|reactor|insightface)/i;
@@ -230,7 +232,7 @@ export interface ParsedComfyWorkflowError {
 }
 
 /**
- * 统一解析 ComfyUI 工作流输入（支持原生 API Prompt JSON、{ prompt } 提交体以及插件导出的 { data: { workflow } } / { workflow } / { json } 包装格式）。
+ * 统一解析 ComfyUI 工作流输入（支持原生 API Prompt JSON、{ prompt } 提交体以及插件导出的 { data: { workflow } } / { workflow } 预设格式）。
  */
 export function parseComfyWorkflowInput(
     raw: unknown,
@@ -269,29 +271,13 @@ export function parseComfyWorkflowInput(
     let extraData: Record<string, unknown> | undefined;
     let target: unknown = root;
 
-    const parseJsonField = (val: unknown): { ok: true; value: unknown } | { ok: false; error: string } => {
-        if (typeof val === 'string') {
-            try {
-                return { ok: true, value: JSON.parse(val) };
-            } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : String(err);
-                return { ok: false, error: `解析嵌套工作流 JSON 失败: ${message}` };
-            }
-        }
-        return { ok: true, value: val };
-    };
-
-    // 1. 解包标准插件预设 { data: { workflow | json } } 或直包 { workflow | json | prompt }
+    // 1. 解包标准插件预设 { data: { workflow } } 或直包 { workflow | prompt }
     if (isPlainRecord(root.data)) {
         if ('workflow' in root.data) {
             target = root.data.workflow;
             const rest = { ...root.data };
             delete rest.workflow;
             if (Object.keys(rest).length > 0) extraData = rest;
-        } else if ('json' in root.data) {
-            const parsedNested = parseJsonField(root.data.json);
-            if (!parsedNested.ok) return parsedNested;
-            target = parsedNested.value;
         } else {
             return {
                 ok: false,
@@ -300,10 +286,6 @@ export function parseComfyWorkflowInput(
         }
     } else if ('workflow' in root) {
         target = root.workflow;
-    } else if ('json' in root) {
-        const parsedNested = parseJsonField(root.json);
-        if (!parsedNested.ok) return parsedNested;
-        target = parsedNested.value;
     } else if (isPlainRecord(root.prompt) && !isComfyNodeEntry(root.prompt)) {
         target = root.prompt;
     }
@@ -693,6 +675,7 @@ export class WorkflowCard implements UIComponent {
     ) => void | boolean | Promise<void | boolean>;
     private readonly onOpenBlueprintCallback?: (currentJson: string, activePresetId?: string) => void;
     private readonly textareaInputListener: () => void;
+    private readonly unsubscribeSettings: () => void;
 
     constructor(options: WorkflowCardOptions) {
         this.rawPresets = [...options.presets];
@@ -745,6 +728,7 @@ export class WorkflowCard implements UIComponent {
 
         this.formatButton = new Button({
             label: '格式化变量',
+            tooltip: '自动识别工作流节点并替换为标准参数占位符（模型、提示词、尺寸、步数、CFG 与种子等）',
             variant: 'secondary',
             size: 'sm',
             onClick: () => {
@@ -806,17 +790,39 @@ export class WorkflowCard implements UIComponent {
         editorRow.appendChild(this.textareaElement);
         this.card.appendContent(editorRow);
 
-        // 6. WeiLin 节点检测提示条（仅当工作流包含 WeiLin 节点时呈现，并指引下载插件）
+        // 6. WeiLin 节点插件常驻提示条（默认始终展示，支持勾选不再显示该提示）
         this.weilinNoticeEl = document.createElement('div');
         this.weilinNoticeEl.className = 'da-workflow-weilin-notice';
         this.weilinNoticeEl.innerHTML = `
             <span class="da-workflow-weilin-notice__icon">${renderIcon('info', 16)}</span>
-            <span class="da-workflow-weilin-notice__text">
-                当前工作流包含 <strong>WeiLin 节点</strong>（用于在 ComfyUI API 工作流中通过提示词动态加载与调节 LoRA）。ComfyUI 原生 API 无法直接解析提示词中的 LoRA 标签，需依赖此节点；使用前请确保您的 ComfyUI 环境中已安装对应节点插件（若尚未安装，请在 ComfyUI Manager 中搜索并安装 <strong>ComfyUI-WeiLin</strong> 插件）。
-            </span>
+            <div class="da-workflow-weilin-notice__body">
+                <span class="da-workflow-weilin-notice__text">
+                    预设提供<strong>原生（Checkpoint / UNet）</strong>与 <strong>WeiLin（Checkpoint / UNet）</strong>四套文生图工作流。ComfyUI 原生 API 无法直接解析提示词中的 LoRA 标签；若使用包含 <strong>WeiLin 节点</strong>的工作流通过提示词动态加载与调节 LoRA，请确保已在 ComfyUI Manager 中搜索并安装 <strong>ComfyUI-WeiLin</strong>（WeiLin-Comfyui-Tools）插件。
+                </span>
+                <button type="button" class="da-workflow-weilin-notice__dismiss" data-action="dismiss-weilin-notice">
+                    不再显示该提示
+                </button>
+            </div>
         `;
+        const dismissBtn = this.weilinNoticeEl.querySelector<HTMLButtonElement>(
+            '[data-action="dismiss-weilin-notice"]'
+        );
+        dismissBtn?.addEventListener('click', () => {
+            const currentUi = settingsStore.get('ui');
+            settingsStore.set('ui', {
+                ...currentUi,
+                dismissWeilinNotice: true,
+            });
+            this.updateWeilinNotice();
+        });
         this.card.appendContent(this.weilinNoticeEl);
-        this.updateWeilinNotice(this.currentData.json);
+        this.updateWeilinNotice();
+
+        this.unsubscribeSettings = eventBus.on('settings:updated', ({ keys }) => {
+            if (!keys || keys.includes('ui')) {
+                this.updateWeilinNotice();
+            }
+        });
     }
 
     /**
@@ -933,6 +939,7 @@ export class WorkflowCard implements UIComponent {
      * 级联释放子组件、事件监听与 DOM 节点。
      */
     public dispose(): void {
+        this.unsubscribeSettings();
         this.textareaElement.removeEventListener('input', this.textareaInputListener);
         this.toolbar.dispose();
         this.formatButton.dispose();
@@ -1020,10 +1027,10 @@ export class WorkflowCard implements UIComponent {
         return true;
     }
 
-    /** 根据当前工作流是否包含 WeiLin 节点动态切换提示条显隐 */
-    private updateWeilinNotice(val: string): void {
-        const hasWeilin = hasWeilinNodeInWorkflow(val);
-        this.weilinNoticeEl.style.display = hasWeilin ? 'flex' : 'none';
+    /** 根据用户是否已关闭提示控制 WeiLin 插件提示条显隐（默认始终显示） */
+    private updateWeilinNotice(_val?: string): void {
+        const dismissed = Boolean(settingsStore.get('ui')?.dismissWeilinNotice);
+        this.weilinNoticeEl.style.display = dismissed ? 'none' : 'flex';
     }
 
     /** 检查 JSON 语法与 ComfyUI API 工作流结构状态并切换 invalid 样式类 */

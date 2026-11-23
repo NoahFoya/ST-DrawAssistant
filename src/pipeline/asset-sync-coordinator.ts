@@ -306,7 +306,7 @@ export class AssetSyncCoordinator {
             // 6. 计算资产增减差异
             const diff = computeAssetDiff(prevCache, updatedCache);
 
-            // 7. 比对当前激活绘图预设与提示词预设（含轮询候选池）的可用性
+            // 7. 比对当前激活生图参数预设与提示词预设（含轮询候选池）的可用性
             const activeDrawingId = prevCfg?.activeDrawingPresetId;
             const dp = activeDrawingId
                 ? settingsStore.getPreset<DrawingPresetData>('drawing', activeDrawingId, providerType)
