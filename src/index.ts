@@ -45,6 +45,8 @@ export * from './ui';
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 let lifecycleGeneration = 0;
+let lifecycleAbortController: AbortController | null = null;
+let pendingAutoGenReply: { chatId: string; messageId: number; swipeId: number } | null = null;
 let settingsModalInstance: SettingsModal | null = null;
 let fabInstance: FloatingActionButton | null = null;
 let drawerEntryInstance: DrawerEntry | null = null;
@@ -77,6 +79,10 @@ export async function initOnce(): Promise<void> {
     }
 
     const currentGen = ++lifecycleGeneration;
+    lifecycleAbortController?.abort();
+    lifecycleAbortController = new AbortController();
+    const currentSignal = lifecycleAbortController.signal;
+    pendingAutoGenReply = null;
 
     initPromise = (async () => {
         try {
@@ -171,6 +177,36 @@ export async function initOnce(): Promise<void> {
                     });
                 };
 
+                // 仅在宿主真正收到新 AI 回复 (MESSAGE_RECEIVED) 时签发一次性自动生图票据，
+                // 避免打开历史聊天记录、切换设置重绘或外部脚本重渲染楼层时误触发自动生图
+                const msgReceivedEvent = eventTypes.MESSAGE_RECEIVED || 'message_received';
+                bindHostEvent(msgReceivedEvent, (data: unknown, type?: unknown) => {
+                    const messageId = extractMessageId(data);
+                    if (messageId === undefined || type === 'first_message' || type === 'quiet') {
+                        return;
+                    }
+                    const settings = settingsStore.getSettings();
+                    if (!settings.enabled || !settings.autoGenerate) {
+                        return;
+                    }
+                    const ctx = getLiveContext();
+                    const msg = ctx?.chat?.[messageId];
+                    if (!msg || msg.is_user || msg.is_system) {
+                        return;
+                    }
+                    pendingAutoGenReply = {
+                        chatId: ctx?.chatId || 'default_chat',
+                        messageId,
+                        swipeId: msg.swipe_id ?? 0,
+                    };
+                });
+
+                // 生成被用户主动中止时立即作废未消费的自动生图票据
+                const genStoppedEvent = eventTypes.GENERATION_STOPPED || 'generation_stopped';
+                bindHostEvent(genStoppedEvent, () => {
+                    pendingAutoGenReply = null;
+                });
+
                 // 监听角色消息渲染完成 (CHARACTER_MESSAGE_RENDERED) - 延后一拍待同步/微任务后处理脚本完成 DOM 刷新后，再执行楼层装饰与自动生图调度
                 const charRenderedEvent =
                     eventTypes.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered';
@@ -196,14 +232,33 @@ export async function initOnce(): Promise<void> {
                         return;
                     }
 
-                    // 默认忽略角色开场白 ('first_message') 的自动生图，仅装配楼层生图按钮而不自动触发生成
+                    const effectiveChatId = initialChatId || 'default_chat';
                     const settings = settingsStore.getSettings();
+                    const ticketMatches = Boolean(
+                        pendingAutoGenReply &&
+                            pendingAutoGenReply.chatId === effectiveChatId &&
+                            pendingAutoGenReply.messageId === messageId &&
+                            pendingAutoGenReply.swipeId === initialSwipeId
+                    );
+                    if (ticketMatches) {
+                        // 一次性消费：同一条 AI 回复只允许消费一次，防止重复渲染触发多次自动生图
+                        pendingAutoGenReply = null;
+                    }
+
+                    // 仅当收到新 AI 回复票据且当前仍允许自动生图、非开场白/静默生成、且消息非用户或系统消息时触发
                     const canAutoGenerate = Boolean(
-                        settings.enabled && settings.autoGenerate && type !== 'first_message'
+                        ticketMatches &&
+                            settings.enabled &&
+                            settings.autoGenerate &&
+                            type !== 'first_message' &&
+                            type !== 'quiet' &&
+                            initialMessageObj &&
+                            !initialMessageObj.is_user &&
+                            !initialMessageObj.is_system
                     );
                     if (canAutoGenerate) {
                         messageDecorator.markPendingAutoGenerate(
-                            initialChatId || 'default_chat',
+                            effectiveChatId,
                             messageId,
                             initialSwipeId
                         );
@@ -230,8 +285,11 @@ export async function initOnce(): Promise<void> {
                         modalOpened = messageDecorator.inspectAndShowArchiveModal(messageId, {
                             onFinished: () => {
                                 const latestCtx = getLiveContext();
+                                const latestSettings = settingsStore.getSettings();
                                 if (
                                     canAutoGenerate &&
+                                    latestSettings.enabled &&
+                                    latestSettings.autoGenerate &&
                                     currentGen === lifecycleGeneration &&
                                     latestCtx?.chatId === initialChatId &&
                                     latestCtx?.chat?.[messageId] === initialMessageObj &&
@@ -246,9 +304,12 @@ export async function initOnce(): Promise<void> {
                         });
                     }
 
-                    // 若未弹出新档案确认窗且允许自动生图，直接触发当前楼层所有就绪按钮
-                    if (!modalOpened && canAutoGenerate) {
+                    // 若未弹出新档案确认窗且允许自动生图，再次确认当前开关未被关闭后再触发就绪按钮
+                    const latestSettings = settingsStore.getSettings();
+                    if (!modalOpened && canAutoGenerate && latestSettings.enabled && latestSettings.autoGenerate) {
                         messageDecorator.triggerReadyButtons(messageId);
+                    } else if (!modalOpened) {
+                        messageDecorator.clearPendingAutoGenerate(messageId);
                     }
                 });
 
@@ -287,6 +348,7 @@ export async function initOnce(): Promise<void> {
                 // 监听候选分支左右滑动切换 (MESSAGE_SWIPED)
                 const swipeEvent = eventTypes.MESSAGE_SWIPED || 'message_swiped';
                 bindHostEvent(swipeEvent, (data: unknown) => {
+                    pendingAutoGenReply = null;
                     const messageId = extractMessageId(data);
                     if (messageId === undefined) {
                         return;
@@ -349,6 +411,7 @@ export async function initOnce(): Promise<void> {
                 // 监听消息删除 (MESSAGE_DELETED) - 校准删除后的楼层队列/在途任务索引，并同步重绑定 DOM 楼层号
                 const msgDeletedEvent = eventTypes.MESSAGE_DELETED || 'message_deleted';
                 bindHostEvent(msgDeletedEvent, (data: unknown) => {
+                    pendingAutoGenReply = null;
                     const liveCtx = getLiveContext();
                     const chatId = liveCtx?.chatId || 'default_chat';
                     const explicitDeletedIndex =
@@ -372,6 +435,7 @@ export async function initOnce(): Promise<void> {
                 // 监听会话变更与初次载入
                 const chatChangedEvent = eventTypes.CHAT_CHANGED || 'chat_id_changed';
                 bindHostEvent(chatChangedEvent, () => {
+                    pendingAutoGenReply = null;
                     messageDecorator.clearCurrentButtons();
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
                     void promptInjector.scheduleSyncToHost();
@@ -379,6 +443,7 @@ export async function initOnce(): Promise<void> {
 
                 const chatLoadedEvent = eventTypes.CHAT_LOADED || 'chatLoaded';
                 bindHostEvent(chatLoadedEvent, () => {
+                    pendingAutoGenReply = null;
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
                     void promptInjector.scheduleSyncToHost();
                 });
@@ -403,7 +468,11 @@ export async function initOnce(): Promise<void> {
             // 监听设置变更：同步四通道提示词注入，并在总开关切换时及时挂载/清理楼层装饰
             let lastPluginEnabled = settingsStore.getSettings().enabled;
             const unbindSettingsSync = eventBus.on('settings:updated', () => {
-                const nowEnabled = settingsStore.getSettings().enabled;
+                const updatedSettings = settingsStore.getSettings();
+                const nowEnabled = updatedSettings.enabled;
+                if (!nowEnabled || !updatedSettings.autoGenerate) {
+                    pendingAutoGenReply = null;
+                }
                 if (nowEnabled !== lastPluginEnabled) {
                     lastPluginEnabled = nowEnabled;
                     if (nowEnabled) {
@@ -427,6 +496,7 @@ export async function initOnce(): Promise<void> {
             void AssetSyncCoordinator.syncProviderAssets(activeProvider, {
                 isManual: false,
                 silentIfNoChange: true,
+                signal: currentSignal,
             });
 
             isInitialized = true;
@@ -467,6 +537,9 @@ export async function onDisable(): Promise<void> {
  */
 export function disposeExtension(): void {
     lifecycleGeneration++;
+    lifecycleAbortController?.abort();
+    lifecycleAbortController = null;
+    pendingAutoGenReply = null;
     initPromise = null;
 
     // 1. 解绑宿主全局事件并清理已注入的扩展提示词分桶
