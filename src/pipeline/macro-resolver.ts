@@ -457,7 +457,7 @@ export function resolvePromptMacros(
             }
 
             unresolvedMacros.push(trimmed);
-            // 外层包裹语法（如 爱丽丝($不存在$)）若宏未命中，同步移除空括号以避免残留 ()
+            // 行内括号写法（如 爱丽丝($不存在$)）若宏未命中，同步移除空括号以避免残留 ()
             return '';
         }
     );

@@ -160,6 +160,25 @@ export class MessageDecorator implements Disposable {
         this.messageGenerations.set(messageId, (this.messageGenerations.get(messageId) ?? 0) + 1);
     }
 
+    private static buildFloorCleanupSelector(
+        scopePrefix: string,
+        preserveFloorSlots?: boolean
+    ): string {
+        const prefix = scopePrefix ? `${scopePrefix} ` : '';
+        const slotSelector = preserveFloorSlots
+            ? '.da-floor-slot.da-floor-slot--appended'
+            : '.da-floor-slot';
+        return [
+            '.da-floor-action-wrapper',
+            '.da-floor-image-container',
+            '.da-floor-image-skeleton',
+            '.da-floor-archive-badges',
+            slotSelector,
+        ]
+            .map((sel) => `${prefix}${sel}`)
+            .join(', ');
+    }
+
     /**
      * 清扫指定楼层 DOM 中可能残留的插件容器、按钮、图片与档案徽标节点，
      * 确保状态 Map 未登记或新分支不含指令时也能清理残留节点。
@@ -175,9 +194,7 @@ export class MessageDecorator implements Disposable {
         if (!messageDom) {
             return;
         }
-        const selector = options?.preserveFloorSlots
-            ? '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot.da-floor-slot--appended'
-            : '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot';
+        const selector = MessageDecorator.buildFloorCleanupSelector('', options?.preserveFloorSlots);
         this.runWithObserverSuppressed(messageId, () => {
             for (const node of messageDom.querySelectorAll(selector)) {
                 node.remove();
@@ -2522,9 +2539,10 @@ export class MessageDecorator implements Disposable {
         this.promptedArchiveKeys.clear();
 
         if (typeof document !== 'undefined') {
-            const selector = options?.preserveFloorSlots
-                ? '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot.da-floor-slot--appended'
-                : '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot';
+            const selector = MessageDecorator.buildFloorCleanupSelector(
+                '#chat',
+                options?.preserveFloorSlots
+            );
             for (const node of document.querySelectorAll(selector)) {
                 node.remove();
             }

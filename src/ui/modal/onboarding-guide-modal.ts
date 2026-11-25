@@ -306,7 +306,7 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                     },
                     {
                         lead: '官方推荐组合与画师串起手式',
-                        body: '推荐选用 `NAI Diffusion V4.5 Full` + `k_euler_ancestral` + `karras` 调度器；默认故事插画已禁止 AI 自填画质或画师词，请在底部「提示词预设」选用或自建画师串起手式，或切为「使用轮询」随机切换画风。',
+                        body: '推荐选用 `NAI Diffusion V4.5 Full` + `k_euler_ancestral` + `karras` 调度器；默认「故事插画」不生成画质或画师词，请在底部「提示词预设」选用或自建画师串起手式，或切为「使用轮询」随机切换画风。',
                     },
                 ],
             },
@@ -496,7 +496,7 @@ const PROMPTS_GUIDE_CONTENT: GuidePageContent = {
             bullets: [
                 {
                     lead: '默认故事插画不生成画质/风格词',
-                    body: '插件内置的「故事插画」提示词只引导 AI 描写剧情场景、角色动作与构图，刻意禁止 AI 输出 `masterpiece`、`best quality` 等画质词或风格词，避免大模型自由发挥导致每次出图画风偏移。',
+                    body: '插件内置的「故事插画」提示词只引导 AI 描写剧情场景、角色动作与构图，不生成 `masterpiece`、`best quality` 等画质词或风格词，避免大模型自由发挥导致每次出图画风偏移。',
                 },
                 {
                     lead: '用「提示词预设」配置指定风格的起手式',
