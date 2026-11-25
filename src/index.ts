@@ -387,6 +387,7 @@ export async function initOnce(): Promise<void> {
                         }
                         void messageDecorator.handleMessageSwiped(messageId, newSwipeId, {
                             skipSwipeCancel: true,
+                            preserveFloorSlots: true,
                         });
                         void promptInjector.scheduleSyncToHost();
                     }
@@ -478,7 +479,7 @@ export async function initOnce(): Promise<void> {
                     if (nowEnabled) {
                         messageDecorator.scheduleScanAllMessages(50);
                     } else {
-                        messageDecorator.clearCurrentButtons();
+                        messageDecorator.clearCurrentButtons({ preserveFloorSlots: true });
                     }
                 }
                 hostRegexService.syncToHost({ reloadChatOnDisplayChange: true });

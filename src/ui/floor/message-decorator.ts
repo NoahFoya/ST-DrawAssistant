@@ -164,7 +164,10 @@ export class MessageDecorator implements Disposable {
      * 清扫指定楼层 DOM 中可能残留的插件容器、按钮、图片与档案徽标节点，
      * 确保状态 Map 未登记或新分支不含指令时也能清理残留节点。
      */
-    private purgeMessageFloorDom(messageId: number): void {
+    private purgeMessageFloorDom(
+        messageId: number,
+        options?: { preserveFloorSlots?: boolean }
+    ): void {
         if (typeof document === 'undefined') {
             return;
         }
@@ -172,10 +175,11 @@ export class MessageDecorator implements Disposable {
         if (!messageDom) {
             return;
         }
+        const selector = options?.preserveFloorSlots
+            ? '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot.da-floor-slot--appended'
+            : '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot';
         this.runWithObserverSuppressed(messageId, () => {
-            for (const node of messageDom.querySelectorAll(
-                '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot'
-            )) {
+            for (const node of messageDom.querySelectorAll(selector)) {
                 node.remove();
             }
         });
@@ -2164,7 +2168,7 @@ export class MessageDecorator implements Disposable {
     public async handleMessageSwiped(
         messageId: number,
         swipeId?: number,
-        options?: { skipSwipeCancel?: boolean }
+        options?: { skipSwipeCancel?: boolean; preserveFloorSlots?: boolean }
     ): Promise<void> {
         this.clearPendingAutoGenerate(messageId);
 
@@ -2191,7 +2195,10 @@ export class MessageDecorator implements Disposable {
         }
 
         sessionLifecycle.syncSwipeState(messageId);
-        this.handleMessageDeleted(messageId);
+        this.handleMessageDeleted(
+            messageId,
+            options?.preserveFloorSlots ? { preserveFloorSlots: true } : undefined
+        );
         await this.decorateMessage(messageId);
     }
 
@@ -2213,13 +2220,14 @@ export class MessageDecorator implements Disposable {
         const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
         const oldSlotCount = messageDom ? messageDom.querySelectorAll('.da-floor-slot').length : 0;
 
+        let isStructureChanged = false;
         if (message && typeof message.mes === 'string') {
             const newCommands = promptPipeline.extractCommands(message.mes);
             const swipeId = message.swipe_id ?? 0;
             const existingDrawings = sessionLifecycle.getSwipeDrawings(messageId, swipeId) || {};
             const existingCount = Object.keys(existingDrawings).length;
 
-            const isStructureChanged =
+            isStructureChanged =
                 (oldSlotCount > 0 && oldSlotCount !== newCommands.length) ||
                 (existingCount > 0 && existingCount !== newCommands.length);
 
@@ -2230,19 +2238,63 @@ export class MessageDecorator implements Disposable {
             }
         }
 
-        this.handleMessageDeleted(messageId);
+        this.handleMessageDeleted(
+            messageId,
+            isStructureChanged ? undefined : { preserveFloorSlots: true }
+        );
         await this.decorateMessage(messageId);
         this.inspectAndShowArchiveModal(messageId);
     }
 
     /**
      * 响应宿主 MESSAGE_DELETED 事件：
-     * 由于宿主删除消息后会通过 updateViewMessageIds() 直接在已有 DOM 节点上更新后续 .mes 的 mesid 属性而不重绘 DOM，
-     * 需清空旧索引绑定的按钮与图像容器，并按最新 mesid 重新挂载所有可见楼层。
+     * 宿主删除消息后仅移除被删楼层并调用 updateViewMessageIds() 原地更新后续 .mes 的 mesid 属性，
+     * 不会重新渲染幸存楼层的 .mes_text；因此清理旧索引绑定的控件实例时必须保留既有内联 .da-floor-slot
+     * 占位锚点，再按最新 mesid 立即重建已装饰楼层，避免失去原段落定位后退回至楼层底部。
      */
     public async resyncAfterMessageDeleted(): Promise<void> {
-        this.clearCurrentButtons();
+        const previouslyDecoratedEls = new Set<Element>();
+        if (typeof document !== 'undefined') {
+            for (const mesEl of document.querySelectorAll('#chat .mes[mesid]')) {
+                if (
+                    mesEl.querySelector(
+                        '.da-floor-slot, .da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges'
+                    )
+                ) {
+                    previouslyDecoratedEls.add(mesEl);
+                }
+            }
+        }
+
+        this.clearCurrentButtons({ preserveFloorSlots: true });
+        const syncEpoch = this.clearEpoch;
         await this.scanAllMessages();
+
+        if (
+            this.isDisposed ||
+            this.clearEpoch !== syncEpoch ||
+            typeof document === 'undefined' ||
+            !settingsStore.getSettings().enabled
+        ) {
+            return;
+        }
+
+        for (const mesEl of previouslyDecoratedEls) {
+            if (this.isDisposed || this.clearEpoch !== syncEpoch) {
+                return;
+            }
+            if (!mesEl.isConnected) {
+                continue;
+            }
+            this.intersectionObserver?.unobserve(mesEl);
+            const mesIdAttr = mesEl.getAttribute('mesid');
+            if (mesIdAttr !== null) {
+                const messageId = parseInt(mesIdAttr, 10);
+                if (!Number.isNaN(messageId)) {
+                    await this.decorateMessage(messageId);
+                }
+            }
+        }
     }
 
     /**
@@ -2250,9 +2302,12 @@ export class MessageDecorator implements Disposable {
      *
      * @param messageId 被删除的消息楼层 ID，未指定则清理全部
      */
-    public handleMessageDeleted(messageId?: number): void {
+    public handleMessageDeleted(
+        messageId?: number,
+        options?: { preserveFloorSlots?: boolean }
+    ): void {
         if (typeof messageId !== 'number') {
-            this.clearCurrentButtons();
+            this.clearCurrentButtons(options);
             return;
         }
 
@@ -2292,7 +2347,7 @@ export class MessageDecorator implements Disposable {
         }
 
         // 2. 清扫 DOM 中未登记或切到空白分支后遗留的按钮/容器/档案徽标
-        this.purgeMessageFloorDom(messageId);
+        this.purgeMessageFloorDom(messageId, options);
     }
 
     /**
@@ -2380,7 +2435,7 @@ export class MessageDecorator implements Disposable {
     /**
      * 清理当前会话全部活跃的楼层按钮、展示容器与骨架占位。
      */
-    public clearCurrentButtons(): void {
+    public clearCurrentButtons(options?: { preserveFloorSlots?: boolean }): void {
         this.clearEpoch += 1;
         this.disconnectLatestFloorObserver();
         this.clearPendingAutoGenerate();
@@ -2442,9 +2497,10 @@ export class MessageDecorator implements Disposable {
         this.promptedArchiveKeys.clear();
 
         if (typeof document !== 'undefined') {
-            for (const node of document.querySelectorAll(
-                '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot'
-            )) {
+            const selector = options?.preserveFloorSlots
+                ? '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot.da-floor-slot--appended'
+                : '#chat .da-floor-action-wrapper, #chat .da-floor-image-container, #chat .da-floor-image-skeleton, #chat .da-floor-archive-badges, #chat .da-floor-slot';
+            for (const node of document.querySelectorAll(selector)) {
                 node.remove();
             }
         }

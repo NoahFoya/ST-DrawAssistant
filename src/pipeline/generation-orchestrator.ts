@@ -247,13 +247,23 @@ export class GenerationOrchestrator {
             ) {
                 continue;
             }
+            const findShiftedIndex = (): number => {
+                const startIdx = Math.min(origIdx - 1, currentChat.length - 1);
+                for (let idx = startIdx; idx >= 0; idx--) {
+                    if (matchesTaskCommand(currentChat[idx], task)) {
+                        return idx;
+                    }
+                }
+                return -1;
+            };
+
             const origIdx = task.target.messageId;
             if (typeof deletedIndex === 'number' && Number.isFinite(deletedIndex) && deletedIndex >= 0) {
                 if (origIdx === deletedIndex) {
                     this.cancelTask(task.taskId, reason);
                 } else if (origIdx > deletedIndex) {
-                    const shiftedIdx = origIdx - 1;
-                    if (shiftedIdx < currentChat.length && matchesTaskCommand(currentChat[shiftedIdx], task)) {
+                    const shiftedIdx = findShiftedIndex();
+                    if (shiftedIdx >= 0) {
                         task.target = { ...task.target, messageId: shiftedIdx };
                     } else {
                         this.cancelTask(task.taskId, reason);
@@ -262,16 +272,9 @@ export class GenerationOrchestrator {
                 continue;
             }
 
-            if (origIdx >= currentChat.length) {
-                const shiftedIdx = origIdx - 1;
-                if (shiftedIdx >= 0 && shiftedIdx < currentChat.length && matchesTaskCommand(currentChat[shiftedIdx], task)) {
-                    task.target = { ...task.target, messageId: shiftedIdx };
-                } else {
-                    this.cancelTask(task.taskId, reason);
-                }
-            } else if (!matchesTaskCommand(currentChat[origIdx], task)) {
-                const shiftedIdx = origIdx - 1;
-                if (shiftedIdx >= 0 && matchesTaskCommand(currentChat[shiftedIdx], task)) {
+            if (origIdx >= currentChat.length || !matchesTaskCommand(currentChat[origIdx], task)) {
+                const shiftedIdx = findShiftedIndex();
+                if (shiftedIdx >= 0) {
                     task.target = { ...task.target, messageId: shiftedIdx };
                 } else {
                     this.cancelTask(task.taskId, reason);

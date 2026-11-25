@@ -16,6 +16,11 @@
     transition: opacity 0.2s ease;
 }
 
+.da-floor-slot:empty {
+    display: none;
+    margin: 0;
+}
+
 /* 1. 楼层动作按钮容器与按钮 */
 .da-floor-action-wrapper {
     display: inline-flex;
