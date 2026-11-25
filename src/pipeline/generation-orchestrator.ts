@@ -80,6 +80,8 @@ export class GenerationOrchestrator {
     private readonly _queue: string[] = [];
     private readonly _controllers = new Map<string, AbortController>();
     private readonly _timeoutTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    // 记录入队瞬间对应的宿主消息对象引用，供消息删除后按对象身份精确重定位（不序列化进任务快照）
+    private readonly _targetMessageRefs = new Map<string, object>();
 
     private _activeCount = 0;
     private _isProcessingQueue = false;
@@ -123,6 +125,9 @@ export class GenerationOrchestrator {
         }
 
         task.status = status;
+        if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+            this._targetMessageRefs.delete(taskId);
+        }
         if (extra?.error) {
             task.error = extra.error;
         }
@@ -247,8 +252,16 @@ export class GenerationOrchestrator {
             ) {
                 continue;
             }
-            const findShiftedIndex = (): number => {
+            const findShiftedIndex = (targetRef?: object): number => {
                 const startIdx = Math.min(origIdx - 1, currentChat.length - 1);
+                if (targetRef) {
+                    for (let idx = startIdx; idx >= 0; idx--) {
+                        if (currentChat[idx] === targetRef) {
+                            return idx;
+                        }
+                    }
+                    return -1;
+                }
                 for (let idx = startIdx; idx >= 0; idx--) {
                     if (matchesTaskCommand(currentChat[idx], task)) {
                         return idx;
@@ -258,6 +271,20 @@ export class GenerationOrchestrator {
             };
 
             const origIdx = task.target.messageId;
+            const targetRef = this._targetMessageRefs.get(task.taskId);
+            if (targetRef) {
+                if (origIdx >= 0 && origIdx < currentChat.length && currentChat[origIdx] === targetRef) {
+                    continue;
+                }
+                const shiftedIdx = findShiftedIndex(targetRef);
+                if (shiftedIdx >= 0) {
+                    task.target = { ...task.target, messageId: shiftedIdx };
+                } else {
+                    this.cancelTask(task.taskId, reason);
+                }
+                continue;
+            }
+
             if (typeof deletedIndex === 'number' && Number.isFinite(deletedIndex) && deletedIndex >= 0) {
                 if (origIdx === deletedIndex) {
                     this.cancelTask(task.taskId, reason);
@@ -448,6 +475,10 @@ export class GenerationOrchestrator {
         };
 
         this._tasks.set(taskId, task);
+        const hostMessage = window.SillyTavern?.getContext?.()?.chat?.[options.target.messageId];
+        if (hostMessage && typeof hostMessage === 'object') {
+            this._targetMessageRefs.set(taskId, hostMessage);
+        }
         this._queue.push(taskId);
 
         const transport = this._settingsStore.get('transport') || 'direct';
@@ -820,6 +851,7 @@ export class GenerationOrchestrator {
 
         for (const id of terminalIds) {
             this._tasks.delete(id);
+            this._targetMessageRefs.delete(id);
         }
     }
 
@@ -851,6 +883,7 @@ export class GenerationOrchestrator {
             controller.abort();
         }
         this._controllers.clear();
+        this._targetMessageRefs.clear();
         this._tasks.clear();
     }
 }

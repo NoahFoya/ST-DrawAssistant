@@ -47,6 +47,14 @@ let initPromise: Promise<void> | null = null;
 let lifecycleGeneration = 0;
 let lifecycleAbortController: AbortController | null = null;
 let pendingAutoGenReply: { chatId: string; messageId: number; swipeId: number } | null = null;
+const pendingEditFallbackTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+function clearPendingEditFallbackTimers(): void {
+    for (const timer of pendingEditFallbackTimers.values()) {
+        clearTimeout(timer);
+    }
+    pendingEditFallbackTimers.clear();
+}
 let settingsModalInstance: SettingsModal | null = null;
 let fabInstance: FloatingActionButton | null = null;
 let drawerEntryInstance: DrawerEntry | null = null;
@@ -83,6 +91,7 @@ export async function initOnce(): Promise<void> {
     lifecycleAbortController = new AbortController();
     const currentSignal = lifecycleAbortController.signal;
     pendingAutoGenReply = null;
+    clearPendingEditFallbackTimers();
 
     initPromise = (async () => {
         try {
@@ -353,6 +362,11 @@ export async function initOnce(): Promise<void> {
                     if (messageId === undefined) {
                         return;
                     }
+                    const editTimer = pendingEditFallbackTimers.get(messageId);
+                    if (editTimer !== undefined) {
+                        clearTimeout(editTimer);
+                        pendingEditFallbackTimers.delete(messageId);
+                    }
                     const swipeId =
                         data && typeof data === 'object' && 'swipeId' in data
                             ? parseHostIndex((data as { swipeId?: unknown }).swipeId)
@@ -393,19 +407,49 @@ export async function initOnce(): Promise<void> {
                     }
                 });
 
-                // 监听消息正文更新与编辑事件（宿主在不同流程中分别触发 MESSAGE_UPDATED 与 MESSAGE_EDITED）
-                const msgEditEvents = new Set<string>([
-                    eventTypes.MESSAGE_UPDATED || 'message_updated',
-                    eventTypes.MESSAGE_EDITED || 'message_edited',
-                ]);
-                for (const evtName of msgEditEvents) {
-                    bindHostEvent(evtName, (data: unknown) => {
-                        const messageId = extractMessageId(data);
-                        if (messageId === undefined) {
+                // 监听消息正文更新与编辑事件：
+                // 宿主在 messageEditDone 中先触发 MESSAGE_EDITED（旧 DOM 清空前），重建 .mes_text 后紧跟触发 MESSAGE_UPDATED；
+                // 因此优先由 MESSAGE_UPDATED 立即重装饰，MESSAGE_EDITED 仅保留 0ms 回退定时以兼容只发单事件的外部脚本，避免一次编辑重复扫描。
+                const scheduleEditedFallback = (messageId: number) => {
+                    const prevTimer = pendingEditFallbackTimers.get(messageId);
+                    if (prevTimer !== undefined) {
+                        clearTimeout(prevTimer);
+                    }
+                    const scheduledGen = lifecycleGeneration;
+                    const timer = setTimeout(() => {
+                        pendingEditFallbackTimers.delete(messageId);
+                        if (lifecycleGeneration !== scheduledGen || !settingsStore.getSettings().enabled) {
                             return;
                         }
                         void messageDecorator.handleMessageEdited(messageId);
                         void promptInjector.scheduleSyncToHost();
+                    }, 0);
+                    pendingEditFallbackTimers.set(messageId, timer);
+                };
+
+                const msgUpdatedEvent: string = eventTypes.MESSAGE_UPDATED || 'message_updated';
+                bindHostEvent(msgUpdatedEvent, (data: unknown) => {
+                    const messageId = extractMessageId(data);
+                    if (messageId === undefined) {
+                        return;
+                    }
+                    const fallbackTimer = pendingEditFallbackTimers.get(messageId);
+                    if (fallbackTimer !== undefined) {
+                        clearTimeout(fallbackTimer);
+                        pendingEditFallbackTimers.delete(messageId);
+                    }
+                    void messageDecorator.handleMessageEdited(messageId);
+                    void promptInjector.scheduleSyncToHost();
+                });
+
+                const msgEditedEvent: string = eventTypes.MESSAGE_EDITED || 'message_edited';
+                if (msgEditedEvent !== msgUpdatedEvent) {
+                    bindHostEvent(msgEditedEvent, (data: unknown) => {
+                        const messageId = extractMessageId(data);
+                        if (messageId === undefined) {
+                            return;
+                        }
+                        scheduleEditedFallback(messageId);
                     });
                 }
 
@@ -413,6 +457,7 @@ export async function initOnce(): Promise<void> {
                 const msgDeletedEvent = eventTypes.MESSAGE_DELETED || 'message_deleted';
                 bindHostEvent(msgDeletedEvent, (data: unknown) => {
                     pendingAutoGenReply = null;
+                    clearPendingEditFallbackTimers();
                     const liveCtx = getLiveContext();
                     const chatId = liveCtx?.chatId || 'default_chat';
                     const explicitDeletedIndex =
@@ -437,6 +482,7 @@ export async function initOnce(): Promise<void> {
                 const chatChangedEvent = eventTypes.CHAT_CHANGED || 'chat_id_changed';
                 bindHostEvent(chatChangedEvent, () => {
                     pendingAutoGenReply = null;
+                    clearPendingEditFallbackTimers();
                     messageDecorator.clearCurrentButtons();
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
                     void promptInjector.scheduleSyncToHost();
@@ -445,6 +491,7 @@ export async function initOnce(): Promise<void> {
                 const chatLoadedEvent = eventTypes.CHAT_LOADED || 'chatLoaded';
                 bindHostEvent(chatLoadedEvent, () => {
                     pendingAutoGenReply = null;
+                    clearPendingEditFallbackTimers();
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
                     void promptInjector.scheduleSyncToHost();
                 });
@@ -479,6 +526,7 @@ export async function initOnce(): Promise<void> {
                     if (nowEnabled) {
                         messageDecorator.scheduleScanAllMessages(50);
                     } else {
+                        clearPendingEditFallbackTimers();
                         messageDecorator.clearCurrentButtons({ preserveFloorSlots: true });
                     }
                 }
@@ -541,6 +589,7 @@ export function disposeExtension(): void {
     lifecycleAbortController?.abort();
     lifecycleAbortController = null;
     pendingAutoGenReply = null;
+    clearPendingEditFallbackTimers();
     initPromise = null;
 
     // 1. 解绑宿主全局事件并清理已注入的扩展提示词分桶

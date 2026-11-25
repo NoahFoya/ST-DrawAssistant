@@ -2254,6 +2254,7 @@ export class MessageDecorator implements Disposable {
      */
     public async resyncAfterMessageDeleted(): Promise<void> {
         const previouslyDecoratedEls = new Set<Element>();
+        const lockedSlots: Array<{ slot: HTMLElement; prevMinHeight: string }> = [];
         if (typeof document !== 'undefined') {
             for (const mesEl of document.querySelectorAll('#chat .mes[mesid]')) {
                 if (
@@ -2262,37 +2263,61 @@ export class MessageDecorator implements Disposable {
                     )
                 ) {
                     previouslyDecoratedEls.add(mesEl);
+                    // 移除图片容器重建前临时锁定已有内联插槽高度，防止异步读图期间长对话滚动高度瞬时塌陷
+                    for (const slot of mesEl.querySelectorAll<HTMLElement>(
+                        '.da-floor-slot:not(.da-floor-slot--appended)'
+                    )) {
+                        if (!slot.querySelector('.da-floor-image-container')) {
+                            continue;
+                        }
+                        const currentHeight = slot.offsetHeight;
+                        if (currentHeight > 0) {
+                            lockedSlots.push({ slot, prevMinHeight: slot.style.minHeight });
+                            slot.setAttribute('data-da-resync-lock', '1');
+                            slot.style.minHeight = `${currentHeight}px`;
+                        }
+                    }
                 }
             }
         }
 
-        this.clearCurrentButtons({ preserveFloorSlots: true });
-        const syncEpoch = this.clearEpoch;
-        await this.scanAllMessages();
+        try {
+            this.clearCurrentButtons({ preserveFloorSlots: true });
+            const syncEpoch = this.clearEpoch;
+            await this.scanAllMessages();
 
-        if (
-            this.isDisposed ||
-            this.clearEpoch !== syncEpoch ||
-            typeof document === 'undefined' ||
-            !settingsStore.getSettings().enabled
-        ) {
-            return;
-        }
-
-        for (const mesEl of previouslyDecoratedEls) {
-            if (this.isDisposed || this.clearEpoch !== syncEpoch) {
+            if (
+                this.isDisposed ||
+                this.clearEpoch !== syncEpoch ||
+                typeof document === 'undefined' ||
+                !settingsStore.getSettings().enabled
+            ) {
                 return;
             }
-            if (!mesEl.isConnected) {
-                continue;
-            }
-            this.intersectionObserver?.unobserve(mesEl);
-            const mesIdAttr = mesEl.getAttribute('mesid');
-            if (mesIdAttr !== null) {
-                const messageId = parseInt(mesIdAttr, 10);
-                if (!Number.isNaN(messageId)) {
-                    await this.decorateMessage(messageId);
+
+            const resyncTasks: Promise<void>[] = [];
+            for (const mesEl of previouslyDecoratedEls) {
+                if (!mesEl.isConnected) {
+                    continue;
                 }
+                this.intersectionObserver?.unobserve(mesEl);
+                const mesIdAttr = mesEl.getAttribute('mesid');
+                if (mesIdAttr !== null) {
+                    const messageId = parseInt(mesIdAttr, 10);
+                    if (!Number.isNaN(messageId)) {
+                        resyncTasks.push(
+                            this.decorateMessage(messageId).catch(() => {
+                                // 单个楼层重同步失败不阻断其余楼层恢复
+                            })
+                        );
+                    }
+                }
+            }
+            await Promise.all(resyncTasks);
+        } finally {
+            for (const { slot, prevMinHeight } of lockedSlots) {
+                slot.removeAttribute('data-da-resync-lock');
+                slot.style.minHeight = prevMinHeight;
             }
         }
     }

@@ -16,7 +16,7 @@
     transition: opacity 0.2s ease;
 }
 
-.da-floor-slot:empty {
+.da-floor-slot:empty:not([data-da-resync-lock]) {
     display: none;
     margin: 0;
 }
