@@ -92,9 +92,9 @@ export interface DrawingPresetData {
     background?: string;
     /** OpenAI GPT Image 输出图像格式 (png / jpeg / webp) */
     outputFormat?: string;
-    /** 原生画幅比例标识 (Gemini aspectRatio / Grok aspect_ratio，如 '1:1' | '16:9') */
+    /** 原生画幅比例标识 (支持 'auto' 自动或具体比例如 '1:1' | '16:9') */
     aspectRatio?: string;
-    /** Gemini 原生图像分辨率档位 ('512' | '1K' | '2K' | '4K') */
+    /** Gemini 原生图像分辨率档位 ('auto' | '512' | '1K' | '2K' | '4K') */
     imageSize?: string;
     /** Grok 原生图像分辨率档位 ('1k' | '2k') */
     resolution?: string;
@@ -124,9 +124,6 @@ export interface PromptPollingPoolItem {
     enabled: boolean;
 }
 
-/** LoRA 语法模式：标准模式 ('standard') 与 WeiLin 扩展模式 ('weilin') */
-export type LoraSyntaxMode = 'standard' | 'weilin';
-
 /** LoRA 配置条目模型 */
 export interface LoraConfigItem {
     /** LoRA 模型文件标识 */
@@ -135,13 +132,13 @@ export interface LoraConfigItem {
     modelWeight?: number;
     /** 文本编码器权重 */
     clipWeight?: number;
-    /** 触发权重（仅用于三权重模式） */
+    /** 触发权重（仅在使用含 ComfyUI-WeiLin 节点的工作流时生效） */
     triggerWeight?: number;
     /** 是否启用该条目 */
     enabled?: boolean;
     /** 触发方式：'always' 常驻挂载（默认） | 'keyword' 关键词命中当次生图提示词时挂载 */
     triggerMode?: ActivationTriggerMode;
-    /** 以 | 或逗号分隔的触发关键词（支持 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
+    /** 以中英文逗号或换行分隔的触发关键词（不以 | 拆词，以保留 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
     keywords?: string;
 }
 
@@ -153,8 +150,6 @@ export interface PromptPresetData {
     positiveSuffix?: string;
     /** 负向提示词 */
     negativePrompt?: string;
-    /** LoRA 语法模式，默认 'standard' */
-    loraSyntaxMode?: LoraSyntaxMode;
     /** LoRA 配置列表 */
     loras?: LoraConfigItem[];
     [key: string]: unknown;
@@ -205,6 +200,9 @@ export type ActivationTriggerMode = 'always' | 'keyword';
 
 /** 绘图与设计思维链显示模式：'show' 原样显示 | 'collapse' 折叠栏 | 'hide' 隐藏 */
 export type ThinkingDisplayMode = 'show' | 'collapse' | 'hide';
+
+/** 楼层图片显示模式：'normal' 正常显示 | 'blur' 模糊遮罩 | 'collapse' 默认折叠 */
+export type ImageDisplayMode = 'normal' | 'blur' | 'collapse';
 
 /** 角色部位固定状态后缀 */
 export type CharacterPartState = 'clothed' | 'exposed' | 'nude';
@@ -482,7 +480,7 @@ export interface PromptInjectionEntry {
     enabled: boolean;
     /** 触发方式：always 常驻注入 | keyword 关键词命中触发 */
     triggerMode: ActivationTriggerMode;
-    /** 以 | 或逗号分隔的触发关键词（常驻模式下忽略） */
+    /** 以中英文逗号或换行分隔的触发关键词（不以 | 拆词，以保留 /pattern/flags 正则，常驻模式下忽略） */
     keywords: string;
     /** 可选次要过滤器关键词（如果为空则忽略） */
     secondaryKeywords?: string;

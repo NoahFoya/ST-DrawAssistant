@@ -11,7 +11,7 @@ export const NOVELAI_IMAGE_HOST = 'https://image.novelai.net';
 /** NovelAI 官方服务商标识 */
 export const NOVELAI_OFFICIAL_SERVICE_ID = 'novelai-official';
 
-/** 第三方端点服务商标识 */
+/** 第三方服务商标识 */
 export const NOVELAI_CUSTOM_SERVICE_ID = 'custom';
 
 /**
@@ -43,7 +43,7 @@ const NOVELAI_MODEL_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
- * 获取已知官方模型的友好显示名称，其余模型（如第三方端点自定义标识）原样返回。
+ * 获取已知官方模型的友好显示名称，其余模型（如第三方接口自定义标识）原样返回。
  *
  * @param modelId 原始模型标识符
  * @returns 友好展示名称或原始标识符

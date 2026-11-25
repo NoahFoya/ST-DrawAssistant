@@ -9,6 +9,7 @@
  */
 
 import type {
+    AppliedLoraMetadata,
     GenerationRequest,
     GenerationResult,
     ProviderHealthResult,
@@ -16,6 +17,7 @@ import type {
     ImageGenerationMetadata,
     ComfyUIProviderConfig,
     DrawingPresetData,
+    ResolvedLoraSpec,
     WorkflowPresetData,
 } from '@types';
 import {
@@ -24,7 +26,22 @@ import {
     type InFlightAssetSlot,
 } from '../base-provider';
 import { buildWorkflow, resolveSeed, type WorkflowVariables } from './workflow-builder';
-import { imageInputToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
+import {
+    assertSupportedNativeLoraFiles,
+    collectWorkflowAnchorHints,
+    hasWeilinNodeInGraph,
+    injectNativeLoraNodes,
+} from './lora-graph-injector';
+import {
+    applyTextLoraTagsToPrompt,
+    sanitizeLoraPrompts,
+} from '../../pipeline/lora-utils';
+import { resolveAssetMatch } from '../../util/asset-matcher';
+import {
+    imageInputToBlob,
+    ensureValidImageBlob,
+    HttpError,
+} from '../../util/http-client';
 import { logger } from '../../util/logger';
 
 interface ComfyPromptHistoryOutput {
@@ -186,11 +203,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             };
         }
 
-        return {
-            status: 'error',
-            latencyMs: pingResult.latencyMs,
-            message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(pingResult);
     }
 
     /**
@@ -248,11 +261,17 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             cacheKey,
             forceRefresh,
             async (internalSignal) => {
-                const response = await this.fetchWithTransport(
-                    url,
-                    { method: 'GET', timeoutMs: 30000, signal: internalSignal },
-                    transport
-                );
+                let response: Response;
+                try {
+                    response = await this.fetchWithTransport(
+                        url,
+                        { method: 'GET', timeoutMs: 30000, signal: internalSignal },
+                        transport
+                    );
+                } catch (err: unknown) {
+                    this.rethrowTransportDiagnostic(err);
+                    throw err;
+                }
                 const data = (await response.json()) as ComfyObjectInfoMap;
                 if (
                     reqGen === this._assetCacheGen &&
@@ -389,14 +408,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         return Array.from(clipSet);
     }
 
-    /**
-     * 获取 ComfyUI 服务端已载入的 LoRA 模型列表。
-     *
-     * @param signal 中止信号
-     * @returns 可用 LoRA 模型文件名数组
-     */
-    public async fetchLoras(signal?: AbortSignal): Promise<string[]> {
-        const data = await this.fetchObjectInfo(signal);
+    /** 从 /object_info 元数据中提取可用的 LoRA 模型文件名清单 */
+    private extractLorasFromObjectInfo(data: ComfyObjectInfoMap): string[] {
         const loras = new Set<string>();
 
         const list1 = data?.LoraLoader?.input?.required?.lora_name?.[0];
@@ -417,6 +430,17 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         }
 
         return Array.from(loras);
+    }
+
+    /**
+     * 获取 ComfyUI 服务端已载入的 LoRA 模型列表。
+     *
+     * @param signal 中止信号
+     * @returns 可用 LoRA 模型文件名数组
+     */
+    public async fetchLoras(signal?: AbortSignal): Promise<string[]> {
+        const data = await this.fetchObjectInfo(signal);
+        return this.extractLorasFromObjectInfo(data);
     }
 
     /**
@@ -488,6 +512,15 @@ export class ComfyUIProvider extends BaseGenerationProvider {
      * @param signal 中止信号
      * @returns 服务端确认的文件名
      */
+    private assertInpaintTransportSupported(transport: string): void {
+        // 官方 SillyTavern /proxy/:url(*) 仅解析 JSON/urlencoded 并通过 JSON.stringify 转发，不支持 multipart/form-data 文件表单
+        if (transport === 'relay') {
+            throw new Error(
+                'ComfyUI 局部重绘不支持「酒馆代理 (`relay`)」模式：上传底图与蒙版需提交 multipart/form-data 文件表单，官方 SillyTavern /proxy/ 仅转发 JSON 请求。请前往「插件设置 -> 连接方式」切换为「浏览器直连」，并为 ComfyUI 启动参数添加 --enable-cors-header *。'
+            );
+        }
+    }
+
     public async uploadImageBlob(
         blob: Blob,
         fileName: string,
@@ -496,26 +529,196 @@ export class ComfyUIProvider extends BaseGenerationProvider {
     ): Promise<string> {
         const serverUrl = this.getServerUrl();
         const transport = this.getTransport();
+        this.assertInpaintTransportSupported(transport);
         const formData = new FormData();
         formData.append('image', blob, fileName);
         formData.append('type', imageType);
         formData.append('overwrite', 'true');
 
         const uploadUrl = `${serverUrl}/upload/image`;
-        const response = await this.fetchWithTransport(
-            uploadUrl,
-            {
-                method: 'POST',
-                body: formData,
-                timeoutMs: 30000,
-                retries: 1,
-                signal,
-            },
-            transport
-        );
+        let response: Response;
+        try {
+            response = await this.fetchWithTransport(
+                uploadUrl,
+                {
+                    method: 'POST',
+                    body: formData,
+                    timeoutMs: 30000,
+                    retries: 1,
+                    signal,
+                },
+                transport
+            );
+        } catch (err: unknown) {
+            if (err instanceof HttpError) {
+                throw this.formatProviderHttpError(err, 'ComfyUI 上传重绘底图/蒙版失败');
+            }
+            throw err;
+        }
 
         const data = (await response.json()) as { name?: string };
         return data.name || fileName;
+    }
+
+    /**
+     * 解析本次生图任务采用的工作流模板（显式入参优先，缺省读取预设绑定模板）。
+     */
+    private resolveWorkflowTemplate(
+        params: Record<string, unknown>,
+        drawingPreset: DrawingPresetData | undefined,
+        isInpaintMode: boolean
+    ): { rawWorkflow: Record<string, unknown>; resolvedWorkflowId?: string } {
+        let rawWorkflow: Record<string, unknown> | undefined;
+        let resolvedWorkflowId: string | undefined;
+
+        if (params.workflow) {
+            resolvedWorkflowId = (isInpaintMode
+                ? (params.inpaintPresetId ?? drawingPreset?.inpaintPresetId)
+                : (params.txt2imgWorkflowId ?? drawingPreset?.txt2imgWorkflowId)) as string | undefined;
+            if (typeof params.workflow === 'string') {
+                try {
+                    rawWorkflow = JSON.parse(params.workflow);
+                } catch {
+                    throw new Error('ComfyUI 工作流 JSON 格式解析失败');
+                }
+            } else if (typeof params.workflow === 'object' && params.workflow !== null) {
+                rawWorkflow = params.workflow as Record<string, unknown>;
+            }
+        } else if (this._settingsStore) {
+            resolvedWorkflowId = isInpaintMode
+                ? ((params.inpaintPresetId ?? drawingPreset?.inpaintPresetId) as string | undefined)
+                : ((params.txt2imgWorkflowId as string | undefined) ?? drawingPreset?.txt2imgWorkflowId);
+
+            if (!resolvedWorkflowId) {
+                throw new Error(
+                    isInpaintMode
+                        ? '当前预设未选择局部重绘工作流，请前往「ComfyUI → 工作流模板」导入或选择包含蒙版节点的工作流'
+                        : '当前预设未配置文生图工作流，请在设置中绑定'
+                );
+            }
+
+            const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
+                'workflows',
+                resolvedWorkflowId
+            );
+            if (workflowPreset?.data?.workflow) {
+                rawWorkflow = workflowPreset.data.workflow;
+            } else {
+                throw new Error(`缺少有效的工作流模板：绑定的工作流预设不存在或已失效 (ID: ${resolvedWorkflowId})`);
+            }
+        }
+
+        if (!rawWorkflow || Object.keys(rawWorkflow).length === 0) {
+            throw new Error('缺少有效的工作流模板，请在设置中选择或在请求参数中传入');
+        }
+
+        return { rawWorkflow, resolvedWorkflowId };
+    }
+
+    /**
+     * 依据工作流是否包含 WeiLin 节点完成提示词清洗、标签转译或原生 `/object_info` LoRA 解析与元数据生成。
+     */
+    private async prepareWorkflowLoras(
+        rawWorkflow: Record<string, unknown>,
+        request: GenerationRequest,
+        signal?: AbortSignal
+    ): Promise<{
+        isWeilinWorkflow: boolean;
+        promptText: string;
+        negativePromptText: string;
+        resolvedNativeLoras: ResolvedLoraSpec[];
+        supportsLoraLoader: boolean;
+        supportsLoraLoaderModelOnly: boolean;
+        appliedLoraMetadata: AppliedLoraMetadata[];
+    }> {
+        const isWeilinWorkflow = hasWeilinNodeInGraph(rawWorkflow);
+        const requestedLoras = request.loras ?? [];
+
+        if (isWeilinWorkflow) {
+            const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+                allowLora: false,
+                allowWlr: true,
+                sourceLabel: 'ComfyUI WeiLin 工作流',
+                guidance: 'WeiLin 节点仅支持正向提示词中的 <wlr:...> 语法，已剥离不兼容的 <lora:...> 或负向 LoRA 标签',
+            });
+            return {
+                isWeilinWorkflow: true,
+                promptText: applyTextLoraTagsToPrompt(sanitized.positivePrompt, requestedLoras, 'wlr'),
+                negativePromptText: sanitized.negativePrompt,
+                resolvedNativeLoras: [],
+                supportsLoraLoader: true,
+                supportsLoraLoaderModelOnly: true,
+                appliedLoraMetadata: requestedLoras.map((lora) => ({
+                    modelName: lora.modelName,
+                    modelWeight: lora.modelWeight,
+                    clipWeight: lora.clipWeight,
+                    triggerWeight: lora.triggerWeight,
+                })),
+            };
+        }
+
+        const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+            allowLora: false,
+            allowWlr: false,
+            sourceLabel: 'ComfyUI 原生工作流',
+            guidance: '原生工作流通过 LoRA 模型管理自动拼接节点，正文中手写的 <lora:...>/<wlr:...> 不生效',
+        });
+
+        let resolvedNativeLoras: ResolvedLoraSpec[] = [];
+        let supportsLoraLoader = true;
+        let supportsLoraLoaderModelOnly = true;
+
+        if (requestedLoras.length > 0) {
+            assertSupportedNativeLoraFiles(requestedLoras);
+
+            const objectInfo = await this.fetchObjectInfo(signal);
+            supportsLoraLoader = Boolean(objectInfo?.LoraLoader);
+            supportsLoraLoaderModelOnly = Boolean(objectInfo?.LoraLoaderModelOnly);
+            if (!supportsLoraLoader && !supportsLoraLoaderModelOnly) {
+                throw new Error(
+                    'ComfyUI 服务端 /object_info 未检测到内置 LoraLoader 或 LoraLoaderModelOnly 节点，无法动态加载 LoRA'
+                );
+            }
+
+            const serverLoras = this.extractLorasFromObjectInfo(objectInfo);
+            if (serverLoras.length === 0) {
+                throw new Error(
+                    `ComfyUI 服务端可用 LoRA 列表为空，未找到 LoRA 模型 "${requestedLoras[0].modelName}"。请确认文件已放入 ComfyUI/models/loras 目录并点击「测试连接/同步模型」。`
+                );
+            }
+
+            resolvedNativeLoras = requestedLoras.map((lora) => {
+                const matchRes = resolveAssetMatch(lora.modelName, serverLoras);
+                if (matchRes.status === 'missing') {
+                    throw new Error(
+                        `ComfyUI 服务端未找到 LoRA 模型 "${lora.modelName}"，请确认文件位于 ComfyUI/models/loras 目录并点击「测试连接/同步模型」刷新列表`
+                    );
+                }
+                if (matchRes.status === 'ambiguous') {
+                    throw new Error(
+                        `ComfyUI 服务端存在多个同名 LoRA 文件 (${matchRes.candidates.join(', ')})，请在 LoRA 模型管理中重新选择含完整子目录路径的模型 "${lora.modelName}"`
+                    );
+                }
+                return {
+                    ...lora,
+                    modelName: matchRes.value,
+                };
+            });
+        }
+
+        return {
+            isWeilinWorkflow: false,
+            promptText: sanitized.positivePrompt,
+            negativePromptText: sanitized.negativePrompt,
+            resolvedNativeLoras,
+            supportsLoraLoader,
+            supportsLoraLoaderModelOnly,
+            appliedLoraMetadata: resolvedNativeLoras.map((lora) => ({
+                modelName: lora.modelName,
+                modelWeight: lora.modelWeight,
+                clipWeight: lora.clipWeight,
+            })),
+        };
     }
 
     /**
@@ -544,58 +747,25 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         const isInpaintMode = params.mode === 'inpaint';
 
-        // 2. 加载工作流模板（显式参数优先，缺省使用预设绑定的工作流）
-        let rawWorkflow: Record<string, unknown> | undefined;
-        let resolvedWorkflowId: string | undefined;
+        // 2. 加载工作流模板
+        const { rawWorkflow, resolvedWorkflowId } = this.resolveWorkflowTemplate(
+            params,
+            drawingPreset,
+            isInpaintMode
+        );
 
-        if (params.workflow) {
-            resolvedWorkflowId = (isInpaintMode
-                ? (params.inpaintPresetId ?? drawingPreset?.inpaintPresetId)
-                : (params.txt2imgWorkflowId ?? drawingPreset?.txt2imgWorkflowId)) as string | undefined;
-            if (typeof params.workflow === 'string') {
-                try {
-                    rawWorkflow = JSON.parse(params.workflow);
-                } catch {
-                    throw new Error('ComfyUI 工作流 JSON 格式解析失败');
-                }
-            } else if (typeof params.workflow === 'object' && params.workflow !== null) {
-                rawWorkflow = params.workflow as Record<string, unknown>;
-            }
-        } else if (this._settingsStore) {
-            if (isInpaintMode) {
-                resolvedWorkflowId = (params.inpaintPresetId ?? drawingPreset?.inpaintPresetId) as string | undefined;
-                if (!resolvedWorkflowId) {
-                    throw new Error(
-                        '当前预设未选择局部重绘工作流，请前往「ComfyUI → 工作流模板」导入或选择包含蒙版节点的工作流'
-                    );
-                }
-            } else {
-                resolvedWorkflowId =
-                    (params.txt2imgWorkflowId as string | undefined) ?? drawingPreset?.txt2imgWorkflowId;
-                if (!resolvedWorkflowId) {
-                    throw new Error('当前预设未配置文生图工作流，请在设置中绑定');
-                }
-            }
+        // 3. 检测当前工作流是否含 WeiLin 节点并处理提示词与 LoRA 加载策略
+        const {
+            isWeilinWorkflow,
+            promptText,
+            negativePromptText,
+            resolvedNativeLoras,
+            supportsLoraLoader,
+            supportsLoraLoaderModelOnly,
+            appliedLoraMetadata,
+        } = await this.prepareWorkflowLoras(rawWorkflow, request, signal);
 
-            const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
-                'workflows',
-                resolvedWorkflowId
-            );
-            if (workflowPreset?.data?.workflow) {
-                rawWorkflow = workflowPreset.data.workflow;
-            } else {
-                throw new Error(`缺少有效的工作流模板：绑定的工作流预设不存在或已失效 (ID: ${resolvedWorkflowId})`);
-            }
-        }
-
-        if (!rawWorkflow || Object.keys(rawWorkflow).length === 0) {
-            throw new Error('缺少有效的工作流模板，请在设置中选择或在请求参数中传入');
-        }
-
-        // 3. 解析提示词与变量映射，构建执行工作流对象
-        const promptText = request.prompt;
-        const negativePromptText = request.negativePrompt ?? '';
-
+        const anchorHints = collectWorkflowAnchorHints(rawWorkflow);
         const resolvedBaseModel = (params.baseModel ?? drawingPreset?.baseModel) as string | undefined;
         const extraModels = (params.extraModels ?? drawingPreset?.extraModels ?? []) as string[];
         const resolvedSeed = resolveSeed(params.seed as number | undefined ?? drawingPreset?.seed);
@@ -604,6 +774,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         let uploadedMaskImageName: string | undefined;
 
         if (isInpaintMode) {
+            this.assertInpaintTransportSupported(transport);
             const sourceImage = request.sourceImage;
             const maskImage = request.maskImage;
 
@@ -682,7 +853,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             }
         }
 
-        const injectedWorkflow = buildWorkflow(rawWorkflow, variables);
+        let injectedWorkflow = buildWorkflow(rawWorkflow, variables);
 
         // 提交前校验分立模型工作流是否已选择所需的外置 CLIP / VAE 模型，避免将空字符串直接发往服务端
         for (const node of Object.values(injectedWorkflow)) {
@@ -711,7 +882,16 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             }
         }
 
-        // 4. 提交工作流至 POST /prompt 端点并校验 node_errors
+        // 原生工作流下，于完成占位符替换与常规字段校验后动态串联 LoraLoader / LoraLoaderModelOnly 节点
+        if (!isWeilinWorkflow && resolvedNativeLoras.length > 0) {
+            injectedWorkflow = injectNativeLoraNodes(injectedWorkflow, resolvedNativeLoras, {
+                anchorHints,
+                supportsLoraLoader,
+                supportsLoraLoaderModelOnly,
+            });
+        }
+
+        // 4. 提交工作流至 POST /prompt 接口并校验 node_errors（传输诊断故障直接抛出原引导）
         const promptPayload = {
             client_id: this._clientId,
             prompt: injectedWorkflow,
@@ -733,8 +913,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const detail = formatComfySubmitError(err.details) ?? `HTTP ${err.status}`;
-                throw new Error(`ComfyUI 工作流校验失败: ${detail}`);
+                throw this.formatProviderHttpError(err, 'ComfyUI 工作流校验失败', formatComfySubmitError);
             }
             throw err;
         }
@@ -790,8 +969,11 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                 if (signal?.aborted) {
                     throw err;
                 }
-                if (err instanceof HttpError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) {
-                    throw new Error(`ComfyUI 轮询任务状态失败 (HTTP ${err.status})`);
+                if (err instanceof HttpError) {
+                    this.rethrowTransportDiagnostic(err);
+                    if (err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) {
+                        throw new Error(`ComfyUI 轮询任务状态失败 (HTTP ${err.status})`);
+                    }
                 }
                 consecutiveNetworkErrors++;
                 if (consecutiveNetworkErrors >= maxConsecutiveNetworkErrors) {
@@ -905,6 +1087,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
+                this.rethrowTransportDiagnostic(err);
                 throw new Error(`ComfyUI 图像下载失败 (/view HTTP ${err.status})`);
             }
             throw err;
@@ -935,6 +1118,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             clipName: (variables.clip_name as string | undefined) || undefined,
             vaeName: (variables.vae_name as string | undefined) || undefined,
             extraModels: extraModels.length > 0 ? extraModels : undefined,
+            loras: appliedLoraMetadata.length > 0 ? appliedLoraMetadata : undefined,
             width: toFiniteNumber(variables.width),
             height: toFiniteNumber(variables.height),
             mode: isInpaintMode ? 'inpaint' : 'txt2img',

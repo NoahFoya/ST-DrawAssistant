@@ -50,6 +50,96 @@ export function getAssetBaseName(normalizedName: string): string {
     return parts[parts.length - 1] ?? normalizedName;
 }
 
+/** 服务端资产精确比对解析结果 */
+export type AssetMatchResolution =
+    | { readonly status: 'matched'; readonly value: string }
+    | { readonly status: 'ambiguous'; readonly candidates: string[] }
+    | { readonly status: 'missing' };
+
+/** 过滤并保持去重顺序的匹配集收集辅助 */
+function collectUniqueMatches(
+    targetList: readonly string[],
+    predicate: (item: string) => boolean
+): string[] {
+    const seen = new Set<string>();
+    const results: string[] = [];
+    for (const item of targetList) {
+        if (!seen.has(item) && predicate(item)) {
+            seen.add(item);
+            results.push(item);
+        }
+    }
+    return results;
+}
+
+/**
+ * 解析候选模型名称在服务端已知资产列表中的精确对应项：
+ * 1. 严格全等匹配；
+ * 2. 忽略大小写全等匹配；
+ * 3. 归一化全路径匹配（去除哈希与扩展名）；
+ * 4. 基础文件名去路径匹配（若跨子目录出现同名歧义则返回 ambiguous，避免猜错）。
+ */
+export function resolveAssetMatch(
+    candidate: string | undefined | null,
+    targetList: readonly string[] | undefined | null
+): AssetMatchResolution {
+    if (!candidate || !targetList || targetList.length === 0) {
+        return { status: 'missing' };
+    }
+    const cleanCand = candidate.trim();
+    if (!cleanCand) {
+        return { status: 'missing' };
+    }
+
+    // 1. 严格全等匹配
+    if (targetList.includes(cleanCand)) {
+        return { status: 'matched', value: cleanCand };
+    }
+
+    // 2. 忽略大小写全等匹配
+    const candLower = cleanCand.toLowerCase();
+    const ciMatches = collectUniqueMatches(targetList, (item) => item.toLowerCase() === candLower);
+    if (ciMatches.length === 1) {
+        return { status: 'matched', value: ciMatches[0] };
+    }
+    if (ciMatches.length > 1) {
+        return { status: 'ambiguous', candidates: ciMatches };
+    }
+
+    // 3. 归一化全路径匹配
+    const normCand = normalizeAssetName(cleanCand);
+    if (!normCand) {
+        return { status: 'missing' };
+    }
+
+    const normMatches = collectUniqueMatches(targetList, (item) => normalizeAssetName(item) === normCand);
+    if (normMatches.length === 1) {
+        return { status: 'matched', value: normMatches[0] };
+    }
+    if (normMatches.length > 1) {
+        return { status: 'ambiguous', candidates: normMatches };
+    }
+
+    // 4. 基础文件名去路径匹配（允许任一方带有子目录，存在多目录重名时标记歧义）
+    const baseCand = getAssetBaseName(normCand);
+    if (!baseCand) {
+        return { status: 'missing' };
+    }
+
+    const baseMatches = collectUniqueMatches(
+        targetList,
+        (item) => getAssetBaseName(normalizeAssetName(item)) === baseCand
+    );
+    if (baseMatches.length === 1) {
+        return { status: 'matched', value: baseMatches[0] };
+    }
+    if (baseMatches.length > 1) {
+        return { status: 'ambiguous', candidates: baseMatches };
+    }
+
+    return { status: 'missing' };
+}
+
 /**
  * 比对目标候选模型名称是否存在于已知资产列表中。
  *
@@ -67,53 +157,7 @@ export function matchAssetText(
     candidate: string | undefined | null,
     targetList: readonly string[] | undefined | null
 ): boolean {
-    if (!candidate || !targetList || targetList.length === 0) {
-        return false;
-    }
-    const cleanCand = candidate.trim();
-    if (!cleanCand) {
-        return false;
-    }
-
-    // 1. 严格全等匹配
-    if (targetList.includes(cleanCand)) {
-        return true;
-    }
-
-    // 2. 忽略大小写全等匹配
-    const candLower = cleanCand.toLowerCase();
-    if (targetList.some((item) => item.toLowerCase() === candLower)) {
-        return true;
-    }
-
-    // 3. 归一化全路径匹配
-    const normCand = normalizeAssetName(cleanCand);
-    if (!normCand) {
-        return false;
-    }
-
-    for (const item of targetList) {
-        const normItem = normalizeAssetName(item);
-        if (normItem === normCand) {
-            return true;
-        }
-    }
-
-    // 4. 基础文件名去路径容错匹配（允许任一方带有子目录）
-    const baseCand = getAssetBaseName(normCand);
-    if (!baseCand) {
-        return false;
-    }
-
-    for (const item of targetList) {
-        const normItem = normalizeAssetName(item);
-        const baseItem = getAssetBaseName(normItem);
-        if (baseItem === baseCand) {
-            return true;
-        }
-    }
-
-    return false;
+    return resolveAssetMatch(candidate, targetList).status !== 'missing';
 }
 
 /** 校验预设资产参数选项 */

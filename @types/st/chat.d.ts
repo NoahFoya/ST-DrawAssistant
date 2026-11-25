@@ -47,6 +47,20 @@ export interface ChatMessageExtra {
 }
 
 /**
+ * 单条实际参与生成的 LoRA 元数据快照。
+ */
+export interface AppliedLoraMetadata {
+    /** LoRA 模型文件名（或服务端精确相对路径） */
+    readonly modelName: string;
+    /** 基础模型权重 */
+    readonly modelWeight: number;
+    /** 文本编码器权重 */
+    readonly clipWeight?: number;
+    /** 触发词权重（仅含 ComfyUI-WeiLin 节点工作流使用） */
+    readonly triggerWeight?: number;
+}
+
+/**
  * 保存在插件私有 IndexedDB 中的完整图像生成技术参数快照。
  *
  * @remarks
@@ -132,6 +146,8 @@ export interface ImageGenerationMetadata {
     readonly imageSize?: string;
     /** Grok 原生图像分辨率档位 */
     readonly resolution?: string;
+    /** 实际参与本次生图的 LoRA 模型与权重快照 */
+    readonly loras?: readonly AppliedLoraMetadata[];
     /** 本次生成实际使用的提示词预设 ID（含轮询随机抽取命中项） */
     readonly resolvedPromptPresetId?: string;
     /** 本次生成实际使用的提示词预设名称 */

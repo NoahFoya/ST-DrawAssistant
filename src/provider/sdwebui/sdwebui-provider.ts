@@ -9,6 +9,7 @@
  */
 
 import type {
+    AppliedLoraMetadata,
     GenerationRequest,
     GenerationResult,
     ProviderHealthResult,
@@ -22,7 +23,16 @@ import {
     type BaseProviderOptions,
     type InFlightAssetSlot,
 } from '../base-provider';
-import { base64ToBlob, ensureValidImageBlob, HttpError, imageInputToBase64 } from '../../util/http-client';
+import {
+    applyTextLoraTagsToPrompt,
+    sanitizeLoraPrompts,
+} from '../../pipeline/lora-utils';
+import {
+    base64ToBlob,
+    ensureValidImageBlob,
+    HttpError,
+    imageInputToBase64,
+} from '../../util/http-client';
 import { logger } from '../../util/logger';
 
 /** 提取 SD-WebUI HttpError 详情文本 */
@@ -109,11 +119,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             };
         }
 
-        return {
-            status: 'error',
-            latencyMs: pingResult.latencyMs,
-            message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(pingResult);
     }
 
     /**
@@ -191,6 +197,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
                     if (internalSignal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
                         throw err;
                     }
+                    this.rethrowTransportDiagnostic(err);
                     if (degradeOnError) {
                         if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
                             logger.debug(`[SD-WebUI] 服务端未实现 ${endpointPath} 接口 (HTTP ${err.status})，跳过拉取`);
@@ -247,7 +254,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
      *
      * @remarks
      * 现代 A1111 1.9+ / Forge / reForge 支持 `/sdapi/v1/schedulers`；
-     * 若服务端未实现该端点（如返回 404），返回空数组，不阻断资产拉取。
+     * 若服务端未实现该接口（如返回 404），返回空数组，不阻断资产拉取。
      */
     public fetchSchedulers(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
         return this.fetchCachedAsset(
@@ -316,8 +323,21 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         const resolvedClipSkip = (params.clipSkip ?? drawingPreset?.clipSkip) as number | undefined;
         const resolvedVae = (params.vaeName ?? drawingPreset?.vaeName) as string | undefined;
 
-        const fullPrompt = request.prompt;
-        const fullNegativePrompt = request.negativePrompt || '';
+        const requestedLoras = request.loras ?? [];
+        const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+            allowLora: true,
+            allowWlr: false,
+            sourceLabel: 'SD-WebUI 服务',
+            guidance: 'SD-WebUI 仅在正向提示词支持标准 <lora:...> 语法，不兼容 WeiLin <wlr:...> 或负向标签',
+        });
+
+        const fullPrompt = applyTextLoraTagsToPrompt(sanitized.positivePrompt, requestedLoras, 'lora');
+        const fullNegativePrompt = sanitized.negativePrompt;
+        const appliedLoraMetadata: AppliedLoraMetadata[] = requestedLoras.map((lora) => ({
+            modelName: lora.modelName,
+            modelWeight: lora.modelWeight,
+            clipWeight: lora.clipWeight,
+        }));
 
         // 2. 构建 override_settings（按任务切换模型，完成后自动还原）
         const overrideSettings: Record<string, unknown> = {};
@@ -426,8 +446,11 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const detail = extractSdWebUiError(err.details) ?? `HTTP ${err.status}`;
-                throw new Error(`SD-WebUI 服务响应错误 (${err.status}): ${detail}`);
+                throw this.formatProviderHttpError(
+                    err,
+                    `SD-WebUI 服务响应错误 (${err.status})`,
+                    extractSdWebUiError
+                );
             }
             throw err;
         }
@@ -515,6 +538,7 @@ export class SdWebUIProvider extends BaseGenerationProvider {
             baseModel: resolvedBaseModel,
             vaeName: resolvedVae?.trim() || undefined,
             clipSkip: resolvedClipSkip,
+            loras: appliedLoraMetadata.length > 0 ? appliedLoraMetadata : undefined,
             width: effectiveWidth,
             height: effectiveHeight,
             mode: isInpaintMode ? 'inpaint' : 'txt2img',

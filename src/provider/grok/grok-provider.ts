@@ -24,10 +24,10 @@ import {
     type InFlightAssetSlot,
 } from '../base-provider';
 import {
-    extractHttpErrorMessage,
     hashKeyFingerprint,
     parseCustomBodyObject,
     resolveCloudModelId,
+    toCloudGenerationError,
 } from '../cloud-provider-utils';
 import {
     GROK_API_BASE,
@@ -118,11 +118,7 @@ export class GrokProvider extends BaseGenerationProvider {
             };
         }
 
-        return {
-            status: 'error',
-            latencyMs: pingResult.latencyMs,
-            message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(pingResult, 'xAI Grok API Key 无效或无权访问');
     }
 
     public async fetchModels(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
@@ -181,6 +177,7 @@ export class GrokProvider extends BaseGenerationProvider {
                     ) {
                         throw err;
                     }
+                    this.rethrowTransportDiagnostic(err);
                     if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
                         logger.debug(`[GrokProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
                     } else {
@@ -287,11 +284,11 @@ export class GrokProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const detail = extractHttpErrorMessage(err);
-                if (err.status === 429) {
-                    throw new Error(`xAI Grok 请求被限速，请稍后重试: ${detail}`);
-                }
-                throw new Error(`xAI Grok 原生生图失败: ${detail}`);
+                throw toCloudGenerationError(
+                    err,
+                    'xAI Grok 请求被限速，请稍后重试',
+                    'xAI Grok 原生生图失败'
+                );
             }
             throw err;
         }
@@ -317,7 +314,7 @@ export class GrokProvider extends BaseGenerationProvider {
                 );
             } catch (err: unknown) {
                 if (err instanceof HttpError) {
-                    throw new Error(`图像 URL 下载失败: HTTP ${err.status}`);
+                    throw this.formatProviderHttpError(err, '图像 URL 下载失败');
                 }
                 throw err;
             }

@@ -171,7 +171,7 @@ export async function initOnce(): Promise<void> {
                     });
                 };
 
-                // 监听角色消息渲染完成 (CHARACTER_MESSAGE_RENDERED) - 此时楼层 DOM 已挂载就绪，统一执行楼层生图按钮装配、素材提取检测与自动生图调度
+                // 监听角色消息渲染完成 (CHARACTER_MESSAGE_RENDERED) - 延后一拍待同步/微任务后处理脚本完成 DOM 刷新后，再执行楼层装饰与自动生图调度
                 const charRenderedEvent =
                     eventTypes.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered';
                 bindHostEvent(charRenderedEvent, async (data: unknown, type?: unknown) => {
@@ -184,6 +184,33 @@ export async function initOnce(): Promise<void> {
                     const initialMessageObj = initialCtx?.chat?.[messageId];
                     const initialSwipeId = initialMessageObj?.swipe_id ?? 0;
 
+                    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+                    const settledCtx = getLiveContext();
+                    if (
+                        currentGen !== lifecycleGeneration ||
+                        settledCtx?.chatId !== initialChatId ||
+                        settledCtx?.chat?.[messageId] !== initialMessageObj ||
+                        (settledCtx?.chat?.[messageId]?.swipe_id ?? 0) !== initialSwipeId
+                    ) {
+                        return;
+                    }
+
+                    // 默认忽略角色开场白 ('first_message') 的自动生图，仅装配楼层生图按钮而不自动触发生成
+                    const settings = settingsStore.getSettings();
+                    const canAutoGenerate = Boolean(
+                        settings.enabled && settings.autoGenerate && type !== 'first_message'
+                    );
+                    if (canAutoGenerate) {
+                        messageDecorator.markPendingAutoGenerate(
+                            initialChatId || 'default_chat',
+                            messageId,
+                            initialSwipeId
+                        );
+                    } else {
+                        messageDecorator.clearPendingAutoGenerate(messageId);
+                    }
+
                     await messageDecorator.decorateMessage(messageId);
                     const afterDecorateCtx = getLiveContext();
                     if (
@@ -192,16 +219,11 @@ export async function initOnce(): Promise<void> {
                         afterDecorateCtx?.chat?.[messageId] !== initialMessageObj ||
                         (afterDecorateCtx?.chat?.[messageId]?.swipe_id ?? 0) !== initialSwipeId
                     ) {
+                        messageDecorator.clearPendingAutoGenerate(messageId);
                         return;
                     }
 
                     void promptInjector.scheduleSyncToHost();
-
-                    // 默认忽略角色开场白 ('first_message') 的自动生图，仅装配楼层生图按钮而不自动触发生成
-                    const settings = settingsStore.getSettings();
-                    const canAutoGenerate = Boolean(
-                        settings.enabled && settings.autoGenerate && type !== 'first_message'
-                    );
 
                     let modalOpened = false;
                     if (type !== 'first_message') {
@@ -217,6 +239,8 @@ export async function initOnce(): Promise<void> {
                                 ) {
                                     void promptInjector.scheduleSyncToHost();
                                     messageDecorator.triggerReadyButtons(messageId);
+                                } else {
+                                    messageDecorator.clearPendingAutoGenerate(messageId);
                                 }
                             },
                         });
@@ -299,7 +323,9 @@ export async function initOnce(): Promise<void> {
                                 deletedSwipeId
                             );
                         }
-                        void messageDecorator.handleMessageSwiped(messageId, newSwipeId);
+                        void messageDecorator.handleMessageSwiped(messageId, newSwipeId, {
+                            skipSwipeCancel: true,
+                        });
                         void promptInjector.scheduleSyncToHost();
                     }
                 });

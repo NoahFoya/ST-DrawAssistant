@@ -7,7 +7,7 @@
  */
 
 import type { ImageGenerationMetadata } from './st/chat';
-import type { ProviderType } from './provider';
+import type { ProviderType, ResolvedLoraSpec } from './provider';
 
 /** 绘图容器挂载目标定位坐标 */
 export interface SlotMountTarget {
@@ -40,6 +40,8 @@ export interface DrawingTask {
     readonly rawNegativePrompt?: string;
     /** 选用的生图提供者标识符 */
     readonly providerType: ProviderType;
+    /** 任务入队时解析命中的结构化 LoRA 列表快照 */
+    readonly loras?: readonly ResolvedLoraSpec[];
     /** 任务入队时的生成参数快照 */
     readonly parametersSnapshot?: Record<string, unknown>;
     /** 实际解析命中的提示词预设 ID（含轮询抽取结果） */

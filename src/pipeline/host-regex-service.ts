@@ -78,8 +78,8 @@ function buildPairedArchiveTagBranch(startTag: string, endTag: string): string |
 
 /**
  * 构建用于匹配生图指令成对起止标记的正则分支：
- * - 排除反引号包裹的行内代码说明；
- * - 禁止跨越同级起始符、主思维链/绘图思考链标签边界以及多段空行，防止草稿中孤立标签跨段落误吞正文或匹配 Markdown 标题。
+ * - 排除反引号包裹的行内代码说明与包含反引号的片段；
+ * - 禁止跨越同级起始符与主思维链/绘图思考链标签边界，允许正文内部换行与空行，严格以成对生图标记起止。
  */
 function buildPairedDrawingTagBranch(startTag: string, endTag: string): string | null {
     const cleanStart = (startTag || '').trim();
@@ -89,7 +89,7 @@ function buildPairedDrawingTagBranch(startTag: string, endTag: string): string |
     }
     const escapedStart = escapeRegexPattern(cleanStart);
     const escapedEnd = escapeRegexPattern(cleanEnd);
-    return `(?<!\`)${escapedStart}(?:(?!${escapedStart}|<\\/?(?:think|thinking|thought|imagethink|designthink)\\b|\\r?\\n\\s*\\r?\\n)[^\`])*?${escapedEnd}(?!\`)`;
+    return `(?<!\`)${escapedStart}(?:(?!${escapedStart}|<\\/?(?:think|thinking|thought|imagethink|designthink)\\b)[^\`])*?${escapedEnd}(?!\`)`;
 }
 
 /**
@@ -211,7 +211,7 @@ export function buildHistoryCleanMarkupRegexScript(
         }
     }
 
-    // 3. 默认与自定义生图指令起止标记（带防反引号、防跨越思考链与防跨空行保护）
+    // 3. 默认与自定义生图指令起止标记（带防反引号与防跨越思考链保护）
     const defaultDrawingBranch = buildPairedDrawingTagBranch('image###', '###');
     if (defaultDrawingBranch) {
         branches.push(defaultDrawingBranch);

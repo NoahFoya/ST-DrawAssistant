@@ -55,7 +55,7 @@ export function clearStaticLexiconManifestCache(): void {
  * 根据模块所在路径推导 `config/lexicon/` 的相对路径前缀。
  *
  * @remarks
- * 打包产物位于 `dist/index.js`（距根目录 1 层），源码测试位于 `src/store/*.ts`（距根目录 2 层）。
+ * 打包文件位于 `dist/index.js`（距根目录 1 层），源码测试位于 `src/store/*.ts`（距根目录 2 层）。
  */
 export function resolveStaticLexiconUrl(fileName: string, baseUrl?: string): URL {
     const anchorUrl = baseUrl || import.meta.url;

@@ -58,6 +58,12 @@ export interface OrchestratorOptions {
     getActiveChatId?: () => string | undefined;
 }
 
+/** 取消生图任务控制选项 */
+export interface CancelTaskOptions {
+    /** 为 true 时通知上层抑制逐条取消提示弹窗（如批量取消旧分支队列后统一汇总提示） */
+    silentToast?: boolean;
+}
+
 /**
  * 生图任务调度器类。
  */
@@ -85,7 +91,9 @@ export class GenerationOrchestrator {
         this._registry = options.registry ?? providerRegistry;
         this._storage = options.storage ?? imageStorage;
         this._settingsStore = options.settingsStore ?? settingsStore;
-        this._promptPipeline = options.promptPipeline ?? promptPipeline;
+        this._promptPipeline =
+            options.promptPipeline ??
+            (options.settingsStore ? new PromptPipeline(options.settingsStore) : promptPipeline);
         this._eventBus = options.eventBus ?? eventBus;
         this._sessionLifecycle = options.sessionLifecycle ?? sessionLifecycle;
         if (options.bindTaskCanceller && typeof this._sessionLifecycle?.setTaskCanceller === 'function') {
@@ -107,7 +115,7 @@ export class GenerationOrchestrator {
     private transitionTaskStatus(
         taskId: string,
         status: DrawingTaskStatus,
-        extra?: { error?: string; imageId?: string; cancelReason?: string }
+        extra?: { error?: string; imageId?: string; cancelReason?: string; silentToast?: boolean }
     ): void {
         const task = this._tasks.get(taskId);
         if (!task) {
@@ -129,6 +137,7 @@ export class GenerationOrchestrator {
             error: extra?.error,
             imageId: extra?.imageId,
             cancelReason: extra?.cancelReason,
+            ...(extra?.silentToast !== undefined ? { silentToast: extra.silentToast } : {}),
         });
     }
 
@@ -274,7 +283,13 @@ export class GenerationOrchestrator {
     /**
      * 取消指定消息分支下的活跃生图任务（用于消息编辑导致结构变更时清理当前分支任务）。
      */
-    public cancelTasksBySwipe(chatId: string, messageId: number, swipeId: number, reason = '目标候选分支已删除'): void {
+    public cancelTasksBySwipe(
+        chatId: string,
+        messageId: number,
+        swipeId: number,
+        reason = '目标候选分支已删除',
+        options?: CancelTaskOptions
+    ): void {
         for (const task of this._tasks.values()) {
             if (
                 task.target.chatId === chatId &&
@@ -282,9 +297,47 @@ export class GenerationOrchestrator {
                 (task.target.swipeId ?? 0) === swipeId &&
                 (task.status === 'pending' || task.status === 'generating')
             ) {
-                this.cancelTask(task.taskId, reason);
+                this.cancelTask(task.taskId, reason, options);
             }
         }
+    }
+
+    /**
+     * 取消同一楼层下除当前激活分支外的其余历史分支未完成生图任务。
+     *
+     * @remarks
+     * 用于右滑重 roll 生成全新候选分支时释放单并发队列，使新分支生图请求得以优先执行。
+     *
+     * @returns 本次实际取消的任务数量
+     */
+    public cancelOtherSwipeTasks(
+        chatId: string,
+        messageId: number,
+        activeSwipeId: number,
+        reason = '重 roll 生成新分支，已自动取消旧分支任务',
+        options?: CancelTaskOptions
+    ): number {
+        const targetIds: string[] = [];
+        for (const task of this._tasks.values()) {
+            if (
+                task.target.chatId === chatId &&
+                task.target.messageId === messageId &&
+                (task.target.swipeId ?? 0) !== activeSwipeId &&
+                (task.status === 'pending' || task.status === 'generating')
+            ) {
+                targetIds.push(task.taskId);
+            }
+        }
+
+        let cancelledCount = 0;
+        for (const taskId of targetIds) {
+            const task = this._tasks.get(taskId);
+            if (task && (task.status === 'pending' || task.status === 'generating')) {
+                this.cancelTask(taskId, reason, options);
+                cancelledCount++;
+            }
+        }
+        return cancelledCount;
     }
 
     /**
@@ -341,7 +394,7 @@ export class GenerationOrchestrator {
                 : undefined;
         const resolvedDrawing = this._settingsStore.resolveDrawingPreset(providerType, {
             explicitPresetId: explicitDrawingId,
-            throwOnMissingActive: false,
+            throwOnMissingActive: true,
         });
         const effectiveDrawingPresetId = resolvedDrawing.presetId;
 
@@ -380,6 +433,7 @@ export class GenerationOrchestrator {
             negativePrompt: request.negativePrompt,
             rawPrompt: request.rawPrompt,
             rawNegativePrompt: request.rawNegativePrompt,
+            loras: request.loras,
             providerType,
             parametersSnapshot: mergedParamsSnapshot,
             resolvedPromptPresetId: request.resolvedPromptPresetId,
@@ -416,11 +470,13 @@ export class GenerationOrchestrator {
      * @param taskId 任务唯一标识符
      * @param reason 取消原因描述
      */
-    public cancelTask(taskId: string, reason = '用户主动取消'): void {
+    public cancelTask(taskId: string, reason = '用户主动取消', options?: CancelTaskOptions): void {
         const task = this._tasks.get(taskId);
         if (!task || task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
             return;
         }
+
+        const silentToast = options?.silentToast;
 
         if (task.status === 'pending') {
             const queueIndex = this._queue.indexOf(taskId);
@@ -429,13 +485,17 @@ export class GenerationOrchestrator {
             }
             task.sourceImage = undefined;
             task.maskImage = undefined;
-            this.transitionTaskStatus(taskId, 'cancelled', { cancelReason: reason });
+            this.transitionTaskStatus(taskId, 'cancelled', { cancelReason: reason, silentToast });
             logger.info(`排队中任务已取消: ${taskId}`);
             return;
         }
 
         if (task.status === 'generating') {
-            this.transitionTaskStatus(taskId, 'cancelled', { cancelReason: reason, imageId: task.imageId });
+            this.transitionTaskStatus(taskId, 'cancelled', {
+                cancelReason: reason,
+                imageId: task.imageId,
+                silentToast,
+            });
             const controller = this._controllers.get(taskId);
             if (controller) {
                 controller.abort();
@@ -538,7 +598,7 @@ export class GenerationOrchestrator {
                 });
             }
             if (cancelled) {
-                logger.info(`已取消任务退出，已丢弃未生效产物: ${taskId}`);
+                logger.info(`已取消任务退出，已丢弃未保存结果: ${taskId}`);
             } else if (isTimedOut) {
                 const timeoutSec = Math.round(timeoutMs / 1000);
                 this.finalizeFailure(taskId, `生图服务响应超时 (${timeoutSec}s)`);
@@ -573,6 +633,7 @@ export class GenerationOrchestrator {
             const request: GenerationRequest = {
                 prompt: task.prompt,
                 negativePrompt: task.negativePrompt,
+                loras: task.loras,
                 sourceImage: task.sourceImage,
                 maskImage: task.maskImage,
                 parameters: task.parametersSnapshot,
@@ -586,7 +647,7 @@ export class GenerationOrchestrator {
                 return;
             }
 
-            // 8. 图像产物有效性校验与质量处理（拦截 0 字节或损坏结果，防止写入库中）
+            // 8. 生成图像有效性校验与质量处理（拦截 0 字节或损坏结果，防止写入库中）
             const validatedRawBlob = await ensureValidImageBlob(
                 result?.blob,
                 provider.name || task.providerType

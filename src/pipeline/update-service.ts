@@ -682,7 +682,7 @@ export class UpdateService {
             error: null,
         });
 
-        // 1. 宿主环境下优先通过 SillyTavern 原生 Git 端点检查（零 API 限流，且反映真实本地仓库状态）
+        // 1. 宿主环境下优先通过 SillyTavern 原生 Git 查询接口检查（零 API 限流，且反映真实本地仓库状态）
         if (this.isHostContextAvailable() && !explicitBranch) {
             try {
                 const hostRes = await this.tryHostGitVersionCheck(options?.signal);
@@ -941,7 +941,7 @@ export class UpdateService {
      *
      * @remarks
      * 依次尝试候选目标并调用 SillyTavern 宿主 `/api/extensions/update` 执行 git pull，
-     * 成功后回查 `/api/extensions/version` 对齐本地最新提交标识并通知调用方引导刷新。
+     * 成功后回查 `/api/extensions/version` 核对本地最新提交标识并通知调用方引导刷新。
      */
     public async applyUpdate(options?: { signal?: AbortSignal }): Promise<ApplyUpdateResult> {
         if (options?.signal?.aborted) {
@@ -1138,12 +1138,12 @@ export class UpdateService {
 
     /**
      * 判断已初始化用户在版本升级后是否存在尚未阅读的更新说明。
-     * 首次全新安装（`!hasSeenGuide`）由新手引导接管，不重复弹窗。
+     * 首次全新安装（`!ui.seenGuides?.plugin`）由新手引导接管，不重复弹窗。
      */
     public hasPendingChangelogNotice(
         store: Pick<SettingsStore, 'get'> = settingsStore
     ): boolean {
-        if (!Boolean(store.get('isInitialized')) || !Boolean(store.get('hasSeenGuide'))) {
+        if (!Boolean(store.get('isInitialized')) || !Boolean(store.get('ui')?.seenGuides?.plugin)) {
             return false;
         }
         if (this.hasPendingPopupFlag()) {

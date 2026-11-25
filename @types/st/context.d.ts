@@ -58,7 +58,7 @@ export interface SillyTavernContext {
      * 获取附带 CSRF 校验凭证的请求头字典。
      *
      * @remarks
-     * 调用宿主内部 `/api` 端点时需包含此请求头以通过安全校验。
+     * 调用宿主内部 `/api` 接口时需包含此请求头以通过安全校验。
      */
     getRequestHeaders(): Record<string, string>;
 

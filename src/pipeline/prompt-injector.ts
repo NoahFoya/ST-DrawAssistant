@@ -38,6 +38,7 @@ import {
     parseKeywordRegexLiteral,
     resolveActiveMaterialExtractionConfig,
     resolveActiveMaterialFormatConfig,
+    splitCommaKeywordTokens,
     splitKeywordTokens,
 } from './material-definitions';
 import { logger } from '../util/logger';
@@ -1110,12 +1111,12 @@ export function computePromptInjections(
                 const matchWholeWords = Boolean(entry.matchWholeWords);
                 const { raw: rawText, lower: lowerText } = getRecentText(entry.scanDepth ?? 2);
 
-                const primaryKws = splitKeywordTokens(entry.keywords);
+                const primaryKws = splitCommaKeywordTokens(entry.keywords);
                 if (primaryKws.length === 0) {
                     continue;
                 }
 
-                const secondaryKws = splitKeywordTokens(entry.secondaryKeywords);
+                const secondaryKws = splitCommaKeywordTokens(entry.secondaryKeywords);
                 const logic = entry.logicType || 'and_any';
                 const hitPrimary = primaryKws.filter((kw) =>
                     matchKeywordToken(kw, rawText, lowerText, caseSensitive, matchWholeWords)

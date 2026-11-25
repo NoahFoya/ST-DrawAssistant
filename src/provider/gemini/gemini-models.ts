@@ -3,7 +3,7 @@
  *
  * @remarks
  * 仅覆盖支持 `:generateContent` + `responseModalities: ["IMAGE"]` 的 Gemini 图像模型；
- * `imagen-*` 系列使用 `:predict` 端点，不在本表范围内。
+ * `imagen-*` 系列使用 `:predict` 接口，不在本表范围内。
  */
 
 export const GEMINI_OFFICIAL_SERVICE_ID = 'gemini-official';
@@ -25,6 +25,22 @@ export const GEMINI_ASPECT_RATIOS = [
 
 export const GEMINI_IMAGE_SIZES = ['512', '1K', '2K', '4K'] as const;
 export const GEMINI_PRO_IMAGE_SIZES = ['1K', '2K', '4K'] as const;
+
+export const GEMINI_ASPECT_RATIO_OPTIONS: Array<{ label: string; value: string }> = [
+    { label: '自动 (由模型决定)', value: 'auto' },
+    ...GEMINI_ASPECT_RATIOS.map((ratio) => ({ label: ratio, value: ratio })),
+];
+
+/** 构建 Gemini 分辨率档位选项（含显式「自动」以省略 imageSize） */
+export function buildGeminiImageSizeOptions(
+    capabilities: GeminiModelCapabilities
+): Array<{ label: string; value: string }> {
+    const sizes = capabilities.supportedImageSizes.map((size) => ({
+        label: size === '512' ? '512px' : size,
+        value: size,
+    }));
+    return [{ label: '自动', value: 'auto' }, ...sizes];
+}
 
 export interface GeminiModelCapabilities {
     /** 是否支持 generationConfig.imageConfig.imageSize (512 / 1K / 2K / 4K) */

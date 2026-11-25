@@ -6,7 +6,7 @@
  * 1. 部位键采用简洁英文单词，UI 展示中文社区常用标签；
  * 2. 结构清晰的人物身体部位与穿戴层级规范；
  * 3. 宏规则与素材条目独立存储，提供可增删改查的宏规则映射器；
- * 4. 规范对齐 Danbooru 与 Stable Diffusion 常用词条规范。
+ * 4. 参照 Danbooru 与 Stable Diffusion 常用词条规范。
  */
 
 import type {
@@ -623,15 +623,23 @@ export function validateKeywordRegexToken(rawToken: string): string | null {
     }
 }
 
+export interface KeywordTokenSplitOptions {
+    /** 是否将管道符 `|` 视为分隔符（默认 `true` 以兼容角色/服装别名；LoRA 与提示词条目应传 `false` 仅按逗号与换行分隔） */
+    readonly allowPipe?: boolean;
+}
+
 /**
- * 扫描以 `|` 或逗号分隔的关键词字符串，收集所有非法 `/pattern/flags` 正则词元的错误信息。
+ * 扫描关键词字符串，收集所有非法 `/pattern/flags` 正则词元的错误信息。
  */
-export function collectKeywordRegexErrors(rawKeywords?: string): string[] {
+export function collectKeywordRegexErrors(
+    rawKeywords?: string,
+    options?: KeywordTokenSplitOptions
+): string[] {
     if (!rawKeywords) {
         return [];
     }
     const errors: string[] = [];
-    for (const token of splitKeywordTokens(rawKeywords)) {
+    for (const token of splitKeywordTokens(rawKeywords, options)) {
         if (!token.startsWith('/')) continue;
         const err = validateKeywordRegexToken(token);
         if (err) {
@@ -641,10 +649,10 @@ export function collectKeywordRegexErrors(rawKeywords?: string): string[] {
     return errors;
 }
 
-function isKeywordSeparatorChar(ch: string | undefined): boolean {
+function isKeywordSeparatorChar(ch: string | undefined, allowPipe: boolean): boolean {
     return (
         ch === undefined ||
-        ch === '|' ||
+        (allowPipe && ch === '|') ||
         ch === ',' ||
         ch === '，' ||
         ch === '\n' ||
@@ -654,13 +662,17 @@ function isKeywordSeparatorChar(ch: string | undefined): boolean {
 }
 
 /**
- * 解析以 `|` / `,` / `，` / 换行分隔的关键词或别名列表，完整保留合法 `/pattern/flags` 正则字面量（含 `[...]` 字符类内 `/` 与 `,`）。
+ * 解析关键词或别名列表（支持 `,` / `，` / 换行，及按需支持 `|`），完整保留合法 `/pattern/flags` 正则字面量（含 `[...]` 字符类内 `/` 与 `,`）。
  */
-export function splitKeywordTokens(rawKeywords?: string): string[] {
+export function splitKeywordTokens(
+    rawKeywords?: string,
+    options?: KeywordTokenSplitOptions
+): string[] {
     const src = (rawKeywords || '').trim();
     if (!src) {
         return [];
     }
+    const allowPipe = options?.allowPipe !== false;
 
     const tokens: string[] = [];
     let current = '';
@@ -675,7 +687,7 @@ export function splitKeywordTokens(rawKeywords?: string): string[] {
                 let flagEnd = closedAt + 1;
                 while (
                     flagEnd < src.length &&
-                    src[flagEnd] !== '|' &&
+                    !(allowPipe && src[flagEnd] === '|') &&
                     src[flagEnd] !== ',' &&
                     src[flagEnd] !== '，' &&
                     src[flagEnd] !== '\n' &&
@@ -685,13 +697,19 @@ export function splitKeywordTokens(rawKeywords?: string): string[] {
                     flagEnd++;
                 }
                 const flagsPart = src.slice(closedAt + 1, flagEnd);
-                if (hasValidUniqueRegexFlags(flagsPart) && isKeywordSeparatorChar(src[flagEnd])) {
+                if (
+                    hasValidUniqueRegexFlags(flagsPart) &&
+                    isKeywordSeparatorChar(src[flagEnd], allowPipe)
+                ) {
                     tokens.push(src.slice(i, flagEnd).trim());
                     current = '';
                     i = flagEnd;
                     while (
                         i < src.length &&
-                        (src[i] === '|' || src[i] === ',' || src[i] === '，' || /\s/.test(src[i]))
+                        ((allowPipe && src[i] === '|') ||
+                            src[i] === ',' ||
+                            src[i] === '，' ||
+                            /\s/.test(src[i]))
                     ) {
                         i++;
                     }
@@ -700,7 +718,13 @@ export function splitKeywordTokens(rawKeywords?: string): string[] {
             }
         }
 
-        if (ch === '|' || ch === ',' || ch === '，' || ch === '\n' || ch === '\r') {
+        if (
+            (allowPipe && ch === '|') ||
+            ch === ',' ||
+            ch === '，' ||
+            ch === '\n' ||
+            ch === '\r'
+        ) {
             const trimmed = current.trim();
             if (trimmed) {
                 tokens.push(trimmed);
@@ -719,6 +743,13 @@ export function splitKeywordTokens(rawKeywords?: string): string[] {
         tokens.push(tail);
     }
     return tokens;
+}
+
+/**
+ * 仅按中英文逗号与换行分隔的关键词解析（不以 `|` 拆词），保留 `/pattern/flags` 正则字面量。
+ */
+export function splitCommaKeywordTokens(rawKeywords?: string): string[] {
+    return splitKeywordTokens(rawKeywords, { allowPipe: false });
 }
 
 /**
@@ -782,8 +813,8 @@ export function resolveOutfitIdsFromRefs(
     return out;
 }
 
-/** 按顶层逗号切分标签段，完整保留 `()` / `[]` / `{}` / `<>` 及 NovelAI `w::...::` 内部逗号 */
-function splitTopLevelTags(line: string, normalizeChinesePunctuation = true): string[] {
+/** 按顶层逗号切分标签段，完整保留 `()` / `[]` / `{}` / `<>`、数字千分位 `,` 及 NovelAI `w::...::` 内部逗号 */
+export function splitTopLevelTags(line: string, normalizeChinesePunctuation = true): string[] {
     const parts: string[] = [];
     let current = '';
     let paren = 0;
@@ -828,9 +859,11 @@ function splitTopLevelTags(line: string, normalizeChinesePunctuation = true): st
         else if (ch === '<') angle++;
         else if (ch === '>') angle = Math.max(0, angle - 1);
 
-        const isDelimiter = normalizeChinesePunctuation
+        const isThousandSeparator =
+            ch === ',' && /\d/.test(line[i - 1] || '') && /\d/.test(line[i + 1] || '');
+        const isDelimiter = !isThousandSeparator && (normalizeChinesePunctuation
             ? ch === ',' || ch === '，' || ch === '、'
-            : ch === ',';
+            : ch === ',');
 
         if (
             isDelimiter &&

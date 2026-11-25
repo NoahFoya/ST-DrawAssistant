@@ -29,6 +29,7 @@ import type {
     MaterialItemActivationRule,
     ActivationTriggerMode,
     ThinkingDisplayMode,
+    ImageDisplayMode,
     PromptInjectionConfig,
     ImageStorageQuality,
 } from '@types';
@@ -194,17 +195,18 @@ export interface ResolveDrawingPresetOptions {
 /** 插件核心配置结构定义 */
 export interface DrawAssistantSettings {
     isInitialized: boolean;
-    hasSeenGuide: boolean;
     lastSeenChangelogVersion?: string;
     enabled: boolean;
     activeProvider: ProviderType;
     transport: TransportMode;
     taskTimeoutMs: number;
     cancelOnChatChange: boolean;
+    cancelOnSwipe: boolean;
     saveToServer: boolean;
     imageQuality: ImageStorageQuality;
     autoGenerate: boolean;
     cleanPrompt: boolean;
+    cleanPromptPunctuation: boolean;
     normalizeChinesePunctuation: boolean;
     thinkingDisplayMode: ThinkingDisplayMode;
     cleanHistoryThinking: boolean;
@@ -231,7 +233,6 @@ export interface DrawAssistantSettings {
             icon: string;
             animationType?: 'starlight' | 'orbit-ring' | 'aurora-pulse' | 'ripple' | 'none';
             quickPanelEnabled?: boolean;
-            hoverTrigger?: boolean;
         };
         lightbox: {
             enabled: boolean;
@@ -248,7 +249,7 @@ export interface DrawAssistantSettings {
             maxHeight: number;
             maxWidthPct: number;
             rounded: boolean;
-            autoBlur: boolean;
+            displayMode: ImageDisplayMode;
         };
         seenGuides?: {
             plugin?: boolean;
@@ -310,7 +311,7 @@ export function normalizePresetNameKey(name: string): string {
 }
 
 /**
- * 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步对齐外层与内层名称，并保证名称唯一性与 ID 稳定）。
+ * 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步更新外层与内层名称，并保证名称唯一性与 ID 稳定）。
  * 新建预设（`idIndex === -1`）优先采信外层传入的新名称，避免模板或来源副本中的旧 `data.name` 反向覆盖已有条目。
  */
 function upsertPresetItem<P>(
@@ -1707,7 +1708,7 @@ export class SettingsStore {
             const safeMap = isPlainObject(existingMap) ? { ...existingMap } : {};
 
             let updatedDrawingPresets = this._settings.presets.drawing;
-            // 若删除的是提示词预设，对齐固定绑定并从轮询候选池清理该失效 ID（保留 '__polling__' 特殊绑定）
+            // 若删除的是提示词预设，同步更新固定绑定并从轮询候选池清理该失效 ID（保留 '__polling__' 特殊绑定）
             if (category === 'prompts' && updatedDrawingPresets?.[providerKey]) {
                 const fallbackPromptId = nextList[0]?.id || '';
                 const pruned = pruneDrawingPromptRefs(
@@ -1923,16 +1924,17 @@ export class SettingsStore {
             const parsedRecord = parsed as Record<string, unknown>;
             const KNOWN_SETTINGS_KEYS = [
                 'isInitialized',
-                'hasSeenGuide',
                 'enabled',
                 'activeProvider',
                 'transport',
                 'taskTimeoutMs',
                 'cancelOnChatChange',
+                'cancelOnSwipe',
                 'saveToServer',
                 'imageQuality',
                 'autoGenerate',
                 'cleanPrompt',
+                'cleanPromptPunctuation',
                 'normalizeChinesePunctuation',
                 'thinkingDisplayMode',
                 'cleanHistoryThinking',
@@ -2078,10 +2080,12 @@ export class SettingsStore {
             this._settings.transport = baseDefaults.transport;
             this._settings.taskTimeoutMs = baseDefaults.taskTimeoutMs;
             this._settings.cancelOnChatChange = baseDefaults.cancelOnChatChange;
+            this._settings.cancelOnSwipe = baseDefaults.cancelOnSwipe;
             this._settings.saveToServer = baseDefaults.saveToServer;
             this._settings.imageQuality = baseDefaults.imageQuality;
             this._settings.autoGenerate = baseDefaults.autoGenerate;
             this._settings.cleanPrompt = baseDefaults.cleanPrompt;
+            this._settings.cleanPromptPunctuation = baseDefaults.cleanPromptPunctuation;
             this._settings.normalizeChinesePunctuation = baseDefaults.normalizeChinesePunctuation;
             this._settings.thinkingDisplayMode = baseDefaults.thinkingDisplayMode;
             this._settings.cleanHistoryThinking = baseDefaults.cleanHistoryThinking;
@@ -2100,7 +2104,6 @@ export class SettingsStore {
         // 3. 界面交互配置
         if (options.ui) {
             this._settings.ui = structuredClone(baseDefaults.ui);
-            this._settings.hasSeenGuide = baseDefaults.hasSeenGuide;
         }
 
         // 4. 主题预设
@@ -2293,7 +2296,7 @@ export class SettingsStore {
     }
 
     /**
-     * 对齐所有指向预设 ID 的激活指针（主题、各服务生图参数预设、提示词四通道、素材配置），
+     * 校对并修正所有指向预设 ID 的激活指针（主题、各服务生图参数预设、提示词四通道、素材配置），
      * 若当前指针不在对应预设池中，则自动回退至该分类首项或置空。
      *
      * @returns 是否发生任意指针修正

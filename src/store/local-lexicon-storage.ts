@@ -638,7 +638,7 @@ export class LocalLexiconStorage {
     // 2. 自定义词汇管理
 
     /**
-     * 获取全部自定义词汇列表（保持用户编排与插入顺序）。
+     * 获取全部自定义词汇列表（保持用户调整与插入顺序）。
      */
     public async listCustomWords(): Promise<LocalCustomWordItem[]> {
         const list = await this._getItem<LocalCustomWordItem[]>(KEY_CUSTOM_WORDS);

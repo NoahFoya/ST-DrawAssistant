@@ -419,8 +419,22 @@ export function resolvePromptMacros(
     const unresolvedMacros: string[] = [];
 
     const expandedText = text.replace(
-        /\$([^\r\n$,，;；:：!！?？]+?)\$/g,
-        (fullMatch, innerToken: string) => {
+        /(\(\s*)\$([^\r\n$,，;；:：!！?？()（）]+?)\$(\s*\))|(（\s*)\$([^\r\n$,，;；:：!！?？()（）]+?)\$(\s*）)|\$([^\r\n$,，;；:：!！?？]+?)\$/g,
+        (
+            fullMatch,
+            halfOpen: string | undefined,
+            halfInner: string | undefined,
+            halfClose: string | undefined,
+            fullOpen: string | undefined,
+            fullInner: string | undefined,
+            fullClose: string | undefined,
+            bareInner: string | undefined
+        ) => {
+            const innerToken = halfInner ?? fullInner ?? bareInner ?? '';
+            const openWrapper = halfOpen ?? fullOpen ?? '';
+            const closeWrapper = halfClose ?? fullClose ?? '';
+            const hasWrapper = Boolean(openWrapper && closeWrapper);
+
             const trimmed = innerToken.trim();
             if (!trimmed) {
                 return fullMatch;
@@ -439,10 +453,11 @@ export function resolvePromptMacros(
             );
             if (matched) {
                 resolvedMacros.push(trimmed);
-                return expanded;
+                return hasWrapper ? `${openWrapper}${expanded}${closeWrapper}` : expanded;
             }
 
             unresolvedMacros.push(trimmed);
+            // 外层包裹语法（如 爱丽丝($不存在$)）若宏未命中，同步移除空括号以避免残留 ()
             return '';
         }
     );

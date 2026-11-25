@@ -21,6 +21,11 @@ export const GROK_ASPECT_RATIOS = [
 
 export const GROK_RESOLUTIONS = ['1k', '2k'] as const;
 
+export const GROK_ASPECT_RATIO_OPTIONS: Array<{ label: string; value: string }> = [
+    { label: '自动 (由模型决定)', value: 'auto' },
+    ...GROK_ASPECT_RATIOS.map((ratio) => ({ label: ratio, value: ratio })),
+];
+
 export interface GrokModelCapabilities {
     /** 是否支持 aspect_ratio 参数 */
     readonly supportsAspectRatio: boolean;
