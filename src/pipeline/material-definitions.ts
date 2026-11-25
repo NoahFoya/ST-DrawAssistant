@@ -112,16 +112,16 @@ export interface MaterialPartGroup<K extends string> {
 }
 
 /** 角色部位固定状态后缀集合 */
-export const CHARACTER_PART_STATES: readonly CharacterPartState[] = ['clothed', 'exposed', 'nude'];
+export const CHARACTER_PART_STATES: readonly CharacterPartState[] = ['covered', 'exposed', 'nude'];
 
 /** 服装部位固定状态后缀集合 */
 export const OUTFIT_PART_STATES: readonly OutfitPartState[] = ['intact', 'disheveled'];
 
 /** 角色状态后缀展示说明 */
 export const CHARACTER_PART_STATE_LABELS: Readonly<Record<CharacterPartState, string>> = {
-    clothed: '穿衣状态（遮挡部位不展开）',
-    exposed: '半裸/走光状态',
-    nude: '无遮挡全裸状态',
+    covered: '遮蔽状态（不含服装，隐私部位不展开）',
+    exposed: '局部露出（半裸或局部露肤）',
+    nude: '无遮挡全裸',
 };
 
 /** 服装状态后缀展示说明 */
@@ -168,7 +168,7 @@ export const OUTFIT_PART_GROUPS: ReadonlyArray<MaterialPartGroup<OutfitPartKey>>
     },
 ];
 
-/** 角色全部 16 个标准部位定义（支持 通用tags|[clothed]tags|[exposed]tags|[nude]tags 分层） */
+/** 角色全部 16 个标准部位定义（支持 通用tags|[covered]tags|[exposed]tags|[nude]tags 分层） */
 export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] = [
     {
         key: 'appearance',
@@ -209,7 +209,7 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
         key: 'neck_shoulders',
         label: '颈肩与锁骨',
         hint: '脖颈、锁骨与肩部线条特征（如 collarbone, bare_shoulders）',
-        placeholder: '例如: |[clothed]collarbone|[nude]bare_shoulders, collarbone',
+        placeholder: '例如: |[covered]collarbone|[nude]bare_shoulders, collarbone',
         extractAliases: ['NECK_SHOULDERS', 'NECK', 'SHOULDERS', 'COLLARBONE', '颈肩与锁骨', '颈肩', '锁骨', '肩膀'],
     },
     {
@@ -1149,11 +1149,11 @@ export function computeCharacterTokenStats(raw: Partial<CharacterPresetData>): M
 
     const upperText = dedupeCommaTags([
         ...baseSegs,
-        ...upperParts.map((k) => resolvePartTagsForState(data.parts[k], 'clothed')),
+        ...upperParts.map((k) => resolvePartTagsForState(data.parts[k], 'covered')),
     ]);
     const fullText = dedupeCommaTags([
         ...baseSegs,
-        ...fullParts.map((k) => resolvePartTagsForState(data.parts[k], 'clothed')),
+        ...fullParts.map((k) => resolvePartTagsForState(data.parts[k], 'covered')),
     ]);
     const totalText = dedupeCommaTags([...baseSegs, ...allParts.map((k) => data.parts[k])]);
 

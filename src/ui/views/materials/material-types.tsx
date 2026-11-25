@@ -41,7 +41,7 @@ HAIR: blonde_hair, long_hair
 FACE: blue_eyes, delicate_face
 FEATURES:
 ACCESSORIES: hair_ribbon, gold_pendant
-NECK_SHOULDERS: |[clothed]collarbone|[nude]bare_shoulders, collarbone
+NECK_SHOULDERS: |[covered]collarbone|[nude]bare_shoulders, collarbone
 BREASTS: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae
 ABDOMEN: |[exposed]midriff, navel|[nude]narrow_waist, navel
 ARMS: slender_arms|[nude]bare_arms

@@ -205,7 +205,7 @@ export type ThinkingDisplayMode = 'show' | 'collapse' | 'hide';
 export type ImageDisplayMode = 'normal' | 'blur' | 'collapse';
 
 /** 角色部位固定状态后缀 */
-export type CharacterPartState = 'clothed' | 'exposed' | 'nude';
+export type CharacterPartState = 'covered' | 'exposed' | 'nude';
 
 /** 服装部位固定状态后缀 */
 export type OutfitPartState = 'intact' | 'disheveled';
@@ -232,7 +232,7 @@ export type CharacterPartKey =
     | 'legs'
     | 'feet';
 
-/** 角色 16 个按需部位字段（支持 `通用tags|[clothed]tags|[exposed]tags|[nude]tags` 分层） */
+/** 角色 16 个按需部位字段（支持 `通用tags|[covered]tags|[exposed]tags|[nude]tags` 分层） */
 export interface CharacterParts {
     /** 外貌与体型（种族、肤色、身高体型与整体体态） */
     appearance: string;
