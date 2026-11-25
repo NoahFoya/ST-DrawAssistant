@@ -50,7 +50,7 @@ export interface ImageStorageService {
     /** 根据 imageId 获取图像资产记录 */
     getImageRecord(imageId: string): Promise<StoredImageRecord | undefined>;
 
-    /** 物理删除指定图像资产（同步移除元数据、Blob 与缓存 URL） */
+    /** 彻底删除指定图像资产（同步移除元数据、Blob 与缓存 URL） */
     deleteImage(imageId: string): Promise<void>;
 
     /** 查询本地图像资产记录列表，支持按条件筛选与分页 */

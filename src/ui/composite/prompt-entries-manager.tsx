@@ -253,6 +253,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
     const handleAddEntry = () => {
         const id = createUniqueEntryId();
         const defaultDepth = channelId === 'vocab' ? 7 : 0;
+        const defaultScanDepth = channelId === 'vocab' ? 4 : 2;
         const defaultOrder = (entries.length + 1) * 10;
         const newEntry: PromptInjectionEntry = {
             id,
@@ -263,8 +264,8 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
             secondaryKeywords: '',
             logicType: 'and_any',
             caseSensitive: false,
-            matchWholeWords: false,
-            scanDepth: 2,
+            matchWholeWords: true,
+            scanDepth: defaultScanDepth,
             position: 1,
             depth: defaultDepth,
             role: 0,
@@ -417,10 +418,12 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                 numDrafts[`${entry.id}:scanDepth`] ??
                                 String(entry.scanDepth ?? 2);
                             const mainKwErrors = !isAlwaysMode
-                                ? collectKeywordRegexErrors(entry.keywords)
+                                ? collectKeywordRegexErrors(entry.keywords, { allowPipe: false })
                                 : [];
                             const filterKwErrors = !isAlwaysMode
-                                ? collectKeywordRegexErrors(entry.secondaryKeywords)
+                                ? collectKeywordRegexErrors(entry.secondaryKeywords, {
+                                      allowPipe: false,
+                                  })
                                 : [];
 
                             return (
@@ -615,7 +618,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                                     <input
                                                         type="text"
                                                         className={`da-wi-drawer-input ${mainKwErrors.length > 0 ? 'is-invalid' : ''}`}
-                                                        placeholder="关键词或 /正则/i（可用 | 或 , 分隔）"
+                                                        placeholder="关键词或 /正则/i（多个用 , 分隔）"
                                                         value={entry.keywords || ''}
                                                         disabled={isAlwaysMode}
                                                         title={isAlwaysMode ? alwaysModeHint : undefined}

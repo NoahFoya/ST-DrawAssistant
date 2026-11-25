@@ -41,7 +41,7 @@ HAIR: blonde_hair, long_hair
 FACE: blue_eyes, delicate_face
 FEATURES:
 ACCESSORIES: hair_ribbon, gold_pendant
-NECK_SHOULDERS: |[clothed]collarbone|[nude]bare_shoulders, collarbone
+NECK_SHOULDERS: |[covered]collarbone|[nude]bare_shoulders, collarbone
 BREASTS: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae
 ABDOMEN: |[exposed]midriff, navel|[nude]narrow_waist, navel
 ARMS: slender_arms|[nude]bare_arms
@@ -64,6 +64,49 @@ export function getHostCharacterCards(): Array<{ id: string; name: string }> {
             name: item.name || item.avatar || `角色卡 #${i + 1}`,
         };
     });
+}
+
+/** 将逗号或换行分隔的角色卡名称文本解析为大小写不敏感去重数组 */
+export function parseBoundCardNamesInput(raw: string): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const token of raw.split(/[,，\r\n]/)) {
+        const clean = token.trim();
+        if (!clean) continue;
+        const key = clean.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            result.push(clean);
+        }
+    }
+    return result;
+}
+
+/** 拆分已关联的角色卡列表为首卡、其余附加卡与规范化全量清单 */
+export function splitBoundCardNames(boundCardNames?: readonly string[]): {
+    primaryCard: string;
+    extraCards: string[];
+    allCards: string[];
+} {
+    const allCards = (boundCardNames || []).map((n) => (n || '').trim()).filter(Boolean);
+    return {
+        primaryCard: allCards[0] || '',
+        extraCards: allCards.slice(1),
+        allCards,
+    };
+}
+
+/** 根据单选控件提交值更新关联角色卡清单（留空时整体解绑，选中时保留其余附加卡并去重） */
+export function applyPrimaryBoundCardSelection(
+    selectedCard: string,
+    extraCards: readonly string[]
+): string[] {
+    const trimmed = selectedCard.trim();
+    if (!trimmed) {
+        return [];
+    }
+    const lower = trimmed.toLowerCase();
+    return [trimmed, ...extraCards.filter((n) => n.toLowerCase() !== lower)];
 }
 
 export function createEmptyActivationTemplate(): MaterialActivationPresetData {

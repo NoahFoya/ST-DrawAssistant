@@ -56,6 +56,8 @@ export interface DimensionPickerOptions {
     maxDimension?: number;
     /** 快捷比例预设列表 */
     aspectRatios?: AspectRatioPreset[];
+    /** 是否允许选择「自动 (由模型决定)」模式 */
+    allowAuto?: boolean;
     /** 是否作为嵌入组件（不创建外层 Card 边框与标题） */
     embedded?: boolean;
     /** 数据变更通知回调 */
@@ -97,6 +99,7 @@ export class DimensionPicker implements UIComponent, Disposable {
     private readonly minDimension: number;
     private readonly maxDimension: number;
     private readonly aspectRatios: AspectRatioPreset[];
+    private readonly allowAuto: boolean;
     private readonly disposables: Disposable[] = [];
 
     // 控件引用
@@ -112,11 +115,13 @@ export class DimensionPicker implements UIComponent, Disposable {
         this.minDimension = options.minDimension ?? 64;
         this.maxDimension = options.maxDimension ?? 4096;
         this.aspectRatios = options.aspectRatios ?? DEFAULT_ASPECT_RATIOS;
+        this.allowAuto = Boolean(options.allowAuto);
 
         // 1. 初始化尺寸状态并钳制在允许范围内
         const initialWidth = this.clampDimension(options.initialData?.width ?? 1024);
         const initialHeight = this.clampDimension(options.initialData?.height ?? 1024);
-        const initialRatio = this.detectRatio(initialWidth, initialHeight);
+        const initialIsAuto = this.allowAuto && options.initialData?.aspectRatio === 'auto';
+        const initialRatio = initialIsAuto ? 'auto' : this.detectRatio(initialWidth, initialHeight);
 
         this.data = {
             width: initialWidth,
@@ -132,23 +137,33 @@ export class DimensionPicker implements UIComponent, Disposable {
         this.disposables.push(this.ratioBadge);
 
         // 3. 构建第 1 行：画幅比例下拉选择表单项
-        const selectOptions: SelectOption[] = this.aspectRatios.map((p) => ({
-            value: p.id,
-            label: `${p.label} (${p.width} × ${p.height})`,
-        }));
-        selectOptions.push({ value: 'custom', label: '自定义尺寸' });
+        const selectOptions: SelectOption[] = [
+            ...(this.allowAuto ? [{ value: 'auto', label: '自动 (由模型决定)' }] : []),
+            ...this.aspectRatios.map((p) => ({
+                value: p.id,
+                label: `${p.label} (${p.width} × ${p.height})`,
+            })),
+            { value: 'custom', label: '自定义尺寸' },
+        ];
 
         this.ratioSelect = new Select({
             value: this.data.aspectRatio ?? '1:1',
             options: selectOptions,
             onChange: (val: string) => {
-                if (val !== 'custom') {
+                if (val === 'auto' && this.allowAuto) {
+                    this.data.aspectRatio = 'auto';
+                    this.syncAutoVisibility(true);
+                    this.ratioBadge.setText(this.getBadgeText(this.data.width, this.data.height, 'auto'));
+                    this.notifyChange();
+                } else if (val !== 'custom') {
                     const preset = this.aspectRatios.find((p) => p.id === val);
                     if (preset) {
+                        this.syncAutoVisibility(false);
                         this.setDimensions(preset.width, preset.height);
                     }
                 } else {
                     this.data.aspectRatio = 'custom';
+                    this.syncAutoVisibility(false);
                     this.ratioBadge.setText(this.getBadgeText(this.data.width, this.data.height, 'custom'));
                     this.notifyChange();
                 }
@@ -158,7 +173,9 @@ export class DimensionPicker implements UIComponent, Disposable {
 
         this.ratioFormField = new FormField({
             label: '画幅比例',
-            tooltip: '快速切换常用画幅比例与推荐分辨率（涵盖 1:1 正方形、3:4 / 9:16 竖屏人像与 16:9 宽屏风光等）。',
+            tooltip: this.allowAuto
+                ? '支持选用「自动 (由模型决定)」交由模型自定构图，或快速切换常用画幅比例与推荐分辨率（涵盖 1:1 正方形、3:4 / 9:16 竖屏人像与 16:9 宽屏风光等）。'
+                : '快速切换常用画幅比例与推荐分辨率（涵盖 1:1 正方形、3:4 / 9:16 竖屏人像与 16:9 宽屏风光等）。',
             control: this.ratioSelect,
         });
         this.disposables.push(this.ratioFormField);
@@ -235,6 +252,12 @@ export class DimensionPicker implements UIComponent, Disposable {
             this.element = card.element;
             this.disposables.push(card);
         }
+
+        this.syncAutoVisibility(initialIsAuto);
+    }
+
+    private syncAutoVisibility(isAuto: boolean): void {
+        this.sizeFormField.element.style.display = isAuto ? 'none' : '';
     }
 
     /**
@@ -257,6 +280,21 @@ export class DimensionPicker implements UIComponent, Disposable {
         const nextHeight = partial.height !== undefined
             ? this.clampDimension(partial.height)
             : this.data.height;
+
+        if (this.allowAuto && partial.aspectRatio === 'auto') {
+            this.data.width = nextWidth;
+            this.data.height = nextHeight;
+            this.data.aspectRatio = 'auto';
+            this.widthInput.setValue(nextWidth, { silent: true });
+            this.heightInput.setValue(nextHeight, { silent: true });
+            this.ratioSelect.setValue('auto', { silent: true });
+            this.syncAutoVisibility(true);
+            this.ratioBadge.setText(this.getBadgeText(nextWidth, nextHeight, 'auto'));
+            if (!options?.silent) {
+                this.notifyChange();
+            }
+            return;
+        }
 
         this.updateDimensionsInternal(nextWidth, nextHeight, options);
     }
@@ -298,6 +336,7 @@ export class DimensionPicker implements UIComponent, Disposable {
         // 同步输入框状态 (静默以避免循环触发)
         this.widthInput.setValue(width, { silent: true });
         this.heightInput.setValue(height, { silent: true });
+        this.syncAutoVisibility(false);
 
         // 同步下拉框选项
         this.ratioSelect.setValue(this.data.aspectRatio, { silent: true });
@@ -346,6 +385,9 @@ export class DimensionPicker implements UIComponent, Disposable {
      * 计算并格式化徽标文本。
      */
     private getBadgeText(width: number, height: number, ratioId?: string): string {
+        if (ratioId === 'auto') {
+            return '自动 (由模型决定)';
+        }
         const mp = ((width * height) / 1000000).toFixed(2);
         const ratioLabel = ratioId && ratioId !== 'custom' ? ` · ${ratioId}` : '';
         return `${width} × ${height} (${mp} MP${ratioLabel})`;

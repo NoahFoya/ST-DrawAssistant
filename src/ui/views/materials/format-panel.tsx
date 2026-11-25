@@ -147,7 +147,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             face: 'blue_eyes, delicate_face',
             features: 'cat_ears, wings',
             accessories: 'hair_ribbon, gold_pendant',
-            neck_shoulders: '|[clothed]collarbone|[nude]bare_shoulders, collarbone',
+            neck_shoulders: '|[covered]collarbone|[nude]bare_shoulders, collarbone',
             breasts: 'medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae',
             upper_back: '|[nude]bare_back',
             abdomen: '|[exposed]midriff, navel|[nude]narrow_waist, navel',
@@ -236,7 +236,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             <CardView
                 title="生图宏规则配置"
                 subtitle="生图宏指令与展开部位维护"
-                tooltip={`定义生图宏（固定语法为 $名称-宏-状态$，例如 $角色名-full-clothed$、$服装名-full-intact$）：\n1. 组合展开：按选中部位顺序读取各部位通用标签与目标状态标签，自动去重拼装为逗号分隔的出图提示词；\n2. 固定状态后缀：角色支持 clothed（穿衣）/ exposed（半裸）/ nude（全裸），服装支持 intact（完整）/ disheveled（凌乱）；\n3. 提示词通道注入：所有已配置的宏条目将由行模板渲染，并注入上下文中的 {{角色可用宏列表}} 与 {{服装可用宏列表}}。`}
+                tooltip={`定义生图宏（固定语法为 $名称-宏-状态$，例如 $角色名-full-covered$、$服装名-full-intact$）：\n1. 组合展开：按选中部位顺序读取各部位通用标签与目标状态标签，自动去重拼装为逗号分隔的出图提示词；\n2. 固定状态后缀：角色支持 covered（遮蔽状态，不含服装）/ exposed（局部露出）/ nude（全裸），服装支持 intact（完整）/ disheveled（凌乱）；\n3. 提示词通道注入：所有已配置的宏条目将由行模板渲染，并注入上下文中的 {{角色可用宏列表}} 与 {{服装可用宏列表}}。`}
                 className="da-card--padded"
             >
                 <div className="da-macro-unified-toolbar">

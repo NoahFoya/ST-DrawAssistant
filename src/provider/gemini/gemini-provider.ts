@@ -24,10 +24,10 @@ import {
     type InFlightAssetSlot,
 } from '../base-provider';
 import {
-    extractHttpErrorMessage,
     hashKeyFingerprint,
     parseCustomBodyObject,
     resolveCloudModelId,
+    toCloudGenerationError,
 } from '../cloud-provider-utils';
 import {
     GEMINI_API_BASE,
@@ -151,11 +151,7 @@ export class GeminiProvider extends BaseGenerationProvider {
             };
         }
 
-        return {
-            status: 'error',
-            latencyMs: pingResult.latencyMs,
-            message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(pingResult, 'Gemini API Key 无效或无权访问');
     }
 
     public async fetchModels(signal?: AbortSignal, forceRefresh = false): Promise<string[]> {
@@ -236,6 +232,7 @@ export class GeminiProvider extends BaseGenerationProvider {
                     ) {
                         throw err;
                     }
+                    this.rethrowTransportDiagnostic(err);
                     if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
                         logger.debug(`[GeminiProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
                     } else {
@@ -275,21 +272,30 @@ export class GeminiProvider extends BaseGenerationProvider {
             (typeof params.aspectRatio === 'string' && params.aspectRatio.trim()) ||
             (typeof drawingPreset?.aspectRatio === 'string' && drawingPreset.aspectRatio.trim()) ||
             '1:1';
+        const isAutoAspectRatio = resolvedAspectRatio.toLowerCase() === 'auto';
 
         const rawImageSize =
             (typeof params.imageSize === 'string' && params.imageSize.trim()) ||
             (typeof drawingPreset?.imageSize === 'string' && drawingPreset.imageSize.trim()) ||
             undefined;
+        const isAutoImageSize = Boolean(rawImageSize && rawImageSize.toLowerCase() === 'auto');
         let resolvedImageSize: string | undefined;
+        let metadataImageSize: string | undefined;
         if (capabilities.supportsImageSize) {
-            if (rawImageSize && capabilities.supportedImageSizes.includes(rawImageSize)) {
+            if (isAutoImageSize) {
+                resolvedImageSize = undefined;
+                metadataImageSize = 'auto';
+            } else if (rawImageSize && capabilities.supportedImageSizes.includes(rawImageSize)) {
                 resolvedImageSize = rawImageSize;
+                metadataImageSize = rawImageSize;
             } else if (rawImageSize && capabilities.supportedImageSizes.includes('1K')) {
                 resolvedImageSize = '1K';
+                metadataImageSize = '1K';
             } else if (!capabilities.allowsDefaultEmptyImageSize) {
                 resolvedImageSize = capabilities.supportedImageSizes.includes('1K')
                     ? '1K'
                     : capabilities.supportedImageSizes[0];
+                metadataImageSize = resolvedImageSize;
             }
         }
 
@@ -313,19 +319,24 @@ export class GeminiProvider extends BaseGenerationProvider {
             });
         }
 
-        const imageConfig: Record<string, unknown> = {
-            aspectRatio: resolvedAspectRatio,
-        };
+        const imageConfig: Record<string, unknown> = {};
+        if (!isAutoAspectRatio) {
+            imageConfig['aspectRatio'] = resolvedAspectRatio;
+        }
         if (resolvedImageSize) {
             imageConfig['imageSize'] = resolvedImageSize;
         }
 
+        const generationConfig: Record<string, unknown> = {
+            responseModalities: ['IMAGE'],
+        };
+        if (Object.keys(imageConfig).length > 0) {
+            generationConfig['imageConfig'] = imageConfig;
+        }
+
         const requestBody: Record<string, unknown> = {
             contents: [{ parts }],
-            generationConfig: {
-                responseModalities: ['IMAGE'],
-                imageConfig,
-            },
+            generationConfig,
         };
 
         // 2. 可选自定义 JSON 扩展合并（保护 generationConfig 与 imageConfig 嵌套结构不被整块覆盖）
@@ -352,7 +363,9 @@ export class GeminiProvider extends BaseGenerationProvider {
                     typeof customImgCfg === 'object' &&
                     !Array.isArray(customImgCfg)
                 ) {
-                    const baseImgCfg = baseGenCfg['imageConfig'] as Record<string, unknown>;
+                    const baseImgCfg =
+                        (baseGenCfg['imageConfig'] as Record<string, unknown> | undefined) ?? {};
+                    baseGenCfg['imageConfig'] = baseImgCfg;
                     Object.assign(baseImgCfg, customImgCfg);
                 }
             }
@@ -376,11 +389,11 @@ export class GeminiProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const detail = extractHttpErrorMessage(err);
-                if (err.status === 429) {
-                    throw new Error(`Gemini 请求被限速，请稍后重试: ${detail}`);
-                }
-                throw new Error(`Gemini 原生生图失败: ${detail}`);
+                throw toCloudGenerationError(
+                    err,
+                    'Gemini 请求被限速，请稍后重试',
+                    'Gemini 原生生图失败'
+                );
             }
             throw err;
         }
@@ -447,7 +460,7 @@ export class GeminiProvider extends BaseGenerationProvider {
             durationMs,
             baseModel: resolvedModel,
             aspectRatio: resolvedAspectRatio,
-            imageSize: resolvedImageSize,
+            imageSize: metadataImageSize,
         };
 
         return { blob, metadata };

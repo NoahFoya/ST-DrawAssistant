@@ -13,7 +13,9 @@ export interface ChangelogItem {
     readonly date: string;
     /** 版本主标题 */
     readonly title: string;
-    /** 详细更新要点列表 */
+    /** 版本重要更新概览（弹窗默认直接展示） */
+    readonly summary?: string;
+    /** 详细更新要点列表（弹窗默认折叠展示） */
     readonly items: string[];
 }
 

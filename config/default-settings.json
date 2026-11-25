@@ -1,16 +1,17 @@
 {
   "isInitialized": false,
-  "hasSeenGuide": false,
   "lastSeenChangelogVersion": "",
   "enabled": true,
   "activeProvider": "comfyui",
   "transport": "direct",
   "taskTimeoutMs": 120000,
   "cancelOnChatChange": true,
+  "cancelOnSwipe": true,
   "saveToServer": false,
   "imageQuality": "original",
   "autoGenerate": false,
   "cleanPrompt": true,
+  "cleanPromptPunctuation": true,
   "normalizeChinesePunctuation": false,
   "thinkingDisplayMode": "show",
   "cleanHistoryThinking": false,
@@ -114,8 +115,7 @@
       "opacity": 0.95,
       "icon": "palette",
       "animationType": "starlight",
-      "quickPanelEnabled": false,
-      "hoverTrigger": true
+      "quickPanelEnabled": false
     },
     "lightbox": {
       "enabled": true
@@ -132,7 +132,7 @@
       "maxHeight": 480,
       "maxWidthPct": 100,
       "rounded": true,
-      "autoBlur": false
+      "displayMode": "normal"
     },
     "seenGuides": {
       "plugin": false,

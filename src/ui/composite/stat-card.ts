@@ -5,7 +5,7 @@
  * 负责呈现生图统计指标监控：
  * 1. 标准化装配 Card 基础容器组件并支持头部统一操作；
  * 2. 聚合 4 项核心指标：累计生成总数、今日出图量、近 7 天出图总量、生成成功率（附失败数）；
- * 3. 近 7 天双轨轻量 SVG 微图表：柱状呈现每日出图量，折线呈现平均耗时；
+ * 3. 近 7 天双指标复合 SVG 微图表：柱状呈现每日出图量，折线呈现平均耗时；
  * 4. 最近生成任务流水明细：展示时间、引擎、模型、尺寸与模式、耗时与执行状态；
  * 5. 状态感知健康变体：按成功率阈值显示状态色彩（绿色、黄色、红色）。
  */
@@ -230,7 +230,7 @@ export class StatCard implements UIComponent {
             this.rateElements.cardEl.classList.add('da-stat-card--danger');
         }
 
-        // 5. 渲染近 7 天 SVG 双轨图表
+        // 5. 渲染近 7 天 SVG 双指标复合图表
         this.renderTrendsChart(data.dailyTrends);
 
         // 6. 渲染最近生成任务流水表

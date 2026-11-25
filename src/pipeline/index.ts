@@ -1,8 +1,9 @@
 /**
- * 任务编排与提示词预处理模块统一导出。
+ * 任务调度与提示词预处理模块统一导出。
  */
 
 export * from './prompt-pipeline';
+export * from './lora-utils';
 export * from './macro-resolver';
 export * from './material-definitions';
 export * from './archive-extractor';

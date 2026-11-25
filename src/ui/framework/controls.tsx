@@ -6,13 +6,15 @@
  * 封装为无状态/受控 Preact 函数组件，保持 .da-* 样式类名与原生交互事件一致。
  */
 
-import type { ComponentChildren } from 'preact';
-import { useState, useRef, useEffect, useLayoutEffect } from 'preact/hooks';
+import { render, type ComponentChildren } from 'preact';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'preact/hooks';
 import type { FormFieldControlWidth } from '../components/form-field';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { SegmentedControlOption } from '../components/segmented-control';
 import type { ButtonVariant, ButtonSize } from '../components/button';
 import type { BadgeVariant } from '../components/badge';
+import { renderIcon } from '../components/icons';
+import { overlayStack } from './overlay-stack';
 
 // 1. 通用卡片容器组件 (CardView)
 
@@ -800,5 +802,402 @@ export function BadgeView(props: BadgeViewProps) {
             {props.dot && <span className="da-badge__dot" />}
             <span className="da-badge__text">{props.text}</span>
         </span>
+    );
+}
+
+// 12. 可搜索下拉选择器 (SearchableSelectControl)
+
+export interface SearchableSelectControlProps {
+    value: string;
+    options: SelectOption[];
+    placeholder?: string;
+    emptyLabel?: string;
+    searchPlaceholder?: string;
+    emptyResultText?: string;
+    allowCustomValue?: boolean;
+    customValueLabel?: (query: string) => string;
+    disabled?: boolean;
+    dirty?: boolean;
+    invalid?: boolean;
+    tooltip?: string;
+    className?: string;
+    onChange?: (value: string) => boolean | void | Promise<boolean | void>;
+}
+
+export function SearchableSelectControl(props: SearchableSelectControlProps) {
+    const val = props.value ?? '';
+    const [isOpen, setIsOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const triggerRef = useRef<HTMLDivElement | null>(null);
+    const portalHostRef = useRef<HTMLDivElement | null>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+    // 过滤去重后的非空基础选项
+    const baseOptions = useMemo(() => {
+        const seen = new Set<string>();
+        const list: SelectOption[] = [];
+        for (const opt of props.options) {
+            if (opt.value === '' && props.emptyLabel !== undefined) continue;
+            if (!seen.has(opt.value)) {
+                seen.add(opt.value);
+                list.push(opt);
+            }
+        }
+        return list;
+    }, [props.options, props.emptyLabel]);
+
+    const selectedOption = useMemo(
+        () => baseOptions.find((opt) => opt.value === val),
+        [baseOptions, val]
+    );
+
+    const displayItems = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const items: Array<{ value: string; label: string; isEmpty?: boolean; isCustom?: boolean; disabled?: boolean }> = [];
+
+        if (props.emptyLabel !== undefined) {
+            const matchesEmpty = !q || props.emptyLabel.toLowerCase().includes(q);
+            if (matchesEmpty) {
+                items.push({ value: '', label: props.emptyLabel, isEmpty: true });
+            }
+        }
+
+        for (const opt of baseOptions) {
+            if (!q || opt.label.toLowerCase().includes(q) || opt.value.toLowerCase().includes(q)) {
+                items.push({ value: opt.value, label: opt.label, disabled: opt.disabled });
+            }
+        }
+
+        const rawQuery = query.trim();
+        if (
+            props.allowCustomValue &&
+            rawQuery.length > 0 &&
+            !baseOptions.some(
+                (opt) =>
+                    opt.value.toLowerCase() === rawQuery.toLowerCase() ||
+                    opt.label.toLowerCase() === rawQuery.toLowerCase()
+            )
+        ) {
+            items.push({
+                value: rawQuery,
+                label: props.customValueLabel
+                    ? props.customValueLabel(rawQuery)
+                    : `使用「${rawQuery}」`,
+                isCustom: true,
+            });
+        }
+
+        return items;
+    }, [baseOptions, query, props.emptyLabel, props.allowCustomValue, props.customValueLabel]);
+
+    const commitSelection = (nextVal: string) => {
+        setIsOpen(false);
+        setQuery('');
+        if (nextVal !== val || nextVal === '') {
+            void props.onChange?.(nextVal);
+        }
+    };
+
+    const repositionDropdown = () => {
+        const host = portalHostRef.current;
+        const trigger = triggerRef.current;
+        if (!host || !trigger) return;
+        const dropdown = host.firstElementChild as HTMLElement | null;
+        if (!dropdown) return;
+
+        const rect = trigger.getBoundingClientRect?.();
+        if (!rect) return;
+        const vw = window.innerWidth || 1024;
+        const vh = window.innerHeight || 768;
+
+        const minWidth = Math.max(rect.width || 0, 220);
+        const width = Math.min(minWidth, Math.max(180, vw - 16));
+        const left = Math.max(8, Math.min(rect.left || 0, vw - width - 8));
+
+        const spaceBelow = vh - (rect.bottom || 0) - 8;
+        const spaceAbove = (rect.top || 0) - 8;
+        const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+
+        dropdown.style.width = `${width}px`;
+        dropdown.style.left = `${left}px`;
+        if (openAbove) {
+            dropdown.style.top = 'auto';
+            dropdown.style.bottom = `${Math.max(8, vh - (rect.top || 0) + 4)}px`;
+        } else {
+            dropdown.style.bottom = 'auto';
+            dropdown.style.top = `${Math.max(8, (rect.bottom || 0) + 4)}px`;
+        }
+    };
+
+    // 打开/关闭时管理外部点击关闭、Escape 守卫、滚动重定位与聚焦
+    useEffect(() => {
+        if (!isOpen || typeof document === 'undefined') return;
+
+        setActiveIndex(0);
+        const onPointerDown = (e: PointerEvent) => {
+            const target = e.target as Node | null;
+            if (!target) return;
+            if (
+                containerRef.current?.contains(target) ||
+                portalHostRef.current?.contains(target)
+            ) {
+                return;
+            }
+            setIsOpen(false);
+            setQuery('');
+        };
+        const onReposition = () => repositionDropdown();
+
+        document.addEventListener('pointerdown', onPointerDown, true);
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('resize', onReposition);
+            window.addEventListener('scroll', onReposition, true);
+        }
+        const removeEscape = overlayStack.registerEscapeGuard(() => {
+            setIsOpen(false);
+            setQuery('');
+            return true;
+        });
+
+        const focusTimer = setTimeout(() => {
+            try {
+                searchInputRef.current?.focus({ preventScroll: true });
+            } catch {
+                searchInputRef.current?.focus();
+            }
+            repositionDropdown();
+        }, 0);
+
+        return () => {
+            clearTimeout(focusTimer);
+            removeEscape();
+            document.removeEventListener('pointerdown', onPointerDown, true);
+            if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+                window.removeEventListener('resize', onReposition);
+                window.removeEventListener('scroll', onReposition, true);
+            }
+        };
+    }, [isOpen]);
+
+    // 将下拉菜单渲染到 body 挂载点，避免被父容器裁剪
+    useLayoutEffect(() => {
+        if (typeof document === 'undefined') return;
+
+        if (!isOpen) {
+            if (portalHostRef.current) {
+                render(null, portalHostRef.current);
+                portalHostRef.current.remove();
+                portalHostRef.current = null;
+            }
+            return;
+        }
+
+        if (!portalHostRef.current) {
+            const host = document.createElement('div');
+            document.body.appendChild(host);
+            portalHostRef.current = host;
+        }
+
+        const safeActiveIdx = Math.min(activeIndex, Math.max(0, displayItems.length - 1));
+
+        const dropdownNode = (
+            <div
+                className="da-searchable-select__dropdown st-da-root"
+                role="listbox"
+                data-da-floating-popover="true"
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <div className="da-searchable-select__search-bar">
+                    <span
+                        className="da-searchable-select__search-icon"
+                        dangerouslySetInnerHTML={{ __html: renderIcon('search', 13) }}
+                    />
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        className="da-searchable-select__search-input"
+                        placeholder={props.searchPlaceholder || '搜索选项...'}
+                        value={query}
+                        onInput={(e) => {
+                            setQuery((e.currentTarget as HTMLInputElement).value);
+                            setActiveIndex(0);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                if (displayItems.length > 0) {
+                                    setActiveIndex((prev) => (prev + 1) % displayItems.length);
+                                }
+                            } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                if (displayItems.length > 0) {
+                                    setActiveIndex(
+                                        (prev) => (prev - 1 + displayItems.length) % displayItems.length
+                                    );
+                                }
+                            } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const target = displayItems[safeActiveIdx];
+                                if (target && !target.disabled) {
+                                    commitSelection(target.value);
+                                }
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setIsOpen(false);
+                                setQuery('');
+                            }
+                        }}
+                    />
+                    {query.length > 0 && (
+                        <button
+                            type="button"
+                            className="da-searchable-select__clear"
+                            title="清空搜索"
+                            aria-label="清空搜索"
+                            onClick={() => {
+                                setQuery('');
+                                setActiveIndex(0);
+                                searchInputRef.current?.focus();
+                            }}
+                            dangerouslySetInnerHTML={{ __html: renderIcon('close', 11) }}
+                        />
+                    )}
+                </div>
+
+                <div className="da-searchable-select__list">
+                    {displayItems.length === 0 ? (
+                        <div className="da-searchable-select__empty">
+                            {props.emptyResultText || '无匹配选项'}
+                        </div>
+                    ) : (
+                        displayItems.map((item, idx) => {
+                            const isSelected = item.value === val;
+                            const isHighlighted = idx === safeActiveIdx;
+                            const optClass = [
+                                'da-searchable-select__option',
+                                item.isEmpty ? 'da-searchable-select__option--empty' : '',
+                                isSelected ? 'is-selected' : '',
+                                isHighlighted ? 'is-highlighted' : '',
+                            ]
+                                .filter(Boolean)
+                                .join(' ');
+                            return (
+                                <button
+                                    key={`${item.isEmpty ? '__empty__' : item.value}_${idx}`}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected ? 'true' : 'false'}
+                                    disabled={item.disabled}
+                                    className={optClass}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        if (!item.disabled) {
+                                            commitSelection(item.value);
+                                        }
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                    }}
+                                >
+                                    <span className="da-searchable-select__option-label">
+                                        {item.label}
+                                    </span>
+                                    {isSelected && (
+                                        <span
+                                            className="da-searchable-select__option-check"
+                                            dangerouslySetInnerHTML={{
+                                                __html: renderIcon('check', 13),
+                                            }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        );
+
+        render(dropdownNode, portalHostRef.current);
+        repositionDropdown();
+    }, [isOpen, query, activeIndex, val, displayItems, props.searchPlaceholder, props.emptyResultText]);
+
+    useEffect(() => {
+        return () => {
+            if (portalHostRef.current) {
+                render(null, portalHostRef.current);
+                portalHostRef.current.remove();
+                portalHostRef.current = null;
+            }
+        };
+    }, []);
+
+    const displayLabel = val
+        ? selectedOption?.label || val
+        : props.emptyLabel || props.placeholder || '-- 请选择 --';
+
+    const wrapperClasses = [
+        'da-select-wrapper',
+        'da-searchable-select',
+        isOpen ? 'is-open' : '',
+        props.disabled ? 'da-select-wrapper--disabled' : '',
+        props.dirty ? 'da-select-wrapper--dirty is-dirty' : '',
+        props.invalid ? 'is-invalid' : '',
+        props.className || '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+
+    return (
+        <div ref={containerRef} className={wrapperClasses}>
+            <div
+                ref={triggerRef}
+                role="combobox"
+                aria-expanded={isOpen ? 'true' : 'false'}
+                aria-disabled={props.disabled ? 'true' : 'false'}
+                tabIndex={props.disabled ? -1 : 0}
+                className="da-searchable-select__trigger"
+                title={props.tooltip || displayLabel}
+                onClick={() => {
+                    if (!props.disabled) {
+                        setIsOpen((prev) => !prev);
+                    }
+                }}
+                onKeyDown={(e) => {
+                    if (props.disabled) return;
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setIsOpen(true);
+                    }
+                }}
+            >
+                <span
+                    className={`da-searchable-select__value${!val ? ' is-placeholder' : ''}`}
+                >
+                    {displayLabel}
+                </span>
+                {!props.disabled && Boolean(val) && (
+                    <button
+                        type="button"
+                        className="da-searchable-select__clear"
+                        title="解除关联"
+                        aria-label="解除关联"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            commitSelection('');
+                        }}
+                        dangerouslySetInnerHTML={{ __html: renderIcon('close', 11) }}
+                    />
+                )}
+                <span
+                    className="da-searchable-select__chevron"
+                    dangerouslySetInnerHTML={{ __html: renderIcon('chevronDown', 12) }}
+                />
+            </div>
+        </div>
     );
 }

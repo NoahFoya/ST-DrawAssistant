@@ -3,26 +3,41 @@
  *
  * @remarks
  * 专用 LoRA 管理视窗：
- * 1. 内嵌无外框 `LoraManager` (`embedded: true`)，提供标准表单行模式切换（SD-WebUI / ComfyUI）与联想下拉添加；
- * 2. 支持无上限挂载、单条启用/停用切换与多维权重调优；
- * 3. 点击确认后同步回写条目与语法模式至提示词预设数据模型。
+ * 1. 内嵌无外框 `LoraManager` (`embedded: true`)，提供联想下拉添加与三权重微调；
+ * 2. 支持无上限挂载、单条启用/停用切换与常驻/关键词触发；
+ * 3. 点击确认后同步回写条目至提示词预设数据模型。
  */
 
 import type { Disposable } from '../types';
-import type { LoraSyntaxMode } from '@types';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { LoraManager, type LoraEntryItem } from '../composite/lora-manager';
+import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
+import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { Toast } from '../feedback/toast';
+
+function normalizeLoraSnapshot(items: readonly LoraEntryItem[]): string {
+    return JSON.stringify(
+        items.map((it) => ({
+            id: it.id,
+            enabled: it.enabled !== false,
+            modelName: (it.modelName || '').trim(),
+            modelWeight: it.modelWeight,
+            clipWeight: it.clipWeight,
+            triggerWeight: it.triggerWeight ?? DEFAULT_LORA_WEIGHTS.triggerWeight,
+            triggerMode: it.triggerMode === 'keyword' ? 'keyword' : 'always',
+            keywords: it.keywords ?? '',
+        }))
+    );
+}
 
 export interface LoraModalOptions {
-    /** 当前 LoRA 语法模式 (默认 'standard') */
-    readonly mode?: LoraSyntaxMode;
     /** 可选的可用 LoRA 模型文件名列表 */
     readonly availableModels?: string[];
     /** 初始挂载的 LoRA 条目快照 */
     readonly initialItems?: LoraEntryItem[];
     /** 保存/确认回调 */
-    readonly onSave?: (items: LoraEntryItem[], mode: LoraSyntaxMode) => void;
+    readonly onSave?: (items: LoraEntryItem[]) => void;
     /** 关闭或取消回调 */
     readonly onClose?: () => void;
 }
@@ -46,10 +61,11 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
     }
 
     let isDisposed = false;
-    const initialMode: LoraSyntaxMode = options.mode ?? 'standard';
+    let isPromptingClose = false;
     const initialItems: LoraEntryItem[] = options.initialItems
         ? options.initialItems.map((it) => ({ ...it }))
         : [];
+    const initialSnapshot = normalizeLoraSnapshot(initialItems);
 
     // 1. 全屏遮罩外壳
     const backdrop = document.createElement('div');
@@ -87,7 +103,7 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
     header.appendChild(closeBtn);
     panel.appendChild(header);
 
-    // 4. 内容主体区域（内嵌 LoraManager，包含模式选择表单行、联想下拉框与已挂载列表）
+    // 4. 内容主体区域（内嵌 LoraManager，包含能力说明、联想下拉框与已挂载列表）
     const body = document.createElement('div');
     body.className = 'da-submodal-body da-lora-modal-body';
 
@@ -99,7 +115,6 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
 
     const loraManager = new LoraManager({
         embedded: true,
-        mode: initialMode,
         availableModels: options.availableModels ?? [],
         initialItems,
         onChange: (items) => {
@@ -149,6 +164,10 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
     const dispose = () => {
         if (isDisposed) return;
         isDisposed = true;
+        if (isPromptingClose) {
+            ConfirmDialog.dispose();
+            isPromptingClose = false;
+        }
         unbindBackdrop();
         overlayStack.remove('lora-modal');
         loraManager.dispose();
@@ -158,23 +177,70 @@ export function openLoraModal(options: LoraModalOptions): Disposable {
         }
     };
 
-    const handleClose = () => {
-        options.onClose?.();
+    const handleSave = (): boolean => {
+        const invalidRules = loraManager.validateKeywordRules();
+        if (invalidRules.length > 0) {
+            const first = invalidRules[0];
+            loraManager.focusItemKeywords(first.id);
+            Toast.warning(`请先修正「${first.modelName}」中的无效关键词正则：${first.errors[0]}`);
+            return false;
+        }
+        const finalItems = loraManager.getItems();
         dispose();
+        options.onSave?.(finalItems);
+        return true;
+    };
+
+    const handleClose = async () => {
+        if (isDisposed || isPromptingClose) return;
+        const currentSnapshot = normalizeLoraSnapshot(loraManager.getItems());
+        if (currentSnapshot === initialSnapshot) {
+            options.onClose?.();
+            dispose();
+            return;
+        }
+
+        isPromptingClose = true;
+        try {
+            const choice = await ConfirmDialog.choose({
+                title: '存在未应用修改',
+                message: '当前 LoRA 配置存在尚未应用的修改，是否在关闭前应用？',
+                primaryText: '应用并关闭',
+                secondaryText: '放弃修改',
+                cancelText: '继续编辑',
+                isSecondaryDanger: true,
+            });
+            if (isDisposed || choice === 'cancel') {
+                return;
+            }
+            if (choice === 'primary') {
+                handleSave();
+                return;
+            }
+            options.onClose?.();
+            dispose();
+        } finally {
+            isPromptingClose = false;
+        }
     };
 
     activeLoraModalInstance = { dispose };
-    overlayStack.push('lora-modal', handleClose, dispose);
+    overlayStack.push('lora-modal', () => {
+        void handleClose();
+    }, dispose);
 
-    closeBtn.onclick = handleClose;
-    cancelBtn.onclick = handleClose;
-    unbindBackdrop = bindBackdropDismiss(backdrop, handleClose);
+    closeBtn.onclick = () => {
+        void handleClose();
+    };
+    cancelBtn.onclick = () => {
+        void handleClose();
+    };
+    unbindBackdrop = bindBackdropDismiss(backdrop, () => {
+        void handleClose();
+    });
 
     saveBtn.onclick = () => {
-        const finalItems = loraManager.getItems();
-        const finalMode = loraManager.getMode();
-        dispose();
-        options.onSave?.(finalItems, finalMode);
+        handleSave();
     };
 
     return { dispose };

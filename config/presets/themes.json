@@ -2,6 +2,7 @@
   {
     "id": "catppuccin-mocha",
     "name": "Catppuccin Mocha · 柔紫灰",
+    "description": "柔和紫灰调暗色主题（默认外观）",
     "data": {
       "accent": "#cba6f7",
       "accentSecondary": "#89b4fa",
@@ -29,6 +30,7 @@
   {
     "id": "gruvbox-dark",
     "name": "Gruvbox Dark · 暖棕琥珀",
+    "description": "复古暖棕与琥珀黄暗色主题",
     "data": {
       "accent": "#fabd2f",
       "accentSecondary": "#d79921",
@@ -56,6 +58,7 @@
   {
     "id": "tokyo-night",
     "name": "Tokyo Night · 蓝紫夜",
+    "description": "深邃蓝紫都市夜景暗色主题",
     "data": {
       "accent": "#7aa2f7",
       "accentSecondary": "#bb9af7",
@@ -83,6 +86,7 @@
   {
     "id": "nord-dark",
     "name": "Nord · 极地灰蓝",
+    "description": "冷静极地青蓝灰暗色主题",
     "data": {
       "accent": "#88c0d0",
       "accentSecondary": "#81a1c1",
@@ -110,6 +114,7 @@
   {
     "id": "linear-indigo",
     "name": "Linear · 深灰靛蓝",
+    "description": "高对比极简炭黑与靛蓝暗色主题",
     "data": {
       "accent": "#818cf8",
       "accentSecondary": "#6366f1",
@@ -137,6 +142,7 @@
   {
     "id": "rose-pine-dawn",
     "name": "Rosé Pine Dawn · 暖纸米白",
+    "description": "低刺激温润米白羊皮纸亮色主题",
     "data": {
       "accent": "#286983",
       "accentSecondary": "#56949f",
@@ -164,6 +170,7 @@
   {
     "id": "catppuccin-latte",
     "name": "Catppuccin Latte · 冷灰紫",
+    "description": "柔和浅灰与丁香紫亮色主题",
     "data": {
       "accent": "#8839ef",
       "accentSecondary": "#7287fd",
@@ -191,6 +198,7 @@
   {
     "id": "github-light",
     "name": "GitHub Light · 素白晴蓝",
+    "description": "清爽纯白与晴空蓝亮色主题",
     "data": {
       "accent": "#0969da",
       "accentSecondary": "#0550ae",

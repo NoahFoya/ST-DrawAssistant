@@ -15,6 +15,7 @@ import { Toast } from '../feedback/toast';
 import { providerRegistry } from '../../provider/registry';
 import { imageStorage } from '../../store/image-storage';
 import { copyTextToClipboard } from '../../util/browser-io';
+import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
 import { logger } from '../../util/logger';
 
 export interface ImageInfoModalOpenOptions {
@@ -78,6 +79,7 @@ const KNOWN_REUSABLE_META_KEYS = new Set([
     'vaeName',
     'clipSkip',
     'extraModels',
+    'loras',
     'workflowId',
     'denoiseStrength',
     'maskBlur',
@@ -422,6 +424,25 @@ export class ImageInfoModal implements Disposable {
         if (Array.isArray(metadata.extraModels) && metadata.extraModels.length > 0) {
             const joined = metadata.extraModels.map((m) => String(m)).filter(Boolean).join(', ');
             pushIfPresent(modelEntries, '附加模型', joined, { wide: true });
+        }
+        if (Array.isArray(metadata.loras) && metadata.loras.length > 0) {
+            const formattedLoras = metadata.loras
+                .map((item) => {
+                    if (!item || typeof item !== 'object') return '';
+                    const name = String(item.modelName || '').trim();
+                    if (!name) return '';
+                    const mWeight = item.modelWeight ?? DEFAULT_LORA_WEIGHTS.modelWeight;
+                    const cWeight = item.clipWeight ?? mWeight;
+                    const baseWeights = mWeight === cWeight ? `${mWeight}` : `${mWeight}/${cWeight}`;
+                    const triggerSuffix =
+                        typeof item.triggerWeight === 'number' && Number.isFinite(item.triggerWeight)
+                            ? ` / Trigger:${item.triggerWeight}`
+                            : '';
+                    return `${name} (${baseWeights}${triggerSuffix})`;
+                })
+                .filter(Boolean)
+                .join(', ');
+            pushIfPresent(modelEntries, 'LoRA 模型', formattedLoras, { wide: true });
         }
         pushIfPresent(modelEntries, '工作流模板', metadata.workflowId);
         pushIfPresent(

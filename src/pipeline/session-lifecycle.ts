@@ -139,46 +139,53 @@ export class SessionLifecycleManager implements Disposable {
     }
 
     /**
-     * 读取指定楼层图片的展示记录。
-     *
-     * @remarks
-     * 当消息存在 `swipe_info` 且目标分支并非当前激活分支时，从 `swipe_info[swipeId].extra.drawings` 读取；
-     * 否则优先从 `message.extra.drawings` 读取并回退至 `swipe_info[swipeId].extra.drawings`。
-     *
-     * @param target 目标楼层位置坐标
-     * @returns 匹配的图片记录条目，不存在时返回 undefined
+     * 读取指定楼层与分支下保存的楼层生图记录字典（优先按当前激活分支读取 `message.extra.drawings`）。
      */
-    public getSlotEntry(target: SlotMountTarget): DrawingSlotEntry | undefined {
+    public getSwipeDrawings(
+        messageId: number,
+        swipeId?: number
+    ): Record<number, DrawingSlotEntry> | undefined {
         const context = this._getContext();
         if (!context || !Array.isArray(context.chat)) {
             return undefined;
         }
-        const message = context.chat[target.messageId];
+        const message = context.chat[messageId];
         if (!message) {
             return undefined;
         }
 
-        const swipeId = target.swipeId ?? 0;
+        const resolvedSwipeId = swipeId ?? message.swipe_id ?? 0;
         const hasSwipeInfo = Array.isArray(message.swipe_info);
         const activeSwipeId = message.swipe_id ?? 0;
-        const isActiveSwipe = !hasSwipeInfo || message.swipe_id === undefined || activeSwipeId === swipeId;
+        const isActiveSwipe =
+            !hasSwipeInfo || message.swipe_id === undefined || activeSwipeId === resolvedSwipeId;
 
-        if (isActiveSwipe) {
-            const activeEntry = message.extra?.drawings?.[target.instructionIndex];
-            if (activeEntry) {
-                return activeEntry;
-            }
+        if (isActiveSwipe && message.extra?.drawings) {
+            return message.extra.drawings;
         }
 
-        if (hasSwipeInfo && message.swipe_info[swipeId]?.extra?.drawings?.[target.instructionIndex]) {
-            return message.swipe_info[swipeId].extra.drawings[target.instructionIndex];
+        if (hasSwipeInfo && message.swipe_info[resolvedSwipeId]?.extra?.drawings) {
+            return message.swipe_info[resolvedSwipeId].extra!.drawings;
         }
 
         return undefined;
     }
 
     /**
-     * 在宿主触发 `MESSAGE_SWIPED` 时对齐当前消息分支的 `extra.drawings` 状态。
+     * 读取指定楼层图片的展示记录。
+     *
+     * @remarks
+     * 委托 {@link getSwipeDrawings} 统一解析当前激活分支或历史 `swipe_info` 快照上的生图索引。
+     *
+     * @param target 目标楼层位置坐标
+     * @returns 匹配的图片记录条目，不存在时返回 undefined
+     */
+    public getSlotEntry(target: SlotMountTarget): DrawingSlotEntry | undefined {
+        return this.getSwipeDrawings(target.messageId, target.swipeId)?.[target.instructionIndex];
+    }
+
+    /**
+     * 在宿主触发 `MESSAGE_SWIPED` 时同步当前消息分支的 `extra.drawings` 状态。
      *
      * @remarks
      * SillyTavern 在向右滑出新分支（Overswipe）时，先执行 `syncMesToSwipe` 将旧分支 `extra` 存入 `swipe_info[oldSwipeId]`，

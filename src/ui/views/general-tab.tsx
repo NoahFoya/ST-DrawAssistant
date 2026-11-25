@@ -8,11 +8,23 @@
  */
 
 import type { VNode } from 'preact';
-import type { ImageStorageQuality, ProviderType, ThinkingDisplayMode, TransportMode } from '@types';
+import type {
+    ImageDisplayMode,
+    ImageStorageQuality,
+    ProviderType,
+    ThinkingDisplayMode,
+    TransportMode,
+} from '@types';
 import { PreactSettingsView, SchemaForm, type CardSchema } from '../framework';
+import { TauriRelayNotice } from '../components';
 import { ReactiveSettingsBridge } from '../viewmodels';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import { hostRegexService } from '../../pipeline/host-regex-service';
+import {
+    detectHostRuntime,
+    getTransportModeTooltip,
+    TRANSPORT_MODE_OPTIONS,
+} from '../../util/http-client';
 
 interface GeneralFormModel {
     enabled: boolean;
@@ -20,6 +32,7 @@ interface GeneralFormModel {
     transport: TransportMode;
     timeoutSec: number;
     cancelOnChatChange: boolean;
+    cancelOnSwipe: boolean;
     promptStartTag: string;
     promptEndTag: string;
     autoGenerate: boolean;
@@ -27,6 +40,7 @@ interface GeneralFormModel {
     imageActionPanelEnabled: boolean;
     lightboxEnabled: boolean;
     cleanPrompt: boolean;
+    cleanPromptPunctuation: boolean;
     normalizeChinesePunctuation: boolean;
     thinkingDisplayMode: ThinkingDisplayMode;
     cleanHistoryThinking: boolean;
@@ -36,7 +50,7 @@ interface GeneralFormModel {
     maxWidthPct: number;
     maxHeight: number;
     rounded: boolean;
-    autoBlur: boolean;
+    displayMode: ImageDisplayMode;
     imageQuality: ImageStorageQuality;
     saveToServer: boolean;
 }
@@ -73,12 +87,21 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'segmented',
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '默认由浏览器直连生图服务；遇到跨域 (CORS) 拦截或远程 HTTPS 酒馆访问本地 HTTP 服务时，请切换为「酒馆代理」（需在酒馆 config.yaml 开启 enableCorsProxy: true）。',
-                options: [
-                    { label: '浏览器直连', value: 'direct' },
-                    { label: '酒馆代理', value: 'relay' },
-                ],
+                isInvalidWhen: (_, m) => m.transport === 'relay' && !detectHostRuntime().supportsRelayProxy,
+                tooltip: getTransportModeTooltip(),
+                options: [...TRANSPORT_MODE_OPTIONS],
+            },
+            {
+                key: 'transportNotice',
+                type: 'custom',
+                bare: true,
+                visibleWhen: (m) => m.transport === 'relay' && !detectHostRuntime().supportsRelayProxy,
+                renderCustom: (ctx) => (
+                    <TauriRelayNotice
+                        disabled={ctx.disabled || !ctx.model.enabled}
+                        onSwitchToDirect={() => ctx.updateField('transport', 'direct')}
+                    />
+                ),
             },
             {
                 key: 'timeoutSec',
@@ -99,6 +122,15 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
                     '默认开启，切换至其他酒馆会话时将取消未完成任务；关闭后任务继续在后台完成并仅保存至「本地图库」。',
+            },
+            {
+                key: 'cancelOnSwipe',
+                label: '重 roll 时取消旧分支任务',
+                type: 'switch',
+                width: 'w-toggle',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '默认开启，右滑重 roll 生成全新候选分支时自动取消旧分支尚未完成的生图任务，优先处理新版队列；左右翻看已有分支时保留后台队列，关闭后允许旧分支继续完成。',
             },
         ],
     },
@@ -158,12 +190,21 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
             },
             {
                 key: 'cleanPrompt',
-                label: '提示词自动去重整理',
+                label: '提示词 Tags 自动去重',
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认开启。提交生成前按英文逗号自动清理多余空白逗号及重复标签（如预设前后缀与触发词重合），同时保留 <lora:...> 语法。',
+                    '开启后仅对英文逗号分隔的纯英文标签按首次出现保序去重，保留中英文自然句式与 <lora:...> / <wlr:...> 语法。',
+            },
+            {
+                key: 'cleanPromptPunctuation',
+                label: '标点与空行自动整理',
+                type: 'switch',
+                width: 'w-toggle',
+                disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '开启后自动合并连续重复的同类标点、清理多余逗号分隔，并去除多余空白行（保留单次有效换行）；关闭后保留原始标点与空行。',
             },
             {
                 key: 'normalizeChinesePunctuation',
@@ -172,7 +213,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认关闭（信任并保留模型原生输出的中文「，」「、」，适配 MOSS 等中文自然语义模型）。开启后，清洗提示词时会将中文全角逗号与顿号统一转为英文半角逗号「, 」。',
+                    '开启后将中文全角逗号「，」与顿号「、」转为英文半角逗号「, 」，兼容仅按英文逗号分割的标签模型；默认关闭以保留中文自然语义。',
             },
             {
                 key: 'thinkingDisplayMode',
@@ -180,7 +221,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'segmented',
                 width: 'w-240',
                 tooltip:
-                    '控制消息中 <imagethink> 与 <designthink> 思维链的前端显示效果：选择「折叠」或「隐藏」时将直接同步写入酒馆原生全局正则（仅格式化显示），即使禁用本插件依然持久生效。',
+                    '设置对话中 <imagethink> 与 <designthink> 标签块的前端展示方式，不影响通用思考链 <think>（若所用提示词模板不生成这两类标签则无额外变化）。选择「折叠」或「隐藏」时将同步写入酒馆全局正则，停用插件后仍保留生效。',
                 options: [
                     { label: '显示', value: 'show' },
                     { label: '折叠', value: 'collapse' },
@@ -193,7 +234,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'switch',
                 width: 'w-toggle',
                 tooltip:
-                    '开启后将向酒馆原生全局正则写入历史思考清洗规则（仅格式化提示词，最小深度 0）：发送给 AI 时自动剥离历史消息中的 <imagethink> 与 <designthink> 思维链，节省上下文 Token，插件禁用后依然有效。',
+                    '同步写入酒馆全局正则：发送对话上下文前自动剥离历史消息中的 <imagethink> 与 <designthink> 标签块（不影响通用 <think>；若当前模板未生成这两类标签则无额外效果），节省上下文 Token，停用插件后仍保持生效。',
             },
             {
                 key: 'cleanHistoryMarkup',
@@ -201,7 +242,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'switch',
                 width: 'w-toggle',
                 tooltip:
-                    '开启后将向酒馆原生全局正则写入历史标记清洗规则（仅格式化提示词，最小深度 0）：发送给 AI 时自动剥离历史消息中的生图指令标记（如 image###...###）与角色/服装档案块（<character>/<outfit>），不影响前端楼层生图按钮与已出图片，插件禁用后依然有效。',
+                    '同步写入酒馆全局正则：发送对话上下文前自动剥离历史消息中的生图指令与角色/服装档案标记，节省 Token 且不影响楼层已出图片，停用插件后仍保持生效。',
             },
         ],
     },
@@ -216,8 +257,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 options: [
-                    { label: '居中对齐', value: 'center' },
                     { label: '靠左对齐', value: 'flex-start' },
+                    { label: '居中对齐', value: 'center' },
                     { label: '靠右对齐', value: 'flex-end' },
                 ],
             },
@@ -265,13 +306,18 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 disabledWhen: (m) => !m.enabled,
             },
             {
-                key: 'autoBlur',
-                label: '防窥模糊',
-                type: 'switch',
-                width: 'w-toggle',
+                key: 'displayMode',
+                label: '显示模式',
+                type: 'segmented',
+                width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '生成图片默认呈模糊遮罩，鼠标悬停或点击查看大图后显示清晰画面。',
+                    '正常：直接展示完整图片；模糊：图片默认高斯模糊遮罩，鼠标悬停或点击查看大图后清晰；折叠：默认收起图片，点击折叠栏按需展开或收起。',
+                options: [
+                    { label: '正常', value: 'normal' },
+                    { label: '模糊', value: 'blur' },
+                    { label: '折叠', value: 'collapse' },
+                ],
             },
         ],
     },
@@ -332,6 +378,7 @@ export class GeneralTabView extends PreactSettingsView {
             transport: (s.transport || 'direct') as TransportMode,
             timeoutSec: Math.round((s.taskTimeoutMs || 120000) / 1000),
             cancelOnChatChange: s.cancelOnChatChange ?? true,
+            cancelOnSwipe: s.cancelOnSwipe ?? true,
             promptStartTag: s.promptStartTag || 'image###',
             promptEndTag: s.promptEndTag || '###',
             autoGenerate: s.autoGenerate ?? false,
@@ -339,6 +386,7 @@ export class GeneralTabView extends PreactSettingsView {
             imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
             lightboxEnabled: lightbox?.enabled ?? true,
             cleanPrompt: s.cleanPrompt ?? true,
+            cleanPromptPunctuation: s.cleanPromptPunctuation ?? true,
             normalizeChinesePunctuation: Boolean(s.normalizeChinesePunctuation),
             thinkingDisplayMode: (s.thinkingDisplayMode || 'show') as ThinkingDisplayMode,
             cleanHistoryThinking: Boolean(s.cleanHistoryThinking),
@@ -348,7 +396,7 @@ export class GeneralTabView extends PreactSettingsView {
             maxWidthPct: img?.maxWidthPct ?? 100,
             maxHeight: img?.maxHeight ?? 480,
             rounded: img?.rounded ?? true,
-            autoBlur: Boolean(img?.autoBlur),
+            displayMode: (img?.displayMode || 'normal') as ImageDisplayMode,
             imageQuality: (s.imageQuality || 'original') as ImageStorageQuality,
             saveToServer: s.saveToServer ?? false,
         };
@@ -374,6 +422,9 @@ export class GeneralTabView extends PreactSettingsView {
                 break;
             case 'cancelOnChatChange':
                 this.bridge.set('cancelOnChatChange', Boolean(val));
+                break;
+            case 'cancelOnSwipe':
+                this.bridge.set('cancelOnSwipe', Boolean(val));
                 break;
             case 'promptStartTag':
                 this.bridge.set('promptStartTag', String(val).trim() || 'image###');
@@ -407,6 +458,9 @@ export class GeneralTabView extends PreactSettingsView {
                 break;
             case 'cleanPrompt':
                 this.bridge.set('cleanPrompt', Boolean(val));
+                break;
+            case 'cleanPromptPunctuation':
+                this.bridge.set('cleanPromptPunctuation', Boolean(val));
                 break;
             case 'normalizeChinesePunctuation':
                 this.bridge.set('normalizeChinesePunctuation', Boolean(val));
@@ -448,9 +502,9 @@ export class GeneralTabView extends PreactSettingsView {
                     rounded: Boolean(val),
                 });
                 break;
-            case 'autoBlur':
+            case 'displayMode':
                 this.updateImageDisplay({
-                    autoBlur: Boolean(val),
+                    displayMode: val as ImageDisplayMode,
                 });
                 break;
             case 'imageQuality':
@@ -468,7 +522,7 @@ export class GeneralTabView extends PreactSettingsView {
         maxWidthPct?: number;
         maxHeight?: number;
         rounded?: boolean;
-        autoBlur?: boolean;
+        displayMode?: ImageDisplayMode;
     }): void {
         const current = this.bridge.get('ui')?.imageDisplay ?? {
             align: 'center' as const,
@@ -476,7 +530,7 @@ export class GeneralTabView extends PreactSettingsView {
             maxWidthPct: 100,
             maxHeight: 480,
             rounded: true,
-            autoBlur: false,
+            displayMode: 'normal' as const,
         };
         this.bridge.updateUi({
             imageDisplay: {
@@ -488,9 +542,23 @@ export class GeneralTabView extends PreactSettingsView {
 
     protected renderContent(): VNode {
         const model = this.buildViewModel();
+        const hostRuntime = detectHostRuntime();
+        const cards = GENERAL_CARDS_SCHEMA.map((card) => {
+            if (card.id !== 'general-basic') {
+                return card;
+            }
+            return {
+                ...card,
+                fields: card.fields.map((field) =>
+                    field.key === 'transport'
+                        ? { ...field, tooltip: getTransportModeTooltip(hostRuntime) }
+                        : field
+                ),
+            };
+        });
         return (
             <SchemaForm
-                cards={GENERAL_CARDS_SCHEMA}
+                cards={cards}
                 model={model}
                 onFieldChange={(key, val) => this.handleFieldChange(key, val)}
             />

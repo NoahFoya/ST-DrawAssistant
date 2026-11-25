@@ -40,9 +40,6 @@ export interface FabPositionState {
 
 const STORAGE_KEY_POSITION = 'st_draw_assistant_fab_position';
 const DEFAULT_FAB_RATIO: FabPositionState = { ratioX: 0.96, ratioY: 0.86 };
-const HOVER_OPEN_DELAY_MS = 250;
-const HOVER_CLOSE_DELAY_MS = 300;
-const LONG_PRESS_OPEN_DELAY_MS = 450;
 const DOUBLE_CLICK_THRESHOLD_MS = 280;
 
 function clampUnit(value: number): number {
@@ -69,17 +66,12 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private clickSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
     private snapTimer: ReturnType<typeof setTimeout> | null = null;
     private pulseTimer: ReturnType<typeof setTimeout> | null = null;
-    private hoverOpenTimer: ReturnType<typeof setTimeout> | null = null;
-    private hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
-    private longPressTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly activeTaskIds = new Set<string>();
 
     private currentRatioX: number = DEFAULT_FAB_RATIO.ratioX;
     private currentRatioY: number = DEFAULT_FAB_RATIO.ratioY;
 
     private readonly onPointerDownBound: (e: PointerEvent) => void;
-    private readonly onPointerEnterBound: (e: PointerEvent) => void;
-    private readonly onPointerLeaveBound: (e: PointerEvent) => void;
     private readonly onClickBound: (e: MouseEvent) => void;
     private readonly onDblClickBound: (e: MouseEvent) => void;
     private readonly onPointerMoveBound: (e: PointerEvent) => void;
@@ -125,14 +117,10 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.quickPanel = new FabQuickPanel({
             anchorElement: this.element,
             onOpenMainSettings: () => this.openMainSettings(),
-            onPointerEnter: () => this.clearHoverCloseTimer(),
-            onPointerLeave: () => this.scheduleHoverClose(),
         });
 
         // 3. 绑定事件处理器引用
         this.onPointerDownBound = this.onPointerDown.bind(this);
-        this.onPointerEnterBound = this.onPointerEnter.bind(this);
-        this.onPointerLeaveBound = this.onPointerLeave.bind(this);
         this.onClickBound = this.onClick.bind(this);
         this.onDblClickBound = this.onDblClick.bind(this);
         this.onPointerMoveBound = this.onPointerMove.bind(this);
@@ -147,8 +135,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
     private bindEvents(): void {
         this.element.addEventListener?.('pointerdown', this.onPointerDownBound);
-        this.element.addEventListener?.('pointerenter', this.onPointerEnterBound);
-        this.element.addEventListener?.('pointerleave', this.onPointerLeaveBound);
         this.element.addEventListener?.('click', this.onClickBound);
         this.element.addEventListener?.('dblclick', this.onDblClickBound);
 
@@ -170,72 +156,7 @@ export class FloatingActionButton implements UIComponent, Disposable {
         return Boolean(settingsStore.get('ui')?.fab?.quickPanelEnabled);
     }
 
-    private isHoverTriggerEnabled(): boolean {
-        const fab = settingsStore.get('ui')?.fab;
-        return Boolean(fab?.quickPanelEnabled) && fab?.hoverTrigger !== false;
-    }
-
-    private clearHoverOpenTimer(): void {
-        if (this.hoverOpenTimer !== null) {
-            clearTimeout(this.hoverOpenTimer);
-            this.hoverOpenTimer = null;
-        }
-    }
-
-    private clearHoverCloseTimer(): void {
-        if (this.hoverCloseTimer !== null) {
-            clearTimeout(this.hoverCloseTimer);
-            this.hoverCloseTimer = null;
-        }
-    }
-
-    private clearLongPressTimer(): void {
-        if (this.longPressTimer !== null) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = null;
-        }
-    }
-
-    private scheduleHoverClose(): void {
-        if (!this.isHoverTriggerEnabled() || !this.quickPanel.isOpen()) {
-            return;
-        }
-        this.clearHoverCloseTimer();
-        this.hoverCloseTimer = setTimeout(() => {
-            this.hoverCloseTimer = null;
-            this.quickPanel.close();
-        }, HOVER_CLOSE_DELAY_MS);
-    }
-
-    private onPointerEnter(e: PointerEvent): void {
-        if (e.pointerType && e.pointerType !== 'mouse') {
-            return;
-        }
-        this.clearHoverCloseTimer();
-        if (!this.isHoverTriggerEnabled() || this.isDragging || this.quickPanel.isOpen()) {
-            return;
-        }
-        this.clearHoverOpenTimer();
-        this.hoverOpenTimer = setTimeout(() => {
-            this.hoverOpenTimer = null;
-            if (!this.isDragging && this.isHoverTriggerEnabled()) {
-                this.quickPanel.open();
-            }
-        }, HOVER_OPEN_DELAY_MS);
-    }
-
-    private onPointerLeave(e: PointerEvent): void {
-        if (e.pointerType && e.pointerType !== 'mouse') {
-            return;
-        }
-        this.clearHoverOpenTimer();
-        this.scheduleHoverClose();
-    }
-
     private openMainSettings(): void {
-        this.clearHoverOpenTimer();
-        this.clearHoverCloseTimer();
-        this.clearLongPressTimer();
         this.quickPanel.close();
         this.clickHandler?.();
     }
@@ -263,9 +184,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
         this.isDragging = true;
         this.hasMoved = false;
         this.suppressNextClick = false;
-        this.clearHoverOpenTimer();
-        this.clearHoverCloseTimer();
-        this.clearLongPressTimer();
         if (this.clickSuppressionTimer !== null) {
             clearTimeout(this.clickSuppressionTimer);
             this.clickSuppressionTimer = null;
@@ -290,18 +208,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
             this.startElemY = bounds.minTop + this.currentRatioY * bounds.travelY;
         }
 
-        // 触控长按展开快捷面板
-        if (e.pointerType !== 'mouse' && this.isQuickPanelEnabled()) {
-            this.longPressTimer = setTimeout(() => {
-                this.longPressTimer = null;
-                if (this.isDragging && !this.hasMoved && this.isQuickPanelEnabled()) {
-                    this.suppressNextClick = true;
-                    this.triggerClickPulse();
-                    this.quickPanel.open();
-                }
-            }, LONG_PRESS_OPEN_DELAY_MS);
-        }
-
         this.element.classList?.add('is-dragging');
 
         if (typeof window !== 'undefined') {
@@ -319,8 +225,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
         if (Math.hypot(dx, dy) > 4) {
             this.hasMoved = true;
-            this.clearHoverOpenTimer();
-            this.clearLongPressTimer();
         }
 
         const bounds = this.getSafeTravelBounds(this.cachedElemWidth, this.cachedElemHeight);
@@ -339,7 +243,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
     private onPointerUp(): void {
         if (!this.isDragging) return;
         this.isDragging = false;
-        this.clearLongPressTimer();
         this.element.classList.remove('is-dragging');
 
         if (typeof window !== 'undefined') {
@@ -406,8 +309,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
         }
         this.lastClickTimestamp = now;
 
-        this.clearHoverOpenTimer();
-        this.clearHoverCloseTimer();
         this.quickPanel.toggle();
     }
 
@@ -534,8 +435,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
      */
     public dispose(): void {
         this.element.removeEventListener?.('pointerdown', this.onPointerDownBound);
-        this.element.removeEventListener?.('pointerenter', this.onPointerEnterBound);
-        this.element.removeEventListener?.('pointerleave', this.onPointerLeaveBound);
         this.element.removeEventListener?.('click', this.onClickBound);
         this.element.removeEventListener?.('dblclick', this.onDblClickBound);
 
@@ -565,9 +464,6 @@ export class FloatingActionButton implements UIComponent, Disposable {
             clearTimeout(this.pulseTimer);
             this.pulseTimer = null;
         }
-        this.clearHoverOpenTimer();
-        this.clearHoverCloseTimer();
-        this.clearLongPressTimer();
         this.quickPanel.dispose();
 
         this.element.parentElement?.removeChild(this.element);

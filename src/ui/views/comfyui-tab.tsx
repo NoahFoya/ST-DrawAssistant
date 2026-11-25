@@ -61,6 +61,15 @@ export class ComfyUITabView extends ProviderTabView {
             defaultNewName: '新建预设',
             defaultSamplers: COMFY_SAMPLER_OPTIONS,
             defaultSchedulers: COMFY_SCHEDULER_OPTIONS,
+            defaultDraftTemplate: () => ({
+                width: 832,
+                height: 1216,
+                samplerName: 'euler_ancestral',
+                scheduler: 'normal',
+                steps: 28,
+                cfgScale: 6,
+                seed: -1,
+            }),
             checkWorkflowBindings: true,
             validateRequired: (cfg) => {
                 const missing: string[] = [];
@@ -89,7 +98,7 @@ export class ComfyUITabView extends ProviderTabView {
                 type: 'select',
                 placeholder: '选择文生图工作流',
                 tooltip:
-                    '选择出图使用的 API 格式工作流：单文件整合模型选「Checkpoint」，分立扩散模型（如 Flux / Qwen / MOSS）选「UNet」；如需在提示词中动态加载 LoRA，请安装 ComfyUI-WeiLin 插件并选用「WeiLin」版。',
+                    '选择 API 格式的出图工作流：单文件底模选「Checkpoint」，分立底模（如 Flux / Qwen / MOSS）选「UNet」，两者均自动串联内置 LoraLoader 注入所选 LoRA。',
                 options: () => this.vm.txt2imgWorkflowOptions.value,
                 invalidTooltip: (m) => `关联的文生图工作流不存在或已失效 (ID: ${m.txt2imgWorkflowId || ''})`,
             },
@@ -118,7 +127,7 @@ export class ComfyUITabView extends ProviderTabView {
                 type: 'select',
                 placeholder: '选择主模型文件',
                 tooltip:
-                    '整合型 Checkpoint 模型请搭配「Checkpoint 模型文生图」工作流；UNet / 扩散分立模型请搭配「UNet 模型文生图」工作流并指定下方 CLIP 与 VAE 模型。',
+                    '单文件整合模型请配合「Checkpoint」工作流，分立扩散模型（diffusion_models / unet）请配合「UNet」工作流并在下方指定 CLIP 与 VAE。',
                 options: () => this.vm.effectiveModelOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该主模型 (${m.baseModel || ''})`,
             },
@@ -127,7 +136,7 @@ export class ComfyUITabView extends ProviderTabView {
                 label: 'CLIP 模型',
                 type: 'select',
                 tooltip:
-                    'Checkpoint 整合模型通常已内置 CLIP，保持「使用模型内置」即可；使用 UNet 分立模型工作流时，必须在此明确指定对应的 CLIP 编码器文件。',
+                    'Checkpoint 整合模型通常保留「使用模型内置」即可；UNet 分立模型须在此选定配套 CLIP 编码器。',
                 options: () => this.vm.effectiveClipOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该 CLIP (${m.clipName || ''})`,
             },
@@ -136,7 +145,7 @@ export class ComfyUITabView extends ProviderTabView {
                 label: 'VAE 模型',
                 type: 'select',
                 tooltip:
-                    'Checkpoint 整合模型大多内置烘焙 VAE，可保持「使用模型内置」；使用 UNet 分立模型工作流时，必须在此明确指定对应的 VAE 模型文件。',
+                    'Checkpoint 整合模型通常保留「使用模型内置」即可；UNet 分立模型须在此选定配套 VAE。',
                 options: () => this.vm.effectiveVaeOptions.value,
                 invalidTooltip: (m) => `当前服务端未检测到该 VAE (${m.vaeName || ''})`,
             },
@@ -209,8 +218,8 @@ export class ComfyUITabView extends ProviderTabView {
 
                     <DimensionPickerView
                         embedded={true}
-                        width={draft.width || 1024}
-                        height={draft.height || 1024}
+                        width={draft.width || 832}
+                        height={draft.height || 1216}
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({
@@ -231,10 +240,10 @@ export class ComfyUITabView extends ProviderTabView {
                         schedulers={this.vm.schedulerOptions.value}
                         dirty={isSamplerDirty}
                         data={{
-                            samplerName: draft.samplerName || 'euler',
+                            samplerName: draft.samplerName || 'euler_ancestral',
                             scheduler: draft.scheduler || 'normal',
-                            steps: draft.steps ?? 20,
-                            cfgScale: draft.cfgScale ?? 3.5,
+                            steps: draft.steps ?? 28,
+                            cfgScale: draft.cfgScale ?? 6,
                             seed: draft.seed ?? -1,
                         }}
                         onChange={(s) =>

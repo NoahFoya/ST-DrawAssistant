@@ -2,7 +2,7 @@
  * UI 模块核心基础接口与类型定义。
  *
  * @remarks
- * 为 UI 系统确立统一生命周期管理、原子受控控件交互与页面选项卡装配基础规范。
+ * 为 UI 系统确立统一生命周期管理、受控基础控件交互与页面选项卡装配基础规范。
  */
 
 import type { Disposable } from '@types';
@@ -33,7 +33,7 @@ export interface SetValueOptions {
 export type ControlChangeCallback<T> = (value: T) => void | boolean;
 
 /**
- * 纯受控原子控件通用操作句柄接口。
+ * 纯受控基础控件通用操作句柄接口。
  *
  * @typeParam T 控件受控读写的数据类型。
  */

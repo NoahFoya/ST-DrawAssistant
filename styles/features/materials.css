@@ -1313,6 +1313,19 @@
     padding: 10px 12px;
 }
 
+.da-activation-bound-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.da-field-inline-hint {
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--da-text-muted);
+}
+
 .da-sandbox-preview {
     display: flex;
     flex-direction: column;

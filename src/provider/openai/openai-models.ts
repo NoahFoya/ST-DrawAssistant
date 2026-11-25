@@ -18,6 +18,8 @@ export interface OpenAIModelCapabilities {
     readonly supportsBackground: boolean;
     /** 是否支持 output_format 参数 (png / jpeg / webp) */
     readonly supportsOutputFormat: boolean;
+    /** 是否支持自动分辨率/尺寸（GPT Image 发送 size: "auto"，兼容后端省略 size） */
+    readonly supportsAutoSize: boolean;
 }
 
 export const OPENAI_MODEL_OPTIONS: Array<{ label: string; value: string }> = [
@@ -31,6 +33,13 @@ export const OPENAI_MODEL_OPTIONS: Array<{ label: string; value: string }> = [
     { label: 'Kwai-Kolors/Kolors', value: 'Kwai-Kolors/Kolors' },
 ];
 
+export function isSiliconFlowService(serviceId?: string, serverUrl?: string): boolean {
+    return (
+        serviceId === 'siliconflow' ||
+        /(?:^|[./])siliconflow\.cn(?:[:/]|$)/i.test(serverUrl || '')
+    );
+}
+
 export function resolveOpenAIModelCapabilities(modelId?: string): OpenAIModelCapabilities {
     const lower = (modelId || '').trim().toLowerCase();
 
@@ -43,6 +52,7 @@ export function resolveOpenAIModelCapabilities(modelId?: string): OpenAIModelCap
             supportsStyle: false,
             supportsBackground: true,
             supportsOutputFormat: true,
+            supportsAutoSize: true,
         };
     }
 
@@ -55,6 +65,7 @@ export function resolveOpenAIModelCapabilities(modelId?: string): OpenAIModelCap
             supportsStyle: true,
             supportsBackground: false,
             supportsOutputFormat: false,
+            supportsAutoSize: false,
         };
     }
 
@@ -67,6 +78,7 @@ export function resolveOpenAIModelCapabilities(modelId?: string): OpenAIModelCap
             supportsStyle: false,
             supportsBackground: false,
             supportsOutputFormat: false,
+            supportsAutoSize: false,
         };
     }
 
@@ -78,5 +90,6 @@ export function resolveOpenAIModelCapabilities(modelId?: string): OpenAIModelCap
         supportsStyle: false,
         supportsBackground: false,
         supportsOutputFormat: false,
+        supportsAutoSize: true,
     };
 }

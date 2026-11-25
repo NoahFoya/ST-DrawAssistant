@@ -17,7 +17,7 @@ import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
 import {
     GROK_API_BASE,
-    GROK_ASPECT_RATIOS,
+    GROK_ASPECT_RATIO_OPTIONS,
     GROK_CUSTOM_SERVICE_ID,
     GROK_MODEL_OPTIONS,
     GROK_OFFICIAL_SERVICE_ID,
@@ -38,10 +38,7 @@ const GROK_PROVIDER_PRESETS: ProviderPreset[] = [
     },
 ];
 
-const ASPECT_RATIO_OPTIONS = GROK_ASPECT_RATIOS.map((ratio) => ({
-    label: ratio,
-    value: ratio,
-}));
+const ASPECT_RATIO_OPTIONS = GROK_ASPECT_RATIO_OPTIONS;
 
 const RESOLUTION_OPTIONS = GROK_RESOLUTIONS.map((res) => ({
     label: res.toUpperCase(),
@@ -150,7 +147,8 @@ export class GrokTabView extends ProviderTabView {
                 label: '画幅比例',
                 type: 'select',
                 options: ASPECT_RATIO_OPTIONS,
-                tooltip: 'xAI Grok Imagine 原生 aspect_ratio 参数。旧版 grok-2-image 不支持该参数。',
+                tooltip:
+                    'xAI Grok Imagine 原生 aspect_ratio 参数（选择「自动」时由模型决定构图）。旧版 grok-2-image 不支持该参数。',
                 visibleWhen: (m) =>
                     resolveGrokModelCapabilities(getEffectiveModel(m)).supportsAspectRatio,
                 transform: {

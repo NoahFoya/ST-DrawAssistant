@@ -53,11 +53,23 @@ export interface GenerationParameters {
     [key: string]: unknown;
 }
 
+/** 触发并规范化后的运行时 LoRA 配置项 */
+export interface ResolvedLoraSpec {
+    /** LoRA 模型文件名或相对路径 */
+    readonly modelName: string;
+    /** 基础模型权重 */
+    readonly modelWeight: number;
+    /** 文本编码器 (CLIP) 权重 */
+    readonly clipWeight: number;
+    /** 触发词权重（仅含 ComfyUI-WeiLin 节点工作流使用） */
+    readonly triggerWeight: number;
+}
+
 /**
  * 主流程发起的通用绘图请求数据。
  *
  * @remarks
- * 聚焦承载单次生图的核心即时意图（提示词、可选底图与蒙版等）。
+ * 聚焦承载单次生图的核心即时意图（提示词、触发的 LoRA、可选底图与蒙版等）。
  * 尺寸、步数、采样器、模型及工作流模板等常规超参数由各 Provider 每次生成时从配置中心加载其激活的参数预设；
  * parameters 仅用于指令中极少数的单次覆盖项（如指定种子、局部重绘等），无需传递常规超参数字典。
  */
@@ -70,6 +82,8 @@ export interface GenerationRequest {
     readonly rawPrompt?: string;
     /** 预设合并与语法转换前的原始负向提示词 */
     readonly rawNegativePrompt?: string;
+    /** 当次命中触发条件的有效 LoRA 结构化列表（由各支持的提供方按各自协议落地） */
+    readonly loras?: readonly ResolvedLoraSpec[];
     /** 局部重绘时的底图数据（Blob 二进制流或 Base64 字符串） */
     readonly sourceImage?: Blob | string;
     /** 局部重绘遮罩蒙版（Blob 二进制流或 Base64 字符串，白色重绘，黑色保留） */
@@ -125,7 +139,7 @@ export interface ProviderAssetCache {
     readonly updatedAt?: number;
 }
 
-/** 单个服务商/端点独立暂存的连接信息与资产缓存快照 */
+/** 单个服务商/接口配置独立暂存的连接信息与资产缓存快照 */
 export interface CommonServiceProfile {
     /** 服务端基础接口地址 */
     readonly serverUrl?: string;

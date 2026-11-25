@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责从原始输入指令中提取正负向提示词、剥离思考链与代码块干扰、
- * 规整标点符号（中文逗号转半角）、按配置执行标签去重并构建 GenerationRequest 请求对象。
+ * 按配置整理连续重复标点/空行并执行纯英文逗号标签去重，构建 GenerationRequest 请求对象。
  */
 
 import type {
@@ -13,15 +13,19 @@ import type {
     PromptPresetData,
     PromptPollingPoolItem,
     DrawingPresetData,
-    LoraConfigItem,
-    LoraSyntaxMode,
+    ResolvedLoraSpec,
 } from '@types';
 import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
 import { type SettingsStore, normalizePresetNameKey, settingsStore } from '../store/settings-store';
 import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../provider/novelai/novelai-models';
 import { resolvePromptMacros } from './macro-resolver';
-import { cleanTagSegments, splitKeywordTokens } from './material-definitions';
-import { matchKeywordToken, stripThinkingAndComments } from './prompt-injector';
+import { splitTopLevelTags } from './material-definitions';
+import { stripThinkingAndComments } from './prompt-injector';
+import {
+    resolveTriggeredLoras,
+    sanitizeLoraPrompts,
+    supportsLoraSyntax,
+} from './lora-utils';
 import { providerRegistry } from '../provider/registry';
 import { logger } from '../util/logger';
 
@@ -322,38 +326,24 @@ export function resolveEffectivePromptPresetsForValidation(
 export function mergeNegativePrompts(
     presetNegative?: string,
     userNegative?: string,
-    deduplicate = true,
-    normalizeChinesePunctuation = true
+    deduplicateOrOptions: boolean | CleanPromptOptions = true,
+    normalizeChinesePunctuation = false
 ): string {
+    const cleanOptions: CleanPromptOptions =
+        typeof deduplicateOrOptions === 'boolean'
+            ? {
+                  deduplicate: deduplicateOrOptions,
+                  cleanPunctuation: true,
+                  normalizeChinesePunctuation,
+              }
+            : deduplicateOrOptions;
     const p1 = (presetNegative ?? '').trim();
     const p2 = (userNegative ?? '').trim();
     if (!p1 && !p2) return '';
-    if (!p1) return p2;
-    if (!p2) return p1;
+    if (!p1) return cleanPromptText(p2, cleanOptions);
+    if (!p2) return cleanPromptText(p1, cleanOptions);
 
-    return cleanTagSegments(`${p1}, ${p2}`, { deduplicate, normalizeChinesePunctuation });
-}
-
-/**
- * 剥离文本中的 LoRA 语法标签 (<lora:...> 与 <wlr:...>)，用于适配不支持 LoRA 语法的后端。
- *
- * @param text 输入文本
- * @returns 剥离 LoRA 语法后的文本
- */
-export function stripLoraSyntax(text: string): string {
-    if (!text) {
-        return '';
-    }
-    if (!/<(?:lora|wlr):[^>]+>/i.test(text)) {
-        return text.trim();
-    }
-    // 剥离 LoRA 语法标签后同时折叠残留空逗号与多余空白，避免自然语言后端跳过切片清洗时留下 `, ,`
-    return text
-        .replace(/<(?:lora|wlr):[^>]+>/gi, ' ')
-        .replace(/,\s*,+/g, ', ')
-        .replace(/^\s*,\s*|\s*,\s*$/g, '')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+    return cleanPromptText(joinPromptSegment(p1, p2), cleanOptions);
 }
 
 /**
@@ -377,7 +367,7 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
  *
  * @remarks
  * 剥离 HTML 注释、已闭合与未闭合的大模型思考链 (<think>...</think>) 以及代码块，
- * 避免模型思考文本或代码块内容混入提示词或误触发指令提取。
+ * 避免模型思考草稿与大段代码块干扰提取或混入生图提示词；不误删正文行内反引号内容。
  *
  * @param rawText 原始文本
  * @returns 净化后的文本
@@ -389,78 +379,205 @@ export function sanitizeMessageText(rawText: string): string {
 
     // 1. 复用公共规则剥离 HTML 注释与 <think>/<thinking> 思考链
     let text = stripThinkingAndComments(rawText);
-    // 2. 剥离代码块与代码标签
+    // 2. 剥离围栏代码块与代码标签
     text = text.replace(/<pre[\s\S]*?<\/pre>/gi, '');
     text = text.replace(/<code[\s\S]*?<\/code>/gi, '');
     text = text.replace(/```[\s\S]*?```/g, '');
-    text = text.replace(/`[^`\n]+`/g, '');
 
     return text.trim();
 }
 
-/**
- * 规范化提示词文本中的换行、标点符号与冗余逗号，支持受控去重。
- *
- * @remarks
- * 处理流程：
- * 1. 规整中文全角逗号与顿号为英文半角逗号；
- * 2. 按换行符拆分段落，逐段修剪；
- * 3. 按逗号拆分为词元并去除空白；
- * 4. 若开启 deduplicate，按大小写不敏感进行标签去重（严格保留 `<lora:...>` 等特殊语法标签）；
- * 5. 重新以 `, ` 连接。
- *
- * @param rawPrompt 原始提示词文本
- * @param deduplicate 是否执行标签去重，默认为 false
- * @param normalizeChinesePunctuation 是否将中文全角逗号与顿号规整为英文半角逗号，默认为 true
- * @returns 规整后的单行提示词文本
- */
-export function cleanPromptText(
-    rawPrompt: string,
-    deduplicate = false,
-    normalizeChinesePunctuation = true
-): string {
-    return cleanTagSegments(rawPrompt, { deduplicate, normalizeChinesePunctuation });
-}
-
-/**
- * 判断指定服务提供方是否采用自然语言描述式提示词（而非 Danbooru 标签串）。
- */
-export function isNaturalLanguageProvider(provider?: ProviderType): boolean {
-    return provider === 'openai' || provider === 'gemini' || provider === 'grok';
-}
-
-/**
- * 判断指定服务提供方是否支持 LoRA 提示词语法标签（`<lora:...>` / `<wlr:...>`）。
- */
-export function supportsLoraSyntax(provider?: ProviderType): boolean {
-    return provider === 'sdwebui' || provider === 'comfyui';
-}
-
-/**
- * 规整自然语言提示词文本：保留完整英文句式、标点与段落结构，仅修剪首尾空白并压缩多余空行。
- */
-export function cleanNaturalLanguagePrompt(rawPrompt: string): string {
-    if (!rawPrompt || typeof rawPrompt !== 'string') {
-        return '';
+/** 在 `<...>` 语法标签外部将中文全角逗号与顿号替换为英文半角逗号 */
+function replaceChineseCommasOutsideTags(line: string): string {
+    let result = '';
+    let angle = 0;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '<') {
+            angle++;
+            result += ch;
+        } else if (ch === '>') {
+            angle = Math.max(0, angle - 1);
+            result += ch;
+        } else if (angle === 0 && (ch === '，' || ch === '、')) {
+            result += ', ';
+            while (i + 1 < line.length && (line[i + 1] === ' ' || line[i + 1] === '\t')) {
+                i++;
+            }
+        } else {
+            result += ch;
+        }
     }
-    return rawPrompt
-        .replace(/\r\n?/g, '\n')
-        .split('\n')
-        .map((line) => line.replace(/[ \t]+/g, ' ').trim())
-        .join('\n')
-        .replace(/\n{3,}/g, '\n\n')
+    return result;
+}
+
+/** 仅折叠连续重复的同类分隔与句读标点（保留 `::` 权重边界与 `...`/`……` 省略号） */
+function collapseDuplicatePunctuation(line: string): string {
+    return line
+        .replace(/,[ \t]*(?:,[ \t]*)+/g, ', ')
+        .replace(/，(?:[ \t]*，)+/g, '，')
+        .replace(/、(?:[ \t]*、)+/g, '、')
+        .replace(/。(?:[ \t]*。)+/g, '。')
+        .replace(/；(?:[ \t]*；)+/g, '；')
+        .replace(/;(?:[ \t]*;)+/g, ';')
+        .replace(/！(?:[ \t]*！)+/g, '！')
+        .replace(/？(?:[ \t]*？)+/g, '？')
+        .replace(/[ \t]+/g, ' ')
         .trim();
 }
 
+/** 判断逗号切分后的词元是否为纯英文短标签并返回去重键，非纯英文短标签返回 null 以原样保留 */
+function getAsciiTagDedupeKey(token: string): string | null {
+    if (!token) return null;
+    if (/[^\x20-\x7E]/.test(token)) {
+        return null;
+    }
+
+    const isLoraTag = /^<(?:lora|wlr):/i.test(token) && token.endsWith('>');
+    if (isLoraTag) {
+        return token.replace(/\\/g, '/').toLowerCase();
+    }
+    if (token.startsWith('<') && token.endsWith('>')) {
+        return token;
+    }
+
+    // 保留 NovelAI 复合权重容器（含内部逗号）以及句末带句读符号的自然语言完整分句
+    if (token.includes('::') && token.includes(',')) {
+        return null;
+    }
+    if (/[.!?;]$/.test(token) && !/[>)]$/.test(token) && !token.endsWith('::')) {
+        return null;
+    }
+
+    const wordCount = token.trim().split(/\s+/).length;
+    if (wordCount > 5) {
+        return null;
+    }
+    return token.toLowerCase();
+}
+
+/** 提示词清理与标点整理选项 */
+export interface CleanPromptOptions {
+    /** 是否执行纯英文逗号标签保序去重，默认为 false */
+    readonly deduplicate?: boolean;
+    /** 是否自动整理连续重复标点、多余逗号并去除多余空白行，默认为 true */
+    readonly cleanPunctuation?: boolean;
+    /** 是否将中文全角逗号与顿号规整为英文半角逗号，默认为 false */
+    readonly normalizeChinesePunctuation?: boolean;
+}
+
 /**
- * 自然语言提示词片段拼接：若前段以句末/分隔标点结尾则直接空格连接，否则补逗号后连接。
+ * 统一规范化提示词文本：按需执行标点与空行整理（清除空白行并保留单次换行）、纯英文逗号标签去重，以及中文标点转换。
+ *
+ * @param rawPrompt 原始提示词文本
+ * @param deduplicateOrOptions 布尔值（兼容旧签名：是否去重）或清理选项对象
+ * @param normalizeChinesePunctuation 是否将中文全角逗号与顿号规整为英文半角逗号，默认为 false
+ * @returns 规整后的提示词文本
  */
-export function joinNaturalLanguageSegment(head: string, tail: string): string {
+export function cleanPromptText(
+    rawPrompt: string,
+    deduplicateOrOptions: boolean | CleanPromptOptions = false,
+    normalizeChinesePunctuation = false
+): string {
+    if (!rawPrompt || typeof rawPrompt !== 'string') {
+        return '';
+    }
+
+    const deduplicate =
+        typeof deduplicateOrOptions === 'boolean'
+            ? deduplicateOrOptions
+            : Boolean(deduplicateOrOptions?.deduplicate);
+    const cleanPunctuation =
+        typeof deduplicateOrOptions === 'boolean'
+            ? true
+            : deduplicateOrOptions?.cleanPunctuation !== false;
+    const normalizeZh =
+        typeof deduplicateOrOptions === 'boolean'
+            ? normalizeChinesePunctuation
+            : Boolean(deduplicateOrOptions?.normalizeChinesePunctuation);
+
+    const normalizedLines = rawPrompt.replace(/\r\n?/g, '\n').split('\n');
+    while (normalizedLines.length > 0 && !normalizedLines[0].trim()) {
+        normalizedLines.shift();
+    }
+    while (normalizedLines.length > 0 && !normalizedLines[normalizedLines.length - 1].trim()) {
+        normalizedLines.pop();
+    }
+    if (normalizedLines.length === 0) {
+        return '';
+    }
+
+    if (!deduplicate && !cleanPunctuation && !normalizeZh) {
+        return normalizedLines.join('\n').trim();
+    }
+
+    const workingLines = cleanPunctuation
+        ? normalizedLines.filter((line) => Boolean(line.trim()))
+        : normalizedLines;
+    const seenAsciiTags = new Set<string>();
+    const processedLines: string[] = [];
+
+    for (let i = 0; i < workingLines.length; i++) {
+        let line = workingLines[i].trim();
+        if (!line) {
+            processedLines.push('');
+            continue;
+        }
+
+        if (normalizeZh) {
+            line = replaceChineseCommasOutsideTags(line);
+        }
+        if (cleanPunctuation) {
+            line = collapseDuplicatePunctuation(line);
+        }
+
+        if (!deduplicate && !cleanPunctuation) {
+            processedLines.push(line);
+            continue;
+        }
+
+        const hasTrailingComma = line.endsWith(',');
+        const nextLineHasContent = i + 1 < workingLines.length && workingLines[i + 1].trim().length > 0;
+        const segments = splitTopLevelTags(line, false);
+        const keptTokens: string[] = [];
+
+        for (const token of segments) {
+            if (!token) continue;
+            if (deduplicate) {
+                const dedupeKey = getAsciiTagDedupeKey(token);
+                if (dedupeKey !== null) {
+                    if (seenAsciiTags.has(dedupeKey)) {
+                        continue;
+                    }
+                    seenAsciiTags.add(dedupeKey);
+                }
+            }
+            keptTokens.push(token);
+        }
+
+        if (keptTokens.length === 0) {
+            continue;
+        }
+
+        let formattedLine = keptTokens.join(', ');
+        if (hasTrailingComma && nextLineHasContent) {
+            formattedLine += ',';
+        }
+        processedLines.push(formattedLine);
+    }
+
+    return processedLines.join('\n').trim();
+}
+
+/**
+ * 统一提示词片段拼接：若前段以中英文句末/分句标点结尾则直接空格连接，否则补英文逗号后连接。
+ */
+export function joinPromptSegment(head: string, tail: string): string {
     const a = head.trim();
     const b = tail.trim();
     if (!a) return b;
     if (!b) return a;
-    if (/[.,;:!?'"\-\n]$/.test(a)) {
+    if (/[.,;:!?\n，。、；：！？…—]$/.test(a) || /(?<=[.,!?。！？])['"”’]$/.test(a)) {
         return `${a} ${b}`;
     }
     return `${a}, ${b}`;
@@ -496,8 +613,9 @@ export function extractDrawingCommands(
     const commands: ExtractedDrawingCommand[] = [];
     const escapedStart = cleanStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escapedEnd = cleanEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 第一分支跳过成对 Markdown 行内反引号示例（含双反引号），第二分支严格以成对生图起止标记匹配（支持内部换行与空行，仅防范跨入同级起始符或思考链边界）
     const regex = new RegExp(
-        `(?<!\`)${escapedStart}((?:(?!${escapedStart}|<\\/?(?:think|thinking|thought|imagethink|designthink)\\b|\\r?\\n\\s*\\r?\\n)[\\s\\S])*?)${escapedEnd}(?!\`)`,
+        `(?<!\`)(\`+)(?:[^\\n\`]|(?!\\1)\`)*?\\1(?!\`)|(?<!\`)${escapedStart}((?:(?!${escapedStart}|<\\/?(?:think|thinking|thought|imagethink|designthink)\\b)[\\s\\S])*?)${escapedEnd}(?!\`)`,
         'gi'
     );
 
@@ -511,7 +629,10 @@ export function extractDrawingCommands(
         }
         lastIndexBeforeMatch = regex.lastIndex;
 
-        const promptText = (match[1] || '').trim();
+        if (match[1]) {
+            continue;
+        }
+        const promptText = (match[2] || '').trim();
         if (promptText) {
             commands.push({
                 rawMatch: match[0],
@@ -594,105 +715,6 @@ export function separatePromptByPipe(input: string): { positive: string; negativ
     };
 }
 
-/** 可被格式化为 LoRA 标签的输入数据规范 */
-export interface FormatLoraTagInput {
-    modelName?: string;
-    modelWeight?: number;
-    clipWeight?: number;
-    triggerWeight?: number;
-}
-
-/**
- * 根据指定模式将 LoRA 条目格式化为提示词标签。
- *
- * @param item LoRA 条目数据
- * @param mode 语法模式 ('standard' | 'weilin')，默认 'standard'
- * @returns 格式化后的标签字符串
- */
-export function formatLoraTag(
-    item: FormatLoraTagInput,
-    mode: LoraSyntaxMode = 'standard'
-): string {
-    if (!item) {
-        return '';
-    }
-    const rawName = item.modelName || '';
-    if (!rawName) {
-        return '';
-    }
-    const cleanName = rawName
-        .replace(/\\/g, '/')
-        .replace(/\.(safetensors|pt|ckpt|pth)$/i, '')
-        .trim();
-    if (!cleanName) {
-        return '';
-    }
-
-    const rawModel = typeof item.modelWeight === 'number' ? item.modelWeight : undefined;
-
-    // 过滤无效或数值为 0 的主权重
-    if (rawModel !== undefined && (!Number.isFinite(rawModel) || Math.abs(rawModel) < 0.001)) {
-        return '';
-    }
-    const baseModel = rawModel !== undefined ? rawModel : 0.8;
-    const clampedModel = Math.max(-5.0, Math.min(5.0, Number(baseModel.toFixed(3))));
-    if (Math.abs(clampedModel) < 0.001) {
-        return '';
-    }
-
-    const clampedClip =
-        typeof item.clipWeight === 'number' && Number.isFinite(item.clipWeight)
-            ? Math.max(-5.0, Math.min(5.0, Number(item.clipWeight.toFixed(3))))
-            : clampedModel;
-
-    if (mode === 'weilin') {
-        const clampedTrigger =
-            typeof item.triggerWeight === 'number' && Number.isFinite(item.triggerWeight)
-                ? Math.max(-5.0, Math.min(5.0, Number(item.triggerWeight.toFixed(3))))
-                : 1.0;
-        return `<wlr:${cleanName}:${clampedModel}:${clampedClip}:${clampedTrigger}>`;
-    }
-
-    if (clampedModel === clampedClip) {
-        return `<lora:${cleanName}:${clampedModel}>`;
-    }
-    return `<lora:${cleanName}:${clampedModel}:${clampedClip}>`;
-}
-
-/**
- * 判断单条 LoRA 配置在当次生图提示词下是否满足挂载条件：
- * - `enabled === false` 或 `modelName` 为空时不挂载；
- * - `triggerMode !== 'keyword'`（默认 `'always'`）时常驻挂载；
- * - `triggerMode === 'keyword'` 时，检查当次原始正向提示词（含 `$角色名-宏-状态$`）与宏展开后的正向提示词是否命中任一触发关键词（支持 `|`、`,` 分隔及 `/pattern/flags` 正则）。
- */
-export function isLoraTriggeredForPrompt(
-    lora: LoraConfigItem | undefined | null,
-    rawPositive: string,
-    expandedPositive: string
-): boolean {
-    if (!lora || lora.enabled === false || !lora.modelName?.trim()) {
-        return false;
-    }
-    if (lora.triggerMode !== 'keyword') {
-        return true;
-    }
-    const tokens = splitKeywordTokens(lora.keywords);
-    if (tokens.length === 0) {
-        return false;
-    }
-    const combinedRaw = [rawPositive, expandedPositive].filter(Boolean).join('\n');
-    if (!combinedRaw.trim()) {
-        return false;
-    }
-    const combinedLower = combinedRaw.toLowerCase();
-    for (const token of tokens) {
-        if (matchKeywordToken(token, combinedRaw, combinedLower, false, false)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 /**
  * 构建提示词请求的入参配置项。
  */
@@ -730,7 +752,7 @@ export class PromptPipeline {
      * 6. 依据后端能力分流组装 LoRA 词条；
      * 7. NovelAI 权重括号语法转换；
      * 8. 剥离不支持后端的残留 LoRA 标签；
-     * 9. 按配置执行中文标点转换与标签去重。
+     * 9. 按独立开关规整文本（纯英文逗号标签去重、多余标点与空行清理、中文标点转换）。
      *
      * @param options 处理配置项
      * @returns 装配好的生图请求对象
@@ -738,11 +760,12 @@ export class PromptPipeline {
     public buildGenerationRequest(options: BuildPromptOptions): GenerationRequest {
         const currentSettings = this._settingsStore.getSettings();
         const shouldDeduplicate = Boolean(currentSettings?.cleanPrompt);
+        const shouldCleanPunctuation = currentSettings?.cleanPromptPunctuation !== false;
         const normalizeChinesePunctuation = Boolean(currentSettings?.normalizeChinesePunctuation);
         const provider = options.providerType;
         const params = options.parameters || {};
 
-        // 1. 先行对原始提示词进行思考链与代码块清洗，防止模型思考草稿干扰提示词
+        // 1. 先行对原始提示词进行思考链与代码块清洗，保留正文中合法的行内反引号内容
         const sanitizedRaw = sanitizeMessageText(options.rawPrompt);
 
         // 2. 按顶层管道符 | 分离正向与负向提示词；若后端不支持负向提示词则丢弃负向段
@@ -782,6 +805,8 @@ export class PromptPipeline {
 
         positive = applyMaterialMacros(positive);
         negative = applyMaterialMacros(negative);
+        // 保留仅包含当次生图正文与素材宏展开的快照，供关键词触发 LoRA 判定（不纳入预设自身前后缀）
+        const macroExpandedPositive = positive;
 
         // 4. 解析绑定的提示词预设 (支持固定预设与轮询候选池随机触发)
         let promptPreset: PromptPresetData | undefined;
@@ -799,7 +824,7 @@ export class PromptPipeline {
                     : undefined;
             const resolved = this._settingsStore.resolveDrawingPreset<DrawingPresetData>(provider, {
                 explicitPresetId: explicitDrawingId,
-                throwOnMissingActive: false,
+                throwOnMissingActive: true,
             });
             drawingPreset = resolved.preset;
             if (!promptPresetId) {
@@ -807,31 +832,32 @@ export class PromptPipeline {
             }
         }
         if (promptPresetId === PROMPT_POLLING_PRESET_ID) {
-            if (provider) {
-                const pollingInfo = resolvePromptPollingCandidates(
-                    this._settingsStore,
-                    provider,
-                    drawingPreset
-                );
-                if (pollingInfo.hasExplicitPool && pollingInfo.candidates.length === 0) {
-                    throw new Error(
-                        '提示词轮询池中暂无已启用的有效预设，请在生图参数预设的轮询面板中勾选至少一项提示词预设'
-                    );
-                }
-                if (pollingInfo.candidates.length > 0) {
-                    const lastId = this._lastPolledByProvider.get(provider);
-                    const pickPool =
-                        pollingInfo.candidates.length >= 2 && lastId
-                            ? pollingInfo.candidates.filter((c) => c.id !== lastId)
-                            : pollingInfo.candidates;
-                    const poolToUse = pickPool.length > 0 ? pickPool : pollingInfo.candidates;
-                    const chosen = poolToUse[Math.floor(Math.random() * poolToUse.length)];
-                    this._lastPolledByProvider.set(provider, chosen.id);
-                    promptPreset = chosen.data;
-                    resolvedPromptPresetId = chosen.id;
-                    resolvedPromptPresetName = chosen.name;
-                }
+            if (!provider) {
+                throw new Error('使用提示词轮询时必须指定生图后端 (provider)');
             }
+            const pollingInfo = resolvePromptPollingCandidates(
+                this._settingsStore,
+                provider,
+                drawingPreset
+            );
+            if (pollingInfo.candidates.length === 0) {
+                throw new Error(
+                    pollingInfo.hasExplicitPool
+                        ? '提示词轮询池中暂无已启用的有效预设，请在生图参数预设的轮询面板中勾选至少一项提示词预设'
+                        : '当前暂无已启用的提示词预设可供轮询，请至少启用一项提示词预设'
+                );
+            }
+            const lastId = this._lastPolledByProvider.get(provider);
+            const pickPool =
+                pollingInfo.candidates.length >= 2 && lastId
+                    ? pollingInfo.candidates.filter((c) => c.id !== lastId)
+                    : pollingInfo.candidates;
+            const poolToUse = pickPool.length > 0 ? pickPool : pollingInfo.candidates;
+            const chosen = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+            this._lastPolledByProvider.set(provider, chosen.id);
+            promptPreset = chosen.data;
+            resolvedPromptPresetId = chosen.id;
+            resolvedPromptPresetName = chosen.name;
         } else if (promptPresetId) {
             const pp = this._settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId, provider);
             if (!pp) {
@@ -843,63 +869,34 @@ export class PromptPipeline {
         }
 
         // 5. 应用提示词预设（前缀、后缀、负向词基底，同样支持本地素材宏展开）
-        const useNaturalLanguage = isNaturalLanguageProvider(provider);
+        let resolvedLoras: ResolvedLoraSpec[] = [];
         if (promptPreset) {
             const prefix = applyMaterialMacros((promptPreset.positivePrefix || '').trim());
             const suffix = applyMaterialMacros((promptPreset.positiveSuffix || '').trim());
             const defaultNeg = applyMaterialMacros((promptPreset.negativePrompt || '').trim());
 
             if (prefix) {
-                positive = useNaturalLanguage
-                    ? joinNaturalLanguageSegment(prefix, positive)
-                    : positive
-                      ? `${prefix}, ${positive}`
-                      : prefix;
+                positive = joinPromptSegment(prefix, positive);
             }
 
-            // 6. 依据 ProviderType 能力分流组装 LoRA 词条 (置于主体后、后缀前)
-            const normalizedPositive = positive.replace(/\\/g, '/');
-            const normalizedSuffix = suffix.replace(/\\/g, '/');
-            if (Array.isArray(promptPreset.loras) && promptPreset.loras.length > 0) {
-                if (supportsLoraSyntax(provider)) {
-                    // SD-WebUI 强制标准双权重语法；ComfyUI 遵从预设配置的语法模式 ('standard' 或 'weilin')
-                    const syntaxMode = provider === 'sdwebui' ? 'standard' : (promptPreset.loraSyntaxMode ?? 'standard');
-                    for (const lora of promptPreset.loras) {
-                        const rawName = lora?.modelName?.trim() || '';
-                        if (!rawName || !isLoraTriggeredForPrompt(lora, rawPositiveInput, positive)) {
-                            continue;
-                        }
-                        const cleanName = rawName
-                            .replace(/\\/g, '/')
-                            .replace(/\.(safetensors|pt|ckpt|pth)$/i, '')
-                            .trim();
-                        const tagRegex = new RegExp(
-                            `<(?:lora|wlr):${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`,
-                            'i'
-                        );
-                        if (!tagRegex.test(normalizedPositive) && !tagRegex.test(normalizedSuffix)) {
-                            const tag = formatLoraTag(lora, syntaxMode);
-                            if (tag) positive = positive ? `${positive}, ${tag}` : tag;
-                        }
-                    }
-                }
-                // 不支持 LoRA 提示词语法的后端跳过组装，统一在下方剥离残留标签
+            // 6. 对支持 LoRA 的后端（SD-WebUI / ComfyUI）筛选当次触发的结构化 LoRA 列表，交由各 Provider 按实际工作流/协议转译
+            if (Array.isArray(promptPreset.loras) && promptPreset.loras.length > 0 && supportsLoraSyntax(provider)) {
+                resolvedLoras = resolveTriggeredLoras(
+                    promptPreset.loras,
+                    rawPositiveInput,
+                    macroExpandedPositive
+                );
             }
 
             if (suffix) {
-                positive = useNaturalLanguage
-                    ? joinNaturalLanguageSegment(positive, suffix)
-                    : positive
-                      ? `${positive}, ${suffix}`
-                      : suffix;
+                positive = joinPromptSegment(positive, suffix);
             }
             if (supportsNegative && defaultNeg) {
-                negative = mergeNegativePrompts(
-                    defaultNeg,
-                    negative,
-                    shouldDeduplicate,
-                    normalizeChinesePunctuation
-                );
+                negative = mergeNegativePrompts(defaultNeg, negative, {
+                    deduplicate: shouldDeduplicate,
+                    cleanPunctuation: shouldCleanPunctuation,
+                    normalizeChinesePunctuation,
+                });
             }
         }
 
@@ -921,31 +918,35 @@ export class PromptPipeline {
             }
         }
 
-        // 8. 针对不支持 LoRA 语法标签的后端（NovelAI、OpenAI、Gemini、Grok），自动剥离残留的 <lora:...> 与 <wlr:...>
+        // 8. 针对不支持 LoRA 的后端（NovelAI、OpenAI、Gemini、Grok），自动剥离残留的手写 <lora:...> 与 <wlr:...> 并显式提醒
         if (provider && !supportsLoraSyntax(provider)) {
-            positive = stripLoraSyntax(positive);
+            const sanitized = sanitizeLoraPrompts(positive, negative, {
+                allowLora: false,
+                allowWlr: false,
+                sourceLabel: `${provider} 服务`,
+                guidance: '当前绘图服务不支持 LoRA 语法',
+            });
+            positive = sanitized.positivePrompt;
             if (negative) {
-                negative = stripLoraSyntax(negative);
+                negative = sanitized.negativePrompt;
             }
         }
 
-        // 9. 规整文本：自然语言引擎保留完整句式与段落，标签型引擎按配置执行保序标签去重与可选中文标点转换
-        const normalizeNaturalText = (text: string): string => {
-            const source = normalizeChinesePunctuation ? text.replace(/[，、]/g, ', ') : text;
-            return cleanNaturalLanguagePrompt(source);
+        // 9. 统一规整文本：按独立开关控制去重、标点与空行整理，以及中文标点转换
+        const cleanOptions: CleanPromptOptions = {
+            deduplicate: shouldDeduplicate,
+            cleanPunctuation: shouldCleanPunctuation,
+            normalizeChinesePunctuation,
         };
-        const cleanPositive = useNaturalLanguage
-            ? normalizeNaturalText(positive)
-            : cleanPromptText(positive, shouldDeduplicate, normalizeChinesePunctuation);
-        const cleanNegative = useNaturalLanguage
-            ? normalizeNaturalText(negative)
-            : cleanPromptText(negative, shouldDeduplicate, normalizeChinesePunctuation);
+        const cleanPositive = cleanPromptText(positive, cleanOptions);
+        const cleanNegative = cleanPromptText(negative, cleanOptions);
 
         return {
             prompt: cleanPositive,
             negativePrompt: cleanNegative || undefined,
             rawPrompt: rawPositiveInput,
             rawNegativePrompt: rawNegativeInput || undefined,
+            loras: resolvedLoras.length > 0 ? resolvedLoras : undefined,
             sourceImage: options.sourceImage ?? (params.sourceImage as Blob | string | undefined),
             maskImage: options.maskImage ?? (params.maskImage as Blob | string | undefined),
             resolvedPromptPresetId,

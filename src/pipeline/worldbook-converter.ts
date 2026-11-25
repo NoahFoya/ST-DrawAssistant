@@ -15,7 +15,7 @@ import type {
     PromptInjectionEntry,
     PromptChannelPresetData,
 } from '@types';
-import { splitKeywordTokens } from './material-definitions';
+import { splitCommaKeywordTokens, splitKeywordTokens } from './material-definitions';
 
 /** 导入 JSON 文件结构识别结果 */
 export type PromptImportFormat = 'plugin-preset' | 'st-worldbook' | 'invalid';
@@ -276,10 +276,10 @@ export function parseStWorldbookEntries(
                 return val
                     .map((k) => String(k ?? '').trim())
                     .filter(Boolean)
-                    .join('|');
+                    .join(', ');
             }
             if (typeof val === 'string') {
-                return splitKeywordTokens(val).join('|');
+                return splitKeywordTokens(val).join(', ');
             }
             return '';
         };
@@ -364,8 +364,8 @@ export function exportToStWorldbookJson(
     const entriesMap: Record<string, Record<string, unknown>> = {};
 
     (entries || []).forEach((entry, idx) => {
-        const keys = splitKeywordTokens(entry.keywords);
-        const keysecondary = splitKeywordTokens(entry.secondaryKeywords);
+        const keys = splitCommaKeywordTokens(entry.keywords);
+        const keysecondary = splitCommaKeywordTokens(entry.secondaryKeywords);
         const selectiveLogic =
             keysecondary.length === 0
                 ? 0

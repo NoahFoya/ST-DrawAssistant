@@ -1,7 +1,7 @@
 /**
  * NovelAI 绘图服务提供方适配器 (NovelAIProvider)。
  *
- * 基于 NovelAI HTTP API 对接官方云端与第三方兼容端点的图像生成服务：
+ * 基于 NovelAI HTTP API 对接官方云端与第三方兼容接口的图像生成服务：
  * 1. 请求头携带 Authorization: Bearer 鉴权；
  * 2. 图像宽高必须为 64 的整数倍；
  * 3. 按模型版本组装 parameters（V4/V5 采用 v4_prompt，V3 采用扁平参数）；
@@ -20,6 +20,7 @@ import type {
 import { BaseGenerationProvider, type BaseProviderOptions } from '../base-provider';
 import {
     base64ToBlob,
+    detectHostRuntime,
     detectImageMimeFromBytes,
     ensureValidImageBlob,
     HttpError,
@@ -32,17 +33,17 @@ import {
     resolveNovelAIModelName,
 } from './novelai-models';
 
-/** NovelAI 图像生成 API 端点 */
+/** NovelAI 图像生成 API 接口路径 */
 const NOVELAI_GENERATE_ENDPOINT = '/ai/generate-image';
 const NOVELAI_USER_DATA_ENDPOINT = 'https://api.novelai.net/user/data';
 
 /**
- * 解析并构建最终的生图请求端点。
+ * 解析并构建最终的生图请求地址。
  *
  * @remarks
  * 基于 URL 语义分析：
  * 1. 若配置的 URL 含非根子路径（如 /novelai、/api/generate），视为用户填写的完整生图路由，原样使用；
- * 2. 仅包含根域名时，追加官方标准生成端点 (/ai/generate-image)。
+ * 2. 仅包含根域名时，追加官方标准生成路径 (/ai/generate-image)。
  *
  * @param serverUrl 用户配置的服务端基础地址
  * @returns 规范完整的生图请求 URL
@@ -208,7 +209,7 @@ export function extractGatewayErrorMessage(json: unknown): string | null {
 }
 
 /**
- * 将 width/height 向下对齐至 64 的整数倍，且最小取值不小于 64。
+ * 将 width/height 向下取整至 64 的整数倍，且最小取值不小于 64。
  *
  * @remarks
  * NovelAI API 要求图像尺寸必须为 64 的正整数倍且最小为 64，否则返回参数错误。
@@ -410,7 +411,7 @@ async function inflateRawBytes(compressed: Uint8Array): Promise<Uint8Array> {
  * 异步解包 NovelAI 返回的 ZIP 响应，提取首张有效图像 Blob。
  *
  * @remarks
- * 兼容官方原生 STORE (method = 0) 与第三方端点常见的流式 Data Descriptor (`flags & 0x0008`) + Deflate (`method = 8`) ZIP：
+ * 兼容官方原生 STORE (method = 0) 与第三方接口常见的流式 Data Descriptor (`flags & 0x0008`) + Deflate (`method = 8`) ZIP：
  * 优先解析 Central Directory 读取真实大小与偏移，并通过原生 `DecompressionStream('deflate-raw')` 解压。
  */
 export async function extractImageFromZip(buffer: ArrayBuffer, mimeType = 'image/png'): Promise<Blob> {
@@ -469,7 +470,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
      *
      * @remarks
      * 1. 官方服务商恒为官方图像服务地址 (https://image.novelai.net)，忽略配置中的地址；
-     * 2. 第三方端点读取配置中心的自填地址，未填写时返回空字符串；
+     * 2. 第三方服务读取配置中心的自填地址，未填写时返回空字符串；
      * 3. 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -492,9 +493,9 @@ export class NovelAIProvider extends BaseGenerationProvider {
      *
      * @remarks
      * 1. 官方服务请求用户数据接口 (/user/data)，可确认 Token 有效性；
-     * 2. 第三方端点向生图路由发送轻量连通性检查请求 (Ping)，HTTP 400 / 405 / 415 / 422 均表明生图路由存在；
-     *    401 / 403 表明鉴权失败；仅当生图路由未命中 (404) 时回退检测站点 `/api/health`。
-     *    第三方网关的连通性检测通常不校验完整参数或密钥，可达时提示密钥将在生图时校验。
+     * 2. 第三方服务向生图接口发送轻量连通性检查请求 (Ping)，优先拦截代理/传输诊断报错及 401/403（含酒馆代理从 401 改写的 400 Unauthorized）；
+     *    纯 HTTP 400 / 405 / 415 / 422 表明生图接口可达；仅当生图接口返回 404 时才补充检测站点 `/api/health`。
+     *    第三方中转的连通性检测通常不校验完整参数或密钥，可达时提示密钥将在生图时校验。
      *
      * @param signal 中止信号
      */
@@ -521,13 +522,21 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 };
             }
 
-            if (pingResult.status === 401 || pingResult.status === 403) {
-                return {
-                    status: 'error',
-                    latencyMs: pingResult.latencyMs,
-                    message: `NovelAI API Key 无效或已过期 (HTTP ${pingResult.status})`,
-                };
+            if (
+                pingResult.isTransportDiagnostic ||
+                pingResult.isAuthError ||
+                pingResult.status === 401 ||
+                pingResult.status === 403
+            ) {
+                return this.formatPingFailure(pingResult, 'NovelAI API Key 无效或已过期');
             }
+
+            const unreachableHint =
+                transport === 'relay'
+                    ? '无法经由酒馆代理连接 NovelAI 官方服务（请确认 SillyTavern enableCorsProxy 已开启且服务端网络可访问 api.novelai.net）'
+                    : detectHostRuntime().supportsRelayProxy
+                        ? '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在「插件设置」切换为“酒馆代理”或改用自定义反代）'
+                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，当前 TauriTavern 不支持酒馆代理，请改用支持跨域的自定义反代）';
 
             return {
                 status: 'error',
@@ -536,20 +545,20 @@ export class NovelAIProvider extends BaseGenerationProvider {
                     pingResult.error ||
                     (pingResult.status !== undefined
                         ? `连接失败 (HTTP ${pingResult.status})`
-                        : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在「插件设置」开启“酒馆代理”或改用自定义反代）'),
+                        : unreachableHint),
             };
         }
 
         const serverUrl = this.getServerUrl();
         if (!serverUrl) {
-            return { status: 'error', message: '未填写第三方端点地址' };
+            return { status: 'error', message: '未填写第三方服务地址' };
         }
         if (!config?.apiKey) {
             return { status: 'error', message: '未配置 API Key' };
         }
 
         const okMessage = (ms?: number): string =>
-            `第三方端点可达 (${ms ?? '-'}ms)，密钥将在生图时校验`;
+            `第三方服务接口可达 (${ms ?? '-'}ms)，密钥将在生图时校验`;
         const pingOptions = {
             transport,
             signal,
@@ -557,23 +566,23 @@ export class NovelAIProvider extends BaseGenerationProvider {
             headers: { Authorization: `Bearer ${config.apiKey}` },
         };
 
-        // 1. 首选单点检查：向生图路由发送轻量连通性检查请求 (Ping)
-        // 多数代理在生图路由收到 GET 空请求时返回 400 / 405 / 415 / 422，均代表路由已存在并正常响应
+        // 1. 首选单点检查：先排除宿主代理/HTML 回退诊断与鉴权失败，再识别 400/405/415/422 可达状态
         const endpointPing = await this._httpClient.ping(resolveNovelAIEndpoint(serverUrl), pingOptions);
+        if (
+            endpointPing.isTransportDiagnostic ||
+            endpointPing.isAuthError ||
+            endpointPing.status === 401 ||
+            endpointPing.status === 403
+        ) {
+            return this.formatPingFailure(endpointPing, 'API Key 无效或无权访问');
+        }
+
         const reachableErrorStatuses = new Set([400, 405, 415, 422]);
         if (
             endpointPing.ok ||
             (endpointPing.status !== undefined && reachableErrorStatuses.has(endpointPing.status))
         ) {
             return { status: 'ok', latencyMs: endpointPing.latencyMs, message: okMessage(endpointPing.latencyMs) };
-        }
-
-        if (endpointPing.status === 401 || endpointPing.status === 403) {
-            return {
-                status: 'error',
-                latencyMs: endpointPing.latencyMs,
-                message: endpointPing.error || `API Key 无效或无权访问 (HTTP ${endpointPing.status})`,
-            };
         }
 
         // 2. 判定是否属于底层网络连接失败（端口拒绝 ECONNREFUSED、主机无法解析 ENOTFOUND 或完全不可达）
@@ -586,16 +595,12 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 endpointPing.error.includes('Failed to fetch')
             ));
 
-        // 若网络或端口不可达，直接返回失败，避免并发请求其他候选路由
+        // 若网络或端口不可达，直接返回失败，避免发起额外请求
         if (isNetworkDown) {
-            return {
-                status: 'error',
-                latencyMs: endpointPing.latencyMs,
-                message: endpointPing.error || `连接失败 (HTTP ${endpointPing.status ?? 'unknown'})`,
-            };
+            return this.formatPingFailure(endpointPing);
         }
 
-        // 3. 仅当生图路由明确返回 404 未命中时，回退检测站点简单健康路由（不附带 Authorization 以减少 CORS 预检阻塞）
+        // 3. 仅当生图接口返回 404 时才检查 /api/health（不附带 Authorization 以减少 CORS 预检阻塞）
         if (endpointPing.status === 404 && !signal?.aborted) {
             try {
                 const healthUrl = `${new URL(serverUrl).origin}/api/health`;
@@ -604,6 +609,9 @@ export class NovelAIProvider extends BaseGenerationProvider {
                     signal,
                     timeoutMs: 4000,
                 });
+                if (res.isTransportDiagnostic) {
+                    return this.formatPingFailure(res);
+                }
                 if (res.ok) {
                     return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
                 }
@@ -612,11 +620,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             }
         }
 
-        return {
-            status: 'error',
-            latencyMs: endpointPing.latencyMs,
-            message: endpointPing.error || `连接失败 (HTTP ${endpointPing.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(endpointPing);
     }
 
     /**
@@ -640,12 +644,12 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const startTime = Date.now();
         const config = this._getConfig();
 
-        // 1. 校验凭据与端点地址
+        // 1. 校验凭据与服务地址
         if (!config?.apiKey) {
             throw new Error('未配置 NovelAI API Key，请在设置中填写');
         }
         if (!this._isOfficial() && !this.getServerUrl()) {
-            throw new Error('未填写第三方端点地址，请在设置中填写');
+            throw new Error('未填写第三方服务地址，请在设置中填写');
         }
 
         const transport = this.getTransport();
@@ -665,7 +669,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
         const isV5 = modelFamily === 'v5';
         const isV4OrHigher = modelFamily !== 'v3';
 
-        // 4. 对齐分辨率尺寸至 64 的整数倍
+        // 4. 将分辨率尺寸按 64 像素整数倍取整
         const rawWidth = (params.width ?? drawingPreset?.width ?? 832) as number;
         const rawHeight = (params.height ?? drawingPreset?.height ?? 1216) as number;
         const resolvedWidth = alignTo64(rawWidth);
@@ -799,8 +803,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const extracted = extractGatewayErrorMessage(err.details);
-                throw new Error(`NovelAI 生图请求失败: ${extracted || `HTTP ${err.status}`}`);
+                throw this.formatProviderHttpError(err, 'NovelAI 生图请求失败', extractGatewayErrorMessage);
             }
             throw err;
         }
@@ -855,7 +858,7 @@ export class NovelAIProvider extends BaseGenerationProvider {
                         );
                     } catch (err: unknown) {
                         if (err instanceof HttpError) {
-                            throw new Error(`下载中转图片失败: HTTP ${err.status}`);
+                            throw this.formatProviderHttpError(err, '下载中转图片失败');
                         }
                         throw err;
                     }

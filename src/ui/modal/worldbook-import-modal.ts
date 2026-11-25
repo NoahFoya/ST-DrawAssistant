@@ -14,7 +14,7 @@ import type { Disposable } from '../types';
 import type { PromptInjectionEntry, PromptChannelPresetData, PresetItem } from '@types';
 import type { ParsedStWorldbookResult } from '../../pipeline/worldbook-converter';
 import { exportToStWorldbookJson } from '../../pipeline/worldbook-converter';
-import { splitKeywordTokens } from '../../pipeline/material-definitions';
+import { splitCommaKeywordTokens } from '../../pipeline/material-definitions';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { downloadJsonFile } from '../../util/browser-io';
@@ -257,7 +257,7 @@ export function openWorldbookImportModal(options: WorldbookImportModalOptions): 
             entry.triggerMode === 'always'
                 ? 'da-badge da-badge--primary'
                 : 'da-badge da-badge--warning';
-        const kwCount = splitKeywordTokens(entry.keywords).length;
+        const kwCount = splitCommaKeywordTokens(entry.keywords).length;
         trigBadge.textContent =
             entry.triggerMode === 'always' ? '常驻' : `关键词 (${kwCount})`;
         metaGroup.appendChild(trigBadge);

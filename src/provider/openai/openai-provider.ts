@@ -22,15 +22,22 @@ import {
     type BaseProviderOptions,
     type InFlightAssetSlot,
 } from '../base-provider';
-import { base64ToBlob, ensureValidImageBlob, HttpError } from '../../util/http-client';
+import {
+    base64ToBlob,
+    ensureValidImageBlob,
+    HttpError,
+} from '../../util/http-client';
 import { logger } from '../../util/logger';
 import {
-    extractHttpErrorMessage,
     hashKeyFingerprint,
     parseCustomBodyObject,
     resolveCloudModelId,
+    toCloudGenerationError,
 } from '../cloud-provider-utils';
-import { resolveOpenAIModelCapabilities } from './openai-models';
+import {
+    isSiliconFlowService,
+    resolveOpenAIModelCapabilities,
+} from './openai-models';
 
 /**
  * 将 width/height 组装为 OpenAI images/generations 的 size 字符串。
@@ -121,7 +128,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 获取 OpenAI 兼容服务基础地址。
      *
      * @remarks
-     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共端点 (https://api.openai.com)。
+     * 读取配置中心的 OpenAI 兼容服务地址，未配置时缺省为默认公共接口地址 (https://api.openai.com)。
      * 自动规整末尾斜杠以确保 URL 拼接的一致性。
      */
     public getServerUrl(): string {
@@ -163,7 +170,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 检查 OpenAI 兼容服务连通性。
      *
      * @remarks
-     * 请求 GET ${v1Base}/models 验证服务可达性；该端点在大多数兼容实现中均存在。
+     * 请求 GET ${v1Base}/models 验证服务可达性；该接口在大多数兼容实现中均存在。
      *
      * @param signal 中止信号
      */
@@ -188,11 +195,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
             };
         }
 
-        return {
-            status: 'error',
-            latencyMs: pingResult.latencyMs,
-            message: pingResult.error || `连接失败 (HTTP ${pingResult.status ?? 'unknown'})`,
-        };
+        return this.formatPingFailure(pingResult, 'API Key 无效或无权访问');
     }
 
     /**
@@ -201,7 +204,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * @remarks
      * 请求 GET ${v1Base}/models，过滤 id 含图像关键词的条目。
      * 支持并发请求复用与 60 秒短时内存缓存，避免重复请求。
-     * 若后端不支持该端点则静默返回空数组。
+     * 若后端不支持该接口则静默返回空数组（代理或传输故障仍显式抛出）。
      *
      * @param signal 中止信号
      * @param forceRefresh 是否强制忽略缓存拉取最新数据
@@ -262,6 +265,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
                     if (internalSignal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
                         throw err;
                     }
+                    this.rethrowTransportDiagnostic(err);
                     if (err instanceof HttpError && (err.status === 404 || err.status === 405 || err.status === 501)) {
                         logger.debug(`[OpenAIProvider] 服务端未实现 /models 接口 (HTTP ${err.status})，跳过模型枚举`);
                     } else {
@@ -278,7 +282,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
      * 执行 OpenAI 兼容图像生成任务。
      *
      * @remarks
-     * 向 /v1/images/generations 端点提交生图请求，优先解析响应中的 b64_json 图像数据，
+     * 向 /v1/images/generations 接口提交生图请求，优先解析响应中的 b64_json 图像数据，
      * 若服务端仅返回 url 则通过 HTTP 客户端执行二次拉取并转换为 Blob。
      *
      * @param request 生图请求参数
@@ -306,13 +310,27 @@ export class OpenAIProvider extends BaseGenerationProvider {
         const resolvedPrompt = request.prompt;
         const resolvedModel = resolveOpenAIModel(params, drawingPreset);
         const capabilities = resolveOpenAIModelCapabilities(resolvedModel);
-        const isSiliconFlow =
-            config?.serviceId === 'siliconflow' ||
-            /(?:^|[./])siliconflow\.cn(?:[:/]|$)/i.test(v1Base);
+        const isSiliconFlow = isSiliconFlowService(config?.serviceId, v1Base);
+        const rawAspectRatio =
+            (typeof params.aspectRatio === 'string' && params.aspectRatio.trim()) ||
+            (typeof drawingPreset?.aspectRatio === 'string' && drawingPreset.aspectRatio.trim()) ||
+            '';
+        const isAutoSize =
+            capabilities.supportsAutoSize &&
+            !isSiliconFlow &&
+            rawAspectRatio.toLowerCase() === 'auto';
 
-        const resolvedWidth = (params.width ?? drawingPreset?.width) as number | undefined;
-        const resolvedHeight = (params.height ?? drawingPreset?.height) as number | undefined;
-        const sizeStr = buildSizeString(resolvedWidth, resolvedHeight);
+        const resolvedWidth = isAutoSize
+            ? undefined
+            : ((params.width ?? drawingPreset?.width) as number | undefined);
+        const resolvedHeight = isAutoSize
+            ? undefined
+            : ((params.height ?? drawingPreset?.height) as number | undefined);
+        const sizeStr = isAutoSize
+            ? capabilities.family === 'gpt-image'
+                ? 'auto'
+                : undefined
+            : buildSizeString(resolvedWidth, resolvedHeight);
 
         const rawQuality = (params.quality ?? drawingPreset?.quality) as string | undefined;
         const resolvedQuality =
@@ -393,11 +411,11 @@ export class OpenAIProvider extends BaseGenerationProvider {
             );
         } catch (err: unknown) {
             if (err instanceof HttpError) {
-                const errorDetail = extractHttpErrorMessage(err);
-                if (err.status === 429) {
-                    throw new Error(`请求被限速，请稍后重试: ${errorDetail}`);
-                }
-                throw new Error(`OpenAI 兼容服务生图失败: ${errorDetail}`);
+                throw toCloudGenerationError(
+                    err,
+                    '请求被限速，请稍后重试',
+                    'OpenAI 兼容服务生图失败'
+                );
             }
             throw err;
         }
@@ -434,7 +452,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
                 );
             } catch (err: unknown) {
                 if (err instanceof HttpError) {
-                    throw new Error(`图像 URL 下载失败: HTTP ${err.status}`);
+                    throw this.formatProviderHttpError(err, '图像 URL 下载失败');
                 }
                 throw err;
             }
@@ -452,15 +470,22 @@ export class OpenAIProvider extends BaseGenerationProvider {
                 : resolvedModel;
         let finalWidth = resolvedWidth;
         let finalHeight = resolvedHeight;
+        let finalAspectRatio = isAutoSize ? 'auto' : undefined;
         const effectiveSizeStr =
             typeof requestBody['image_size'] === 'string'
                 ? requestBody['image_size']
                 : requestBody['size'];
         if (typeof effectiveSizeStr === 'string') {
-            const sizeMatch = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(effectiveSizeStr.trim());
+            const trimmedSize = effectiveSizeStr.trim();
+            const sizeMatch = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(trimmedSize);
             if (sizeMatch) {
                 finalWidth = Number(sizeMatch[1]);
                 finalHeight = Number(sizeMatch[2]);
+                finalAspectRatio = undefined;
+            } else if (trimmedSize.toLowerCase() === 'auto') {
+                finalWidth = undefined;
+                finalHeight = undefined;
+                finalAspectRatio = 'auto';
             }
         }
         const finalQuality =
@@ -491,6 +516,7 @@ export class OpenAIProvider extends BaseGenerationProvider {
             baseModel: finalModel,
             width: finalWidth,
             height: finalHeight,
+            aspectRatio: finalAspectRatio,
             quality: finalQuality,
             style: finalStyle,
             background: finalBackground,

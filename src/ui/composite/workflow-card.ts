@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
+import { hasWeilinNodeInGraph } from '../../provider/comfyui/lora-graph-injector';
 
 /** 替换变量信息 */
 export interface VariableReplacementInfo {
@@ -356,25 +357,15 @@ export function isWorkflowFieldEligibleForVariable(
  * 快速检测给定工作流 JSON 中是否包含 WeiLin 扩展节点。
  *
  * @remarks
- * 客观限制说明：
- * ComfyUI 原生 API 提示词格式不支持直接解析 `<lora:...>` 文本语法动态加载模型。
- * 在 ComfyUI 流程中实现提示词文本级动态 LoRA 解析与权重调节，必须在工作流中接入
- * `WeiLin` 节点插件（如 `WeiLinPromptUI` / `weilin-comfyui-tools` 等节点）。
- * 本函数通过扫描节点的 class_type 与 title 是否包含 weilin 标识，判断是否需要对用户提示依赖安装。
+ * ComfyUI 原生工作流已支持由插件客户端自动拼接内置 `LoraLoader` 节点加载 LoRA；
+ * 若用户导入的自定义工作流中使用了 `WeiLin` 节点（如 `WeiLinPromptUI`），则运行时会改为输出 `<wlr:...>` 语法
+ * 并启用触发词权重（Trigger）等精细控制，同时通过 UI 按需提醒安装 `ComfyUI-WeiLin` 插件。
  */
 export function hasWeilinNodeInWorkflow(jsonStr: string): boolean {
     if (!jsonStr || typeof jsonStr !== 'string') return false;
     const parsed = parseComfyWorkflowInput(jsonStr);
     if (!parsed.ok) return false;
-
-    return Object.values(parsed.workflow).some((node) => {
-        if (!isPlainRecord(node)) return false;
-        const classType = typeof node.class_type === 'string' ? node.class_type : '';
-        const title = isPlainRecord(node._meta) && typeof node._meta.title === 'string'
-            ? node._meta.title
-            : '';
-        return /weilin/i.test(classType) || /weilin/i.test(title);
-    });
+    return hasWeilinNodeInGraph(parsed.workflow);
 }
 
 /** 扫描与格式化 ComfyUI 工作流时的原始节点结构模型 */
@@ -790,14 +781,14 @@ export class WorkflowCard implements UIComponent {
         editorRow.appendChild(this.textareaElement);
         this.card.appendContent(editorRow);
 
-        // 6. WeiLin 节点插件常驻提示条（默认始终展示，支持勾选不再显示该提示）
+        // 6. WeiLin 节点插件按需提示条（仅当当前工作流包含 WeiLin 节点时显示，支持勾选不再显示该提示）
         this.weilinNoticeEl = document.createElement('div');
         this.weilinNoticeEl.className = 'da-workflow-weilin-notice';
         this.weilinNoticeEl.innerHTML = `
             <span class="da-workflow-weilin-notice__icon">${renderIcon('info', 16)}</span>
             <div class="da-workflow-weilin-notice__body">
                 <span class="da-workflow-weilin-notice__text">
-                    预设提供<strong>原生（Checkpoint / UNet）</strong>与 <strong>WeiLin（Checkpoint / UNet）</strong>四套文生图工作流。ComfyUI 原生 API 无法直接解析提示词中的 LoRA 标签；若使用包含 <strong>WeiLin 节点</strong>的工作流通过提示词动态加载与调节 LoRA，请确保已在 ComfyUI Manager 中搜索并安装 <strong>ComfyUI-WeiLin</strong>（WeiLin-Comfyui-Tools）插件。
+                    检测到当前工作流包含 <strong>WeiLin 节点</strong>：如需使用触发词权重或 WeiLin 词库等更精细的 LoRA 控制，请确认已在 ComfyUI Manager 搜索安装 <strong>ComfyUI-WeiLin</strong>（WeiLin-Comfyui-Tools）插件，生图时会自动将 LoRA 按 &lt;wlr:...&gt; 语法传给该节点；切换为原生工作流则无需安装任何第三方插件。
                 </span>
                 <button type="button" class="da-workflow-weilin-notice__dismiss" data-action="dismiss-weilin-notice">
                     不再显示该提示
@@ -1027,10 +1018,12 @@ export class WorkflowCard implements UIComponent {
         return true;
     }
 
-    /** 根据用户是否已关闭提示控制 WeiLin 插件提示条显隐（默认始终显示） */
-    private updateWeilinNotice(_val?: string): void {
+    /** 根据当前工作流是否含 WeiLin 节点及用户关闭设置按需控制 WeiLin 插件提示条显隐 */
+    private updateWeilinNotice(val?: string): void {
+        const targetJson = val !== undefined ? val : this.currentData.json;
         const dismissed = Boolean(settingsStore.get('ui')?.dismissWeilinNotice);
-        this.weilinNoticeEl.style.display = dismissed ? 'none' : 'flex';
+        const hasWeilin = hasWeilinNodeInWorkflow(targetJson);
+        this.weilinNoticeEl.style.display = hasWeilin && !dismissed ? 'flex' : 'none';
     }
 
     /** 检查 JSON 语法与 ComfyUI API 工作流结构状态并切换 invalid 样式类 */

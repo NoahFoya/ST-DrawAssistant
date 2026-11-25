@@ -552,7 +552,6 @@ export class ProviderTabViewModel implements Disposable {
                     positivePrefix: p.data?.positivePrefix || '',
                     positiveSuffix: p.data?.positiveSuffix || '',
                     negativePrompt: p.data?.negativePrompt || '',
-                    loraSyntaxMode: p.data?.loraSyntaxMode || 'standard',
                     loras: (p.data?.loras || []).map((l, idx) => ({
                         id: `lora_${p.id}_${idx}`,
                         enabled: l.enabled !== false,
@@ -1239,7 +1238,6 @@ export class ProviderTabViewModel implements Disposable {
             positivePrefix: src?.positivePrefix || '',
             positiveSuffix: src?.positiveSuffix || '',
             negativePrompt: src?.negativePrompt || '',
-            loraSyntaxMode: src?.loraSyntaxMode || (this.provider === 'comfyui' ? 'weilin' : 'standard'),
             loras: (src?.loras || [])
                 .filter((l) => Boolean(l.modelName?.trim()))
                 .map((l) => ({
@@ -1268,7 +1266,6 @@ export class ProviderTabViewModel implements Disposable {
                     positivePrefix: '',
                     positiveSuffix: '',
                     negativePrompt: '',
-                    loraSyntaxMode: this.provider === 'comfyui' ? 'weilin' : 'standard',
                     loras: [],
                 }),
                 buildCloneData: () => buildPromptData(effectiveData),

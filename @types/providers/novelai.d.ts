@@ -2,12 +2,12 @@
  * NovelAI 绘图服务提供方私有配置模型。
  *
  * @remarks
- * 包含 NovelAI 官方云端与第三方兼容端点的专有连接、API 密钥与生图参数预设配置。
+ * 包含 NovelAI 官方云端与第三方兼容服务的专有连接、API 密钥与生图参数预设配置。
  */
 
 import type { ProviderAssetCache } from '../provider';
 
-/** NovelAI 服务商标识：官方服务或用户自填地址的第三方端点 */
+/** NovelAI 服务商标识：官方服务或用户自填地址的第三方接口 */
 export type NovelAIServiceId = 'novelai-official' | 'custom';
 
 /** 单个服务商独立保存的连接信息与模型缓存 */

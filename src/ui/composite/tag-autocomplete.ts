@@ -35,6 +35,8 @@ export type TagAutocompleteMode = 'lexicon-only' | 'prompt-with-macro';
 export interface TagAutocompleteOptions {
     /** 联想模式：素材管理用 'lexicon-only'，生图编辑框用 'prompt-with-macro' */
     readonly mode: TagAutocompleteMode;
+    /** 失焦时是否自动剥离成对 `$...$` 标记（`lexicon-only` 下默认 `true`；支持正则锚点 `$` 的关键词框传 `false`） */
+    readonly stripMacrosOnBlur?: boolean;
     /** 候选列表最大展示条数（默认 15） */
     readonly limit?: number;
     /** 可选自定义检索服务实例（默认使用全局 lexiconIndexService） */
@@ -118,6 +120,7 @@ export class TagAutocomplete implements Disposable {
     public readonly target: HTMLInputElement | HTMLTextAreaElement;
     public readonly mode: TagAutocompleteMode;
 
+    private readonly _stripMacrosOnBlur: boolean;
     private readonly _limit: number;
     private readonly _indexService: LexiconIndexService;
     private readonly _onSelect?: (item: LexiconCandidateItem, newValue: string) => void;
@@ -141,6 +144,8 @@ export class TagAutocomplete implements Disposable {
     ) {
         this.target = target;
         this.mode = options.mode;
+        this._stripMacrosOnBlur =
+            options.stripMacrosOnBlur ?? (options.mode === 'lexicon-only');
         this._limit = options.limit ?? 15;
         this._indexService = options.indexService ?? lexiconIndexService;
         this._onSelect = options.onSelect;
@@ -387,8 +392,8 @@ export class TagAutocomplete implements Disposable {
 
         const onBlur = () => {
             this._blurredSinceQuery = true;
-            // 在 lexicon-only 模式下，失焦时自动剥离可能手动粘贴的 $...$ 宏，防止循环嵌套
-            if (this.mode === 'lexicon-only' && this.target.value.includes('$')) {
+            // 在默认 lexicon-only 模式下，失焦时自动剥离可能手动粘贴的 $...$ 宏，防止循环嵌套；支持正则锚点 `$` 的输入可显式禁用
+            if (this._stripMacrosOnBlur && this.target.value.includes('$')) {
                 const cleaned = stripNestedMacroTokens(this.target.value);
                 if (cleaned !== this.target.value) {
                     this.target.value = cleaned;

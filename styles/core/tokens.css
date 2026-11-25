@@ -11,7 +11,7 @@
  */
 
 :root {
-    /* 1. 表面层级（基准色值与默认阅读主题 Catppuccin Mocha 对齐） */
+    /* 1. 表面层级（基准色值与默认阅读主题 Catppuccin Mocha 保持一致） */
     --da-bg-canvas: #11111b;
     --da-bg-primary: #1e1e2e;
     --da-bg-secondary: #181825;

@@ -31,7 +31,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '故事插画',
         defaultDepth: 0,
         defaultOrder: 10,
-        desc: '默认开启的主通道。四个通道共用同一套触发与变量机制；若已挂载外部世界书，可关闭本通道或自由修改预设内容。',
+        desc: '默认开启的主通道，教 AI 在剧情回复中何时及如何输出生图指令；若已挂载外部绘画世界书，可关闭本通道。',
     },
     {
         id: 'vocab',
@@ -39,7 +39,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '词汇指导',
         defaultDepth: 7,
         defaultOrder: 200,
-        desc: '默认关闭的词表指导通道，用于在上下文中为大语言模型提供 Danbooru 分类标签参考与按关键词触发的扩展词表（与侧边栏「词库」本地联想功能完全独立）。',
+        desc: '默认关闭的词表参考通道，以 @D=7 深度注入常见 Danbooru 标签表并按中文联想词扩展触发（与侧边栏本地联想「词库」相互独立）。',
     },
     {
         id: 'character',
@@ -47,7 +47,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '素材创作',
         defaultDepth: 0,
         defaultOrder: 20,
-        desc: '默认关闭的分类通道，适合存放用于辅助 AI 梳理人物与服装设定的创作提示词，配合「素材管理 → 解析设置」中的起止标记规则进行档案识别与收录。',
+        desc: '默认关闭的建档提示词通道，引导 AI 按「素材管理 → 解析设置」的标签格式生成角色与服装设定档案。',
     },
     {
         id: 'material',
@@ -55,7 +55,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
         label: '素材注入',
         defaultDepth: 0,
         defaultOrder: 30,
-        desc: '默认关闭的分类通道，适合挂载 {{角色启用列表}}、{{服装启用列表}}、{{角色可用宏列表}} 与 {{服装可用宏列表}} 等动态模板变量，将已启用的素材列表与生图宏说明注入上下文（也可按习惯写进其他开启的通道中）。',
+        desc: '默认关闭的素材变量通道，通过 {{角色启用列表}}、{{服装启用列表}} 与可用宏模板将已启用的素材注入推理上下文。',
     },
 ];
 

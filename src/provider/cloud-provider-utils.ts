@@ -3,7 +3,7 @@
  */
 
 import type { DrawingPresetData } from '@types';
-import { HttpError } from '../util/http-client';
+import { HttpError, resolveHttpErrorMessage } from '../util/http-client';
 import { logger } from '../util/logger';
 
 /**
@@ -20,30 +20,51 @@ export function hashKeyFingerprint(apiKey?: string): string {
 }
 
 /**
- * 从 HttpError 提取可读的上游错误信息。
+ * 从 HttpError 提取可读的错误信息。
+ * 若为宿主代理/传输诊断错误，优先返回完整诊断说明；否则按通用云端格式提取上游错误字段。
  */
 export function extractHttpErrorMessage(err: HttpError): string {
-    let errorDetail = `HTTP ${err.status}`;
-    const details = err.details;
-    if (details && typeof details === 'object') {
-        const record = details as Record<string, unknown>;
-        const nestedError =
-            typeof record.error === 'object' && record.error !== null
-                ? (record.error as Record<string, unknown>)
-                : undefined;
-        const errorMsg =
-            typeof record.error === 'string' ? record.error : nestedError?.message;
-        if (typeof errorMsg === 'string' && errorMsg.trim()) {
-            errorDetail = errorMsg.trim();
-        } else if (typeof record.message === 'string' && record.message.trim()) {
-            errorDetail = record.message.trim();
-        } else if (typeof record.detail === 'string' && record.detail.trim()) {
-            errorDetail = record.detail.trim();
+    return resolveHttpErrorMessage(err, (details) => {
+        if (details && typeof details === 'object' && !Array.isArray(details)) {
+            const record = details as Record<string, unknown>;
+            const nestedError =
+                typeof record.error === 'object' && record.error !== null
+                    ? (record.error as Record<string, unknown>)
+                    : undefined;
+            const errorMsg =
+                typeof record.error === 'string' ? record.error : nestedError?.message;
+            if (typeof errorMsg === 'string' && errorMsg.trim()) {
+                return errorMsg.trim();
+            }
+            if (typeof record.message === 'string' && record.message.trim()) {
+                return record.message.trim();
+            }
+            if (typeof record.detail === 'string' && record.detail.trim()) {
+                return record.detail.trim();
+            }
+        } else if (typeof details === 'string' && details.trim()) {
+            return details.trim();
         }
-    } else if (typeof details === 'string' && details.trim()) {
-        errorDetail = details.trim();
+        return undefined;
+    });
+}
+
+/**
+ * 统一将云端生图请求抛出的 `HttpError` 映射为诊断引导、限速提示或服务报错。
+ */
+export function toCloudGenerationError(
+    err: HttpError,
+    rateLimitPrefix: string,
+    failurePrefix: string
+): Error {
+    const detail = extractHttpErrorMessage(err);
+    if (err.isTransportDiagnostic) {
+        return new Error(detail);
     }
-    return errorDetail;
+    if (err.status === 429) {
+        return new Error(`${rateLimitPrefix}: ${detail}`);
+    }
+    return new Error(`${failurePrefix}: ${detail}`);
 }
 
 /**

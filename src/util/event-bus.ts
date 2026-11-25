@@ -25,6 +25,8 @@ export interface TaskStatusEventData {
     readonly imageId?: string;
     /** 任务取消原因描述，取消时存在 */
     readonly cancelReason?: string;
+    /** 为 true 时抑制底层单任务取消提示弹窗（如批量取消旧分支任务后由上层统一提示） */
+    readonly silentToast?: boolean;
 }
 
 /** 插件默认事件类型映射 */
@@ -35,7 +37,7 @@ export type AppEventMap = {
     'image:ready': { imageId: string; target: SlotMountTarget };
     /** 图像标星收藏状态变更通知 */
     'image:favorite-changed': { imageId: string; favorited: boolean };
-    /** 图像资产从存储中物理删除通知 */
+    /** 图像资产从存储中彻底删除通知 */
     'image:deleted': { imageId: string };
     /** 插件设置项更新 */
     'settings:updated': {

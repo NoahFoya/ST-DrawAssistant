@@ -5,7 +5,7 @@
  * 负责在提示词清洗前单层解析 `$名称-宏-状态$` 格式的素材宏引用：
  * 1. 严格固定格式 (`$名称-宏-状态$`):
  *    - 前段匹配素材库格式预设中的宏规则（如 `closeup` / `upper` / `cowboy` / `full` / `bust` / `crotch` 等）；
- *    - 后段匹配该类型的固定状态后缀（角色: `clothed` / `exposed` / `nude`；服装: `intact` / `disheveled`）；
+ *    - 后段匹配该类型的固定状态后缀（角色: `covered` / `exposed` / `nude`；服装: `intact` / `disheveled`）；
  *    - 展开时按标准部位顺序依次加载各选中部位的 `通用tags + [状态]tags` 并去重。
  * 2. 缺省状态降级 (`$名称-宏$`):
  *    - 仅作解析器回退策略，不鼓励 AI 省略状态；省略状态时仅展开选中部位的 `通用tags`。
@@ -419,8 +419,22 @@ export function resolvePromptMacros(
     const unresolvedMacros: string[] = [];
 
     const expandedText = text.replace(
-        /\$([^\r\n$,，;；:：!！?？]+?)\$/g,
-        (fullMatch, innerToken: string) => {
+        /(\(\s*)\$([^\r\n$,，;；:：!！?？()（）]+?)\$(\s*\))|(（\s*)\$([^\r\n$,，;；:：!！?？()（）]+?)\$(\s*）)|\$([^\r\n$,，;；:：!！?？]+?)\$/g,
+        (
+            fullMatch,
+            halfOpen: string | undefined,
+            halfInner: string | undefined,
+            halfClose: string | undefined,
+            fullOpen: string | undefined,
+            fullInner: string | undefined,
+            fullClose: string | undefined,
+            bareInner: string | undefined
+        ) => {
+            const innerToken = halfInner ?? fullInner ?? bareInner ?? '';
+            const openWrapper = halfOpen ?? fullOpen ?? '';
+            const closeWrapper = halfClose ?? fullClose ?? '';
+            const hasWrapper = Boolean(openWrapper && closeWrapper);
+
             const trimmed = innerToken.trim();
             if (!trimmed) {
                 return fullMatch;
@@ -439,10 +453,11 @@ export function resolvePromptMacros(
             );
             if (matched) {
                 resolvedMacros.push(trimmed);
-                return expanded;
+                return hasWrapper ? `${openWrapper}${expanded}${closeWrapper}` : expanded;
             }
 
             unresolvedMacros.push(trimmed);
+            // 行内括号写法（如 爱丽丝($不存在$)）若宏未命中，同步移除空括号以避免残留 ()
             return '';
         }
     );
@@ -486,7 +501,7 @@ export interface LexiconCandidateItem {
 
 /** 编辑框内单个 $宏$ 调用诊断结果 */
 export interface MacroTokenDiagnostic {
-    /** 原始宏片段（含首尾 $，如 "$角色名-full-clothed$"） */
+    /** 原始宏片段（含首尾 $，如 "$角色名-full-covered$"） */
     readonly rawToken: string;
     /** 去除首尾 $ 后的内部标识 */
     readonly innerToken: string;
@@ -581,7 +596,7 @@ function buildSuffixCandidates(
                 entry.kind === 'character'
                     ? ruleName === 'crotch'
                         ? 'nude'
-                        : 'clothed'
+                        : 'covered'
                     : 'intact';
             const baseDesc =
                 rule.description?.trim() || `部位: ${(rule.targetParts || []).join(', ')}`;

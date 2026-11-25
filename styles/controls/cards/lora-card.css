@@ -4,8 +4,8 @@
  * @remarks
  * 1. 提示词卡片内嵌胶囊 (.da-lora-chip)：支持一键切换启用/休眠状态与快速移除；
  * 2. 独立模态框 (.da-lora-modal-panel)：复用统一次级弹窗骨架 .da-submodal-*，内嵌 LoraManager；
- * 3. 顶部两行控制栏 (.da-lora-add-bar)：首行为标准表单行模式选择，次行为输入联想下拉框与添加按钮；
- * 4. 已挂载条目卡片 (.da-lora-item)：首行展示开关、模型名、实时标签预览与移除按钮，次行采用自适应网格排布 2/3 列权重步进器。
+ * 3. 顶部两行控制栏 (.da-lora-add-bar)：首行为自动注入能力说明提示，次行为输入联想下拉框与添加按钮；
+ * 4. 已挂载条目卡片 (.da-lora-item)：首行展示开关、模型名、权重摘要与移除按钮，次行采用自适应网格排布 3 列权重步进器。
  */
 
 /* 1. 提示词预设卡片内的 LoRA 概要与交互胶囊 */
@@ -22,11 +22,6 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-}
-
-.da-prompt-lora-mode-badge {
-    font-family: var(--da-font-mono, monospace);
-    font-size: 11px;
 }
 
 .da-prompt-lora-badges {
@@ -188,15 +183,32 @@
     padding: 10px 16px 12px;
 }
 
-/* 第 1 行：标准表单行（左：LoRA 添加模式 + ? 帮助提示；右：SD-WebUI / ComfyUI 切换） */
-.da-lora-mode-row.da-form-row {
-    padding: 2px 0 8px 0;
-    min-height: 36px;
-    border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
+/* 第 1 行：各后端自动适配与 WeiLin Trigger 权重能力提示条 */
+.da-lora-capability-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--da-radius-sm, 6px);
+    background: var(--da-color-info-subtle, rgba(var(--da-accent-rgb), 0.1));
+    border: 1px solid rgba(var(--da-accent-rgb), 0.24);
+    font-size: var(--da-font-size-xs, 12px);
+    line-height: 1.45;
+    color: var(--da-text-secondary, rgba(255, 255, 255, 0.8));
 }
 
-.da-lora-mode-row.da-form-row:hover {
-    background-color: transparent;
+.da-lora-capability-note__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-accent-color);
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.da-lora-capability-note__text strong {
+    color: var(--da-text-primary);
+    font-weight: 600;
 }
 
 /* 第 2 行：可输入联想选择下拉框 + 添加按钮 */
@@ -337,6 +349,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px 14px;
+    min-width: 0;
     background: var(--da-surface-card, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.09));
     border-radius: var(--da-radius-md, 8px);
@@ -371,9 +384,10 @@
 /* 首行：开关 + 名称与实时标签预览 + 移除按钮 */
 .da-lora-item__row--header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px 10px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
 }
@@ -382,7 +396,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    flex: 1 1 auto;
+    flex: 1 1 200px;
     min-width: 0;
 }
 
@@ -437,6 +451,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .da-lora-item__trigger-seg.da-segmented {
@@ -455,6 +470,7 @@
     flex-direction: column;
     gap: 4px;
     width: 100%;
+    min-width: 0;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--da-separator, rgba(255, 255, 255, 0.06));
     box-sizing: border-box;
@@ -465,10 +481,17 @@
     flex-direction: column;
     gap: 4px;
     width: 100%;
+    min-width: 0;
 }
 
-.da-lora-kw-input.is-invalid {
-    border-color: var(--da-color-error, #f43f5e);
+.da-lora-kw-field .da-lora-param-label {
+    white-space: normal;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.da-textarea.da-lora-kw-input {
+    min-height: 56px;
 }
 
 .da-lora-kw-error {

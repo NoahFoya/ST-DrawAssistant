@@ -31,6 +31,7 @@ import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
 import {
     OPENAI_MODEL_OPTIONS,
+    isSiliconFlowService,
     resolveOpenAIModelCapabilities,
 } from '../../provider/openai/openai-models';
 
@@ -173,11 +174,13 @@ export class OpenAITabView extends ProviderTabView {
             defaultNewName: '新建预设',
             defaultModels: OPENAI_MODEL_OPTIONS,
             defaultDraftTemplate: () => ({
-                baseModel: 'dall-e-3',
+                baseModel: 'gpt-image-1',
                 width: 1024,
-                height: 1024,
-                quality: 'standard',
-                style: 'vivid',
+                height: 1536,
+                quality: 'medium',
+                background: 'auto',
+                outputFormat: 'png',
+                promptPresetId: '',
             }),
             onPresetApplied: (_preset, draft) => {
                 this.customBodyJson?.syncFromDraft((draft.customBodyJson as string) || '');
@@ -197,13 +200,22 @@ export class OpenAITabView extends ProviderTabView {
                 const effectiveModel =
                     (cfg.customModel && cfg.customModel.trim()) || cfg.baseModel;
                 if (!effectiveModel) missing.push('模型标识 (预置或自定义)');
+                const conn = this.vm?.connectionData.value;
+                const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
+                const supportsAutoSize =
+                    resolveOpenAIModelCapabilities(effectiveModel).supportsAutoSize &&
+                    !isSiliconFlow;
+                const isAutoSize =
+                    supportsAutoSize &&
+                    String(cfg.aspectRatio || '').trim().toLowerCase() === 'auto';
                 if (
-                    typeof cfg.width !== 'number' ||
-                    !Number.isFinite(cfg.width) ||
-                    cfg.width <= 0 ||
-                    typeof cfg.height !== 'number' ||
-                    !Number.isFinite(cfg.height) ||
-                    cfg.height <= 0
+                    !isAutoSize &&
+                    (typeof cfg.width !== 'number' ||
+                        !Number.isFinite(cfg.width) ||
+                        cfg.width <= 0 ||
+                        typeof cfg.height !== 'number' ||
+                        !Number.isFinite(cfg.height) ||
+                        cfg.height <= 0)
                 ) {
                     missing.push('画幅尺寸 (宽/高)');
                 }
@@ -213,6 +225,21 @@ export class OpenAITabView extends ProviderTabView {
 
         this.customBodyJson = new CustomBodyJsonController(this.vm.presetController);
 
+        const syncDimsForModel = () => {
+            const latest = this.vm.presetController.draftConfig.value;
+            const effectiveModel =
+                (latest.customModel && latest.customModel.trim()) ||
+                latest.baseModel ||
+                'gpt-image-1';
+            const conn = this.vm.connectionData.value;
+            const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
+            const supportsAutoSize =
+                resolveOpenAIModelCapabilities(effectiveModel).supportsAutoSize && !isSiliconFlow;
+            if (!supportsAutoSize && String(latest.aspectRatio || '').toLowerCase() === 'auto') {
+                this.vm.presetController.updateDraft('aspectRatio', undefined);
+            }
+        };
+
         this.modelFields = [
             {
                 key: 'baseModel',
@@ -220,9 +247,10 @@ export class OpenAITabView extends ProviderTabView {
                 type: 'select',
                 options: () => this.vm.effectiveModelOptions.value,
                 transform: {
-                    toView: (v) => (v as string) || 'dall-e-3',
+                    toView: (v) => (v as string) || 'gpt-image-1',
                     fromView: (v) => String(v),
                 },
+                onAfterChange: syncDimsForModel,
             },
             {
                 key: 'customModel',
@@ -235,6 +263,7 @@ export class OpenAITabView extends ProviderTabView {
                     toView: (v) => (v as string) || '',
                     fromView: (v) => String(v || '').trim(),
                 },
+                onAfterChange: syncDimsForModel,
             },
             {
                 key: 'promptPresetId',
@@ -253,14 +282,18 @@ export class OpenAITabView extends ProviderTabView {
         const draft = presetController.draftConfig.value;
         const dirtyFields = presetController.dirtyFields.value;
         const invalidFields = presetController.invalidFields.value;
+        const conn = this.vm.connectionData.value;
+        const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
 
         const effectiveModel =
-            (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'dall-e-3';
+            (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'gpt-image-1';
         const capabilities = resolveOpenAIModelCapabilities(effectiveModel);
         const isDallE3 = capabilities.family === 'dall-e-3';
         const isGptImage = capabilities.family === 'gpt-image';
+        const supportsAutoSize = capabilities.supportsAutoSize && !isSiliconFlow;
 
-        const isDimsDirty = dirtyFields.has('width') || dirtyFields.has('height');
+        const isDimsDirty =
+            dirtyFields.has('width') || dirtyFields.has('height') || dirtyFields.has('aspectRatio');
 
         return (
             <ProviderTabLayout
@@ -299,10 +332,12 @@ export class OpenAITabView extends ProviderTabView {
                     </div>
 
                     <DimensionPickerView
-                        key={capabilities.family}
+                        key={`${capabilities.family}:${supportsAutoSize ? 'auto' : 'fixed'}`}
                         embedded={true}
+                        allowAuto={supportsAutoSize}
+                        aspectRatio={supportsAutoSize ? draft.aspectRatio : undefined}
                         width={draft.width ?? 1024}
-                        height={draft.height ?? 1024}
+                        height={draft.height ?? (isGptImage ? 1536 : 1024)}
                         aspectRatios={
                             isGptImage
                                 ? GPT_IMAGE_ASPECT_RATIOS
@@ -313,6 +348,10 @@ export class OpenAITabView extends ProviderTabView {
                         dirty={isDimsDirty}
                         onChange={(dims) =>
                             presetController.patchDraft({
+                                aspectRatio:
+                                    supportsAutoSize && dims.aspectRatio === 'auto'
+                                        ? 'auto'
+                                        : undefined,
                                 width: dims.width,
                                 height: dims.height,
                             })
