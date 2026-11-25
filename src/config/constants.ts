@@ -5,7 +5,7 @@
 import type { ThemePresetData } from '@types';
 
 export const EXTENSION_TITLE = 'ST-DrawAssistant 绘画助手';
-export const EXTENSION_VERSION = '1.4.0';
+export const EXTENSION_VERSION = '1.5.0';
 
 /** 插件 GitHub 仓库与更新检测配置 */
 export const GITHUB_REPO = 'NoahFoya/ST-DrawAssistant';
@@ -28,7 +28,7 @@ export const PROMPT_POLLING_PRESET_ID = '__polling__';
 export const MESSAGE_SCAN_DEBOUNCE_DELAY_MS = 250;
 
 /**
- * 插件安全回退主题常数（与默认阅读预设 Catppuccin Mocha 对齐）。
+ * 插件安全回退主题常数（与默认阅读预设 Catppuccin Mocha 保持一致）。
  *
  * @remarks
  * 仅用于配置异常或未初始化预设时的容错回退，不作为预设注入预设列表。
