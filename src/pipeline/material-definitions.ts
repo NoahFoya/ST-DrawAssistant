@@ -173,7 +173,7 @@ export const CHARACTER_PART_DEFS: readonly MaterialPartDef<CharacterPartKey>[] =
     {
         key: 'appearance',
         label: '外貌与体型',
-        hint: '整体体型、身高感、肤色与种族（如 fair_skin, slender, elf）',
+        hint: '整体体型、身高比例、肤色与种族（如 fair_skin, slender, elf）',
         placeholder: '例如: fair_skin, slender, petite',
         extractAliases: ['APPEARANCE', 'PHYSIQUE', 'GENERAL', 'OVERALL', '外貌与身材', '外貌与体型', '外貌', '身材'],
     },

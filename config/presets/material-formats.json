@@ -23,7 +23,7 @@
         {
           "id": "char_macro_upper",
           "name": "upper",
-          "description": "上半身半身构图，包含外貌、头部五官、颈肩、胸部、腰腹、手臂、手部与常驻配饰。",
+          "description": "上半身构图，包含外貌、头部五官、颈肩、胸部、腰腹、手臂、手部与常驻配饰。",
           "targetParts": [
             "appearance",
             "hair",
@@ -154,7 +154,7 @@
         {
           "id": "outfit_macro_upper",
           "name": "upper",
-          "description": "上半身半身构图，包含整体风格、头饰、外套、上衣与配饰。",
+          "description": "上半身构图，包含整体风格、头饰、外套、上衣与配饰。",
           "targetParts": [
             "style",
             "headwear",
