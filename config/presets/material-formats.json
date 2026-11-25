@@ -2,6 +2,7 @@
   {
     "id": "material_format_default",
     "name": "格式与宏 · 默认模板",
+    "description": "默认角色与服装上下文注入文本模板及常用构图简写宏规则",
     "data": {
       "characterTemplate": "{{name}}:\n  - 别名: {{aliases}}\n  - 描述: {{description}}\n  - 专属服装:\n{{outfits}}",
       "outfitTemplate": "[{{name}}]\n  - 别名: {{aliases}}\n  - 描述: {{description}}",
@@ -59,7 +60,7 @@
         {
           "id": "char_macro_full",
           "name": "full",
-          "description": "全身或大场景构图，包含从头到脚正面及常规全身部位（按状态过滤遮挡部位）。",
+          "description": "全身或大场景构图，包含从头到脚全套身体部位（按状态自动过滤穿衣遮挡的私密部位）。",
           "targetParts": [
             "appearance",
             "hair",
@@ -73,6 +74,7 @@
             "hands",
             "hips",
             "genitals",
+            "anus",
             "legs",
             "feet"
           ]
@@ -80,7 +82,7 @@
         {
           "id": "char_macro_back",
           "name": "back",
-          "description": "背影或背面视角构图，省略正面五官与胸部，包含外貌、发型、颈肩、背部、手臂、手部、臀部与腿足。",
+          "description": "背影或背面视角构图，省略正面五官与胸部，包含外貌、发型、颈肩、背部、手臂、手部、臀部、肛门与腿足（按状态过滤遮挡部位）。",
           "targetParts": [
             "appearance",
             "hair",
@@ -91,6 +93,7 @@
             "arms",
             "hands",
             "hips",
+            "anus",
             "legs",
             "feet"
           ]
@@ -98,10 +101,11 @@
         {
           "id": "char_macro_lower",
           "name": "lower",
-          "description": "腰胯以下构图，包含臀部、腿部、足部与生殖器（半裸或全裸时可见）。",
+          "description": "腰胯以下构图，包含臀部、生殖器、肛门/后庭、腿部与足部（半裸或全裸时可见）。",
           "targetParts": [
             "hips",
             "genitals",
+            "anus",
             "legs",
             "feet"
           ]
@@ -127,11 +131,12 @@
         {
           "id": "char_macro_crotch",
           "name": "crotch",
-          "description": "胯部与生殖器局部特写构图，包含下腹、臀胯与生殖器特征（不含胸部）。",
+          "description": "胯部与私密局部特写构图，包含下腹、臀胯、生殖器与肛门/后庭特征（不含胸部）。",
           "targetParts": [
             "abdomen",
             "hips",
-            "genitals"
+            "genitals",
+            "anus"
           ]
         }
       ],
@@ -139,9 +144,10 @@
         {
           "id": "outfit_macro_closeup",
           "name": "closeup",
-          "description": "头部与领口特写构图，包含头饰与配饰。",
+          "description": "头部与领口特写构图，包含头饰、上衣/领口与配饰。",
           "targetParts": [
             "headwear",
+            "top",
             "accessories"
           ]
         },

@@ -2,6 +2,7 @@
   {
     "id": "char_sample_alice",
     "name": "爱丽丝",
+    "description": "样例角色预设：金发蓝眼的见习魔法使「爱丽丝」，展示分层状态写法与服装绑定",
     "data": {
       "name": "爱丽丝",
       "aliases": "alice",

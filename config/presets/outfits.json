@@ -2,6 +2,7 @@
   {
     "id": "outfit_sample_school",
     "name": "学院制服",
+    "description": "样例服装预设：经典日系深蓝水手服与百褶短裙，展示穿脱状态分层写法",
     "data": {
       "name": "学院制服",
       "aliases": "school_uniform|制服",
@@ -24,6 +25,7 @@
   {
     "id": "outfit_sample_casual",
     "name": "日常便服",
+    "description": "样例服装预设：舒适宽松的连帽卫衣与牛仔裤",
     "data": {
       "name": "日常便服",
       "aliases": "casual|便服",

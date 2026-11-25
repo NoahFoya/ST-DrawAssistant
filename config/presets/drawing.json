@@ -57,7 +57,7 @@
     {
       "id": "drawing_openai_default",
       "name": "OpenAI · 默认预设",
-      "description": "gpt-image-1 模型（1024×1536 竖屏），绑定「OpenAI · 日系二次元」提示词预设",
+      "description": "gpt-image-1 模型（1024×1536 竖屏），默认不绑定提示词预设",
       "data": {
         "baseModel": "gpt-image-1",
         "width": 1024,
@@ -65,7 +65,7 @@
         "quality": "medium",
         "background": "auto",
         "outputFormat": "png",
-        "promptPresetId": "prompt_openai_anime"
+        "promptPresetId": ""
       }
     }
   ],
@@ -73,11 +73,11 @@
     {
       "id": "drawing_gemini_default",
       "name": "Gemini · 默认预设",
-      "description": "gemini-2.5-flash-image 原生模型（1:1 比例），绑定「Gemini · 通用高清」提示词预设",
+      "description": "gemini-2.5-flash-image 原生模型（1:1 比例），默认不绑定提示词预设",
       "data": {
         "baseModel": "gemini-2.5-flash-image",
         "aspectRatio": "1:1",
-        "promptPresetId": "prompt_gemini_general"
+        "promptPresetId": ""
       }
     }
   ],
@@ -85,12 +85,12 @@
     {
       "id": "drawing_grok_default",
       "name": "Grok · 默认预设",
-      "description": "grok-imagine-image 原生模型（1:1 比例，1k 分辨率），绑定「Grok · 通用高清」提示词预设",
+      "description": "grok-imagine-image 原生模型（1:1 比例，1k 分辨率），默认不绑定提示词预设",
       "data": {
         "baseModel": "grok-imagine-image",
         "aspectRatio": "1:1",
         "resolution": "1k",
-        "promptPresetId": "prompt_grok_general"
+        "promptPresetId": ""
       }
     }
   ]
