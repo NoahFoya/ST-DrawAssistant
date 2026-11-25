@@ -768,11 +768,21 @@
 }
 
 .da-fqp-row__control .da-select-wrapper,
-.da-fqp-row__control .da-select {
+.da-fqp-row__control .da-select,
+.da-fqp-row__control .da-input {
     width: 176px;
     max-width: 100%;
     height: 27px;
     font-size: 12px;
+}
+
+.da-fqp-subhint {
+    margin-top: -2px;
+    padding-left: 2px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--da-text-muted);
+    word-break: break-word;
 }
 
 .da-fqp-row__control .da-number-input {

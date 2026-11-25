@@ -1316,10 +1316,9 @@ export class SettingsModal implements Disposable {
         const seenGuides = uiCfg?.seenGuides ?? {};
 
         if (resolvedTabId === 'general') {
-            if (Boolean(settingsStore.get('hasSeenGuide')) || Boolean(seenGuides.plugin)) {
+            if (Boolean(seenGuides.plugin)) {
                 return;
             }
-            settingsStore.set('hasSeenGuide', true);
             settingsStore.set('ui', {
                 ...uiCfg,
                 seenGuides: {

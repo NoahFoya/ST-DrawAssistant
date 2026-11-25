@@ -258,7 +258,7 @@ export class ThemeService implements Disposable {
 
         const target = this.targetElement;
 
-        // 0. 冻结颜色与背景 CSS 过渡，确保深浅主题切换时所有子控件同帧原子更新
+        // 0. 冻结颜色与背景 CSS 过渡，确保深浅主题切换时所有子控件同帧统一切换
         const canFreeze =
             typeof window !== 'undefined' &&
             typeof window.requestAnimationFrame === 'function' &&

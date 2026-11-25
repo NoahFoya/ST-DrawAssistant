@@ -11,7 +11,7 @@
  */
 
 import type { UIComponent, Disposable } from '../types';
-import type { ProviderHealthResult } from '@types';
+import type { ProviderHealthResult, ProviderType, TransportMode } from '@types';
 import { Card } from '../components/card';
 import { TextInput } from '../components/text-input';
 import { Select, type SelectOption } from '../components/select';
@@ -20,6 +20,11 @@ import { Badge, type BadgeVariant } from '../components/badge';
 import { FormField } from '../components/form-field';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
+import { settingsStore } from '../../store/settings-store';
+import {
+    buildTransportTroubleshootingLines,
+    detectHostRuntime,
+} from '../../util/http-client';
 import { logger } from '../../util/logger';
 
 /** 服务商预设模板定义 */
@@ -45,6 +50,8 @@ export interface AssetFetchResult {
 }
 
 export interface ConnectionCardOptions {
+    /** 所属生图服务类型（用于定制连接排错建议，未传入时回退读取全局激活服务） */
+    providerType?: ProviderType;
     /** 卡片主标题，默认 "服务连接" */
     title?: string;
     /** 卡片副标题说明 */
@@ -410,17 +417,28 @@ export class ConnectionCard implements UIComponent, Disposable {
     public showErrorDetailsModal(): void {
         if (!this.lastErrorDetails) return;
         const { url, message } = this.lastErrorDetails;
+        const transport = (settingsStore.get('transport') || 'direct') as TransportMode;
+        const hostRuntime = detectHostRuntime();
+        const providerType =
+            this.options.providerType ?? (settingsStore.get('activeProvider') as ProviderType | undefined);
+        const tips = buildTransportTroubleshootingLines({
+            transport,
+            providerType,
+            hostRuntime,
+        });
+        const transportLabel = transport === 'relay' ? '酒馆代理 (relay)' : '浏览器直连 (direct)';
         const formattedMsg = [
-            `【请求地址】\n${url || '(未设置服务地址)'}`,
+            `【请求地址】\n${url || '(未填写/使用默认地址)'}`,
+            `\n【当前通道】\n${transportLabel} · ${hostRuntime.hostLabel}`,
             `\n【错误详情】\n${message}`,
-            `\n【排查建议】\n1. 请确认外部生图服务（ComfyUI / SD-WebUI / Forge）已启动，并在浏览器直接打开上方地址确认可访问；\n2. 浏览器直连需配置跨域启动参数并重启服务：ComfyUI 添加 --enable-cors-header *（局域网访问另加 --listen 0.0.0.0），SD-WebUI 添加 --api --cors-allow-origins=*；\n3. 若酒馆位于远程 HTTPS 域名而本地服务为 HTTP，请在「插件设置」切换为「酒馆代理」（需酒馆 config.yaml 开启 enableCorsProxy: true）。`,
+            `\n【排查建议】\n${tips.join('\n')}`,
         ].join('\n');
 
         void ConfirmDialog.info({
             title: '服务连接排查指引',
             message: formattedMsg,
             confirmText: '我知道了',
-            copyText: `服务地址: ${url}\n错误信息: ${message}`,
+            copyText: `服务类型: ${providerType || 'unknown'}\n连接方式: ${transportLabel}\n宿主环境: ${hostRuntime.hostLabel}\n服务地址: ${url}\n错误信息: ${message}`,
         });
     }
 

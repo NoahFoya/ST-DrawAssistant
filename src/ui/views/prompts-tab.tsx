@@ -3,7 +3,7 @@
  *
  * @remarks
  * 组织四大提示词注入通道与启用设置面板：
- * 1. 故事插画 (`story`)：场景捕捉、视觉推演与标签组装规范条目；
+ * 1. 故事插画 (`story`)：场景捕捉、画面描述与生图指令规范条目；
  * 2. 词汇指导 (`vocab`)：常驻基础词汇与条件触发标签条目；
  * 3. 素材创作 (`character`)：角色设定扩写与服装/档案排版规范条目；
  * 4. 素材注入 (`material`)：承载外部 <image_database> 容器并引用素材启用列表变量；
@@ -54,6 +54,7 @@ import {
     normalizePluginPromptChannelPreset,
     parseStWorldbookEntries,
 } from '../../pipeline/worldbook-converter';
+import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
 import {
     openWorldbookImportModal,
     openPromptExportFormatModal,
@@ -98,7 +99,8 @@ function createDefaultEntryForChannel(
         enabled: true,
         triggerMode: 'always',
         keywords: '',
-        scanDepth: 2,
+        matchWholeWords: true,
+        scanDepth: channelId === 'vocab' ? 4 : 2,
         position: 1,
         depth: meta.defaultDepth,
         role: 0,
@@ -160,6 +162,32 @@ export class PromptsTabView extends PreactSettingsView {
                     this.promptInjectionSignal.value = next;
                 },
                 evaluateDirtyFields: evaluatePresetDataDirty,
+                canPerformAction: (action, draft) => {
+                    if (action !== 'save' && action !== 'saveAs') {
+                        return { allowed: true };
+                    }
+                    const draftEntries = Array.isArray(draft?.entries) ? draft.entries : [];
+                    for (const entry of draftEntries) {
+                        if (!entry || entry.triggerMode === 'always') continue;
+                        const mainErr = collectKeywordRegexErrors(entry.keywords, { allowPipe: false })[0];
+                        if (mainErr) {
+                            return {
+                                allowed: false,
+                                message: `请先修正条目「${entry.name || '未命名'}」主关键词中的无效正则：${mainErr}`,
+                            };
+                        }
+                        const secErr = collectKeywordRegexErrors(entry.secondaryKeywords, {
+                            allowPipe: false,
+                        })[0];
+                        if (secErr) {
+                            return {
+                                allowed: false,
+                                message: `请先修正条目「${entry.name || '未命名'}」次要关键词中的无效正则：${secErr}`,
+                            };
+                        }
+                    }
+                    return { allowed: true };
+                },
                 onPresetApplied: () => {
                     void promptInjector.scheduleSyncToHost();
                 },

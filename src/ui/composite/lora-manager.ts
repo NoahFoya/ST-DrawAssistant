@@ -2,17 +2,16 @@
  * LoRA 动态管理复合组件 (LoraManager)。
  *
  * @remarks
- * 负责生图任务中 LoRA 模型的语法模式切换、检索联想选择、挂载与权重管理：
- * 1. 第 1 行（标准表单行）：左侧为“LoRA 添加模式”及悬停提示说明（?），右侧切换 SD-WebUI (`<lora:...>`) 与 ComfyUI (`<wlr:...>`) 模式；
- * 2. 第 2 行（检索联想添加栏）：左侧为可输入联想选择下拉框（仅支持从已同步的服务端模型列表中联想筛选并选择，不支持手动添加未知模型），右侧为添加按钮；
+ * 负责生图任务中 LoRA 模型的检索联想选择、挂载与三权重（Model / CLIP / Trigger）配置：
+ * 1. 顶部能力说明：标注各后端自动适配策略与 WeiLin 触发词权重适用条件；
+ * 2. 检索联想添加栏：仅支持从已同步的服务端模型列表中联想筛选并选择，不支持手动添加未知模型；
  * 3. 无数量上限：不限制挂载的 LoRA 数量；
- * 4. 条目卡片列表：展示实时语法标签预览、启用/停用开关、移除按钮及自适应多维权重步进器。
+ * 4. 条目卡片列表：展示统一静态权重摘要、启用/停用开关、常驻/关键词触发切换、移除按钮及三列权重步进器。
  */
 
 import type { UIComponent, Disposable } from '../types';
-import type { ActivationTriggerMode, LoraSyntaxMode } from '@types';
+import type { ActivationTriggerMode } from '@types';
 import { Card } from '../components/card';
-import { FormField } from '../components/form-field';
 import { SegmentedControl } from '../components/segmented-control';
 import { Switch } from '../components/switch';
 import { NumberInput } from '../components/number-input';
@@ -21,11 +20,9 @@ import { Badge } from '../components/badge';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { computeAnchoredPosition, viewportService } from '../layout/viewport';
-import { formatLoraTag, type FormatLoraTagInput } from '../../pipeline/prompt-pipeline';
 import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
-
-export type { LoraSyntaxMode, FormatLoraTagInput };
-export { formatLoraTag };
+import { DEFAULT_LORA_WEIGHTS, formatLoraWeightSummary } from '../../pipeline/lora-utils';
+import { attachTagAutocomplete } from './tag-autocomplete';
 
 /** 单个已挂载 LoRA 条目数据模型 */
 export interface LoraEntryItem {
@@ -38,11 +35,11 @@ export interface LoraEntryItem {
     modelWeight: number;
     /** 文本编码器权重，默认 0.80 */
     clipWeight: number;
-    /** 触发权重，默认 1.00，仅在 weilin 模式下生效 */
+    /** 触发权重，默认 1.00（仅在选用含 ComfyUI-WeiLin 节点的工作流时生效） */
     triggerWeight?: number;
     /** 触发方式：'always' 常驻挂载（默认） | 'keyword' 关键词命中当次生图提示词时挂载 */
     triggerMode?: ActivationTriggerMode;
-    /** 以 | 或逗号分隔的触发关键词（支持 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
+    /** 以中英文逗号或换行分隔的触发关键词（不以 | 拆词，以保留 /pattern/flags 正则，仅 triggerMode === 'keyword' 时生效） */
     keywords?: string;
 }
 
@@ -54,22 +51,17 @@ export interface LoraManagerOptions {
     subtitle?: string;
     /** 是否以嵌入式无外框模式渲染（用于独立模态弹窗内部，消除双层卡片嵌套），默认 false */
     embedded?: boolean;
-    /** LoRA 语法模式：标准模式 ('standard') 或 WeiLin 扩展模式 ('weilin')，默认 'standard' */
-    mode?: LoraSyntaxMode;
     /** 外部注入的已载入可用 LoRA 模型文件名列表 */
     availableModels?: string[];
     /** 初始挂载的 LoRA 列表条目 */
     initialItems?: LoraEntryItem[];
     /** 条目变更回调通知 */
     onChange?(items: LoraEntryItem[]): void;
-    /** 语法模式变更回调通知 */
-    onModeChange?(mode: LoraSyntaxMode): void;
 }
 
 /** 单条目交互组件的初始化配置项 */
 interface LoraItemRowOptions {
     item: LoraEntryItem;
-    mode: LoraSyntaxMode;
     availableModels: string[];
     onUpdate(id: string, patch: Partial<LoraEntryItem>): void;
     onDelete(id: string): void;
@@ -85,7 +77,6 @@ class LoraItemRow implements Disposable {
     private readonly options: LoraItemRowOptions;
     private readonly disposables: Disposable[] = [];
 
-    private mode: LoraSyntaxMode;
     private availableModels: string[];
 
     private readonly switchControl: Switch;
@@ -95,18 +86,17 @@ class LoraItemRow implements Disposable {
     private readonly triggerSegmented: SegmentedControl;
     private readonly deleteBadge: HTMLButtonElement;
     private readonly keywordsRow: HTMLElement;
-    private readonly keywordsInput: HTMLInputElement;
+    private readonly keywordsInput: HTMLTextAreaElement;
     private readonly keywordsErrorEl: HTMLElement;
     private readonly paramsRow: HTMLElement;
 
     private modelWeightInput!: NumberInput;
     private clipWeightInput!: NumberInput;
-    private triggerWeightInput?: NumberInput;
+    private triggerWeightInput!: NumberInput;
 
     constructor(options: LoraItemRowOptions) {
         this.options = options;
         this.item = options.item;
-        this.mode = options.mode;
         this.availableModels = options.availableModels;
 
         // 1. 条目主容器 (.da-lora-item)
@@ -151,7 +141,7 @@ class LoraItemRow implements Disposable {
 
         this.missingBadgeEl = document.createElement('span');
         this.missingBadgeEl.classList.add('da-lora-item__missing-dot');
-        this.missingBadgeEl.title = '服务端未检测到此模型，仍会按名称生成对应标签';
+        this.missingBadgeEl.title = '服务端未检测到此模型，请确认文件位置或重新同步模型列表';
         nameLine.appendChild(this.missingBadgeEl);
 
         this.tagPreviewEl = document.createElement('code');
@@ -219,15 +209,22 @@ class LoraItemRow implements Disposable {
         kwLabel.textContent = '触发关键词 (当次生图提示词命中任一词或正则时挂载该 LoRA)';
         kwFieldWrap.appendChild(kwLabel);
 
-        this.keywordsInput = document.createElement('input');
-        this.keywordsInput.type = 'text';
-        this.keywordsInput.classList.add('da-input', 'da-lora-kw-input');
-        this.keywordsInput.placeholder = '输入触发关键词或 /正则/i（多个用 | 或 , 分隔）...';
+        this.keywordsInput = document.createElement('textarea');
+        this.keywordsInput.classList.add('da-textarea', 'da-lora-kw-input');
+        this.keywordsInput.rows = 2;
+        this.keywordsInput.placeholder =
+            '输入触发关键词或 /正则/i（支持 Tag 联想，多个用英文逗号分隔）...';
         this.keywordsInput.value = this.item.keywords || '';
         this.keywordsInput.disabled = !this.item.enabled;
 
         this.keywordsErrorEl = document.createElement('div');
         this.keywordsErrorEl.classList.add('da-lora-kw-error', 'da-hidden');
+
+        const kwAutocomplete = attachTagAutocomplete(this.keywordsInput, {
+            mode: 'lexicon-only',
+            stripMacrosOnBlur: false,
+        });
+        this.disposables.push(kwAutocomplete);
 
         const onKwInput = () => {
             const val = this.keywordsInput.value;
@@ -249,13 +246,13 @@ class LoraItemRow implements Disposable {
         // 3. 次行：自适应网格参数步进器容器 (.da-lora-item__row--params)
         this.paramsRow = document.createElement('div');
         this.paramsRow.classList.add('da-lora-item__row--params');
-        this.renderParamsInputs(this.mode);
+        this.renderParamsInputs();
         this.element.appendChild(this.paramsRow);
 
         this.refreshHeaderMeta();
     }
 
-    /** 刷新模型缺失标记与实时标签预览 */
+    /** 刷新模型缺失标记与静态权重摘要 */
     private refreshHeaderMeta(): void {
         this.nameTextEl.textContent = this.item.modelName || '(未命名模型)';
         this.nameTextEl.title = this.item.modelName || '';
@@ -267,106 +264,86 @@ class LoraItemRow implements Disposable {
         this.missingBadgeEl.style.display = isMissing ? 'inline-block' : 'none';
         if (isMissing) {
             this.element.classList.add('is-missing');
-            this.element.title = '服务端未检测到此模型，仍会按名称生成对应标签';
+            this.element.title = '服务端未检测到此模型，请确认文件位置或重新同步模型列表';
         } else {
             this.element.classList.remove('is-missing');
             this.element.title = '';
         }
 
-        const previewTag = formatLoraTag(this.item, this.mode);
-        this.tagPreviewEl.textContent = previewTag || '<lora:未指定:0.8>';
+        this.tagPreviewEl.textContent = formatLoraWeightSummary(this.item);
     }
 
-    /** 渲染次行参数步进器 */
-    public renderParamsInputs(mode: LoraSyntaxMode): void {
-        this.mode = mode;
+    /** 渲染次行三列参数步进器（Model / CLIP / Trigger） */
+    public renderParamsInputs(): void {
         this.paramsRow.innerHTML = '';
         this.modelWeightInput?.dispose();
         this.clipWeightInput?.dispose();
         this.triggerWeightInput?.dispose();
 
-        // 1. Model 权重步进器
-        const modelGroup = document.createElement('div');
-        modelGroup.classList.add('da-lora-param-group');
-        const modelLabel = document.createElement('span');
-        modelLabel.classList.add('da-lora-param-label');
-        modelLabel.textContent = '模型权重 (Model)';
-        modelGroup.appendChild(modelLabel);
-
-        this.modelWeightInput = new NumberInput({
-            value: this.item.modelWeight,
-            min: -2.0,
-            max: 2.0,
-            step: 0.05,
-            precision: 2,
-            disabled: !this.item.enabled,
-            onChange: (val) => {
-                this.item.modelWeight = val;
-                this.refreshHeaderMeta();
-                this.options.onUpdate(this.item.id, { modelWeight: val });
+        const specs: ReadonlyArray<{
+            key: 'modelWeight' | 'clipWeight' | 'triggerWeight';
+            label: string;
+            title?: string;
+            defaultVal: number;
+            assign: (input: NumberInput) => void;
+        }> = [
+            {
+                key: 'modelWeight',
+                label: '模型权重 (Model)',
+                defaultVal: DEFAULT_LORA_WEIGHTS.modelWeight,
+                assign: (input) => {
+                    this.modelWeightInput = input;
+                },
             },
-        });
-        modelGroup.appendChild(this.modelWeightInput.element);
-        this.paramsRow.appendChild(modelGroup);
-
-        // 2. CLIP 权重步进器
-        const clipGroup = document.createElement('div');
-        clipGroup.classList.add('da-lora-param-group');
-        const clipLabel = document.createElement('span');
-        clipLabel.classList.add('da-lora-param-label');
-        clipLabel.textContent = 'CLIP 权重 (CLIP)';
-        clipGroup.appendChild(clipLabel);
-
-        this.clipWeightInput = new NumberInput({
-            value: this.item.clipWeight,
-            min: -2.0,
-            max: 2.0,
-            step: 0.05,
-            precision: 2,
-            disabled: !this.item.enabled,
-            onChange: (val) => {
-                this.item.clipWeight = val;
-                this.refreshHeaderMeta();
-                this.options.onUpdate(this.item.id, { clipWeight: val });
+            {
+                key: 'clipWeight',
+                label: 'CLIP 权重 (CLIP)',
+                defaultVal: DEFAULT_LORA_WEIGHTS.clipWeight,
+                assign: (input) => {
+                    this.clipWeightInput = input;
+                },
             },
-        });
-        clipGroup.appendChild(this.clipWeightInput.element);
-        this.paramsRow.appendChild(clipGroup);
+            {
+                key: 'triggerWeight',
+                label: '触发词权重 (Trigger · 仅 WeiLin)',
+                title: '仅在使用包含 ComfyUI-WeiLin 节点的工作流时生效',
+                defaultVal: DEFAULT_LORA_WEIGHTS.triggerWeight,
+                assign: (input) => {
+                    this.triggerWeightInput = input;
+                },
+            },
+        ];
 
-        // 3. WeiLin 模式专属：Trigger 权重步进器
-        if (mode === 'weilin') {
-            const triggerGroup = document.createElement('div');
-            triggerGroup.classList.add('da-lora-param-group');
-            const triggerLabel = document.createElement('span');
-            triggerLabel.classList.add('da-lora-param-label');
-            triggerLabel.textContent = '触发词权重 (Trigger)';
-            triggerGroup.appendChild(triggerLabel);
+        for (const spec of specs) {
+            const group = document.createElement('div');
+            group.classList.add('da-lora-param-group');
+            const labelEl = document.createElement('span');
+            labelEl.classList.add('da-lora-param-label');
+            labelEl.textContent = spec.label;
+            if (spec.title) {
+                labelEl.title = spec.title;
+            }
+            group.appendChild(labelEl);
 
-            this.triggerWeightInput = new NumberInput({
-                value: this.item.triggerWeight ?? 1.0,
+            const input = new NumberInput({
+                value: this.item[spec.key] ?? spec.defaultVal,
                 min: -2.0,
                 max: 2.0,
                 step: 0.05,
                 precision: 2,
                 disabled: !this.item.enabled,
                 onChange: (val) => {
-                    this.item.triggerWeight = val;
+                    this.item[spec.key] = val;
                     this.refreshHeaderMeta();
-                    this.options.onUpdate(this.item.id, { triggerWeight: val });
+                    this.options.onUpdate(this.item.id, { [spec.key]: val });
                 },
             });
-            triggerGroup.appendChild(this.triggerWeightInput.element);
-            this.paramsRow.appendChild(triggerGroup);
-        } else {
-            this.triggerWeightInput = undefined;
+            spec.assign(input);
+            group.appendChild(input.element);
+            this.paramsRow.appendChild(group);
         }
 
         this.refreshHeaderMeta();
-    }
-
-    /** 语法模式发生变化时动态更新次行与标签预览 */
-    public updateMode(mode: LoraSyntaxMode): void {
-        this.renderParamsInputs(mode);
     }
 
     /** 可用模型资产发生变化时更新检测标识 */
@@ -382,7 +359,7 @@ class LoraItemRow implements Disposable {
         this.keywordsInput.disabled = disabled;
         this.modelWeightInput.setDisabled(disabled);
         this.clipWeightInput.setDisabled(disabled);
-        this.triggerWeightInput?.setDisabled(disabled);
+        this.triggerWeightInput.setDisabled(disabled);
     }
 
     /** 同步关键词输入行的显隐与正则语法校验状态 */
@@ -393,6 +370,7 @@ class LoraItemRow implements Disposable {
             this.validateKeywordsInput();
         } else {
             this.keywordsInput.classList.remove('is-invalid');
+            this.keywordsInput.setAttribute('aria-invalid', 'false');
             this.keywordsErrorEl.classList.add('da-hidden');
             this.keywordsErrorEl.textContent = '';
         }
@@ -400,16 +378,33 @@ class LoraItemRow implements Disposable {
 
     /** 校验关键词输入框中的 /pattern/flags 正则字面量合法性 */
     private validateKeywordsInput(): void {
-        const errors = collectKeywordRegexErrors(this.item.keywords);
+        const errors = collectKeywordRegexErrors(this.item.keywords, { allowPipe: false });
         const firstError = errors[0] ?? null;
         if (firstError) {
             this.keywordsInput.classList.add('is-invalid');
+            this.keywordsInput.setAttribute('aria-invalid', 'true');
             this.keywordsErrorEl.textContent = firstError;
             this.keywordsErrorEl.classList.remove('da-hidden');
         } else {
             this.keywordsInput.classList.remove('is-invalid');
+            this.keywordsInput.setAttribute('aria-invalid', 'false');
             this.keywordsErrorEl.textContent = '';
             this.keywordsErrorEl.classList.add('da-hidden');
+        }
+    }
+
+    /** 返回当前条目的关键词正则错误列表（仅在关键词触发模式下检查） */
+    public getKeywordValidationErrors(): string[] {
+        if (this.item.triggerMode !== 'keyword') {
+            return [];
+        }
+        return collectKeywordRegexErrors(this.item.keywords, { allowPipe: false });
+    }
+
+    /** 聚焦关键词输入框（用于保存拦截定位） */
+    public focusKeywordsInput(): void {
+        if (this.item.triggerMode === 'keyword' && !this.keywordsInput.disabled) {
+            this.keywordsInput.focus();
         }
     }
 
@@ -418,9 +413,9 @@ class LoraItemRow implements Disposable {
             d.dispose();
         }
         this.disposables.length = 0;
-        this.modelWeightInput?.dispose();
-        this.clipWeightInput?.dispose();
-        this.triggerWeightInput?.dispose();
+        this.modelWeightInput.dispose();
+        this.clipWeightInput.dispose();
+        this.triggerWeightInput.dispose();
         this.element.remove();
     }
 }
@@ -437,13 +432,10 @@ export class LoraManager implements UIComponent, Disposable {
     private readonly itemRows = new Map<string, LoraItemRow>();
     private readonly disposables: Disposable[] = [];
 
-    private mode: LoraSyntaxMode;
     private availableModels: string[];
     private readonly isEmbedded: boolean;
 
     private readonly quotaBadge: Badge;
-    private readonly modeSegmented: SegmentedControl;
-    private readonly modeFormField: FormField;
     private readonly addBarContainer: HTMLElement;
     private readonly comboboxContainer: HTMLElement;
     private readonly comboboxInput: HTMLInputElement;
@@ -462,7 +454,6 @@ export class LoraManager implements UIComponent, Disposable {
 
     constructor(options: LoraManagerOptions = {}) {
         this.options = options;
-        this.mode = options.mode ?? 'standard';
         this.availableModels = [...(options.availableModels ?? [])];
         this.isEmbedded = Boolean(options.embedded);
 
@@ -492,34 +483,20 @@ export class LoraManager implements UIComponent, Disposable {
         }
 
         // 3. 顶部控制面板 (.da-lora-add-bar)：
-        //    第 1 行：标准表单行（左：LoRA 添加模式 + ? 帮助提示；右：SD-WebUI / ComfyUI 切换）
+        //    第 1 行：自动适配与 WeiLin 精细控制能力说明条
         //    第 2 行：可输入联想选择下拉框 + 添加按钮
         this.addBarContainer = document.createElement('div');
         this.addBarContainer.classList.add('da-lora-add-bar');
 
-        this.modeSegmented = new SegmentedControl({
-            value: this.mode,
-            options: [
-                { label: 'SD-WebUI', value: 'standard' },
-                { label: 'ComfyUI', value: 'weilin' },
-            ],
-            onChange: (val) => {
-                const nextMode = (val === 'weilin' ? 'weilin' : 'standard') as LoraSyntaxMode;
-                this.setMode(nextMode);
-            },
-        });
-        this.disposables.push(this.modeSegmented);
-
-        this.modeFormField = new FormField({
-            label: 'LoRA 添加模式',
-            tooltip:
-                'SD-WebUI 模式生成标准的 <lora:模型:模型权重:CLIP权重> 标签（适用于 SD-WebUI / Forge）；ComfyUI 模式生成 <wlr:模型:模型权重:CLIP权重:触发词权重> 标签，配合 ComfyUI-WeiLin 节点在 API 工作流中通过提示词动态加载与调节 LoRA。',
-            width: 'w-240',
-            className: 'da-lora-mode-row',
-            control: this.modeSegmented,
-        });
-        this.disposables.push(this.modeFormField);
-        this.addBarContainer.appendChild(this.modeFormField.element);
+        const capabilityNote = document.createElement('div');
+        capabilityNote.className = 'da-lora-capability-note';
+        capabilityNote.innerHTML = `
+            <span class="da-lora-capability-note__icon">${renderIcon('info', 14)}</span>
+            <span class="da-lora-capability-note__text">
+                <strong>Model / CLIP 权重</strong>由当前引擎与工作流自动注入（SD-WebUI 转 <code>&lt;lora:...&gt;</code>，ComfyUI 原生工作流自动拼接内置节点）。若需使用<strong>触发词权重 (Trigger)</strong>等更精细的 LoRA 控制，需安装 <strong>ComfyUI-WeiLin</strong> 插件并选用含 WeiLin 节点的工作流。
+            </span>
+        `;
+        this.addBarContainer.appendChild(capabilityNote);
 
         // 第 2 行：输入联想选择下拉框 + 添加按钮
         const addControlsRow = document.createElement('div');
@@ -910,31 +887,6 @@ export class LoraManager implements UIComponent, Disposable {
         this.updateQuotaDisplay();
     }
 
-    /** 获取当前语法模式 */
-    public getMode(): LoraSyntaxMode {
-        return this.mode;
-    }
-
-    /** 动态设置语法模式并重绘条目参数步进器 */
-    public setMode(mode: LoraSyntaxMode): void {
-        if (this.mode === mode) return;
-        this.mode = mode;
-        this.modeSegmented.setValue(mode, { silent: true });
-
-        for (const item of this.items) {
-            if (mode === 'weilin' && item.triggerWeight === undefined) {
-                item.triggerWeight = 1.0;
-            }
-        }
-
-        for (const row of this.itemRows.values()) {
-            row.updateMode(mode);
-        }
-
-        this.options.onModeChange?.(mode);
-        this.notifyChange();
-    }
-
     /** 获取已绑定的可用模型列表 */
     public getAvailableModels(): string[] {
         return this.availableModels;
@@ -957,9 +909,9 @@ export class LoraManager implements UIComponent, Disposable {
             id: partial?.id ?? `lora_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             enabled: partial?.enabled ?? true,
             modelName: partial?.modelName ?? '',
-            modelWeight: partial?.modelWeight ?? 0.8,
-            clipWeight: partial?.clipWeight ?? 0.8,
-            triggerWeight: partial?.triggerWeight ?? (this.mode === 'weilin' ? 1.0 : undefined),
+            modelWeight: partial?.modelWeight ?? DEFAULT_LORA_WEIGHTS.modelWeight,
+            clipWeight: partial?.clipWeight ?? DEFAULT_LORA_WEIGHTS.clipWeight,
+            triggerWeight: partial?.triggerWeight ?? DEFAULT_LORA_WEIGHTS.triggerWeight,
             triggerMode: partial?.triggerMode === 'keyword' ? 'keyword' : 'always',
             keywords: partial?.keywords ?? '',
         };
@@ -1013,7 +965,6 @@ export class LoraManager implements UIComponent, Disposable {
     private renderSingleRow(item: LoraEntryItem): void {
         const row = new LoraItemRow({
             item,
-            mode: this.mode,
             availableModels: this.availableModels,
             onUpdate: (id, patch) => this.handleItemUpdate(id, patch),
             onDelete: (id) => this.removeItem(id),
@@ -1040,6 +991,36 @@ export class LoraManager implements UIComponent, Disposable {
     /** 获取当前全量已挂载条目快照 */
     public getItems(): LoraEntryItem[] {
         return this.items.map((it) => ({ ...it }));
+    }
+
+    /** 校验所有关键词触发条目中的正则语法合法性 */
+    public validateKeywordRules(): Array<{
+        readonly id: string;
+        readonly modelName: string;
+        readonly errors: string[];
+    }> {
+        const invalid: Array<{ id: string; modelName: string; errors: string[] }> = [];
+        for (const item of this.items) {
+            const row = this.itemRows.get(item.id);
+            const errors = row
+                ? row.getKeywordValidationErrors()
+                : item.triggerMode === 'keyword'
+                  ? collectKeywordRegexErrors(item.keywords, { allowPipe: false })
+                  : [];
+            if (errors.length > 0) {
+                invalid.push({
+                    id: item.id,
+                    modelName: item.modelName || '(未命名模型)',
+                    errors,
+                });
+            }
+        }
+        return invalid;
+    }
+
+    /** 聚焦指定条目的关键词输入框 */
+    public focusItemKeywords(id: string): void {
+        this.itemRows.get(id)?.focusKeywordsInput();
     }
 
     /** 全量设置已挂载条目 */

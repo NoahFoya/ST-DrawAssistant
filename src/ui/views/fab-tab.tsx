@@ -80,7 +80,6 @@ export class FabTabView extends PreactSettingsView {
             icon: string;
             animationType: FabAnimationOption;
             quickPanelEnabled: boolean;
-            hoverTrigger: boolean;
         }>
     ): void {
         const currentFab = this.bridge.get('ui')?.fab || {
@@ -89,7 +88,6 @@ export class FabTabView extends PreactSettingsView {
             icon: 'palette',
             animationType: 'starlight' as FabAnimationOption,
             quickPanelEnabled: false,
-            hoverTrigger: true,
         };
         this.bridge.updateUi({
             fab: {
@@ -133,7 +131,6 @@ export class FabTabView extends PreactSettingsView {
         const opacity = fab?.opacity ?? 0.95;
         const opacityPct = Math.round(opacity * 100);
         const quickPanelEnabled = Boolean(fab?.quickPanelEnabled);
-        const hoverTrigger = fab?.hoverTrigger ?? true;
         const currentIcon = (fab?.icon as string) || 'palette';
         const rawAnim = fab?.animationType as string | undefined;
         const currentAnim: FabAnimationOption = FAB_ANIMATION_OPTIONS.some(
@@ -190,26 +187,12 @@ export class FabTabView extends PreactSettingsView {
                     <FormFieldView
                         label="启用快捷面板"
                         width="w-toggle"
-                        tooltip="开启后单击或长按悬浮球可展开快捷面板，快速切换生图服务、预设与高频开关；双击悬浮球或点击面板顶栏「主设置」可直接打开主设置窗口。"
+                        tooltip="开启后单击悬浮球可展开或收起快捷面板，快速切换生图服务、预设与高频开关；双击悬浮球或点击面板顶栏「主设置」可直接打开主设置窗口。"
                     >
                         <SwitchControl
                             value={quickPanelEnabled}
                             onChange={(checked) =>
                                 this.updateFabSettings({ quickPanelEnabled: checked })
-                            }
-                        />
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="鼠标悬停自动展开"
-                        width="w-toggle"
-                        tooltip="桌面端鼠标在悬浮球上悬停约 0.25 秒时自动呼出快捷面板，移出面板区域后自动收起。"
-                    >
-                        <SwitchControl
-                            value={hoverTrigger}
-                            disabled={!quickPanelEnabled}
-                            onChange={(checked) =>
-                                this.updateFabSettings({ hoverTrigger: checked })
                             }
                         />
                     </FormFieldView>

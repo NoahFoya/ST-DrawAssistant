@@ -71,6 +71,15 @@ export class SDWebUITabView extends ProviderTabView {
             defaultNewName: '新建预设',
             defaultSamplers: SDWEBUI_DEFAULT_SAMPLERS,
             defaultSchedulers: SDWEBUI_DEFAULT_SCHEDULERS,
+            defaultDraftTemplate: () => ({
+                width: 832,
+                height: 1216,
+                samplerName: 'Euler a',
+                scheduler: 'Automatic',
+                steps: 28,
+                cfgScale: 5.5,
+                seed: -1,
+            }),
             validateRequired: (cfg) => {
                 const missing: string[] = [];
                 if (!cfg.baseModel) missing.push('主模型');
@@ -285,10 +294,10 @@ export class SDWebUITabView extends ProviderTabView {
                         schedulers={this.vm.schedulerOptions.value}
                         dirty={isSamplerDirty}
                         data={{
-                            samplerName: draft.samplerName || 'DPM++ 2M Karras',
+                            samplerName: draft.samplerName || 'Euler a',
                             scheduler: draft.scheduler || 'Automatic',
                             steps: draft.steps ?? 28,
-                            cfgScale: draft.cfgScale ?? 7.0,
+                            cfgScale: draft.cfgScale ?? 5.5,
                             seed: draft.seed ?? -1,
                         }}
                         onChange={(s) =>

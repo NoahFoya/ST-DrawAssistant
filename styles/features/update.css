@@ -66,6 +66,65 @@
     color: var(--da-text-primary);
 }
 
+.da-changelog-summary {
+    margin: 0;
+    font-size: 0.88em;
+    line-height: 1.55;
+    color: var(--da-text-secondary);
+}
+
+.da-changelog-details-toggle {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: var(--da-radius-sm, 6px);
+    border: 1px solid transparent;
+    background: rgba(var(--da-accent-rgb), 0.06);
+    color: var(--da-text-muted);
+    font-size: 0.8em;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+        border-color 0.18s var(--da-ease),
+        color 0.18s var(--da-ease),
+        background 0.18s var(--da-ease);
+}
+
+.da-changelog-details-toggle:hover,
+.da-changelog-details-toggle[aria-expanded="true"] {
+    color: var(--da-accent-color);
+    border-color: var(--da-border-highlight);
+    background: rgba(var(--da-accent-rgb), 0.10);
+}
+
+.da-changelog-details-toggle:focus-visible {
+    outline: 2px solid var(--da-accent-color);
+    outline-offset: 2px;
+}
+
+.da-changelog-details-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s var(--da-ease);
+}
+
+.da-changelog-details-toggle[aria-expanded="true"] .da-changelog-details-chevron {
+    transform: rotate(90deg);
+}
+
+.da-changelog-details-panel {
+    padding-top: 2px;
+}
+
+.da-changelog-details-panel[hidden] {
+    display: none;
+}
+
 .da-changelog-items-list {
     margin: 0;
     padding-left: 18px;

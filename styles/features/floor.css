@@ -4,7 +4,7 @@
  * @remarks
  * 为楼层内嵌生图呈现提供视觉基准：
  * 1. 楼层生图动作按钮 (FloorActionButton)：ready / generating / done / error 状态机排版；
- * 2. 楼层图片展示容器 (FloorImageContainer)：容器挂载、图片排版对齐、防窥模糊与操作胶囊。
+ * 2. 楼层图片展示容器 (FloorImageContainer)：容器挂载、图片排版对齐、显示模式 (正常/模糊/折叠) 与操作胶囊。
  */
 
 /* 0. 楼层正文内嵌生图容器 */
@@ -173,7 +173,7 @@
     margin-top: 8px;
 }
 
-/* 防窥模糊遮罩 */
+/* 模糊显示遮罩 */
 .da-floor-image--blurred {
     filter: blur(16px);
     transition: filter 0.3s ease;
@@ -181,6 +181,74 @@
 
 .da-floor-image--blurred:hover {
     filter: blur(0);
+}
+
+/* 默认折叠模式下的控制按钮与收起态 */
+.da-floor-image-collapse-toggle {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    margin-bottom: 6px;
+    font-size: var(--da-font-size-xs, 0.78rem);
+    font-weight: 500;
+    color: var(--da-text-secondary);
+    background: var(--da-surface-card, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--da-border-card, rgba(255, 255, 255, 0.15));
+    border-radius: var(--da-radius-md, 8px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.18s var(--da-ease, ease), border-color 0.18s var(--da-ease, ease), color 0.18s var(--da-ease, ease);
+}
+
+.da-floor-image-collapse-toggle:hover {
+    color: var(--da-text-primary);
+    background: var(--da-surface-card-hover, rgba(255, 255, 255, 0.14));
+    border-color: var(--da-accent-color);
+}
+
+.da-floor-image-collapse-toggle__arrow,
+.da-floor-image-collapse-toggle__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.da-floor-image-collapse-toggle__arrow svg {
+    transition: transform 0.18s var(--da-ease, ease);
+}
+
+.da-floor-image-container--collapse > .da-floor-image-collapse-toggle {
+    display: inline-flex;
+}
+
+.da-floor-image-container--collapse:not(.is-expanded) > .da-floor-image-collapse-toggle {
+    margin-bottom: 0;
+}
+
+.da-floor-image-container--collapse.is-expanded > .da-floor-image-collapse-toggle {
+    color: var(--da-text-primary);
+    border-color: rgba(var(--da-accent-rgb, 129, 140, 248), 0.4);
+}
+
+.da-floor-image-container--collapse.is-expanded .da-floor-image-collapse-toggle__arrow svg {
+    transform: rotate(90deg);
+}
+
+.da-floor-image-container--collapse:not(.is-expanded) > .da-floor-image-box {
+    display: none;
+}
+
+[data-theme-mode="light"] .da-floor-image-collapse-toggle {
+    color: var(--da-text-secondary, #475569);
+    background: var(--da-surface-card, #ffffff);
+    border-color: var(--da-border-card, #e2e8f0);
+}
+
+[data-theme-mode="light"] .da-floor-image-collapse-toggle:hover {
+    color: var(--da-text-primary, #1e293b);
+    border-color: var(--da-accent-color);
 }
 
 /* 重新生成重绘过程中的占位透明度 */

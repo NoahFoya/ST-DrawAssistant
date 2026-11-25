@@ -109,7 +109,7 @@ const PLUGIN_GUIDE_CONTENT: GuidePageContent = {
                 },
                 {
                     lead: '连接方式（推荐浏览器直连）',
-                    body: '默认「浏览器直连」响应最快；如果遇到跨域拦截，或远程 HTTPS 酒馆无法直接连本地 HTTP 服务，请切为「酒馆代理」（需在酒馆 `config.yaml` 打开 `enableCorsProxy: true`）。',
+                    body: '默认「浏览器直连」响应最快；如果遇到跨域拦截，或远程 HTTPS 酒馆无法直接连本地 HTTP 服务，请切为「酒馆代理」（需在 SillyTavern `config.yaml` 打开 `enableCorsProxy: true`；若启用 `privateAddressWhitelist` 且访问本地/内网地址须将 IP 加入 `allowedRanges`。注意 TauriTavern 外壳不支持 `/proxy/`，请保持直连）。',
                 },
                 {
                     lead: '悬浮球快捷面板（可选）',
@@ -124,15 +124,15 @@ const PLUGIN_GUIDE_CONTENT: GuidePageContent = {
             bullets: [
                 {
                     lead: '识别标记与正负向分隔',
-                    body: '默认按 `image### 正向词 | 负向词 ###` 识别 AI 写的生图指令；如需兼容部分模型习惯，可在下方调整起止标记。',
+                    body: '默认按 `image### 正向词 | 负向词 ###` 识别 AI 写的生图指令（支持内部多行与换行排版）；如需兼容部分模型习惯，可在下方调整起止标记。',
                 },
                 {
-                    lead: '自动去重与中文标点处理',
-                    body: '「提示词自动去重整理」默认开启，用来去掉预设前后缀和触发词里的重复标签；「中文标点转英文逗号」默认关闭，以保留 MOSS 等中文大模型的原生句式。',
+                    lead: '提示词去重、标点与空行整理',
+                    body: '「提示词 Tags 自动去重」与「标点与空行自动整理」默认开启，分别负责纯英文标签去重、重复标点清理及空白行压缩，并完整保留中英文自然句式与有效换行；「中文标点转英文逗号」默认关闭以保留中文自然语义。',
                 },
                 {
                     lead: '隐藏思考与清理历史标记',
-                    body: '设置里的「绘图与设计思考」和「清理历史...」开关会同步写入酒馆全局正则，防止过程草稿和旧标签一直占用后续对话上下文（即使停用本插件也会继续生效）。',
+                    body: '「绘图与设计思考」与两项历史清理开关会同步写入酒馆全局正则，使过程草稿与旧标记不占用后续对话上下文（停用本插件后仍会在酒馆中持续生效）。',
                 },
                 {
                     lead: '图片保存、看图与词库定位',
@@ -160,33 +160,33 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                     },
                     {
                         lead: '秋叶绘世整合包启动器',
-                        body: '打开启动器进入「高级选项 / 启动参数」，勾选允许跨域访问，或在额外启动参数栏填上 `--enable-cors-header *`（同局域网手机/平板访问请勾选开放远程连接）。',
+                        body: '打开启动器进入「高级选项 / 启动参数」，开启允许跨域访问，或在额外启动参数栏填写 `--enable-cors-header *`（同局域网手机或平板访问请同步勾选开放远程连接）。',
                     },
                     {
                         lead: '官方便携包 (Windows)',
-                        body: '右键编辑 `run_nvidia_gpu.bat`（或 `run_cpu.bat`），在 `main.py` 后面加上 `--enable-cors-header *`（需同局域网访问再加 `--listen 0.0.0.0`）。',
+                        body: '右键编辑 `run_nvidia_gpu.bat`（或 `run_cpu.bat`），在 `main.py` 后加上 `--listen 127.0.0.1 --enable-cors-header *`（需同局域网访问可将 `127.0.0.1` 改为 `0.0.0.0`）。',
                     },
                     {
                         lead: '桌面版、重启检查与远程酒馆',
-                        body: 'Desktop 版可在服务设置附加 `--enable-cors-header *`。改完后务必重启 ComfyUI，先确认浏览器能直接打开 `http://127.0.0.1:8188`，再到插件点「测试连接/同步模型」。若酒馆在远程 HTTPS 域名而 ComfyUI 在本机，请改用「酒馆代理」。',
+                        body: 'Desktop 版可在服务设置附加 `--enable-cors-header *`。改完后务必重启 ComfyUI，先确认浏览器能直接打开 `http://127.0.0.1:8188`，再到插件点「测试连接/同步模型」。若酒馆在远程 HTTPS 域名而 ComfyUI 在本机，可改用「酒馆代理」（需确保 `enableCorsProxy: true` 且 `privateAddressWhitelist` 放行本机地址；注意 ComfyUI 局部重绘需上传图片表单，仅支持「浏览器直连」，且 TauriTavern 宿主不支持酒馆代理）。',
                     },
                 ],
             },
             {
-                title: '2. 4 套内置工作流怎么选',
+                title: '2. 内置原生工作流与 LoRA 说明',
                 badge: '工作流基础',
                 bullets: [
                     {
                         lead: '工作流怎么运行',
-                        body: '插件自带四套开箱工作流，生图时会自动把你在页面选好的模型、提示词、尺寸、步数、CFG 和种子填入工作流并提交运行。',
+                        body: '插件内置「默认 Checkpoint 模型文生图」与「默认 UNet 模型文生图」两套原生工作流，生图时会自动填入模型、提示词、尺寸、步数、CFG 和种子，并动态串联内置 `LoraLoader` 节点加载底部提示词预设里配置的 LoRA。',
                     },
                     {
                         lead: 'Checkpoint 底模 vs UNet 分立模型',
-                        body: '常见的 SDXL / Illustrious / NoobAI / Pony 单文件整合大模型（放在 `checkpoints/` 目录）选 `默认 Checkpoint 模型文生图`，CLIP 与 VAE 保持「使用模型内置」即可；Flux / Qwen-Image / MOSS / Anima 等分立模型（放在 `unet/` 或 `diffusion_models/` 目录）选 `默认 UNet 模型文生图`，并记得在「模型配置」选好对应的 CLIP 与 VAE（特殊架构可进「打开蓝图」切换加载器类型）。',
+                        body: 'SDXL / Illustrious / NoobAI / Pony 单文件整合大模型（位于 `checkpoints/` 目录）选 `默认 Checkpoint 模型文生图`，CLIP 与 VAE 保持「使用模型内置」；Flux / Qwen-Image / MOSS / Anima 等分立模型（位于 `unet/` 或 `diffusion_models/` 目录）选 `默认 UNet 模型文生图`，并在「模型配置」指定配套 CLIP 与 VAE（特殊架构可在「打开蓝图」切换加载器类型）。',
                     },
                     {
-                        lead: '原生版 vs WeiLin 版',
-                        body: '不需要在提示词里用关键词动态挂 LoRA 时，选「原生」零插件直接用；如果要用常驻或关键词触发 `<lora:...>` / `<wlr:...>`，需在 ComfyUI Manager 安装 `ComfyUI-WeiLin` 插件并切到「WeiLin」版。',
+                        lead: 'WeiLin 节点插件（可选增强）',
+                        body: '若导入并使用了含 `WeiLinPromptUI` 节点的自定义工作流以启用触发词权重（Trigger）等精细控制，生图时会按 `<wlr:...>` 语法发送（服务端须安装 `ComfyUI-WeiLin` 插件）；默认原生工作流直接使用标准节点运行。',
                     },
                 ],
             },
@@ -288,13 +288,13 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                     },
                     {
                         lead: '直连受阻怎么处理',
-                        body: '若国内浏览器直连官方域名超时，可在「插件设置」切换为「酒馆代理」，或把上方「服务商」改成「自定义服务」填入你的中转反代地址。',
+                        body: '若国内浏览器直连官方域名超时，使用标准 SillyTavern Node 版时可在「插件设置」切换为「酒馆代理」（须开启 `enableCorsProxy: true`）；若使用 TauriTavern 等不支持 `/proxy/` 的宿主环境，请保持「浏览器直连」并将上方「服务商」改成「自定义服务」填入允许跨域的中转地址。',
                     },
                 ],
             },
             {
                 title: '2. V4 / V4.5 / V5 权重转换与推荐搭配',
-                badge: 'V4+ 对齐',
+                badge: 'V4+ 适配',
                 bullets: [
                     {
                         lead: '圆括号权重自动转换',
@@ -345,11 +345,11 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                 bullets: [
                     {
                         lead: 'GPT Image vs DALL-E 3 参数差异',
-                        body: '`GPT Image` 系列支持生成画质、透明背景与输出格式切换；`DALL-E 3` 支持画质 (`standard/hd`) 与风格 (`vivid/natural`) 调整。',
+                        body: '`GPT Image` 系列支持生成画质、透明背景与输出格式切换，分辨率支持「自动 (由模型决定)」或指定尺寸；`DALL-E 3` 支持画质 (`standard/hd`) 与风格 (`vivid/natural`) 调整。',
                     },
                     {
-                        lead: '直接用自然句子描述画面',
-                        body: '这类模型能直接看懂中英文长句和段落描述，插件会原样保留完整语义；不涉及负向提示词、LoRA 与画板局部重绘。',
+                        lead: '直接用自然句子描述画面（推荐切换故事插画预设）',
+                        body: '这类模型更擅长阅读自然语言长句：建议去「提示词 → 故事插画」切换为「故事插画 · 中文自然语义」或「故事插画 · 自然语言」；默认生图配置不绑定多余前后缀，需要统一画风时可在提示词预设中选用「日系二次元 / 半写实厚涂 / 电影感摄影 / 唯美水彩插画」。',
                     },
                 ],
             },
@@ -392,11 +392,11 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                 bullets: [
                     {
                         lead: '直接选择画幅比例',
-                        body: '通过「画幅比例」直接决定横图、竖图或方图构图。',
+                        body: '通过「画幅比例」直接决定横图、竖图或方图构图，也可选「自动 (由模型决定)」。',
                     },
                     {
                         lead: '分辨率随模型自动显隐',
-                        body: '`2.5 Flash Image` 仅支持默认尺寸，界面会自动隐藏清晰度栏；`3.1 Flash` 支持 `512px / 1K / 2K / 4K`；`3 Pro` 支持 `1K / 2K / 4K`；手填自定模型可选「默认（不传）」。',
+                        body: '`2.5 Flash Image` 仅支持默认尺寸，界面会自动隐藏清晰度栏；`3.1 Flash` 支持 `512px / 1K / 2K / 4K`；`3 Pro` 支持 `1K / 2K / 4K`；不支持固定分档时可选「自动」。',
                     },
                 ],
             },
@@ -407,7 +407,7 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                 bullets: [
                     {
                         lead: '推荐搭配自然语义预设',
-                        body: '建议去「提示词」选用「故事插画 · 自然语言」或「故事插画 · 中文自然语义 (MOSS / 通用)」；有特殊代理或推理参数需求可填底部「自定义请求参数 JSON」。',
+                        body: '建议去「提示词 → 故事插画」选用「故事插画 · 中文自然语义」或「故事插画 · 自然语言」；默认生图配置不绑定多余前后缀，如需限定画风可在提示词预设中选择日系二次元、半写实厚涂、电影感摄影或唯美水彩插画，有特殊请求参数可填在底部「自定义请求参数 JSON」。',
                     },
                 ],
             },
@@ -439,7 +439,7 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                 bullets: [
                     {
                         lead: '按模型支持度自动显示',
-                        body: '`grok-imagine-image` 系列支持原生的「画幅比例」与 `1K / 2K`「分辨率档位」切换；切回旧版 `grok-2-image` 模型时会自动隐藏不支持的选项。',
+                        body: '`grok-imagine-image` 系列支持原生的「画幅比例」（可选「自动 (由模型决定)」或具体比例）与 `1K / 2K`「分辨率档位」切换；切回旧版 `grok-2-image` 模型时会自动隐藏不支持的选项。',
                     },
                 ],
             },
@@ -449,8 +449,8 @@ const PROVIDER_GUIDE_MAP: Record<ProviderType, GuidePageContent> = {
                 badgeMuted: true,
                 bullets: [
                     {
-                        lead: '完整保留中文与英文长句',
-                        body: '直接写场景段落即可，无负向提示词；如需向代理补充额外参数可在下方「自定义请求参数 JSON」填写。',
+                        lead: '完整保留中文与英文长句（推荐切换故事插画预设）',
+                        body: '直接用中英文自然句段描述画面即可，建议将「提示词 → 故事插画」切换为「中文自然语义」或「自然语言」；默认不绑定前后缀，也可按需选择快捷画风或向底部「自定义请求参数 JSON」补充额外字段。',
                     },
                 ],
             },
@@ -474,7 +474,7 @@ const PROMPTS_GUIDE_CONTENT: GuidePageContent = {
                 },
                 {
                     lead: '默认只开「故事插画」省上下文',
-                    body: '初次安装默认只开「故事插画」（内置标准标签、NovelAI V4.5、英文自然语言、以及适配 MOSS 等模型的「中文自然语义 (MOSS / 通用)」），其余三项默认关闭，不会白耗对话 Token。',
+                    body: '初次安装默认只开「故事插画」（内置标准标签、NovelAI V4.5、英文自然语言与「中文自然语义」），其余三项默认关闭，不会白耗对话 Token。',
                 },
                 {
                     lead: '已有外部绘画世界书怎么用',
@@ -500,7 +500,7 @@ const PROMPTS_GUIDE_CONTENT: GuidePageContent = {
                 },
                 {
                     lead: 'AI 引用简写宏与自动录卡',
-                    body: '让 AI 在生图指令里简写 `$名称-动作-状态$`，提交画图前插件会自动展开成完整标签；在「解析设置」开启提取后，遇到 AI 新生成的角色或服装档案还会弹窗提示一键存入素材库。',
+                    body: '让 AI 在生图指令里简写 `角色名($角色名-宏-状态$)`，提交画图前插件会自动展开成完整标签；在「解析设置」开启提取后，遇到 AI 新生成的角色或服装档案还会弹窗提示一键存入素材库。',
                 },
             ],
         },

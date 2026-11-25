@@ -3,9 +3,10 @@
  *
  * 负责解析消息中的生图指令标签，管理楼层内的动作按钮、骨架屏与图片展示容器：
  * - 解析消息正文中的生图指令并替换为楼层生图容器节点；
- * - 管理楼层内的生图按钮与生成中骨架屏；
+ * - 管理楼层内的生图按钮与生成中骨架屏，支持脱离 DOM 后的自动重新挂载；
+ * - 监听当前最新 AI 楼层 `.mes_text` 变化，避免外部美化或状态脚本整块覆写导致按钮/自动生图丢失；
  * - 出图就绪后在楼层消息中展示图片，并支持全屏预览与图片编辑面板；
- * - 响应宿主消息删除、编辑与分支滑动事件，清理对应实例。
+ * - 响应宿主消息删除、编辑与候选分支切换事件（含重 roll 取消旧分支队列）并清理对应实例。
  */
 
 import type { Disposable } from '../types';
@@ -33,10 +34,15 @@ import { logger } from '../../util/logger';
 import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
 import {
     buildFloorSlotKey,
+    matchesFloorSlotMessage,
+    matchesFloorSlotScope,
     replaceCommandsWithFloorSlots,
     validateCurrentPresetAssets,
 } from './floor-helpers';
 import type {
+    ChatMessage,
+    DrawingSlotEntry,
+    DrawingTask,
     ProviderType,
     SlotMountTarget,
 } from '@types';
@@ -47,6 +53,20 @@ interface FloorSlotState {
     displayUrl: string;
     favorited: boolean;
     syncFavUI: (fav: boolean) => void;
+}
+
+interface ObservedLatestFloorState {
+    chatId: string;
+    messageId: number;
+    swipeId: number;
+    mesText: HTMLElement;
+    expectedNodes: Set<HTMLElement>;
+}
+
+interface PendingAutoGenerateTarget {
+    chatId: string;
+    messageId: number;
+    swipeId: number;
 }
 
 export class MessageDecorator implements Disposable {
@@ -83,6 +103,14 @@ export class MessageDecorator implements Disposable {
     private scanTimer: ReturnType<typeof setTimeout> | null = null;
     private unbindEventListener: (() => void) | null = null;
     private intersectionObserver: IntersectionObserver | null = null;
+
+    /** 最新 AI 楼层 DOM 自动恢复监听与一次性待自动生图状态 */
+    private latestFloorObserver: MutationObserver | null = null;
+    private observedLatestFloor: ObservedLatestFloorState | null = null;
+    private observerRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly selfMutatingDepths = new Map<number, number>();
+    private pendingAutoGenerateTarget: PendingAutoGenerateTarget | null = null;
+    private readonly pendingArchiveConfirmations = new Set<number>();
 
     public constructor() {
         this.bind();
@@ -144,11 +172,387 @@ export class MessageDecorator implements Disposable {
         if (!messageDom) {
             return;
         }
-        for (const node of messageDom.querySelectorAll(
-            '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot'
-        )) {
-            node.remove();
+        this.runWithObserverSuppressed(messageId, () => {
+            for (const node of messageDom.querySelectorAll(
+                '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-archive-badges, .da-floor-slot'
+            )) {
+                node.remove();
+            }
+        });
+    }
+
+    /**
+     * 获取指定楼层对应的 `.mes` 外壳及其正文挂载容器（`.mes_text` 或回退 `.mes`）。
+     */
+    private getMessageTextContainer(
+        messageId: number
+    ): { messageDom: HTMLElement; mesText: HTMLElement } | null {
+        if (typeof document === 'undefined') {
+            return null;
         }
+        const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`) as HTMLElement | null;
+        if (!messageDom) {
+            return null;
+        }
+        const mesText = (messageDom.querySelector('.mes_text') || messageDom) as HTMLElement;
+        return { messageDom, mesText };
+    }
+
+    /**
+     * 动态解析指定楼层与指令序号当前在 DOM 中的活跃插槽元素，避免闭包持有被外部重绘替换的过期节点。
+     */
+    private resolveSlotElement(
+        messageId: number,
+        instructionIndex: number,
+        fallbackContainer?: HTMLElement | null
+    ): HTMLElement | null {
+        const containerInfo = this.getMessageTextContainer(messageId);
+        if (!containerInfo) {
+            return typeof document === 'undefined' ? (fallbackContainer ?? null) : null;
+        }
+        const { messageDom, mesText } = containerInfo;
+        const liveSlot = messageDom.querySelector(
+            `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
+        ) as HTMLElement | null;
+        if (liveSlot) {
+            return liveSlot;
+        }
+        if (fallbackContainer && fallbackContainer.isConnected && messageDom.contains(fallbackContainer)) {
+            return fallbackContainer;
+        }
+        return mesText;
+    }
+
+    /**
+     * 将图片容器、骨架屏或动作按钮挂载至目标容器，并保持展示内容在前、动作按钮在后的 DOM 顺序。
+     */
+    private mountToSlot(
+        mountTarget: HTMLElement,
+        element: HTMLElement,
+        role: 'visual' | 'button'
+    ): void {
+        const isStructuredSlot = mountTarget.classList.contains('da-floor-slot');
+        if (role === 'visual') {
+            if (isStructuredSlot) {
+                if (
+                    !element.isConnected ||
+                    element.parentElement !== mountTarget ||
+                    mountTarget.firstElementChild !== element
+                ) {
+                    mountTarget.insertBefore(element, mountTarget.firstChild);
+                }
+            } else if (!element.isConnected || element.parentElement !== mountTarget) {
+                const firstBtn = mountTarget.querySelector(':scope > .da-floor-action-wrapper');
+                if (firstBtn) {
+                    mountTarget.insertBefore(element, firstBtn);
+                } else {
+                    mountTarget.appendChild(element);
+                }
+            }
+            return;
+        }
+
+        const hasTrailingVisual = Boolean(
+            element.parentElement === mountTarget &&
+                element.nextElementSibling &&
+                (element.nextElementSibling.classList.contains('da-floor-image-container') ||
+                    element.nextElementSibling.classList.contains('da-floor-image-skeleton'))
+        );
+        if (!element.isConnected || element.parentElement !== mountTarget || hasTrailingVisual) {
+            mountTarget.appendChild(element);
+        }
+    }
+
+    /**
+     * 在执行自身楼层 DOM 修改期间暂时屏蔽同楼层的 MutationObserver 回调，防止形成自我触发循环。
+     */
+    private runWithObserverSuppressed(messageId: number, fn: () => void): void {
+        const prev = this.selfMutatingDepths.get(messageId) ?? 0;
+        this.selfMutatingDepths.set(messageId, prev + 1);
+        try {
+            fn();
+        } finally {
+            const next = (this.selfMutatingDepths.get(messageId) ?? 1) - 1;
+            if (next <= 0) {
+                this.latestFloorObserver?.takeRecords();
+                this.selfMutatingDepths.delete(messageId);
+            } else {
+                this.selfMutatingDepths.set(messageId, next);
+            }
+        }
+    }
+
+    /**
+     * 判断指定楼层是否为当前会话中的最新一条非用户（AI）消息。
+     */
+    private isLatestAiMessage(
+        chat: ReadonlyArray<ChatMessage | undefined> | undefined,
+        messageId: number
+    ): boolean {
+        if (!Array.isArray(chat)) {
+            return false;
+        }
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const item = chat[i];
+            if (item && !item.is_user && !item.is_system) {
+                return i === messageId;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 收集指定楼层当前分支已实际挂载在目标 `.mes_text` 中的插件节点集合。
+     */
+    private collectObservedNodesForMessage(
+        mesText: HTMLElement,
+        chatId: string,
+        messageId: number,
+        swipeId: number
+    ): Set<HTMLElement> {
+        const nodes = new Set<HTMLElement>();
+        for (const el of mesText.querySelectorAll('.da-floor-slot, .da-floor-archive-badges')) {
+            nodes.add(el as HTMLElement);
+        }
+        const maps: Array<Map<string, HTMLElement>> = [this.activeImageContainers, this.activeSkeletons];
+        for (const [key, btn] of this.activeButtons.entries()) {
+            if (matchesFloorSlotScope(key, chatId, messageId, swipeId) && mesText.contains(btn.element)) {
+                nodes.add(btn.element);
+            }
+        }
+        for (const map of maps) {
+            for (const [key, el] of map.entries()) {
+                if (matchesFloorSlotScope(key, chatId, messageId, swipeId) && mesText.contains(el)) {
+                    nodes.add(el);
+                }
+            }
+        }
+        return nodes;
+    }
+
+    /**
+     * 若当前正受观察的最新 AI 楼层发生节点增删，同步刷新预期存活节点清单。
+     */
+    private syncObservedNodesIfTarget(messageId: number): void {
+        const observed = this.observedLatestFloor;
+        if (!observed || observed.messageId !== messageId) {
+            return;
+        }
+        observed.expectedNodes = this.collectObservedNodesForMessage(
+            observed.mesText,
+            observed.chatId,
+            observed.messageId,
+            observed.swipeId
+        );
+    }
+
+    /**
+     * 断开最新 AI 楼层 `.mes_text` DOM 自动恢复监听并取消待执行的恢复定时器。
+     */
+    private disconnectLatestFloorObserver(): void {
+        if (this.observerRecoveryTimer !== null) {
+            clearTimeout(this.observerRecoveryTimer);
+            this.observerRecoveryTimer = null;
+        }
+        if (this.latestFloorObserver) {
+            this.latestFloorObserver.disconnect();
+            this.latestFloorObserver = null;
+        }
+        this.observedLatestFloor = null;
+    }
+
+    /**
+     * 将轻量 `MutationObserver` 绑定至当前最新一条 AI 消息的 `.mes_text` 容器，
+     * 用于在外部脚本调用 `updateMessageBlock` 覆写 DOM 后自动重新挂载与补发未完成的自动生图。
+     */
+    private updateLatestFloorObserver(
+        chatId: string,
+        messageId: number,
+        swipeId: number,
+        mesText: HTMLElement,
+        shouldWatch: boolean
+    ): void {
+        if (!shouldWatch || typeof MutationObserver === 'undefined') {
+            if (this.observedLatestFloor?.messageId === messageId) {
+                this.disconnectLatestFloorObserver();
+            }
+            return;
+        }
+
+        const expectedNodes = this.collectObservedNodesForMessage(mesText, chatId, messageId, swipeId);
+        if (expectedNodes.size === 0) {
+            if (this.observedLatestFloor?.messageId === messageId) {
+                this.disconnectLatestFloorObserver();
+            }
+            return;
+        }
+
+        if (
+            this.latestFloorObserver &&
+            this.observedLatestFloor &&
+            this.observedLatestFloor.mesText === mesText
+        ) {
+            this.observedLatestFloor.chatId = chatId;
+            this.observedLatestFloor.messageId = messageId;
+            this.observedLatestFloor.swipeId = swipeId;
+            this.observedLatestFloor.expectedNodes = expectedNodes;
+            return;
+        }
+
+        this.disconnectLatestFloorObserver();
+        const observedState: ObservedLatestFloorState = {
+            chatId,
+            messageId,
+            swipeId,
+            mesText,
+            expectedNodes,
+        };
+        this.observedLatestFloor = observedState;
+
+        this.latestFloorObserver = new MutationObserver(() => {
+            if (
+                this.isDisposed ||
+                !settingsStore.getSettings().enabled ||
+                this.observedLatestFloor !== observedState ||
+                (this.selfMutatingDepths.get(observedState.messageId) ?? 0) > 0
+            ) {
+                return;
+            }
+
+            const hostContext = window.SillyTavern?.getContext?.();
+            if (!hostContext || hostContext.chatId !== observedState.chatId) {
+                return;
+            }
+            const msg = hostContext.chat?.[observedState.messageId];
+            if (!msg || msg.is_user || (msg.swipe_id ?? 0) !== observedState.swipeId) {
+                return;
+            }
+
+            const liveMessageDom = document.querySelector(`#chat .mes[mesid="${observedState.messageId}"]`);
+            const liveMesText = liveMessageDom?.querySelector('.mes_text') as HTMLElement | null;
+            const hasMesTextReplaced =
+                !observedState.mesText.isConnected ||
+                (liveMesText !== null && liveMesText !== observedState.mesText);
+            let hasDetachedPluginNode = hasMesTextReplaced;
+            if (!hasDetachedPluginNode) {
+                for (const node of observedState.expectedNodes) {
+                    if (!node.isConnected || !observedState.mesText.contains(node)) {
+                        hasDetachedPluginNode = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasDetachedPluginNode) {
+                return;
+            }
+
+            const hasCommands =
+                typeof msg.mes === 'string' && promptPipeline.extractCommands(msg.mes).length > 0;
+            const extractionCfg = resolveActiveMaterialExtractionConfig(settingsStore.getSettings());
+            const hasArchives =
+                typeof msg.mes === 'string' &&
+                extractionCfg?.enabled !== false &&
+                extractArchivesFromText(msg.mes, extractionCfg).length > 0;
+            if (!hasCommands && !hasArchives) {
+                return;
+            }
+
+            this.scheduleObserverRecovery(observedState);
+        });
+
+        this.latestFloorObserver.observe(mesText, { childList: true, subtree: true });
+    }
+
+    /**
+     * 调度最新 AI 楼层 DOM 自动恢复：重新装饰并补挂脱离节点，若有未消费的自动生图意图则补发触发。
+     */
+    private scheduleObserverRecovery(observed: ObservedLatestFloorState): void {
+        if (this.observerRecoveryTimer !== null) {
+            clearTimeout(this.observerRecoveryTimer);
+        }
+        this.observerRecoveryTimer = setTimeout(() => {
+            this.observerRecoveryTimer = null;
+            void this.performObserverRecovery(observed);
+        }, 0);
+    }
+
+    private async performObserverRecovery(observed: ObservedLatestFloorState): Promise<void> {
+        if (this.isDisposed || !settingsStore.getSettings().enabled) {
+            return;
+        }
+        if (this.observedLatestFloor !== observed) {
+            return;
+        }
+
+        const inFlight = this.inFlightDecorations.get(observed.messageId);
+        if (inFlight) {
+            await inFlight.catch(() => undefined);
+            if (this.isDisposed || this.observedLatestFloor !== observed) {
+                return;
+            }
+        }
+
+        const beforeCtx = window.SillyTavern?.getContext?.();
+        const beforeMsg = beforeCtx?.chat?.[observed.messageId];
+        if (
+            !beforeCtx ||
+            beforeCtx.chatId !== observed.chatId ||
+            !beforeMsg ||
+            (beforeMsg.swipe_id ?? 0) !== observed.swipeId ||
+            !this.isLatestAiMessage(beforeCtx.chat, observed.messageId)
+        ) {
+            return;
+        }
+
+        await this.decorateMessage(observed.messageId);
+
+        const afterCtx = window.SillyTavern?.getContext?.();
+        const afterMsg = afterCtx?.chat?.[observed.messageId];
+        if (
+            this.isDisposed ||
+            !afterCtx ||
+            afterCtx.chatId !== observed.chatId ||
+            afterMsg !== beforeMsg ||
+            (afterMsg.swipe_id ?? 0) !== observed.swipeId
+        ) {
+            return;
+        }
+
+        const settings = settingsStore.getSettings();
+        if (
+            settings.enabled &&
+            settings.autoGenerate &&
+            !this.pendingArchiveConfirmations.has(observed.messageId) &&
+            this.matchesPendingAutoGenerate(observed.chatId, observed.messageId, observed.swipeId)
+        ) {
+            this.triggerReadyButtons(observed.messageId);
+        }
+    }
+
+    /**
+     * 记录指定楼层与分支的一次性待自动生图意图（当外部脚本抢先清空 DOM 导致首轮触发落空时，
+     * 供自动恢复后补触发一次，并在成功点击或切走/取消时清除）。
+     */
+    public markPendingAutoGenerate(chatId: string, messageId: number, swipeId: number): void {
+        this.pendingAutoGenerateTarget = { chatId, messageId, swipeId };
+    }
+
+    /**
+     * 清除指定楼层（或全部）待自动生图标记。
+     */
+    public clearPendingAutoGenerate(messageId?: number): void {
+        if (messageId === undefined || this.pendingAutoGenerateTarget?.messageId === messageId) {
+            this.pendingAutoGenerateTarget = null;
+        }
+    }
+
+    private matchesPendingAutoGenerate(chatId: string, messageId: number, swipeId: number): boolean {
+        return Boolean(
+            this.pendingAutoGenerateTarget &&
+                this.pendingAutoGenerateTarget.chatId === chatId &&
+                this.pendingAutoGenerateTarget.messageId === messageId &&
+                this.pendingAutoGenerateTarget.swipeId === swipeId
+        );
     }
 
     /**
@@ -216,6 +620,7 @@ export class MessageDecorator implements Disposable {
             }
 
             if (eventData.status === 'failed') {
+                button.element.style.display = '';
                 button.setState('error', '生成失败，点击重试');
                 this.removeSkeleton(target.messageId, target.instructionIndex, target.chatId, swipeId);
                 const container = this.activeImageContainers.get(buttonKey);
@@ -226,10 +631,15 @@ export class MessageDecorator implements Disposable {
             } else if (eventData.status === 'cancelled') {
                 const container = this.activeImageContainers.get(buttonKey);
                 const hasImage = Boolean(container?.querySelector('.da-floor-image'));
+                if (!hasImage) {
+                    button.element.style.display = '';
+                }
                 button.setState(hasImage ? 'done' : 'ready');
                 this.removeSkeleton(target.messageId, target.instructionIndex, target.chatId, swipeId);
                 container?.querySelector('.da-floor-image')?.classList.remove('da-floor-image--regenerating');
-                Toast.info('生图任务已取消');
+                if (!eventData.silentToast) {
+                    Toast.info('生图任务已取消');
+                }
             } else if (eventData.status === 'generating') {
                 button.setState('generating');
             } else if (eventData.status === 'pending') {
@@ -254,7 +664,12 @@ export class MessageDecorator implements Disposable {
         const unbindSettingsUpdated = eventBus.on('settings:updated', () => {
             const settings = settingsStore.getSettings();
             if (!settings.enabled) {
+                this.disconnectLatestFloorObserver();
+                this.clearPendingAutoGenerate();
                 return;
+            }
+            if (!settings.autoGenerate) {
+                this.clearPendingAutoGenerate();
             }
             const displayCfg = settings.ui?.imageDisplay;
             for (const container of this.activeImageContainers.values()) {
@@ -268,7 +683,7 @@ export class MessageDecorator implements Disposable {
                     continue;
                 }
                 const activeTask = generationOrchestrator.getActiveTaskByTarget(slotState.target);
-                if (!activeTask) {
+                if (!activeTask && button.getState?.() !== 'error') {
                     button.element.style.display = hideButtonOnDone ? 'none' : '';
                 }
             }
@@ -497,11 +912,13 @@ export class MessageDecorator implements Disposable {
                 }
             }
             this.promptedArchiveKeys.add(sig);
+            this.pendingArchiveConfirmations.add(messageId);
 
             let finishedCalled = false;
             const finishOnce = () => {
                 if (finishedCalled) return;
                 finishedCalled = true;
+                this.pendingArchiveConfirmations.delete(messageId);
                 options?.onFinished?.();
             };
 
@@ -561,112 +978,135 @@ export class MessageDecorator implements Disposable {
     }
 
     /**
-     * 执行指定楼层的实际装饰解析与 DOM 挂载逻辑。
-     *
-     * @param messageId 目标消息楼层 ID
+     * 查找或补偿挂载当前生图指令对应的楼层容器节点。
      */
-    private async performDecorateMessage(messageId: number): Promise<void> {
-        if (this.isDisposed || typeof document === 'undefined' || !settingsStore.getSettings().enabled) {
-            return;
+    private ensureCommandSlotElement(
+        messageId: number,
+        targetContainer: HTMLElement,
+        slotsMap: Map<number, HTMLElement>,
+        instructionIndex: number,
+        shouldAppendFallback: boolean
+    ): HTMLElement {
+        const directSlot = slotsMap.get(instructionIndex);
+        if (directSlot) {
+            return directSlot;
         }
 
-        const hostContext = window.SillyTavern?.getContext?.();
-        if (!hostContext || !Array.isArray(hostContext.chat)) {
-            return;
-        }
-
-        const message = hostContext.chat[messageId];
-        if (!message || typeof message.mes !== 'string') {
-            return;
-        }
-
-        const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
-        if (!messageDom) {
-            return;
-        }
-
-        const targetContainer = (messageDom.querySelector('.mes_text') || messageDom) as HTMLElement;
-        const chatId = hostContext.chatId || 'default_chat';
-        const swipeId = message.swipe_id ?? 0;
-        const token = this.captureMessageToken(messageId);
-
-        // 1. 检测并处理楼层中的角色与服装档案块（折叠胶囊）
-        this.decorateArchiveBlocks(targetContainer, message.mes);
-
-        // 2. 提取消息正文中的生图指令标签
-        const commands = promptPipeline.extractCommands(message.mes);
-        if (commands.length === 0) {
-            for (const slot of targetContainer.querySelectorAll(
-                '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-slot'
-            )) {
-                slot.remove();
+        let resolved!: HTMLElement;
+        // 结构补偿挂载：若 Markdown 语法导致指令未能成功替换，按已有图片或活跃任务记录在末尾追加容器
+        this.runWithObserverSuppressed(messageId, () => {
+            const existing = targetContainer.querySelector(
+                `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
+            ) as HTMLElement | null;
+            if (existing) {
+                resolved = existing;
+            } else if (shouldAppendFallback) {
+                const appended = document.createElement('div');
+                appended.className = 'da-floor-slot da-floor-slot--appended';
+                appended.setAttribute('data-instruction-index', String(instructionIndex));
+                targetContainer.appendChild(appended);
+                resolved = appended;
+            } else {
+                resolved = targetContainer;
             }
-            return;
+            slotsMap.set(instructionIndex, resolved);
+        });
+        return resolved;
+    }
+
+    /**
+     * 渲染已持久化楼层图片，并在等待 IndexedDB 读取期间若正文容器被外部覆写时刷新容器定位与重绘高亮态。
+     */
+    private async reconcileSlotAfterImageRender(options: {
+        messageId: number;
+        chatId: string;
+        swipeId: number;
+        token: { clearEpoch: number; generation: number };
+        cmd: ReturnType<typeof promptPipeline.extractCommands>[number];
+        slotElement: HTMLElement;
+        slotKey: string;
+        entry: DrawingSlotEntry;
+        activeTask: DrawingTask | undefined;
+    }): Promise<{ slotElement: HTMLElement; hasRenderedImage: boolean } | null> {
+        const { messageId, chatId, swipeId, token, cmd, slotKey, entry, activeTask } = options;
+        let slotElement = options.slotElement;
+
+        await this.renderImageToFloor(
+            messageId,
+            entry.imageId,
+            cmd.instructionIndex,
+            entry.imageUrl,
+            chatId,
+            swipeId
+        );
+        if (!this.isMessageTokenValid(messageId, token)) {
+            return null;
         }
 
-        // 3. 将正文中的指令文本拆分替换为楼层生图容器
-        const slotsMap = this.replaceCommandsWithSlots(targetContainer, commands);
+        const liveInfo = this.getMessageTextContainer(messageId);
+        if (!liveInfo) {
+            return null;
+        }
 
-        // 4. 遍历指令挂载楼层容器与动作按钮
-        const settings = settingsStore.getSettings();
-        const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
-
-        for (const cmd of commands) {
-            let slotElement = slotsMap.get(cmd.instructionIndex);
-            const slotKey = this.buildSlotKey(chatId, messageId, swipeId, cmd.instructionIndex);
-            const target: SlotMountTarget = {
-                chatId,
-                messageId,
-                swipeId,
-                instructionIndex: cmd.instructionIndex,
-            };
-
-            const entry = sessionLifecycle.getSlotEntry(target);
-            const activeTask = generationOrchestrator.getActiveTaskByTarget(target);
-            const hasSlotEntry = Boolean(entry?.imageId || entry?.imageUrl);
-
-            // 结构补偿挂载：若 Markdown 语法导致指令未能成功替换，按已有图片记录在末尾追加容器
-            if (!slotElement) {
-                const existing = targetContainer.querySelector(
-                    `.da-floor-slot[data-instruction-index="${cmd.instructionIndex}"]`
-                ) as HTMLElement | null;
-                if (existing) {
-                    slotElement = existing;
-                } else if (hasSlotEntry || activeTask) {
-                    slotElement = document.createElement('div');
-                    slotElement.className = 'da-floor-slot da-floor-slot--appended';
-                    slotElement.setAttribute('data-instruction-index', String(cmd.instructionIndex));
-                    targetContainer.appendChild(slotElement);
-                } else {
-                    slotElement = targetContainer;
+        const liveTextContainer = liveInfo.mesText;
+        if (!slotElement.isConnected || !liveTextContainer.contains(slotElement)) {
+            this.runWithObserverSuppressed(messageId, () => {
+                const refreshedSlots = this.replaceCommandsWithSlots(liveTextContainer, [cmd]);
+                slotElement =
+                    refreshedSlots.get(cmd.instructionIndex) ??
+                    this.resolveSlotElement(messageId, cmd.instructionIndex, liveTextContainer) ??
+                    liveTextContainer;
+                const existingImgContainer = this.activeImageContainers.get(slotKey);
+                if (existingImgContainer) {
+                    this.mountToSlot(slotElement, existingImgContainer, 'visual');
                 }
-                slotsMap.set(cmd.instructionIndex, slotElement);
-            }
+            });
+        }
 
-            let hasRenderedImage = false;
-            if (hasSlotEntry) {
-                // 渲染楼层图片，若图片正在重新生成中则添加相应样式
-                await this.renderImageToFloor(messageId, entry!.imageId, cmd.instructionIndex, entry!.imageUrl, chatId, swipeId);
-                if (!this.isMessageTokenValid(messageId, token)) {
-                    return;
-                }
-                hasRenderedImage = this.activeImageContainers.has(slotKey);
-                if (hasRenderedImage && activeTask) {
-                    const imgEl = slotElement.querySelector('.da-floor-image');
-                    imgEl?.classList.add('da-floor-image--regenerating');
-                }
-            } else if (activeTask) {
-                this.renderSkeletonToFloor(messageId, cmd.instructionIndex, chatId, swipeId);
-            }
+        const hasRenderedImage = this.activeImageContainers.has(slotKey);
+        if (hasRenderedImage && activeTask) {
+            slotElement.querySelector('.da-floor-image')?.classList.add('da-floor-image--regenerating');
+        }
 
-            // 若配置了出图后隐藏按钮，且当前已渲染图片且无活跃任务，则隐藏按钮
+        return { slotElement, hasRenderedImage };
+    }
+
+    /**
+     * 为指定生图指令容器创建（或复用）交互动作按钮、挂入当前容器并同步状态。
+     */
+    private mountActionButtonForSlot(options: {
+        chatId: string;
+        messageId: number;
+        swipeId: number;
+        target: SlotMountTarget;
+        cmd: ReturnType<typeof promptPipeline.extractCommands>[number];
+        slotKey: string;
+        slotElement: HTMLElement;
+        hasRenderedImage: boolean;
+        activeTask: DrawingTask | undefined;
+        hideButtonOnDone: boolean;
+    }): void {
+        const {
+            chatId,
+            messageId,
+            swipeId,
+            target,
+            cmd,
+            slotKey,
+            slotElement,
+            hasRenderedImage,
+            activeTask,
+            hideButtonOnDone,
+        } = options;
+
+        this.runWithObserverSuppressed(messageId, () => {
             if (hasRenderedImage && hideButtonOnDone && !activeTask) {
                 const existingBtn = this.activeButtons.get(slotKey);
                 if (existingBtn) {
                     existingBtn.dispose();
                     this.activeButtons.delete(slotKey);
                 }
-                continue;
+                return;
             }
 
             let button = this.activeButtons.get(slotKey);
@@ -696,7 +1136,8 @@ export class MessageDecorator implements Disposable {
                             target,
                         };
 
-                        const imgEl = slotElement.querySelector('.da-floor-image');
+                        const liveSlot = this.resolveSlotElement(messageId, cmd.instructionIndex);
+                        const imgEl = liveSlot?.querySelector('.da-floor-image') ?? null;
                         if (imgEl) {
                             imgEl.classList.add('da-floor-image--regenerating');
                         } else {
@@ -714,7 +1155,8 @@ export class MessageDecorator implements Disposable {
                             const errMessage = err instanceof Error ? err.message : String(err);
                             logger.error(`[MessageDecorator] 任务提交失败: ${errMessage}`);
                             this.removeSkeleton(messageId, cmd.instructionIndex, chatId, swipeId);
-                            imgEl?.classList.remove('da-floor-image--regenerating');
+                            const currentSlot = this.resolveSlotElement(messageId, cmd.instructionIndex);
+                            currentSlot?.querySelector('.da-floor-image')?.classList.remove('da-floor-image--regenerating');
                             Toast.error(errMessage);
                             throw err;
                         }
@@ -724,17 +1166,18 @@ export class MessageDecorator implements Disposable {
                         if (task) {
                             generationOrchestrator.cancelTask(task.taskId, '用户主动取消');
                         }
-                        const imgEl = slotElement.querySelector('.da-floor-image');
-                        imgEl?.classList.remove('da-floor-image--regenerating');
+                        const liveSlot = this.resolveSlotElement(messageId, cmd.instructionIndex);
+                        liveSlot?.querySelector('.da-floor-image')?.classList.remove('da-floor-image--regenerating');
                         this.removeSkeleton(messageId, cmd.instructionIndex, chatId, swipeId);
                     },
                 });
 
                 this.activeButtons.set(slotKey, button);
-                slotElement.appendChild(button.element);
             }
 
-            // 同步按钮状态：生成中、已完成或就绪
+            // 若缓存按钮已脱离当前插槽（如 .mes_text 被外部脚本重置），重新挂回新容器
+            this.mountToSlot(slotElement, button.element, 'button');
+
             if (activeTask) {
                 button.element.style.display = '';
                 button.setState(activeTask.status === 'pending' ? 'pending' : 'generating');
@@ -745,7 +1188,149 @@ export class MessageDecorator implements Disposable {
                 button.element.style.display = '';
                 button.setState('ready');
             }
+        });
+    }
+
+    /**
+     * 执行指定楼层的实际装饰解析与 DOM 挂载逻辑。
+     *
+     * @param messageId 目标消息楼层 ID
+     */
+    private async performDecorateMessage(messageId: number): Promise<void> {
+        if (this.isDisposed || typeof document === 'undefined' || !settingsStore.getSettings().enabled) {
+            return;
         }
+
+        const hostContext = window.SillyTavern?.getContext?.();
+        if (!hostContext || !Array.isArray(hostContext.chat)) {
+            return;
+        }
+
+        const message = hostContext.chat[messageId];
+        if (!message || typeof message.mes !== 'string') {
+            return;
+        }
+
+        const containerInfo = this.getMessageTextContainer(messageId);
+        if (!containerInfo) {
+            return;
+        }
+
+        const targetContainer = containerInfo.mesText;
+        const chatId = hostContext.chatId || 'default_chat';
+        const swipeId = message.swipe_id ?? 0;
+        const token = this.captureMessageToken(messageId);
+        const isLatestAi = this.isLatestAiMessage(hostContext.chat, messageId);
+
+        let archives: ExtractedArchiveItem[] = [];
+        let commands: ReturnType<typeof promptPipeline.extractCommands> = [];
+        let slotsMap = new Map<number, HTMLElement>();
+
+        this.runWithObserverSuppressed(messageId, () => {
+            // 1. 检测并处理楼层中的角色与服装档案块（折叠胶囊）
+            archives = this.decorateArchiveBlocks(targetContainer, message.mes);
+
+            // 2. 提取消息正文中的生图指令标签
+            commands = promptPipeline.extractCommands(message.mes);
+            if (commands.length === 0) {
+                for (const slot of targetContainer.querySelectorAll(
+                    '.da-floor-action-wrapper, .da-floor-image-container, .da-floor-image-skeleton, .da-floor-slot'
+                )) {
+                    slot.remove();
+                }
+                return;
+            }
+
+            // 3. 将正文中的指令文本拆分替换为楼层生图容器
+            slotsMap = this.replaceCommandsWithSlots(targetContainer, commands);
+        });
+
+        if (commands.length === 0) {
+            if (this.matchesPendingAutoGenerate(chatId, messageId, swipeId)) {
+                this.clearPendingAutoGenerate(messageId);
+            }
+            this.updateLatestFloorObserver(
+                chatId,
+                messageId,
+                swipeId,
+                targetContainer,
+                isLatestAi && archives.length > 0
+            );
+            return;
+        }
+
+        // 4. 遍历指令挂载楼层容器与动作按钮
+        const settings = settingsStore.getSettings();
+        const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
+        let hasReadySlot = false;
+
+        for (const cmd of commands) {
+            const slotKey = this.buildSlotKey(chatId, messageId, swipeId, cmd.instructionIndex);
+            const target: SlotMountTarget = {
+                chatId,
+                messageId,
+                swipeId,
+                instructionIndex: cmd.instructionIndex,
+            };
+
+            const entry = sessionLifecycle.getSlotEntry(target);
+            const activeTask = generationOrchestrator.getActiveTaskByTarget(target);
+            const hasSlotEntry = Boolean(entry?.imageId || entry?.imageUrl);
+
+            let slotElement = this.ensureCommandSlotElement(
+                messageId,
+                targetContainer,
+                slotsMap,
+                cmd.instructionIndex,
+                hasSlotEntry || Boolean(activeTask)
+            );
+
+            let hasRenderedImage = false;
+            if (hasSlotEntry) {
+                const reconciled = await this.reconcileSlotAfterImageRender({
+                    messageId,
+                    chatId,
+                    swipeId,
+                    token,
+                    cmd,
+                    slotElement,
+                    slotKey,
+                    entry: entry!,
+                    activeTask,
+                });
+                if (!reconciled) {
+                    return;
+                }
+                slotElement = reconciled.slotElement;
+                hasRenderedImage = reconciled.hasRenderedImage;
+            } else if (activeTask) {
+                this.renderSkeletonToFloor(messageId, cmd.instructionIndex, chatId, swipeId);
+            }
+
+            if (!hasRenderedImage && !activeTask) {
+                hasReadySlot = true;
+            }
+
+            this.mountActionButtonForSlot({
+                chatId,
+                messageId,
+                swipeId,
+                target,
+                cmd,
+                slotKey,
+                slotElement,
+                hasRenderedImage,
+                activeTask,
+                hideButtonOnDone,
+            });
+        }
+
+        if (!hasReadySlot && this.matchesPendingAutoGenerate(chatId, messageId, swipeId)) {
+            this.clearPendingAutoGenerate(messageId);
+        }
+
+        const finalMesText = this.getMessageTextContainer(messageId)?.mesText ?? targetContainer;
+        this.updateLatestFloorObserver(chatId, messageId, swipeId, finalMesText, isLatestAi);
     }
 
     /**
@@ -764,6 +1349,9 @@ export class MessageDecorator implements Disposable {
         }
 
         const buttons = messageDom.querySelectorAll<HTMLButtonElement>('.da-floor-action-btn');
+        if (buttons.length > 0) {
+            this.clearPendingAutoGenerate(messageId);
+        }
         for (const btn of buttons) {
             const state = btn.getAttribute('data-state');
             if (state === 'ready') {
@@ -790,10 +1378,6 @@ export class MessageDecorator implements Disposable {
         const effectiveSwipeId = swipeId ?? (hostContext?.chat?.[messageId]?.swipe_id ?? 0);
         const containerKey = this.buildSlotKey(effectiveChatId, messageId, effectiveSwipeId, instructionIndex);
 
-        if (this.activeSkeletons.has(containerKey) || this.activeImageContainers.has(containerKey)) {
-            return;
-        }
-
         const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
         if (!messageDom) {
             return;
@@ -806,6 +1390,22 @@ export class MessageDecorator implements Disposable {
             return;
         }
 
+        const existingContainer = this.activeImageContainers.get(containerKey);
+        if (existingContainer && existingContainer.isConnected && slotElement.contains(existingContainer)) {
+            return;
+        }
+
+        const existingSkeleton = this.activeSkeletons.get(containerKey);
+        if (existingSkeleton) {
+            if (!existingSkeleton.isConnected || !slotElement.contains(existingSkeleton)) {
+                this.runWithObserverSuppressed(messageId, () => {
+                    this.mountToSlot(slotElement, existingSkeleton, 'visual');
+                    this.syncObservedNodesIfTarget(messageId);
+                });
+            }
+            return;
+        }
+
         const skeleton = document.createElement('div');
         skeleton.className = 'da-floor-image-skeleton';
         skeleton.setAttribute('data-slot-skeleton', containerKey);
@@ -814,8 +1414,11 @@ export class MessageDecorator implements Disposable {
         iconSpan.textContent = '正在生成图像...';
         skeleton.appendChild(iconSpan);
 
-        slotElement.insertBefore(skeleton, slotElement.firstChild);
-        this.activeSkeletons.set(containerKey, skeleton);
+        this.runWithObserverSuppressed(messageId, () => {
+            this.mountToSlot(slotElement, skeleton, 'visual');
+            this.activeSkeletons.set(containerKey, skeleton);
+            this.syncObservedNodesIfTarget(messageId);
+        });
     }
 
     /**
@@ -834,8 +1437,11 @@ export class MessageDecorator implements Disposable {
 
         const skeleton = this.activeSkeletons.get(containerKey);
         if (skeleton) {
-            skeleton.remove();
-            this.activeSkeletons.delete(containerKey);
+            this.runWithObserverSuppressed(messageId, () => {
+                skeleton.remove();
+                this.activeSkeletons.delete(containerKey);
+                this.syncObservedNodesIfTarget(messageId);
+            });
         }
     }
 
@@ -956,27 +1562,30 @@ export class MessageDecorator implements Disposable {
             } else {
                 // 无图且无活跃任务：清除骨架屏与旧图片容器，重置按钮为就绪状态
                 this.removeSkeleton(messageId, instructionIndex, effectiveChatId, effectiveSwipeId);
-                const existingContainer = this.activeImageContainers.get(containerKey);
-                if (existingContainer) {
-                    this.activePreloadCleanups.get(containerKey)?.();
-                    this.activePreloadCleanups.delete(containerKey);
-                    this.activeSlotCleanups.get(containerKey)?.();
-                    this.activeSlotCleanups.delete(containerKey);
-                    existingContainer.remove();
-                    this.activeImageContainers.delete(containerKey);
-                }
-                this.activeSlotStates.delete(containerKey);
-                const slotElement = messageDom.querySelector(
-                    `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
-                );
-                slotElement?.querySelector('.da-floor-image-container')?.remove();
-                slotElement?.querySelector('.da-floor-image-skeleton')?.remove();
+                this.runWithObserverSuppressed(messageId, () => {
+                    const existingContainer = this.activeImageContainers.get(containerKey);
+                    if (existingContainer) {
+                        this.activePreloadCleanups.get(containerKey)?.();
+                        this.activePreloadCleanups.delete(containerKey);
+                        this.activeSlotCleanups.get(containerKey)?.();
+                        this.activeSlotCleanups.delete(containerKey);
+                        existingContainer.remove();
+                        this.activeImageContainers.delete(containerKey);
+                    }
+                    this.activeSlotStates.delete(containerKey);
+                    const slotElement = messageDom.querySelector(
+                        `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
+                    );
+                    slotElement?.querySelector('.da-floor-image-container')?.remove();
+                    slotElement?.querySelector('.da-floor-image-skeleton')?.remove();
 
-                const button = this.activeButtons.get(containerKey);
-                if (button) {
-                    button.element.style.display = '';
-                    button.setState('ready');
-                }
+                    const button = this.activeButtons.get(containerKey);
+                    if (button) {
+                        button.element.style.display = '';
+                        button.setState('ready');
+                    }
+                    this.syncObservedNodesIfTarget(messageId);
+                });
             }
             return;
         }
@@ -1025,10 +1634,21 @@ export class MessageDecorator implements Disposable {
             };
         };
 
-        // 已有图片容器时预载图片地址、平滑替换并同步容器状态
+        // 已有图片容器时确认其仍挂载于最新插槽中，再预载图片地址、平滑替换并同步容器状态
         const existingContainer = this.activeImageContainers.get(containerKey);
         const existingImg = existingContainer?.querySelector('.da-floor-image') as HTMLImageElement | null;
         if (existingContainer && existingImg) {
+            this.runWithObserverSuppressed(messageId, () => {
+                const mountTarget =
+                    this.resolveSlotElement(messageId, instructionIndex, textContainer) ?? textContainer;
+                this.mountToSlot(mountTarget, existingContainer, 'visual');
+                const existingButton = this.activeButtons.get(containerKey);
+                if (existingButton && existingButton.element.style.display !== 'none') {
+                    this.mountToSlot(mountTarget, existingButton.element, 'button');
+                }
+                this.syncObservedNodesIfTarget(messageId);
+            });
+
             delete existingImg.dataset.fallbackApplied;
             bindImageFallback(existingImg);
 
@@ -1405,21 +2025,38 @@ export class MessageDecorator implements Disposable {
         actionsContainer.appendChild(downloadBtn);
 
         imageBox.appendChild(actionsContainer);
+
+        const collapseToggleBtn = document.createElement('button');
+        collapseToggleBtn.type = 'button';
+        collapseToggleBtn.className = 'da-floor-image-collapse-toggle';
+        collapseToggleBtn.setAttribute('aria-expanded', 'false');
+        collapseToggleBtn.innerHTML = `<span class="da-floor-image-collapse-toggle__arrow">${renderIcon('chevronRight', 13)}</span><span class="da-floor-image-collapse-toggle__icon">${renderIcon('image', 13)}</span><span class="da-floor-image-collapse-toggle__label">展开生成图片</span>`;
+        collapseToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const expanded = imageContainer.classList.toggle('is-expanded');
+            collapseToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            const labelEl = collapseToggleBtn.querySelector('.da-floor-image-collapse-toggle__label');
+            if (labelEl) {
+                labelEl.textContent = expanded ? '收起生成图片' : '展开生成图片';
+            }
+        });
+
+        imageContainer.appendChild(collapseToggleBtn);
         imageContainer.appendChild(imageBox);
         this.applyDisplaySettingsToContainer(imageContainer, displayCfg);
 
         // 4. 定位对应的 .da-floor-slot 元素插入图片展示容器
-        const slotElement = messageDom.querySelector(
-            `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
-        ) as HTMLElement | null;
-
-        if (slotElement) {
-            slotElement.insertBefore(imageContainer, slotElement.firstChild);
-        } else {
-            textContainer.appendChild(imageContainer);
-        }
-
-        this.activeImageContainers.set(containerKey, imageContainer);
+        this.runWithObserverSuppressed(messageId, () => {
+            const mountTarget =
+                this.resolveSlotElement(messageId, instructionIndex, textContainer) ?? textContainer;
+            this.mountToSlot(mountTarget, imageContainer, 'visual');
+            this.activeImageContainers.set(containerKey, imageContainer);
+            const existingButton = this.activeButtons.get(containerKey);
+            if (existingButton && existingButton.element.style.display !== 'none') {
+                this.mountToSlot(mountTarget, existingButton.element, 'button');
+            }
+            this.syncObservedNodesIfTarget(messageId);
+        });
 
         // 5. 若配置开启了 saveToServer 且尚未转存，触发静默后台服务端转存
         if (settings.saveToServer && !serverImageUrl && imageId) {
@@ -1502,12 +2139,57 @@ export class MessageDecorator implements Disposable {
     }
 
     /**
-     * 处理宿主候选分支滑动切换 (Swipe)，对齐分支图片数据并更新对应分支的指令与图片显示。
+     * 判断当前触发的候选分支滑动是否为右滑重 roll 生成的全新分支 (Overswipe)。
+     */
+    private isOverswipeTarget(message: ChatMessage | undefined, targetSwipeId: number): boolean {
+        if (!message) {
+            return false;
+        }
+        if (Array.isArray(message.swipes) && targetSwipeId >= message.swipes.length) {
+            return true;
+        }
+        if (Array.isArray(message.swipe_info) && !message.swipe_info[targetSwipeId]) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 处理宿主候选分支滑动切换 (Swipe)，同步分支图片数据、按需取消旧分支队列并更新对应分支显示。
      *
      * @param messageId 目标消息楼层 ID
-     * @param _swipeId 分支滑动索引
+     * @param swipeId 分支滑动索引
+     * @param options 可选行为控制（如分支删除后的视图刷新跳过重 roll 取消）
      */
-    public async handleMessageSwiped(messageId: number, _swipeId?: number): Promise<void> {
+    public async handleMessageSwiped(
+        messageId: number,
+        swipeId?: number,
+        options?: { skipSwipeCancel?: boolean }
+    ): Promise<void> {
+        this.clearPendingAutoGenerate(messageId);
+
+        const hostContext = window.SillyTavern?.getContext?.();
+        const message = hostContext?.chat?.[messageId];
+        const targetSwipeId = swipeId ?? message?.swipe_id ?? 0;
+
+        if (
+            !options?.skipSwipeCancel &&
+            (settingsStore.getSettings().cancelOnSwipe ?? true) &&
+            this.isOverswipeTarget(message, targetSwipeId)
+        ) {
+            const chatId = hostContext?.chatId || 'default_chat';
+            const cancelledCount = generationOrchestrator.cancelOtherSwipeTasks(
+                chatId,
+                messageId,
+                targetSwipeId,
+                '重 roll 生成新分支，已自动取消旧分支任务',
+                { silentToast: true }
+            );
+            if (cancelledCount > 0) {
+                Toast.info(`已取消上一分支的 ${cancelledCount} 个未完成生图任务`);
+            }
+        }
+
         sessionLifecycle.syncSwipeState(messageId);
         this.handleMessageDeleted(messageId);
         await this.decorateMessage(messageId);
@@ -1534,10 +2216,7 @@ export class MessageDecorator implements Disposable {
         if (message && typeof message.mes === 'string') {
             const newCommands = promptPipeline.extractCommands(message.mes);
             const swipeId = message.swipe_id ?? 0;
-            const existingDrawings =
-                (Array.isArray(message.swipe_info) && message.swipe_info[swipeId]?.extra?.drawings) ||
-                message.extra?.drawings ||
-                {};
+            const existingDrawings = sessionLifecycle.getSwipeDrawings(messageId, swipeId) || {};
             const existingCount = Object.keys(existingDrawings).length;
 
             const isStructureChanged =
@@ -1580,22 +2259,21 @@ export class MessageDecorator implements Disposable {
         // 1. 递增消息装饰计数器并清除在途 Promise 记录，防止切换分支前的异步任务回写 DOM
         this.bumpMessageGeneration(messageId);
         this.inFlightDecorations.delete(messageId);
-
-        // key 尾部三段固定为 messageId:swipeId:instructionIndex，从尾部索引避免 chatId 含 ':' 时失配
-        const isTargetSlot = (key: string): boolean => {
-            const parts = key.split(':');
-            return parts.length >= 4 && Number(parts[parts.length - 3]) === messageId;
-        };
+        this.clearPendingAutoGenerate(messageId);
+        this.pendingArchiveConfirmations.delete(messageId);
+        if (this.observedLatestFloor?.messageId === messageId) {
+            this.disconnectLatestFloorObserver();
+        }
 
         for (const [key, btn] of this.activeButtons.entries()) {
-            if (isTargetSlot(key)) {
+            if (matchesFloorSlotMessage(key, messageId)) {
                 btn.dispose();
                 this.activeButtons.delete(key);
             }
         }
 
         for (const [key, container] of this.activeImageContainers.entries()) {
-            if (isTargetSlot(key)) {
+            if (matchesFloorSlotMessage(key, messageId)) {
                 this.activePreloadCleanups.get(key)?.();
                 this.activePreloadCleanups.delete(key);
                 this.activeSlotCleanups.get(key)?.();
@@ -1607,7 +2285,7 @@ export class MessageDecorator implements Disposable {
         }
 
         for (const [key, skeleton] of this.activeSkeletons.entries()) {
-            if (isTargetSlot(key)) {
+            if (matchesFloorSlotMessage(key, messageId)) {
                 skeleton.remove();
                 this.activeSkeletons.delete(key);
             }
@@ -1647,21 +2325,32 @@ export class MessageDecorator implements Disposable {
                 continue;
             }
 
-            this.activePreloadCleanups.get(key)?.();
-            this.activePreloadCleanups.delete(key);
-            this.activeSlotCleanups.get(key)?.();
-            this.activeSlotCleanups.delete(key);
-            this.activeSlotStates.delete(key);
-            const container = this.activeImageContainers.get(key);
-            if (container) {
-                container.remove();
-                this.activeImageContainers.delete(key);
-            }
+            const targetMessageId = slotState.target?.messageId;
+            const executeCleanup = () => {
+                this.activePreloadCleanups.get(key)?.();
+                this.activePreloadCleanups.delete(key);
+                this.activeSlotCleanups.get(key)?.();
+                this.activeSlotCleanups.delete(key);
+                this.activeSlotStates.delete(key);
+                const container = this.activeImageContainers.get(key);
+                if (container) {
+                    container.remove();
+                    this.activeImageContainers.delete(key);
+                }
 
-            const button = this.activeButtons.get(key);
-            if (button) {
-                button.element.style.display = '';
-                button.setState('ready');
+                const button = this.activeButtons.get(key);
+                if (button) {
+                    button.element.style.display = '';
+                    button.setState('ready');
+                }
+                if (typeof targetMessageId === 'number') {
+                    this.syncObservedNodesIfTarget(targetMessageId);
+                }
+            };
+            if (typeof targetMessageId === 'number') {
+                this.runWithObserverSuppressed(targetMessageId, executeCleanup);
+            } else {
+                executeCleanup();
             }
             logger.info(`已同步重置被删除图像对应楼层图片容器: ${key} [${imageId}]`);
         }
@@ -1693,6 +2382,10 @@ export class MessageDecorator implements Disposable {
      */
     public clearCurrentButtons(): void {
         this.clearEpoch += 1;
+        this.disconnectLatestFloorObserver();
+        this.clearPendingAutoGenerate();
+        this.pendingArchiveConfirmations.clear();
+        this.selfMutatingDepths.clear();
         this.messageGenerations.clear();
         this.inFlightDecorations.clear();
         this.inFlightRenders.clear();
@@ -1777,6 +2470,23 @@ export class MessageDecorator implements Disposable {
             imageContainer.classList.add('da-floor-image-container--right');
         }
 
+        const displayMode = displayCfg?.displayMode || 'normal';
+        const isCollapseMode = displayMode === 'collapse';
+        imageContainer.classList.toggle('da-floor-image-container--collapse', isCollapseMode);
+        const toggleBtn = imageContainer.querySelector(
+            '.da-floor-image-collapse-toggle'
+        ) as HTMLButtonElement | null;
+        if (!isCollapseMode) {
+            imageContainer.classList.remove('is-expanded');
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', 'false');
+                const labelEl = toggleBtn.querySelector('.da-floor-image-collapse-toggle__label');
+                if (labelEl) {
+                    labelEl.textContent = '展开生成图片';
+                }
+            }
+        }
+
         const imageBox = imageContainer.querySelector('.da-floor-image-box') as HTMLElement | null;
         if (imageBox) {
             imageBox.style.borderRadius = displayCfg?.rounded === false ? '0px' : '';
@@ -1787,7 +2497,7 @@ export class MessageDecorator implements Disposable {
             imgEl.style.maxHeight = displayCfg?.maxHeight ? `${displayCfg.maxHeight}px` : '';
             imgEl.style.maxWidth = displayCfg?.maxWidthPct ? `${displayCfg.maxWidthPct}%` : '';
             imgEl.style.objectFit = displayCfg?.objectFit || '';
-            imgEl.classList.toggle('da-floor-image--blurred', Boolean(displayCfg?.autoBlur));
+            imgEl.classList.toggle('da-floor-image--blurred', displayMode === 'blur');
         }
     }
 

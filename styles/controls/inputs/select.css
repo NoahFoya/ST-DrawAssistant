@@ -163,3 +163,220 @@
     opacity: 1;
 }
 
+/* 5. 可搜索下拉选择器 (SearchableSelectControl) */
+.da-searchable-select {
+    position: relative;
+}
+
+.da-searchable-select__trigger {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    height: 32px;
+    padding: 0 8px 0 10px;
+    box-sizing: border-box;
+    border-radius: var(--da-radius-input, 8px);
+    border: 1px solid var(--da-border-color);
+    background-color: var(--da-bg-input);
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-sm, 13px);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.14s var(--da-ease), box-shadow 0.14s var(--da-ease), background-color 0.14s var(--da-ease);
+}
+
+.da-searchable-select__trigger:hover {
+    border-color: rgba(var(--da-accent-rgb), 0.45);
+    background-color: var(--da-bg-input-hover);
+}
+
+.da-searchable-select.is-open .da-searchable-select__trigger,
+.da-searchable-select__trigger:focus-visible {
+    border-color: var(--da-accent-color);
+    box-shadow: var(--da-focus-ring);
+    background-color: var(--da-bg-input);
+}
+
+.da-searchable-select.is-dirty .da-searchable-select__trigger {
+    border-color: var(--da-color-warn) !important;
+    box-shadow: 0 0 0 1px var(--da-color-warn), 0 0 8px rgba(var(--da-color-warn-rgb), 0.25) !important;
+}
+
+.da-searchable-select.is-invalid .da-searchable-select__trigger {
+    border-color: var(--da-color-error) !important;
+    background-color: rgba(var(--da-color-error-rgb, 239, 68, 68), 0.06) !important;
+    box-shadow: 0 0 0 1px var(--da-color-error) !important;
+}
+
+.da-searchable-select__value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.da-searchable-select__value.is-placeholder {
+    color: var(--da-text-muted);
+}
+
+.da-searchable-select__clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--da-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.14s ease, background-color 0.14s ease;
+}
+
+.da-searchable-select__clear:hover {
+    color: var(--da-text-primary);
+    background: var(--da-bg-hover);
+}
+
+.da-searchable-select__chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-text-secondary);
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.da-searchable-select.is-open .da-searchable-select__chevron {
+    transform: rotate(180deg);
+}
+
+/* 悬浮搜索下拉菜单（挂载至 body 防止滚动容器裁切） */
+.da-searchable-select__dropdown {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    background: var(--da-bg-secondary, #181825);
+    border: 1px solid var(--da-border-focus, var(--da-accent-color));
+    border-radius: var(--da-radius-md, 10px);
+    box-shadow: var(--da-shadow-modal, 0 12px 32px rgba(0, 0, 0, 0.55));
+    z-index: var(--da-z-popover, 10035);
+    max-width: calc(var(--da-vvw, 100vw) - 16px);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.da-searchable-select__search-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--da-border-subtle, var(--da-border-color));
+    background: var(--da-bg-surface-subtle, transparent);
+}
+
+.da-searchable-select__search-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-text-muted);
+    flex-shrink: 0;
+}
+
+.da-searchable-select__search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 26px;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-xs, 12.5px);
+    outline: none;
+}
+
+.da-searchable-select__search-input::placeholder {
+    color: var(--da-text-muted);
+}
+
+.da-searchable-select__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    max-height: min(230px, calc(var(--da-vvh, 100dvh) * 0.42));
+}
+
+.da-searchable-select__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--da-text-primary);
+    font-family: var(--da-font-family);
+    font-size: var(--da-font-size-xs, 12.5px);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.da-searchable-select__option-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-searchable-select__option-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--da-accent-color);
+    flex-shrink: 0;
+}
+
+.da-searchable-select__option:hover,
+.da-searchable-select__option.is-highlighted {
+    background: rgba(var(--da-accent-rgb), 0.14);
+}
+
+.da-searchable-select__option.is-selected {
+    background: rgba(var(--da-accent-rgb), 0.18);
+    color: var(--da-accent-color);
+    font-weight: 600;
+}
+
+.da-searchable-select__option--empty {
+    color: var(--da-text-secondary);
+}
+
+.da-searchable-select__empty {
+    padding: 12px 10px;
+    text-align: center;
+    font-size: var(--da-font-size-xs, 12px);
+    color: var(--da-text-muted);
+}
+
+/* 快捷面板紧致行内尺寸适配 */
+.da-fqp-row__control .da-searchable-select__trigger {
+    height: 27px;
+    font-size: 12px;
+    padding: 0 6px 0 8px;
+}
+

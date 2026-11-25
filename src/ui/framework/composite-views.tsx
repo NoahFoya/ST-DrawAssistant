@@ -195,6 +195,7 @@ export function PresetToolbarView(props: PresetToolbarViewProps): VNode {
 export interface DimensionPickerViewProps extends Omit<DimensionPickerOptions, 'initialData'> {
     width: number;
     height: number;
+    aspectRatio?: string;
     dirty?: boolean;
     embedded?: boolean;
 }
@@ -207,15 +208,28 @@ export function DimensionPickerView(props: DimensionPickerViewProps): VNode {
         () =>
             new DimensionPicker({
                 ...props,
-                initialData: { width: props.width, height: props.height },
+                initialData: {
+                    width: props.width,
+                    height: props.height,
+                    aspectRatio: props.aspectRatio,
+                },
                 onChange: (dims: DimensionPickerData) => {
                     callbacksRef.current.onChange?.(dims);
                 },
             }),
         (instance) => {
             const cur = instance.getData();
-            if (cur.width !== props.width || cur.height !== props.height) {
-                instance.setData({ width: props.width, height: props.height }, { silent: true });
+            const targetIsAuto = Boolean(props.allowAuto && props.aspectRatio === 'auto');
+            const curIsAuto = cur.aspectRatio === 'auto';
+            if (cur.width !== props.width || cur.height !== props.height || curIsAuto !== targetIsAuto) {
+                instance.setData(
+                    {
+                        width: props.width,
+                        height: props.height,
+                        aspectRatio: targetIsAuto ? 'auto' : undefined,
+                    },
+                    { silent: true }
+                );
             }
             instance.element.classList.toggle('is-dirty', Boolean(props.dirty));
         }

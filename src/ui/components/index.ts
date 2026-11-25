@@ -1,8 +1,8 @@
 /**
- * 基础原子控件库聚合导出。
+ * 基础控件库聚合导出。
  *
  * @remarks
- * 包含通用卡片容器 (Card) 与纯受控表单原子控件：
+ * 包含通用卡片容器 (Card) 与纯受控基础表单控件：
  * - 容器：Card
  * - 按钮：Button
  * - 表单输入：TextInput, NumberInput, Select, Switch, SegmentedControl
@@ -19,6 +19,7 @@ export * from './segmented-control';
 export * from './badge';
 export * from './form-field';
 export * from './icons';
+export * from './transport-notice';
 
 export type {
     Disposable,

@@ -178,7 +178,7 @@ export class NovelAITabView extends ProviderTabView {
                 label: '权重语法自动转换',
                 type: 'switch',
                 tooltip:
-                    '开启后自动将 SD 圆括号权重（如 (masterpiece:1.2) 与双层裸括号 ((tag))）转换为 NovelAI 对应架构语法：V4 / V4.5 / V5 默认转为原生 weight::tag::，仅选择 V3 模型时兼容转为 {tag} / [tag] 并降级 :: 区块。',
+                    '开启后将 SD 圆括号权重（如 (masterpiece:1.2) 与 ((tag))）自动转为对应架构语法：V4 / V4.5 / V5 转为原生 weight::tag::，V3 模型转为 {tag} / [tag]。',
                 transform: {
                     toView: (v) => v !== false,
                     fromView: (v) => Boolean(v),
@@ -193,7 +193,7 @@ export class NovelAITabView extends ProviderTabView {
                 type: 'select',
                 options: SMEA_MODE_OPTIONS,
                 tooltip:
-                    '正弦采样与动态特征增强算法（仅支持 V3 架构模型）。在大分辨率（如 1024×1024 以上）生成时，能显著抑制多头、多肢体或构图杂乱；V4/V4.5/V5 模型已原生优化，无需开启。',
+                    '仅 V3 架构模型可用：在高分辨率生图时减少多肢体与构图畸变；V4 及以上模型已原生优化，无需开启。',
                 disabledWhen: (m) => {
                     const effectiveModel =
                         (m.customModel && String(m.customModel).trim()) ||

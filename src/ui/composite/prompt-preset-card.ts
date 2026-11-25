@@ -12,17 +12,17 @@ import type { UIComponent } from '../types';
 import { Card } from '../components/card';
 import { renderIcon } from '../components/icons';
 import { PresetToolbar, type PresetToolbarItem, type PresetActionType } from './preset-toolbar';
-import { type LoraEntryItem, type LoraSyntaxMode } from './lora-manager';
+import { type LoraEntryItem } from './lora-manager';
 import { openLoraModal } from '../modal/lora-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from './tag-autocomplete';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
 
 /** 提示词卡片表单数据模型 */
 export interface PromptCardData {
     positivePrefix: string;
     positiveSuffix: string;
     negativePrompt: string;
-    loraSyntaxMode?: LoraSyntaxMode;
     loras: LoraEntryItem[];
 }
 
@@ -45,8 +45,6 @@ export interface PromptPresetCardOptions {
     showLora?: boolean;
     /** 是否展示负向提示词输入框，针对 OpenAI 兼容等无负向词特性的后端可配置为 false，默认 true */
     showNegativePrompt?: boolean;
-    /** LoRA 语法模式（'standard' 为标准双权重，'weilin' 为三权重扩展），默认 'standard' */
-    mode?: LoraSyntaxMode;
     /** 可选 LoRA 模型列表 */
     availableModels?: string[];
     /** 预设操作回调 */
@@ -72,7 +70,6 @@ export class PromptPresetCard implements UIComponent {
     private readonly suffixTextarea: HTMLTextAreaElement;
     private readonly negTextarea: HTMLTextAreaElement;
     private loraBadgesContainer?: HTMLElement;
-    private loraModeBadgeEl?: HTMLElement;
     private availableModels: string[] = [];
 
     private currentData: PromptCardData;
@@ -112,7 +109,6 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: found?.data?.positivePrefix || '',
             positiveSuffix: found?.data?.positiveSuffix || '',
             negativePrompt: found?.data?.negativePrompt || '',
-            loraSyntaxMode: found?.data?.loraSyntaxMode ?? options.mode ?? 'standard',
             loras: found?.data?.loras ? found.data.loras.map((l) => ({ ...l })) : []
         };
 
@@ -120,7 +116,6 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: options.value?.positivePrefix ?? defaultData.positivePrefix,
             positiveSuffix: options.value?.positiveSuffix ?? defaultData.positiveSuffix,
             negativePrompt: options.value?.negativePrompt ?? defaultData.negativePrompt,
-            loraSyntaxMode: options.value?.loraSyntaxMode ?? defaultData.loraSyntaxMode,
             loras: options.value?.loras ? options.value.loras.map((l) => ({ ...l })) : defaultData.loras
         };
         this.baselineData = this.cloneData(this.currentData);
@@ -218,12 +213,7 @@ export class PromptPresetCard implements UIComponent {
             loraTitle.className = 'da-field-label';
             loraTitle.textContent = 'LoRA 模型';
 
-            const modeBadge = document.createElement('span');
-            modeBadge.className = 'da-badge da-badge--neutral da-prompt-lora-mode-badge';
-            this.loraModeBadgeEl = modeBadge;
-
             loraTitleGroup.appendChild(loraTitle);
-            loraTitleGroup.appendChild(modeBadge);
 
             const openLoraBtn = document.createElement('button');
             openLoraBtn.type = 'button';
@@ -232,12 +222,10 @@ export class PromptPresetCard implements UIComponent {
             openLoraBtn.title = '打开独立模态弹窗管理 LoRA 模型与权重';
             openLoraBtn.onclick = () => {
                 openLoraModal({
-                    mode: this.currentData.loraSyntaxMode ?? options.mode ?? 'standard',
                     availableModels: this.availableModels,
                     initialItems: this.currentData.loras,
-                    onSave: (items, mode) => {
+                    onSave: (items) => {
                         this.currentData.loras = items.map((it) => ({ ...it }));
-                        this.currentData.loraSyntaxMode = mode;
                         this.renderLoraBadges();
                         this.updateDirtyState();
                         this.onChangeCallback?.(this.getValue());
@@ -273,7 +261,6 @@ export class PromptPresetCard implements UIComponent {
         if (val.positivePrefix !== undefined) this.currentData.positivePrefix = val.positivePrefix;
         if (val.positiveSuffix !== undefined) this.currentData.positiveSuffix = val.positiveSuffix;
         if (val.negativePrompt !== undefined) this.currentData.negativePrompt = val.negativePrompt;
-        if (val.loraSyntaxMode !== undefined) this.currentData.loraSyntaxMode = val.loraSyntaxMode;
         if (val.loras !== undefined) {
             this.currentData.loras = val.loras.map((l) => ({ ...l }));
         }
@@ -366,13 +353,6 @@ export class PromptPresetCard implements UIComponent {
         this.baselineData = this.cloneData(data);
         this.syncInputs(this.currentData);
         this.toolbar.setDirty(false);
-    }
-
-    /**
-     * 动态更新 LoRA 语法模式。
-     */
-    public setMode(mode: LoraSyntaxMode): void {
-        this.currentData.loraSyntaxMode = mode;
     }
 
     /**
@@ -496,11 +476,6 @@ export class PromptPresetCard implements UIComponent {
         if (!this.loraBadgesContainer) return;
         this.loraBadgesContainer.innerHTML = '';
 
-        const mode = this.currentData.loraSyntaxMode ?? 'standard';
-        if (this.loraModeBadgeEl) {
-            this.loraModeBadgeEl.textContent = mode === 'weilin' ? 'ComfyUI <wlr>' : 'SD-WebUI <lora>';
-        }
-
         const allLoras = this.currentData.loras || [];
         if (allLoras.length === 0) {
             const emptySpan = document.createElement('span');
@@ -524,8 +499,9 @@ export class PromptPresetCard implements UIComponent {
             chip.className = chipClasses;
 
             const isKeywordTrigger = lora.triggerMode === 'keyword';
+            const triggerWeightText = (lora.triggerWeight ?? DEFAULT_LORA_WEIGHTS.triggerWeight).toFixed(2);
             let tooltip = isEnabled
-                ? `点击停用: ${lora.modelName} (Model: ${lora.modelWeight}, CLIP: ${lora.clipWeight})`
+                ? `点击停用: ${lora.modelName} (Model: ${lora.modelWeight}, CLIP: ${lora.clipWeight}, Trigger: ${triggerWeightText})`
                 : `已停用（点击重新启用）: ${lora.modelName}`;
             if (isKeywordTrigger) {
                 const kwDesc = (lora.keywords || '').trim() || '未填写关键词';
@@ -601,12 +577,6 @@ export class PromptPresetCard implements UIComponent {
         if (this.currentData.positivePrefix !== this.baselineData.positivePrefix) return true;
         if (this.currentData.positiveSuffix !== this.baselineData.positiveSuffix) return true;
         if (this.currentData.negativePrompt !== this.baselineData.negativePrompt) return true;
-        if (
-            (this.currentData.loraSyntaxMode ?? 'standard') !==
-            (this.baselineData.loraSyntaxMode ?? 'standard')
-        ) {
-            return true;
-        }
 
         const currentLoras = this.currentData.loras || [];
         const baseLoras = this.baselineData.loras || [];
@@ -632,7 +602,6 @@ export class PromptPresetCard implements UIComponent {
             positivePrefix: data.positivePrefix,
             positiveSuffix: data.positiveSuffix,
             negativePrompt: data.negativePrompt,
-            loraSyntaxMode: data.loraSyntaxMode ?? 'standard',
             loras: data.loras ? data.loras.map((l) => ({ ...l })) : []
         };
     }

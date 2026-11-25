@@ -18,7 +18,7 @@ import {
     SwitchControl,
     SegmentedControlView,
     PresetToolbarView,
-    SelectControl,
+    SearchableSelectControl,
     NumberInputControl,
 } from '../../framework';
 import type { PresetActionType } from '../../composite';
@@ -30,7 +30,12 @@ import {
 } from '../../../pipeline/material-definitions';
 import { promptInjector } from '../../../pipeline/prompt-injector';
 import { settingsStore } from '../../../store/settings-store';
-import { getHostCharacterCards } from './material-types';
+import {
+    applyPrimaryBoundCardSelection,
+    getHostCharacterCards,
+    parseBoundCardNamesInput,
+    splitBoundCardNames,
+} from './material-types';
 
 export interface ActivationPanelProps {
     charController: PresetController<CharacterPresetData>;
@@ -76,21 +81,6 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
         setRawBoundCardsText(null);
     }, [activeActivationPresetId]);
 
-    const parseCardNamesInput = (raw: string): string[] => {
-        const seen = new Set<string>();
-        const result: string[] = [];
-        for (const token of raw.split(/[,，\r\n]/)) {
-            const clean = token.trim();
-            if (!clean) continue;
-            const key = clean.toLowerCase();
-            if (!seen.has(key)) {
-                seen.add(key);
-                result.push(clean);
-            }
-        }
-        return result;
-    };
-
     const updateActivationRule = (
         ruleGroup: 'characterRules' | 'outfitRules',
         presetId: string,
@@ -117,22 +107,17 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
         });
     };
 
-    const rawBoundCards = (actDraft?.boundCardNames || [])
-        .map((n) => (n || '').trim())
-        .filter(Boolean);
-    const primaryBoundCard = rawBoundCards[0] || '';
-    const extraBoundCards = rawBoundCards.slice(1);
+    const {
+        primaryCard: primaryBoundCard,
+        extraCards: extraBoundCards,
+        allCards: rawBoundCards,
+    } = splitBoundCardNames(actDraft?.boundCardNames);
 
     const updateBoundCard = (cardName: string) => {
-        const trimmed = cardName.trim();
-        if (!trimmed) {
-            activationController.updateDraft('boundCardNames', []);
-            return;
-        }
-        const dedupedRest = extraBoundCards.filter(
-            (n) => n.toLowerCase() !== trimmed.toLowerCase()
+        activationController.updateDraft(
+            'boundCardNames',
+            applyPrimaryBoundCardSelection(cardName, extraBoundCards)
         );
-        activationController.updateDraft('boundCardNames', [trimmed, ...dedupedRest]);
     };
 
     const renderRuleSection = (cfg: {
@@ -241,32 +226,35 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                         width="auto"
                     >
                         {hostCards.length === 0 ? (
-                            <input
-                                type="text"
-                                className="da-input"
-                                placeholder="输入绑定的酒馆角色卡名称（多个可用逗号分隔）"
-                                value={rawBoundCardsText !== null ? rawBoundCardsText : rawBoundCards.join(', ')}
-                                onInput={(e) => {
-                                    const nextRaw = (e.currentTarget as HTMLInputElement).value;
-                                    setRawBoundCardsText(nextRaw);
-                                    activationController.updateDraft(
-                                        'boundCardNames',
-                                        parseCardNamesInput(nextRaw)
+                                    <input
+                                        type="text"
+                                        className="da-input"
+                                        placeholder="输入绑定的酒馆角色卡名称（多个可用逗号分隔）"
+                                        value={
+                                            rawBoundCardsText !== null
+                                                ? rawBoundCardsText
+                                                : rawBoundCards.join(', ')
+                                        }
+                                        onInput={(e) => {
+                                            const nextRaw = (e.currentTarget as HTMLInputElement).value;
+                                            setRawBoundCardsText(nextRaw);
+                                            activationController.updateDraft(
+                                                'boundCardNames',
+                                                parseBoundCardNamesInput(nextRaw)
+                                            );
+                                        }}
+                                        onBlur={() => setRawBoundCardsText(null)}
+                                    />
+                                ) : (() => {
+                                    const matchedHost = hostCards.find(
+                                        (hc) =>
+                                            hc.name.trim().toLowerCase() ===
+                                            primaryBoundCard.toLowerCase()
                                     );
-                                }}
-                                onBlur={() => setRawBoundCardsText(null)}
-                            />
-                        ) : (() => {
-                            const matchedHost = hostCards.find(
-                                (hc) => hc.name.trim().toLowerCase() === primaryBoundCard.toLowerCase()
-                            );
-                            const selectedCardVal = matchedHost ? matchedHost.name : primaryBoundCard;
-                            return (
-                                <SelectControl
-                                    value={selectedCardVal}
-                                    onChange={(val) => updateBoundCard(val)}
-                                    options={[
-                                        { value: '', label: '-- 未关联角色卡 --' },
+                                    const selectedCardVal = matchedHost
+                                        ? matchedHost.name
+                                        : primaryBoundCard;
+                                    const cardOptions = [
                                         ...(primaryBoundCard && !matchedHost
                                             ? [
                                                   {
@@ -279,10 +267,29 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                                             value: hc.name,
                                             label: hc.name,
                                         })),
-                                    ]}
-                                />
-                            );
-                        })()}
+                                    ];
+                                    return (
+                                        <div className="da-activation-bound-wrap">
+                                            <SearchableSelectControl
+                                                value={selectedCardVal}
+                                                options={cardOptions}
+                                                emptyLabel="-- 未关联角色卡 --"
+                                                placeholder="-- 未关联角色卡 --"
+                                                searchPlaceholder="搜索酒馆角色卡名称..."
+                                                emptyResultText="未找到匹配的角色卡"
+                                                allowCustomValue={true}
+                                                customValueLabel={(q) => `使用自定义角色卡名「${q}」`}
+                                                onChange={(val) => updateBoundCard(val)}
+                                            />
+                                            {extraBoundCards.length > 0 && (
+                                                <div className="da-field-inline-hint">
+                                                    另已关联 {extraBoundCards.length} 张角色卡：
+                                                    {extraBoundCards.join('、')}（清空当前选择将一并解绑）
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                     </FormFieldView>
 
                     <FormFieldView

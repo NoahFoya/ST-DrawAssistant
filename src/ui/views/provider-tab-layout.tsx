@@ -97,6 +97,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
     return (
         <>
             <ConnectionCardView
+                providerType={vm.provider}
                 title={props.connectionTitle}
                 subtitle={props.connectionSubtitle}
                 urlPlaceholder={props.urlPlaceholder}
@@ -155,7 +156,6 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 onInstanceChange={(inst) => vm.registerPromptCard(inst)}
                 showLora={props.showLoraInPromptManager !== false}
                 showNegativePrompt={props.showNegativeInPromptManager !== false}
-                mode={vm.provider === 'comfyui' ? 'weilin' : 'standard'}
                 availableModels={vm.serverLoras.value}
                 onAction={(action, pId, data) => vm.handlePromptAssetAction(action, pId, data)}
                 onImportFiles={(files) => void vm.handlePromptImportFiles(files)}

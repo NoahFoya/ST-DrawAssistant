@@ -17,10 +17,11 @@ import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
 import {
     GEMINI_API_BASE,
-    GEMINI_ASPECT_RATIOS,
+    GEMINI_ASPECT_RATIO_OPTIONS,
     GEMINI_CUSTOM_SERVICE_ID,
     GEMINI_MODEL_OPTIONS,
     GEMINI_OFFICIAL_SERVICE_ID,
+    buildGeminiImageSizeOptions,
     resolveGeminiModelCapabilities,
 } from '../../provider/gemini/gemini-models';
 
@@ -37,10 +38,7 @@ const GEMINI_PROVIDER_PRESETS: ProviderPreset[] = [
     },
 ];
 
-const ASPECT_RATIO_OPTIONS = GEMINI_ASPECT_RATIOS.map((ratio) => ({
-    label: ratio,
-    value: ratio,
-}));
+const ASPECT_RATIO_OPTIONS = GEMINI_ASPECT_RATIO_OPTIONS;
 
 function getEffectiveModel(draft: DrawingPresetData): string {
     return (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'gemini-2.5-flash-image';
@@ -104,10 +102,16 @@ export class GeminiTabView extends ProviderTabView {
         const syncImageSizeForModel = () => {
             const latest = this.vm.presetController.draftConfig.value;
             const caps = resolveGeminiModelCapabilities(getEffectiveModel(latest));
-            if (!caps.supportsImageSize || caps.allowsDefaultEmptyImageSize) {
+            if (!caps.supportsImageSize) {
                 return;
             }
             const curSize = String(latest.imageSize || '');
+            if (curSize.toLowerCase() === 'auto') {
+                return;
+            }
+            if (!curSize && caps.allowsDefaultEmptyImageSize) {
+                return;
+            }
             if (!caps.supportedImageSizes.includes(curSize)) {
                 const fallbackSize = caps.supportedImageSizes.includes('1K')
                     ? '1K'
@@ -155,7 +159,8 @@ export class GeminiTabView extends ProviderTabView {
                 label: '画幅比例',
                 type: 'select',
                 options: ASPECT_RATIO_OPTIONS,
-                tooltip: 'Gemini 原生 imageConfig.aspectRatio 参数，直接由模型按比例生成构图。',
+                tooltip:
+                    'Gemini 原生 imageConfig.aspectRatio 参数；选择「自动」时由模型或参考图自行决定构图比例。',
                 transform: {
                     toView: (v) => (v as string) || '1:1',
                     fromView: (v) => String(v),
@@ -167,16 +172,10 @@ export class GeminiTabView extends ProviderTabView {
                 type: 'segmented',
                 options: (m) => {
                     const capabilities = resolveGeminiModelCapabilities(getEffectiveModel(m));
-                    const sizes = capabilities.supportedImageSizes.map((size) => ({
-                        label: size === '512' ? '512px' : size,
-                        value: size,
-                    }));
-                    return capabilities.allowsDefaultEmptyImageSize
-                        ? [{ label: '默认', value: '' }, ...sizes]
-                        : sizes;
+                    return buildGeminiImageSizeOptions(capabilities);
                 },
                 tooltip:
-                    '仅部分高阶模型支持该参数（gemini-3.1-flash-image-preview 支持 512px/1K/2K/4K；gemini-3-pro-image-preview 支持 1K/2K/4K）；2.5 Flash Image 自动隐藏；其余模型或自定义别名可按需选用或保持「默认（不传）」。',
+                    '仅部分高阶模型支持该参数（gemini-3.1-flash-image-preview 支持 512px/1K/2K/4K；gemini-3-pro-image-preview 支持 1K/2K/4K）；选用「自动」时不显式传递档位，交由模型默认决定；2.5 Flash Image 自动隐藏。',
                 visibleWhen: (m) =>
                     resolveGeminiModelCapabilities(getEffectiveModel(m)).supportsImageSize,
                 transform: {
@@ -184,8 +183,11 @@ export class GeminiTabView extends ProviderTabView {
                         const capabilities = resolveGeminiModelCapabilities(getEffectiveModel(m));
                         const supported = capabilities.supportedImageSizes;
                         const s = String(v || '');
+                        if (s.toLowerCase() === 'auto') {
+                            return 'auto';
+                        }
                         if (capabilities.allowsDefaultEmptyImageSize) {
-                            return supported.includes(s) ? s : '';
+                            return supported.includes(s) ? s : 'auto';
                         }
                         if (supported.includes(s)) return s;
                         return supported.includes('1K') ? '1K' : (supported[0] ?? '1K');

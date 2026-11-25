@@ -23,11 +23,15 @@ import { openChangelogModal } from '../modal/changelog-modal';
 import { updateService } from '../../pipeline/update-service';
 import { eventBus } from '../../util/event-bus';
 import { copyTextToClipboard, downloadJsonFile } from '../../util/browser-io';
+import { detectHostRuntime } from '../../util/http-client';
 import { EXTENSION_TITLE, EXTENSION_VERSION } from '../../config/constants';
 import type { UpdateState } from '@types';
 
 interface EnvSummaryState {
     hasST: boolean;
+    hostLabel: string;
+    pageOrigin: string;
+    supportsRelayProxy: boolean;
     userAgent: string;
     usedMb: string;
     quotaMb: string;
@@ -52,8 +56,12 @@ export class AboutTabView extends PreactSettingsView {
     public constructor() {
         super('da-tab-pane da-view-about');
 
+        const initialRuntime = detectHostRuntime();
         this.envState = signal<EnvSummaryState>({
-            hasST: typeof window !== 'undefined' && Boolean(window.SillyTavern?.getContext),
+            hasST: initialRuntime.hasSillyTavern,
+            hostLabel: initialRuntime.hostLabel,
+            pageOrigin: initialRuntime.pageOrigin,
+            supportsRelayProxy: initialRuntime.supportsRelayProxy,
             userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '未知环境',
             usedMb: '未知',
             quotaMb: '未知',
@@ -78,7 +86,7 @@ export class AboutTabView extends PreactSettingsView {
 
     private async refreshEnvState(): Promise<void> {
         const seq = ++this.envRefreshSeq;
-        const hasST = typeof window !== 'undefined' && Boolean(window.SillyTavern?.getContext);
+        const runtime = detectHostRuntime();
         const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '未知环境';
         const estimate = await imageStorage.getStorageEstimate();
         if (this.viewDisposed || seq !== this.envRefreshSeq) return;
@@ -88,7 +96,10 @@ export class AboutTabView extends PreactSettingsView {
         const transport = String(settingsStore.get('transport') || 'direct');
 
         this.envState.value = {
-            hasST,
+            hasST: runtime.hasSillyTavern,
+            hostLabel: runtime.hostLabel,
+            pageOrigin: runtime.pageOrigin,
+            supportsRelayProxy: runtime.supportsRelayProxy,
             userAgent,
             usedMb,
             quotaMb,
@@ -114,6 +125,8 @@ export class AboutTabView extends PreactSettingsView {
             }`,
             `- **生成时间**: ${new Date().toISOString()}`,
             `- **SillyTavern 宿主**: ${env.hasST ? '已集成' : '未检测到宿主'}`,
+            `- **运行外壳**: ${env.hostLabel} (${env.supportsRelayProxy ? '支持 /proxy/' : '不支持 /proxy/'})`,
+            `- **页面来源**: ${env.pageOrigin || '未知'}`,
             `- **生图服务**: ${env.activeProvider}`,
             `- **连接方式**: ${env.transport}`,
             `- **存储空间**: ${env.usedMb} MB / ${env.quotaMb} MB (${env.usagePercent}%)`,

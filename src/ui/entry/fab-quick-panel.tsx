@@ -16,6 +16,7 @@ import type {
     ActivationTriggerMode,
     CharacterPresetData,
     DrawingPresetData,
+    ImageDisplayMode,
     ImageStorageQuality,
     MaterialActivationPresetData,
     MaterialExtractionPresetData,
@@ -52,37 +53,52 @@ import {
 } from '../../provider/novelai/novelai-models';
 import {
     OPENAI_MODEL_OPTIONS,
+    isSiliconFlowService,
     resolveOpenAIModelCapabilities,
 } from '../../provider/openai/openai-models';
 import {
     GEMINI_API_BASE,
-    GEMINI_ASPECT_RATIOS,
+    GEMINI_ASPECT_RATIO_OPTIONS,
     GEMINI_CUSTOM_SERVICE_ID,
     GEMINI_MODEL_OPTIONS,
     GEMINI_OFFICIAL_SERVICE_ID,
+    buildGeminiImageSizeOptions,
     resolveGeminiModelCapabilities,
 } from '../../provider/gemini/gemini-models';
 import {
     GROK_API_BASE,
-    GROK_ASPECT_RATIOS,
+    GROK_ASPECT_RATIO_OPTIONS,
     GROK_CUSTOM_SERVICE_ID,
     GROK_MODEL_OPTIONS,
     GROK_OFFICIAL_SERVICE_ID,
     GROK_RESOLUTIONS,
     resolveGrokModelCapabilities,
 } from '../../provider/grok/grok-models';
-import { SwitchControl, SelectControl, SegmentedControlView, NumberInputControl } from '../framework';
+import {
+    SwitchControl,
+    SelectControl,
+    SearchableSelectControl,
+    SegmentedControlView,
+    NumberInputControl,
+} from '../framework';
 import {
     DEFAULT_ASPECT_RATIOS,
     OPENAI_ASPECT_RATIOS,
     GPT_IMAGE_ASPECT_RATIOS,
 } from '../composite/dimension-picker';
 import type { SelectOption } from '../components/select';
-import { getHostCharacterCards } from '../views/materials/material-types';
+import {
+    applyPrimaryBoundCardSelection,
+    getHostCharacterCards,
+    parseBoundCardNamesInput,
+    splitBoundCardNames,
+} from '../views/materials/material-types';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { computeAnchoredPosition, getViewportRect, viewportService } from '../layout/viewport';
 import { eventBus } from '../../util/event-bus';
+import { detectHostRuntime, TRANSPORT_MODE_OPTIONS } from '../../util/http-client';
+import { TauriRelayNotice } from '../components';
 import type { Disposable } from '../types';
 
 export type QuickPanelTabId = 'general' | 'provider' | 'prompts' | 'materials';
@@ -92,10 +108,6 @@ export interface FabQuickPanelOptions {
     readonly anchorElement: HTMLElement;
     /** 点击「主设置」按钮触发打开主设置弹窗回调 */
     readonly onOpenMainSettings?: () => void;
-    /** 鼠标移入面板通知（供悬浮球悬停计时器协同） */
-    readonly onPointerEnter?: () => void;
-    /** 鼠标移出面板通知（供悬浮球悬停计时器协同） */
-    readonly onPointerLeave?: () => void;
 }
 
 const PROVIDER_SELECT_OPTIONS: ReadonlyArray<SelectOption> = [
@@ -259,6 +271,7 @@ export class FabQuickPanel implements Disposable {
         character: false,
         material: false,
     });
+    private readonly rawBoundCardsDraft = signal<{ presetId: string; text: string } | null>(null);
 
     private isOpenState = false;
     private unlistenSettings: (() => void) | null = null;
@@ -266,8 +279,6 @@ export class FabQuickPanel implements Disposable {
     private unbindEscape: (() => void) | null = null;
 
     private readonly onDocumentPointerDownBound: (e: PointerEvent) => void;
-    private readonly onPointerEnterBound: () => void;
-    private readonly onPointerLeaveBound: () => void;
 
     public constructor(options: FabQuickPanelOptions) {
         this.options = options;
@@ -283,11 +294,6 @@ export class FabQuickPanel implements Disposable {
         }
 
         this.onDocumentPointerDownBound = this.onDocumentPointerDown.bind(this);
-        this.onPointerEnterBound = () => this.options.onPointerEnter?.();
-        this.onPointerLeaveBound = () => this.options.onPointerLeave?.();
-
-        this.element.addEventListener?.('pointerenter', this.onPointerEnterBound);
-        this.element.addEventListener?.('pointerleave', this.onPointerLeaveBound);
 
         this.unlistenSettings = eventBus.on('settings:updated', () => {
             this.settingsSignal.value = settingsStore.getSettings();
@@ -393,11 +399,12 @@ export class FabQuickPanel implements Disposable {
 
     private onDocumentPointerDown(e: PointerEvent): void {
         if (!this.isOpenState) return;
-        const target = e.target as Node | null;
+        const target = e.target as HTMLElement | null;
         if (!target) return;
         if (
             this.element.contains(target) ||
-            this.options.anchorElement.contains(target)
+            this.options.anchorElement.contains(target) ||
+            target.closest?.('[data-da-floating-popover="true"]')
         ) {
             return;
         }
@@ -435,11 +442,13 @@ export class FabQuickPanel implements Disposable {
         const activeProvider = (s.activeProvider || 'comfyui') as ProviderType;
         const transport = (s.transport || 'direct') as TransportMode;
         const cancelOnChatChange = s.cancelOnChatChange ?? true;
+        const cancelOnSwipe = s.cancelOnSwipe ?? true;
         const autoGenerate = Boolean(s.autoGenerate);
         const hideButtonOnDone = Boolean(s.ui?.floorButton?.hideOnDone);
         const imageActionPanelEnabled = s.ui?.imageActionPanel?.enabled ?? true;
         const lightboxEnabled = s.ui?.lightbox?.enabled ?? true;
         const cleanPrompt = s.cleanPrompt ?? true;
+        const cleanPromptPunctuation = s.cleanPromptPunctuation ?? true;
         const normalizeChinesePunctuation = Boolean(s.normalizeChinesePunctuation);
         const thinkingMode: ThinkingDisplayMode = s.thinkingDisplayMode || 'show';
         const cleanHistoryThinking = Boolean(s.cleanHistoryThinking);
@@ -449,7 +458,9 @@ export class FabQuickPanel implements Disposable {
         const align = (img?.align || 'center') as 'center' | 'flex-start' | 'flex-end';
         const objectFit = (img?.objectFit || 'contain') as 'contain' | 'cover' | 'none';
         const rounded = img?.rounded ?? true;
-        const autoBlur = Boolean(img?.autoBlur);
+        const displayMode: ImageDisplayMode = img?.displayMode || 'normal';
+        const hostRuntime = detectHostRuntime();
+        const showTauriRelayNotice = transport === 'relay' && !hostRuntime.supportsRelayProxy;
 
         const imageQuality = (s.imageQuality || 'original') as ImageStorageQuality;
         const saveToServer = Boolean(s.saveToServer);
@@ -489,18 +500,29 @@ export class FabQuickPanel implements Disposable {
                         <SegmentedControlView
                             value={transport}
                             disabled={!enabled}
-                            options={[
-                                { label: '浏览器直连', value: 'direct' },
-                                { label: '酒馆代理', value: 'relay' },
-                            ]}
+                            options={[...TRANSPORT_MODE_OPTIONS]}
                             onChange={(val) => settingsStore.set('transport', val as TransportMode)}
                         />
                     </QuickFormRow>
+                    {showTauriRelayNotice && (
+                        <TauriRelayNotice
+                            compact
+                            disabled={!enabled}
+                            onSwitchToDirect={() => settingsStore.set('transport', 'direct')}
+                        />
+                    )}
                     <QuickFormRow label="切换聊天时取消任务" disabled={!enabled}>
                         <SwitchControl
                             value={cancelOnChatChange}
                             disabled={!enabled}
                             onChange={(val) => settingsStore.set('cancelOnChatChange', val)}
+                        />
+                    </QuickFormRow>
+                    <QuickFormRow label="重 roll 时取消旧分支任务" disabled={!enabled}>
+                        <SwitchControl
+                            value={cancelOnSwipe}
+                            disabled={!enabled}
+                            onChange={(val) => settingsStore.set('cancelOnSwipe', val)}
                         />
                     </QuickFormRow>
                 </QuickSection>
@@ -552,11 +574,18 @@ export class FabQuickPanel implements Disposable {
                             }}
                         />
                     </QuickFormRow>
-                    <QuickFormRow label="提示词自动去重整理" disabled={!enabled}>
+                    <QuickFormRow label="提示词 Tags 自动去重" disabled={!enabled}>
                         <SwitchControl
                             value={cleanPrompt}
                             disabled={!enabled}
                             onChange={(val) => settingsStore.set('cleanPrompt', val)}
+                        />
+                    </QuickFormRow>
+                    <QuickFormRow label="标点与空行自动整理" disabled={!enabled}>
+                        <SwitchControl
+                            value={cleanPromptPunctuation}
+                            disabled={!enabled}
+                            onChange={(val) => settingsStore.set('cleanPromptPunctuation', val)}
                         />
                     </QuickFormRow>
                     <QuickFormRow label="中文标点转英文逗号" disabled={!enabled}>
@@ -606,8 +635,8 @@ export class FabQuickPanel implements Disposable {
                             value={align}
                             disabled={!enabled}
                             options={[
-                                { label: '居中', value: 'center' },
                                 { label: '靠左', value: 'flex-start' },
+                                { label: '居中', value: 'center' },
                                 { label: '靠右', value: 'flex-end' },
                             ]}
                             onChange={(val) =>
@@ -636,11 +665,18 @@ export class FabQuickPanel implements Disposable {
                             onChange={(val) => updateImageDisplay({ rounded: val })}
                         />
                     </QuickFormRow>
-                    <QuickFormRow label="防窥模糊" disabled={!enabled}>
-                        <SwitchControl
-                            value={autoBlur}
+                    <QuickFormRow label="显示模式" disabled={!enabled}>
+                        <SegmentedControlView
+                            value={displayMode}
                             disabled={!enabled}
-                            onChange={(val) => updateImageDisplay({ autoBlur: val })}
+                            options={[
+                                { label: '正常', value: 'normal' },
+                                { label: '模糊', value: 'blur' },
+                                { label: '折叠', value: 'collapse' },
+                            ]}
+                            onChange={(val) =>
+                                updateImageDisplay({ displayMode: val as ImageDisplayMode })
+                            }
                         />
                     </QuickFormRow>
                 </QuickSection>
@@ -672,7 +708,7 @@ export class FabQuickPanel implements Disposable {
         );
     }
 
-    // 2. 服务设置 Tab (对齐当前激活服务的预设、模型、工作流、画幅比例与采样控制)
+    // 2. 服务设置 Tab (同步当前激活服务的预设、模型、工作流、画幅比例与采样控制)
     private renderProviderTab(s: DrawAssistantSettings): VNode {
         const provider = (s.activeProvider || 'comfyui') as ProviderType;
         const providerLabel =
@@ -972,10 +1008,10 @@ export class FabQuickPanel implements Disposable {
                             </QuickFormRow>
                             <QuickFormRow label="生图模型">
                                 <SelectControl
-                                    value={drawingData.baseModel || 'dall-e-3'}
+                                    value={drawingData.baseModel || 'gpt-image-1'}
                                     options={buildSelectOptionsWithCurrent(
                                         [...cachedModels, ...OPENAI_MODEL_OPTIONS],
-                                        drawingData.baseModel || 'dall-e-3'
+                                        drawingData.baseModel || 'gpt-image-1'
                                     )}
                                     onChange={(val) =>
                                         this.updateActiveDrawingPresetData(
@@ -1071,8 +1107,8 @@ export class FabQuickPanel implements Disposable {
                         provider === 'sdwebui' ||
                         provider === 'novelai') &&
                     (() => {
-                        const width = Number(drawingData.width || 1024);
-                        const height = Number(drawingData.height || 1024);
+                        const width = Number(drawingData.width || 832);
+                        const height = Number(drawingData.height || 1216);
                         const matchedRatio =
                             DEFAULT_ASPECT_RATIOS.find(
                                 (p) => p.width === width && p.height === height
@@ -1172,7 +1208,11 @@ export class FabQuickPanel implements Disposable {
                                         <NumberInputControl
                                             value={Number(
                                                 drawingData.cfgScale ??
-                                                    (provider === 'novelai' ? 5 : 6)
+                                                    (provider === 'novelai'
+                                                        ? 5
+                                                        : provider === 'sdwebui'
+                                                          ? 5.5
+                                                          : 6)
                                             )}
                                             min={0}
                                             max={provider === 'novelai' ? 10 : 20}
@@ -1347,8 +1387,13 @@ export class FabQuickPanel implements Disposable {
                     provider === 'openai' &&
                     (() => {
                         const caps = resolveOpenAIModelCapabilities(
-                            effectiveModelId || 'dall-e-3'
+                            effectiveModelId || 'gpt-image-1'
                         );
+                        const isSiliconFlow = isSiliconFlowService(
+                            providerCfg.serviceId,
+                            providerCfg.serverUrl
+                        );
+                        const supportsAutoSize = caps.supportsAutoSize && !isSiliconFlow;
                         const openaiRatios =
                             caps.family === 'gpt-image'
                                 ? GPT_IMAGE_ASPECT_RATIOS
@@ -1356,11 +1401,20 @@ export class FabQuickPanel implements Disposable {
                                   ? OPENAI_ASPECT_RATIOS
                                   : DEFAULT_ASPECT_RATIOS;
                         const width = Number(drawingData.width || 1024);
-                        const height = Number(drawingData.height || 1024);
-                        const matchedOpenAIRatio =
-                            openaiRatios.find((p) => p.width === width && p.height === height)
-                                ?.id || 'custom';
+                        const height = Number(
+                            drawingData.height || (caps.family === 'gpt-image' ? 1536 : 1024)
+                        );
+                        const isAutoSize =
+                            supportsAutoSize &&
+                            String(drawingData.aspectRatio || '').toLowerCase() === 'auto';
+                        const matchedOpenAIRatio = isAutoSize
+                            ? 'auto'
+                            : openaiRatios.find((p) => p.width === width && p.height === height)
+                                  ?.id || 'custom';
                         const openaiRatioOptions: SelectOption[] = [
+                            ...(supportsAutoSize
+                                ? [{ value: 'auto', label: '自动 (由模型决定)' }]
+                                : []),
                             ...openaiRatios.map((p) => ({
                                 value: p.id,
                                 label: p.label.includes('(')
@@ -1378,12 +1432,24 @@ export class FabQuickPanel implements Disposable {
                                         value={matchedOpenAIRatio}
                                         options={openaiRatioOptions}
                                         onChange={(val) => {
+                                            if (val === 'auto' && supportsAutoSize) {
+                                                this.updateActiveDrawingPresetData(
+                                                    provider,
+                                                    activeDrawingId,
+                                                    { aspectRatio: 'auto' }
+                                                );
+                                                return;
+                                            }
                                             const preset = openaiRatios.find((p) => p.id === val);
                                             if (!preset) return;
                                             this.updateActiveDrawingPresetData(
                                                 provider,
                                                 activeDrawingId,
-                                                { width: preset.width, height: preset.height }
+                                                {
+                                                    aspectRatio: undefined,
+                                                    width: preset.width,
+                                                    height: preset.height,
+                                                }
                                             );
                                         }}
                                     />
@@ -1477,33 +1543,27 @@ export class FabQuickPanel implements Disposable {
                         const caps = resolveGeminiModelCapabilities(
                             effectiveModelId || 'gemini-2.5-flash-image'
                         );
-                        const sizeOptions = caps.supportedImageSizes.map((sz) => ({
-                            label: sz === '512' ? '512px' : sz,
-                            value: sz,
-                        }));
-                        const fullSizeOptions = caps.allowsDefaultEmptyImageSize
-                            ? [{ label: '默认', value: '' }, ...sizeOptions]
-                            : sizeOptions;
+                        const fullSizeOptions = buildGeminiImageSizeOptions(caps);
                         const curSize = String(drawingData.imageSize || '');
-                        const resolvedSize = caps.allowsDefaultEmptyImageSize
-                            ? caps.supportedImageSizes.includes(curSize)
-                                ? curSize
-                                : ''
-                            : caps.supportedImageSizes.includes(curSize)
-                              ? curSize
-                              : caps.supportedImageSizes.includes('1K')
-                                ? '1K'
-                                : (caps.supportedImageSizes[0] ?? '1K');
+                        const resolvedSize =
+                            curSize.toLowerCase() === 'auto'
+                                ? 'auto'
+                                : caps.allowsDefaultEmptyImageSize
+                                  ? caps.supportedImageSizes.includes(curSize)
+                                      ? curSize
+                                      : 'auto'
+                                  : caps.supportedImageSizes.includes(curSize)
+                                    ? curSize
+                                    : caps.supportedImageSizes.includes('1K')
+                                      ? '1K'
+                                      : (caps.supportedImageSizes[0] ?? '1K');
 
                         return (
                             <QuickSection title="画面参数">
                                 <QuickFormRow label="画幅比例">
                                     <SelectControl
                                         value={drawingData.aspectRatio || '1:1'}
-                                        options={GEMINI_ASPECT_RATIOS.map((r) => ({
-                                            label: r,
-                                            value: r,
-                                        }))}
+                                        options={GEMINI_ASPECT_RATIO_OPTIONS}
                                         onChange={(val) =>
                                             this.updateActiveDrawingPresetData(
                                                 provider,
@@ -1547,10 +1607,7 @@ export class FabQuickPanel implements Disposable {
                                     <QuickFormRow label="画幅比例">
                                         <SelectControl
                                             value={drawingData.aspectRatio || '1:1'}
-                                            options={GROK_ASPECT_RATIOS.map((r) => ({
-                                                label: r,
-                                                value: r,
-                                            }))}
+                                            options={GROK_ASPECT_RATIO_OPTIONS}
                                             onChange={(val) =>
                                                 this.updateActiveDrawingPresetData(
                                                     provider,
@@ -1864,11 +1921,11 @@ export class FabQuickPanel implements Disposable {
         const activeFmtId = activeFmtPreset?.id || '';
 
         const hostCards = getHostCharacterCards();
-        const rawBoundCards = (actData.boundCardNames || [])
-            .map((n) => (n || '').trim())
-            .filter(Boolean);
-        const primaryBoundCard = rawBoundCards[0] || '';
-        const extraBoundCards = rawBoundCards.slice(1);
+        const {
+            primaryCard: primaryBoundCard,
+            extraCards: extraBoundCards,
+            allCards: rawBoundCards,
+        } = splitBoundCardNames(actData.boundCardNames);
 
         // 过滤已绑定至角色的专属服装，通用服装启用列表仅展示独立通用服装
         const allBoundOutfitIds: string[] = [];
@@ -1975,33 +2032,67 @@ export class FabQuickPanel implements Disposable {
                             }
                         />
                     </QuickFormRow>
-                    {hostCards.length > 0 && activeActPreset && (
-                        <QuickFormRow label="关联酒馆角色卡">
-                            <SelectControl
-                                value={primaryBoundCard}
-                                options={buildSelectOptionsWithCurrent(
-                                    hostCards.map((hc) => ({
-                                        label: hc.name,
-                                        value: hc.name,
-                                    })),
-                                    primaryBoundCard,
-                                    '-- 未关联角色卡 --'
+                    {activeActPreset && (
+                        <>
+                            <QuickFormRow label="关联酒馆角色卡">
+                                {hostCards.length === 0 ? (
+                                    <input
+                                        type="text"
+                                        className="da-input"
+                                        placeholder="输入角色卡名（逗号分隔多个）"
+                                        value={
+                                            this.rawBoundCardsDraft.value?.presetId === activeActId
+                                                ? this.rawBoundCardsDraft.value.text
+                                                : rawBoundCards.join(', ')
+                                        }
+                                        onInput={(e) => {
+                                            const nextRaw = (e.currentTarget as HTMLInputElement).value;
+                                            this.rawBoundCardsDraft.value = {
+                                                presetId: activeActId,
+                                                text: nextRaw,
+                                            };
+                                            updateActiveActivationData({
+                                                boundCardNames: parseBoundCardNamesInput(nextRaw),
+                                            });
+                                        }}
+                                        onBlur={() => {
+                                            this.rawBoundCardsDraft.value = null;
+                                        }}
+                                    />
+                                ) : (
+                                    <SearchableSelectControl
+                                        value={primaryBoundCard}
+                                        options={buildSelectOptionsWithCurrent(
+                                            hostCards.map((hc) => ({
+                                                label: hc.name,
+                                                value: hc.name,
+                                            })),
+                                            primaryBoundCard
+                                        )}
+                                        emptyLabel="-- 未关联角色卡 --"
+                                        placeholder="-- 未关联角色卡 --"
+                                        searchPlaceholder="搜索酒馆角色卡..."
+                                        emptyResultText="无匹配角色卡"
+                                        allowCustomValue={true}
+                                        customValueLabel={(q) => `使用自定义「${q}」`}
+                                        onChange={(val) =>
+                                            updateActiveActivationData({
+                                                boundCardNames: applyPrimaryBoundCardSelection(
+                                                    val,
+                                                    extraBoundCards
+                                                ),
+                                            })
+                                        }
+                                    />
                                 )}
-                                onChange={(val) => {
-                                    const trimmed = val.trim();
-                                    if (!trimmed) {
-                                        updateActiveActivationData({ boundCardNames: [] });
-                                        return;
-                                    }
-                                    const dedupedRest = extraBoundCards.filter(
-                                        (n) => n.toLowerCase() !== trimmed.toLowerCase()
-                                    );
-                                    updateActiveActivationData({
-                                        boundCardNames: [trimmed, ...dedupedRest],
-                                    });
-                                }}
-                            />
-                        </QuickFormRow>
+                            </QuickFormRow>
+                            {hostCards.length > 0 && extraBoundCards.length > 0 && (
+                                <div className="da-fqp-subhint">
+                                    另已关联 {extraBoundCards.length} 张：{extraBoundCards.join('、')}
+                                    （清空当前选择将一并解绑）
+                                </div>
+                            )}
+                        </>
                     )}
                     {activeActPreset && (
                         <QuickFormRow label="角色触发时附带绑定服装">
@@ -2281,8 +2372,6 @@ export class FabQuickPanel implements Disposable {
 
     public dispose(): void {
         this.close();
-        this.element.removeEventListener?.('pointerenter', this.onPointerEnterBound);
-        this.element.removeEventListener?.('pointerleave', this.onPointerLeaveBound);
         if (this.unlistenSettings) {
             this.unlistenSettings();
             this.unlistenSettings = null;

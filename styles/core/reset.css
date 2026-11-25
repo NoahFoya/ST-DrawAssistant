@@ -126,7 +126,7 @@
     background: rgba(var(--da-accent-rgb, 129, 140, 248), 0.45);
 }
 
-/* 7. 主题原子化切换过渡冻结标记（消除深浅切换瞬间的过渡异步反色撕裂） */
+/* 7. 主题统一切换过渡冻结标记（消除深浅切换瞬间的过渡异步反色撕裂） */
 .da-theme-switching,
 .da-theme-switching * {
     transition: none !important;

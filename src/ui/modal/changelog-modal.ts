@@ -157,7 +157,8 @@ export class ChangelogModal implements Disposable {
             return;
         }
 
-        for (const item of items) {
+        for (let idx = 0; idx < items.length; idx++) {
+            const item = items[idx];
             const card = document.createElement('div');
             card.className = 'da-changelog-version-card';
 
@@ -186,17 +187,73 @@ export class ChangelogModal implements Disposable {
             }
             card.appendChild(cardHeader);
 
-            if (Array.isArray(item.items) && item.items.length > 0) {
+            const detailItems = Array.isArray(item.items) ? item.items : [];
+            const summaryText =
+                typeof item.summary === 'string' && item.summary.trim()
+                    ? item.summary.trim()
+                    : detailItems[0] || '';
+            if (summaryText) {
+                const summaryEl = document.createElement('p');
+                summaryEl.className = 'da-changelog-summary';
+                summaryEl.textContent = summaryText;
+                card.appendChild(summaryEl);
+            }
+
+            if (detailItems.length > 0) {
+                const detailsId = `da-changelog-details-${idx}`;
+                const collapsedText = `...+${detailItems.length}`;
+                const expandHint = `展开全部 ${detailItems.length} 项更新`;
+                const collapseHint = '收起更新细节';
+
+                const toggleBtn = document.createElement('button');
+                toggleBtn.type = 'button';
+                toggleBtn.className = 'da-changelog-details-toggle';
+                toggleBtn.setAttribute('aria-expanded', 'false');
+                toggleBtn.setAttribute('aria-controls', detailsId);
+                toggleBtn.setAttribute('aria-label', expandHint);
+                toggleBtn.title = expandHint;
+
+                const chevron = document.createElement('span');
+                chevron.className = 'da-changelog-details-chevron';
+                chevron.innerHTML = renderIcon('chevronRight', 13);
+
+                const toggleLabel = document.createElement('span');
+                toggleLabel.className = 'da-changelog-details-label';
+                toggleLabel.textContent = collapsedText;
+
+                toggleBtn.appendChild(chevron);
+                toggleBtn.appendChild(toggleLabel);
+
+                const detailsPanel = document.createElement('div');
+                detailsPanel.id = detailsId;
+                detailsPanel.className = 'da-changelog-details-panel';
+                detailsPanel.hidden = true;
+
                 const ul = document.createElement('ul');
                 ul.className = 'da-changelog-items-list';
 
-                for (const text of item.items) {
+                for (const text of detailItems) {
                     const li = document.createElement('li');
                     li.className = 'da-changelog-item';
                     li.textContent = text;
                     ul.appendChild(li);
                 }
-                card.appendChild(ul);
+                detailsPanel.appendChild(ul);
+
+                toggleBtn.onclick = () => {
+                    const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                    const nextExpanded = !isExpanded;
+                    toggleBtn.setAttribute('aria-expanded', String(nextExpanded));
+                    card.classList.toggle('is-expanded', nextExpanded);
+                    detailsPanel.hidden = !nextExpanded;
+                    toggleLabel.textContent = nextExpanded ? '收起' : collapsedText;
+                    const nextHint = nextExpanded ? collapseHint : expandHint;
+                    toggleBtn.setAttribute('aria-label', nextHint);
+                    toggleBtn.title = nextHint;
+                };
+
+                card.appendChild(toggleBtn);
+                card.appendChild(detailsPanel);
             }
 
             container.appendChild(card);
