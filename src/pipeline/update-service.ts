@@ -787,222 +787,221 @@ export class UpdateService {
         });
 
         try {
+            // 1. 宿主环境下优先通过 SillyTavern 原生 Git 查询接口检查（零 API 限流，且反映真实本地仓库状态）
+            if (this.isHostContextAvailable() && !explicitBranch) {
+                try {
+                    const hostRes = await this.tryHostGitVersionCheck(options?.signal);
+                    if (hostRes) {
+                        let remoteSha: string | null = hostRes.hasUpdate ? null : hostRes.currentSha;
+                        let remoteMessage: string | null = null;
 
-        // 1. 宿主环境下优先通过 SillyTavern 原生 Git 查询接口检查（零 API 限流，且反映真实本地仓库状态）
-        if (this.isHostContextAvailable() && !explicitBranch) {
-            try {
-                const hostRes = await this.tryHostGitVersionCheck(options?.signal);
-                if (hostRes) {
-                    let remoteSha: string | null = hostRes.hasUpdate ? null : hostRes.currentSha;
-                    let remoteMessage: string | null = null;
-
-                    if (hostRes.hasUpdate && hostRes.branch && !this.isRateLimited()) {
-                        try {
-                            const commit = await this.fetchGithubCommit(
-                                hostRes.branch,
-                                Math.min(timeoutMs, 3500),
-                                options?.signal,
-                                hostRes.repoSlug
-                            );
-                            remoteSha = commit.sha;
-                            remoteMessage = commit.message;
-                        } catch {
-                            // 宿主已确认存在远程新提交；补充摘要失败不影响一键更新可用性
+                        if (hostRes.hasUpdate && hostRes.branch && !this.isRateLimited()) {
+                            try {
+                                const commit = await this.fetchGithubCommit(
+                                    hostRes.branch,
+                                    Math.min(timeoutMs, 3500),
+                                    options?.signal,
+                                    hostRes.repoSlug
+                                );
+                                remoteSha = commit.sha;
+                                remoteMessage = commit.message;
+                            } catch {
+                                // 宿主已确认存在远程新提交；补充摘要失败不影响一键更新可用性
+                            }
                         }
+
+                        const now = Date.now();
+                        const branchDesc = hostRes.branch ? `（分支: ${hostRes.branch}）` : '';
+                        const msg = hostRes.hasUpdate
+                            ? remoteSha
+                                ? `发现新版本提交 (${remoteSha}): ${remoteMessage || hostRes.branch}`
+                                : `发现可用新版本提交${branchDesc}，可点击一键更新`
+                            : `当前已是最新版本 (${hostRes.currentSha || `v${EXTENSION_VERSION}`})`;
+
+                        return this.commitCheckState(
+                            {
+                                isChecking: false,
+                                hasUpdate: hostRes.hasUpdate,
+                                currentBranch: hostRes.branch,
+                                currentCommitSha: hostRes.currentSha,
+                                remoteCommitSha: remoteSha,
+                                remoteCommitMessage: remoteMessage,
+                                checkSource: 'host-git' as UpdateCheckSource,
+                                remoteVersion: null,
+                                rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
+                                error: null,
+                                lastCheckedAt: now,
+                            },
+                            {
+                                success: true,
+                                hasUpdate: hostRes.hasUpdate,
+                                currentSha: hostRes.currentSha,
+                                remoteSha,
+                                remoteMessage,
+                                message: msg,
+                            }
+                        );
+                    }
+                } catch (err: unknown) {
+                    if (options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError();
+                    }
+                    logger.warn('[UpdateService] 宿主 Git 版本检测异常，降级远程检测:', err);
+                }
+            }
+
+            const targetRepo = this._resolvedGithubRepo || GITHUB_REPO;
+            let resolvedBranch = explicitBranch || this._state.currentBranch.trim();
+            if (!resolvedBranch && !this.isRateLimited()) {
+                try {
+                    const defaultBranch = await this.resolveGithubDefaultBranch(
+                        targetRepo,
+                        Math.min(timeoutMs, 5000),
+                        options?.signal
+                    );
+                    if (defaultBranch) {
+                        resolvedBranch = defaultBranch;
+                        this.setState({ currentBranch: resolvedBranch });
+                    }
+                } catch {
+                    if (options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError();
+                    }
+                }
+            }
+
+            // 2. 远程提交检测（带限流冷却感知；未解析出具名分支时回退查询上游 HEAD）
+            let apiErrorMsg = '';
+            let fetchedRemoteCommit: { sha: string; message: string } | null = null;
+            if (!this.isRateLimited()) {
+                try {
+                    const commitRef = resolvedBranch || 'HEAD';
+                    const commit = await this.fetchGithubCommit(
+                        commitRef,
+                        timeoutMs,
+                        options?.signal,
+                        targetRepo
+                    );
+                    const localSha = this.getLocalInstalledCommitSha();
+                    if (localSha) {
+                        const hasUpdate = localSha.toLowerCase() !== commit.sha.toLowerCase();
+                        const now = Date.now();
+                        const resultMessage = hasUpdate
+                            ? `发现新版本提交 (${commit.sha}): ${commit.message}`
+                            : `当前已是最新版本 (${localSha})`;
+
+                        return this.commitCheckState(
+                            {
+                                isChecking: false,
+                                hasUpdate,
+                                currentBranch: resolvedBranch,
+                                currentCommitSha: localSha,
+                                remoteCommitSha: commit.sha,
+                                remoteCommitMessage: commit.message,
+                                checkSource: 'github-api' as UpdateCheckSource,
+                                remoteVersion: null,
+                                rateLimitedUntil: null,
+                                error: null,
+                                lastCheckedAt: now,
+                            },
+                            {
+                                success: true,
+                                hasUpdate,
+                                currentSha: localSha,
+                                remoteSha: commit.sha,
+                                remoteMessage: commit.message,
+                                message: resultMessage,
+                            }
+                        );
                     }
 
-                    const now = Date.now();
-                    const branchDesc = hostRes.branch ? `（分支: ${hostRes.branch}）` : '';
-                    const msg = hostRes.hasUpdate
-                        ? remoteSha
-                            ? `发现新版本提交 (${remoteSha}): ${remoteMessage || hostRes.branch}`
-                            : `发现可用新版本提交${branchDesc}，可点击一键更新`
-                        : `当前已是最新版本 (${hostRes.currentSha || `v${EXTENSION_VERSION}`})`;
+                    // 无本地 commit 记录（如 ZIP 安装首次检查）时，不将远端 SHA 写入本地缓存，继续由 manifest 语义版本判定更新
+                    fetchedRemoteCommit = commit;
+                } catch (err: unknown) {
+                    if (options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError();
+                    }
+                    apiErrorMsg = err instanceof Error ? err.message : String(err);
+                    logger.warn(`[UpdateService] GitHub 提交检测失败: ${apiErrorMsg}`);
+                }
+            } else {
+                const resetTimeStr = new Date(this._rateLimitedUntil).toLocaleTimeString();
+                apiErrorMsg = `GitHub API 请求频次超限，将在 ${resetTimeStr} 后恢复`;
+            }
 
-                    return this.commitCheckState(
-                        {
-                            isChecking: false,
-                            hasUpdate: hostRes.hasUpdate,
-                            currentBranch: hostRes.branch,
-                            currentCommitSha: hostRes.currentSha,
-                            remoteCommitSha: remoteSha,
-                            remoteCommitMessage: remoteMessage,
-                            checkSource: 'host-git' as UpdateCheckSource,
-                            remoteVersion: null,
-                            rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
-                            error: null,
-                            lastCheckedAt: now,
-                        },
-                        {
-                            success: true,
-                            hasUpdate: hostRes.hasUpdate,
-                            currentSha: hostRes.currentSha,
-                            remoteSha,
-                            remoteMessage,
-                            message: msg,
-                        }
+            // 3. 静态 manifest.json 语义版本检查（解决无本地 SHA 或 GitHub API 限流场景）
+            if (!options?.signal?.aborted) {
+                try {
+                    const remoteVersion = await this.fetchRemoteManifestVersion(
+                        resolvedBranch,
+                        Math.min(timeoutMs, 5000),
+                        options?.signal,
+                        targetRepo
                     );
+                    if (remoteVersion) {
+                        const hasNewVersion = compareSemver(remoteVersion, EXTENSION_VERSION) > 0;
+                        const now = Date.now();
+                        const remoteSha = fetchedRemoteCommit?.sha ?? null;
+                        const remoteMsg =
+                            fetchedRemoteCommit?.message ||
+                            (hasNewVersion ? `发布版本 v${remoteVersion}` : null);
+                        const msg = hasNewVersion
+                            ? `发现新版本 v${remoteVersion}（当前 v${EXTENSION_VERSION}）`
+                            : apiErrorMsg
+                              ? `当前核心版本与远端一致 (v${EXTENSION_VERSION})；提交详情因限流暂未拉取`
+                              : `当前已是最新版本 (v${EXTENSION_VERSION})`;
+
+                        return this.commitCheckState(
+                            {
+                                isChecking: false,
+                                hasUpdate: hasNewVersion,
+                                remoteCommitSha: remoteSha,
+                                remoteCommitMessage: remoteMsg,
+                                checkSource: 'manifest' as UpdateCheckSource,
+                                remoteVersion,
+                                rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
+                                error: null,
+                                lastCheckedAt: now,
+                            },
+                            {
+                                success: true,
+                                hasUpdate: hasNewVersion,
+                                remoteSha,
+                                remoteMessage: remoteMsg,
+                                message: msg,
+                            }
+                        );
+                    }
+                } catch (err: unknown) {
+                    if (options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError();
+                    }
+                    logger.warn('[UpdateService] 静态版本清单回退检测失败:', err);
                 }
-            } catch (err: unknown) {
-                if (options?.signal?.aborted) {
-                    return this.cancelCheckWithoutError();
-                }
-                logger.warn('[UpdateService] 宿主 Git 版本检测异常，降级远程检测:', err);
+            } else {
+                return this.cancelCheckWithoutError();
             }
-        }
 
-        const targetRepo = this._resolvedGithubRepo || GITHUB_REPO;
-        let resolvedBranch = explicitBranch || this._state.currentBranch.trim();
-        if (!resolvedBranch && !this.isRateLimited()) {
-            try {
-                const defaultBranch = await this.resolveGithubDefaultBranch(
-                    targetRepo,
-                    Math.min(timeoutMs, 5000),
-                    options?.signal
-                );
-                if (defaultBranch) {
-                    resolvedBranch = defaultBranch;
-                    this.setState({ currentBranch: resolvedBranch });
+            // 4. 所有可用版本比较渠道均失败
+            const finalError =
+                apiErrorMsg ||
+                (fetchedRemoteCommit
+                    ? '未能获取远端版本清单完成比对'
+                    : '网络连接异常，无法获取更新信息');
+            return this.commitCheckState(
+                {
+                    isChecking: false,
+                    rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
+                    error: finalError,
+                },
+                {
+                    success: false,
+                    hasUpdate: false,
+                    remoteSha: fetchedRemoteCommit?.sha ?? null,
+                    remoteMessage: fetchedRemoteCommit?.message ?? null,
+                    message: finalError,
                 }
-            } catch {
-                if (options?.signal?.aborted) {
-                    return this.cancelCheckWithoutError();
-                }
-            }
-        }
-
-        // 2. 远程提交检测（带限流冷却感知；未解析出具名分支时回退查询上游 HEAD）
-        let apiErrorMsg = '';
-        let fetchedRemoteCommit: { sha: string; message: string } | null = null;
-        if (!this.isRateLimited()) {
-            try {
-                const commitRef = resolvedBranch || 'HEAD';
-                const commit = await this.fetchGithubCommit(
-                    commitRef,
-                    timeoutMs,
-                    options?.signal,
-                    targetRepo
-                );
-                const localSha = this.getLocalInstalledCommitSha();
-                if (localSha) {
-                    const hasUpdate = localSha.toLowerCase() !== commit.sha.toLowerCase();
-                    const now = Date.now();
-                    const resultMessage = hasUpdate
-                        ? `发现新版本提交 (${commit.sha}): ${commit.message}`
-                        : `当前已是最新版本 (${localSha})`;
-
-                    return this.commitCheckState(
-                        {
-                            isChecking: false,
-                            hasUpdate,
-                            currentBranch: resolvedBranch,
-                            currentCommitSha: localSha,
-                            remoteCommitSha: commit.sha,
-                            remoteCommitMessage: commit.message,
-                            checkSource: 'github-api' as UpdateCheckSource,
-                            remoteVersion: null,
-                            rateLimitedUntil: null,
-                            error: null,
-                            lastCheckedAt: now,
-                        },
-                        {
-                            success: true,
-                            hasUpdate,
-                            currentSha: localSha,
-                            remoteSha: commit.sha,
-                            remoteMessage: commit.message,
-                            message: resultMessage,
-                        }
-                    );
-                }
-
-                // 无本地 commit 记录（如 ZIP 安装首次检查）时，不将远端 SHA 写入本地缓存，继续由 manifest 语义版本判定更新
-                fetchedRemoteCommit = commit;
-            } catch (err: unknown) {
-                if (options?.signal?.aborted) {
-                    return this.cancelCheckWithoutError();
-                }
-                apiErrorMsg = err instanceof Error ? err.message : String(err);
-                logger.warn(`[UpdateService] GitHub 提交检测失败: ${apiErrorMsg}`);
-            }
-        } else {
-            const resetTimeStr = new Date(this._rateLimitedUntil).toLocaleTimeString();
-            apiErrorMsg = `GitHub API 请求频次超限，将在 ${resetTimeStr} 后恢复`;
-        }
-
-        // 3. 静态 manifest.json 语义版本检查（解决无本地 SHA 或 GitHub API 限流场景）
-        if (!options?.signal?.aborted) {
-            try {
-                const remoteVersion = await this.fetchRemoteManifestVersion(
-                    resolvedBranch,
-                    Math.min(timeoutMs, 5000),
-                    options?.signal,
-                    targetRepo
-                );
-                if (remoteVersion) {
-                    const hasNewVersion = compareSemver(remoteVersion, EXTENSION_VERSION) > 0;
-                    const now = Date.now();
-                    const remoteSha = fetchedRemoteCommit?.sha ?? null;
-                    const remoteMsg =
-                        fetchedRemoteCommit?.message ||
-                        (hasNewVersion ? `发布版本 v${remoteVersion}` : null);
-                    const msg = hasNewVersion
-                        ? `发现新版本 v${remoteVersion}（当前 v${EXTENSION_VERSION}）`
-                        : apiErrorMsg
-                          ? `当前核心版本与远端一致 (v${EXTENSION_VERSION})；提交详情因限流暂未拉取`
-                          : `当前已是最新版本 (v${EXTENSION_VERSION})`;
-
-                    return this.commitCheckState(
-                        {
-                            isChecking: false,
-                            hasUpdate: hasNewVersion,
-                            remoteCommitSha: remoteSha,
-                            remoteCommitMessage: remoteMsg,
-                            checkSource: 'manifest' as UpdateCheckSource,
-                            remoteVersion,
-                            rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
-                            error: null,
-                            lastCheckedAt: now,
-                        },
-                        {
-                            success: true,
-                            hasUpdate: hasNewVersion,
-                            remoteSha,
-                            remoteMessage: remoteMsg,
-                            message: msg,
-                        }
-                    );
-                }
-            } catch (err: unknown) {
-                if (options?.signal?.aborted) {
-                    return this.cancelCheckWithoutError();
-                }
-                logger.warn('[UpdateService] 静态版本清单回退检测失败:', err);
-            }
-        } else {
-            return this.cancelCheckWithoutError();
-        }
-
-        // 4. 所有可用版本比较渠道均失败
-        const finalError =
-            apiErrorMsg ||
-            (fetchedRemoteCommit
-                ? '未能获取远端版本清单完成比对'
-                : '网络连接异常，无法获取更新信息');
-        return this.commitCheckState(
-            {
-                isChecking: false,
-                rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
-                error: finalError,
-            },
-            {
-                success: false,
-                hasUpdate: false,
-                remoteSha: fetchedRemoteCommit?.sha ?? null,
-                remoteMessage: fetchedRemoteCommit?.message ?? null,
-                message: finalError,
-            }
-        );
+            );
         } finally {
             if (this._state.isChecking) {
                 this.setState({ isChecking: false });

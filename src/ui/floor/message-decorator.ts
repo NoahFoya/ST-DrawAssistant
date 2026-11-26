@@ -1207,7 +1207,12 @@ export class MessageDecorator implements Disposable {
         slotKey: string;
         entry: DrawingSlotEntry;
         activeTask: DrawingTask | undefined;
-    }): Promise<{ slotElement: HTMLElement; hasRenderedImage: boolean } | null> {
+    }): Promise<{
+        slotElement: HTMLElement;
+        hasRenderedImage: boolean;
+        liveTextContainer: HTMLElement;
+        refreshedSlots?: Map<number, HTMLElement>;
+    } | null> {
         const { messageId, chatId, swipeId, token, cmd, slotKey, entry, activeTask } = options;
         let slotElement = options.slotElement;
 
@@ -1229,22 +1234,24 @@ export class MessageDecorator implements Disposable {
         }
 
         const liveTextContainer = liveInfo.mesText;
+        let refreshedSlots: Map<number, HTMLElement> | undefined;
         if (!slotElement.isConnected || !liveTextContainer.contains(slotElement)) {
             const liveCtx = window.SillyTavern?.getContext?.();
             const liveMesText = liveCtx?.chat?.[messageId]?.mes;
             const extracted =
                 typeof liveMesText === 'string' ? promptPipeline.extractCommands(liveMesText) : [];
             const commandsForReplace = extracted.length > 0 ? extracted : [cmd];
-            let refreshedSlots!: Map<number, HTMLElement>;
+            let replacedSlots!: Map<number, HTMLElement>;
             this.runWithObserverSuppressed(messageId, () => {
-                refreshedSlots = this.replaceCommandsWithSlots(liveTextContainer, commandsForReplace);
+                replacedSlots = this.replaceCommandsWithSlots(liveTextContainer, commandsForReplace);
             });
             slotElement = this.ensureCommandSlotElement(
                 messageId,
                 liveTextContainer,
-                refreshedSlots,
+                replacedSlots,
                 cmd.instructionIndex
             );
+            refreshedSlots = replacedSlots;
             this.runWithObserverSuppressed(messageId, () => {
                 const existingImgContainer = this.activeImageContainers.get(slotKey);
                 if (existingImgContainer) {
@@ -1253,7 +1260,7 @@ export class MessageDecorator implements Disposable {
 
                 // 若同一楼层包含多条指令，正文被外部脚本重建时一并回挂前序插槽的图片、骨架屏与交互按钮
                 const hideButtonOnDone = settingsStore.getSettings().ui?.floorButton?.hideOnDone ?? false;
-                for (const [otherIndex, otherSlotEl] of refreshedSlots.entries()) {
+                for (const [otherIndex, otherSlotEl] of replacedSlots.entries()) {
                     if (otherIndex === cmd.instructionIndex) {
                         continue;
                     }
@@ -1294,7 +1301,7 @@ export class MessageDecorator implements Disposable {
             slotElement.querySelector('.da-floor-image')?.classList.add('da-floor-image--regenerating');
         }
 
-        return { slotElement, hasRenderedImage };
+        return { slotElement, hasRenderedImage, liveTextContainer, refreshedSlots };
     }
 
     /**
@@ -1490,6 +1497,7 @@ export class MessageDecorator implements Disposable {
         const hideButtonOnDone = settings.ui?.floorButton?.hideOnDone ?? false;
         let hasReadySlot = false;
 
+        let liveTargetContainer = targetContainer;
         for (const cmd of commands) {
             const slotKey = this.buildSlotKey(chatId, messageId, swipeId, cmd.instructionIndex);
             const target: SlotMountTarget = {
@@ -1505,7 +1513,7 @@ export class MessageDecorator implements Disposable {
 
             let slotElement = this.ensureCommandSlotElement(
                 messageId,
-                targetContainer,
+                liveTargetContainer,
                 slotsMap,
                 cmd.instructionIndex
             );
@@ -1528,6 +1536,10 @@ export class MessageDecorator implements Disposable {
                 }
                 slotElement = reconciled.slotElement;
                 hasRenderedImage = reconciled.hasRenderedImage;
+                liveTargetContainer = reconciled.liveTextContainer;
+                if (reconciled.refreshedSlots) {
+                    slotsMap = reconciled.refreshedSlots;
+                }
             } else if (activeTask) {
                 this.renderSkeletonToFloor(messageId, cmd.instructionIndex, chatId, swipeId);
             }
