@@ -231,7 +231,7 @@ export function createSDWebUITabView() {
         },
         {
             key: 'hiresUpscaler',
-            label: '放大算法 (Upscaler)',
+            label: '放大算法',
             type: 'select',
             options: [...HIRES_UPSCALER_OPTIONS],
             tooltip:
@@ -244,7 +244,7 @@ export function createSDWebUITabView() {
         },
         {
             key: 'hiresScale',
-            label: '放大倍率 (Upscale by)',
+            label: '放大倍率',
             type: 'number',
             min: 1.0,
             max: 4.0,
@@ -260,7 +260,7 @@ export function createSDWebUITabView() {
         },
         {
             key: 'hiresSteps',
-            label: '高清修复步数 (Hires steps)',
+            label: '高清修复步数',
             type: 'number',
             min: 0,
             max: 50,
@@ -277,7 +277,7 @@ export function createSDWebUITabView() {
         },
         {
             key: 'hiresDenoise',
-            label: '重绘幅度 (Denoise)',
+            label: '重绘幅度',
             type: 'number',
             min: 0.0,
             max: 1.0,

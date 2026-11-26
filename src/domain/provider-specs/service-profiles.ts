@@ -263,13 +263,13 @@ export const IMAGE_STORAGE_QUALITY_OPTIONS: ReadonlyArray<{
     readonly value: ImageStorageQuality;
     readonly label: string;
 }> = [
-    { value: 'original', label: '原始格式 (原样保留)' },
-    { value: 'png', label: 'PNG 无损 (统一含参 PNG)' },
-    { value: 'webp-high', label: 'WebP 高质量 (90%)' },
-    { value: 'webp-medium', label: 'WebP 均衡压缩 (80%)' },
-    { value: 'jpeg-high', label: 'JPEG 高质量 (92%)' },
-    { value: 'jpeg-medium', label: 'JPEG 均衡压缩 (85%)' },
+    { value: 'original', label: '原图' },
+    { value: 'png', label: '无损 PNG' },
+    { value: 'webp-high', label: 'WebP 高画质 (90%)' },
+    { value: 'webp-medium', label: 'WebP 标准 (80%)' },
+    { value: 'jpeg-high', label: 'JPEG 高画质 (92%)' },
+    { value: 'jpeg-medium', label: 'JPEG 标准 (85%)' },
 ];
 
 export const IMAGE_STORAGE_QUALITY_TOOLTIP =
-    '原始格式保留后端直出格式与自带参数，缺参 PNG 自动补充绘图参数；PNG 无损会将非 PNG 转为 PNG 并写入参数；WebP 90%/80% 占用空间更小并按 EXIF 规范保留参数（兼容拖入 ComfyUI）；JPEG 92%/85% 文件较小并写入标准 EXIF 参数（透明底将填充白色）。';
+    '「原图」保留服务直出格式并补充缺失的绘图参数；「无损 PNG」适合下载后导入 ComfyUI，WebP 与 JPEG 体积更小且同样支持写入参数。';

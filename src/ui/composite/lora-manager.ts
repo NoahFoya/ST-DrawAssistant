@@ -289,7 +289,7 @@ class LoraItemRow implements Disposable {
         }> = [
             {
                 key: 'modelWeight',
-                label: '模型权重 (Model)',
+                label: '模型权重',
                 defaultVal: DEFAULT_LORA_WEIGHTS.modelWeight,
                 assign: (input) => {
                     this.modelWeightInput = input;
@@ -297,7 +297,7 @@ class LoraItemRow implements Disposable {
             },
             {
                 key: 'clipWeight',
-                label: 'CLIP 权重 (CLIP)',
+                label: 'CLIP 权重',
                 defaultVal: DEFAULT_LORA_WEIGHTS.clipWeight,
                 assign: (input) => {
                     this.clipWeightInput = input;
@@ -305,7 +305,7 @@ class LoraItemRow implements Disposable {
             },
             {
                 key: 'triggerWeight',
-                label: '触发词权重 (Trigger · 仅 WeiLin)',
+                label: '触发词权重 (仅 WeiLin)',
                 title: '仅在使用包含 ComfyUI-WeiLin 节点的工作流时生效',
                 defaultVal: DEFAULT_LORA_WEIGHTS.triggerWeight,
                 assign: (input) => {

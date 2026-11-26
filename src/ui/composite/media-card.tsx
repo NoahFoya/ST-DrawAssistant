@@ -3,20 +3,17 @@
  *
  * @remarks
  * 基于 Preact JSX 呈现本地图库单张图像卡片与生成状态：
- * 1. 状态展示：generating（生成中耗时提示）、ready（图片展示）、failed（失败提示与重试按钮）；
+ * 1. 状态展示：generating（生成中耗时提示，支持取消）、ready（图片展示）、failed（失败提示与重试按钮）；
  * 2. 图像加载容错：监听 onError 事件，先回调上层恢复处理器，失败时切换为失败重试状态；
- * 3. 交互响应：支持多选模式勾选、点击预览、查看元信息、收藏、复制/下载与拖拽分享。
+ * 3. 交互响应：支持多选模式勾选、点击预览、查看元信息、收藏、复制图片、下载与原生图片拖出。
  */
 
 import type { VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { imageStorage } from '../../store/image-storage';
-import {
-    attachImageDragFile,
-    copyImageBlobToClipboard,
-    downloadImageAsset,
-} from '../../util/browser-io';
+import { downloadImageAsset } from '../../util/browser-io';
 import { renderIcon } from '../components/icons';
+import { copyResolvedImageWithToast } from '../feedback/image-clipboard';
 import { Toast } from '../feedback/toast';
 
 /** 媒体条目生命周期状态 */
@@ -68,24 +65,11 @@ export interface MediaCardProps {
     className?: string;
 }
 
-async function resolveMediaItemBlob(item: MediaCardItemData): Promise<Blob | null> {
-    if (item.id) {
-        const stored = await imageStorage.getImageBlob(item.id);
-        if (stored && stored.size > 0) return stored;
-    }
-    if (item.url) {
-        const res = await fetch(item.url);
-        if (res.ok) return await res.blob();
-    }
-    return null;
-}
-
 export function MediaCard(props: MediaCardProps): VNode {
     const [selectedState, setSelectedState] = useState(Boolean(props.selected));
     const [favOverride, setFavOverride] = useState<boolean | null>(null);
     const [failedOverride, setFailedOverride] = useState<string | null>(null);
 
-    const imgRef = useRef<HTMLImageElement | null>(null);
     const mountedRef = useRef(true);
     const prevSelectedRef = useRef(props.selected);
     const prevFavKeyRef = useRef(`${props.item.id}:${props.item.isFavorite}`);
@@ -129,18 +113,6 @@ export function MediaCard(props: MediaCardProps): VNode {
         isFavorite: effectiveFav,
         ...(failedOverride !== null ? { errorMessage: failedOverride } : {}),
     };
-
-    useEffect(() => {
-        const imgEl = imgRef.current;
-        if (effectiveStatus !== 'ready' || !props.item.url || !imgEl) {
-            return;
-        }
-        return attachImageDragFile(
-            imgEl,
-            () => resolveMediaItemBlob(effectiveItem),
-            `st_draw_${props.item.id.slice(0, 8)}`
-        );
-    }, [effectiveStatus, props.item.id, props.item.url]);
 
     const isSelectable = Boolean(props.selectable);
     const rootClass = [
@@ -229,19 +201,11 @@ export function MediaCard(props: MediaCardProps): VNode {
                         className="da-media-card__action-btn da-media-card__action-btn--copy"
                         title="复制图片"
                         dangerouslySetInnerHTML={{ __html: renderIcon('copy', 14) }}
-                        onClick={async (e) => {
+                        onClick={(e) => {
                             e.stopPropagation();
-                            const blob = await resolveMediaItemBlob(effectiveItem);
-                            if (!blob) {
-                                Toast.error('获取图片数据失败');
-                                return;
-                            }
-                            const ok = await copyImageBlobToClipboard(blob);
-                            if (ok) {
-                                Toast.success('已复制图片到剪贴板');
-                            } else {
-                                Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
-                            }
+                            void copyResolvedImageWithToast(() =>
+                                imageStorage.resolveImageBlob(effectiveItem.id, effectiveItem.url)
+                            );
                         }}
                     />
                     <button
@@ -252,7 +216,8 @@ export function MediaCard(props: MediaCardProps): VNode {
                         onClick={async (e) => {
                             e.stopPropagation();
                             const ok = await downloadImageAsset({
-                                resolveBlob: () => resolveMediaItemBlob(effectiveItem),
+                                resolveBlob: () =>
+                                    imageStorage.resolveImageBlob(effectiveItem.id, effectiveItem.url),
                                 url: props.item.url,
                                 fileNameBase: `st_draw_${props.item.id.slice(0, 8)}_${Date.now()}`,
                             });
@@ -266,10 +231,10 @@ export function MediaCard(props: MediaCardProps): VNode {
 
             {effectiveStatus === 'ready' && props.item.url && (
                 <img
-                    ref={imgRef}
                     className="da-media-card__thumb"
                     src={props.item.url}
                     alt="生成图片"
+                    draggable={true}
                     loading="lazy"
                     onError={handleImageError}
                 />

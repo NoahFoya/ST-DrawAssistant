@@ -5,7 +5,7 @@
  * 集中承载阶段 B（幂等 DOM 修补）与交互控件生命周期：
  * - 骨架屏挂载与移除；
  * - 生成图像首次挂载与后台预载平滑替换（含 8s 超时安全释放）；
- * - IndexedDB 损坏/缺失 URL 回退重建与右键/长按操作菜单；
+ * - IndexedDB 损坏/缺失 URL 回退重建、原生拖出、右键/长按与角落编辑入口；
  * - Lightbox 历史图片翻页对照与设为当前回调；
  * - 动作按钮状态同步（ready / pending / generating / done / error）与重新生成。
  */
@@ -22,14 +22,11 @@ import { sessionLifecycle } from '../../pipeline/session-lifecycle';
 import { imageStorage } from '../../store/image-storage';
 import { settingsStore } from '../../store/settings-store';
 import { urlPool } from '../../store/url-pool';
-import {
-    attachImageDragFile,
-    copyImageBlobToClipboard,
-    downloadImageAsset,
-} from '../../util/browser-io';
+import { downloadImageAsset } from '../../util/browser-io';
 import { logger } from '../../util/logger';
 import { renderIcon } from '../components/icons';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import { copyResolvedImageWithToast } from '../feedback/image-clipboard';
 import { Toast } from '../feedback/toast';
 import { imageInfoModal } from '../media/image-info-modal';
 import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
@@ -545,21 +542,11 @@ export class FloorSlotRenderer {
         bindImageFallback(imgEl);
         imgEl.src = displayUrl;
         imgEl.alt = 'AI 生成图像';
+        imgEl.draggable = true;
         imgEl.loading = 'lazy';
 
-        const resolveSlotBlob = async (): Promise<Blob | null> => {
-            if (slotState.imageId) {
-                const stored = await imageStorage.getImageBlob(slotState.imageId);
-                if (stored && stored.size > 0) return stored;
-            }
-            if (slotState.displayUrl) {
-                const res = await fetch(slotState.displayUrl);
-                if (res.ok) return await res.blob();
-            }
-            return null;
-        };
-        const dragFileBase = `st_draw_${slotState.imageId ? slotState.imageId.slice(0, 8) : messageId}`;
-        const detachDrag = attachImageDragFile(imgEl, resolveSlotBlob, dragFileBase);
+        const resolveSlotBlob = (): Promise<Blob | null> =>
+            imageStorage.resolveImageBlob(slotState.imageId, slotState.displayUrl);
 
         let justLongPressed = false;
         if (isLightboxEnabled) {
@@ -667,12 +654,7 @@ export class FloorSlotRenderer {
 
             imageBox.addEventListener('touchcancel', cancelTouch, { passive: true });
 
-            this.activeSlotCleanups.set(containerKey, () => {
-                detachDrag();
-                cancelAllGestures();
-            });
-        } else {
-            this.activeSlotCleanups.set(containerKey, detachDrag);
+            this.activeSlotCleanups.set(containerKey, cancelAllGestures);
         }
 
         imageBox.appendChild(imgEl);
@@ -737,17 +719,7 @@ export class FloorSlotRenderer {
         copyBtn.innerHTML = renderIcon('copy', 14);
         copyBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const blob = await resolveSlotBlob();
-            if (!blob) {
-                Toast.error('获取图片数据失败');
-                return;
-            }
-            const ok = await copyImageBlobToClipboard(blob);
-            if (ok) {
-                Toast.success('已复制图片到剪贴板');
-            } else {
-                Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
-            }
+            await copyResolvedImageWithToast(resolveSlotBlob);
         });
         actionsContainer.appendChild(copyBtn);
 

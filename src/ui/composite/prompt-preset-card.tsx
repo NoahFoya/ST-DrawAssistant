@@ -413,7 +413,7 @@ export function PromptPresetCard(props: PromptPresetCardProps): VNode {
                 style={showNegativePrompt ? undefined : { display: 'none' }}
             >
                 <div className="da-textarea-header">
-                    <label className="da-field-label">负向提示词 (Negative Prompt)</label>
+                    <label className="da-field-label">负向提示词</label>
                     <span className="da-field-help">
                         生成时自动注入的基础过滤词，抑制畸变、水印及低画质特征
                     </span>

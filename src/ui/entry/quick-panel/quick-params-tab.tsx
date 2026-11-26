@@ -582,7 +582,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
                         />
                     </QuickFormRow>
                     <QuickFormRow
-                        label="放大算法 (Upscaler)"
+                        label="放大算法"
                         disabled={!drawingData.enableHires}
                     >
                         <SelectControl
@@ -755,7 +755,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
                                 />
                             </QuickFormRow>
                             {caps.supportsQuality && caps.qualityOptions.length > 0 && (
-                                <QuickFormRow label="生成画质 (Quality)">
+                                <QuickFormRow label="生成画质">
                                     <SelectControl
                                         value={
                                             drawingData.quality || caps.qualityOptions[0]
@@ -775,7 +775,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
                                 </QuickFormRow>
                             )}
                             {caps.supportsStyle && (
-                                <QuickFormRow label="画面风格 (Style)">
+                                <QuickFormRow label="画面风格">
                                     <SelectControl
                                         value={drawingData.style || 'vivid'}
                                         options={[
@@ -793,7 +793,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
                                 </QuickFormRow>
                             )}
                             {caps.supportsBackground && (
-                                <QuickFormRow label="背景模式 (Background)">
+                                <QuickFormRow label="背景模式">
                                     <SelectControl
                                         value={drawingData.background || 'auto'}
                                         options={[
@@ -815,7 +815,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
                                 </QuickFormRow>
                             )}
                             {caps.supportsOutputFormat && (
-                                <QuickFormRow label="输出格式 (Output Format)">
+                                <QuickFormRow label="输出格式">
                                     <SegmentedControlView
                                         value={drawingData.outputFormat || 'png'}
                                         options={[

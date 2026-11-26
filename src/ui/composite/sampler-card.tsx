@@ -231,7 +231,7 @@ export function SamplerCard(props: SamplerCardProps): VNode {
     const content = (
         <>
             <FormFieldView
-                label="采样算法 (Sampler)"
+                label="采样算法"
                 tooltip="决定去噪迭代算法与成图质感。二次元风格推荐 Euler a、DPM++ 2S a 或 DDIM；写实风格推荐 DPM++ 2M 或 UniPC；Flux 等模型首选 Euler。"
             >
                 <SelectControl
@@ -243,7 +243,7 @@ export function SamplerCard(props: SamplerCardProps): VNode {
 
             {showScheduler && (
                 <FormFieldView
-                    label="调度器 (Scheduler)"
+                    label="调度器"
                     tooltip="控制去噪过程中的步进时间曲线。Karras 适合细化中后期质感与细节；Normal 与 Simple 过程平稳均衡；SGM Uniform 适配特定扩散模型。通常首选推荐 Karras 或 Normal。"
                 >
                     <SelectControl
@@ -255,7 +255,7 @@ export function SamplerCard(props: SamplerCardProps): VNode {
             )}
 
             <FormFieldView
-                label="采样步数 (Steps)"
+                label="采样步数"
                 tooltip="画面生成的迭代轮次。步数过低会导致画面模糊且细节未成型，过高则生成耗时倍增且可能引入杂质伪影。推荐区间：SD 1.5 为 20~28 步，SDXL 为 25~35 步，Flux Schnell 仅需 4 步，Flux Dev 为 20~28 步。"
             >
                 <NumberInputControl
@@ -269,7 +269,7 @@ export function SamplerCard(props: SamplerCardProps): VNode {
             </FormFieldView>
 
             <FormFieldView
-                label="提示词引导系数 (CFG Scale)"
+                label="引导系数 (CFG)"
                 tooltip="控制画面贴合提示词的约束程度（CFG Scale）。数值越高越严格遵循提示词，但过高（>9.0）易产生色彩过饱和与肢体崩坏；数值过低画面自由度更高。动漫通常推荐 6.0~7.5，写实推荐 4.5~6.0，Flux / Pony 等专属模型推荐 1.0~3.5。"
             >
                 <NumberInputControl
@@ -283,7 +283,7 @@ export function SamplerCard(props: SamplerCardProps): VNode {
             </FormFieldView>
 
             <FormFieldView
-                label="随机种子 (Seed)"
+                label="随机种子"
                 tooltip="控制生成随机性的种子数。设为 -1 时每次出图自动随机生成；若需微调提示词、测试权重或保持同一角色的构图与容貌一致性，可固定为具体数值。"
             >
                 <div className="da-sampler-card__seed-control">

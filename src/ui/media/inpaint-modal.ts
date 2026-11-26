@@ -402,7 +402,7 @@ export class InpaintModal implements Disposable {
         denoiseHeader.className = 'da-inpaint-field-header';
         const denoiseLabel = document.createElement('span');
         denoiseLabel.className = 'da-inpaint-field-label';
-        denoiseLabel.textContent = '重绘幅度 (Denoise)';
+        denoiseLabel.textContent = '重绘幅度';
         const denoiseNote = document.createElement('span');
         denoiseNote.className = 'da-inpaint-field-note';
         denoiseNote.textContent = '0.05~1.00';
@@ -430,7 +430,7 @@ export class InpaintModal implements Disposable {
         blurHeader.className = 'da-inpaint-field-header';
         const blurLabel = document.createElement('span');
         blurLabel.className = 'da-inpaint-field-label';
-        blurLabel.textContent = '蒙版羽化 (Mask Blur)';
+        blurLabel.textContent = '蒙版羽化';
         const blurNote = document.createElement('span');
         blurNote.className = 'da-inpaint-field-note';
         blurNote.textContent = '边缘柔化';

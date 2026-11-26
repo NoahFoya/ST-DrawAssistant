@@ -208,12 +208,12 @@ export class ImageInfoModal implements Disposable {
 
         // 1. 正向提示词卡片
         const promptText = String(metadata.prompt || '');
-        colMeta.appendChild(this.createPromptCard('正向提示词 (Prompt)', promptText, false));
+        colMeta.appendChild(this.createPromptCard('正向提示词', promptText, false));
 
         // 2. 负向提示词卡片 (若存在)
         const negativeText = String(metadata.negativePrompt || '');
         if (negativeText) {
-            colMeta.appendChild(this.createPromptCard('负向提示词 (Negative Prompt)', negativeText, true));
+            colMeta.appendChild(this.createPromptCard('负向提示词', negativeText, true));
         }
 
         // 3. 分组可复用生成参数卡片
@@ -318,11 +318,11 @@ export class ImageInfoModal implements Disposable {
         const copyJsonBtn = document.createElement('button');
         copyJsonBtn.type = 'button';
         copyJsonBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        copyJsonBtn.textContent = '复制可复用参数 JSON';
+        copyJsonBtn.textContent = '复制参数 JSON';
         copyJsonBtn.addEventListener('click', () => {
             const reusablePayload = this.buildReusableMetadataPayload(metadata);
             const jsonPayload = JSON.stringify(reusablePayload, null, 2);
-            void this.copyText(jsonPayload, '已复制可复用参数 JSON');
+            void this.copyText(jsonPayload, '已复制参数 JSON');
         });
         actionsCard.appendChild(copyJsonBtn);
 

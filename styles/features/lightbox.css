@@ -62,8 +62,13 @@
     object-fit: contain;
     border-radius: var(--da-radius-sm, 6px);
     box-shadow: var(--da-shadow-modal, 0 16px 48px rgba(0, 0, 0, 0.55));
-    pointer-events: none;
+    pointer-events: auto;
     user-select: none;
+    -webkit-user-drag: auto;
+}
+
+.da-lightbox-stage.is-zoomed .da-lightbox-img {
+    pointer-events: none;
     -webkit-user-drag: none;
 }
 

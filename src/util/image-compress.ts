@@ -5,10 +5,10 @@
  * 支持六档图像存储格式处理：
  * - 'original': 返回原始 Blob，不执行图像重编码；
  * - 'png': 统一为无损 PNG（原图已是 PNG 时直接原样返回，非 PNG 时转为 PNG）；
- * - 'webp-high': 转码为高质量 WebP (quality: 0.9)；
- * - 'webp-medium': 转码为平衡 WebP (quality: 0.8)；
- * - 'jpeg-high': 转码为高质量 JPEG (quality: 0.92，自动纯白铺底)；
- * - 'jpeg-medium': 转码为平衡 JPEG (quality: 0.85，自动纯白铺底)。
+ * - 'webp-high': 转码为高画质 WebP (quality: 0.9)；
+ * - 'webp-medium': 转码为标准 WebP (quality: 0.8)；
+ * - 'jpeg-high': 转码为高画质 JPEG (quality: 0.92，自动纯白铺底)；
+ * - 'jpeg-medium': 转码为标准 JPEG (quality: 0.85，自动纯白铺底)。
  * 优先采用 OffscreenCanvas 与 createImageBitmap 在无 DOM 干扰下高效率转码；
  * 当环境不支持 OffscreenCanvas 时降级为 HTMLCanvasElement 或在异常时安全回退原始 Blob。
  */

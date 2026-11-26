@@ -936,7 +936,7 @@ export class BlueprintModal implements Disposable {
 
         if (classType.includes('cliptextencode') || classType.includes('prompt')) {
             return {
-                title: customTitle || '条件文本编码 (Prompt)',
+                title: customTitle || '条件文本编码',
                 badgeText: 'Prompt',
                 badgeClass: 'da-blueprint-badge--prompt',
                 category: 'PROMPT',
@@ -945,7 +945,7 @@ export class BlueprintModal implements Disposable {
         }
         if (classType.includes('ksampler') || classType.includes('sampler')) {
             return {
-                title: customTitle || '采样去噪计算 (KSampler)',
+                title: customTitle || '采样器 (KSampler)',
                 badgeText: 'Sampler',
                 badgeClass: 'da-blueprint-badge--sampler',
                 category: 'SAMPLER',
@@ -960,7 +960,7 @@ export class BlueprintModal implements Disposable {
             classType.includes('cliploader')
         ) {
             return {
-                title: customTitle || '模型加载器 (Loader)',
+                title: customTitle || '模型加载器',
                 badgeText: 'Model',
                 badgeClass: 'da-blueprint-badge--model',
                 category: 'SAMPLER',
@@ -973,7 +973,7 @@ export class BlueprintModal implements Disposable {
             classType.includes('previewimage')
         ) {
             return {
-                title: customTitle || '尺寸与潜空间 (Size/Output)',
+                title: customTitle || '尺寸与潜空间',
                 badgeText: 'Output',
                 badgeClass: 'da-blueprint-badge--size',
                 category: 'SIZE',

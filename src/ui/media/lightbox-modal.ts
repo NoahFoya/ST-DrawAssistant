@@ -3,9 +3,9 @@
  *
  * @remarks
  * 负责本地图库与楼层大图全屏预览、缩放平移、翻页与快捷操作：
- * 1. 全屏视窗：全屏暗色遮罩展示图片；
- * 2. 交互手势：支持滚轮缩放 (0.2x ~ 5.0x)、鼠标拖拽平移及双击复位；
- * 3. 统一顶栏矢量操作：收藏（星标 SVG）、元信息（`!` 感叹号 SVG）、编辑与重新生成（当具备楼层上下文时呈现，便于移动端唤出）、下载图片（下箭头 SVG）、关闭（叉号 SVG）；
+ * 1. 全屏视窗：全屏暗色遮罩展示图片，常态允许原生拖出图片，放大平移态自动锁定拖出；
+ * 2. 交互手势：支持滚轮缩放 (0.2x ~ 5.0x)、鼠标拖拽平移、双击复位及轻扫切图；
+ * 3. 统一顶栏操作：收藏、元信息、复制图片、下载图片、编辑与重新生成、历史对比「设为当前」、关闭；
  * 4. 键盘与生命周期：支持 Esc 退出、左右方向键翻页，销毁时自动注销全局监听。
  */
 
@@ -17,12 +17,9 @@ import { overlayStack } from '../framework/overlay-stack';
 import { imageInfoModal } from './image-info-modal';
 import { Toast } from '../feedback/toast';
 import { reportRuntimeError } from '../feedback/error-feedback';
+import { copyResolvedImageWithToast } from '../feedback/image-clipboard';
 import { logger } from '../../util/logger';
-import {
-    attachImageDragFile,
-    copyImageBlobToClipboard,
-    downloadImageAsset,
-} from '../../util/browser-io';
+import { downloadImageAsset } from '../../util/browser-io';
 
 /** 灯箱条目数据接口 */
 export interface LightboxItem {
@@ -77,6 +74,7 @@ export class LightboxModal implements Disposable {
 
     // DOM 元素引用
     private backdropEl?: HTMLElement;
+    private stageEl?: HTMLElement;
     private wrapperEl?: HTMLElement;
     private imgEl?: HTMLImageElement;
     private counterEl?: HTMLElement;
@@ -90,7 +88,6 @@ export class LightboxModal implements Disposable {
     private setCurrentBtnEl?: HTMLButtonElement;
     private editBtnEl?: HTMLButtonElement;
     private isSettingCurrent = false;
-    private detachDragShare?: () => void;
 
     // 全局事件解绑器与灯箱自建回退 URL 管理列表（独立于楼层会话 urlPool）
     private readonly disposers: (() => void)[] = [];
@@ -124,6 +121,7 @@ export class LightboxModal implements Disposable {
         const img = document.createElement('img');
         img.className = 'da-lightbox-img';
         img.alt = '图像全屏预览';
+        img.draggable = true;
         img.addEventListener('error', async () => {
             if (!this.isOpenState) return;
             const capturedGen = this.openGeneration;
@@ -375,6 +373,7 @@ export class LightboxModal implements Disposable {
 
         // 6. 保存 DOM 引用（保持游离态，在 openItems() 打开时动态挂至 document.body 末位以保证置顶层级）
         this.backdropEl = backdrop;
+        this.stageEl = stage;
         this.wrapperEl = wrapper;
         this.imgEl = img;
         this.counterEl = counter;
@@ -489,7 +488,9 @@ export class LightboxModal implements Disposable {
             this.isDragging = this.zoom > 1.05;
             this.dragStartX = e.clientX - this.translateX;
             this.dragStartY = e.clientY - this.translateY;
-            stage.setPointerCapture?.(e.pointerId);
+            if (this.isDragging || e.pointerType !== 'mouse') {
+                stage.setPointerCapture?.(e.pointerId);
+            }
             if (this.isDragging) {
                 stage.classList.add('is-dragging');
             }
@@ -559,6 +560,11 @@ export class LightboxModal implements Disposable {
      */
     private applyTransform(): void {
         if (!this.wrapperEl) return;
+        const isZoomed = this.zoom > 1.05;
+        this.stageEl?.classList.toggle('is-zoomed', isZoomed);
+        if (this.imgEl) {
+            this.imgEl.draggable = !isZoomed;
+        }
         this.wrapperEl.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.zoom})`;
         if (this.scaleTextEl) {
             this.scaleTextEl.textContent = `${Math.round(this.zoom * 100)}%`;
@@ -659,13 +665,7 @@ export class LightboxModal implements Disposable {
 
         if (this.imgEl) {
             this.imgEl.src = item.url;
-            this.detachDragShare?.();
-            const fileBase = `st_draw_${item.imageId ? item.imageId.slice(0, 8) : Date.now()}`;
-            this.detachDragShare = attachImageDragFile(
-                this.imgEl,
-                () => this.resolveCurrentBlob(),
-                fileBase
-            );
+            this.imgEl.draggable = true;
         }
 
         const total = this.items.length;
@@ -707,29 +707,11 @@ export class LightboxModal implements Disposable {
     private async resolveCurrentBlob(): Promise<Blob | null> {
         const item = this.items[this.currentIndex];
         if (!item) return null;
-        if (item.imageId) {
-            const stored = await imageStorage.getImageBlob(item.imageId);
-            if (stored && stored.size > 0) return stored;
-        }
-        if (item.url) {
-            const res = await fetch(item.url);
-            if (res.ok) return await res.blob();
-        }
-        return null;
+        return imageStorage.resolveImageBlob(item.imageId, item.url);
     }
 
     private async copyCurrent(): Promise<void> {
-        const blob = await this.resolveCurrentBlob();
-        if (!blob) {
-            Toast.error('获取图片数据失败');
-            return;
-        }
-        const ok = await copyImageBlobToClipboard(blob);
-        if (ok) {
-            Toast.success('已复制图片到剪贴板');
-        } else {
-            Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
-        }
+        await copyResolvedImageWithToast(() => this.resolveCurrentBlob());
     }
 
     /**
@@ -861,8 +843,6 @@ export class LightboxModal implements Disposable {
     public close(): void {
         this.isOpenState = false;
         this.openGeneration += 1;
-        this.detachDragShare?.();
-        this.detachDragShare = undefined;
         overlayStack.remove('lightbox-modal');
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';

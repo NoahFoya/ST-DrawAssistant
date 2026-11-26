@@ -6,3 +6,4 @@ export * from './toast';
 export * from './confirm-dialog';
 export * from './tooltip-service';
 export * from './error-feedback';
+export * from './image-clipboard';
