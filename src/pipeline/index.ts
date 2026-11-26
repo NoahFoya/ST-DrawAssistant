@@ -16,3 +16,5 @@ export * from './session-lifecycle';
 export * from './server-storage-service';
 export * from './asset-sync-coordinator';
 export * from './update-service';
+export * from './floor-coordinator';
+export * from './preset-transfer-service';

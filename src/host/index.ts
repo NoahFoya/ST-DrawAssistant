@@ -4,3 +4,4 @@
 
 export * from './host-context';
 export * from './host-extension-api';
+export * from './host-event-bridge';
