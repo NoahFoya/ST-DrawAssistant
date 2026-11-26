@@ -222,7 +222,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                     <FormFieldView
                         label="关联酒馆角色卡"
                         tooltip="将当前启用预设与宿主特定角色卡名称进行绑定。若列表中未列出，可手动输入角色卡名称（支持逗号分隔多个名称，忽略大小写）。"
-                        width="auto"
+                        width="w-240"
                     >
                         {hostCards.length === 0 ? (
                                     <input
@@ -294,7 +294,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                     <FormFieldView
                         label="聊天消息扫描深度"
                         tooltip="从最近几条对话消息中检索角色/服装名称或别名（默认 2 条；设为 0 表示不扫描聊天正文，仅注入「常驻」素材）。"
-                        width="w-120"
+                        width="w-240"
                     >
                         <NumberInputControl
                             min={0}

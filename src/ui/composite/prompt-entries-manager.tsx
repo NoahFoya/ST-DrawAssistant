@@ -32,11 +32,11 @@ export interface WiPositionOption {
 
 /** SillyTavern setExtensionPrompt 实际支持的 5 个插入位置枚举 */
 export const WI_POSITION_OPTIONS: readonly WiPositionOption[] = [
-    { value: 0, label: '角色定义前 (Prompt Top)', isDepthEnabled: false, position: 2, role: 0 },
-    { value: 1, label: '角色定义后 (Prompt Bottom)', isDepthEnabled: false, position: 0, role: 0 },
-    { value: 40, label: '[系统] 插入深度 @D', isDepthEnabled: true, position: 1, role: 0 },
-    { value: 41, label: '[用户] 插入深度 @D', isDepthEnabled: true, position: 1, role: 1 },
-    { value: 42, label: '[AI] 插入深度 @D', isDepthEnabled: true, position: 1, role: 2 },
+    { value: 0, label: '角色定义前', isDepthEnabled: false, position: 2, role: 0 },
+    { value: 1, label: '角色定义后', isDepthEnabled: false, position: 0, role: 0 },
+    { value: 40, label: '[系统] 深度 @D', isDepthEnabled: true, position: 1, role: 0 },
+    { value: 41, label: '[用户] 深度 @D', isDepthEnabled: true, position: 1, role: 1 },
+    { value: 42, label: '[AI] 深度 @D', isDepthEnabled: true, position: 1, role: 2 },
 ];
 
 /** 从条目的 position 与 role 映射到位置下拉选项值 */
@@ -320,7 +320,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                     <div className="da-wi-toolbar__left">
                         <button
                             type="button"
-                            className="da-btn da-btn--primary da-btn--sm da-wi-btn--add"
+                            className="da-btn da-btn--primary da-wi-btn--add"
                             title="新增提示词条目"
                             onClick={handleAddEntry}
                         >
@@ -332,7 +332,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                         </button>
                         <button
                             type="button"
-                            className="da-btn da-btn--secondary da-btn--sm da-wi-btn--icon"
+                            className="da-btn da-btn--secondary da-wi-btn--icon"
                             title="展开/收起全部条目"
                             onClick={toggleAllExpand}
                         >
@@ -340,7 +340,7 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                         </button>
                         <button
                             type="button"
-                            className="da-btn da-btn--secondary da-btn--sm da-wi-btn--icon"
+                            className="da-btn da-btn--secondary da-wi-btn--icon"
                             title="全部开启/全部关闭条目"
                             onClick={toggleAllEnabled}
                         >
@@ -536,8 +536,8 @@ export function PromptEntriesManager(props: PromptEntriesManagerProps): VNode {
                                             value={depthVal}
                                             title={
                                                 isDepthActive
-                                                    ? '聊天上下文插入深度 @D'
-                                                    : '仅在插入深度 @D 模式下可用'
+                                                    ? '聊天上下文深度 @D'
+                                                    : '仅在深度 @D 模式下可用'
                                             }
                                             onInput={(e) =>
                                                 handleNumericInput(

@@ -124,8 +124,8 @@
 .da-form-row__control .da-dimension-picker__size-group {
     width: 240px;
     max-width: 100%;
-    min-width: 240px;
-    flex: 0 0 240px;
+    min-width: 0;
+    flex: 0 0 auto;
     box-sizing: border-box;
 }
 
@@ -133,7 +133,8 @@
 .da-form-row__control:has(.da-input-wrapper),
 .da-form-row__control:not(.da-slot--w-120):not(.da-slot--w-80):has(> .da-number-input),
 .da-form-row__control:has(.da-segmented),
-.da-form-row__control:has(.da-dimension-picker__size-group) {
+.da-form-row__control:has(.da-dimension-picker__size-group),
+.da-form-row__control:has(.da-color-picker) {
     width: 240px;
     max-width: 100%;
     min-width: 240px;
@@ -166,10 +167,10 @@
 }
 
 .da-slot--w-toggle {
-    width: 38px;
-    min-width: 38px;
-    max-width: 38px;
-    flex: 0 0 38px !important;
+    width: 46px;
+    min-width: 46px;
+    max-width: 46px;
+    flex: 0 0 46px !important;
 }
 
 /* 4. 字段标签组单行横向排布 (.da-field-label-group) */
@@ -224,33 +225,40 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    width: 240px;
+    max-width: 100%;
+    flex: 0 0 auto;
+    box-sizing: border-box;
 }
 
 .da-color-picker__swatch {
     position: relative;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border-radius: 6px;
     border: 1px solid var(--da-border-color);
     cursor: pointer;
     box-shadow: var(--da-inset-top-light);
     flex-shrink: 0;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .da-color-picker__native {
     position: absolute;
     top: -10px;
     left: -10px;
-    width: 46px;
-    height: 46px;
+    width: 52px;
+    height: 52px;
     opacity: 0;
     cursor: pointer;
 }
 
 .da-input.da-color-picker__text {
-    width: min(200px, 100%);
-    height: 28px;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    height: 32px;
     text-align: left;
     padding: 0 8px;
     font-size: 12px;

@@ -772,7 +772,7 @@
 .da-fqp-row__control .da-input {
     width: 176px;
     max-width: 100%;
-    height: 27px;
+    height: 28px;
     font-size: 12px;
 }
 
@@ -788,7 +788,7 @@
 .da-fqp-row__control .da-number-input {
     width: 176px;
     max-width: 100%;
-    height: 27px;
+    height: 28px;
 }
 
 .da-fqp-row__control .da-number-input__field {
@@ -801,13 +801,14 @@
 }
 
 .da-fqp-row__control .da-segmented {
-    height: 27px;
+    height: 28px;
 }
 
 .da-fqp-row__control .da-segmented__item {
     padding: 0 8px;
     font-size: 11.5px;
-    height: 23px;
+    height: 24px;
+    min-height: 24px;
 }
 
 /* 提示词通道行（左侧状态点+标题，右侧下拉框+开关） */
@@ -816,7 +817,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    min-height: 29px;
+    min-height: 28px;
 }
 
 .da-fqp-channel-row__left {
@@ -845,7 +846,7 @@
 .da-fqp-channel-select .da-select-wrapper,
 .da-fqp-channel-select .da-select {
     width: 100%;
-    height: 27px;
+    height: 28px;
     font-size: 12px;
 }
 

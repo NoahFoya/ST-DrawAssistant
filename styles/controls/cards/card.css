@@ -200,12 +200,6 @@
     border-bottom: none;
 }
 
-.da-connection-card .da-form-row__control {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: none;
-}
-
 .da-connection-suggestion {
     display: flex;
     align-items: center;

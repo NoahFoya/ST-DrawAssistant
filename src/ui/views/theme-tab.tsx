@@ -79,7 +79,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
             <CardView title="重点颜色">
                 <FormFieldView
                     label="主强调色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('accent')}
                 >
                     <ColorPickerInput
@@ -91,7 +91,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="辅助渐变色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('accentSecondary')}
                 >
                     <ColorPickerInput
@@ -104,7 +104,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
                 <FormFieldView
                     label="主按钮文字颜色"
                     tooltip="主要按钮上的前景文字颜色（强调色偏深时建议白色，偏亮时建议深色）"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('textOnAccent')}
                 >
                     <ColorPickerInput
@@ -117,7 +117,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
             {/* 3. 背景颜色 */}
             <CardView title="背景颜色">
-                <FormFieldView label="窗口背景" width="auto" dirty={dirtyFields.has('bgPrimary')}>
+                <FormFieldView label="窗口背景" width="w-240" dirty={dirtyFields.has('bgPrimary')}>
                     <ColorPickerInput
                         value={draft.bgPrimary}
                         placeholder="#1e1e2e"
@@ -127,7 +127,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="侧边栏背景"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('bgSecondary')}
                 >
                     <ColorPickerInput
@@ -137,7 +137,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
                     />
                 </FormFieldView>
 
-                <FormFieldView label="卡片背景" width="auto" dirty={dirtyFields.has('bgCard')}>
+                <FormFieldView label="卡片背景" width="w-240" dirty={dirtyFields.has('bgCard')}>
                     <ColorPickerInput
                         value={draft.bgCard}
                         placeholder="#28293d"
@@ -147,7 +147,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="卡片悬停背景"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('bgCardHover')}
                 >
                     <ColorPickerInput
@@ -157,7 +157,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
                     />
                 </FormFieldView>
 
-                <FormFieldView label="输入框背景" width="auto" dirty={dirtyFields.has('bgInput')}>
+                <FormFieldView label="输入框背景" width="w-240" dirty={dirtyFields.has('bgInput')}>
                     <ColorPickerInput
                         value={draft.bgInput}
                         placeholder="#161622"
@@ -170,7 +170,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
             <CardView title="边框与文字颜色">
                 <FormFieldView
                     label="边框颜色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('borderColor')}
                 >
                     <ColorPickerInput
@@ -183,7 +183,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
                 <FormFieldView
                     label="高亮边框颜色"
                     tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色 (borderHighlight)"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('borderHighlight')}
                 >
                     <ColorPickerInput
@@ -195,7 +195,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="正文文字颜色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('textPrimary')}
                 >
                     <ColorPickerInput
@@ -207,7 +207,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="次要文字颜色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('textSecondary')}
                 >
                     <ColorPickerInput
@@ -219,7 +219,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="提示文字颜色"
-                    width="auto"
+                    width="w-240"
                     dirty={dirtyFields.has('textMuted')}
                 >
                     <ColorPickerInput

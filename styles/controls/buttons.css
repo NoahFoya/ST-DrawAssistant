@@ -135,10 +135,10 @@
 }
 
 /* 3. 尺寸与形态修饰符 */
-/* 紧凑小型尺寸 (26px) */
+/* 紧凑小型尺寸 (28px 高密度行统一阶梯) */
 .st-da-root .da-btn--sm,
 .da-btn.da-btn--sm {
-    height: 26px;
+    height: 28px;
     padding: 0 8px;
     font-size: var(--da-font-size-xs, 0.74rem);
 }
@@ -153,8 +153,8 @@
 
 .st-da-root .da-btn--icon.da-btn--sm,
 .da-btn.da-btn--icon.da-btn--sm {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     padding: 0;
 }
 

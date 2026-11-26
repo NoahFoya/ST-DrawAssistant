@@ -84,13 +84,11 @@ export function GalleryTab(props: { vm: GalleryState }): VNode {
                             <ButtonControl
                                 label="刷新"
                                 variant="secondary"
-                                size="sm"
                                 onClick={() => vm.refresh()}
                             />
                             <ButtonControl
                                 label={isBatchMode ? '退出批量管理' : '批量管理'}
                                 variant={isBatchMode ? 'primary' : 'secondary'}
-                                size="sm"
                                 onClick={() => vm.toggleBatchMode()}
                             />
                         </div>

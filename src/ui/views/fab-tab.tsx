@@ -159,7 +159,6 @@ export function FabTab(): VNode {
                     <ButtonControl
                         label="重置默认位置"
                         variant="secondary"
-                        size="sm"
                         onClick={() => {
                             eventBus.emit('ui:reset-fab-position');
                             Toast.show('已重置悬浮球停靠位置', { level: 'info' });

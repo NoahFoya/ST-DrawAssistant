@@ -280,7 +280,8 @@
     .da-form-row .da-select-wrapper,
     .da-form-row .da-segmented,
     .da-form-row .da-dimension-picker__size-group,
-    .da-form-row .da-number-input {
+    .da-form-row .da-number-input,
+    .da-form-row .da-color-picker {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;

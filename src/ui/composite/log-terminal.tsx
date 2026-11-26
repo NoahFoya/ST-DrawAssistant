@@ -288,13 +288,11 @@ export function LogTerminal(props: LogTerminalProps): VNode {
                     <ButtonControl
                         label="复制全部"
                         variant="ghost"
-                        size="sm"
                         onClick={() => void handleCopyAll()}
                     />
                     <ButtonControl
                         label="清空"
                         variant="ghost"
-                        size="sm"
                         onClick={() => {
                             for (const t of copyTimersRef.current.values()) {
                                 clearTimeout(t);
