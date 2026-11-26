@@ -14,6 +14,7 @@ import { StorageMaintenanceService } from './storage-maintenance';
 import { imageStorage } from '../../store/image-storage';
 import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { logger } from '../../util/logger';
 
 function formatBackendLabel(engine: string): string {
@@ -221,9 +222,15 @@ export class LogsStatsViewModel implements Disposable {
                 Toast.success(`已清理 ${count} 条失败记录`);
             }
         } catch (err) {
-            logger.warn('[LogsStatsViewModel] 清理失败记录异常:', err);
             if (!this.isDisposed) {
-                Toast.error('清理失败记录异常，请稍后重试');
+                reportRuntimeError(
+                    '[LogsStatsViewModel] 清理失败记录异常:',
+                    '清理失败记录异常，请前往「日志与统计」查看详情',
+                    err,
+                    'warn'
+                );
+            } else {
+                logger.warn('[LogsStatsViewModel] 清理失败记录异常:', err);
             }
         }
     }
@@ -237,9 +244,15 @@ export class LogsStatsViewModel implements Disposable {
                 Toast.success(`已清理 ${count} 张未收藏图片`);
             }
         } catch (err) {
-            logger.warn('[LogsStatsViewModel] 清理未收藏记录异常:', err);
             if (!this.isDisposed) {
-                Toast.error('清理未收藏记录异常，请稍后重试');
+                reportRuntimeError(
+                    '[LogsStatsViewModel] 清理未收藏记录异常:',
+                    '清理未收藏记录异常，请前往「日志与统计」查看详情',
+                    err,
+                    'warn'
+                );
+            } else {
+                logger.warn('[LogsStatsViewModel] 清理未收藏记录异常:', err);
             }
         }
     }
@@ -253,9 +266,15 @@ export class LogsStatsViewModel implements Disposable {
                 Toast.success(`已清理 ${count} 条本地图像记录`);
             }
         } catch (err) {
-            logger.warn('[LogsStatsViewModel] 清空本地图像记录异常:', err);
             if (!this.isDisposed) {
-                Toast.error('清空本地图像记录异常，请稍后重试');
+                reportRuntimeError(
+                    '[LogsStatsViewModel] 清空本地图像记录异常:',
+                    '清空本地图像记录异常，请前往「日志与统计」查看详情',
+                    err,
+                    'warn'
+                );
+            } else {
+                logger.warn('[LogsStatsViewModel] 清空本地图像记录异常:', err);
             }
         }
     }

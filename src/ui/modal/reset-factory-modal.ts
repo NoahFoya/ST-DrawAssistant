@@ -14,7 +14,7 @@ import { settingsStore, type ResetPartialOptions } from '../../store/settings-st
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
-import { logger } from '../../util/logger';
+import { reportRuntimeError } from '../feedback/error-feedback';
 
 export interface ResetFactoryModalOptions {
     /** 恢复完成后的回调 */
@@ -480,9 +480,11 @@ export function openResetFactoryModal(options: ResetFactoryModalOptions = {}): D
             confirmBtn.disabled = false;
             cancelBtn.disabled = false;
             updateFooterState();
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.error('[ResetFactoryModal] 恢复出厂设置异常:', err);
-            Toast.error(`恢复出厂设置失败: ${msg}`);
+            reportRuntimeError(
+                '[ResetFactoryModal] 恢复出厂设置异常:',
+                '恢复出厂设置失败，请前往「日志与统计」查看详情',
+                err
+            );
         }
     };
 

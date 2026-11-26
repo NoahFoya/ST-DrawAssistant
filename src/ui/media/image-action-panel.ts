@@ -14,13 +14,13 @@ import type { StoredImageRecord } from '@types';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { imageInfoModal } from './image-info-modal';
 import { openInpaintModal, type InpaintConfirmResult } from './inpaint-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from '../composite/tag-autocomplete';
 import { resolvePromptMacros } from '../../pipeline/macro-resolver';
 import { providerRegistry } from '../../provider/registry';
 import { settingsStore } from '../../store/settings-store';
-import { logger } from '../../util/logger';
 
 /** 图像操作弹窗上下文数据 */
 export interface ImageActionContext {
@@ -619,8 +619,11 @@ export class ImageActionPanel implements Disposable {
             a.remove();
             Toast.success('已开始下载图像');
         } catch (err) {
-            logger.error('下载图像异常:', err);
-            Toast.error('下载失败，请检查网络或资源');
+            reportRuntimeError(
+                '[ImageActionPanel] 下载图像异常:',
+                '下载失败，请检查网络或前往「日志与统计」查看详情',
+                err
+            );
         }
     }
 

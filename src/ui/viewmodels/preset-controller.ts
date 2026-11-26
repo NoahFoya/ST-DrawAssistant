@@ -10,7 +10,9 @@ import { signal, computed, type Signal, type ReadonlySignal } from '@preact/sign
 import type { PresetCategory, PresetItem, ProviderType } from '@types';
 import type { PresetActionType, PresetToolbarItem } from '../composite/preset-toolbar';
 import { normalizePresetNameKey, settingsStore } from '../../store/settings-store';
+import { logger } from '../../util/logger';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { downloadJsonFile } from '../../util/browser-io';
 import {
@@ -18,6 +20,7 @@ import {
     formatBatchImportSummary,
     parsePresetBatchJson,
     readFileAsText,
+    resolveBatchImportToastError,
     resolveBatchUniquePresetName,
 } from './preset-batch-io';
 
@@ -441,8 +444,11 @@ export class PresetController<TData extends Record<string, unknown>> {
         try {
             return await this.executeAction(action, targetId);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            Toast.show(`预设操作失败: ${message}`, { level: 'error' });
+            reportRuntimeError(
+                '[PresetController] 预设操作异常:',
+                '预设操作失败，请前往「日志与统计」查看详情',
+                err
+            );
             return false;
         }
     }
@@ -832,7 +838,8 @@ export class PresetController<TData extends Record<string, unknown>> {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
                 if (skippedErrors.length > 0) {
                     failedCount += skippedErrors.length;
-                    firstError ??= skippedErrors[0];
+                    logger.warn(`[PresetController] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
+                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
                 }
                 for (const candidate of candidates) {
                     const validationError = validatePresetPayloadForCategory(
@@ -841,14 +848,19 @@ export class PresetController<TData extends Record<string, unknown>> {
                     );
                     if (validationError) {
                         failedCount += 1;
-                        firstError ??= validationError;
+                        logger.warn(
+                            `[PresetController] 批量导入预设校验失败 (${file.name} / ${candidate.name}):`,
+                            validationError
+                        );
+                        firstError ??= resolveBatchImportToastError(validationError);
                         continue;
                     }
                     validCandidates.push(candidate);
                 }
             } catch (err: unknown) {
                 failedCount += 1;
-                firstError ??= err instanceof Error ? err.message : String(err);
+                logger.warn(`[PresetController] 批量导入文件读取/解析失败 (${file.name}):`, err);
+                firstError ??= resolveBatchImportToastError(err);
             }
         }
 

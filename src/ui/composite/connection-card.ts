@@ -11,21 +11,19 @@
  */
 
 import type { UIComponent, Disposable } from '../types';
-import type { ProviderHealthResult, ProviderType, TransportMode } from '@types';
+import type { ProviderHealthResult, ProviderType } from '@types';
 import { Card } from '../components/card';
 import { TextInput } from '../components/text-input';
 import { Select, type SelectOption } from '../components/select';
 import { Button } from '../components/button';
 import { Badge, type BadgeVariant } from '../components/badge';
 import { FormField } from '../components/form-field';
-import { ConfirmDialog } from '../feedback/confirm-dialog';
-import { Toast } from '../feedback/toast';
-import { settingsStore } from '../../store/settings-store';
 import {
-    buildTransportTroubleshootingLines,
-    detectHostRuntime,
-} from '../../util/http-client';
-import { logger } from '../../util/logger';
+    logConnectionFailure,
+    showConnectionDiagnosticsModal,
+} from '../feedback/error-feedback';
+import { Toast } from '../feedback/toast';
+import { eventBus } from '../../util/event-bus';
 
 /** 服务商预设模板定义 */
 export interface ProviderPreset {
@@ -319,7 +317,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             this.presetSelect.setValue(resolvedPresetId);
         }
         this.applyPresetState();
-        this.resetStatusToIdle();
+        this.resetStatusToIdle(false);
     }
 
     private resolveValidPresetId(
@@ -401,6 +399,7 @@ export class ConnectionCard implements UIComponent, Disposable {
                     this.statusBadge.element.removeAttribute('title');
                 }
                 this.statusBadge.element.classList.remove('is-clickable');
+                this.emitHealthUpdate(result);
             } else if (result.suggestedUrl) {
                 const rawMsg = result.message || `检测到可用地址: ${result.suggestedUrl}`;
                 this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
@@ -409,15 +408,15 @@ export class ConnectionCard implements UIComponent, Disposable {
                 this.statusBadge.element.title = rawMsg;
                 this.statusBadge.element.classList.add('is-clickable');
                 Toast.info(`检测到可用地址，点击「应用」补全后即可连接`);
+                this.emitHealthUpdate(result);
             } else {
                 const rawMsg = result.message || '网络连接异常';
-                this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
-                this.hideSuggestionBanner();
-                this.updateBadge('danger', '连接失败');
-                this.statusBadge.element.title = '点击查看排查指引与详细错误';
-                this.statusBadge.element.classList.add('is-clickable');
-                const briefMsg = rawMsg.length > 50 ? `${rawMsg.slice(0, 50)}...` : rawMsg;
-                Toast.error(`服务连接失败: ${briefMsg}`);
+                this.handleConnectionFailure(
+                    'ConnectionCard',
+                    '服务连接失败，请点击状态徽标或前往「日志与统计」查看详情',
+                    rawMsg
+                );
+                this.emitHealthUpdate(result);
             }
             return result;
         } catch (err) {
@@ -430,12 +429,15 @@ export class ConnectionCard implements UIComponent, Disposable {
                 return null;
             }
             const msg = err instanceof Error ? err.message : String(err || '网络异常');
-            this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
-            this.updateBadge('danger', '连接异常');
-            this.statusBadge.element.title = '点击查看排查指引与详细错误';
-            this.statusBadge.element.classList.add('is-clickable');
-            Toast.error(`服务连接异常: ${msg}`);
-            return { status: 'error', message: msg };
+            this.handleConnectionFailure(
+                'ConnectionCard',
+                '服务连接失败，请点击状态徽标或前往「日志与统计」查看详情',
+                msg,
+                err
+            );
+            const failureResult: ProviderHealthResult = { status: 'error', message: msg };
+            this.emitHealthUpdate(failureResult);
+            return failureResult;
         } finally {
             if (!this.isDisposed && this.pingAbortController === controller) {
                 this.actionButton.setLoading(false);
@@ -450,28 +452,10 @@ export class ConnectionCard implements UIComponent, Disposable {
     public showErrorDetailsModal(): void {
         if (!this.lastErrorDetails) return;
         const { url, message } = this.lastErrorDetails;
-        const transport = (settingsStore.get('transport') || 'direct') as TransportMode;
-        const hostRuntime = detectHostRuntime();
-        const providerType =
-            this.options.providerType ?? (settingsStore.get('activeProvider') as ProviderType | undefined);
-        const tips = buildTransportTroubleshootingLines({
-            transport,
-            providerType,
-            hostRuntime,
-        });
-        const transportLabel = transport === 'relay' ? '酒馆代理 (relay)' : '浏览器直连 (direct)';
-        const formattedMsg = [
-            `【请求地址】\n${url || '(未填写/使用默认地址)'}`,
-            `\n【当前通道】\n${transportLabel} · ${hostRuntime.hostLabel}`,
-            `\n【错误详情】\n${message}`,
-            `\n【排查建议】\n${tips.join('\n')}`,
-        ].join('\n');
-
-        void ConfirmDialog.info({
-            title: '服务连接排查指引',
-            message: formattedMsg,
-            confirmText: '我知道了',
-            copyText: `服务类型: ${providerType || 'unknown'}\n连接方式: ${transportLabel}\n宿主环境: ${hostRuntime.hostLabel}\n服务地址: ${url}\n错误信息: ${message}`,
+        void showConnectionDiagnosticsModal({
+            url,
+            message,
+            providerType: this.options.providerType,
         });
     }
 
@@ -524,12 +508,13 @@ export class ConnectionCard implements UIComponent, Disposable {
                 return null;
             }
             const msg = err instanceof Error ? err.message : String(err || '网络异常');
-            this.lastErrorDetails = { url: this.data.serverUrl, message: msg };
-            this.updateBadge('danger', '连接异常');
-            this.statusBadge.element.title = '点击查看排查指引与详细错误';
-            this.statusBadge.element.classList.add('is-clickable');
-            logger.error('[ConnectionCard] 拉取模型列表失败:', msg);
-            Toast.error(`获取模型列表失败: ${msg}`);
+            this.handleConnectionFailure(
+                'ConnectionCard/Assets',
+                '获取模型列表失败，请点击状态徽标或前往「日志与统计」查看详情',
+                msg,
+                err
+            );
+            this.emitHealthUpdate({ status: 'error', message: msg });
             return null;
         } finally {
             if (!this.isDisposed && this.assetAbortController === controller) {
@@ -600,12 +585,59 @@ export class ConnectionCard implements UIComponent, Disposable {
         void this.triggerPingAndSync();
     }
 
-    private resetStatusToIdle(): void {
+    private handleConnectionFailure(
+        logScope: string,
+        toastMessage: string,
+        rawMessage: string,
+        rawError?: unknown
+    ): void {
+        this.lastErrorDetails = { url: this.data.serverUrl, message: rawMessage };
+        this.hideSuggestionBanner();
+        this.updateBadge('danger', '连接失败');
+        this.statusBadge.element.title = '点击查看排查指引与详细错误';
+        this.statusBadge.element.classList.add('is-clickable');
+        logConnectionFailure({
+            scope: logScope,
+            providerType: this.options.providerType,
+            url: this.data.serverUrl,
+            message: rawMessage,
+            rawError,
+        });
+        Toast.error(toastMessage);
+    }
+
+    private emitHealthUpdate(result: ProviderHealthResult | null): void {
+        if (!this.options.providerType) {
+            return;
+        }
+        eventBus.emit('provider:health-updated', {
+            providerType: this.options.providerType,
+            result,
+        });
+    }
+
+    private abortInFlightRequests(): void {
+        if (this.pingAbortController) {
+            this.pingAbortController.abort();
+            this.pingAbortController = null;
+        }
+        if (this.assetAbortController) {
+            this.assetAbortController.abort();
+            this.assetAbortController = null;
+        }
+        this.actionButton.setLoading(false);
+    }
+
+    private resetStatusToIdle(emitEvent = true): void {
+        this.abortInFlightRequests();
         this.lastErrorDetails = null;
         this.hideSuggestionBanner();
         this.statusBadge.element.removeAttribute('title');
         this.statusBadge.element.classList.remove('is-clickable');
         this.updateBadge('neutral', '未检测');
+        if (emitEvent) {
+            this.emitHealthUpdate(null);
+        }
     }
 
     private updateBadge(variant: BadgeVariant, text: string): void {
@@ -622,14 +654,7 @@ export class ConnectionCard implements UIComponent, Disposable {
      */
     public dispose(): void {
         this.isDisposed = true;
-        if (this.pingAbortController) {
-            this.pingAbortController.abort();
-            this.pingAbortController = null;
-        }
-        if (this.assetAbortController) {
-            this.assetAbortController.abort();
-            this.assetAbortController = null;
-        }
+        this.abortInFlightRequests();
 
         for (const item of this.disposables) {
             try {

@@ -17,6 +17,7 @@ import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { openResetFactoryModal } from '../modal/reset-factory-modal';
 import { openChangelogModal } from '../modal/changelog-modal';
@@ -50,6 +51,7 @@ export class AboutTabView extends PreactSettingsView {
     private readonly updateState: Signal<UpdateState>;
     private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
     private reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    private updateAbortController: AbortController | null = null;
     private viewDisposed = false;
     private envRefreshSeq = 0;
 
@@ -171,9 +173,26 @@ export class AboutTabView extends PreactSettingsView {
         }
     }
 
+    private abortPendingUpdateCheck(): void {
+        if (this.updateAbortController) {
+            this.updateAbortController.abort();
+            this.updateAbortController = null;
+        }
+    }
+
     private async handleCheckUpdate(silent = false): Promise<void> {
-        const res = await updateService.checkUpdate({ force: !silent });
-        if (this.viewDisposed) return;
+        this.abortPendingUpdateCheck();
+        const controller = new AbortController();
+        this.updateAbortController = controller;
+
+        const res = await updateService.checkUpdate({
+            force: !silent,
+            signal: controller.signal,
+        });
+        if (this.updateAbortController === controller) {
+            this.updateAbortController = null;
+        }
+        if (this.viewDisposed || controller.signal.aborted) return;
         if (!silent) {
             if (res.hasUpdate) {
                 const versionHint = res.remoteSha || (res.remoteVersion ? `v${res.remoteVersion}` : '最新');
@@ -181,7 +200,11 @@ export class AboutTabView extends PreactSettingsView {
                     level: 'info',
                 });
             } else if (!res.success) {
-                Toast.show(`检查更新失败: ${res.message}`, { level: 'error' });
+                reportRuntimeError(
+                    '[AboutTabView] 检查更新失败:',
+                    '检查更新失败，请前往「日志与统计」查看详情',
+                    res.message
+                );
             } else {
                 Toast.show(res.message || '当前已是最新版本', { level: 'success' });
             }
@@ -217,7 +240,11 @@ export class AboutTabView extends PreactSettingsView {
                 }
             }, 1500);
         } else {
-            Toast.show(`更新失败: ${result.message || '未知错误'}`, { level: 'error' });
+            reportRuntimeError(
+                '[AboutTabView] 应用更新失败:',
+                '插件更新失败，请前往「日志与统计」查看详情',
+                result.message || '未知错误'
+            );
         }
     }
 
@@ -231,7 +258,11 @@ export class AboutTabView extends PreactSettingsView {
             );
             logger.info('[AboutTabView] 完整配置备份已导出');
         } catch (err) {
-            Toast.show('导出配置失败: ' + String(err), { level: 'error' });
+            reportRuntimeError(
+                '[AboutTabView] 导出配置备份失败:',
+                '导出配置失败，请前往「日志与统计」查看详情',
+                err
+            );
         }
     }
 
@@ -249,14 +280,20 @@ export class AboutTabView extends PreactSettingsView {
                 });
                 logger.info('[AboutTabView] 配置备份已成功导入');
             } else {
-                Toast.show('导入配置失败: ' + (result.error || '未知格式错误'), {
-                    level: 'error',
-                });
+                reportRuntimeError(
+                    '[AboutTabView] 导入配置备份失败:',
+                    '导入配置失败，请检查文件格式或在日志查看详情',
+                    result.error || '未知格式错误'
+                );
             }
             inputEl.value = '';
         };
         reader.onerror = () => {
-            Toast.show('读取配置文件发生错误', { level: 'error' });
+            reportRuntimeError(
+                '[AboutTabView] 读取配置文件发生错误:',
+                '读取配置文件失败，请前往「日志与统计」查看详情',
+                reader.error
+            );
             inputEl.value = '';
         };
         reader.readAsText(file);
@@ -601,12 +638,18 @@ export class AboutTabView extends PreactSettingsView {
     public override activate(): void {
         super.activate();
         void this.refreshEnvState();
-        void updateService.checkUpdate({ force: false });
+        void this.handleCheckUpdate(true);
+    }
+
+    public override deactivate(): void {
+        this.abortPendingUpdateCheck();
+        super.deactivate();
     }
 
     public override dispose(): void {
         this.viewDisposed = true;
         this.envRefreshSeq++;
+        this.abortPendingUpdateCheck();
         if (this.copyResetTimer !== null) {
             clearTimeout(this.copyResetTimer);
             this.copyResetTimer = null;

@@ -35,12 +35,14 @@ import {
     formatBatchImportSummary,
     parsePresetBatchJson,
     readFileAsText,
+    resolveBatchImportToastError,
     resolveBatchUniquePresetName,
 } from '../viewmodels/preset-batch-io';
 import { bindDelegatedTagAutocomplete } from '../composite/tag-autocomplete';
 import type { Disposable } from '../types';
 import { settingsStore, normalizePresetNameKey } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
+import { logger } from '../../util/logger';
 import { downloadJsonFile } from '../../util/browser-io';
 import {
     materialImageStorage,
@@ -59,6 +61,7 @@ import {
 import { promptInjector } from '../../pipeline/prompt-injector';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 
 import {
     type MaterialsSubTab,
@@ -808,7 +811,11 @@ export class MaterialsTabView extends PreactSettingsView {
                 Toast.show(`已另存预设: ${cleanName}`, { level: 'success' });
                 return true;
             } catch (err: unknown) {
-                Toast.show(err instanceof Error ? err.message : '另存预设失败', { level: 'error' });
+                reportRuntimeError(
+                    '[MaterialsTabView] 另存预设失败:',
+                    '另存预设失败，请前往「日志与统计」查看详情',
+                    err
+                );
                 return false;
             }
         }
@@ -1062,9 +1069,11 @@ export class MaterialsTabView extends PreactSettingsView {
             if (resolvedAvatarId) {
                 void materialImageStorage.deleteAvatar(resolvedAvatarId);
             }
-            Toast.show(err instanceof Error ? err.message : '导入预设保存失败', {
-                level: 'error',
-            });
+            reportRuntimeError(
+                '[MaterialsTabView] 导入预设保存失败:',
+                '导入预设保存失败，请前往「日志与统计」查看详情',
+                err
+            );
             return;
         }
 
@@ -1108,8 +1117,11 @@ export class MaterialsTabView extends PreactSettingsView {
                 }
             } catch (err: unknown) {
                 if (this.isDisposedView) return;
-                const message = err instanceof Error ? err.message : String(err);
-                Toast.show(`导入解析失败: ${message}`, { level: 'error' });
+                reportRuntimeError(
+                    '[MaterialsTabView] 导入预设解析失败:',
+                    '导入解析失败，请检查文件格式或在日志查看详情',
+                    err
+                );
                 return;
             }
         }
@@ -1141,7 +1153,8 @@ export class MaterialsTabView extends PreactSettingsView {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
                 if (skippedErrors.length > 0) {
                     failedCount += skippedErrors.length;
-                    firstError ??= skippedErrors[0];
+                    logger.warn(`[MaterialsTabView] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
+                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
                 }
                 for (const candidate of candidates) {
                     const rawData = candidate.data;
@@ -1151,7 +1164,11 @@ export class MaterialsTabView extends PreactSettingsView {
                     );
                     if (errMsg) {
                         failedCount += 1;
-                        firstError ??= errMsg;
+                        logger.warn(
+                            `[MaterialsTabView] 批量导入档案校验失败 (${file.name} / ${candidate.name}):`,
+                            errMsg
+                        );
+                        firstError ??= resolveBatchImportToastError(errMsg);
                         continue;
                     }
                     const embeddedAvatar =
@@ -1211,7 +1228,8 @@ export class MaterialsTabView extends PreactSettingsView {
                 }
             } catch (err: unknown) {
                 failedCount += 1;
-                firstError ??= err instanceof Error ? err.message : String(err);
+                logger.warn(`[MaterialsTabView] 批量导入档案读取/解析失败 (${file.name}):`, err);
+                firstError ??= resolveBatchImportToastError(err);
             }
         }
 

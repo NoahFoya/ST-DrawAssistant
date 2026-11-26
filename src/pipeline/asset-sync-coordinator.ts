@@ -140,15 +140,17 @@ export class AssetSyncCoordinator {
 
         const provider = providerRegistry.getProvider(providerType);
         if (!provider) {
+            const errMsg = `未注册 ${providerType} 服务提供方`;
+            if (options.throwOnError) {
+                throw new Error(errMsg);
+            }
+            logger.error(`[AssetSyncCoordinator] ${errMsg}`);
             if (options.isManual && !options.suppressToast) {
                 eventBus.emit('toast:show', {
                     type: 'error',
-                    message: `未注册 ${providerType} 服务提供方`,
+                    message: '获取模型列表失败，请前往「日志与统计」查看详情',
                     duration: 3000,
                 });
-            }
-            if (options.throwOnError) {
-                throw new Error(`未注册 ${providerType} 服务提供方`);
             }
             return null;
         }
@@ -199,31 +201,34 @@ export class AssetSyncCoordinator {
                 }
                 if (health.status !== 'ok') {
                     const errMsg = health.message || '服务未启动或连接失败';
+                    if (options.throwOnError) {
+                        throw new Error(errMsg);
+                    }
+                    logger.error(`[AssetSyncCoordinator] [${providerType}] 健康检测失败: ${errMsg}`);
                     if (options.isManual && !options.suppressToast) {
                         eventBus.emit('toast:show', {
                             type: 'error',
-                            message: `获取模型列表失败: ${errMsg}`,
+                            message: '获取模型列表失败，请前往「日志与统计」查看详情',
                             duration: 3000,
                         });
-                    }
-                    if (options.throwOnError) {
-                        throw new Error(errMsg);
                     }
                     return null;
                 }
             } catch (err: unknown) {
                 const isAbort =
                     signal?.aborted || (err instanceof DOMException && err.name === 'AbortError');
-                if (options.isManual && !options.suppressToast && !isAbort) {
-                    const msg = err instanceof Error ? err.message : String(err || '网络异常');
-                    eventBus.emit('toast:show', {
-                        type: 'error',
-                        message: `获取模型列表异常: ${msg}`,
-                        duration: 3000,
-                    });
-                }
                 if (options.throwOnError) {
                     throw err;
+                }
+                if (!isAbort) {
+                    logger.error(`[AssetSyncCoordinator] [${providerType}] 健康检测异常:`, err);
+                    if (options.isManual && !options.suppressToast) {
+                        eventBus.emit('toast:show', {
+                            type: 'error',
+                            message: '获取模型列表失败，请前往「日志与统计」查看详情',
+                            duration: 3000,
+                        });
+                    }
                 }
                 return null;
             }
@@ -394,19 +399,18 @@ export class AssetSyncCoordinator {
         } catch (err: unknown) {
             const isAbort =
                 signal?.aborted || (err instanceof DOMException && err.name === 'AbortError');
+            if (options.throwOnError) {
+                throw err;
+            }
             if (!isAbort) {
-                const errorMsg = err instanceof Error ? err.message : String(err || '拉取异常');
                 logger.warn(`[AssetSyncCoordinator] [${providerType}] 资产同步异常:`, err);
                 if (options.isManual && !options.suppressToast) {
                     eventBus.emit('toast:show', {
                         type: 'error',
-                        message: `模型资产同步失败: ${errorMsg}`,
+                        message: '模型资产同步失败，请前往「日志与统计」查看详情',
                         duration: 3000,
                     });
                 }
-            }
-            if (options.throwOnError) {
-                throw err;
             }
             return null;
         }

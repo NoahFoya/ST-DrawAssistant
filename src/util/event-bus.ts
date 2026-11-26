@@ -8,7 +8,14 @@
  * 3. 资源清理：on 与 once 返回解除监听函数。
  */
 
-import type { DrawingTask, DrawingTaskStatus, SlotMountTarget, UpdateState } from '@types';
+import type {
+    DrawingTask,
+    DrawingTaskStatus,
+    ProviderHealthResult,
+    ProviderType,
+    SlotMountTarget,
+    UpdateState,
+} from '@types';
 import { logger } from './logger';
 
 /** 任务状态变更事件数据 */
@@ -49,6 +56,11 @@ export type AppEventMap = {
     };
     /** 在线版本与更新状态流转变更 */
     'update:status-changed': UpdateState;
+    /** 生图服务连通性检测结果变更（null 表示配置变更后回到待检测状态） */
+    'provider:health-updated': {
+        providerType: ProviderType;
+        result: ProviderHealthResult | null;
+    };
     /** 常驻悬浮球位置复位交互动作 */
     'ui:reset-fab-position': void;
     /** 界面反馈提示条显示 */

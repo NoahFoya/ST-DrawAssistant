@@ -33,6 +33,7 @@ import {
     formatBatchImportSummary,
     parsePresetBatchJson,
     readFileAsText,
+    resolveBatchImportToastError,
     resolveBatchUniquePresetName,
 } from '../viewmodels/preset-batch-io';
 import {
@@ -48,6 +49,7 @@ import {
 import { normalizePresetNameKey, settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
 import { getCachedOfficialPresets } from '../../store/static-preset-loader';
 import { eventBus } from '../../util/event-bus';
+import { logger } from '../../util/logger';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import {
     detectPromptImportFormat,
@@ -62,6 +64,7 @@ import {
 } from '../modal/worldbook-import-modal';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { evaluatePresetDataDirty } from './materials/material-types';
 
 export type PromptsSubTabId = PromptChannelId | 'preview';
@@ -363,9 +366,12 @@ export class PromptsTabView extends PreactSettingsView {
         const format = detectPromptImportFormat(raw);
 
         if (format === 'invalid') {
-            Toast.show('导入失败：未识别为有效的插件提示词预设或酒馆原生世界书 JSON', {
-                level: 'error',
-            });
+            reportRuntimeError(
+                '[PromptsTabView] 导入提示词预设失败：未识别的 JSON 格式',
+                '导入失败：未识别为有效的插件提示词预设或酒馆原生世界书 JSON，请前往「日志与统计」查看详情',
+                undefined,
+                'warn'
+            );
             return;
         }
 
@@ -376,7 +382,12 @@ export class PromptsTabView extends PreactSettingsView {
                 fallbackName
             );
             if (!normalized) {
-                Toast.show('导入失败：预设缺少 entries 数组', { level: 'error' });
+                reportRuntimeError(
+                    '[PromptsTabView] 导入提示词预设失败：预设缺少 entries 数组',
+                    '导入失败：预设缺少 entries 数组，请前往「日志与统计」查看详情',
+                    fallbackName,
+                    'warn'
+                );
                 return;
             }
             await this.saveNewImportedPreset(
@@ -503,8 +514,11 @@ export class PromptsTabView extends PreactSettingsView {
                     return;
                 }
             } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : String(err);
-                Toast.show(`解析 JSON 文件失败: ${message}`, { level: 'error' });
+                reportRuntimeError(
+                    '[PromptsTabView] 解析 JSON 文件失败:',
+                    '解析 JSON 文件失败，请检查文件格式或在日志查看详情',
+                    err
+                );
                 return;
             }
         }
@@ -533,7 +547,8 @@ export class PromptsTabView extends PreactSettingsView {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
                 if (skippedErrors.length > 0) {
                     failedCount += skippedErrors.length;
-                    firstError ??= skippedErrors[0];
+                    logger.warn(`[PromptsTabView] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
+                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
                 }
                 for (const candidate of candidates) {
                     const normalized = normalizePluginPromptChannelPreset(
@@ -542,7 +557,8 @@ export class PromptsTabView extends PreactSettingsView {
                     );
                     if (!normalized) {
                         failedCount += 1;
-                        firstError ??= '预设缺少 entries 数组';
+                        logger.warn(`[PromptsTabView] 批量导入预设缺少 entries 数组 (${file.name}): ${candidate.name}`);
+                        firstError ??= resolveBatchImportToastError('预设缺少 entries 数组');
                         continue;
                     }
                     const finalName = resolveBatchUniquePresetName(
@@ -564,7 +580,8 @@ export class PromptsTabView extends PreactSettingsView {
                 }
             } catch (err: unknown) {
                 failedCount += 1;
-                firstError ??= err instanceof Error ? err.message : String(err);
+                logger.warn(`[PromptsTabView] 批量导入文件读取/解析失败 (${file.name}):`, err);
+                firstError ??= resolveBatchImportToastError(err);
             }
         }
 

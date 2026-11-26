@@ -111,6 +111,8 @@ export class UpdateService {
     private _resolvedDefaultBranch: { repo: string; branch: string } | null = null;
     private _rateLimitedUntil = 0;
     private _inFlightCheckPromise: Promise<CheckUpdateResult> | null = null;
+    private _inFlightCheckController: AbortController | null = null;
+    private _activeCheckWaiters = 0;
 
     private constructor() {
         this._state = this.createInitialState();
@@ -142,6 +144,9 @@ export class UpdateService {
         this._resolvedGithubRepo = null;
         this._resolvedDefaultBranch = null;
         this._rateLimitedUntil = 0;
+        this._inFlightCheckController?.abort();
+        this._inFlightCheckController = null;
+        this._activeCheckWaiters = 0;
         this._inFlightCheckPromise = null;
         this._state = this.createInitialState();
     }
@@ -583,6 +588,78 @@ export class UpdateService {
         };
     }
 
+    private buildCancelledCheckResult(): CheckUpdateResult {
+        return {
+            success: false,
+            hasUpdate: false,
+            currentSha: this._state.currentCommitSha,
+            remoteSha: this._state.remoteCommitSha,
+            remoteMessage: this._state.remoteCommitMessage,
+            checkSource: this._state.checkSource,
+            remoteVersion: this._state.remoteVersion,
+            rateLimitedUntil: this._state.rateLimitedUntil,
+            message: '更新检测已取消',
+        };
+    }
+
+    /** 取消时仅结束检查状态，不污染既有成功结果或错误消息 */
+    private cancelCheckWithoutError(): CheckUpdateResult {
+        this.setState({ isChecking: false });
+        return this.buildCancelledCheckResult();
+    }
+
+    /** 让单个调用方的 AbortSignal 与共享在途请求解耦，仅当全部订阅方均中止时取消底层请求 */
+    private awaitCheckWithCallerSignal(
+        task: Promise<CheckUpdateResult>,
+        sharedController: AbortController | null,
+        callerSignal?: AbortSignal
+    ): Promise<CheckUpdateResult> {
+        if (callerSignal?.aborted) {
+            return Promise.resolve(this.buildCancelledCheckResult());
+        }
+
+        this._activeCheckWaiters += 1;
+        let released = false;
+        const releaseWaiter = (abortSharedIfEmpty: boolean) => {
+            if (released) return;
+            released = true;
+            this._activeCheckWaiters = Math.max(0, this._activeCheckWaiters - 1);
+            if (
+                abortSharedIfEmpty &&
+                this._activeCheckWaiters === 0 &&
+                sharedController &&
+                this._inFlightCheckController === sharedController
+            ) {
+                sharedController.abort();
+            }
+        };
+
+        if (!callerSignal) {
+            return task.finally(() => releaseWaiter(false));
+        }
+
+        return new Promise<CheckUpdateResult>((resolve, reject) => {
+            const onAbort = () => {
+                releaseWaiter(true);
+                resolve(this.buildCancelledCheckResult());
+            };
+            callerSignal.addEventListener('abort', onAbort, { once: true });
+
+            task.then(
+                (res) => {
+                    callerSignal.removeEventListener('abort', onAbort);
+                    releaseWaiter(false);
+                    resolve(res);
+                },
+                (err) => {
+                    callerSignal.removeEventListener('abort', onAbort);
+                    releaseWaiter(false);
+                    reject(err);
+                }
+            );
+        });
+    }
+
     /**
      * 在线检测插件更新。
      *
@@ -599,17 +676,7 @@ export class UpdateService {
         force?: boolean;
     }): Promise<CheckUpdateResult> {
         if (options?.signal?.aborted) {
-            return {
-                success: false,
-                hasUpdate: false,
-                currentSha: this._state.currentCommitSha,
-                remoteSha: this._state.remoteCommitSha,
-                remoteMessage: this._state.remoteCommitMessage,
-                checkSource: this._state.checkSource,
-                remoteVersion: this._state.remoteVersion,
-                rateLimitedUntil: this._state.rateLimitedUntil,
-                message: '更新检测已取消',
-            };
+            return this.buildCancelledCheckResult();
         }
 
         if (this._state.isUpdating) {
@@ -628,18 +695,55 @@ export class UpdateService {
 
         if (this._inFlightCheckPromise) {
             if (!options?.force) {
-                return await this._inFlightCheckPromise;
+                return await this.awaitCheckWithCallerSignal(
+                    this._inFlightCheckPromise,
+                    this._inFlightCheckController,
+                    options?.signal
+                );
             }
-            await this._inFlightCheckPromise.catch(() => {});
+            const callerSignal = options?.signal;
+            if (callerSignal?.aborted) {
+                return this.buildCancelledCheckResult();
+            }
+            if (callerSignal) {
+                let onAbort: (() => void) | null = null;
+                try {
+                    await Promise.race([
+                        this._inFlightCheckPromise.catch(() => {}),
+                        new Promise<void>((resolve) => {
+                            onAbort = () => resolve();
+                            callerSignal.addEventListener('abort', onAbort, { once: true });
+                        }),
+                    ]);
+                } finally {
+                    if (onAbort) {
+                        callerSignal.removeEventListener('abort', onAbort);
+                    }
+                }
+            } else {
+                await this._inFlightCheckPromise.catch(() => {});
+            }
+            if (callerSignal?.aborted) {
+                return this.buildCancelledCheckResult();
+            }
         }
 
-        const task = this.executeCheckUpdate(options);
+        const sharedController = new AbortController();
+        this._inFlightCheckController = sharedController;
+        this._activeCheckWaiters = 0;
+
+        const task = this.executeCheckUpdate({
+            ...options,
+            signal: sharedController.signal,
+        });
         this._inFlightCheckPromise = task;
         try {
-            return await task;
+            return await this.awaitCheckWithCallerSignal(task, sharedController, options?.signal);
         } finally {
             if (this._inFlightCheckPromise === task) {
                 this._inFlightCheckPromise = null;
+                this._inFlightCheckController = null;
+                this._activeCheckWaiters = 0;
             }
         }
     }
@@ -681,6 +785,8 @@ export class UpdateService {
             ...(explicitBranch ? { currentBranch: explicitBranch } : {}),
             error: null,
         });
+
+        try {
 
         // 1. 宿主环境下优先通过 SillyTavern 原生 Git 查询接口检查（零 API 限流，且反映真实本地仓库状态）
         if (this.isHostContextAvailable() && !explicitBranch) {
@@ -739,11 +845,7 @@ export class UpdateService {
                 }
             } catch (err: unknown) {
                 if (options?.signal?.aborted) {
-                    const abortMsg = '更新检测已取消';
-                    return this.commitCheckState(
-                        { isChecking: false, error: abortMsg },
-                        { success: false, hasUpdate: false, message: abortMsg }
-                    );
+                    return this.cancelCheckWithoutError();
                 }
                 logger.warn('[UpdateService] 宿主 Git 版本检测异常，降级远程检测:', err);
             }
@@ -762,13 +864,9 @@ export class UpdateService {
                     resolvedBranch = defaultBranch;
                     this.setState({ currentBranch: resolvedBranch });
                 }
-            } catch (err: unknown) {
+            } catch {
                 if (options?.signal?.aborted) {
-                    const abortMsg = '更新检测已取消';
-                    return this.commitCheckState(
-                        { isChecking: false, error: abortMsg },
-                        { success: false, hasUpdate: false, message: abortMsg }
-                    );
+                    return this.cancelCheckWithoutError();
                 }
             }
         }
@@ -822,11 +920,7 @@ export class UpdateService {
                 fetchedRemoteCommit = commit;
             } catch (err: unknown) {
                 if (options?.signal?.aborted) {
-                    const abortMsg = '更新检测已取消';
-                    return this.commitCheckState(
-                        { isChecking: false, error: abortMsg },
-                        { success: false, hasUpdate: false, message: abortMsg }
-                    );
+                    return this.cancelCheckWithoutError();
                 }
                 apiErrorMsg = err instanceof Error ? err.message : String(err);
                 logger.warn(`[UpdateService] GitHub 提交检测失败: ${apiErrorMsg}`);
@@ -881,20 +975,12 @@ export class UpdateService {
                 }
             } catch (err: unknown) {
                 if (options?.signal?.aborted) {
-                    const abortMsg = '更新检测已取消';
-                    return this.commitCheckState(
-                        { isChecking: false, error: abortMsg },
-                        { success: false, hasUpdate: false, message: abortMsg }
-                    );
+                    return this.cancelCheckWithoutError();
                 }
                 logger.warn('[UpdateService] 静态版本清单回退检测失败:', err);
             }
         } else {
-            const abortMsg = '更新检测已取消';
-            return this.commitCheckState(
-                { isChecking: false, error: abortMsg },
-                { success: false, hasUpdate: false, message: abortMsg }
-            );
+            return this.cancelCheckWithoutError();
         }
 
         // 4. 所有可用版本比较渠道均失败
@@ -917,6 +1003,11 @@ export class UpdateService {
                 message: finalError,
             }
         );
+        } finally {
+            if (this._state.isChecking) {
+                this.setState({ isChecking: false });
+            }
+        }
     }
 
     /** 将宿主 Git 拉取异常映射为清晰可操作的排障文案 */

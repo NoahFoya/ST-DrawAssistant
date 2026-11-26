@@ -660,7 +660,7 @@ export async function initOnce(): Promise<void> {
                 isManual: false,
                 silentIfNoChange: true,
                 signal: currentSignal,
-            }).catch(() => undefined);
+            });
 
             isInitialized = true;
             logger.info('ST-DrawAssistant 扩展核心生命周期与 UI 系统已就绪');

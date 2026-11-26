@@ -175,6 +175,27 @@ export function readFileAsText(file: File): Promise<string> {
 }
 
 /**
+ * 从批量导入异常或校验错误中提取可面向用户的简短校验提示；未知技术异常统一引导查看日志。
+ */
+export function resolveBatchImportToastError(errOrMsg: unknown): string {
+    const raw =
+        errOrMsg instanceof Error
+            ? errOrMsg.message
+            : typeof errOrMsg === 'string'
+              ? errOrMsg
+              : '';
+    if (
+        raw &&
+        /(?:不兼容|Save \(API Format\)|UI Layout|缺少|未包含|未找到|无效|非对象|工作流|格式不符合)/.test(
+            raw
+        )
+    ) {
+        return raw;
+    }
+    return '请检查文件格式或前往「日志与统计」查看详情';
+}
+
+/**
  * 格式化批量导入结果汇总文案。
  */
 export function formatBatchImportSummary(

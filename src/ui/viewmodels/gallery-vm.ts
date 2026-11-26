@@ -16,6 +16,7 @@ import { imageStorage } from '../../store/image-storage';
 import { eventBus } from '../../util/event-bus';
 import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { logger } from '../../util/logger';
 
@@ -176,8 +177,11 @@ export class GalleryViewModel implements Disposable {
             await this.resolveCurrentPageUrls();
         } catch (err) {
             if (!this.isDisposed && seq === this.refreshSeq) {
-                logger.error('[GalleryViewModel] 刷新本地图库异常:', err);
-                Toast.error('刷新本地图库记录失败');
+                reportRuntimeError(
+                    '[GalleryViewModel] 刷新本地图库异常:',
+                    '刷新本地图库记录失败，请前往「日志与统计」查看详情',
+                    err
+                );
             }
         }
     }
@@ -299,10 +303,16 @@ export class GalleryViewModel implements Disposable {
             this.pageUrlMap.value = nextMap;
             return true;
         } catch (err) {
-            logger.warn(`[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`, err);
             markFailed();
             if (!silent) {
-                Toast.error('重新载入图像失败');
+                reportRuntimeError(
+                    `[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`,
+                    '重新载入图像失败，请前往「日志与统计」查看详情',
+                    err,
+                    'warn'
+                );
+            } else {
+                logger.warn(`[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`, err);
             }
             return false;
         }
@@ -471,8 +481,11 @@ export class GalleryViewModel implements Disposable {
             URL.revokeObjectURL(url);
             Toast.success(`成功导出 ${selectedRecords.length} 项备份清单`);
         } catch (err) {
-            logger.error('[GalleryViewModel] 导出备份异常:', err);
-            Toast.error('导出失败，请重试');
+            reportRuntimeError(
+                '[GalleryViewModel] 导出备份异常:',
+                '导出失败，请前往「日志与统计」查看详情',
+                err
+            );
         }
     }
 

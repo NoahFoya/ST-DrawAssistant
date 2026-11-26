@@ -17,6 +17,10 @@ import { providerRegistry } from '../../provider/registry';
 import { ICONS, renderIcon } from '../components/icons';
 import { tooltipService } from '../feedback/tooltip-service';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
+import {
+    logConnectionFailure,
+    showConnectionDiagnosticsModal,
+} from '../feedback/error-feedback';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { logger } from '../../util/logger';
 import { updateService } from '../../pipeline/update-service';
@@ -30,7 +34,7 @@ import {
     type OnboardingGuideModalOptions,
 } from './onboarding-guide-modal';
 import { openChangelogModal } from './changelog-modal';
-import type { ProviderType } from '@types';
+import type { ProviderHealthResult, ProviderStoredConfig, ProviderType } from '@types';
 
 /**
  * 未注册选项卡的占位空视图。
@@ -159,10 +163,13 @@ export class SettingsModal implements Disposable {
     private consecutiveHealthFailures = 0;
     private onVisibilityChangeHandler: (() => void) | null = null;
     private abortController: AbortController | null = null;
+    private updateAbortController: AbortController | null = null;
+    private assetSyncAbortController: AbortController | null = null;
 
     // 全局事件解绑函数与更新状态徽标
     private unlistenSettings: (() => void) | null = null;
     private unlistenUpdate: (() => void) | null = null;
+    private unlistenHealthUpdate: (() => void) | null = null;
     private unlistenViewport: (() => void) | null = null;
     private removeOverlayEntry: (() => void) | null = null;
     private removeBackdropDismiss: (() => void) | null = null;
@@ -170,6 +177,11 @@ export class SettingsModal implements Disposable {
     private activeGuideModal: OnboardingGuideModal | null = null;
     private activeChangelogModal: Disposable | null = null;
     private isPromptingClose = false;
+    private lastHealthErrorDetails: {
+        providerType: ProviderType;
+        url: string;
+        message: string;
+    } | null = null;
 
     constructor(private readonly options: SettingsModalOptions = {}) {
         if (options.defaultTab) {
@@ -181,14 +193,30 @@ export class SettingsModal implements Disposable {
             this.syncVersionBadgeState(Boolean(state.hasUpdate));
         });
 
+        // 监听连接卡片连通性检测与配置变更，保持底栏状态同步
+        this.unlistenHealthUpdate = eventBus.on('provider:health-updated', (payload) => {
+            if (!this.isOpenState || payload.providerType !== this.getActiveProviderType()) {
+                return;
+            }
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
+            }
+            this.applyHealthStatus(payload.providerType, payload.result, { logFailure: false });
+            this.scheduleNextHealthCheck();
+        });
+
         // 监听配置中心变更，响应活跃提供方与主题同步
         this.unlistenSettings = eventBus.on('settings:updated', (data) => {
             if (data.key === 'activeProvider' || data.keys?.includes('activeProvider')) {
                 this.updateProviderLabels();
                 const newActive = this.getActiveProviderType();
+                this.assetSyncAbortController?.abort();
+                this.assetSyncAbortController = new AbortController();
                 void AssetSyncCoordinator.syncProviderAssets(newActive, {
                     isManual: false,
                     silentIfNoChange: true,
+                    signal: this.assetSyncAbortController.signal,
                 });
                 if (this.isOpenState) {
                     this.consecutiveHealthFailures = 0;
@@ -282,8 +310,13 @@ export class SettingsModal implements Disposable {
         this.consecutiveHealthFailures = 0;
         void this.checkActiveProviderHealth();
 
-        // 打开设置面板时自动静默检查一次更新（受 UpdateService 内置冷却时间保护）
-        void updateService.checkUpdate({ force: false });
+        // 打开设置面板时自动静默检查一次更新（绑定弹窗生命周期中止信号，受冷却时间保护）
+        this.updateAbortController?.abort();
+        this.updateAbortController = new AbortController();
+        void updateService.checkUpdate({
+            force: false,
+            signal: this.updateAbortController.signal,
+        });
 
         this.options.onOpen?.();
 
@@ -390,6 +423,14 @@ export class SettingsModal implements Disposable {
         if (this.abortController !== null) {
             this.abortController.abort();
             this.abortController = null;
+        }
+        if (this.updateAbortController !== null) {
+            this.updateAbortController.abort();
+            this.updateAbortController = null;
+        }
+        if (this.assetSyncAbortController !== null) {
+            this.assetSyncAbortController.abort();
+            this.assetSyncAbortController = null;
         }
 
         // 注销全局浮层栈 Escape 响应
@@ -584,6 +625,84 @@ export class SettingsModal implements Disposable {
         }, interval);
     }
 
+    private resolveProviderServerUrl(providerType: ProviderType): string {
+        const provider = providerRegistry.getProvider(providerType) as
+            | { getServerUrl?: () => string }
+            | undefined;
+        if (typeof provider?.getServerUrl === 'function') {
+            return provider.getServerUrl();
+        }
+        return settingsStore.getProviderConfig<ProviderStoredConfig>(providerType)?.serverUrl ?? '';
+    }
+
+    /**
+     * 统一应用并渲染底栏生图服务健康状态。
+     */
+    private applyHealthStatus(
+        providerType: ProviderType,
+        result: ProviderHealthResult | null,
+        options?: { logFailure?: boolean; rawError?: unknown }
+    ): void {
+        if (!this.statusDotElement || !this.statusTextElement) {
+            return;
+        }
+        const providerName = this.getProviderDisplayName(providerType);
+        const statusContainer = this.statusDotElement.parentElement;
+
+        if (result === null) {
+            this.consecutiveHealthFailures = 0;
+            this.lastHealthErrorDetails = null;
+            this.statusDotElement.className = 'da-status-dot da-status-idle';
+            this.statusTextElement.textContent = `${providerName}: 待检测`;
+            this.statusTextElement.title = '点击检测服务连接';
+            statusContainer?.setAttribute('title', '点击检测服务连接');
+            return;
+        }
+
+        if (result.status === 'ok') {
+            this.consecutiveHealthFailures = 0;
+            this.lastHealthErrorDetails = null;
+            this.statusDotElement.className = 'da-status-dot da-status-ok';
+            const latencyStr = typeof result.latencyMs === 'number' ? ` (${result.latencyMs}ms)` : '';
+            this.statusTextElement.textContent = `${providerName}: 在线${latencyStr}`;
+            const tip = `${providerName} 响应正常${latencyStr}`;
+            this.statusTextElement.title = tip;
+            statusContainer?.setAttribute('title', tip);
+            return;
+        }
+
+        const serverUrl = this.resolveProviderServerUrl(providerType);
+        if (result.suggestedUrl) {
+            this.consecutiveHealthFailures++;
+            const msg = result.message || `检测到可用地址: ${result.suggestedUrl}`;
+            this.lastHealthErrorDetails = { providerType, url: serverUrl, message: msg };
+            this.statusDotElement.className = 'da-status-dot da-status-warn';
+            this.statusTextElement.textContent = `${providerName}: 地址需补全`;
+            const tip = '点击查看建议地址与排查指引';
+            this.statusTextElement.title = tip;
+            statusContainer?.setAttribute('title', tip);
+            return;
+        }
+
+        this.consecutiveHealthFailures++;
+        const rawMsg = result.message || '网络连接异常';
+        if (options?.logFailure !== false) {
+            logConnectionFailure({
+                scope: 'SettingsModal',
+                providerType,
+                url: serverUrl,
+                message: rawMsg,
+                rawError: options?.rawError,
+            });
+        }
+        this.lastHealthErrorDetails = { providerType, url: serverUrl, message: rawMsg };
+        this.statusDotElement.className = 'da-status-dot da-status-error';
+        this.statusTextElement.textContent = `${providerName}: 连接失败`;
+        const tip = '点击查看排查指引与重新检测';
+        this.statusTextElement.title = tip;
+        statusContainer?.setAttribute('title', tip);
+    }
+
     /**
      * 执行当前生效生图服务的健康状态检测与往返耗时测试。
      */
@@ -602,8 +721,10 @@ export class SettingsModal implements Disposable {
         const activeProvider = this.getActiveProviderType();
         const providerName = this.getProviderDisplayName(activeProvider);
 
+        this.lastHealthErrorDetails = null;
         this.statusDotElement.className = 'da-status-dot da-status-checking';
         this.statusTextElement.textContent = `${providerName}: 检测中...`;
+        this.statusDotElement.parentElement?.setAttribute('title', '正在检测服务连接...');
 
         try {
             const provider = providerRegistry.getProvider(activeProvider);
@@ -624,20 +745,7 @@ export class SettingsModal implements Disposable {
                 return;
             }
 
-            if (result.status === 'ok') {
-                this.consecutiveHealthFailures = 0;
-                this.statusDotElement.className = 'da-status-dot da-status-ok';
-                const latencyStr = typeof result.latencyMs === 'number' ? ` (${result.latencyMs}ms)` : '';
-                this.statusTextElement.textContent = `${providerName}: 在线${latencyStr}`;
-                this.statusTextElement.title = `${providerName} 响应正常${latencyStr}`;
-            } else {
-                this.consecutiveHealthFailures++;
-                this.statusDotElement.className = 'da-status-dot da-status-error';
-                this.statusTextElement.textContent = `${providerName}: 连接失败`;
-                this.statusTextElement.title = result.message
-                    ? `${providerName}: ${result.message}`
-                    : `${providerName}: 连接失败`;
-            }
+            this.applyHealthStatus(activeProvider, result, { logFailure: true });
         } catch (err: unknown) {
             const isAbort = err instanceof Error && err.name === 'AbortError';
             if (
@@ -650,11 +758,12 @@ export class SettingsModal implements Disposable {
             ) {
                 return;
             }
-            this.consecutiveHealthFailures++;
-            logger.warn(`生图服务 [${activeProvider}] 健康检测异常:`, err);
-            this.statusDotElement.className = 'da-status-dot da-status-error';
-            this.statusTextElement.textContent = `${providerName}: 连接异常`;
-            this.statusTextElement.title = `${providerName}: ${String(err)}`;
+            const msg = err instanceof Error ? err.message : String(err || '网络异常');
+            this.applyHealthStatus(
+                activeProvider,
+                { status: 'error', message: msg },
+                { logFailure: true, rawError: err }
+            );
         } finally {
             if (
                 this.isOpenState &&
@@ -671,6 +780,7 @@ export class SettingsModal implements Disposable {
      */
     public dispose(): void {
         this.close();
+        this.lastHealthErrorDetails = null;
 
         if (this.unlistenSettings) {
             this.unlistenSettings();
@@ -680,6 +790,10 @@ export class SettingsModal implements Disposable {
         if (this.unlistenUpdate) {
             this.unlistenUpdate();
             this.unlistenUpdate = null;
+        }
+        if (this.unlistenHealthUpdate) {
+            this.unlistenHealthUpdate();
+            this.unlistenHealthUpdate = null;
         }
         if (this.unlistenViewport) {
             this.unlistenViewport();
@@ -1071,6 +1185,18 @@ export class SettingsModal implements Disposable {
         serverStatusContainer.appendChild(this.statusTextElement);
 
         const onProbeClick = () => {
+            if (this.lastHealthErrorDetails) {
+                const details = this.lastHealthErrorDetails;
+                void showConnectionDiagnosticsModal({
+                    providerType: details.providerType,
+                    url: details.url,
+                    message: details.message,
+                    onRetry: () => {
+                        void this.checkActiveProviderHealth();
+                    },
+                });
+                return;
+            }
             void this.checkActiveProviderHealth();
         };
         serverStatusContainer.addEventListener('click', onProbeClick);

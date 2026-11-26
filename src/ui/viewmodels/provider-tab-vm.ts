@@ -29,6 +29,7 @@ import {
     formatBatchImportSummary,
     parsePresetBatchJson,
     readFileAsText,
+    resolveBatchImportToastError,
     resolveBatchUniquePresetName,
 } from './preset-batch-io';
 import type { SelectOption, SelectOptGroup } from '../components/select';
@@ -56,6 +57,7 @@ import { eventBus } from '../../util/event-bus';
 import { matchAssetText } from '../../util/asset-matcher';
 import { downloadJsonFile } from '../../util/browser-io';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { logger } from '../../util/logger';
 
@@ -1141,13 +1143,16 @@ export class ProviderTabViewModel implements Disposable {
                 const items = cfg.parseFile(rawText, file);
                 if (items.length === 0) {
                     failedCount += 1;
-                    firstError ??= `${file.name} 未包含有效预设`;
+                    const emptyMsg = `${file.name} 未包含有效预设`;
+                    logger.warn(`[ProviderTabViewModel] 批量导入文件未包含有效${cfg.label}: ${file.name}`);
+                    firstError ??= resolveBatchImportToastError(emptyMsg);
                     continue;
                 }
                 validCandidates.push(...items);
             } catch (err: unknown) {
                 failedCount += 1;
-                firstError ??= err instanceof Error ? err.message : String(err);
+                logger.warn(`[ProviderTabViewModel] 批量导入文件解析失败 (${file.name}):`, err);
+                firstError ??= resolveBatchImportToastError(err);
             }
         }
 
@@ -1331,7 +1336,12 @@ export class ProviderTabViewModel implements Disposable {
                 buildSaveData: (existing) => {
                     const res = parseComfyWorkflowInput(effectiveData!.json);
                     if (!res.ok) {
-                        Toast.show(`工作流保存失败：${res.error}`, { level: 'error' });
+                        reportRuntimeError(
+                            '[ProviderTabViewModel] 工作流保存解析失败:',
+                            '工作流保存失败：配置格式无效，详情见日志',
+                            res.error,
+                            'warn'
+                        );
                         return null;
                     }
                     return { ...existing, workflow: res.workflow };
@@ -1340,7 +1350,12 @@ export class ProviderTabViewModel implements Disposable {
                     if (effectiveData?.json === undefined) return existing;
                     const res = parseComfyWorkflowInput(effectiveData.json);
                     if (!res.ok) {
-                        Toast.show(`工作流导出失败：${res.error}`, { level: 'error' });
+                        reportRuntimeError(
+                            '[ProviderTabViewModel] 工作流导出解析失败:',
+                            '工作流导出失败：配置格式无效，详情见日志',
+                            res.error,
+                            'warn'
+                        );
                         return null;
                     }
                     return { ...existing, workflow: res.workflow };
@@ -1350,7 +1365,12 @@ export class ProviderTabViewModel implements Disposable {
                     if (!effectiveData?.json) return { workflow: {} };
                     const res = parseComfyWorkflowInput(effectiveData.json);
                     if (!res.ok) {
-                        Toast.show(`工作流另存失败：${res.error}`, { level: 'error' });
+                        reportRuntimeError(
+                            '[ProviderTabViewModel] 工作流另存解析失败:',
+                            '工作流另存失败：配置格式无效，详情见日志',
+                            res.error,
+                            'warn'
+                        );
                         return null;
                     }
                     return { workflow: res.workflow };

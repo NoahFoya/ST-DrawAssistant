@@ -13,8 +13,8 @@ import type { Disposable } from '../types';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { openFloatingSurface, type FloatingMenuEntry } from '../layout/floating-sheet';
-import { logger } from '../../util/logger';
 import {
     COMFYUI_VARIABLE_DEFINITIONS,
     isWorkflowFieldEligibleForVariable,
@@ -81,8 +81,12 @@ export class BlueprintModal implements Disposable {
         if (trimmed) {
             const res = parseComfyWorkflowInput(trimmed);
             if (!res.ok) {
-                logger.warn('蓝图编辑器打开失败:', res.error);
-                Toast.error(res.error);
+                reportRuntimeError(
+                    '[BlueprintModal] 蓝图编辑器打开失败:',
+                    '工作流配置解析失败，请前往「日志与统计」查看详情',
+                    res.error,
+                    'warn'
+                );
                 return false;
             }
             parsed = structuredClone(res.workflow) as WorkflowJsonObj;
@@ -341,8 +345,11 @@ export class BlueprintModal implements Disposable {
                 Toast.success('蓝图工作流节点配置已更新！');
                 this.close();
             } catch (err) {
-                logger.error('保存工作流修改失败:', err);
-                Toast.error(`保存失败: ${String(err)}`);
+                reportRuntimeError(
+                    '[BlueprintModal] 保存工作流修改失败:',
+                    '保存工作流修改失败，请前往「日志与统计」查看详情',
+                    err
+                );
             }
         });
 

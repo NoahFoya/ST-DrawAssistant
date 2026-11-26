@@ -15,6 +15,7 @@ import { NumberInput } from '../components/number-input';
 import { SegmentedControl } from '../components/segmented-control';
 import { renderIcon } from '../components/icons';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { providerRegistry } from '../../provider/registry';
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
@@ -707,8 +708,11 @@ export class InpaintModal implements Disposable {
             if (this.isDisposed) {
                 return;
             }
-            logger.error('[InpaintModal] 底图加载失败:', err);
-            Toast.error('底图加载失败，请检查网络或资源地址');
+            reportRuntimeError(
+                '[InpaintModal] 底图加载失败:',
+                '底图加载失败，请检查网络或在「日志与统计」查看详情',
+                err
+            );
             this.handleCancel();
         };
 
@@ -1268,8 +1272,11 @@ export class InpaintModal implements Disposable {
             }
             Toast.success('已提交局部重绘任务');
         } catch (err) {
-            logger.error('[InpaintModal] 导出或提交局部重绘异常:', err);
-            Toast.error('提交局部重绘任务失败');
+            reportRuntimeError(
+                '[InpaintModal] 导出或提交局部重绘异常:',
+                '提交局部重绘任务失败，请前往「日志与统计」查看详情',
+                err
+            );
         } finally {
             this.isSubmitting = false;
             if (this.confirmBtnEl && !this.isDisposed) {

@@ -16,6 +16,7 @@ import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { imageInfoModal } from './image-info-modal';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { logger } from '../../util/logger';
 import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
 
@@ -153,7 +154,12 @@ export class LightboxModal implements Disposable {
                 }
             }
             if (this.isOpenState && this.openGeneration === capturedGen && this.currentIndex === capturedIndex) {
-                Toast.error('图片资源无法载入');
+                reportRuntimeError(
+                    '[LightboxModal] 图片资源载入失败:',
+                    '图片资源无法载入，请前往「日志与统计」查看详情',
+                    currentItem.url,
+                    'warn'
+                );
             }
         });
 
@@ -764,8 +770,11 @@ export class LightboxModal implements Disposable {
             }
             return newFav;
         } catch (err) {
-            logger.error('切换图像标星收藏异常:', err);
-            Toast.error('操作失败，请重试');
+            reportRuntimeError(
+                '[LightboxModal] 切换图像标星收藏异常:',
+                '操作失败，请前往「日志与统计」查看详情',
+                err
+            );
             return false;
         }
     }
@@ -820,8 +829,11 @@ export class LightboxModal implements Disposable {
             a.remove();
             Toast.success('已开始下载原图');
         } catch (err) {
-            logger.error('下载大图异常:', err);
-            Toast.error('下载失败，请检查网络或图片资源');
+            reportRuntimeError(
+                '[LightboxModal] 下载大图异常:',
+                '下载失败，请检查网络或前往「日志与统计」查看详情',
+                err
+            );
         } finally {
             if (tempObjectUrl) {
                 const revokeTarget = tempObjectUrl;

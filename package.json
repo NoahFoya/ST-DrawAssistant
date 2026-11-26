@@ -15,6 +15,8 @@
     "test:novelai": "vitest run tests/live/novelai-live.test.ts",
     "test:openai": "vitest run tests/live/openai-live.test.ts",
     "test:all": "vitest run",
+    "verify": "node tests/verify.mjs",
+    "verify:ui": "node tests/ui-playground/verify-headless.mjs",
     "mock:openai": "node tests/helpers/start-mock-server.mjs",
     "preview:ui": "node tests/ui-playground/server.mjs",
     "check-terms": "node tests/check-terms.mjs",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "happy-dom": "^20.12.2",
+    "playwright-core": "^1.65.1",
     "ts-loader": "^9.5.1",
     "typescript": "^5.5.0",
     "vitest": "^4.1.11",

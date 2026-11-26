@@ -809,7 +809,7 @@ export class MessageDecorator implements Disposable {
                 const container = this.activeImageContainers.get(buttonKey);
                 container?.querySelector('.da-floor-image')?.classList.remove('da-floor-image--regenerating');
                 if (eventData.task.error) {
-                    Toast.error(`生图任务失败: ${eventData.task.error}`);
+                    Toast.error('生图任务失败，请点击重试或在「日志与统计」查看详情');
                 }
             } else if (eventData.status === 'cancelled') {
                 const container = this.activeImageContainers.get(buttonKey);
@@ -1230,15 +1230,61 @@ export class MessageDecorator implements Disposable {
 
         const liveTextContainer = liveInfo.mesText;
         if (!slotElement.isConnected || !liveTextContainer.contains(slotElement)) {
+            const liveCtx = window.SillyTavern?.getContext?.();
+            const liveMesText = liveCtx?.chat?.[messageId]?.mes;
+            const extracted =
+                typeof liveMesText === 'string' ? promptPipeline.extractCommands(liveMesText) : [];
+            const commandsForReplace = extracted.length > 0 ? extracted : [cmd];
+            let refreshedSlots!: Map<number, HTMLElement>;
             this.runWithObserverSuppressed(messageId, () => {
-                const refreshedSlots = this.replaceCommandsWithSlots(liveTextContainer, [cmd]);
-                slotElement =
-                    refreshedSlots.get(cmd.instructionIndex) ??
-                    this.resolveSlotElement(messageId, cmd.instructionIndex, liveTextContainer) ??
-                    liveTextContainer;
+                refreshedSlots = this.replaceCommandsWithSlots(liveTextContainer, commandsForReplace);
+            });
+            slotElement = this.ensureCommandSlotElement(
+                messageId,
+                liveTextContainer,
+                refreshedSlots,
+                cmd.instructionIndex
+            );
+            this.runWithObserverSuppressed(messageId, () => {
                 const existingImgContainer = this.activeImageContainers.get(slotKey);
                 if (existingImgContainer) {
                     this.mountToSlot(slotElement, existingImgContainer, 'visual');
+                }
+
+                // 若同一楼层包含多条指令，正文被外部脚本重建时一并回挂前序插槽的图片、骨架屏与交互按钮
+                const hideButtonOnDone = settingsStore.getSettings().ui?.floorButton?.hideOnDone ?? false;
+                for (const [otherIndex, otherSlotEl] of refreshedSlots.entries()) {
+                    if (otherIndex === cmd.instructionIndex) {
+                        continue;
+                    }
+                    const otherSlotKey = this.buildSlotKey(chatId, messageId, swipeId, otherIndex);
+                    const otherTask = generationOrchestrator.getActiveTaskByTarget({
+                        chatId,
+                        messageId,
+                        swipeId,
+                        instructionIndex: otherIndex,
+                    });
+                    const otherImgContainer = this.activeImageContainers.get(otherSlotKey);
+                    if (otherImgContainer) {
+                        this.mountToSlot(otherSlotEl, otherImgContainer, 'visual');
+                        if (otherTask) {
+                            otherImgContainer
+                                .querySelector('.da-floor-image')
+                                ?.classList.add('da-floor-image--regenerating');
+                        }
+                    } else {
+                        const otherSkeleton = this.activeSkeletons.get(otherSlotKey);
+                        if (otherSkeleton) {
+                            this.mountToSlot(otherSlotEl, otherSkeleton, 'visual');
+                        }
+                    }
+
+                    const otherButton = this.activeButtons.get(otherSlotKey);
+                    if (otherButton) {
+                        const shouldHide = Boolean(otherImgContainer && hideButtonOnDone && !otherTask);
+                        otherButton.element.style.display = shouldHide ? 'none' : '';
+                        this.mountToSlot(otherSlotEl, otherButton.element, 'button');
+                    }
                 }
             });
         }
@@ -1337,7 +1383,7 @@ export class MessageDecorator implements Disposable {
                             this.removeSkeleton(messageId, cmd.instructionIndex, chatId, swipeId);
                             const currentSlot = this.resolveSlotElement(messageId, cmd.instructionIndex);
                             currentSlot?.querySelector('.da-floor-image')?.classList.remove('da-floor-image--regenerating');
-                            Toast.error(errMessage);
+                            Toast.error('生图任务提交失败，请前往「日志与统计」查看详情');
                             throw err;
                         }
                     },
@@ -2994,7 +3040,7 @@ export class MessageDecorator implements Disposable {
             logger.error(`[MessageDecorator] 重新生成任务提交失败: ${errMessage}`);
             this.removeSkeleton(target.messageId, target.instructionIndex, target.chatId, swipeId);
             imgEl?.classList.remove('da-floor-image--regenerating');
-            Toast.error(errMessage);
+            Toast.error('重新生成任务提交失败，请前往「日志与统计」查看详情');
             throw err;
         }
     }

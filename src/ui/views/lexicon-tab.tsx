@@ -37,7 +37,9 @@ import {
 } from '../../store/static-lexicon-loader';
 import { lexiconIndexService } from '../../pipeline/lexicon-index-service';
 import { eventBus } from '../../util/event-bus';
+import { logger } from '../../util/logger';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { createPointAnchorRect, openFloatingSurface } from '../layout/floating-sheet';
 import { downloadTextFile } from '../../util/browser-io';
@@ -524,9 +526,11 @@ export class LexiconTabView extends PreactSettingsView {
                     };
                     reader.onerror = () => {
                         if (!this.viewDisposed) {
-                            Toast.show(`读取文件「${f.name}」失败`, {
-                                level: 'error',
-                            });
+                            reportRuntimeError(
+                                `[LexiconTabView] 读取词库文件「${f.name}」失败:`,
+                                '读取词库文件失败，请前往「日志与统计」查看详情',
+                                reader.error
+                            );
                         }
                     };
                     reader.readAsText(f);
@@ -608,11 +612,10 @@ export class LexiconTabView extends PreactSettingsView {
             );
         } catch (err) {
             if (!this.viewDisposed) {
-                Toast.show(
-                    `载入「${pack.displayName}」失败: ${
-                        err instanceof Error ? err.message : String(err)
-                    }`,
-                    { level: 'error' }
+                reportRuntimeError(
+                    `[LexiconTabView] 载入「${pack.displayName}」失败:`,
+                    '载入本地词库失败，请前往「日志与统计」查看详情',
+                    err
                 );
             }
         } finally {
@@ -637,11 +640,10 @@ export class LexiconTabView extends PreactSettingsView {
             }
         } catch (err) {
             if (!this.viewDisposed) {
-                Toast.show(
-                    `卸载「${pack.displayName}」失败: ${
-                        err instanceof Error ? err.message : String(err)
-                    }`,
-                    { level: 'error' }
+                reportRuntimeError(
+                    `[LexiconTabView] 卸载「${pack.displayName}」失败:`,
+                    '卸载本地词库失败，请前往「日志与统计」查看详情',
+                    err
                 );
             }
         } finally {
@@ -673,7 +675,8 @@ export class LexiconTabView extends PreactSettingsView {
                     presetPackId: pack.id,
                 });
                 loadedCount += 1;
-            } catch {
+            } catch (err) {
+                logger.warn(`[LexiconTabView] 批量载入词库分片「${pack.displayName}」失败:`, err);
                 failedCount += 1;
             } finally {
                 this.setPackBusy(pack.id, false);
