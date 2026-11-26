@@ -26,7 +26,9 @@ import { resolvePromptPollingCandidates } from '../../pipeline/prompt-pipeline';
 import type { Disposable } from '../types';
 import {
     AppValidationError,
+    EMPTY_PROVIDER_ASSET_CACHE,
     buildPresetBundlePayload,
+    completeProviderAssetCache,
     normalizePresetNameKey,
     parseComfyWorkflowInput,
     parsePresetBatchJson,
@@ -112,32 +114,6 @@ export interface ProviderTabStateOptions {
 
 function isPlainRecord(val: unknown): val is Record<string, unknown> {
     return Boolean(val && typeof val === 'object' && !Array.isArray(val));
-}
-
-/** 空资产缓存基准对象，用于清空或重置资产（显式将 updatedAt 设为 0，使 deepMerge 覆盖前一次同步时间戳） */
-const EMPTY_ASSET_CACHE: ProviderAssetCache = Object.freeze({
-    checkpoints: [],
-    unets: [],
-    vaes: [],
-    clips: [],
-    loras: [],
-    samplers: [],
-    schedulers: [],
-    updatedAt: 0,
-});
-
-/** 补全资产缓存字段，确保数组不为 undefined 且时间戳显式归零 */
-function completeAssetCache(cache?: ProviderAssetCache): ProviderAssetCache {
-    return {
-        checkpoints: cache?.checkpoints ? [...cache.checkpoints] : [],
-        unets: cache?.unets ? [...cache.unets] : [],
-        vaes: cache?.vaes ? [...cache.vaes] : [],
-        clips: cache?.clips ? [...cache.clips] : [],
-        loras: cache?.loras ? [...cache.loras] : [],
-        samplers: cache?.samplers ? [...cache.samplers] : [],
-        schedulers: cache?.schedulers ? [...cache.schedulers] : [],
-        updatedAt: cache?.updatedAt ?? 0,
-    };
 }
 
 export class ProviderTabState implements Disposable {
@@ -794,7 +770,7 @@ export class ProviderTabState implements Disposable {
         const urlChanged = data.serverUrl !== prevUrl;
         if (urlChanged && this.supportsAssetSync) {
             this.cancelInFlightAssetSync();
-            patch.assetCache = EMPTY_ASSET_CACHE;
+            patch.assetCache = EMPTY_PROVIDER_ASSET_CACHE;
         }
         settingsStore.setProviderConfig(this.provider, patch);
 
@@ -819,34 +795,25 @@ export class ProviderTabState implements Disposable {
         }
         this.cancelInFlightAssetSync();
 
-        const cfg = this.readProviderStoreConfig();
-        const next = cfg.serviceProfiles?.[nextId];
-        const fixedUrl = this.options.serviceProfiles?.fixedUrls?.[nextId];
-        const defaultUrl = this.options.serviceProfiles?.defaultUrls?.[nextId];
-        const nextUrl = fixedUrl ?? (next?.serverUrl || defaultUrl) ?? '';
-        const nextApiKey = next?.apiKey ?? '';
-
-        settingsStore.setProviderConfig(this.provider, {
-            serviceId: nextId,
-            serverUrl: nextUrl,
-            apiKey: nextApiKey,
-            assetCache: completeAssetCache(next?.assetCache),
-            serviceProfiles: {
-                [prevId]: {
-                    serverUrl: cfg.serverUrl ?? '',
-                    apiKey: cfg.apiKey ?? '',
-                    assetCache: completeAssetCache(cfg.assetCache),
-                },
-            },
+        const res = settingsStore.switchProviderService(this.provider, nextId, {
+            defaultServiceId: prevId,
+            fixedUrls: this.options.serviceProfiles?.fixedUrls,
+            defaultUrls: this.options.serviceProfiles?.defaultUrls,
         });
+        if (!res.switched) {
+            return;
+        }
 
+        const nextCache = completeProviderAssetCache(
+            this.readProviderStoreConfig().serviceProfiles?.[nextId]?.assetCache ?? res.nextAssetCache
+        );
         this.connectionData.value = {
-            serverUrl: nextUrl,
-            apiKey: nextApiKey,
+            serverUrl: res.nextUrl,
+            apiKey: res.nextApiKey,
             activePresetId: nextId,
         };
         if (this.supportsAssetSync) {
-            this.loadAssetSignals(next?.assetCache);
+            this.loadAssetSignals(nextCache);
             this.scheduleAssetSync(0);
         }
     }
@@ -1570,6 +1537,13 @@ export class ProviderTabState implements Disposable {
             this.unlistenSettings = eventBus.on('settings:updated', (payload) => {
                 const freshCfg = this.readProviderStoreConfig();
                 this.connectionData.value = this.buildConnectionData(freshCfg);
+                if (
+                    !this.activeAssetSyncAbort &&
+                    this.supportsAssetSync &&
+                    payload?.key === `providers.${this.provider}`
+                ) {
+                    this.loadAssetSignals(freshCfg.assetCache);
+                }
 
                 const freshActiveId = freshCfg.activeDrawingPresetId || '';
                 if (

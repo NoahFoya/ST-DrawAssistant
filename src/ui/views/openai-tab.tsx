@@ -26,8 +26,12 @@ import { CustomBodyJsonCard } from './cloud-tab-helpers';
 import {
     DEFAULT_ASPECT_RATIOS,
     GPT_IMAGE_ASPECT_RATIOS,
+    OPENAI_API_BASE,
     OPENAI_ASPECT_RATIOS,
     OPENAI_MODEL_OPTIONS,
+    OPENAI_OFFICIAL_SERVICE_ID,
+    getProviderServiceProfileRules,
+    getProviderServiceProfiles,
     isSiliconFlowService,
     resolveOpenAIModelCapabilities,
 } from '../../domain';
@@ -61,19 +65,7 @@ const OPENAI_STYLE_OPTIONS = [
     { label: 'natural (写实)', value: 'natural' },
 ];
 
-const OPENAI_PROVIDER_PRESETS: ProviderPreset[] = [
-    {
-        id: 'openai-official',
-        label: 'OpenAI 官方',
-        defaultUrl: 'https://api.openai.com/v1',
-    },
-    {
-        id: 'siliconflow',
-        label: 'SiliconFlow 硅基流动',
-        defaultUrl: 'https://api.siliconflow.cn/v1',
-    },
-    { id: 'custom', label: '自定义服务', defaultUrl: '' },
-];
+const OPENAI_PROVIDER_PRESETS: ProviderPreset[] = [...getProviderServiceProfiles('openai')];
 
 const GPT_IMAGE_QUALITY_FIELD: FieldSchema<DrawingPresetData> = {
     key: 'quality',
@@ -306,14 +298,13 @@ export function OpenAITab(props: {
 export function createOpenAITabView() {
     let customBodyJson: CustomBodyJsonController | null = null;
 
+    const openaiRules = getProviderServiceProfileRules('openai');
     const vm = new ProviderTabState({
         provider: 'openai',
-        defaultServerUrl: 'https://api.openai.com/v1',
-        defaultServiceId: 'openai-official',
+        defaultServerUrl: OPENAI_API_BASE,
+        defaultServiceId: OPENAI_OFFICIAL_SERVICE_ID,
         serviceProfiles: {
-            defaultUrls: Object.fromEntries(
-                OPENAI_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [p.id, p.defaultUrl])
-            ),
+            defaultUrls: { ...(openaiRules?.defaultUrls || {}) },
         },
         idPrefix: 'openai_',
         promptMessageForNew: '请输入新生图参数预设名称:',

@@ -30,6 +30,10 @@ import type {
     ImageStorageQuality,
 } from '@types';
 import { registerDefaultProviderRuntime } from '../util/provider-runtime';
+import type {
+    ProviderServiceSwitchOverrides,
+    ProviderServiceSwitchResult,
+} from '../domain';
 import { SettingsRepository, type SettingsSignals } from './settings-repository';
 import { PresetRepository, resolveDrawingPresetFromPorts } from './preset-repository';
 import { PresetLifecycle } from './preset-lifecycle';
@@ -308,6 +312,14 @@ export class SettingsStore {
         patch: Partial<T>
     ): void {
         this.repository.setProviderConfig<T>(type, patch);
+    }
+
+    public switchProviderService(
+        type: ProviderType,
+        nextServiceId: string,
+        overrides?: ProviderServiceSwitchOverrides
+    ): ProviderServiceSwitchResult {
+        return this.repository.switchProviderService(type, nextServiceId, overrides);
     }
 
     public getPresets<T = Record<string, unknown>>(

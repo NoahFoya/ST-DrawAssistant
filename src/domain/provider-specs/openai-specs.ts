@@ -2,6 +2,12 @@
  * OpenAI 官方与兼容图像模型目录及能力表。
  */
 
+export const OPENAI_OFFICIAL_SERVICE_ID = 'openai-official';
+export const OPENAI_SILICONFLOW_SERVICE_ID = 'siliconflow';
+export const OPENAI_CUSTOM_SERVICE_ID = 'custom';
+export const OPENAI_API_BASE = 'https://api.openai.com/v1';
+export const SILICONFLOW_API_BASE = 'https://api.siliconflow.cn/v1';
+
 export type OpenAIModelFamily = 'dall-e-3' | 'dall-e-2' | 'gpt-image' | 'compat';
 
 export interface OpenAIModelCapabilities {
@@ -35,7 +41,7 @@ export const OPENAI_MODEL_OPTIONS: Array<{ label: string; value: string }> = [
 
 export function isSiliconFlowService(serviceId?: string, serverUrl?: string): boolean {
     return (
-        serviceId === 'siliconflow' ||
+        serviceId === OPENAI_SILICONFLOW_SERVICE_ID ||
         /(?:^|[./])siliconflow\.cn(?:[:/]|$)/i.test(serverUrl || '')
     );
 }

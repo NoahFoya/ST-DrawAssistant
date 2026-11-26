@@ -18,25 +18,15 @@ import { CustomBodyJsonCard } from './cloud-tab-helpers';
 import {
     GROK_API_BASE,
     GROK_ASPECT_RATIO_OPTIONS,
-    GROK_CUSTOM_SERVICE_ID,
     GROK_MODEL_OPTIONS,
     GROK_OFFICIAL_SERVICE_ID,
     GROK_RESOLUTIONS,
+    getProviderServiceProfileRules,
+    getProviderServiceProfiles,
     resolveGrokModelCapabilities,
 } from '../../domain';
 
-const GROK_PROVIDER_PRESETS: ProviderPreset[] = [
-    {
-        id: GROK_OFFICIAL_SERVICE_ID,
-        label: 'xAI Grok 官方',
-        defaultUrl: GROK_API_BASE,
-    },
-    {
-        id: GROK_CUSTOM_SERVICE_ID,
-        label: '自定义中转 / 代理',
-        defaultUrl: '',
-    },
-];
+const GROK_PROVIDER_PRESETS: ProviderPreset[] = [...getProviderServiceProfiles('grok')];
 
 const ASPECT_RATIO_OPTIONS = GROK_ASPECT_RATIO_OPTIONS;
 
@@ -126,14 +116,13 @@ export function GrokTab(props: {
 export function createGrokTabView() {
     let customBodyJson: CustomBodyJsonController | null = null;
 
+    const grokRules = getProviderServiceProfileRules('grok');
     const vm = new ProviderTabState({
         provider: 'grok',
         defaultServerUrl: GROK_API_BASE,
         defaultServiceId: GROK_OFFICIAL_SERVICE_ID,
         serviceProfiles: {
-            defaultUrls: Object.fromEntries(
-                GROK_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [p.id, p.defaultUrl])
-            ),
+            defaultUrls: { ...(grokRules?.defaultUrls || {}) },
         },
         idPrefix: 'grok_',
         promptMessageForNew: '请输入新生图参数预设名称:',

@@ -23,33 +23,21 @@ import { DimensionPicker, SamplerCard, PresetToolbar } from '../composite';
 import {
     NOVELAI_RANGE_CONFIG,
     NOVELAI_OFFICIAL_SERVICE_ID,
-    NOVELAI_CUSTOM_SERVICE_ID,
     NOVELAI_IMAGE_HOST,
     OFFICIAL_NOVELAI_MODELS,
     NOVELAI_SAMPLER_OPTIONS,
     NOVELAI_SCHEDULER_OPTIONS,
     NOVELAI_SMEA_MODE_OPTIONS,
     formatNovelAIModelLabel,
+    getProviderServiceProfileRules,
+    getProviderServiceProfiles,
     resolveNovelAIModelFamily,
 } from '../../domain';
 import type { ProviderPreset } from '../composite/connection-card';
 import { ProviderTabState } from '../state';
 import { ProviderTabLayout, createProviderTabView } from './provider-tab-layout';
 
-const NOVELAI_PROVIDER_PRESETS: ProviderPreset[] = [
-    {
-        id: NOVELAI_OFFICIAL_SERVICE_ID,
-        label: 'NovelAI 官方',
-        defaultUrl: NOVELAI_IMAGE_HOST,
-        urlEditable: false,
-    },
-    {
-        id: NOVELAI_CUSTOM_SERVICE_ID,
-        label: '自定义服务',
-        defaultUrl: '',
-        urlEditable: true,
-    },
-];
+const NOVELAI_PROVIDER_PRESETS: ProviderPreset[] = [...getProviderServiceProfiles('novelai')];
 
 const CFG_RESCALE_FIELD: FieldSchema<DrawingPresetData> = {
     key: 'cfgRescale',
@@ -215,7 +203,7 @@ export function createNovelAITabView() {
         })),
         serviceProfiles: {
             fixedUrls: {
-                [NOVELAI_OFFICIAL_SERVICE_ID]: NOVELAI_IMAGE_HOST,
+                ...(getProviderServiceProfileRules('novelai')?.fixedUrls || {}),
             },
         },
         defaultSamplers: [...NOVELAI_SAMPLER_OPTIONS],

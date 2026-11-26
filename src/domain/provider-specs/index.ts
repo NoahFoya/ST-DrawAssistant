@@ -5,3 +5,4 @@ export * from './openai-specs';
 export * from './gemini-specs';
 export * from './grok-specs';
 export * from './comfyui-workflow';
+export * from './service-profiles';

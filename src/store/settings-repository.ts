@@ -11,10 +11,16 @@ import type {
     MaterialLibraryConfig,
     PresetSettings,
     PromptInjectionConfig,
+    ProviderStoredConfig,
     ProviderType,
     TransportMode,
 } from '@types';
 import defaultSettingsData from '../../config/default-settings.json';
+import {
+    resolveProviderServiceSwitchPatch,
+    type ProviderServiceSwitchOverrides,
+    type ProviderServiceSwitchResult,
+} from '../domain';
 import { getHostContext } from '../host';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
@@ -323,6 +329,27 @@ export class SettingsRepository {
 
         eventBus.emit('settings:updated', { key: `providers.${type}`, value: updated });
         this.saveToHost(true);
+    }
+
+    /**
+     * 一次性切换提供方的当前服务商档位，自动归档切出档位并恢复目标档位的连接信息与资产缓存。
+     */
+    public switchProviderService(
+        type: ProviderType,
+        nextServiceId: string,
+        overrides?: ProviderServiceSwitchOverrides
+    ): ProviderServiceSwitchResult {
+        const current = this.getProviderConfig<ProviderStoredConfig>(type);
+        const resolved = resolveProviderServiceSwitchPatch(
+            type,
+            current,
+            nextServiceId,
+            overrides
+        );
+        if (resolved.switched) {
+            this.setProviderConfig<ProviderStoredConfig>(type, resolved.patch);
+        }
+        return resolved;
     }
 
     public restoreLocalSecrets(): void {

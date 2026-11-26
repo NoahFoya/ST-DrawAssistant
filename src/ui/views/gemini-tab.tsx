@@ -18,25 +18,15 @@ import { CustomBodyJsonCard } from './cloud-tab-helpers';
 import {
     GEMINI_API_BASE,
     GEMINI_ASPECT_RATIO_OPTIONS,
-    GEMINI_CUSTOM_SERVICE_ID,
     GEMINI_MODEL_OPTIONS,
     GEMINI_OFFICIAL_SERVICE_ID,
     buildGeminiImageSizeOptions,
+    getProviderServiceProfileRules,
+    getProviderServiceProfiles,
     resolveGeminiModelCapabilities,
 } from '../../domain';
 
-const GEMINI_PROVIDER_PRESETS: ProviderPreset[] = [
-    {
-        id: GEMINI_OFFICIAL_SERVICE_ID,
-        label: 'Google Gemini 官方',
-        defaultUrl: GEMINI_API_BASE,
-    },
-    {
-        id: GEMINI_CUSTOM_SERVICE_ID,
-        label: '自定义中转 / 代理',
-        defaultUrl: '',
-    },
-];
+const GEMINI_PROVIDER_PRESETS: ProviderPreset[] = [...getProviderServiceProfiles('gemini')];
 
 const ASPECT_RATIO_OPTIONS = GEMINI_ASPECT_RATIO_OPTIONS;
 
@@ -117,14 +107,13 @@ export function GeminiTab(props: {
 export function createGeminiTabView() {
     let customBodyJson: CustomBodyJsonController | null = null;
 
+    const geminiRules = getProviderServiceProfileRules('gemini');
     const vm = new ProviderTabState({
         provider: 'gemini',
         defaultServerUrl: GEMINI_API_BASE,
         defaultServiceId: GEMINI_OFFICIAL_SERVICE_ID,
         serviceProfiles: {
-            defaultUrls: Object.fromEntries(
-                GEMINI_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [p.id, p.defaultUrl])
-            ),
+            defaultUrls: { ...(geminiRules?.defaultUrls || {}) },
         },
         idPrefix: 'gemini_',
         promptMessageForNew: '请输入新生图参数预设名称:',

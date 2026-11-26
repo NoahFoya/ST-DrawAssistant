@@ -22,6 +22,7 @@ import type {
 } from '@types';
 import type { Disposable } from '../types';
 import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
+import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import { hostRegexService } from '../../pipeline/host-regex-service';
 import { getHostCharacterCards } from '../../host';
@@ -74,6 +75,7 @@ export class QuickPanelState implements Disposable {
     public readonly rawBoundCardsDraft = signal<{ presetId: string; text: string } | null>(null);
 
     private unlistenSettings: (() => void) | null = null;
+    private activeServiceSyncAbort: AbortController | null = null;
 
     public constructor(options: QuickPanelStateOptions = {}) {
         this.unlistenSettings = eventBus.on('settings:updated', () => {
@@ -167,6 +169,41 @@ export class QuickPanelState implements Disposable {
         patch: Partial<ProviderStoredConfig>
     ): void {
         settingsStore.setProviderConfig(provider, patch);
+    }
+
+    /** 中止快捷面板发起的在途服务商资产同步请求 */
+    private cancelInFlightServiceAssetSync(): void {
+        if (this.activeServiceSyncAbort) {
+            this.activeServiceSyncAbort.abort();
+            this.activeServiceSyncAbort = null;
+        }
+    }
+
+    /**
+     * 切换服务商档位，与主设置面板共享 `serviceProfiles` 存档切换并在无缓存模型时触发静默资产同步。
+     */
+    public switchProviderService(provider: ProviderType, nextServiceId: string): void {
+        this.cancelInFlightServiceAssetSync();
+        const res = settingsStore.switchProviderService(provider, nextServiceId);
+        if (!res.switched) {
+            return;
+        }
+        const cache = res.nextAssetCache;
+        const hasModels =
+            Boolean(cache?.checkpoints?.length) || Boolean(cache?.unets?.length);
+        if (!hasModels) {
+            const controller = new AbortController();
+            this.activeServiceSyncAbort = controller;
+            void AssetSyncCoordinator.syncProviderAssets(provider, {
+                isManual: false,
+                silentIfNoChange: true,
+                signal: controller.signal,
+            }).finally(() => {
+                if (this.activeServiceSyncAbort === controller) {
+                    this.activeServiceSyncAbort = null;
+                }
+            });
+        }
     }
 
     public updateActiveDrawingPresetData(
@@ -307,6 +344,7 @@ export class QuickPanelState implements Disposable {
     }
 
     public dispose(): void {
+        this.cancelInFlightServiceAssetSync();
         if (this.unlistenSettings) {
             this.unlistenSettings();
             this.unlistenSettings = null;

@@ -19,9 +19,6 @@ import {
     SDWEBUI_DEFAULT_SAMPLERS,
     SDWEBUI_DEFAULT_SCHEDULERS,
     HIRES_UPSCALER_OPTIONS,
-    NOVELAI_CUSTOM_SERVICE_ID,
-    NOVELAI_IMAGE_HOST,
-    NOVELAI_OFFICIAL_SERVICE_ID,
     NOVELAI_SAMPLER_OPTIONS,
     NOVELAI_SCHEDULER_OPTIONS,
     NOVELAI_SMEA_MODE_OPTIONS,
@@ -31,23 +28,19 @@ import {
     OPENAI_MODEL_OPTIONS,
     isSiliconFlowService,
     resolveOpenAIModelCapabilities,
-    GEMINI_API_BASE,
     GEMINI_ASPECT_RATIO_OPTIONS,
-    GEMINI_CUSTOM_SERVICE_ID,
     GEMINI_MODEL_OPTIONS,
-    GEMINI_OFFICIAL_SERVICE_ID,
     buildGeminiImageSizeOptions,
     resolveGeminiModelCapabilities,
-    GROK_API_BASE,
     GROK_ASPECT_RATIO_OPTIONS,
-    GROK_CUSTOM_SERVICE_ID,
     GROK_MODEL_OPTIONS,
-    GROK_OFFICIAL_SERVICE_ID,
     GROK_RESOLUTIONS,
     resolveGrokModelCapabilities,
     DEFAULT_ASPECT_RATIOS,
     OPENAI_ASPECT_RATIOS,
     GPT_IMAGE_ASPECT_RATIOS,
+    getProviderServiceProfileRules,
+    getProviderServiceProfiles,
 } from '../../../domain';
 import {
     SwitchControl,
@@ -111,6 +104,24 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
         label: sc,
         value: sc,
     }));
+
+    const serviceProfiles = getProviderServiceProfiles(provider);
+    const defaultServiceId = getProviderServiceProfileRules(provider)?.defaultServiceId || '';
+
+    const renderServiceProfileRow = (): VNode | null => {
+        if (serviceProfiles.length === 0) {
+            return null;
+        }
+        return (
+            <QuickFormRow label="服务商">
+                <SelectControl
+                    value={providerCfg.serviceId || defaultServiceId}
+                    options={serviceProfiles.map((p) => ({ label: p.label, value: p.id }))}
+                    onChange={(val) => state.switchProviderService(provider, val)}
+                />
+            </QuickFormRow>
+        );
+    };
 
     return (
         <div className="da-fqp-tab-content" data-tab="provider">
@@ -289,23 +300,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
 
                 {activeDrawingPreset && provider === 'novelai' && (
                     <>
-                        <QuickFormRow label="服务商">
-                            <SelectControl
-                                value={providerCfg.serviceId || NOVELAI_OFFICIAL_SERVICE_ID}
-                                options={[
-                                    { label: 'NovelAI 官方', value: NOVELAI_OFFICIAL_SERVICE_ID },
-                                    { label: '自定义服务', value: NOVELAI_CUSTOM_SERVICE_ID },
-                                ]}
-                                onChange={(val) =>
-                                    state.setProviderConfig(provider, {
-                                        serviceId: val,
-                                        ...(val === NOVELAI_OFFICIAL_SERVICE_ID
-                                            ? { serverUrl: NOVELAI_IMAGE_HOST }
-                                            : {}),
-                                    })
-                                }
-                            />
-                        </QuickFormRow>
+                        {renderServiceProfileRow()}
                         <QuickFormRow label="生图模型">
                             <SelectControl
                                 value={drawingData.baseModel || 'nai-diffusion-4-5-full'}
@@ -342,21 +337,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
 
                 {activeDrawingPreset && provider === 'openai' && (
                     <>
-                        <QuickFormRow label="服务商">
-                            <SelectControl
-                                value={providerCfg.serviceId || 'openai-official'}
-                                options={[
-                                    { label: 'OpenAI 官方', value: 'openai-official' },
-                                    { label: 'SiliconFlow 硅基流动', value: 'siliconflow' },
-                                    { label: '自定义服务', value: 'custom' },
-                                ]}
-                                onChange={(val) =>
-                                    state.setProviderConfig(provider, {
-                                        serviceId: val,
-                                    })
-                                }
-                            />
-                        </QuickFormRow>
+                        {renderServiceProfileRow()}
                         <QuickFormRow label="生图模型">
                             <SelectControl
                                 value={drawingData.baseModel || 'gpt-image-1'}
@@ -378,23 +359,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
 
                 {activeDrawingPreset && provider === 'gemini' && (
                     <>
-                        <QuickFormRow label="服务商">
-                            <SelectControl
-                                value={providerCfg.serviceId || GEMINI_OFFICIAL_SERVICE_ID}
-                                options={[
-                                    { label: 'Google Gemini 官方', value: GEMINI_OFFICIAL_SERVICE_ID },
-                                    { label: '自定义中转 / 代理', value: GEMINI_CUSTOM_SERVICE_ID },
-                                ]}
-                                onChange={(val) =>
-                                    state.setProviderConfig(provider, {
-                                        serviceId: val,
-                                        ...(val === GEMINI_OFFICIAL_SERVICE_ID
-                                            ? { serverUrl: GEMINI_API_BASE }
-                                            : {}),
-                                    })
-                                }
-                            />
-                        </QuickFormRow>
+                        {renderServiceProfileRow()}
                         <QuickFormRow label="生图模型">
                             <SelectControl
                                 value={drawingData.baseModel || 'gemini-2.5-flash-image'}
@@ -416,23 +381,7 @@ export function QuickProviderTab(props: QuickPanelSubViewProps): VNode {
 
                 {activeDrawingPreset && provider === 'grok' && (
                     <>
-                        <QuickFormRow label="服务商">
-                            <SelectControl
-                                value={providerCfg.serviceId || GROK_OFFICIAL_SERVICE_ID}
-                                options={[
-                                    { label: 'xAI Grok 官方', value: GROK_OFFICIAL_SERVICE_ID },
-                                    { label: '自定义中转 / 代理', value: GROK_CUSTOM_SERVICE_ID },
-                                ]}
-                                onChange={(val) =>
-                                    state.setProviderConfig(provider, {
-                                        serviceId: val,
-                                        ...(val === GROK_OFFICIAL_SERVICE_ID
-                                            ? { serverUrl: GROK_API_BASE }
-                                            : {}),
-                                    })
-                                }
-                            />
-                        </QuickFormRow>
+                        {renderServiceProfileRow()}
                         <QuickFormRow label="生图模型">
                             <SelectControl
                                 value={drawingData.baseModel || 'grok-imagine-image'}
