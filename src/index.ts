@@ -596,7 +596,7 @@ export async function initOnce(): Promise<void> {
                     pendingAutoGenReply = null;
                     abortActiveAutoGenWaits();
                     clearPendingEditFallbackTimers();
-                    messageDecorator.clearCurrentButtons();
+                    messageDecorator.clearCurrentButtons({ preserveFloorSlots: true });
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
                     void promptInjector.scheduleSyncToHost();
                 });
@@ -660,7 +660,7 @@ export async function initOnce(): Promise<void> {
                 isManual: false,
                 silentIfNoChange: true,
                 signal: currentSignal,
-            });
+            }).catch(() => undefined);
 
             isInitialized = true;
             logger.info('ST-DrawAssistant 扩展核心生命周期与 UI 系统已就绪');
