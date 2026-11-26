@@ -665,5 +665,3 @@ export class GalleryState implements Disposable {
         this.disposers.length = 0;
     }
 }
-
-export { GalleryState as GalleryViewModel };

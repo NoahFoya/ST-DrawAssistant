@@ -29,11 +29,7 @@ import type {
     PromptInjectionConfig,
     ImageStorageQuality,
 } from '@types';
-import { DEFAULT_TASK_TIMEOUT_MS } from '../config/constants';
-import { normalizePresetNameKey } from '../domain/preset/preset-validation';
 import { registerDefaultProviderRuntime } from '../util/provider-runtime';
-
-export { DEFAULT_TASK_TIMEOUT_MS, normalizePresetNameKey };
 import { SettingsRepository, type SettingsSignals } from './settings-repository';
 import { PresetRepository, resolveDrawingPresetFromPorts } from './preset-repository';
 import { PresetLifecycle } from './preset-lifecycle';
@@ -168,8 +164,6 @@ export interface SavePresetOptions {
     /** 自动加入启用预设时的初始触发模式（默认 `'keyword'`） */
     readonly defaultTriggerMode?: ActivationTriggerMode;
 }
-
-/** 默认单任务超时时间常量的历史兼容导出（真实定义位于 config/constants.ts） */
 
 /** 生图参数预设解析选项 */
 export interface ResolveDrawingPresetOptions {

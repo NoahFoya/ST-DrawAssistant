@@ -16,8 +16,12 @@ import type {
     ResolvedLoraSpec,
 } from '@types';
 import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
-import { type SettingsStore, normalizePresetNameKey, settingsStore } from '../store/settings-store';
-import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../domain';
+import { type SettingsStore, settingsStore } from '../store/settings-store';
+import {
+    normalizePresetNameKey,
+    resolveNovelAIModelFamily,
+    resolveNovelAIModelName,
+} from '../domain';
 import { resolvePromptMacros } from './macro-resolver';
 import { splitTopLevelTags } from './material-definitions';
 import { stripThinkingAndComments } from './prompt-injector';

@@ -13,5 +13,5 @@ export * from './media';
 export * from './composite';
 export * from './framework';
 export * from './layout';
-export * from './viewmodels';
+export * from './state';
 export * from './views';

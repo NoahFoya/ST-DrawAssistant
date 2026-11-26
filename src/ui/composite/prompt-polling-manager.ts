@@ -15,7 +15,7 @@ import { Button } from '../components/button';
 import { Select } from '../components/select';
 import { Switch } from '../components/switch';
 import { renderIcon } from '../components/icons';
-import { normalizePresetNameKey } from '../../store/settings-store';
+import { normalizePresetNameKey } from '../../domain';
 
 export interface PromptPollingManagerOptions {
     /** 当前服务可用的全部提示词预设列表 */

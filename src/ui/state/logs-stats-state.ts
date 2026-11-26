@@ -310,5 +310,3 @@ export class LogsStatsState implements Disposable {
         this.deactivate();
     }
 }
-
-export { LogsStatsState as LogsStatsViewModel };

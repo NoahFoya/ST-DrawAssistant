@@ -7,11 +7,11 @@ import type { VNode } from 'preact';
 import { PROMPT_POLLING_PRESET_ID } from '../../config/constants';
 import { summarizePromptPollingPool } from '../composite/prompt-polling-manager';
 import { openPromptPollingModal } from '../modal/prompt-polling-modal';
-import type { ProviderTabViewModel } from '../viewmodels/provider-tab-vm';
+import type { ProviderTabState } from '../state/provider-tab-state';
 import { BadgeView, ButtonControl, FormFieldView } from './controls';
 
 export interface PromptPollingPanelViewProps {
-    readonly vm: ProviderTabViewModel;
+    readonly vm: ProviderTabState;
 }
 
 /**

@@ -1638,8 +1638,3 @@ export class ProviderTabState implements Disposable {
         this.deactivate();
     }
 }
-
-export {
-    ProviderTabState as ProviderTabViewModel,
-    type ProviderTabStateOptions as ProviderTabViewModelOptions,
-};

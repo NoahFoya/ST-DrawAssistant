@@ -8,12 +8,6 @@
 
 import type { promptPipeline } from '../../pipeline/prompt-pipeline';
 import { settingsStore } from '../../store/settings-store';
-export {
-    buildFloorSlotKey,
-    matchesFloorSlotMessage,
-    matchesFloorSlotScope,
-    validateCurrentPresetAssets,
-} from '../../pipeline/floor-coordinator';
 
 type ExtractedFloorCommand = ReturnType<typeof promptPipeline.extractCommands>[number];
 
