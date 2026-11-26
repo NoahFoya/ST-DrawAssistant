@@ -60,6 +60,7 @@ export class GalleryState implements Disposable {
     private readonly disposers: (() => void)[] = [];
     private renderSeq = 0;
     private refreshSeq = 0;
+    private isActive = false;
     private isDisposed = false;
 
     public constructor(pageSize = DEFAULT_GALLERY_PAGE_SIZE) {
@@ -143,16 +144,78 @@ export class GalleryState implements Disposable {
 
         // 监听全局收藏状态变更并实时同步视图模型列表
         const unsubFav = eventBus.on('image:favorite-changed', ({ imageId, favorited }) => {
+            if (this.isDisposed) return;
             const hasItem = this.allRecords.value.some((r) => r.imageId === imageId);
             if (!hasItem) return;
             this.allRecords.value = this.allRecords.value.map((r) =>
                 r.imageId === imageId ? { ...r, favorited } : r
             );
             void StorageMaintenanceService.computeStorageSummary(this.allRecords.value).then((summary) => {
+                if (this.isDisposed) return;
                 this.storageSummary.value = summary;
             });
         });
-        this.disposers.push(unsubFav);
+
+        // 监听全局图片删除与生成完成事件（楼层删除/后台持久化后同步刷新图库状态）
+        const unsubDeleted = eventBus.on('image:deleted', ({ imageId }) => {
+            if (this.isDisposed) return;
+            this.removeRecordFromMemory(imageId);
+        });
+        const unsubReady = eventBus.on('image:ready', () => {
+            if (this.isDisposed || !this.isActive) return;
+            void this.refresh();
+        });
+
+        this.disposers.push(unsubFav, unsubDeleted, unsubReady);
+    }
+
+    /**
+     * 页签激活时标记为活跃并拉取最新图库记录。
+     */
+    public activate(): void {
+        if (this.isDisposed) return;
+        this.isActive = true;
+        void this.refresh();
+    }
+
+    /**
+     * 页签切出时停用活跃监听，避免后台任务就绪时触发无谓查询。
+     */
+    public deactivate(): void {
+        this.isActive = false;
+    }
+
+    private removeRecordFromMemory(imageId: string): void {
+        const hadRecord = this.allRecords.value.some((r) => r.imageId === imageId);
+        if (hadRecord) {
+            this.allRecords.value = this.allRecords.value.filter((r) => r.imageId !== imageId);
+        }
+
+        if (this.selectedIds.value.has(imageId)) {
+            const nextSel = new Set(this.selectedIds.value);
+            nextSel.delete(imageId);
+            this.selectedIds.value = nextSel;
+        }
+
+        const currentMap = this.pageUrlMap.value;
+        const oldUrl = currentMap.get(imageId);
+        if (oldUrl || currentMap.has(imageId)) {
+            const nextUrlMap = new Map(currentMap);
+            if (oldUrl) {
+                this.revokeUrlForce(oldUrl);
+            }
+            nextUrlMap.delete(imageId);
+            this.pageUrlMap.value = nextUrlMap;
+        }
+
+        if (hadRecord) {
+            void StorageMaintenanceService.computeStorageSummary(this.allRecords.value).then(
+                (summary) => {
+                    if (this.isDisposed) return;
+                    this.storageSummary.value = summary;
+                }
+            );
+        }
     }
 
     /**
@@ -397,6 +460,7 @@ export class GalleryState implements Disposable {
      * @param fav 目标标星状态
      */
     public async toggleFavorite(imageId: string, _fav?: boolean): Promise<void> {
+        if (this.isDisposed) return;
         let changed = false;
         const off = eventBus.on('image:favorite-changed', (payload) => {
             if (payload.imageId === imageId) {
@@ -409,6 +473,7 @@ export class GalleryState implements Disposable {
         } finally {
             off();
         }
+        if (this.isDisposed) return;
         if (!changed) {
             Toast.error('操作失败：本地图像记录不存在');
             return;
@@ -422,31 +487,23 @@ export class GalleryState implements Disposable {
      * @param imageId 目标图片唯一标识符
      */
     public async deleteSingleRecord(imageId: string): Promise<void> {
+        if (this.isDisposed) return;
         const confirmed = await ConfirmDialog.confirm({
             title: '删除图片记录',
             message: '确定要删除此图像记录吗？',
             isDanger: true,
         });
-        if (!confirmed) return;
+        if (!confirmed || this.isDisposed) return;
 
         await imageStorage.deleteImage(imageId);
-        this.allRecords.value = this.allRecords.value.filter((r) => r.imageId !== imageId);
-        const nextSel = new Set(this.selectedIds.value);
-        nextSel.delete(imageId);
-        this.selectedIds.value = nextSel;
+        if (this.isDisposed) return;
+        this.removeRecordFromMemory(imageId);
 
-        const nextUrlMap = new Map(this.pageUrlMap.value);
-        const oldUrl = nextUrlMap.get(imageId);
-        if (oldUrl) {
-            this.revokeUrlForce(oldUrl);
-        }
-        nextUrlMap.delete(imageId);
-        this.pageUrlMap.value = nextUrlMap;
-
-        this.storageSummary.value = await StorageMaintenanceService.computeStorageSummary(
-            this.allRecords.value
-        );
+        const summary = await StorageMaintenanceService.computeStorageSummary(this.allRecords.value);
+        if (this.isDisposed) return;
+        this.storageSummary.value = summary;
         await this.resolveCurrentPageUrls();
+        if (this.isDisposed) return;
         Toast.success('图片已删除');
     }
 
@@ -523,12 +580,13 @@ export class GalleryState implements Disposable {
             message: confirmMsg,
             isDanger: true,
         });
-        if (!confirmed) return;
+        if (!confirmed || this.isDisposed) return;
 
         const nextSel = new Set(sel);
         const nextUrlMap = new Map(this.pageUrlMap.value);
         for (const rec of toDelete) {
             await imageStorage.deleteImage(rec.imageId);
+            if (this.isDisposed) return;
             nextSel.delete(rec.imageId);
             const oldUrl = nextUrlMap.get(rec.imageId);
             if (oldUrl) {
@@ -588,11 +646,13 @@ export class GalleryState implements Disposable {
                     title: r.metadata?.prompt || '未命名作品',
                     favorited: Boolean(r.favorited),
                     onFavoriteChange: (newFav) => {
+                        if (this.isDisposed) return;
                         this.allRecords.value = this.allRecords.value.map((rec) =>
                             rec.imageId === r.imageId ? { ...rec, favorited: newFav } : rec
                         );
                         void StorageMaintenanceService.computeStorageSummary(this.allRecords.value).then(
                             (summary) => {
+                                if (this.isDisposed) return;
                                 this.storageSummary.value = summary;
                             }
                         );
@@ -603,6 +663,8 @@ export class GalleryState implements Disposable {
                 }
             }
         }
+
+        if (this.isDisposed) return;
 
         if (lightboxItems.length > 0) {
             lightboxModal.openItems(lightboxItems, startIndex);
@@ -640,6 +702,7 @@ export class GalleryState implements Disposable {
     }
 
     public dispose(): void {
+        this.isActive = false;
         this.isDisposed = true;
         this.renderSeq += 1;
         this.refreshSeq += 1;

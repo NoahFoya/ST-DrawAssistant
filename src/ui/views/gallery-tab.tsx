@@ -263,7 +263,10 @@ export function createGalleryTabView(): StatefulSettingsView<GalleryState> {
         state: vm,
         render: () => <GalleryTab vm={vm} />,
         onActivate: () => {
-            void vm.refresh();
+            vm.activate();
+        },
+        onDeactivate: () => {
+            vm.deactivate();
         },
         onDispose: () => {
             vm.dispose();

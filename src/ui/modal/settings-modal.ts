@@ -177,6 +177,7 @@ export class SettingsModal implements Disposable {
     private activeGuideModal: OnboardingGuideModal | null = null;
     private activeChangelogModal: Disposable | null = null;
     private isPromptingClose = false;
+    private isPromptingSwitch = false;
     private lastHealthErrorDetails: {
         providerType: ProviderType;
         url: string;
@@ -265,7 +266,7 @@ export class SettingsModal implements Disposable {
     public open(tabId?: string): void {
         if (this.isOpenState) {
             if (tabId && tabId !== this.activeTabId) {
-                this.switchTab(tabId);
+                void this.switchTab(tabId);
             }
             return;
         }
@@ -304,7 +305,10 @@ export class SettingsModal implements Disposable {
 
         // 切换至目标选项卡
         const targetTab = tabId || this.activeTabId || this.options.defaultTab || 'general';
-        this.switchTab(targetTab, { suppressGuide: shouldShowChangelog });
+        void this.switchTab(targetTab, {
+            suppressGuide: shouldShowChangelog,
+            skipUnsavedCheck: true,
+        });
 
         // 启动底栏连通性检测（重置连续失败计数器）
         this.consecutiveHealthFailures = 0;
@@ -329,7 +333,7 @@ export class SettingsModal implements Disposable {
      * 交互式关闭入口：若存在未保存的草稿修改，弹窗询问保存、放弃或继续编辑。
      */
     public async requestClose(): Promise<void> {
-        if (!this.isOpenState || this.isPromptingClose) {
+        if (!this.isOpenState || this.isPromptingClose || this.isPromptingSwitch) {
             return;
         }
 
@@ -362,7 +366,7 @@ export class SettingsModal implements Disposable {
                 isSecondaryDanger: true,
             });
 
-            if (choice === 'cancel') {
+            if (!this.isOpenState || choice === 'cancel') {
                 return;
             }
 
@@ -370,9 +374,12 @@ export class SettingsModal implements Disposable {
                 for (const item of dirtyViews) {
                     if (typeof item.view.saveUnsavedChanges === 'function') {
                         const ok = await item.view.saveUnsavedChanges();
+                        if (!this.isOpenState) {
+                            return;
+                        }
                         if (ok === false) {
                             if (this.activeTabId !== item.tabId) {
-                                this.switchTab(item.tabId);
+                                void this.switchTab(item.tabId, { skipUnsavedCheck: true });
                             }
                             return;
                         }
@@ -407,6 +414,7 @@ export class SettingsModal implements Disposable {
         tooltipService.hide();
         this.isOpenState = false;
         this.isPromptingClose = false;
+        this.isPromptingSwitch = false;
 
         // 停用当前激活视图
         this.safeDeactivate(this.activeView);
@@ -466,16 +474,92 @@ export class SettingsModal implements Disposable {
     }
 
     /**
-     * 切换至指定选项卡。
+     * 切换至指定选项卡；若当前激活页存在未保存修改则先弹窗询问保存或放弃。
      *
      * @param tabId 目标选项卡 ID
+     * @param options 切换控制项（无脏改或 skipUnsavedCheck 时在首个 await 前同步完成 DOM 切换）
+     * @returns 是否已完成切换
      */
-    public switchTab(tabId: string, options?: { readonly suppressGuide?: boolean }): void {
+    public async switchTab(
+        tabId: string,
+        options?: {
+            readonly suppressGuide?: boolean;
+            readonly skipUnsavedCheck?: boolean;
+        }
+    ): Promise<boolean> {
         tooltipService.hide();
         // 若点击的是生图服务主条目，则重定向至当前生效的具体服务
         const resolvedTabId =
             tabId === 'provider-main' ? this.getActiveProviderType() : tabId;
 
+        // 重复点击当前已激活且已挂载的页签时保持幂等
+        if (this.activeView && resolvedTabId === this.activeTabId) {
+            this.updateSidebarHighlight(resolvedTabId);
+            return true;
+        }
+
+        if (!options?.skipUnsavedCheck) {
+            if (this.isPromptingSwitch || this.isPromptingClose) {
+                return false;
+            }
+
+            const currentView = this.activeView as SettingsView | null;
+            const currentTabId = this.activeTabId;
+            if (
+                currentView &&
+                typeof currentView.hasUnsavedChanges === 'function' &&
+                currentView.hasUnsavedChanges()
+            ) {
+                const wasOpenBeforeAwait = this.isOpenState;
+                const currentTitle = currentView.title || this.getTabTitle(currentTabId);
+                this.isPromptingSwitch = true;
+                try {
+                    const choice = await ConfirmDialog.choose({
+                        title: '存在未保存修改',
+                        message: `「${currentTitle}」存在未保存的修改，是否在切换前保存？`,
+                        primaryText: '保存并切换',
+                        secondaryText: '放弃修改',
+                        cancelText: '继续编辑',
+                        isSecondaryDanger: true,
+                    });
+
+                    if (
+                        (wasOpenBeforeAwait && !this.isOpenState) ||
+                        this.activeView !== currentView ||
+                        this.activeTabId !== currentTabId
+                    ) {
+                        return false;
+                    }
+
+                    if (choice === 'cancel') {
+                        return false;
+                    }
+
+                    if (choice === 'primary') {
+                        if (typeof currentView.saveUnsavedChanges === 'function') {
+                            const ok = await currentView.saveUnsavedChanges();
+                            if ((wasOpenBeforeAwait && !this.isOpenState) || ok === false) {
+                                return false;
+                            }
+                        }
+                    } else if (choice === 'secondary') {
+                        currentView.discardUnsavedChanges?.();
+                    }
+                } finally {
+                    this.isPromptingSwitch = false;
+                }
+            }
+        }
+
+        this.performTabTransition(resolvedTabId, options);
+        return true;
+    }
+
+    /** 执行实际的选项卡 DOM 切换、视图生命周期触发与侧栏高亮 */
+    private performTabTransition(
+        resolvedTabId: string,
+        options?: { readonly suppressGuide?: boolean }
+    ): void {
         // 若切换到收纳在服务抽屉中的非当前生效生图服务，自动展开抽屉以高亮对应子项；
         // 在紧凑移动端切换至非生图服务选项卡时则收起二级胶囊栏，释放内容区视高
         const isProviderTab = PROVIDER_DEFINITIONS.some((p) => p.id === resolvedTabId);
@@ -926,7 +1010,7 @@ export class SettingsModal implements Disposable {
         this.syncVersionBadgeState(Boolean(updateService.getState().hasUpdate));
 
         const onVersionClick = () => {
-            this.switchTab('about');
+            void this.switchTab('about');
         };
         versionBadge.addEventListener('click', onVersionClick);
         versionBadge.addEventListener('keydown', (e) => {
@@ -956,20 +1040,32 @@ export class SettingsModal implements Disposable {
         themeSelect.addEventListener('change', async () => {
             const newTheme = themeSelect.value;
             const prevTheme = themeService.getActiveThemeId();
+            if (this.isPromptingClose || this.isPromptingSwitch) {
+                themeSelect.value = prevTheme;
+                return;
+            }
             const themeView = this.viewsCache.get('theme') as SettingsView | undefined;
             if (themeView?.hasUnsavedChanges?.()) {
-                const confirmed = await ConfirmDialog.confirm({
-                    title: '存在未保存的主题修改',
-                    message: '「主题设置」中有未保存的修改。快捷切换主题将放弃这些修改，是否继续？',
-                    confirmText: '放弃并切换',
-                    cancelText: '取消',
-                    isDanger: true,
-                });
-                if (!confirmed) {
-                    themeSelect.value = prevTheme;
-                    return;
+                this.isPromptingSwitch = true;
+                try {
+                    const confirmed = await ConfirmDialog.confirm({
+                        title: '存在未保存的主题修改',
+                        message: '「主题设置」中有未保存的修改。快捷切换主题将放弃这些修改，是否继续？',
+                        confirmText: '放弃并切换',
+                        cancelText: '取消',
+                        isDanger: true,
+                    });
+                    if (!this.isOpenState) {
+                        return;
+                    }
+                    if (!confirmed) {
+                        themeSelect.value = prevTheme;
+                        return;
+                    }
+                    themeView.discardUnsavedChanges?.();
+                } finally {
+                    this.isPromptingSwitch = false;
                 }
-                themeView.discardUnsavedChanges?.();
             }
             settingsStore.set('activeThemePresetId', newTheme);
             themeService.applyCurrentTheme();
@@ -1051,7 +1147,7 @@ export class SettingsModal implements Disposable {
         providerMainBtn.className = 'da-sidebar-provider-trigger';
         providerMainBtn.type = 'button';
         providerMainBtn.addEventListener('click', () => {
-            this.switchTab('provider-main');
+            void this.switchTab('provider-main');
         });
 
         this.providerTitleTextElement = document.createElement('span');
@@ -1089,7 +1185,7 @@ export class SettingsModal implements Disposable {
             if (target && (drawerToggle.contains(target) || providerMainBtn.contains(target))) {
                 return;
             }
-            this.switchTab('provider-main');
+            void this.switchTab('provider-main');
         });
 
         this.providerDrawerToggle = drawerToggle;
@@ -1152,7 +1248,7 @@ export class SettingsModal implements Disposable {
 
         if (!disabled) {
             btn.addEventListener('click', () => {
-                this.switchTab(tabId);
+                void this.switchTab(tabId);
             });
         }
 
@@ -1371,7 +1467,7 @@ export class SettingsModal implements Disposable {
             subItem.appendChild(subLabel);
 
             subItem.addEventListener('click', () => {
-                this.switchTab(prov.id);
+                void this.switchTab(prov.id);
             });
 
             this.providerSubItemsContainer.appendChild(subItem);
@@ -1535,12 +1631,16 @@ export class SettingsModal implements Disposable {
                 this.activeChangelogModal = null;
             },
             onNavigateToPresetManager: () => {
-                this.switchTab('about');
-                requestAnimationFrame(() => {
-                    document
-                        .getElementById('da-about-static-presets')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                });
+                void (async () => {
+                    const switched = await this.switchTab('about');
+                    if (switched && this.isOpenState) {
+                        requestAnimationFrame(() => {
+                            document
+                                .getElementById('da-about-static-presets')
+                                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        });
+                    }
+                })();
             },
         });
     }

@@ -174,23 +174,30 @@ export function LogTerminal(props: LogTerminalProps): VNode {
 
     const terminalRef = useRef<HTMLDivElement | null>(null);
     const isAutoScrollRef = useRef(true);
+    const maxLinesRef = useRef(maxLines);
+    maxLinesRef.current = maxLines;
+    const initialLogsRef = useRef(props.initialLogs);
+    initialLogsRef.current = props.initialLogs;
     const copyTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    useEffect(() => {
+        setEntries((prev) => (prev.length > maxLines ? prev.slice(-maxLines) : prev));
+    }, [maxLines]);
 
     useEffect(() => {
         if (props.autoSubscribeGlobalLogger === false && !props.loggerInstance) {
             return;
         }
         const targetLogger = props.loggerInstance ?? globalLogger;
-        const recentLogs = targetLogger.getRecentLogs(200);
-        if (recentLogs.length > 0) {
-            setEntries((prev) => {
-                const next = [...prev, ...recentLogs.map((e) => normalizeItem(e))];
-                return next.length > maxLines ? next.slice(-maxLines) : next;
-            });
-        }
+        const limit = maxLinesRef.current;
+        const seedInitial = (initialLogsRef.current ?? []).map((entry) => normalizeItem(entry));
+        const recentLogs = targetLogger.getRecentLogs(Math.max(200, limit)).map((e) => normalizeItem(e));
+        const hydrated = [...seedInitial, ...recentLogs];
+        setEntries(hydrated.length > limit ? hydrated.slice(-limit) : hydrated);
 
         const unsubscribe = targetLogger.onLog((entry: LogEntry) => {
             setEntries((prev) => {
+                const cap = maxLinesRef.current;
                 const next = [
                     ...prev,
                     normalizeItem({
@@ -200,14 +207,14 @@ export function LogTerminal(props: LogTerminalProps): VNode {
                         details: entry.details,
                     }),
                 ];
-                return next.length > maxLines ? next.slice(-maxLines) : next;
+                return next.length > cap ? next.slice(-cap) : next;
             });
         });
 
         return () => {
             unsubscribe();
         };
-    }, [props.autoSubscribeGlobalLogger, props.loggerInstance, maxLines]);
+    }, [props.autoSubscribeGlobalLogger, props.loggerInstance]);
 
     useEffect(() => {
         const timers = copyTimersRef.current;
