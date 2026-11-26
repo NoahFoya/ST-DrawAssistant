@@ -102,6 +102,10 @@ export class ConnectionCard implements UIComponent, Disposable {
     private apiKeyFormField?: FormField;
 
     private readonly actionButton: Button;
+    private readonly suggestionBannerEl: HTMLElement;
+    private readonly suggestionTextEl: HTMLElement;
+    private readonly applySuggestionBtn: Button;
+    private pendingSuggestedUrl: string | null = null;
     private isDisposed = false;
 
     private pingAbortController: AbortController | null = null;
@@ -226,6 +230,25 @@ export class ConnectionCard implements UIComponent, Disposable {
         });
         this.card.appendContent(this.urlFormField.element);
         this.disposables.push(this.urlInput, this.urlFormField);
+
+        // 4.2.1 可选：后缀补全建议提示条（检测连接发现补全后可达的地址时展示）
+        this.suggestionBannerEl = document.createElement('div');
+        this.suggestionBannerEl.className = 'da-connection-suggestion da-hidden';
+        this.suggestionTextEl = document.createElement('span');
+        this.suggestionTextEl.className = 'da-connection-suggestion__text';
+        this.applySuggestionBtn = new Button({
+            label: '应用',
+            variant: 'primary',
+            size: 'sm',
+            className: 'da-connection-suggestion__btn',
+            onClick: () => {
+                this.applySuggestedUrl();
+            },
+        });
+        this.suggestionBannerEl.appendChild(this.suggestionTextEl);
+        this.suggestionBannerEl.appendChild(this.applySuggestionBtn.element);
+        this.card.appendContent(this.suggestionBannerEl);
+        this.disposables.push(this.applySuggestionBtn);
 
         // 4.3 可选：接口鉴权凭据 (API Key / Token)
         if (options.showApiKey) {
@@ -370,6 +393,7 @@ export class ConnectionCard implements UIComponent, Disposable {
             if (result.status === 'ok') {
                 const latencyText = result.latencyMs !== undefined ? ` (${result.latencyMs}ms)` : '';
                 this.lastErrorDetails = null;
+                this.hideSuggestionBanner();
                 this.updateBadge('success', `已连接${latencyText}`);
                 if (result.message) {
                     this.statusBadge.element.title = result.message;
@@ -377,9 +401,18 @@ export class ConnectionCard implements UIComponent, Disposable {
                     this.statusBadge.element.removeAttribute('title');
                 }
                 this.statusBadge.element.classList.remove('is-clickable');
+            } else if (result.suggestedUrl) {
+                const rawMsg = result.message || `检测到可用地址: ${result.suggestedUrl}`;
+                this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
+                this.showSuggestionBanner(result.suggestedUrl);
+                this.updateBadge('warning', '地址需补全');
+                this.statusBadge.element.title = rawMsg;
+                this.statusBadge.element.classList.add('is-clickable');
+                Toast.info(`检测到可用地址，点击「应用」补全后即可连接`);
             } else {
                 const rawMsg = result.message || '网络连接异常';
                 this.lastErrorDetails = { url: this.data.serverUrl, message: rawMsg };
+                this.hideSuggestionBanner();
                 this.updateBadge('danger', '连接失败');
                 this.statusBadge.element.title = '点击查看排查指引与详细错误';
                 this.statusBadge.element.classList.add('is-clickable');
@@ -541,8 +574,35 @@ export class ConnectionCard implements UIComponent, Disposable {
         return typeof this.fetchAssetList === 'function';
     }
 
+    private showSuggestionBanner(suggestedUrl: string): void {
+        this.pendingSuggestedUrl = suggestedUrl;
+        this.suggestionTextEl.textContent = `检测到可用地址: ${suggestedUrl}`;
+        this.suggestionTextEl.title = suggestedUrl;
+        this.suggestionBannerEl.classList.remove('da-hidden');
+    }
+
+    private hideSuggestionBanner(): void {
+        this.pendingSuggestedUrl = null;
+        this.suggestionTextEl.textContent = '';
+        this.suggestionTextEl.removeAttribute('title');
+        this.suggestionBannerEl.classList.add('da-hidden');
+    }
+
+    private applySuggestedUrl(): void {
+        const nextUrl = this.pendingSuggestedUrl;
+        if (!nextUrl || this.isDisposed) {
+            return;
+        }
+        this.data.serverUrl = nextUrl;
+        this.urlInput.setValue(nextUrl);
+        this.resetStatusToIdle();
+        this.notifyChange();
+        void this.triggerPingAndSync();
+    }
+
     private resetStatusToIdle(): void {
         this.lastErrorDetails = null;
+        this.hideSuggestionBanner();
         this.statusBadge.element.removeAttribute('title');
         this.statusBadge.element.classList.remove('is-clickable');
         this.updateBadge('neutral', '未检测');

@@ -48,6 +48,14 @@ let lifecycleGeneration = 0;
 let lifecycleAbortController: AbortController | null = null;
 let pendingAutoGenReply: { chatId: string; messageId: number; swipeId: number } | null = null;
 const pendingEditFallbackTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const activeAutoGenControllers = new Set<AbortController>();
+
+function abortActiveAutoGenWaits(): void {
+    for (const controller of activeAutoGenControllers) {
+        controller.abort();
+    }
+    activeAutoGenControllers.clear();
+}
 
 function clearPendingEditFallbackTimers(): void {
     for (const timer of pendingEditFallbackTimers.values()) {
@@ -91,6 +99,7 @@ export async function initOnce(): Promise<void> {
     lifecycleAbortController = new AbortController();
     const currentSignal = lifecycleAbortController.signal;
     pendingAutoGenReply = null;
+    abortActiveAutoGenWaits();
     clearPendingEditFallbackTimers();
 
     initPromise = (async () => {
@@ -149,6 +158,92 @@ export async function initOnce(): Promise<void> {
             const getLiveContext = () => window.SillyTavern?.getContext?.();
             const eventSource = hostContext.eventSource;
             const eventTypes = hostContext.eventTypes || {};
+            let isHostGenerating = false;
+            let activeGenerationEpoch = 0;
+            const generationEndCallbacks = new Set<() => void>();
+
+            const flushGenerationEndCallbacks = () => {
+                if (generationEndCallbacks.size === 0) return;
+                const callbacks = Array.from(generationEndCallbacks);
+                generationEndCallbacks.clear();
+                for (const cb of callbacks) {
+                    cb();
+                }
+            };
+
+            const scheduleStableAutoGenerate = async (params: {
+                messageId: number;
+                initialChatId: string | undefined;
+                initialMessageObj: unknown;
+                initialSwipeId: number;
+                expectedGenEpoch: number;
+            }): Promise<void> => {
+                const { messageId, initialChatId, initialMessageObj, initialSwipeId, expectedGenEpoch } = params;
+                const isContextStillValid = (): boolean => {
+                    if (currentGen !== lifecycleGeneration || activeGenerationEpoch !== expectedGenEpoch) {
+                        return false;
+                    }
+                    const latestCtx = getLiveContext();
+                    const latestSettings = settingsStore.getSettings();
+                    return Boolean(
+                        latestSettings.enabled &&
+                            latestSettings.autoGenerate &&
+                            latestCtx?.chatId === initialChatId &&
+                            latestCtx?.chat?.[messageId] === initialMessageObj &&
+                            (latestCtx?.chat?.[messageId]?.swipe_id ?? 0) === initialSwipeId
+                    );
+                };
+
+                if (!isContextStillValid()) {
+                    messageDecorator.clearPendingAutoGenerate(messageId);
+                    return;
+                }
+
+                const controller = new AbortController();
+                activeAutoGenControllers.add(controller);
+                try {
+                    const stable = await messageDecorator.waitForFloorDomStable(messageId, {
+                        quietMs: 300,
+                        maxWaitMs: 3000,
+                        signal: controller.signal,
+                        isAborted: () => controller.signal.aborted || !isContextStillValid(),
+                        isHostGenerating: () => isHostGenerating,
+                        waitForGenerationEnd: () =>
+                            new Promise<void>((resolve) => {
+                                if (!isHostGenerating || controller.signal.aborted) {
+                                    resolve();
+                                    return;
+                                }
+                                const onDone = () => {
+                                    controller.signal.removeEventListener('abort', onDone);
+                                    generationEndCallbacks.delete(onDone);
+                                    resolve();
+                                };
+                                generationEndCallbacks.add(onDone);
+                                controller.signal.addEventListener('abort', onDone, { once: true });
+                            }),
+                    });
+
+                    if (!stable || controller.signal.aborted || !isContextStillValid()) {
+                        messageDecorator.clearPendingAutoGenerate(messageId);
+                        return;
+                    }
+
+                    const messageDom = document.querySelector(`#chat .mes[mesid="${messageId}"]`);
+                    if (messageDom && messageDom.querySelectorAll('.da-floor-action-btn').length === 0) {
+                        await messageDecorator.decorateMessage(messageId);
+                        if (controller.signal.aborted || !isContextStillValid()) {
+                            messageDecorator.clearPendingAutoGenerate(messageId);
+                            return;
+                        }
+                    }
+
+                    void promptInjector.scheduleSyncToHost();
+                    messageDecorator.triggerReadyButtons(messageId);
+                } finally {
+                    activeAutoGenControllers.delete(controller);
+                }
+            };
 
             if (eventSource) {
                 const parseHostIndex = (val: unknown): number | undefined => {
@@ -210,10 +305,20 @@ export async function initOnce(): Promise<void> {
                     };
                 });
 
-                // 生成被用户主动中止时立即作废未消费的自动生图票据
+                // 生成被用户主动中止或结束时更新宿主生成状态，并在中止时作废未消费票据与等待队列
                 const genStoppedEvent = eventTypes.GENERATION_STOPPED || 'generation_stopped';
                 bindHostEvent(genStoppedEvent, () => {
+                    isHostGenerating = false;
                     pendingAutoGenReply = null;
+                    abortActiveAutoGenWaits();
+                    messageDecorator.clearPendingAutoGenerate();
+                    flushGenerationEndCallbacks();
+                });
+
+                const genEndedEvent = eventTypes.GENERATION_ENDED || 'generation_ended';
+                bindHostEvent(genEndedEvent, () => {
+                    isHostGenerating = false;
+                    flushGenerationEndCallbacks();
                 });
 
                 // 监听角色消息渲染完成 (CHARACTER_MESSAGE_RENDERED) - 延后一拍待同步/微任务后处理脚本完成 DOM 刷新后，再执行楼层装饰与自动生图调度
@@ -289,23 +394,19 @@ export async function initOnce(): Promise<void> {
 
                     void promptInjector.scheduleSyncToHost();
 
+                    const expectedGenEpoch = activeGenerationEpoch;
                     let modalOpened = false;
                     if (type !== 'first_message') {
                         modalOpened = messageDecorator.inspectAndShowArchiveModal(messageId, {
                             onFinished: () => {
-                                const latestCtx = getLiveContext();
-                                const latestSettings = settingsStore.getSettings();
-                                if (
-                                    canAutoGenerate &&
-                                    latestSettings.enabled &&
-                                    latestSettings.autoGenerate &&
-                                    currentGen === lifecycleGeneration &&
-                                    latestCtx?.chatId === initialChatId &&
-                                    latestCtx?.chat?.[messageId] === initialMessageObj &&
-                                    (latestCtx?.chat?.[messageId]?.swipe_id ?? 0) === initialSwipeId
-                                ) {
-                                    void promptInjector.scheduleSyncToHost();
-                                    messageDecorator.triggerReadyButtons(messageId);
+                                if (canAutoGenerate) {
+                                    void scheduleStableAutoGenerate({
+                                        messageId,
+                                        initialChatId,
+                                        initialMessageObj,
+                                        initialSwipeId,
+                                        expectedGenEpoch,
+                                    });
                                 } else {
                                     messageDecorator.clearPendingAutoGenerate(messageId);
                                 }
@@ -313,10 +414,16 @@ export async function initOnce(): Promise<void> {
                         });
                     }
 
-                    // 若未弹出新档案确认窗且允许自动生图，再次确认当前开关未被关闭后再触发就绪按钮
+                    // 若未弹出新档案确认窗且允许自动生图，等待宿主生成结束与正文 DOM 稳定后再触发就绪按钮
                     const latestSettings = settingsStore.getSettings();
                     if (!modalOpened && canAutoGenerate && latestSettings.enabled && latestSettings.autoGenerate) {
-                        messageDecorator.triggerReadyButtons(messageId);
+                        await scheduleStableAutoGenerate({
+                            messageId,
+                            initialChatId,
+                            initialMessageObj,
+                            initialSwipeId,
+                            expectedGenEpoch,
+                        });
                     } else if (!modalOpened) {
                         messageDecorator.clearPendingAutoGenerate(messageId);
                     }
@@ -344,6 +451,9 @@ export async function initOnce(): Promise<void> {
                 const genStartedEvent =
                     eventTypes.GENERATION_STARTED || 'generation_started';
                 bindHostEvent(genStartedEvent, () => {
+                    abortActiveAutoGenWaits();
+                    isHostGenerating = true;
+                    activeGenerationEpoch += 1;
                     promptInjector.syncToHost();
                 });
 
@@ -358,6 +468,7 @@ export async function initOnce(): Promise<void> {
                 const swipeEvent = eventTypes.MESSAGE_SWIPED || 'message_swiped';
                 bindHostEvent(swipeEvent, (data: unknown) => {
                     pendingAutoGenReply = null;
+                    abortActiveAutoGenWaits();
                     const messageId = extractMessageId(data);
                     if (messageId === undefined) {
                         return;
@@ -457,6 +568,7 @@ export async function initOnce(): Promise<void> {
                 const msgDeletedEvent = eventTypes.MESSAGE_DELETED || 'message_deleted';
                 bindHostEvent(msgDeletedEvent, (data: unknown) => {
                     pendingAutoGenReply = null;
+                    abortActiveAutoGenWaits();
                     clearPendingEditFallbackTimers();
                     const liveCtx = getLiveContext();
                     const chatId = liveCtx?.chatId || 'default_chat';
@@ -482,6 +594,7 @@ export async function initOnce(): Promise<void> {
                 const chatChangedEvent = eventTypes.CHAT_CHANGED || 'chat_id_changed';
                 bindHostEvent(chatChangedEvent, () => {
                     pendingAutoGenReply = null;
+                    abortActiveAutoGenWaits();
                     clearPendingEditFallbackTimers();
                     messageDecorator.clearCurrentButtons();
                     messageDecorator.scheduleScanAllMessages(MESSAGE_SCAN_DEBOUNCE_DELAY_MS);
@@ -520,6 +633,7 @@ export async function initOnce(): Promise<void> {
                 const nowEnabled = updatedSettings.enabled;
                 if (!nowEnabled || !updatedSettings.autoGenerate) {
                     pendingAutoGenReply = null;
+                    abortActiveAutoGenWaits();
                 }
                 if (nowEnabled !== lastPluginEnabled) {
                     lastPluginEnabled = nowEnabled;
@@ -589,6 +703,7 @@ export function disposeExtension(): void {
     lifecycleAbortController?.abort();
     lifecycleAbortController = null;
     pendingAutoGenReply = null;
+    abortActiveAutoGenWaits();
     clearPendingEditFallbackTimers();
     initPromise = null;
 

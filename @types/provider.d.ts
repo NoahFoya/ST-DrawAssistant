@@ -117,6 +117,8 @@ export interface ProviderHealthResult {
     readonly latencyMs?: number;
     /** 状态说明或版本信息 */
     readonly message?: string;
+    /** 当原地址不可达但补全标准后缀后可达时，提供待用户确认应用的建议完整地址 */
+    readonly suggestedUrl?: string;
 }
 
 /** 绘图服务提供方本地持久化资产缓存模型 */

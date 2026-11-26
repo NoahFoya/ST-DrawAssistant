@@ -39,6 +39,7 @@ interface GeneralFormModel {
     hideButtonOnDone: boolean;
     imageActionPanelEnabled: boolean;
     lightboxEnabled: boolean;
+    lightboxHistoryLimit: number;
     cleanPrompt: boolean;
     cleanPromptPunctuation: boolean;
     normalizeChinesePunctuation: boolean;
@@ -187,6 +188,20 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'switch',
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
+            },
+            {
+                key: 'lightboxHistoryLimit',
+                label: '历史对比保留上限',
+                type: 'number',
+                width: 'w-120',
+                min: 0,
+                max: 50,
+                step: 1,
+                unit: '张',
+                visibleWhen: (m) => m.lightboxEnabled,
+                disabledWhen: (m) => !m.enabled || !m.lightboxEnabled,
+                tooltip:
+                    '楼层图片重新生成或局部重绘后，在放大预览中按时间顺序保留的可翻页对比历史数量（默认 10 张；设为 0 则不保留）。超出上限仅移除关联，不会删除图库中的原图。',
             },
             {
                 key: 'cleanPrompt',
@@ -385,6 +400,7 @@ export class GeneralTabView extends PreactSettingsView {
             hideButtonOnDone: floorButton?.hideOnDone ?? false,
             imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
             lightboxEnabled: lightbox?.enabled ?? true,
+            lightboxHistoryLimit: Math.max(0, Math.min(50, Math.round(Number(lightbox?.historyLimit ?? 10)))),
             cleanPrompt: s.cleanPrompt ?? true,
             cleanPromptPunctuation: s.cleanPromptPunctuation ?? true,
             normalizeChinesePunctuation: Boolean(s.normalizeChinesePunctuation),
@@ -449,13 +465,28 @@ export class GeneralTabView extends PreactSettingsView {
                     },
                 });
                 break;
-            case 'lightboxEnabled':
+            case 'lightboxEnabled': {
+                const current = this.bridge.get('ui')?.lightbox;
                 this.bridge.updateUi({
                     lightbox: {
+                        ...(current || {}),
                         enabled: Boolean(val),
                     },
                 });
                 break;
+            }
+            case 'lightboxHistoryLimit': {
+                const parsed = Number(val);
+                const clamped = Number.isFinite(parsed) ? Math.max(0, Math.min(50, Math.round(parsed))) : 10;
+                const current = this.bridge.get('ui')?.lightbox;
+                this.bridge.updateUi({
+                    lightbox: {
+                        enabled: current?.enabled ?? true,
+                        historyLimit: clamped,
+                    },
+                });
+                break;
+            }
             case 'cleanPrompt':
                 this.bridge.set('cleanPrompt', Boolean(val));
                 break;

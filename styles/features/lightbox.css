@@ -83,7 +83,9 @@
 .da-lightbox-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
     pointer-events: auto;
 }
 
@@ -97,12 +99,31 @@
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--da-border-color);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.da-lightbox-history-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78em;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.18);
+    color: var(--da-color-warn, #fbbf24);
+    border: 1px solid rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.42);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .da-lightbox-title {
     font-size: 0.9em;
     color: var(--da-text-secondary);
     max-width: 400px;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -113,6 +134,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
     pointer-events: auto;
 }
 
@@ -218,6 +240,34 @@
     stroke: currentColor;
 }
 
+.da-lightbox-btn--pill {
+    width: auto;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 18px;
+    gap: 5px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.da-lightbox-btn--set-current {
+    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.24);
+    border: 1px solid rgba(var(--da-accent-rgb, 99, 102, 241), 0.48);
+    color: var(--da-text-primary);
+}
+
+.da-lightbox-btn--set-current:hover {
+    background: rgba(var(--da-accent-rgb, 99, 102, 241), 0.38);
+    color: var(--da-text-primary);
+    transform: none;
+}
+
+.da-lightbox-btn--set-current:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .da-lightbox-divider {
     width: 1px;
     height: 18px;
@@ -237,9 +287,31 @@
 
 /* 7. 移动端与小屏适配 */
 @media (max-width: 640px) {
+    .da-lightbox-header {
+        top: max(10px, env(safe-area-inset-top, 0px));
+        left: max(10px, env(safe-area-inset-left, 0px));
+        right: max(10px, env(safe-area-inset-right, 0px));
+        flex-wrap: wrap;
+        gap: 6px 8px;
+    }
+
+    .da-lightbox-info {
+        flex: 1 1 100%;
+        min-width: 0;
+        gap: 6px;
+    }
+
     .da-lightbox-title {
-        max-width: 44vw;
+        max-width: none;
+        flex: 1 1 0;
         font-size: 0.84em;
+    }
+
+    .da-lightbox-header-actions {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 4px;
     }
 
     .da-lightbox-nav {
@@ -263,5 +335,12 @@
     .da-lightbox-btn {
         width: 32px;
         height: 32px;
+    }
+
+    .da-lightbox-btn--pill {
+        width: auto;
+        height: 30px;
+        padding: 0 10px;
+        font-size: 0.76em;
     }
 }

@@ -206,6 +206,29 @@
     max-width: none;
 }
 
+.da-connection-suggestion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 16px;
+    background: rgba(var(--da-color-warn-rgb, 245, 158, 11), 0.1);
+    border-bottom: 1px solid var(--da-separator);
+}
+
+.da-connection-suggestion__text {
+    font-size: var(--da-font-size-xs, 0.78rem);
+    color: var(--da-color-warn, #f59e0b);
+    word-break: break-all;
+    line-height: 1.4;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.da-connection-suggestion__btn {
+    flex-shrink: 0;
+}
+
 /* 6. 卡片内语义小标题分割栏 (.da-section-banner) */
 .da-section-banner {
     display: flex;

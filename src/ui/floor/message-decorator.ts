@@ -22,7 +22,7 @@ import { generationOrchestrator, type SubmitTaskOptions } from '../../pipeline/g
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { urlPool } from '../../store/url-pool';
-import { lightboxModal } from '../media/lightbox-modal';
+import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
 import { imageInfoModal } from '../media/image-info-modal';
 import { imageActionPanel } from '../media/image-action-panel';
 import { renderIcon } from '../components/icons';
@@ -111,6 +111,7 @@ export class MessageDecorator implements Disposable {
     private readonly selfMutatingDepths = new Map<number, number>();
     private pendingAutoGenerateTarget: PendingAutoGenerateTarget | null = null;
     private readonly pendingArchiveConfirmations = new Set<number>();
+    private readonly stabilityWaitMessages = new Set<number>();
 
     public constructor() {
         this.bind();
@@ -544,9 +545,170 @@ export class MessageDecorator implements Disposable {
             settings.enabled &&
             settings.autoGenerate &&
             !this.pendingArchiveConfirmations.has(observed.messageId) &&
+            !this.stabilityWaitMessages.has(observed.messageId) &&
             this.matchesPendingAutoGenerate(observed.chatId, observed.messageId, observed.swipeId)
         ) {
             this.triggerReadyButtons(observed.messageId);
+        }
+    }
+
+    /**
+     * 判断 DOM 变更节点是否仅属于插件自身挂载的楼层元素。
+     */
+    private isPluginFloorDomNode(node: Node): boolean {
+        if (!(node instanceof Element)) {
+            return false;
+        }
+        for (const cls of node.classList) {
+            if (cls.startsWith('da-floor-')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 判断 MutationRecord 是否全部由插件自身楼层节点引发（自身修饰不应延长稳定等待）。
+     */
+    private isPluginOnlyMutation(mutation: MutationRecord): boolean {
+        if (mutation.target instanceof Element && this.isPluginFloorDomNode(mutation.target)) {
+            return true;
+        }
+        if (mutation.type === 'childList') {
+            const changed = [...Array.from(mutation.addedNodes), ...Array.from(mutation.removedNodes)];
+            return changed.length > 0 && changed.every((n) => this.isPluginFloorDomNode(n));
+        }
+        return false;
+    }
+
+    /**
+     * 自适应等待目标 AI 楼层完成宿主生成并达到正文 DOM 稳定状态。
+     *
+     * @remarks
+     * 避免流式生成尾段或外部美化脚本二次改写正文 DOM 期间过早触发自动点击：
+     * 1. 若宿主仍处于生成中，先等待生成结束信号（受总超时上限约束）；
+     * 2. 监听目标楼层节点变更，要求连续 quietMs（默认 300ms）无外部正文变动，最长等待 maxWaitMs（默认 3000ms）；
+     * 3. 若未找到楼层 DOM 且宿主未处于生成中，立即返回以兼容无 DOM 测试环境。
+     */
+    public async waitForFloorDomStable(
+        messageId: number,
+        options?: {
+            quietMs?: number;
+            maxWaitMs?: number;
+            signal?: AbortSignal;
+            isAborted?: () => boolean;
+            isHostGenerating?: () => boolean;
+            waitForGenerationEnd?: () => Promise<void>;
+        }
+    ): Promise<boolean> {
+        const quietMs = options?.quietMs ?? 300;
+        const maxWaitMs = options?.maxWaitMs ?? 3000;
+        const isAborted = (): boolean =>
+            Boolean(this.isDisposed || options?.signal?.aborted || options?.isAborted?.());
+
+        if (isAborted()) {
+            return false;
+        }
+
+        const hasDom = typeof document !== 'undefined' && typeof MutationObserver !== 'undefined';
+        const messageDom = hasDom
+            ? (document.querySelector(`#chat .mes[mesid="${messageId}"]`) as HTMLElement | null)
+            : null;
+        const hostGenerating = Boolean(options?.isHostGenerating?.());
+
+        if (!messageDom && !hostGenerating) {
+            return !isAborted();
+        }
+
+        this.stabilityWaitMessages.add(messageId);
+        try {
+            return await new Promise<boolean>((resolve) => {
+                let settled = false;
+                let generationFinished = !hostGenerating;
+                let quietTimer: ReturnType<typeof setTimeout> | null = null;
+                let maxTimer: ReturnType<typeof setTimeout> | null = null;
+                let observer: MutationObserver | null = null;
+
+                const cleanup = () => {
+                    if (quietTimer !== null) {
+                        clearTimeout(quietTimer);
+                        quietTimer = null;
+                    }
+                    if (maxTimer !== null) {
+                        clearTimeout(maxTimer);
+                        maxTimer = null;
+                    }
+                    observer?.disconnect();
+                    observer = null;
+                    options?.signal?.removeEventListener('abort', onAbort);
+                };
+
+                const finish = (ok: boolean) => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    resolve(ok && !isAborted());
+                };
+
+                const onAbort = () => finish(false);
+
+                const armQuietTimer = () => {
+                    if (settled || !generationFinished) {
+                        return;
+                    }
+                    if (quietTimer !== null) {
+                        clearTimeout(quietTimer);
+                    }
+                    if (!messageDom) {
+                        finish(true);
+                        return;
+                    }
+                    quietTimer = setTimeout(() => {
+                        quietTimer = null;
+                        finish(true);
+                    }, quietMs);
+                };
+
+                options?.signal?.addEventListener('abort', onAbort, { once: true });
+
+                maxTimer = setTimeout(() => {
+                    maxTimer = null;
+                    finish(true);
+                }, maxWaitMs);
+
+                if (messageDom) {
+                    observer = new MutationObserver((mutations) => {
+                        if (settled || (this.selfMutatingDepths.get(messageId) ?? 0) > 0) {
+                            return;
+                        }
+                        const hasExternalMutation = mutations.some((m) => !this.isPluginOnlyMutation(m));
+                        if (hasExternalMutation) {
+                            armQuietTimer();
+                        }
+                    });
+                    observer.observe(messageDom, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true,
+                    });
+                }
+
+                if (!generationFinished && options?.waitForGenerationEnd) {
+                    void options.waitForGenerationEnd().then(() => {
+                        if (settled) return;
+                        if (isAborted()) {
+                            finish(false);
+                            return;
+                        }
+                        generationFinished = true;
+                        armQuietTimer();
+                    });
+                } else {
+                    armQuietTimer();
+                }
+            });
+        } finally {
+            this.stabilityWaitMessages.delete(messageId);
         }
     }
 
@@ -1005,8 +1167,7 @@ export class MessageDecorator implements Disposable {
         messageId: number,
         targetContainer: HTMLElement,
         slotsMap: Map<number, HTMLElement>,
-        instructionIndex: number,
-        shouldAppendFallback: boolean
+        instructionIndex: number
     ): HTMLElement {
         const directSlot = slotsMap.get(instructionIndex);
         if (directSlot) {
@@ -1014,21 +1175,19 @@ export class MessageDecorator implements Disposable {
         }
 
         let resolved!: HTMLElement;
-        // 结构补偿挂载：若 Markdown 语法导致指令未能成功替换，按已有图片或活跃任务记录在末尾追加容器
+        // 结构补偿挂载：若正则美化整段替换或 Markdown 语法导致指令文本未留在正文中，统一在正文末尾追加独立容器
         this.runWithObserverSuppressed(messageId, () => {
             const existing = targetContainer.querySelector(
                 `.da-floor-slot[data-instruction-index="${instructionIndex}"]`
             ) as HTMLElement | null;
             if (existing) {
                 resolved = existing;
-            } else if (shouldAppendFallback) {
+            } else {
                 const appended = document.createElement('div');
                 appended.className = 'da-floor-slot da-floor-slot--appended';
                 appended.setAttribute('data-instruction-index', String(instructionIndex));
                 targetContainer.appendChild(appended);
                 resolved = appended;
-            } else {
-                resolved = targetContainer;
             }
             slotsMap.set(instructionIndex, resolved);
         });
@@ -1302,8 +1461,7 @@ export class MessageDecorator implements Disposable {
                 messageId,
                 targetContainer,
                 slotsMap,
-                cmd.instructionIndex,
-                hasSlotEntry || Boolean(activeTask)
+                cmd.instructionIndex
             );
 
             let hasRenderedImage = false;
@@ -1815,23 +1973,7 @@ export class MessageDecorator implements Disposable {
                     return;
                 }
                 e.stopPropagation();
-                lightboxModal.open(slotState.displayUrl, {
-                    imageId: slotState.imageId,
-                    favorited: slotState.favorited,
-                    onFavoriteChange: (newFav) => {
-                        slotState.syncFavUI(newFav);
-                    },
-                    onEdit: isImageActionPanelEnabled
-                        ? () => {
-                              void this.openImageActionPanel(
-                                  messageId,
-                                  instructionIndex,
-                                  slotState.imageId,
-                                  slotState.displayUrl
-                              );
-                          }
-                        : undefined,
-                });
+                void this.openSlotLightbox(slotState, messageId, instructionIndex, isImageActionPanelEnabled);
             });
         }
 
@@ -1968,24 +2110,13 @@ export class MessageDecorator implements Disposable {
                 metadata: currentRecord?.metadata,
                 imageUrl: slotState.displayUrl,
                 onPreview: (url) => {
-                    lightboxModal.open(url, {
-                        imageId: slotState.imageId,
-                        favorited: slotState.favorited,
-                        onFavoriteChange: (newFav) => {
-                            slotState.favorited = newFav;
-                            slotState.syncFavUI(newFav);
-                        },
-                        onEdit: isImageActionPanelEnabled
-                            ? () => {
-                                  void this.openImageActionPanel(
-                                      messageId,
-                                      instructionIndex,
-                                      slotState.imageId,
-                                      slotState.displayUrl
-                                  );
-                              }
-                            : undefined,
-                    });
+                    void this.openSlotLightbox(
+                        slotState,
+                        messageId,
+                        instructionIndex,
+                        isImageActionPanelEnabled,
+                        url
+                    );
                 },
                 onEdit: isImageActionPanelEnabled
                     ? () => {
@@ -2091,6 +2222,122 @@ export class MessageDecorator implements Disposable {
         }
 
         logger.info(`已成功在楼层 #${messageId} 挂载生成图像 (序号: ${instructionIndex})`);
+    }
+
+    /**
+     * 打开楼层插槽大图预览，按「历史…当前」顺序装载同一插槽的历史图片支持翻页对比与设为当前。
+     */
+    private async openSlotLightbox(
+        slotState: FloorSlotState,
+        messageId: number,
+        instructionIndex: number,
+        isImageActionPanelEnabled: boolean,
+        currentOverrideUrl?: string
+    ): Promise<void> {
+        const currentUrl = currentOverrideUrl || slotState.displayUrl;
+        const currentImageId = slotState.imageId;
+        const slotEntry = sessionLifecycle.getSlotEntry(slotState.target);
+        const historyIds = Array.isArray(slotEntry?.history) ? slotEntry.history : [];
+
+        const items: LightboxItem[] = [];
+        const missingHistoryIds = new Set<string>();
+
+        for (const histId of historyIds) {
+            if (!histId || histId === currentImageId) {
+                continue;
+            }
+            let histUrl = urlPool.getUrl(histId);
+            const record = await imageStorage.getImageRecord(histId).catch(() => undefined);
+            if (!histUrl) {
+                const blob = await imageStorage.getImageBlob(histId).catch(() => undefined);
+                if (blob && blob.size > 0) {
+                    histUrl = urlPool.createUrl(histId, blob);
+                } else if (record?.remotePath) {
+                    histUrl = record.remotePath;
+                }
+            }
+            if (!histUrl) {
+                missingHistoryIds.add(histId);
+                continue;
+            }
+            const resolvedHistUrl = histUrl;
+            items.push({
+                url: resolvedHistUrl,
+                imageId: histId,
+                favorited: Boolean(record?.favorited),
+                title: record?.metadata?.rawPrompt || record?.metadata?.prompt,
+                isHistory: true,
+                onEdit: isImageActionPanelEnabled
+                    ? () => {
+                          void this.openImageActionPanel(
+                              messageId,
+                              instructionIndex,
+                              histId,
+                              resolvedHistUrl
+                          );
+                      }
+                    : undefined,
+                onSetCurrent: async () => {
+                    const switched = await sessionLifecycle.switchSlotToHistoryImage(
+                        slotState.target,
+                        histId,
+                        { imageUrl: record?.remotePath }
+                    );
+                    if (!switched) {
+                        Toast.error('切换失败：目标楼层或分支已变更');
+                        return false;
+                    }
+                    await this.renderImageToFloor(
+                        messageId,
+                        switched.imageId,
+                        instructionIndex,
+                        switched.imageUrl,
+                        slotState.target.chatId,
+                        slotState.target.swipeId
+                    );
+                    Toast.success('已将该历史图片设为当前楼层图片');
+                    if (lightboxModal.isOpen()) {
+                        await this.openSlotLightbox(
+                            slotState,
+                            messageId,
+                            instructionIndex,
+                            isImageActionPanelEnabled
+                        );
+                    }
+                    return true;
+                },
+            });
+        }
+
+        if (missingHistoryIds.size > 0) {
+            void sessionLifecycle.pruneSlotHistory(slotState.target, missingHistoryIds);
+        }
+
+        const currentRecord = currentImageId
+            ? await imageStorage.getImageRecord(currentImageId).catch(() => undefined)
+            : undefined;
+        items.push({
+            url: currentUrl,
+            imageId: currentImageId,
+            favorited: slotState.favorited,
+            title: currentRecord?.metadata?.rawPrompt || currentRecord?.metadata?.prompt,
+            isHistory: false,
+            onFavoriteChange: (newFav) => {
+                slotState.syncFavUI(newFav);
+            },
+            onEdit: isImageActionPanelEnabled
+                ? () => {
+                      void this.openImageActionPanel(
+                          messageId,
+                          instructionIndex,
+                          slotState.imageId,
+                          slotState.displayUrl
+                      );
+                  }
+                : undefined,
+        });
+
+        lightboxModal.openItems(items, items.length - 1);
     }
 
     /**
@@ -2398,6 +2645,7 @@ export class MessageDecorator implements Disposable {
      * @param imageId 被删除的图像全局唯一标识符
      */
     public handleImageDeleted(imageId: string): void {
+        sessionLifecycle.pruneHistoryImageIdFromChat?.(imageId);
         const affectedEntries: Array<[string, FloorSlotState]> = [];
         for (const [key, slotState] of this.activeSlotStates.entries()) {
             if (slotState.imageId === imageId) {
@@ -2482,6 +2730,7 @@ export class MessageDecorator implements Disposable {
         this.disconnectLatestFloorObserver();
         this.clearPendingAutoGenerate();
         this.pendingArchiveConfirmations.clear();
+        this.stabilityWaitMessages.clear();
         this.selfMutatingDepths.clear();
         this.messageGenerations.clear();
         this.inFlightDecorations.clear();

@@ -236,6 +236,7 @@ export interface DrawAssistantSettings {
         };
         lightbox: {
             enabled: boolean;
+            historyLimit?: number;
         };
         floorButton: {
             hideOnDone: boolean;
