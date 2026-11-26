@@ -20,6 +20,7 @@ import { providerRegistry } from '../../provider/registry';
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
+import { browserStorage } from '../../util/storage-port';
 
 /** 局部重绘偏好配置缓存键名 */
 const INPAINT_PREFS_KEY = 'st_da_inpaint_prefs';
@@ -71,30 +72,14 @@ export interface InpaintModalOptions {
  * 读取本地存储中的局部重绘参数偏好。
  */
 function loadPreferences(): InpaintPreferences {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            const raw = window.localStorage.getItem(INPAINT_PREFS_KEY);
-            if (raw) {
-                return JSON.parse(raw) as InpaintPreferences;
-            }
-        }
-    } catch {
-        // 读取异常时使用默认基准值
-    }
-    return {};
+    return browserStorage.getJson<InpaintPreferences>(INPAINT_PREFS_KEY) ?? {};
 }
 
 /**
  * 保存局部重绘参数偏好至本地存储。
  */
 function savePreferences(prefs: InpaintPreferences): void {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem(INPAINT_PREFS_KEY, JSON.stringify(prefs));
-        }
-    } catch {
-        // 存储受限或异常时忽略
-    }
+    browserStorage.setJson(INPAINT_PREFS_KEY, prefs);
 }
 
 /**

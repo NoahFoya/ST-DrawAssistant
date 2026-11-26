@@ -30,12 +30,14 @@ import {
 import type { PresetActionType } from '../composite';
 import { PromptEntriesManager } from '../composite/prompt-entries-manager';
 import {
-    formatBatchImportSummary,
+    AppValidationError,
+    normalizePresetNameKey,
     parsePresetBatchJson,
-    readFileAsText,
-    resolveBatchImportToastError,
-    resolveBatchUniquePresetName,
-} from '../viewmodels/preset-batch-io';
+    stripJsonExtension,
+    collectKeywordRegexErrors,
+} from '../../domain';
+import { readFileAsText } from '../../util/browser-io';
+import { presetTransferService } from '../../pipeline/preset-transfer-service';
 import {
     PromptsPreviewPanel,
     PROMPT_CHANNELS,
@@ -44,19 +46,16 @@ import {
 import {
     PresetController,
     resolveUniquePresetName,
-    stripJsonExtension,
 } from '../viewmodels';
-import { normalizePresetNameKey, settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
+import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
 import { getCachedOfficialPresets } from '../../store/static-preset-loader';
 import { eventBus } from '../../util/event-bus';
-import { logger } from '../../util/logger';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import {
     detectPromptImportFormat,
     normalizePluginPromptChannelPreset,
     parseStWorldbookEntries,
 } from '../../pipeline/worldbook-converter';
-import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
 import {
     openWorldbookImportModal,
     openPromptExportFormatModal,
@@ -523,75 +522,61 @@ export class PromptsTabView extends PreactSettingsView {
             }
         }
 
-        if (controller.isDirty.value) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: '导入预设确认',
-                message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
-            });
-            if (!confirmed || this.isDisposedView) return;
-        }
-
         const existingNames = new Set(
             controller.fetchPresetsList().map((p) => normalizePresetNameKey(p.name))
         );
         const fallbackName = `导入${meta.label}预设`;
-        let importedCount = 0;
-        let failedCount = 0;
-        let firstError: string | undefined;
-        let lastId = '';
 
-        for (const file of files) {
-            try {
-                const rawText = await readFileAsText(file);
-                if (this.isDisposedView) return;
+        const result = await presetTransferService.importFiles<PromptChannelPresetData>({
+            files,
+            existingNames,
+            fallbackName,
+            logTag: '[PromptsTabView]',
+            isDisposed: () => this.isDisposedView,
+            isDirty: () => controller.isDirty.value,
+            confirmOverwrite: () =>
+                ConfirmDialog.confirm({
+                    title: '导入预设确认',
+                    message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
+                }),
+            parseFile: (rawText, file) => {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
-                if (skippedErrors.length > 0) {
-                    failedCount += skippedErrors.length;
-                    logger.warn(`[PromptsTabView] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
-                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
-                }
+                const valid: Array<{ name: string; data: PromptChannelPresetData }> = [];
+                const channelErrors: AppValidationError[] = [...skippedErrors];
                 for (const candidate of candidates) {
                     const normalized = normalizePluginPromptChannelPreset(
                         { name: candidate.name, data: candidate.data },
                         candidate.name
                     );
                     if (!normalized) {
-                        failedCount += 1;
-                        logger.warn(`[PromptsTabView] 批量导入预设缺少 entries 数组 (${file.name}): ${candidate.name}`);
-                        firstError ??= resolveBatchImportToastError('预设缺少 entries 数组');
+                        channelErrors.push(new AppValidationError('预设缺少 entries 数组'));
                         continue;
                     }
-                    const finalName = resolveBatchUniquePresetName(
-                        normalized.name,
-                        existingNames,
-                        fallbackName
-                    );
-                    const newId = `${channelId}_${Date.now()}_${Math.random()
-                        .toString(36)
-                        .slice(2, 6)}`;
-                    settingsStore.savePreset(meta.category, {
-                        id: newId,
-                        name: finalName,
-                        data: { entries: structuredClone(normalized.data.entries) },
-                        updatedAt: Date.now(),
-                    });
-                    lastId = newId;
-                    importedCount += 1;
+                    valid.push({ name: normalized.name, data: normalized.data });
                 }
-            } catch (err: unknown) {
-                failedCount += 1;
-                logger.warn(`[PromptsTabView] 批量导入文件读取/解析失败 (${file.name}):`, err);
-                firstError ??= resolveBatchImportToastError(err);
-            }
-        }
+                return { candidates: valid, skippedErrors: channelErrors };
+            },
+            commitItem: (candidate, finalName) => {
+                const newId = `${channelId}_${Date.now()}_${Math.random()
+                    .toString(36)
+                    .slice(2, 6)}`;
+                settingsStore.savePreset(meta.category, {
+                    id: newId,
+                    name: finalName,
+                    data: { entries: structuredClone(candidate.data.entries) },
+                    updatedAt: Date.now(),
+                });
+                return { id: newId, name: finalName };
+            },
+        });
 
-        if (lastId) {
-            controller.applyActivePreset(lastId);
+        if (result.aborted) return;
+
+        if (result.lastImportedId) {
+            controller.applyActivePreset(result.lastImportedId);
             void promptInjector.scheduleSyncToHost();
         }
-        Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
-            level: importedCount === 0 ? 'error' : failedCount > 0 ? 'warning' : 'success',
-        });
+        Toast.show(result.summaryMessage, { level: result.toastLevel });
     }
 
     private updateChannelEntries(

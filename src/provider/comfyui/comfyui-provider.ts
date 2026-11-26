@@ -34,8 +34,8 @@ import {
 } from './lora-graph-injector';
 import {
     applyTextLoraTagsToPrompt,
-    sanitizeLoraPrompts,
-} from '../../pipeline/lora-utils';
+    sanitizeLoraPromptsPure,
+} from '../../domain';
 import { resolveAssetMatch } from '../../util/asset-matcher';
 import {
     imageInputToBlob,
@@ -597,7 +597,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                 );
             }
 
-            const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
+            const workflowPreset = this._settingsStore.getPreset?.<WorkflowPresetData>(
                 'workflows',
                 resolvedWorkflowId
             );
@@ -635,12 +635,13 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         const requestedLoras = request.loras ?? [];
 
         if (isWeilinWorkflow) {
-            const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+            const sanitized = sanitizeLoraPromptsPure(request.prompt, request.negativePrompt, {
                 allowLora: false,
                 allowWlr: true,
                 sourceLabel: 'ComfyUI WeiLin 工作流',
                 guidance: 'WeiLin 节点仅支持正向提示词中的 <wlr:...> 语法，已剥离不兼容的 <lora:...> 或负向 LoRA 标签',
             });
+            this.reportLoraWarning(sanitized.warningMessage, 'ComfyUI WeiLin 工作流', sanitized.strippedTags);
             return {
                 isWeilinWorkflow: true,
                 promptText: applyTextLoraTagsToPrompt(sanitized.positivePrompt, requestedLoras, 'wlr'),
@@ -657,12 +658,13 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             };
         }
 
-        const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+        const sanitized = sanitizeLoraPromptsPure(request.prompt, request.negativePrompt, {
             allowLora: false,
             allowWlr: false,
             sourceLabel: 'ComfyUI 原生工作流',
             guidance: '原生工作流通过 LoRA 模型管理自动拼接节点，正文中手写的 <lora:...>/<wlr:...> 不生效',
         });
+        this.reportLoraWarning(sanitized.warningMessage, 'ComfyUI 原生工作流', sanitized.strippedTags);
 
         let resolvedNativeLoras: ResolvedLoraSpec[] = [];
         let supportsLoraLoader = true;

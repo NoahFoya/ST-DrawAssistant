@@ -14,6 +14,7 @@ import { settingsStore } from '../store/settings-store';
 import { imageStorage } from '../store/image-storage';
 import { blobToBase64 } from '../util/http-client';
 import { logger } from '../util/logger';
+import { getHostContext } from '../host';
 
 /** 服务端存储同步检查与执行结果 */
 export interface ServerStorageSyncResult {
@@ -41,11 +42,7 @@ export class ServerStorageService {
     private readonly _inFlightUploads = new Map<string, InFlightUploadEntry>();
 
     public constructor(options?: { getContext?: () => HostUploadContextLike | undefined }) {
-        this._getContext =
-            options?.getContext ??
-            (() => {
-                return window.SillyTavern?.getContext?.();
-            });
+        this._getContext = options?.getContext ?? (() => getHostContext());
     }
 
     /**

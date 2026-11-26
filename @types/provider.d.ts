@@ -7,6 +7,7 @@
  */
 
 import type { ImageGenerationMetadata } from './st/chat';
+import type { PresetCategory, PresetItem } from './preset';
 
 /** 绘图服务提供方类型标识 */
 export type ProviderType = 'sdwebui' | 'comfyui' | 'novelai' | 'openai' | 'gemini' | 'grok';
@@ -186,6 +187,11 @@ export interface GenerationProvider {
     readonly supportsHealthPolling?: boolean;
 
     /**
+     * 获取当前生效的服务端基础地址 (可选能力)
+     */
+    getServerUrl?(): string;
+
+    /**
      * 执行图像生成
      * @param request 通用绘图请求
      * @param signal 中止信号
@@ -264,4 +270,35 @@ export interface ProviderRegistry {
     registerProvider(provider: GenerationProvider): void;
     /** 获取所有已就绪的绘图服务提供方标识列表 */
     getAvailableTypes(): ProviderType[];
+}
+
+/**
+ * 提供方运行期配置、预设与告警通知抽象端口。
+ *
+ * @remarks
+ * 使 `src/provider` 仅依赖类型抽象而非具体 `SettingsStore` 实现。
+ */
+export interface ProviderRuntimePort {
+    get?(key: 'transport'): TransportMode;
+    get?(key: 'taskTimeoutMs'): number | undefined;
+    getProviderConfig<T = ProviderStoredConfig>(providerType: ProviderType): T | undefined;
+    getPreset?<T = Record<string, unknown>>(
+        category: PresetCategory,
+        id: string,
+        providerType?: string
+    ): PresetItem<T> | undefined;
+    resolveDrawingPreset?<T = Record<string, unknown>>(
+        providerType: ProviderType,
+        options?: {
+            explicitPresetId?: string;
+            throwOnMissingActive?: boolean;
+        }
+    ): { presetId?: string; preset?: T };
+    onWarning?(
+        message: string,
+        context?: {
+            readonly source?: string;
+            readonly strippedTags?: readonly string[];
+        }
+    ): void;
 }

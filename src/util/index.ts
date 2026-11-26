@@ -11,3 +11,5 @@ export * from './http-client';
 export * from './image-compress';
 export * from './asset-matcher';
 export * from './browser-io';
+export * from './storage-port';
+export * from './provider-runtime';

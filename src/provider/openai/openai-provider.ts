@@ -37,7 +37,7 @@ import {
 import {
     isSiliconFlowService,
     resolveOpenAIModelCapabilities,
-} from './openai-models';
+} from '../../domain';
 
 /**
  * 将 width/height 组装为 OpenAI images/generations 的 size 字符串。

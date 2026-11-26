@@ -208,3 +208,16 @@ export function attachImageDragFile(
         imgEl.removeEventListener('dragstart', onDragStart);
     };
 }
+
+/**
+ * 以 UTF-8 编码读取浏览器 `File` 对象文本内容。
+ */
+export function readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(reader.error || new Error(`读取文件失败: ${file.name}`));
+        reader.readAsText(file, 'utf-8');
+    });
+}
+

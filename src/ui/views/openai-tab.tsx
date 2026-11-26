@@ -21,19 +21,17 @@ import {
     PresetToolbarView,
     PromptPollingPanelView,
 } from '../framework';
-import {
-    DEFAULT_ASPECT_RATIOS,
-    GPT_IMAGE_ASPECT_RATIOS,
-    OPENAI_ASPECT_RATIOS,
-} from '../composite';
 import { ProviderTabViewModel } from '../viewmodels';
 import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
 import {
+    DEFAULT_ASPECT_RATIOS,
+    GPT_IMAGE_ASPECT_RATIOS,
+    OPENAI_ASPECT_RATIOS,
     OPENAI_MODEL_OPTIONS,
     isSiliconFlowService,
     resolveOpenAIModelCapabilities,
-} from '../../provider/openai/openai-models';
+} from '../../domain';
 
 const OPENAI_QUALITY_OPTIONS = [
     { label: 'standard (标准)', value: 'standard' },

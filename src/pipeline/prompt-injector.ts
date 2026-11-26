@@ -32,16 +32,21 @@ import {
 import {
     CHARACTER_PART_DEFS,
     OUTFIT_PART_DEFS,
-    hasValidUniqueRegexFlags,
     normalizeCharacterData,
     normalizeOutfitData,
-    parseKeywordRegexLiteral,
     resolveActiveMaterialExtractionConfig,
     resolveActiveMaterialFormatConfig,
+} from './material-definitions';
+import {
+    escapeRegExpLiteral,
+    matchKeywordToken,
     splitCommaKeywordTokens,
     splitKeywordTokens,
-} from './material-definitions';
+} from '../domain/prompt/keyword-matcher';
+import { getHostContext } from '../host';
 import { logger } from '../util/logger';
+
+export { matchKeywordToken };
 
 /** 宿主扩展提示词注入键名前缀 */
 const PROMPT_EXTENSION_KEY_PREFIX = 'st_da_inj_';
@@ -237,10 +242,6 @@ export function stripStTemplateComments(text: string): string {
 const MAIN_THINKING_TAG_PATTERN = 'think|thinking|thought';
 const DRAW_THINKING_TAG_PATTERN = 'imagethink|designthink';
 
-function escapeRegExpLiteral(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 export interface StripThinkingOptions {
     /** 当前生图指令起始标签（默认 `image###`） */
     readonly promptStartTag?: string;
@@ -380,48 +381,7 @@ function stripAiMarkupForKeywordScan(
 }
 
 const PURE_ASCII_TOKEN_RE = /^[A-Za-z0-9_.\s'-]+$/;
-
-export function matchKeywordToken(
-    rawToken: string,
-    rawText: string,
-    lowerText: string,
-    caseSensitive: boolean,
-    matchWholeWords = false
-): boolean {
-    const token = rawToken.trim();
-    if (!token) {
-        return false;
-    }
-
-    const regexMatch = parseKeywordRegexLiteral(token);
-    if (regexMatch && hasValidUniqueRegexFlags(regexMatch.flags)) {
-        // 剥离 g/y 有状态标志，确保多次 .test() 结果幂等
-        let flags = regexMatch.flags.replace(/[gy]/g, '');
-        if (!caseSensitive && !flags.includes('i')) {
-            flags += 'i';
-        }
-        try {
-            const re = new RegExp(regexMatch.pattern, flags);
-            return re.test(rawText);
-        } catch {
-            // 非法正则字面量直接返回不匹配，禁止隐性退化为字面文本匹配
-            return false;
-        }
-    }
-
-    if (matchWholeWords && PURE_ASCII_TOKEN_RE.test(token)) {
-        const boundaryFlags = caseSensitive ? '' : 'i';
-        const boundaryRe = new RegExp(
-            `(?:^|[^A-Za-z0-9_])${escapeRegExpLiteral(token)}(?=$|[^A-Za-z0-9_])`,
-            boundaryFlags
-        );
-        return boundaryRe.test(rawText);
-    }
-
-    return caseSensitive
-        ? rawText.includes(token)
-        : lowerText.includes(token.toLowerCase());
-}
+void PURE_ASCII_TOKEN_RE;
 
 /**
  * 提取最近 N 条聊天消息的净化拼接文本（自动剥离插件与 AI 思考标签）。
@@ -643,8 +603,7 @@ export function computeMaterialRenderedLists(options: {
     readonly activeCardKey?: string;
     readonly formatOverride?: Partial<MaterialFormatConfig>;
 } = {}): MaterialRenderedListsResult {
-    const hostContext =
-        typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+    const hostContext = getHostContext();
     const settings = options.settings ?? settingsStore.getSettings();
     const chatMessages =
         options.chatMessages ??
@@ -979,8 +938,7 @@ export function buildPromptBucketKey(
 export function computePromptInjections(
     options: ComputePromptInjectionsOptions = {}
 ): PromptComputedResult {
-    const hostContext =
-        typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+    const hostContext = getHostContext();
     const settings = options.settings ?? settingsStore.getSettings();
     const chatMessages =
         options.chatMessages ??
@@ -1334,8 +1292,7 @@ export class PromptInjector {
             this._pendingMicrotaskPromise = null;
         }
         const settings = this._store.getSettings();
-        const hostContext =
-            typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+        const hostContext = getHostContext();
         const setPromptFn = hostContext?.setExtensionPrompt;
 
         const computed = computePromptInjections({ settings });
@@ -1413,8 +1370,7 @@ export class PromptInjector {
     public clearAllFromHost(): void {
         this._syncEpoch += 1;
         this._pendingMicrotaskPromise = null;
-        const hostContext =
-            typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+        const hostContext = getHostContext();
         const setPromptFn = hostContext?.setExtensionPrompt;
         if (typeof setPromptFn !== 'function') {
             this._registeredMeta.clear();

@@ -31,7 +31,7 @@ import {
     NOVELAI_OFFICIAL_SERVICE_ID,
     resolveNovelAIModelFamily,
     resolveNovelAIModelName,
-} from './novelai-models';
+} from '../../domain';
 
 /** NovelAI 图像生成 API 接口路径 */
 const NOVELAI_GENERATE_ENDPOINT = '/ai/generate-image';

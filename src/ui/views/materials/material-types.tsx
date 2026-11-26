@@ -20,6 +20,7 @@ import { settingsStore } from '../../../store/settings-store';
 import { PresetController } from '../../viewmodels/preset-controller';
 import { lightboxModal } from '../../media/lightbox-modal';
 import { Toast } from '../../feedback/toast';
+import { getHostCharacterCards as readHostCharacterCards } from '../../../host';
 
 export type MaterialsSubTab =
     | 'characters'
@@ -53,17 +54,7 @@ GENITALS: |[nude]pussy, trimmed_pubic_hair
 </character>`;
 
 export function getHostCharacterCards(): Array<{ id: string; name: string }> {
-    if (typeof window === 'undefined') return [];
-    const ctx = window.SillyTavern?.getContext?.();
-    const chars = ctx?.characters;
-    if (!Array.isArray(chars)) return [];
-    return chars.map((c, i) => {
-        const item = c as { avatar?: string; name?: string };
-        return {
-            id: item.avatar || item.name || `char_${i}`,
-            name: item.name || item.avatar || `角色卡 #${i + 1}`,
-        };
-    });
+    return readHostCharacterCards();
 }
 
 /** 将逗号或换行分隔的角色卡名称文本解析为大小写不敏感去重数组 */

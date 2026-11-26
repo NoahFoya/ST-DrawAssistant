@@ -17,7 +17,7 @@ import type {
 } from '@types';
 import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
 import { type SettingsStore, normalizePresetNameKey, settingsStore } from '../store/settings-store';
-import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../provider/novelai/novelai-models';
+import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../domain';
 import { resolvePromptMacros } from './macro-resolver';
 import { splitTopLevelTags } from './material-definitions';
 import { stripThinkingAndComments } from './prompt-injector';

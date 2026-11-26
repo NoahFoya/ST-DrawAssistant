@@ -22,12 +22,14 @@ import type {
 import { providerRegistry } from '../provider/registry';
 import { imageStorage, type ImageStorage } from '../store/image-storage';
 import { PromptPipeline, promptPipeline } from './prompt-pipeline';
-import { settingsStore, type SettingsStore, DEFAULT_TASK_TIMEOUT_MS } from '../store/settings-store';
+import { settingsStore, type SettingsStore } from '../store/settings-store';
+import { DEFAULT_TASK_TIMEOUT_MS } from '../config/constants';
 import { eventBus, type EventBus } from '../util/event-bus';
 import { sessionLifecycle, type SessionLifecycleManager } from './session-lifecycle';
 import { logger } from '../util/logger';
 import { applyImageStorageQuality } from '../util/image-compress';
 import { ensureValidImageBlob } from '../util/http-client';
+import { getHostActiveChatId, getHostChatMessage } from '../host';
 
 /** 提交生图任务参数选项 */
 export interface SubmitTaskOptions {
@@ -104,11 +106,7 @@ export class GenerationOrchestrator {
             });
         }
         this._getActiveChatId =
-            options.getActiveChatId ??
-            (() => {
-                const hostContext = window.SillyTavern?.getContext?.();
-                return hostContext?.chatId;
-            });
+            options.getActiveChatId ?? (() => getHostActiveChatId());
     }
 
     /**
@@ -475,7 +473,7 @@ export class GenerationOrchestrator {
         };
 
         this._tasks.set(taskId, task);
-        const hostMessage = window.SillyTavern?.getContext?.()?.chat?.[options.target.messageId];
+        const hostMessage = getHostChatMessage(options.target.messageId);
         if (hostMessage && typeof hostMessage === 'object') {
             this._targetMessageRefs.set(taskId, hostMessage);
         }

@@ -25,13 +25,15 @@ import { PROMPT_POLLING_PRESET_ID } from '../../config/constants';
 import { resolvePromptPollingCandidates } from '../../pipeline/prompt-pipeline';
 import type { Disposable } from '../types';
 import {
+    AppValidationError,
     buildPresetBundlePayload,
-    formatBatchImportSummary,
+    normalizePresetNameKey,
     parsePresetBatchJson,
-    readFileAsText,
-    resolveBatchImportToastError,
-    resolveBatchUniquePresetName,
-} from './preset-batch-io';
+    sanitizeImportedObject,
+    stripJsonExtension,
+    validatePresetPayloadError,
+} from '../../domain';
+import { presetTransferService } from '../../pipeline/preset-transfer-service';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { AssetFetchResult, ConnectionCardData } from '../composite/connection-card';
 import type { PresetActionType } from '../composite/preset-toolbar';
@@ -45,11 +47,8 @@ import {
 import {
     PresetController,
     resolveUniquePresetName,
-    sanitizeImportedObject,
-    stripJsonExtension,
-    validatePresetPayloadForCategory,
 } from './preset-controller';
-import { normalizePresetNameKey, settingsStore } from '../../store/settings-store';
+import { settingsStore } from '../../store/settings-store';
 import { AssetSyncCoordinator } from '../../pipeline/asset-sync-coordinator';
 import { providerRegistry } from '../../provider/registry';
 import { hasProviderAssetSync } from '../../provider/base-provider';
@@ -1123,106 +1122,65 @@ export class ProviderTabViewModel implements Disposable {
             draftField: 'promptPresetId' | 'txt2imgWorkflowId';
             idPrefix: string;
             label: string;
-            parseFile: (rawText: string, file: File) => Array<{ name: string; data: TData }>;
+            parseFile: (
+                rawText: string,
+                file: File
+            ) => {
+                candidates: Array<{ name: string; data: TData }>;
+                skippedErrors?: ReadonlyArray<unknown>;
+            };
         }
     ): Promise<void> {
-        if (this.isDisposed || files.length === 0) return;
-
         const list = settingsStore.getPresets<TData>(cfg.category, cfg.providerScope);
         const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
         const fallbackName = `导入的${cfg.label}`;
-
-        const validCandidates: Array<{ name: string; data: TData }> = [];
-        let failedCount = 0;
-        let firstError: string | undefined;
-
-        for (const file of files) {
-            try {
-                const rawText = await readFileAsText(file);
-                if (this.isDisposed) return;
-                const items = cfg.parseFile(rawText, file);
-                if (items.length === 0) {
-                    failedCount += 1;
-                    const emptyMsg = `${file.name} 未包含有效预设`;
-                    logger.warn(`[ProviderTabViewModel] 批量导入文件未包含有效${cfg.label}: ${file.name}`);
-                    firstError ??= resolveBatchImportToastError(emptyMsg);
-                    continue;
-                }
-                validCandidates.push(...items);
-            } catch (err: unknown) {
-                failedCount += 1;
-                logger.warn(`[ProviderTabViewModel] 批量导入文件解析失败 (${file.name}):`, err);
-                firstError ??= resolveBatchImportToastError(err);
-            }
-        }
-
-        if (validCandidates.length === 0) {
-            Toast.show(formatBatchImportSummary(0, failedCount, firstError), { level: 'error' });
-            return;
-        }
-
         const targetCard =
             cfg.draftField === 'txt2imgWorkflowId'
                 ? this.workflowCardRef
                 : this.promptCardRef;
-        if (targetCard?.isDirty()) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: `导入${cfg.label}确认`,
-                message: `当前${cfg.label}存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
-            });
-            if (!confirmed || this.isDisposed) return;
-        }
 
-        const isSingleInteractive = validCandidates.length === 1 && files.length === 1;
-        let lastImportedId = '';
-        let lastImportedName = '';
-        let importedCount = 0;
-
-        for (const candidate of validCandidates) {
-            let finalName: string | null = null;
-            if (isSingleInteractive) {
-                finalName = await resolveUniquePresetName(
-                    candidate.name,
-                    existingNames,
-                    fallbackName
+        const result = await presetTransferService.importFiles<TData>({
+            files,
+            existingNames,
+            fallbackName,
+            logTag: '[ProviderTabViewModel]',
+            isDisposed: () => this.isDisposed,
+            isDirty: () => Boolean(targetCard?.isDirty()),
+            confirmOverwrite: () =>
+                ConfirmDialog.confirm({
+                    title: `导入${cfg.label}确认`,
+                    message: `当前${cfg.label}存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
+                }),
+            resolveSingleName: resolveUniquePresetName,
+            parseFile: cfg.parseFile,
+            commitItem: (candidate, finalName) => {
+                const newId = this.generateAssetUniqueId(
+                    cfg.category,
+                    cfg.idPrefix,
+                    cfg.providerScope
                 );
-                if (!finalName || this.isDisposed) return;
-            } else {
-                finalName = resolveBatchUniquePresetName(
-                    candidate.name,
-                    existingNames,
-                    fallbackName
-                );
-            }
+                const importedItem: PresetItem<TData> = {
+                    id: newId,
+                    name: finalName,
+                    data: sanitizeImportedObject(candidate.data),
+                    updatedAt: Date.now(),
+                };
+                settingsStore.savePreset(cfg.category, importedItem, cfg.providerScope);
+                return { id: newId, name: finalName };
+            },
+        });
 
-            const newId = this.generateAssetUniqueId(
-                cfg.category,
-                cfg.idPrefix,
-                cfg.providerScope
-            );
-            const importedItem: PresetItem<TData> = {
-                id: newId,
-                name: finalName,
-                data: sanitizeImportedObject(candidate.data),
-                updatedAt: Date.now(),
-            };
-            settingsStore.savePreset(cfg.category, importedItem, cfg.providerScope);
-            lastImportedId = newId;
-            lastImportedName = finalName;
-            importedCount += 1;
-        }
+        if (result.aborted) return;
 
-        if (lastImportedId) {
-            this.presetController.updateDraft(cfg.draftField, lastImportedId);
+        if (result.lastImportedId) {
+            this.presetController.updateDraft(cfg.draftField, result.lastImportedId);
         }
         this.refreshAssetPools();
 
-        if (importedCount === 1 && failedCount === 0) {
-            Toast.show(`已成功导入${cfg.label}: ${lastImportedName}`, { level: 'success' });
+        if (result.importedCount === 1 && result.failedCount === 0) {
+            Toast.show(`已成功导入${cfg.label}: ${result.lastImportedName}`, { level: 'success' });
         } else {
-            Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
-                level: failedCount > 0 ? 'warning' : 'success',
-            });
+            Toast.show(result.summaryMessage, { level: result.toastLevel });
         }
     }
 
@@ -1293,12 +1251,11 @@ export class ProviderTabViewModel implements Disposable {
             parseFile: (rawText, f) => {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, f.name);
                 const results: Array<{ name: string; data: PromptPresetData }> = [];
+                const promptErrors: AppValidationError[] = [...skippedErrors];
                 for (const candidate of candidates) {
-                    const errMsg = validatePresetPayloadForCategory('prompts', candidate.data);
-                    if (errMsg) {
-                        if (candidates.length === 1) {
-                            throw new Error(errMsg);
-                        }
+                    const errVal = validatePresetPayloadError('prompts', candidate.data);
+                    if (errVal) {
+                        promptErrors.push(errVal);
                         continue;
                     }
                     results.push({
@@ -1306,10 +1263,7 @@ export class ProviderTabViewModel implements Disposable {
                         data: candidate.data as PromptPresetData,
                     });
                 }
-                if (results.length === 0 && skippedErrors.length > 0) {
-                    throw new Error(skippedErrors[0]);
-                }
-                return results;
+                return { candidates: results, skippedErrors: promptErrors };
             },
         });
     }
@@ -1400,7 +1354,13 @@ export class ProviderTabViewModel implements Disposable {
             idPrefix: 'workflow_',
             label: '工作流预设',
             parseFile: (rawText, f) => {
-                const parsed: unknown = JSON.parse(rawText);
+                let parsed: unknown;
+                try {
+                    parsed = JSON.parse(rawText);
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    throw new AppValidationError('工作流文件非有效 JSON 格式', msg);
+                }
                 const rawList: unknown[] | null = Array.isArray(parsed)
                     ? parsed
                     : isPlainRecord(parsed) && Array.isArray(parsed.presets)
@@ -1409,6 +1369,7 @@ export class ProviderTabViewModel implements Disposable {
 
                 if (rawList) {
                     const results: Array<{ name: string; data: WorkflowPresetData }> = [];
+                    const wfErrors: AppValidationError[] = [];
                     rawList.forEach((entry, idx) => {
                         const res = parseComfyWorkflowInput(entry, { requireNodes: true });
                         if (res.ok) {
@@ -1421,29 +1382,33 @@ export class ProviderTabViewModel implements Disposable {
                                     workflow: res.workflow,
                                 },
                             });
+                        } else {
+                            wfErrors.push(new AppValidationError(res.error));
                         }
                     });
-                    if (results.length === 0) {
-                        throw new Error('合集文件中未包含有效的工作流预设');
+                    if (results.length === 0 && wfErrors.length === 0) {
+                        throw new AppValidationError('合集文件中未包含有效的工作流预设');
                     }
-                    return results;
+                    return { candidates: results, skippedErrors: wfErrors };
                 }
 
                 const res = parseComfyWorkflowInput(parsed, { requireNodes: true });
                 if (!res.ok) {
-                    throw new Error(res.error);
+                    throw new AppValidationError(res.error);
                 }
                 const resolvedName =
                     res.extractedName || stripJsonExtension(f.name) || '导入的工作流预设';
-                return [
-                    {
-                        name: resolvedName,
-                        data: {
-                            ...(res.extraData || {}),
-                            workflow: res.workflow,
+                return {
+                    candidates: [
+                        {
+                            name: resolvedName,
+                            data: {
+                                ...(res.extraData || {}),
+                                workflow: res.workflow,
+                            },
                         },
-                    },
-                ];
+                    ],
+                };
             },
         });
     }

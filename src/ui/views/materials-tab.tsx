@@ -26,24 +26,22 @@ import type { PresetActionType } from '../composite';
 import {
     PresetController,
     resolveUniquePresetName,
-    sanitizeImportedObject,
-    stripJsonExtension,
-    validatePresetPayloadForCategory,
 } from '../viewmodels';
 import {
     buildPresetBundlePayload,
-    formatBatchImportSummary,
+    normalizePresetNameKey,
     parsePresetBatchJson,
-    readFileAsText,
-    resolveBatchImportToastError,
-    resolveBatchUniquePresetName,
-} from '../viewmodels/preset-batch-io';
+    sanitizeImportedObject,
+    stripJsonExtension,
+    validatePresetPayloadError,
+    validatePresetPayloadForCategory,
+} from '../../domain';
+import { presetTransferService } from '../../pipeline/preset-transfer-service';
 import { bindDelegatedTagAutocomplete } from '../composite/tag-autocomplete';
 import type { Disposable } from '../types';
-import { settingsStore, normalizePresetNameKey } from '../../store/settings-store';
+import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
-import { logger } from '../../util/logger';
-import { downloadJsonFile } from '../../util/browser-io';
+import { downloadJsonFile, readFileAsText } from '../../util/browser-io';
 import {
     materialImageStorage,
     EMBEDDED_AVATAR_FIELD,
@@ -1127,122 +1125,102 @@ export class MaterialsTabView extends PreactSettingsView {
         }
 
         const ctrl = kind === 'character' ? this.charController : this.outfitController;
-        if (ctrl.isDirty.value) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: '导入预设确认',
-                message:
-                    '当前档案存在未保存的修改，导入并切换新档案将放弃当前未保存修改。是否确定继续导入？',
-            });
-            if (!confirmed || this.isDisposedView) return;
-        }
-
         const existingNames = new Set(
             ctrl.fetchPresetsList().map((p) => normalizePresetNameKey(p.name))
         );
         const fallbackName = kind === 'character' ? '导入角色' : '导入服装';
-        let importedCount = 0;
-        let failedCount = 0;
-        let firstError: string | undefined;
-        let lastNewId = '';
         let lastAvatarId = '';
 
-        for (const file of files) {
-            try {
-                const rawText = await readFileAsText(file);
-                if (this.isDisposedView) return;
+        const result = await presetTransferService.importFiles<Record<string, unknown>>({
+            files,
+            existingNames,
+            fallbackName,
+            logTag: '[MaterialsTabView]',
+            isDisposed: () => this.isDisposedView,
+            isDirty: () => ctrl.isDirty.value,
+            confirmOverwrite: () =>
+                ConfirmDialog.confirm({
+                    title: '导入预设确认',
+                    message:
+                        '当前档案存在未保存的修改，导入并切换新档案将放弃当前未保存修改。是否确定继续导入？',
+                }),
+            parseFile: (rawText, file) => {
                 const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
-                if (skippedErrors.length > 0) {
-                    failedCount += skippedErrors.length;
-                    logger.warn(`[MaterialsTabView] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
-                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
-                }
-                for (const candidate of candidates) {
-                    const rawData = candidate.data;
-                    const errMsg = validatePresetPayloadForCategory(
-                        kind === 'character' ? 'characters' : 'outfits',
-                        rawData
-                    );
-                    if (errMsg) {
-                        failedCount += 1;
-                        logger.warn(
-                            `[MaterialsTabView] 批量导入档案校验失败 (${file.name} / ${candidate.name}):`,
-                            errMsg
-                        );
-                        firstError ??= resolveBatchImportToastError(errMsg);
-                        continue;
-                    }
-                    const embeddedAvatar =
-                        typeof rawData[EMBEDDED_AVATAR_FIELD] === 'string'
-                            ? rawData[EMBEDDED_AVATAR_FIELD]
-                            : '';
-                    delete rawData[EMBEDDED_AVATAR_FIELD];
-
-                    const finalName = resolveBatchUniquePresetName(
-                        candidate.name ||
-                            (typeof rawData.name === 'string' ? rawData.name : '') ||
+                return {
+                    candidates: candidates.map((candidate) => ({
+                        name:
+                            candidate.name ||
+                            (typeof candidate.data.name === 'string' ? candidate.data.name : '') ||
                             fallbackName,
-                        existingNames,
-                        fallbackName
-                    );
+                        data: candidate.data,
+                    })),
+                    skippedErrors,
+                };
+            },
+            validateCandidate: (candidate) =>
+                validatePresetPayloadError(
+                    kind === 'character' ? 'characters' : 'outfits',
+                    candidate.data
+                ),
+            commitItem: async (candidate, finalName) => {
+                const rawData = { ...candidate.data };
+                const embeddedAvatar =
+                    typeof rawData[EMBEDDED_AVATAR_FIELD] === 'string'
+                        ? (rawData[EMBEDDED_AVATAR_FIELD] as string)
+                        : '';
+                delete rawData[EMBEDDED_AVATAR_FIELD];
 
-                    let resolvedAvatarId = '';
-                    if (embeddedAvatar) {
-                        try {
-                            resolvedAvatarId =
-                                (await materialImageStorage.importAvatarFromDataUrl(
-                                    embeddedAvatar
-                                )) || '';
-                        } catch {
-                            resolvedAvatarId = '';
-                        }
+                let resolvedAvatarId = '';
+                if (embeddedAvatar) {
+                    try {
+                        resolvedAvatarId =
+                            (await materialImageStorage.importAvatarFromDataUrl(embeddedAvatar)) ||
+                            '';
+                    } catch {
+                        resolvedAvatarId = '';
                     }
-
-                    const newId = this.generateUniqueMaterialId(kind);
-                    if (kind === 'character') {
-                        const normalized = normalizeCharacterData(rawData);
-                        normalized.name = finalName;
-                        normalized.avatarId = resolvedAvatarId;
-                        settingsStore.savePreset('characters', {
-                            id: newId,
-                            name: finalName,
-                            description: normalized.description,
-                            data: normalized,
-                            updatedAt: Date.now(),
-                        });
-                    } else {
-                        const normalized = normalizeOutfitData(rawData);
-                        normalized.name = finalName;
-                        normalized.avatarId = resolvedAvatarId;
-                        settingsStore.savePreset('outfits', {
-                            id: newId,
-                            name: finalName,
-                            description: normalized.description,
-                            data: normalized,
-                            updatedAt: Date.now(),
-                        });
-                    }
-                    this.syncActivationRuleSnapshot(kind, newId, 'add');
-                    lastNewId = newId;
-                    lastAvatarId = resolvedAvatarId;
-                    importedCount += 1;
                 }
-            } catch (err: unknown) {
-                failedCount += 1;
-                logger.warn(`[MaterialsTabView] 批量导入档案读取/解析失败 (${file.name}):`, err);
-                firstError ??= resolveBatchImportToastError(err);
-            }
-        }
 
-        if (lastNewId) {
-            ctrl.applyActivePreset(lastNewId);
+                const newId = this.generateUniqueMaterialId(kind);
+                if (kind === 'character') {
+                    const normalized = normalizeCharacterData(rawData);
+                    normalized.name = finalName;
+                    normalized.avatarId = resolvedAvatarId;
+                    settingsStore.savePreset('characters', {
+                        id: newId,
+                        name: finalName,
+                        description: normalized.description,
+                        data: normalized,
+                        updatedAt: Date.now(),
+                    });
+                } else {
+                    const normalized = normalizeOutfitData(rawData);
+                    normalized.name = finalName;
+                    normalized.avatarId = resolvedAvatarId;
+                    settingsStore.savePreset('outfits', {
+                        id: newId,
+                        name: finalName,
+                        description: normalized.description,
+                        data: normalized,
+                        updatedAt: Date.now(),
+                    });
+                }
+                this.syncActivationRuleSnapshot(kind, newId, 'add');
+                lastAvatarId = resolvedAvatarId;
+                return { id: newId, name: finalName };
+            },
+        });
+
+        if (result.aborted) return;
+
+        if (result.lastImportedId) {
+            ctrl.applyActivePreset(result.lastImportedId);
             if (lastAvatarId) {
                 this.ensureAvatarLoaded(lastAvatarId);
             }
             void promptInjector.scheduleSyncToHost();
         }
-        Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
-            level: importedCount === 0 ? 'error' : failedCount > 0 ? 'warning' : 'success',
-        });
+        Toast.show(result.summaryMessage, { level: result.toastLevel });
     }
 
     public updateMacroRules(

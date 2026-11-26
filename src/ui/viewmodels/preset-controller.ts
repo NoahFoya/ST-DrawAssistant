@@ -9,130 +9,28 @@
 import { signal, computed, type Signal, type ReadonlySignal } from '@preact/signals';
 import type { PresetCategory, PresetItem, ProviderType } from '@types';
 import type { PresetActionType, PresetToolbarItem } from '../composite/preset-toolbar';
-import { normalizePresetNameKey, settingsStore } from '../../store/settings-store';
-import { logger } from '../../util/logger';
+import { settingsStore } from '../../store/settings-store';
 import { Toast } from '../feedback/toast';
 import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { downloadJsonFile } from '../../util/browser-io';
 import {
-    buildPresetBundlePayload,
-    formatBatchImportSummary,
+    normalizePresetNameKey,
     parsePresetBatchJson,
-    readFileAsText,
-    resolveBatchImportToastError,
-    resolveBatchUniquePresetName,
-} from './preset-batch-io';
+    sanitizeImportedObject,
+    stripJsonExtension,
+    validatePresetPayloadError,
+    validatePresetPayloadForCategory,
+    buildPresetBundlePayload,
+} from '../../domain';
+import { presetTransferService } from '../../pipeline/preset-transfer-service';
 
-const FORBIDDEN_IMPORT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-/** 剥离文件名末尾 `.json` 扩展名作为导入预设的默认名称 */
-export function stripJsonExtension(fileName?: string): string {
-    return typeof fileName === 'string' ? fileName.replace(/\.json$/i, '').trim() : '';
-}
-
-/** 递归剔除 `__proto__` / `constructor` / `prototype` 等危险原型键，防止导入外部 JSON 时引入原型污染属性 */
-export function sanitizeImportedObject<T>(value: T): T {
-    if (Array.isArray(value)) {
-        return value.map((item) => sanitizeImportedObject(item)) as unknown as T;
-    }
-    if (!value || typeof value !== 'object') {
-        return value;
-    }
-    const result: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-        if (FORBIDDEN_IMPORT_KEYS.has(key)) continue;
-        result[key] = sanitizeImportedObject((value as Record<string, unknown>)[key]);
-    }
-    return result as T;
-}
-
-/** 按预设分类校验导入 `data` 对象的结构特征，防止跨分类误导入 */
-export function validatePresetPayloadForCategory(
-    category: PresetCategory,
-    data: Record<string, unknown>
-): string | null {
-    const isPlainObj = (v: unknown): v is Record<string, unknown> =>
-        Boolean(v && typeof v === 'object' && !Array.isArray(v));
-
-    if (category === 'themes') {
-        if (typeof data.accent !== 'string' || !data.accent.trim()) {
-            return '主题预设格式错误：缺少有效的 accent 主强调色字段';
-        }
-        return null;
-    }
-    if (category === 'prompts') {
-        if (
-            'workflow' in data ||
-            Array.isArray(data.entries) ||
-            'parts' in data ||
-            'characterRules' in data ||
-            'characterTemplate' in data ||
-            'charStartTag' in data ||
-            ('accent' in data && 'bgPrimary' in data)
-        ) {
-            return '导入文件属于其他类别预设，与当前「提示词预设」不兼容';
-        }
-        if (data.loras !== undefined && !Array.isArray(data.loras)) {
-            return '提示词预设格式错误：loras 字段必须为数组';
-        }
-        return null;
-    }
-    if (category === 'characters' || category === 'outfits') {
-        if (
-            'workflow' in data ||
-            Array.isArray(data.entries) ||
-            'characterRules' in data ||
-            'characterTemplate' in data ||
-            'charStartTag' in data ||
-            ('accent' in data && 'bgPrimary' in data) ||
-            (data.parts !== undefined && !isPlainObj(data.parts))
-        ) {
-            return `导入文件与当前「${category === 'characters' ? '角色' : '服装'}档案」预设格式不兼容`;
-        }
-        return null;
-    }
-    if (category === 'material_activations') {
-        if (
-            (data.characterRules !== undefined && !isPlainObj(data.characterRules)) ||
-            (data.outfitRules !== undefined && !isPlainObj(data.outfitRules)) ||
-            (!('characterRules' in data) && !('outfitRules' in data))
-        ) {
-            return '素材启用预设格式错误：缺少有效的 characterRules / outfitRules 规则字典';
-        }
-        return null;
-    }
-    if (category === 'material_extractions') {
-        if (
-            !('charStartTag' in data) &&
-            !('outfitStartTag' in data) &&
-            !('enabled' in data)
-        ) {
-            return '解析设置预设格式错误：未包含有效的档案提取规则字段';
-        }
-        return null;
-    }
-    if (category === 'material_formats') {
-        if (!('characterTemplate' in data) && !('outfitTemplate' in data)) {
-            return '变量与宏预设格式错误：缺少有效的渲染模板字段';
-        }
-        return null;
-    }
-    if (category === 'drawing') {
-        if (
-            'workflow' in data ||
-            Array.isArray(data.entries) ||
-            'parts' in data ||
-            'characterRules' in data ||
-            'characterTemplate' in data ||
-            'charStartTag' in data ||
-            ('accent' in data && 'bgPrimary' in data)
-        ) {
-            return '导入文件属于其他类别预设，与当前「生图参数预设」不兼容';
-        }
-    }
-    return null;
-}
+export {
+    stripJsonExtension,
+    sanitizeImportedObject,
+    validatePresetPayloadForCategory,
+    validatePresetPayloadError,
+};
 
 /** 统一校验并在同名冲突时通过弹窗协商唯一预设名称 */
 export async function resolveUniquePresetName(
@@ -819,112 +717,58 @@ export class PresetController<TData extends Record<string, unknown>> {
      * 批量解析并导入一个或多个外部 JSON 预设文件（支持单预设及合集数组格式）。
      */
     public async handleImportFiles(files: File[]): Promise<void> {
-        if (this.isDisposed || files.length === 0) return;
-
         const list = this.fetchPresetsList();
         const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
         const fallbackName =
             this.options.defaultImportName ||
             `导入的 ${this.options.provider || this.options.category} 预设`;
 
-        const validCandidates: Array<{ name: string; data: Record<string, unknown> }> = [];
-        let failedCount = 0;
-        let firstError: string | undefined;
-
-        for (const file of files) {
-            try {
-                const rawText = await readFileAsText(file);
-                if (this.isDisposed) return;
-                const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
-                if (skippedErrors.length > 0) {
-                    failedCount += skippedErrors.length;
-                    logger.warn(`[PresetController] 批量导入跳过无效文件 (${file.name}):`, skippedErrors[0]);
-                    firstError ??= resolveBatchImportToastError(skippedErrors[0]);
-                }
-                for (const candidate of candidates) {
-                    const validationError = validatePresetPayloadForCategory(
-                        this.options.category,
-                        candidate.data
-                    );
-                    if (validationError) {
-                        failedCount += 1;
-                        logger.warn(
-                            `[PresetController] 批量导入预设校验失败 (${file.name} / ${candidate.name}):`,
-                            validationError
-                        );
-                        firstError ??= resolveBatchImportToastError(validationError);
-                        continue;
-                    }
-                    validCandidates.push(candidate);
-                }
-            } catch (err: unknown) {
-                failedCount += 1;
-                logger.warn(`[PresetController] 批量导入文件读取/解析失败 (${file.name}):`, err);
-                firstError ??= resolveBatchImportToastError(err);
-            }
-        }
-
-        if (validCandidates.length === 0) {
-            Toast.show(formatBatchImportSummary(0, failedCount, firstError), { level: 'error' });
-            return;
-        }
-
-        if (this.isDirty.value) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: '导入预设确认',
-                message:
-                    '当前预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？',
-            });
-            if (!confirmed || this.isDisposed) return;
-        }
-
-        const isSingleInteractive = validCandidates.length === 1 && files.length === 1;
-        let lastImportedId = '';
-        let lastImportedName = '';
-        let importedCount = 0;
-
-        for (const candidate of validCandidates) {
-            let finalName: string | null = null;
-            if (isSingleInteractive) {
-                finalName = await resolveUniquePresetName(
-                    candidate.name,
-                    existingNames,
-                    fallbackName
+        const result = await presetTransferService.importFiles<Record<string, unknown>>({
+            files,
+            existingNames,
+            fallbackName,
+            logTag: '[PresetController]',
+            isDisposed: () => this.isDisposed,
+            isDirty: () => this.isDirty.value,
+            confirmOverwrite: () =>
+                ConfirmDialog.confirm({
+                    title: '导入预设确认',
+                    message:
+                        '当前预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？',
+                }),
+            resolveSingleName: resolveUniquePresetName,
+            parseFile: (rawText, file) => parsePresetBatchJson(rawText, file.name),
+            validateCandidate: (candidate) =>
+                validatePresetPayloadError(this.options.category, candidate.data),
+            commitItem: (candidate, finalName) => {
+                const newId = this.generateUniqueId();
+                const importedItem: PresetItem<TData> = {
+                    id: newId,
+                    name: finalName,
+                    data: this.syncMaterialInnerName(candidate.data as TData, finalName),
+                    updatedAt: Date.now(),
+                };
+                settingsStore.savePreset(
+                    this.options.category,
+                    importedItem,
+                    this.options.provider
                 );
-                if (!finalName || this.isDisposed) return;
-            } else {
-                finalName = resolveBatchUniquePresetName(
-                    candidate.name,
-                    existingNames,
-                    fallbackName
-                );
-            }
+                return { id: newId, name: finalName };
+            },
+        });
 
-            const newId = this.generateUniqueId();
-            const importedItem: PresetItem<TData> = {
-                id: newId,
-                name: finalName,
-                data: this.syncMaterialInnerName(candidate.data as TData, finalName),
-                updatedAt: Date.now(),
-            };
-            settingsStore.savePreset(this.options.category, importedItem, this.options.provider);
-            lastImportedId = newId;
-            lastImportedName = finalName;
-            importedCount += 1;
+        if (result.aborted) return;
+
+        if (result.lastImportedId) {
+            this.applyActivePreset(result.lastImportedId);
         }
 
-        if (lastImportedId) {
-            this.applyActivePreset(lastImportedId);
-        }
-
-        if (importedCount === 1 && failedCount === 0) {
+        if (result.importedCount === 1 && result.failedCount === 0) {
             if (this.options.showToast) {
-                Toast.show(`已成功导入预设: ${lastImportedName}`, { level: 'success' });
+                Toast.show(result.summaryMessage, { level: 'success' });
             }
         } else {
-            Toast.show(formatBatchImportSummary(importedCount, failedCount, firstError), {
-                level: failedCount > 0 ? 'warning' : 'success',
-            });
+            Toast.show(result.summaryMessage, { level: result.toastLevel });
         }
     }
 

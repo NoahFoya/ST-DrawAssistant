@@ -33,9 +33,14 @@ import type {
     PromptInjectionConfig,
     ImageStorageQuality,
 } from '@types';
-import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
+import { DEFAULT_TASK_TIMEOUT_MS, PROMPT_POLLING_PRESET_ID } from '../config/constants';
+import { normalizePresetNameKey } from '../domain/preset/preset-validation';
+import { getHostContext } from '../host';
+import { registerDefaultProviderRuntime } from '../util/provider-runtime';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
+
+export { DEFAULT_TASK_TIMEOUT_MS, normalizePresetNameKey };
 import { EMBEDDED_AVATAR_FIELD, materialImageStorage } from './material-image-storage';
 import { imageStorage } from './image-storage';
 import {
@@ -181,8 +186,7 @@ export interface SavePresetOptions {
     readonly defaultTriggerMode?: ActivationTriggerMode;
 }
 
-/** 默认单任务超时时间（毫秒） */
-export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
+/** 默认单任务超时时间常量的历史兼容导出（真实定义位于 config/constants.ts） */
 
 /** 生图参数预设解析选项 */
 export interface ResolveDrawingPresetOptions {
@@ -306,13 +310,7 @@ interface UpsertPresetResult<P> {
     readonly savedItem: PresetItem<P>;
 }
 
-/** 预设名称归一化键（用于 UI 判重与存储写入保持一致） */
-export function normalizePresetNameKey(name: string): string {
-    return name.trim().toLowerCase();
-}
-
-/**
- * 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步更新外层与内层名称，并保证名称唯一性与 ID 稳定）。
+/** 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步更新外层与内层名称，并保证名称唯一性与 ID 稳定）。
  * 新建预设（`idIndex === -1`）优先采信外层传入的新名称，避免模板或来源副本中的旧 `data.name` 反向覆盖已有条目。
  */
 function upsertPresetItem<P>(
@@ -1174,8 +1172,7 @@ export class SettingsStore {
      * 3. 若检测到首次启用 (`!isInitialized`)，通过运行时异步载入 `config/presets/` 静态预设文件。
      */
     public async initializeFromHost(loaderOptions?: LoadStaticPresetsOptions): Promise<void> {
-        const hostContext =
-            typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+        const hostContext = getHostContext();
         const rawSettings = hostContext?.extensionSettings?.[SettingsStore.EXTENSION_NAME] as
             | Record<string, unknown>
             | undefined;
@@ -1849,8 +1846,7 @@ export class SettingsStore {
         }
 
         // 2. 构造脱敏副本同步给宿主
-        const hostContext =
-            typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+        const hostContext = getHostContext();
         if (hostContext?.extensionSettings) {
             const sanitized = this.stripSecretsFromSettings(this._settings);
             hostContext.extensionSettings[SettingsStore.EXTENSION_NAME] = sanitized;
@@ -2842,3 +2838,6 @@ export class SettingsStore {
 
 /** 全局默认单例配置中心 */
 export const settingsStore = new SettingsStore();
+
+// 向 util 运行时入口注册默认提供方配置端口，避免 provider 层静态依赖 store 层
+registerDefaultProviderRuntime(settingsStore);

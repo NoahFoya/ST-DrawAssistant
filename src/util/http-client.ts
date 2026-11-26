@@ -122,6 +122,21 @@ interface TauriWindowProbe {
     };
 }
 
+/** 宿主环境能力与 CSRF 请求头读取接口（由 host 层在启动时注入） */
+export interface HostEnvironmentProvider {
+    hasHostContext(): boolean;
+    getRequestHeaders(): Record<string, string>;
+}
+
+let hostEnvironmentProvider: HostEnvironmentProvider | null = null;
+
+/** 注册宿主环境适配器（通常由 `src/host` 模块自动或随入口初始化注册） */
+export function registerHostEnvironmentProvider(
+    provider: HostEnvironmentProvider | null
+): void {
+    hostEnvironmentProvider = provider;
+}
+
 /**
  * 识别当前前端页面的宿主环境与代理能力。
  */
@@ -137,7 +152,7 @@ export function detectHostRuntime(): HostRuntimeInfo {
         };
     }
 
-    const hasSillyTavern = Boolean(window.SillyTavern?.getContext);
+    const hasSillyTavern = Boolean(hostEnvironmentProvider?.hasHostContext());
     const tauriWin = window as unknown as TauriWindowProbe;
     const tauriHostObj = tauriWin.__TAURITAVERN_HOST__;
     const tauriPlatform =
@@ -277,20 +292,15 @@ function attachResponseAbortCleanup(response: Response, signal: AbortSignal, cle
  * 获取 SillyTavern 宿主环境的认证凭据与 CSRF Token 请求头。
  */
 export function getHostRequestHeaders(): Record<string, string> {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !hostEnvironmentProvider) {
         return {};
     }
-    const hostContext = window.SillyTavern?.getContext?.();
-    if (typeof hostContext?.getRequestHeaders === 'function') {
-        try {
-            return hostContext.getRequestHeaders() ?? {};
-        } catch (err) {
-            logger.warn('获取宿主 CSRF 请求头凭据异常:', err);
-            return {};
-        }
+    try {
+        return hostEnvironmentProvider.getRequestHeaders() ?? {};
+    } catch (err) {
+        logger.warn('获取宿主 CSRF 请求头凭据异常:', err);
+        return {};
     }
-
-    return {};
 }
 
 /**

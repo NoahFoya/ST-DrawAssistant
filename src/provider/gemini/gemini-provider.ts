@@ -34,7 +34,7 @@ import {
     filterGeminiImageModels,
     resolveGeminiModelCapabilities,
     type GeminiModelListItem,
-} from './gemini-models';
+} from '../../domain';
 import {
     base64ToBlob,
     ensureValidImageBlob,

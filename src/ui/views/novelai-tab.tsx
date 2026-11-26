@@ -22,18 +22,18 @@ import {
     PresetToolbarView,
     PromptPollingPanelView,
 } from '../framework';
-import { NOVELAI_RANGE_CONFIG } from '../composite';
-import type { ProviderPreset } from '../composite/connection-card';
-import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 import {
+    NOVELAI_RANGE_CONFIG,
     NOVELAI_OFFICIAL_SERVICE_ID,
     NOVELAI_CUSTOM_SERVICE_ID,
     NOVELAI_IMAGE_HOST,
     OFFICIAL_NOVELAI_MODELS,
     formatNovelAIModelLabel,
     resolveNovelAIModelFamily,
-} from '../../provider/novelai/novelai-models';
+} from '../../domain';
+import type { ProviderPreset } from '../composite/connection-card';
+import { ProviderTabViewModel } from '../viewmodels';
+import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
 
 const NOVELAI_PROVIDER_PRESETS: ProviderPreset[] = [
     {

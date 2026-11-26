@@ -50,13 +50,9 @@ import {
     OFFICIAL_NOVELAI_MODELS,
     formatNovelAIModelLabel,
     resolveNovelAIModelFamily,
-} from '../../provider/novelai/novelai-models';
-import {
     OPENAI_MODEL_OPTIONS,
     isSiliconFlowService,
     resolveOpenAIModelCapabilities,
-} from '../../provider/openai/openai-models';
-import {
     GEMINI_API_BASE,
     GEMINI_ASPECT_RATIO_OPTIONS,
     GEMINI_CUSTOM_SERVICE_ID,
@@ -64,8 +60,6 @@ import {
     GEMINI_OFFICIAL_SERVICE_ID,
     buildGeminiImageSizeOptions,
     resolveGeminiModelCapabilities,
-} from '../../provider/gemini/gemini-models';
-import {
     GROK_API_BASE,
     GROK_ASPECT_RATIO_OPTIONS,
     GROK_CUSTOM_SERVICE_ID,
@@ -73,7 +67,10 @@ import {
     GROK_OFFICIAL_SERVICE_ID,
     GROK_RESOLUTIONS,
     resolveGrokModelCapabilities,
-} from '../../provider/grok/grok-models';
+    DEFAULT_ASPECT_RATIOS,
+    OPENAI_ASPECT_RATIOS,
+    GPT_IMAGE_ASPECT_RATIOS,
+} from '../../domain';
 import {
     SwitchControl,
     SelectControl,
@@ -81,11 +78,6 @@ import {
     SegmentedControlView,
     NumberInputControl,
 } from '../framework';
-import {
-    DEFAULT_ASPECT_RATIOS,
-    OPENAI_ASPECT_RATIOS,
-    GPT_IMAGE_ASPECT_RATIOS,
-} from '../composite/dimension-picker';
 import type { SelectOption } from '../components/select';
 import {
     applyPrimaryBoundCardSelection,

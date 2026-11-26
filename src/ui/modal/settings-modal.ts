@@ -626,9 +626,7 @@ export class SettingsModal implements Disposable {
     }
 
     private resolveProviderServerUrl(providerType: ProviderType): string {
-        const provider = providerRegistry.getProvider(providerType) as
-            | { getServerUrl?: () => string }
-            | undefined;
+        const provider = providerRegistry.getProvider(providerType);
         if (typeof provider?.getServerUrl === 'function') {
             return provider.getServerUrl();
         }

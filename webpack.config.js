@@ -28,7 +28,9 @@ const clientConfig = {
         extensions: ['.ts', '.tsx', '.js', '.json'],
         alias: {
             '@types': path.resolve(__dirname, '@types'),
+            '@domain': path.resolve(__dirname, 'src/domain'),
             '@util': path.resolve(__dirname, 'src/util'),
+            '@host': path.resolve(__dirname, 'src/host'),
             '@store': path.resolve(__dirname, 'src/store'),
             '@pipeline': path.resolve(__dirname, 'src/pipeline'),
             '@provider': path.resolve(__dirname, 'src/provider'),

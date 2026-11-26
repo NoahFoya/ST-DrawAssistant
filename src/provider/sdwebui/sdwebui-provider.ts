@@ -25,8 +25,8 @@ import {
 } from '../base-provider';
 import {
     applyTextLoraTagsToPrompt,
-    sanitizeLoraPrompts,
-} from '../../pipeline/lora-utils';
+    sanitizeLoraPromptsPure,
+} from '../../domain';
 import {
     base64ToBlob,
     ensureValidImageBlob,
@@ -324,12 +324,13 @@ export class SdWebUIProvider extends BaseGenerationProvider {
         const resolvedVae = (params.vaeName ?? drawingPreset?.vaeName) as string | undefined;
 
         const requestedLoras = request.loras ?? [];
-        const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+        const sanitized = sanitizeLoraPromptsPure(request.prompt, request.negativePrompt, {
             allowLora: true,
             allowWlr: false,
             sourceLabel: 'SD-WebUI 服务',
             guidance: 'SD-WebUI 仅在正向提示词支持标准 <lora:...> 语法，不兼容 WeiLin <wlr:...> 或负向标签',
         });
+        this.reportLoraWarning(sanitized.warningMessage, 'SD-WebUI 服务', sanitized.strippedTags);
 
         const fullPrompt = applyTextLoraTagsToPrompt(sanitized.positivePrompt, requestedLoras, 'lora');
         const fullNegativePrompt = sanitized.negativePrompt;

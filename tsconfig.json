@@ -29,8 +29,12 @@
     "paths": {
       "@types": ["@types/index.d.ts"],
       "@types/*": ["@types/*"],
+      "@domain": ["src/domain/index.ts"],
+      "@domain/*": ["src/domain/*"],
       "@util": ["src/util/index.ts"],
       "@util/*": ["src/util/*"],
+      "@host": ["src/host/index.ts"],
+      "@host/*": ["src/host/*"],
       "@store": ["src/store/index.ts"],
       "@store/*": ["src/store/*"],
       "@pipeline": ["src/pipeline/index.ts"],

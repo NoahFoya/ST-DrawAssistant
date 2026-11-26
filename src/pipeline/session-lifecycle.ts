@@ -11,6 +11,7 @@ import type { SlotMountTarget, DrawingSlotEntry, ChatMessage, Disposable } from 
 import { urlPool, type UrlPool } from '../store/url-pool';
 import { settingsStore, type SettingsStore } from '../store/settings-store';
 import { logger } from '../util/logger';
+import { getHostContext } from '../host';
 import { serverStorageService } from './server-storage-service';
 import { promptPipeline } from './prompt-pipeline';
 
@@ -62,11 +63,7 @@ export class SessionLifecycleManager implements Disposable {
         this._cancelTasksByChat = options.cancelTasksByChat;
         this._settingsStore = options.settingsStore ?? settingsStore;
         this._validateImageExists = options.validateImageExists;
-        this._getContext =
-            options.getContext ??
-            (() => {
-                return window.SillyTavern?.getContext?.();
-            });
+        this._getContext = options.getContext ?? (() => getHostContext());
     }
 
     /**

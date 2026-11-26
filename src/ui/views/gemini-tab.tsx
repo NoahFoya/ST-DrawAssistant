@@ -23,7 +23,7 @@ import {
     GEMINI_OFFICIAL_SERVICE_ID,
     buildGeminiImageSizeOptions,
     resolveGeminiModelCapabilities,
-} from '../../provider/gemini/gemini-models';
+} from '../../domain';
 
 const GEMINI_PROVIDER_PRESETS: ProviderPreset[] = [
     {

@@ -9,6 +9,7 @@
  */
 
 import { logger } from '../util/logger';
+import { browserStorage } from '../util/storage-port';
 
 /** 浏览器本地隔离存储键名 */
 export const LOCAL_SECRETS_KEY = 'st_da_local_secrets';
@@ -20,20 +21,6 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function isPlainRecord(item: unknown): item is Record<string, unknown> {
     return Boolean(item) && typeof item === 'object' && !Array.isArray(item);
-}
-
-function resolveBrowserStorage(): Storage | undefined {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            return window.localStorage;
-        }
-        if (typeof localStorage !== 'undefined') {
-            return localStorage;
-        }
-    } catch {
-        return undefined;
-    }
-    return undefined;
 }
 
 /**
@@ -122,9 +109,7 @@ export function restoreProviderSecretsFromStorage(
 ): void {
     if (!isPlainRecord(providers)) return;
     try {
-        const storage = resolveBrowserStorage();
-        if (!storage) return;
-        const raw = storage.getItem(storageKey);
+        const raw = browserStorage.getItem(storageKey);
         if (!raw) return;
         const secrets = JSON.parse(raw) as Record<string, Record<string, unknown>>;
         if (secrets && typeof secrets === 'object') {
@@ -150,15 +135,13 @@ export function persistProviderSecretsToStorage(
 ): void {
     if (!isPlainRecord(providers)) return;
     try {
-        const storage = resolveBrowserStorage();
-        if (!storage) return;
         const secrets: Record<string, Record<string, unknown>> = {};
         for (const [pKey, pCfg] of Object.entries(providers)) {
             if (FORBIDDEN_KEYS.has(pKey)) continue;
             const collected = collectSecretsDeep(pCfg, SECRET_FIELD_PATTERN);
             if (collected) secrets[pKey] = collected;
         }
-        storage.setItem(storageKey, JSON.stringify(secrets));
+        browserStorage.setItem(storageKey, JSON.stringify(secrets));
     } catch (err) {
         logger.warn('持久化私密凭据至本地隔离存储异常:', err);
     }

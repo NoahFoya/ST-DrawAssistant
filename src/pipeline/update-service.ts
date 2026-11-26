@@ -27,7 +27,17 @@ import {
     INSTALLED_COMMIT_SHA_KEY,
     PENDING_CHANGELOG_POPUP_KEY,
 } from '../config/constants';
-import { getHostRequestHeaders } from '../util/http-client';
+import {
+    discoverHostExtensionTargets,
+    extractHostApiError,
+    isHostContextAvailable,
+    postHostExtensionUpdate,
+    postHostExtensionVersion,
+    type HostExtensionTarget,
+    type HostExtensionUpdateResponse,
+    type HostExtensionVersionResponse,
+} from '../host';
+import { browserStorage } from '../util/storage-port';
 import { settingsStore, type SettingsStore } from '../store/settings-store';
 import { eventBus } from '../util/event-bus';
 import { logger } from '../util/logger';
@@ -43,18 +53,6 @@ const HOST_UPDATE_TIMEOUT_MS = 45000;
 const HOST_DISCOVER_TIMEOUT_MS = 3000;
 /** 限流响应未附带重置头时的默认冷却时长 (10 分钟) */
 const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 10 * 60 * 1000;
-
-interface HostExtensionTarget {
-    readonly extensionName: string;
-    readonly global: boolean;
-}
-
-const DEFAULT_HOST_TARGETS: ReadonlyArray<HostExtensionTarget> = [
-    { extensionName: 'third-party/ST-DrawAssistant', global: false },
-    { extensionName: 'ST-DrawAssistant', global: false },
-    { extensionName: 'third-party/ST-DrawAssistant', global: true },
-    { extensionName: 'ST-DrawAssistant', global: true },
-];
 
 /**
  * 对比点分语义版本号 (`a` > `b` 返回 1，相等返回 0，小于返回 -1)。
@@ -110,6 +108,8 @@ export class UpdateService {
     private _resolvedGithubRepo: string | null = null;
     private _resolvedDefaultBranch: { repo: string; branch: string } | null = null;
     private _rateLimitedUntil = 0;
+    private _checkGeneration = 0;
+    private _inFlightGeneration = 0;
     private _inFlightCheckPromise: Promise<CheckUpdateResult> | null = null;
     private _inFlightCheckController: AbortController | null = null;
     private _activeCheckWaiters = 0;
@@ -140,6 +140,8 @@ export class UpdateService {
      * 清空内存缓存与限流时间戳。
      */
     public clearCache(): void {
+        this._checkGeneration += 1;
+        this._inFlightGeneration = 0;
         this._cachedHostTarget = null;
         this._resolvedGithubRepo = null;
         this._resolvedDefaultBranch = null;
@@ -155,27 +157,14 @@ export class UpdateService {
      * 从本地存储中读取已安装的提交短哈希。
      */
     public getLocalInstalledCommitSha(): string | null {
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                return window.localStorage.getItem(INSTALLED_COMMIT_SHA_KEY);
-            }
-        } catch {
-            // 本地存储不可用时忽略
-        }
-        return null;
+        return browserStorage.getItem(INSTALLED_COMMIT_SHA_KEY);
     }
 
     /**
      * 将已安装的提交短哈希写入本地存储。
      */
     public setLocalInstalledCommitSha(sha: string): void {
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem(INSTALLED_COMMIT_SHA_KEY, sha);
-            }
-        } catch {
-            // 本地存储不可用时忽略
-        }
+        browserStorage.setItem(INSTALLED_COMMIT_SHA_KEY, sha);
     }
 
     /**
@@ -195,7 +184,7 @@ export class UpdateService {
 
     /** 是否处于 SillyTavern 浏览器宿主上下文 */
     private isHostContextAvailable(): boolean {
-        return typeof window !== 'undefined' && Boolean(window.SillyTavern?.getContext);
+        return isHostContextAvailable();
     }
 
     /** 检查是否处于 GitHub API 限流冷却窗口 */
@@ -238,75 +227,12 @@ export class UpdateService {
     private async resolveHostExtensionTargets(
         externalSignal?: AbortSignal
     ): Promise<HostExtensionTarget[]> {
-        const dedupeTargets = (list: ReadonlyArray<HostExtensionTarget>): HostExtensionTarget[] => {
-            const seen = new Set<string>();
-            const result: HostExtensionTarget[] = [];
-            for (const item of list) {
-                const key = `${item.global ? 'g' : 'l'}:${item.extensionName}`;
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    result.push(item);
-                }
-            }
-            return result;
-        };
-
-        if (this._cachedHostTarget) {
-            return dedupeTargets([this._cachedHostTarget, ...DEFAULT_HOST_TARGETS]);
-        }
-
-        const discovered: HostExtensionTarget[] = [];
         const { signal, cleanup } = this.createTimeoutSignal(HOST_DISCOVER_TIMEOUT_MS, externalSignal);
         try {
-            const resp = await fetch('/api/extensions/discover', {
-                method: 'GET',
-                headers: getHostRequestHeaders(),
-                signal,
-            });
-            if (resp.ok) {
-                const list = (await resp.json()) as unknown;
-                if (Array.isArray(list)) {
-                    for (const entry of list) {
-                        const rec = entry as { name?: unknown; type?: unknown };
-                        const name = typeof rec?.name === 'string' ? rec.name.trim() : '';
-                        if (
-                            name &&
-                            (name === 'ST-DrawAssistant' || name.endsWith('/ST-DrawAssistant'))
-                        ) {
-                            discovered.push({
-                                extensionName: name,
-                                global: rec.type === 'global',
-                            });
-                        }
-                    }
-                }
-            }
-        } catch {
-            // 宿主未提供 discover 接口或网络请求失败时回退至默认候选列表
+            return await discoverHostExtensionTargets(this._cachedHostTarget, signal);
         } finally {
             cleanup();
         }
-
-        return dedupeTargets([...discovered, ...DEFAULT_HOST_TARGETS]);
-    }
-
-    /** 提取宿主接口返回的错误信息文本 */
-    private async extractResponseError(resp: Response): Promise<string> {
-        const text = await resp.text().catch(() => '');
-        if (text) {
-            try {
-                const json = JSON.parse(text) as { error?: unknown; message?: unknown };
-                if (typeof json.error === 'string' && json.error.trim()) {
-                    return json.error.trim();
-                }
-                if (typeof json.message === 'string' && json.message.trim()) {
-                    return json.message.trim();
-                }
-            } catch {
-                return text.slice(0, 200).trim();
-            }
-        }
-        return `HTTP ${resp.status}`;
     }
 
     /** 通过宿主 `/api/extensions/version` 校验本地 Git 仓库真实提交状态 */
@@ -317,10 +243,6 @@ export class UpdateService {
         repoSlug: string;
     } | null> {
         const targets = await this.resolveHostExtensionTargets(externalSignal);
-        const headers = {
-            'Content-Type': 'application/json',
-            ...getHostRequestHeaders(),
-        };
 
         for (const target of targets) {
             if (externalSignal?.aborted) {
@@ -331,15 +253,10 @@ export class UpdateService {
                 externalSignal
             );
             try {
-                const resp = await fetch('/api/extensions/version', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(target),
-                    signal,
-                });
+                const resp = await postHostExtensionVersion(target, signal);
 
                 if (!resp.ok) {
-                    const errMsg = await this.extractResponseError(resp);
+                    const errMsg = await extractHostApiError(resp);
                     // 若明确提示非 Git 仓库或缺少 git 命令，无需继续尝试其余作用域
                     if (/not a git repository|spawn git|enoent/i.test(errMsg)) {
                         logger.info(`[UpdateService] 宿主扩展暂不支持 Git 版本比对 (${errMsg})，回退远程校验`);
@@ -348,12 +265,7 @@ export class UpdateService {
                     continue;
                 }
 
-                const data = (await resp.json()) as {
-                    currentCommitHash?: string;
-                    currentBranchName?: string;
-                    isUpToDate?: boolean;
-                    remoteUrl?: string;
-                };
+                const data = (await resp.json()) as HostExtensionVersionResponse;
                 if (typeof data?.isUpToDate !== 'boolean' && !data?.currentCommitHash) {
                     continue;
                 }
@@ -565,8 +477,9 @@ export class UpdateService {
         return null;
     }
 
-    /** 构造更新检测结果并同步响应式状态 */
+    /** 构造更新检测结果并同步响应式状态（仅当前代数仍有效时写入状态） */
     private commitCheckState(
+        generation: number,
         patch: Partial<UpdateState>,
         result: Omit<CheckUpdateResult, 'currentSha' | 'remoteSha' | 'remoteMessage'> & {
             currentSha?: string | null;
@@ -574,6 +487,9 @@ export class UpdateService {
             remoteMessage?: string | null;
         }
     ): CheckUpdateResult {
+        if (generation !== this._checkGeneration) {
+            return this.buildCancelledCheckResult();
+        }
         this.setState(patch);
         return {
             success: result.success,
@@ -602,16 +518,19 @@ export class UpdateService {
         };
     }
 
-    /** 取消时仅结束检查状态，不污染既有成功结果或错误消息 */
-    private cancelCheckWithoutError(): CheckUpdateResult {
-        this.setState({ isChecking: false });
+    /** 取消时仅在当前代数有效时结束检查状态，避免旧请求污染后续检查或既有结果 */
+    private cancelCheckWithoutError(generation: number): CheckUpdateResult {
+        if (generation === this._checkGeneration && this._state.isChecking) {
+            this.setState({ isChecking: false });
+        }
         return this.buildCancelledCheckResult();
     }
 
-    /** 让单个调用方的 AbortSignal 与共享在途请求解耦，仅当全部订阅方均中止时取消底层请求 */
+    /** 让单个调用方的 AbortSignal 与共享在途请求解耦，仅当当前代数全部订阅方均中止时取消底层请求 */
     private awaitCheckWithCallerSignal(
         task: Promise<CheckUpdateResult>,
         sharedController: AbortController | null,
+        generation: number,
         callerSignal?: AbortSignal
     ): Promise<CheckUpdateResult> {
         if (callerSignal?.aborted) {
@@ -628,7 +547,8 @@ export class UpdateService {
                 abortSharedIfEmpty &&
                 this._activeCheckWaiters === 0 &&
                 sharedController &&
-                this._inFlightCheckController === sharedController
+                this._inFlightCheckController === sharedController &&
+                this._inFlightGeneration === generation
             ) {
                 sharedController.abort();
             }
@@ -662,12 +582,6 @@ export class UpdateService {
 
     /**
      * 在线检测插件更新。
-     *
-     * @remarks
-     * 1. 若距上次成功检测在冷却期内且未传 `force: true`，直接返回缓存结果；
-     * 2. SillyTavern 宿主下优先调用 `/api/extensions/version` 核对本地 Git 分支与远程差异；
-     * 3. 宿主非 Git 安装或独立环境下，降级请求 GitHub Commits API（带限流冷却识别），
-     *    若触发限流或网络异常则自动回退读取远端 `manifest.json` 语义版本对比。
      */
     public async checkUpdate(options?: {
         branch?: string;
@@ -693,67 +607,63 @@ export class UpdateService {
             };
         }
 
-        if (this._inFlightCheckPromise) {
+        if (this._inFlightCheckPromise && this._inFlightGeneration === this._checkGeneration) {
             if (!options?.force) {
                 return await this.awaitCheckWithCallerSignal(
                     this._inFlightCheckPromise,
                     this._inFlightCheckController,
+                    this._inFlightGeneration,
                     options?.signal
                 );
             }
-            const callerSignal = options?.signal;
-            if (callerSignal?.aborted) {
-                return this.buildCancelledCheckResult();
-            }
-            if (callerSignal) {
-                let onAbort: (() => void) | null = null;
-                try {
-                    await Promise.race([
-                        this._inFlightCheckPromise.catch(() => {}),
-                        new Promise<void>((resolve) => {
-                            onAbort = () => resolve();
-                            callerSignal.addEventListener('abort', onAbort, { once: true });
-                        }),
-                    ]);
-                } finally {
-                    if (onAbort) {
-                        callerSignal.removeEventListener('abort', onAbort);
-                    }
-                }
-            } else {
-                await this._inFlightCheckPromise.catch(() => {});
-            }
-            if (callerSignal?.aborted) {
-                return this.buildCancelledCheckResult();
-            }
+            // 强制刷新立即失效旧检查代数并中止底层请求，避免阻塞新检查启动
+            this._checkGeneration += 1;
+            const staleController = this._inFlightCheckController;
+            this._inFlightCheckPromise = null;
+            this._inFlightCheckController = null;
+            this._inFlightGeneration = 0;
+            this._activeCheckWaiters = 0;
+            staleController?.abort();
         }
 
+        const generation = ++this._checkGeneration;
         const sharedController = new AbortController();
+        this._inFlightGeneration = generation;
         this._inFlightCheckController = sharedController;
         this._activeCheckWaiters = 0;
 
-        const task = this.executeCheckUpdate({
+        const task = this.executeCheckUpdate(generation, {
             ...options,
             signal: sharedController.signal,
         });
         this._inFlightCheckPromise = task;
         try {
-            return await this.awaitCheckWithCallerSignal(task, sharedController, options?.signal);
+            return await this.awaitCheckWithCallerSignal(
+                task,
+                sharedController,
+                generation,
+                options?.signal
+            );
         } finally {
             if (this._inFlightCheckPromise === task) {
                 this._inFlightCheckPromise = null;
                 this._inFlightCheckController = null;
+                this._inFlightGeneration = 0;
                 this._activeCheckWaiters = 0;
             }
         }
     }
 
-    private async executeCheckUpdate(options?: {
-        branch?: string;
-        signal?: AbortSignal;
-        timeoutMs?: number;
-        force?: boolean;
-    }): Promise<CheckUpdateResult> {
+    private async executeCheckUpdate(
+        generation: number,
+        options?: {
+            branch?: string;
+            signal?: AbortSignal;
+            timeoutMs?: number;
+            force?: boolean;
+        }
+    ): Promise<CheckUpdateResult> {
+        const isCurrentGen = () => generation === this._checkGeneration;
         const explicitBranch = options?.branch?.trim() || '';
 
         // 非强制检查且距离上次成功检测不足 5 分钟时直接复用缓存状态，防止频繁切换页签打满请求
@@ -779,6 +689,10 @@ export class UpdateService {
             };
         }
 
+        if (!isCurrentGen() || options?.signal?.aborted) {
+            return this.buildCancelledCheckResult();
+        }
+
         const timeoutMs = options?.timeoutMs ?? DEFAULT_CHECK_TIMEOUT_MS;
         this.setState({
             isChecking: true,
@@ -791,6 +705,9 @@ export class UpdateService {
             if (this.isHostContextAvailable() && !explicitBranch) {
                 try {
                     const hostRes = await this.tryHostGitVersionCheck(options?.signal);
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
+                    }
                     if (hostRes) {
                         let remoteSha: string | null = hostRes.hasUpdate ? null : hostRes.currentSha;
                         let remoteMessage: string | null = null;
@@ -810,6 +727,10 @@ export class UpdateService {
                             }
                         }
 
+                        if (!isCurrentGen() || options?.signal?.aborted) {
+                            return this.cancelCheckWithoutError(generation);
+                        }
+
                         const now = Date.now();
                         const branchDesc = hostRes.branch ? `（分支: ${hostRes.branch}）` : '';
                         const msg = hostRes.hasUpdate
@@ -819,6 +740,7 @@ export class UpdateService {
                             : `当前已是最新版本 (${hostRes.currentSha || `v${EXTENSION_VERSION}`})`;
 
                         return this.commitCheckState(
+                            generation,
                             {
                                 isChecking: false,
                                 hasUpdate: hostRes.hasUpdate,
@@ -843,8 +765,8 @@ export class UpdateService {
                         );
                     }
                 } catch (err: unknown) {
-                    if (options?.signal?.aborted) {
-                        return this.cancelCheckWithoutError();
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
                     }
                     logger.warn('[UpdateService] 宿主 Git 版本检测异常，降级远程检测:', err);
                 }
@@ -859,13 +781,16 @@ export class UpdateService {
                         Math.min(timeoutMs, 5000),
                         options?.signal
                     );
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
+                    }
                     if (defaultBranch) {
                         resolvedBranch = defaultBranch;
                         this.setState({ currentBranch: resolvedBranch });
                     }
                 } catch {
-                    if (options?.signal?.aborted) {
-                        return this.cancelCheckWithoutError();
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
                     }
                 }
             }
@@ -882,6 +807,9 @@ export class UpdateService {
                         options?.signal,
                         targetRepo
                     );
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
+                    }
                     const localSha = this.getLocalInstalledCommitSha();
                     if (localSha) {
                         const hasUpdate = localSha.toLowerCase() !== commit.sha.toLowerCase();
@@ -891,6 +819,7 @@ export class UpdateService {
                             : `当前已是最新版本 (${localSha})`;
 
                         return this.commitCheckState(
+                            generation,
                             {
                                 isChecking: false,
                                 hasUpdate,
@@ -918,8 +847,8 @@ export class UpdateService {
                     // 无本地 commit 记录（如 ZIP 安装首次检查）时，不将远端 SHA 写入本地缓存，继续由 manifest 语义版本判定更新
                     fetchedRemoteCommit = commit;
                 } catch (err: unknown) {
-                    if (options?.signal?.aborted) {
-                        return this.cancelCheckWithoutError();
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
                     }
                     apiErrorMsg = err instanceof Error ? err.message : String(err);
                     logger.warn(`[UpdateService] GitHub 提交检测失败: ${apiErrorMsg}`);
@@ -930,7 +859,7 @@ export class UpdateService {
             }
 
             // 3. 静态 manifest.json 语义版本检查（解决无本地 SHA 或 GitHub API 限流场景）
-            if (!options?.signal?.aborted) {
+            if (isCurrentGen() && !options?.signal?.aborted) {
                 try {
                     const remoteVersion = await this.fetchRemoteManifestVersion(
                         resolvedBranch,
@@ -938,6 +867,9 @@ export class UpdateService {
                         options?.signal,
                         targetRepo
                     );
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
+                    }
                     if (remoteVersion) {
                         const hasNewVersion = compareSemver(remoteVersion, EXTENSION_VERSION) > 0;
                         const now = Date.now();
@@ -952,6 +884,7 @@ export class UpdateService {
                               : `当前已是最新版本 (v${EXTENSION_VERSION})`;
 
                         return this.commitCheckState(
+                            generation,
                             {
                                 isChecking: false,
                                 hasUpdate: hasNewVersion,
@@ -973,13 +906,13 @@ export class UpdateService {
                         );
                     }
                 } catch (err: unknown) {
-                    if (options?.signal?.aborted) {
-                        return this.cancelCheckWithoutError();
+                    if (!isCurrentGen() || options?.signal?.aborted) {
+                        return this.cancelCheckWithoutError(generation);
                     }
                     logger.warn('[UpdateService] 静态版本清单回退检测失败:', err);
                 }
             } else {
-                return this.cancelCheckWithoutError();
+                return this.cancelCheckWithoutError(generation);
             }
 
             // 4. 所有可用版本比较渠道均失败
@@ -989,6 +922,7 @@ export class UpdateService {
                     ? '未能获取远端版本清单完成比对'
                     : '网络连接异常，无法获取更新信息');
             return this.commitCheckState(
+                generation,
                 {
                     isChecking: false,
                     rateLimitedUntil: this.isRateLimited() ? this._rateLimitedUntil : null,
@@ -1003,7 +937,7 @@ export class UpdateService {
                 }
             );
         } finally {
-            if (this._state.isChecking) {
+            if (isCurrentGen() && this._state.isChecking) {
                 this.setState({ isChecking: false });
             }
         }
@@ -1056,10 +990,6 @@ export class UpdateService {
 
         try {
             const targets = await this.resolveHostExtensionTargets(options?.signal);
-            const headers = {
-                'Content-Type': 'application/json',
-                ...getHostRequestHeaders(),
-            };
 
             let updateSuccess = false;
             let pulledSha: string | null = null;
@@ -1074,18 +1004,11 @@ export class UpdateService {
                     options?.signal
                 );
                 try {
-                    const resp = await fetch('/api/extensions/update', {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(target),
-                        signal,
-                    });
+                    const resp = await postHostExtensionUpdate(target, signal);
 
                     if (resp.ok) {
                         this._cachedHostTarget = target;
-                        const data = (await resp.json().catch(() => ({}))) as {
-                            currentCommitHash?: string;
-                        };
+                        const data = (await resp.json().catch(() => ({}))) as HostExtensionUpdateResponse;
                         if (typeof data?.currentCommitHash === 'string' && data.currentCommitHash.trim()) {
                             pulledSha = data.currentCommitHash.trim().slice(0, 7);
                         }
@@ -1093,7 +1016,7 @@ export class UpdateService {
                         break;
                     }
 
-                    lastError = await this.extractResponseError(resp);
+                    lastError = await extractHostApiError(resp);
                     if (/not a git repository|dirty|local changes|would be overwritten|uncommitted|spawn git|enoent/i.test(lastError)) {
                         break;
                     }
@@ -1196,34 +1119,15 @@ export class UpdateService {
 
     /** 标记通过应用内更新拉取后需在下次打开设置面板时弹出更新说明 */
     public markPendingChangelogPopup(): void {
-        try {
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(PENDING_CHANGELOG_POPUP_KEY, '1');
-            }
-        } catch {
-            // 隐私模式下忽略 localStorage 异常
-        }
+        browserStorage.setItem(PENDING_CHANGELOG_POPUP_KEY, '1');
     }
 
     private hasPendingPopupFlag(): boolean {
-        try {
-            return (
-                typeof localStorage !== 'undefined' &&
-                localStorage.getItem(PENDING_CHANGELOG_POPUP_KEY) === '1'
-            );
-        } catch {
-            return false;
-        }
+        return browserStorage.getItem(PENDING_CHANGELOG_POPUP_KEY) === '1';
     }
 
     private clearPendingPopupFlag(): void {
-        try {
-            if (typeof localStorage !== 'undefined') {
-                localStorage.removeItem(PENDING_CHANGELOG_POPUP_KEY);
-            }
-        } catch {
-            // 忽略清理异常
-        }
+        browserStorage.removeItem(PENDING_CHANGELOG_POPUP_KEY);
     }
 
     /**

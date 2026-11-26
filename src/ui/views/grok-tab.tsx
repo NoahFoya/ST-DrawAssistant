@@ -23,7 +23,7 @@ import {
     GROK_OFFICIAL_SERVICE_ID,
     GROK_RESOLUTIONS,
     resolveGrokModelCapabilities,
-} from '../../provider/grok/grok-models';
+} from '../../domain';
 
 const GROK_PROVIDER_PRESETS: ProviderPreset[] = [
     {
