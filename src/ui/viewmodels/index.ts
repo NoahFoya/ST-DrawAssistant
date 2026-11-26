@@ -1,10 +1,2 @@
-/**
- * 视图状态模型与响应式业务控制器模块聚合导出 (ViewModels)。
- */
-
-export * from './reactive-settings';
-export * from './preset-controller';
-export * from './provider-tab-vm';
-export * from './storage-maintenance';
-export * from './logs-stats-vm';
-export * from './gallery-vm';
+/** @deprecated 迁移过渡聚合导出，将于 Batch 4 移除，请改用 `../state`。 */
+export * from '../state';

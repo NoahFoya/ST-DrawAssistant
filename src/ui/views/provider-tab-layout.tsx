@@ -9,54 +9,60 @@
  */
 
 import type { ComponentChildren, VNode } from 'preact';
-import type { ProviderPreset } from '../composite/connection-card';
-import {
-    PreactSettingsView,
-    ConnectionCardView,
-    PromptPresetCardView,
-    WorkflowCardView,
-} from '../framework';
+import type { SettingsView } from '../types';
+import { ConnectionCard, type ProviderPreset } from '../composite/connection-card';
+import { PromptPresetCard } from '../composite/prompt-preset-card';
+import { WorkflowCard } from '../composite/workflow-card';
+import { createPreactSettingsView, type StatefulSettingsView } from '../framework';
 import { openBlueprintModal } from '../modal/blueprint-modal';
-import type { ProviderTabViewModel } from '../viewmodels/provider-tab-vm';
+import type { ProviderTabState, CustomBodyJsonController } from '../state';
+
+export interface ProviderTabViewOptions {
+    id: string;
+    title: string;
+    className: string;
+    vm: ProviderTabState;
+    customBodyJson?: CustomBodyJsonController;
+    render: () => ComponentChildren;
+}
 
 /**
- * 生图服务选项卡公共视图基类。
- * 统一封装 ProviderTabViewModel 的激活、切出、未保存草稿校验与销毁生命周期。
+ * 生图服务选项卡共享适配器：统一托管 ProviderTabState 生命周期、未保存校验与可选 CustomBodyJson 校验。
  */
-export abstract class ProviderTabView extends PreactSettingsView {
-    public abstract readonly vm: ProviderTabViewModel;
-
-    public override activate(): void {
-        super.activate();
-        this.vm.activate();
-    }
-
-    public override deactivate(): void {
-        super.deactivate();
-        this.vm.deactivate();
-    }
-
-    public hasUnsavedChanges(): boolean {
-        return this.vm.hasUnsavedChanges();
-    }
-
-    public saveUnsavedChanges(): Promise<boolean> {
-        return this.vm.saveUnsavedChanges();
-    }
-
-    public discardUnsavedChanges(): void {
-        this.vm.discardUnsavedChanges();
-    }
-
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
-    }
+export function createProviderTabView(
+    options: ProviderTabViewOptions
+): StatefulSettingsView<ProviderTabState> & SettingsView {
+    const { vm, customBodyJson } = options;
+    return createPreactSettingsView<ProviderTabState>({
+        id: options.id,
+        title: options.title,
+        className: options.className,
+        state: vm,
+        render: options.render,
+        onActivate: () => {
+            vm.activate();
+            customBodyJson?.syncOnActivate();
+        },
+        onDeactivate: () => vm.deactivate(),
+        onDispose: () => vm.dispose(),
+        hasUnsavedChanges: () =>
+            vm.hasUnsavedChanges() || Boolean(customBodyJson && !customBodyJson.isValid.value),
+        saveUnsavedChanges: async () => {
+            if (customBodyJson && !customBodyJson.validateBeforeSave()) {
+                return false;
+            }
+            return await vm.saveUnsavedChanges();
+        },
+        discardUnsavedChanges: () => {
+            vm.discardUnsavedChanges();
+            customBodyJson?.syncFromDraft();
+        },
+    });
 }
 
 export interface ProviderTabLayoutProps {
     /** 视图绑定的提供商状态模型 */
-    vm: ProviderTabViewModel;
+    vm: ProviderTabState;
     /** 连接卡片标题 */
     connectionTitle?: string;
     /** 连接卡片副标题 */
@@ -96,7 +102,7 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
 
     return (
         <>
-            <ConnectionCardView
+            <ConnectionCard
                 providerType={vm.provider}
                 title={props.connectionTitle}
                 subtitle={props.connectionSubtitle}
@@ -124,10 +130,12 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
             {props.children}
 
             {props.showWorkflowManager && (
-                <WorkflowCardView
+                <WorkflowCard
                     presets={workflowPresets}
                     activePresetId={activeWorkflowId}
-                    onInstanceChange={(inst) => vm.registerWorkflowCard(inst)}
+                    value={vm.workflowDraft.value}
+                    dirty={vm.isWorkflowDirty.value}
+                    onChange={(data) => vm.updateWorkflowDraft(data)}
                     onAction={(action, wfId, data) =>
                         vm.handleWorkflowAssetAction(action, wfId, data)
                     }
@@ -150,10 +158,12 @@ export function ProviderTabLayout(props: ProviderTabLayoutProps): VNode {
                 />
             )}
 
-            <PromptPresetCardView
+            <PromptPresetCard
                 presets={promptPresets}
                 activePresetId={activePromptId}
-                onInstanceChange={(inst) => vm.registerPromptCard(inst)}
+                value={vm.promptDraft.value}
+                dirty={vm.isPromptDirty.value}
+                onChange={(data) => vm.updatePromptDraft(data)}
                 showLora={props.showLoraInPromptManager !== false}
                 showNegativePrompt={props.showNegativeInPromptManager !== false}
                 availableModels={vm.serverLoras.value}

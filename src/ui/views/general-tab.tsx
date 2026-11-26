@@ -8,6 +8,7 @@
  */
 
 import type { VNode } from 'preact';
+import type { SettingsView } from '../types';
 import type {
     ImageDisplayMode,
     ImageStorageQuality,
@@ -15,9 +16,9 @@ import type {
     ThinkingDisplayMode,
     TransportMode,
 } from '@types';
-import { PreactSettingsView, SchemaForm, type CardSchema } from '../framework';
+import { createPreactSettingsView, SchemaForm, type CardSchema } from '../framework';
 import { TauriRelayNotice } from '../components';
-import { ReactiveSettingsBridge } from '../viewmodels';
+import { settingsStore } from '../../store/settings-store';
 import { promptInjector } from '../../pipeline/prompt-injector';
 import { hostRegexService } from '../../pipeline/host-regex-service';
 import {
@@ -25,6 +26,7 @@ import {
     getTransportModeTooltip,
     TRANSPORT_MODE_OPTIONS,
 } from '../../util/http-client';
+import { PROVIDER_SELECT_OPTIONS } from '../../domain';
 
 interface GeneralFormModel {
     enabled: boolean;
@@ -73,14 +75,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'select',
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
-                options: [
-                    { label: 'ComfyUI', value: 'comfyui' },
-                    { label: 'SD-WebUI / Forge', value: 'sdwebui' },
-                    { label: 'NovelAI', value: 'novelai' },
-                    { label: 'OpenAI 兼容', value: 'openai' },
-                    { label: 'Google Gemini', value: 'gemini' },
-                    { label: 'xAI Grok', value: 'grok' },
-                ],
+                options: [...PROVIDER_SELECT_OPTIONS],
             },
             {
                 key: 'transport',
@@ -367,247 +362,233 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     },
 ];
 
-export class GeneralTabView extends PreactSettingsView {
-    public readonly id = 'general';
-    public readonly title = '插件设置';
+function buildGeneralViewModel(): GeneralFormModel {
+    const s = settingsStore.signals.settings.value;
+    const ui = s.ui;
+    const floorButton = ui?.floorButton;
+    const imageActionPanel = ui?.imageActionPanel;
+    const lightbox = ui?.lightbox;
+    const img = ui?.imageDisplay;
 
-    private readonly bridge: ReactiveSettingsBridge;
+    return {
+        enabled: s.enabled ?? true,
+        activeProvider: (s.activeProvider || 'comfyui') as ProviderType,
+        transport: (s.transport || 'direct') as TransportMode,
+        timeoutSec: Math.round((s.taskTimeoutMs || 120000) / 1000),
+        cancelOnChatChange: s.cancelOnChatChange ?? true,
+        cancelOnSwipe: s.cancelOnSwipe ?? true,
+        promptStartTag: s.promptStartTag || 'image###',
+        promptEndTag: s.promptEndTag || '###',
+        autoGenerate: s.autoGenerate ?? false,
+        hideButtonOnDone: floorButton?.hideOnDone ?? false,
+        imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
+        lightboxEnabled: lightbox?.enabled ?? true,
+        lightboxHistoryLimit: Math.max(
+            0,
+            Math.min(50, Math.round(Number(lightbox?.historyLimit ?? 10)))
+        ),
+        cleanPrompt: s.cleanPrompt ?? true,
+        cleanPromptPunctuation: s.cleanPromptPunctuation ?? true,
+        normalizeChinesePunctuation: Boolean(s.normalizeChinesePunctuation),
+        thinkingDisplayMode: (s.thinkingDisplayMode || 'show') as ThinkingDisplayMode,
+        cleanHistoryThinking: Boolean(s.cleanHistoryThinking),
+        cleanHistoryMarkup: Boolean(s.cleanHistoryMarkup),
+        align: (img?.align || 'center') as GeneralFormModel['align'],
+        objectFit: (img?.objectFit || 'contain') as GeneralFormModel['objectFit'],
+        maxWidthPct: img?.maxWidthPct ?? 100,
+        maxHeight: img?.maxHeight ?? 480,
+        rounded: img?.rounded ?? true,
+        displayMode: (img?.displayMode || 'normal') as ImageDisplayMode,
+        imageQuality: (s.imageQuality || 'original') as ImageStorageQuality,
+        saveToServer: s.saveToServer ?? false,
+    };
+}
 
-    public constructor() {
-        super('da-tab-pane');
-        this.bridge = new ReactiveSettingsBridge(false);
-        this.mountPreact();
-    }
+function updateImageDisplay(patch: {
+    align?: 'center' | 'flex-start' | 'flex-end';
+    objectFit?: 'contain' | 'cover' | 'none';
+    maxWidthPct?: number;
+    maxHeight?: number;
+    rounded?: boolean;
+    displayMode?: ImageDisplayMode;
+}): void {
+    const current = settingsStore.get('ui')?.imageDisplay ?? {
+        align: 'center' as const,
+        objectFit: 'contain' as const,
+        maxWidthPct: 100,
+        maxHeight: 480,
+        rounded: true,
+        displayMode: 'normal' as const,
+    };
+    settingsStore.updateUi({
+        imageDisplay: {
+            ...current,
+            ...patch,
+        },
+    });
+}
 
-    private buildViewModel(): GeneralFormModel {
-        const s = this.bridge.settings.value;
-        const ui = s.ui;
-        const floorButton = ui?.floorButton;
-        const imageActionPanel = ui?.imageActionPanel;
-        const lightbox = ui?.lightbox;
-        const img = ui?.imageDisplay;
-
-        return {
-            enabled: s.enabled ?? true,
-            activeProvider: (s.activeProvider || 'comfyui') as ProviderType,
-            transport: (s.transport || 'direct') as TransportMode,
-            timeoutSec: Math.round((s.taskTimeoutMs || 120000) / 1000),
-            cancelOnChatChange: s.cancelOnChatChange ?? true,
-            cancelOnSwipe: s.cancelOnSwipe ?? true,
-            promptStartTag: s.promptStartTag || 'image###',
-            promptEndTag: s.promptEndTag || '###',
-            autoGenerate: s.autoGenerate ?? false,
-            hideButtonOnDone: floorButton?.hideOnDone ?? false,
-            imageActionPanelEnabled: imageActionPanel?.enabled ?? true,
-            lightboxEnabled: lightbox?.enabled ?? true,
-            lightboxHistoryLimit: Math.max(0, Math.min(50, Math.round(Number(lightbox?.historyLimit ?? 10)))),
-            cleanPrompt: s.cleanPrompt ?? true,
-            cleanPromptPunctuation: s.cleanPromptPunctuation ?? true,
-            normalizeChinesePunctuation: Boolean(s.normalizeChinesePunctuation),
-            thinkingDisplayMode: (s.thinkingDisplayMode || 'show') as ThinkingDisplayMode,
-            cleanHistoryThinking: Boolean(s.cleanHistoryThinking),
-            cleanHistoryMarkup: Boolean(s.cleanHistoryMarkup),
-            align: (img?.align || 'center') as GeneralFormModel['align'],
-            objectFit: (img?.objectFit || 'contain') as GeneralFormModel['objectFit'],
-            maxWidthPct: img?.maxWidthPct ?? 100,
-            maxHeight: img?.maxHeight ?? 480,
-            rounded: img?.rounded ?? true,
-            displayMode: (img?.displayMode || 'normal') as ImageDisplayMode,
-            imageQuality: (s.imageQuality || 'original') as ImageStorageQuality,
-            saveToServer: s.saveToServer ?? false,
-        };
-    }
-
-    private handleFieldChange<K extends keyof GeneralFormModel>(
-        key: K,
-        val: GeneralFormModel[K]
-    ): void {
-        switch (key) {
-            case 'enabled':
-                this.bridge.set('enabled', Boolean(val));
-                void promptInjector.scheduleSyncToHost();
-                break;
-            case 'activeProvider':
-                this.bridge.set('activeProvider', val as ProviderType);
-                break;
-            case 'transport':
-                this.bridge.set('transport', val as TransportMode);
-                break;
-            case 'timeoutSec':
-                this.bridge.set('taskTimeoutMs', Math.max(30, Number(val)) * 1000);
-                break;
-            case 'cancelOnChatChange':
-                this.bridge.set('cancelOnChatChange', Boolean(val));
-                break;
-            case 'cancelOnSwipe':
-                this.bridge.set('cancelOnSwipe', Boolean(val));
-                break;
-            case 'promptStartTag':
-                this.bridge.set('promptStartTag', String(val).trim() || 'image###');
-                break;
-            case 'promptEndTag':
-                this.bridge.set('promptEndTag', String(val).trim() || '###');
-                break;
-            case 'autoGenerate':
-                this.bridge.set('autoGenerate', Boolean(val));
-                break;
-            case 'hideButtonOnDone':
-                this.bridge.updateUi({
-                    floorButton: {
-                        hideOnDone: Boolean(val),
-                    },
-                });
-                break;
-            case 'imageActionPanelEnabled':
-                this.bridge.updateUi({
-                    imageActionPanel: {
-                        enabled: Boolean(val),
-                    },
-                });
-                break;
-            case 'lightboxEnabled': {
-                const current = this.bridge.get('ui')?.lightbox;
-                this.bridge.updateUi({
-                    lightbox: {
-                        ...(current || {}),
-                        enabled: Boolean(val),
-                    },
-                });
-                break;
-            }
-            case 'lightboxHistoryLimit': {
-                const parsed = Number(val);
-                const clamped = Number.isFinite(parsed) ? Math.max(0, Math.min(50, Math.round(parsed))) : 10;
-                const current = this.bridge.get('ui')?.lightbox;
-                this.bridge.updateUi({
-                    lightbox: {
-                        enabled: current?.enabled ?? true,
-                        historyLimit: clamped,
-                    },
-                });
-                break;
-            }
-            case 'cleanPrompt':
-                this.bridge.set('cleanPrompt', Boolean(val));
-                break;
-            case 'cleanPromptPunctuation':
-                this.bridge.set('cleanPromptPunctuation', Boolean(val));
-                break;
-            case 'normalizeChinesePunctuation':
-                this.bridge.set('normalizeChinesePunctuation', Boolean(val));
-                break;
-            case 'thinkingDisplayMode':
-                this.bridge.set('thinkingDisplayMode', val as ThinkingDisplayMode);
-                hostRegexService.syncToHost({ reloadChatOnDisplayChange: true });
-                break;
-            case 'cleanHistoryThinking':
-                this.bridge.set('cleanHistoryThinking', Boolean(val));
-                hostRegexService.syncToHost();
-                break;
-            case 'cleanHistoryMarkup':
-                this.bridge.set('cleanHistoryMarkup', Boolean(val));
-                hostRegexService.syncToHost();
-                break;
-            case 'align':
-                this.updateImageDisplay({
-                    align: val as GeneralFormModel['align'],
-                });
-                break;
-            case 'objectFit':
-                this.updateImageDisplay({
-                    objectFit: val as GeneralFormModel['objectFit'],
-                });
-                break;
-            case 'maxWidthPct':
-                this.updateImageDisplay({
-                    maxWidthPct: Number(val),
-                });
-                break;
-            case 'maxHeight':
-                this.updateImageDisplay({
-                    maxHeight: Number(val),
-                });
-                break;
-            case 'rounded':
-                this.updateImageDisplay({
-                    rounded: Boolean(val),
-                });
-                break;
-            case 'displayMode':
-                this.updateImageDisplay({
-                    displayMode: val as ImageDisplayMode,
-                });
-                break;
-            case 'imageQuality':
-                this.bridge.set('imageQuality', val as ImageStorageQuality);
-                break;
-            case 'saveToServer':
-                this.bridge.set('saveToServer', Boolean(val));
-                break;
+function handleGeneralFieldChange<K extends keyof GeneralFormModel>(
+    key: K,
+    val: GeneralFormModel[K]
+): void {
+    switch (key) {
+        case 'enabled':
+            settingsStore.set('enabled', Boolean(val));
+            void promptInjector.scheduleSyncToHost();
+            break;
+        case 'activeProvider':
+            settingsStore.set('activeProvider', val as ProviderType);
+            break;
+        case 'transport':
+            settingsStore.set('transport', val as TransportMode);
+            break;
+        case 'timeoutSec':
+            settingsStore.set('taskTimeoutMs', Math.max(30, Number(val)) * 1000);
+            break;
+        case 'cancelOnChatChange':
+            settingsStore.set('cancelOnChatChange', Boolean(val));
+            break;
+        case 'cancelOnSwipe':
+            settingsStore.set('cancelOnSwipe', Boolean(val));
+            break;
+        case 'promptStartTag':
+            settingsStore.set('promptStartTag', String(val).trim() || 'image###');
+            break;
+        case 'promptEndTag':
+            settingsStore.set('promptEndTag', String(val).trim() || '###');
+            break;
+        case 'autoGenerate':
+            settingsStore.set('autoGenerate', Boolean(val));
+            break;
+        case 'hideButtonOnDone':
+            settingsStore.updateUi({
+                floorButton: {
+                    hideOnDone: Boolean(val),
+                },
+            });
+            break;
+        case 'imageActionPanelEnabled':
+            settingsStore.updateUi({
+                imageActionPanel: {
+                    enabled: Boolean(val),
+                },
+            });
+            break;
+        case 'lightboxEnabled': {
+            const current = settingsStore.get('ui')?.lightbox;
+            settingsStore.updateUi({
+                lightbox: {
+                    ...(current || {}),
+                    enabled: Boolean(val),
+                },
+            });
+            break;
         }
+        case 'lightboxHistoryLimit': {
+            const parsed = Number(val);
+            const clamped = Number.isFinite(parsed)
+                ? Math.max(0, Math.min(50, Math.round(parsed)))
+                : 10;
+            const current = settingsStore.get('ui')?.lightbox;
+            settingsStore.updateUi({
+                lightbox: {
+                    enabled: current?.enabled ?? true,
+                    historyLimit: clamped,
+                },
+            });
+            break;
+        }
+        case 'cleanPrompt':
+            settingsStore.set('cleanPrompt', Boolean(val));
+            break;
+        case 'cleanPromptPunctuation':
+            settingsStore.set('cleanPromptPunctuation', Boolean(val));
+            break;
+        case 'normalizeChinesePunctuation':
+            settingsStore.set('normalizeChinesePunctuation', Boolean(val));
+            break;
+        case 'thinkingDisplayMode':
+            settingsStore.set('thinkingDisplayMode', val as ThinkingDisplayMode);
+            hostRegexService.syncToHost({ reloadChatOnDisplayChange: true });
+            break;
+        case 'cleanHistoryThinking':
+            settingsStore.set('cleanHistoryThinking', Boolean(val));
+            hostRegexService.syncToHost();
+            break;
+        case 'cleanHistoryMarkup':
+            settingsStore.set('cleanHistoryMarkup', Boolean(val));
+            hostRegexService.syncToHost();
+            break;
+        case 'align':
+            updateImageDisplay({
+                align: val as GeneralFormModel['align'],
+            });
+            break;
+        case 'objectFit':
+            updateImageDisplay({
+                objectFit: val as GeneralFormModel['objectFit'],
+            });
+            break;
+        case 'maxWidthPct':
+            updateImageDisplay({
+                maxWidthPct: Number(val),
+            });
+            break;
+        case 'maxHeight':
+            updateImageDisplay({
+                maxHeight: Number(val),
+            });
+            break;
+        case 'rounded':
+            updateImageDisplay({
+                rounded: Boolean(val),
+            });
+            break;
+        case 'displayMode':
+            updateImageDisplay({
+                displayMode: val as ImageDisplayMode,
+            });
+            break;
+        case 'imageQuality':
+            settingsStore.set('imageQuality', val as ImageStorageQuality);
+            break;
+        case 'saveToServer':
+            settingsStore.set('saveToServer', Boolean(val));
+            break;
     }
+}
 
-    private updateImageDisplay(patch: {
-        align?: 'center' | 'flex-start' | 'flex-end';
-        objectFit?: 'contain' | 'cover' | 'none';
-        maxWidthPct?: number;
-        maxHeight?: number;
-        rounded?: boolean;
-        displayMode?: ImageDisplayMode;
-    }): void {
-        const current = this.bridge.get('ui')?.imageDisplay ?? {
-            align: 'center' as const,
-            objectFit: 'contain' as const,
-            maxWidthPct: 100,
-            maxHeight: 480,
-            rounded: true,
-            displayMode: 'normal' as const,
+export function GeneralTab(): VNode {
+    const model = buildGeneralViewModel();
+    const hostRuntime = detectHostRuntime();
+    const cards = GENERAL_CARDS_SCHEMA.map((card) => {
+        if (card.id !== 'general-basic') {
+            return card;
+        }
+        return {
+            ...card,
+            fields: card.fields.map((field) =>
+                field.key === 'transport'
+                    ? { ...field, tooltip: getTransportModeTooltip(hostRuntime) }
+                    : field
+            ),
         };
-        this.bridge.updateUi({
-            imageDisplay: {
-                ...current,
-                ...patch,
-            },
-        });
-    }
+    });
+    return (
+        <SchemaForm
+            cards={cards}
+            model={model}
+            onFieldChange={(key, val) => handleGeneralFieldChange(key, val)}
+        />
+    );
+}
 
-    protected renderContent(): VNode {
-        const model = this.buildViewModel();
-        const hostRuntime = detectHostRuntime();
-        const cards = GENERAL_CARDS_SCHEMA.map((card) => {
-            if (card.id !== 'general-basic') {
-                return card;
-            }
-            return {
-                ...card,
-                fields: card.fields.map((field) =>
-                    field.key === 'transport'
-                        ? { ...field, tooltip: getTransportModeTooltip(hostRuntime) }
-                        : field
-                ),
-            };
-        });
-        return (
-            <SchemaForm
-                cards={cards}
-                model={model}
-                onFieldChange={(key, val) => this.handleFieldChange(key, val)}
-            />
-        );
-    }
-
-    public override activate(): void {
-        super.activate();
-        this.bridge.activate();
-    }
-
-    public override deactivate(): void {
-        super.deactivate();
-        this.bridge.deactivate();
-    }
-
-    public override dispose(): void {
-        this.bridge.dispose();
-        super.dispose();
-    }
+export function createGeneralTabView(): SettingsView {
+    return createPreactSettingsView({
+        id: 'general',
+        title: '插件设置',
+        className: 'da-tab-pane',
+        render: () => <GeneralTab />,
+    });
 }

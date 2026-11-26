@@ -4,3 +4,4 @@ export * from './novelai-specs';
 export * from './openai-specs';
 export * from './gemini-specs';
 export * from './grok-specs';
+export * from './comfyui-workflow';

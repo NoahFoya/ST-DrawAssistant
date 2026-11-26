@@ -12,11 +12,11 @@ import type {
 import {
     CardView,
     SegmentedControlView,
-    PresetToolbarView,
     ButtonControl,
     BadgeView,
 } from '../../framework';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     CHARACTER_PART_DEFS,
     OUTFIT_PART_DEFS,
@@ -405,7 +405,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
 
     return (
         <div className="da-material-subpanel">
-            <PresetToolbarView
+            <PresetToolbar
                 presets={formatController.toolbarItems.value}
                 activePresetId={formatController.activePresetId.value}
                 dirty={formatController.isDirty.value}

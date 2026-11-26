@@ -1,17 +1,18 @@
 /**
- * 悬浮球选项卡视图 (FabTabView)。
+ * 悬浮球选项卡视图 (FabTab)。
  *
  * @remarks
- * 基于 Preact JSX 与 ReactiveSettingsBridge 声明式构建：
+ * 基于 Preact JSX 与 Fine-Grained Signals 声明式构建：
  * 1. 基础配置卡片：常驻显隐开关、启用快捷面板开关、不透明度数值输入与停靠位置重置按钮；
  * 2. 图标与外观卡片：预设图标切换、自定义圆形头像本地上传与绘图动效选择。
  */
 
 import { useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
+import type { SettingsView } from '../types';
 import type { DrawAssistantSettings } from '../../store/settings-store';
 import {
-    PreactSettingsView,
+    createPreactSettingsView,
     CardView,
     FormFieldView,
     SwitchControl,
@@ -19,7 +20,7 @@ import {
     SelectControl,
     ButtonControl,
 } from '../framework';
-import { ReactiveSettingsBridge } from '../viewmodels';
+import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 import { Toast } from '../feedback/toast';
 
@@ -53,251 +54,226 @@ const BUILTIN_ICON_LIST: BuiltinIconItem[] = [
     { id: 'brush', label: '画笔', svg: FAB_BUILTIN_ICONS.brush },
 ];
 
-export class FabTabView extends PreactSettingsView {
-    public readonly id = 'fab';
-    public readonly title = '悬浮球';
+function isCustomFabIcon(icon: string): boolean {
+    return (
+        icon.startsWith('data:image') ||
+        icon.startsWith('http://') ||
+        icon.startsWith('https://')
+    );
+}
 
-    private readonly bridge: ReactiveSettingsBridge;
+function updateFabSettings(
+    patch: Partial<{
+        visible: boolean;
+        opacity: number;
+        icon: string;
+        animationType: FabAnimationOption;
+        quickPanelEnabled: boolean;
+    }>
+): void {
+    const currentFab = settingsStore.get('ui')?.fab || {
+        visible: true,
+        opacity: 0.95,
+        icon: 'palette',
+        animationType: 'starlight' as FabAnimationOption,
+        quickPanelEnabled: false,
+    };
+    settingsStore.updateUi({
+        fab: {
+            ...currentFab,
+            ...patch,
+        },
+    });
+}
 
-    public constructor() {
-        super('da-tab-pane da-view-fab');
-        this.bridge = new ReactiveSettingsBridge(false);
-        this.mountPreact();
+function handleFabIconFileChange(inputEl: HTMLInputElement): void {
+    const file = inputEl.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        Toast.show('请选择有效的图片文件', { level: 'error' });
+        inputEl.value = '';
+        return;
     }
 
-    private isCustomIcon(icon: string): boolean {
-        return (
-            icon.startsWith('data:image') ||
-            icon.startsWith('http://') ||
-            icon.startsWith('https://')
-        );
-    }
-
-    private updateFabSettings(
-        patch: Partial<{
-            visible: boolean;
-            opacity: number;
-            icon: string;
-            animationType: FabAnimationOption;
-            quickPanelEnabled: boolean;
-        }>
-    ): void {
-        const currentFab = this.bridge.get('ui')?.fab || {
-            visible: true,
-            opacity: 0.95,
-            icon: 'palette',
-            animationType: 'starlight' as FabAnimationOption,
-            quickPanelEnabled: false,
-        };
-        this.bridge.updateUi({
-            fab: {
-                ...currentFab,
-                ...patch,
-            },
-        });
-    }
-
-    private handleFileChange(inputEl: HTMLInputElement): void {
-        const file = inputEl.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-            Toast.show('请选择有效的图片文件', { level: 'error' });
-            inputEl.value = '';
-            return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = reader.result as string;
+        if (dataUrl) {
+            updateFabSettings({ icon: dataUrl });
+            Toast.show('已成功更新悬浮球自定义头像', { level: 'success' });
         }
+        inputEl.value = '';
+    };
+    reader.onerror = () => {
+        Toast.show('读取图片文件失败', { level: 'error' });
+        inputEl.value = '';
+    };
+    reader.readAsDataURL(file);
+}
 
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = reader.result as string;
-            if (dataUrl) {
-                this.updateFabSettings({ icon: dataUrl });
-                Toast.show('已成功更新悬浮球自定义头像', { level: 'success' });
-            }
-            inputEl.value = '';
-        };
-        reader.onerror = () => {
-            Toast.show('读取图片文件失败', { level: 'error' });
-            inputEl.value = '';
-        };
-        reader.readAsDataURL(file);
-    }
+export function FabTab(): VNode {
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    protected renderContent(): VNode {
-        const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const fab = settingsStore.signals.ui.value?.fab;
+    const visible = fab?.visible ?? true;
+    const opacity = fab?.opacity ?? 0.95;
+    const opacityPct = Math.round(opacity * 100);
+    const quickPanelEnabled = Boolean(fab?.quickPanelEnabled);
+    const currentIcon = (fab?.icon as string) || 'palette';
+    const rawAnim = fab?.animationType as string | undefined;
+    const currentAnim: FabAnimationOption = FAB_ANIMATION_OPTIONS.some(
+        (opt) => opt.value === rawAnim
+    )
+        ? (rawAnim as FabAnimationOption)
+        : 'starlight';
+    const isCustom = isCustomFabIcon(currentIcon);
 
-        const fab = this.bridge.settings.value.ui?.fab;
-        const visible = fab?.visible ?? true;
-        const opacity = fab?.opacity ?? 0.95;
-        const opacityPct = Math.round(opacity * 100);
-        const quickPanelEnabled = Boolean(fab?.quickPanelEnabled);
-        const currentIcon = (fab?.icon as string) || 'palette';
-        const rawAnim = fab?.animationType as string | undefined;
-        const currentAnim: FabAnimationOption = FAB_ANIMATION_OPTIONS.some(
-            (opt) => opt.value === rawAnim
-        )
-            ? (rawAnim as FabAnimationOption)
-            : 'starlight';
-        const isCustom = this.isCustomIcon(currentIcon);
+    return (
+        <>
+            <CardView title="基础配置">
+                <FormFieldView label="启用悬浮球" width="w-toggle">
+                    <SwitchControl
+                        value={visible}
+                        onChange={(checked) => updateFabSettings({ visible: checked })}
+                    />
+                </FormFieldView>
 
-        return (
-            <>
-                <CardView title="基础配置">
-                    <FormFieldView
-                        label="启用悬浮球"
-                        width="w-toggle"
-                    >
-                        <SwitchControl
-                            value={visible}
-                            onChange={(checked) => this.updateFabSettings({ visible: checked })}
-                        />
-                    </FormFieldView>
+                <FormFieldView label="悬浮球不透明度" width="w-240">
+                    <NumberInputControl
+                        min={20}
+                        max={100}
+                        step={5}
+                        precision={0}
+                        value={opacityPct}
+                        unit="%"
+                        onChange={(val) =>
+                            updateFabSettings({
+                                opacity: Number((val / 100).toFixed(2)),
+                            })
+                        }
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="悬浮球不透明度"
-                        width="w-240"
-                    >
-                        <NumberInputControl
-                            min={20}
-                            max={100}
-                            step={5}
-                            precision={0}
-                            value={opacityPct}
-                            unit="%"
-                            onChange={(val) =>
-                                this.updateFabSettings({
-                                    opacity: Number((val / 100).toFixed(2)),
-                                })
-                            }
-                        />
-                    </FormFieldView>
+                <FormFieldView label="悬浮球位置">
+                    <ButtonControl
+                        label="重置默认位置"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                            eventBus.emit('ui:reset-fab-position');
+                            Toast.show('已重置悬浮球停靠位置', { level: 'info' });
+                        }}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView label="悬浮球位置">
-                        <ButtonControl
-                            label="重置默认位置"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                                eventBus.emit('ui:reset-fab-position');
-                                Toast.show('已重置悬浮球停靠位置', { level: 'info' });
-                            }}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="启用快捷面板"
+                    width="w-toggle"
+                    tooltip="开启后单击悬浮球可展开或收起快捷面板，快速切换生图服务、预设与高频开关；双击悬浮球或点击面板顶栏「主设置」可直接打开主设置窗口。"
+                >
+                    <SwitchControl
+                        value={quickPanelEnabled}
+                        onChange={(checked) =>
+                            updateFabSettings({ quickPanelEnabled: checked })
+                        }
+                    />
+                </FormFieldView>
+            </CardView>
 
-                    <FormFieldView
-                        label="启用快捷面板"
-                        width="w-toggle"
-                        tooltip="开启后单击悬浮球可展开或收起快捷面板，快速切换生图服务、预设与高频开关；双击悬浮球或点击面板顶栏「主设置」可直接打开主设置窗口。"
-                    >
-                        <SwitchControl
-                            value={quickPanelEnabled}
-                            onChange={(checked) =>
-                                this.updateFabSettings({ quickPanelEnabled: checked })
-                            }
-                        />
-                    </FormFieldView>
-                </CardView>
-
-                <CardView title="图标与外观">
-                    <FormFieldView label="预设图标">
-                        <div className="da-fab-icon-grid">
-                            {BUILTIN_ICON_LIST.map((item) => {
-                                const isActive = !isCustom && currentIcon === item.id;
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        className={`da-fab-icon-chip${isActive ? ' is-active' : ''}`}
-                                        data-id={item.id}
-                                        title={item.label}
-                                        dangerouslySetInnerHTML={{ __html: item.svg }}
-                                        onClick={() => this.updateFabSettings({ icon: item.id })}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </FormFieldView>
-
-                    <FormFieldView
-                        label="自定义图标"
-                        tooltip="支持上传本地图片（PNG / JPG / WebP）作为悬浮球头像，图片保存在浏览器本地并自动居中裁切。"
-                    >
-                        <div className="da-fab-custom-icon-wrapper">
-                            <div className={`da-fab-preview-avatar${isCustom ? ' has-custom' : ''}`}>
-                                {isCustom ? (
-                                    <img alt="自定义头像预览" src={currentIcon} />
-                                ) : (
-                                    <div
-                                        className="da-fab-icon"
-                                        dangerouslySetInnerHTML={{
-                                            __html:
-                                                FAB_BUILTIN_ICONS[currentIcon] ??
-                                                FAB_BUILTIN_ICONS.palette,
-                                        }}
-                                    />
-                                )}
-                            </div>
-
-                            <div className="da-fab-action-group">
-                                <ButtonControl
-                                    label={isCustom ? '更换图片' : '上传本地图片'}
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => fileInputRef.current?.click()}
+            <CardView title="图标与外观">
+                <FormFieldView label="预设图标">
+                    <div className="da-fab-icon-grid">
+                        {BUILTIN_ICON_LIST.map((item) => {
+                            const isActive = !isCustom && currentIcon === item.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    className={`da-fab-icon-chip${isActive ? ' is-active' : ''}`}
+                                    data-id={item.id}
+                                    title={item.label}
+                                    dangerouslySetInnerHTML={{ __html: item.svg }}
+                                    onClick={() => updateFabSettings({ icon: item.id })}
                                 />
-                                {isCustom && (
-                                    <ButtonControl
-                                        label="移除"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            this.updateFabSettings({ icon: 'palette' });
-                                            Toast.show('已移除自定义头像，恢复预设图标', {
-                                                level: 'info',
-                                            });
-                                        }}
-                                    />
-                                )}
-                            </div>
+                            );
+                        })}
+                    </div>
+                </FormFieldView>
 
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="da-hidden"
-                                onChange={(e) =>
-                                    this.handleFileChange(e.currentTarget as HTMLInputElement)
-                                }
-                            />
+                <FormFieldView
+                    label="自定义图标"
+                    tooltip="支持上传本地图片（PNG / JPG / WebP）作为悬浮球头像，图片保存在浏览器本地并自动居中裁切。"
+                >
+                    <div className="da-fab-custom-icon-wrapper">
+                        <div className={`da-fab-preview-avatar${isCustom ? ' has-custom' : ''}`}>
+                            {isCustom ? (
+                                <img alt="自定义头像预览" src={currentIcon} />
+                            ) : (
+                                <div
+                                    className="da-fab-icon"
+                                    dangerouslySetInnerHTML={{
+                                        __html:
+                                            FAB_BUILTIN_ICONS[currentIcon] ??
+                                            FAB_BUILTIN_ICONS.palette,
+                                    }}
+                                />
+                            )}
                         </div>
-                    </FormFieldView>
 
-                    <FormFieldView label="绘图动效" width="w-240">
-                        <SelectControl
-                            value={currentAnim}
-                            options={[...FAB_ANIMATION_OPTIONS]}
-                            onChange={(val) =>
-                                this.updateFabSettings({ animationType: val as FabAnimationOption })
+                        <div className="da-fab-action-group">
+                            <ButtonControl
+                                label={isCustom ? '更换图片' : '上传本地图片'}
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => fileInputRef.current?.click()}
+                            />
+                            {isCustom && (
+                                <ButtonControl
+                                    label="移除"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        updateFabSettings({ icon: 'palette' });
+                                        Toast.show('已移除自定义头像，恢复预设图标', {
+                                            level: 'info',
+                                        });
+                                    }}
+                                />
+                            )}
+                        </div>
+
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="da-hidden"
+                            onChange={(e) =>
+                                handleFabIconFileChange(e.currentTarget as HTMLInputElement)
                             }
                         />
-                    </FormFieldView>
-                </CardView>
-            </>
-        );
-    }
+                    </div>
+                </FormFieldView>
 
-    public override activate(): void {
-        super.activate();
-        this.bridge.activate();
-    }
+                <FormFieldView label="绘图动效" width="w-240">
+                    <SelectControl
+                        value={currentAnim}
+                        options={[...FAB_ANIMATION_OPTIONS]}
+                        onChange={(val) =>
+                            updateFabSettings({ animationType: val as FabAnimationOption })
+                        }
+                    />
+                </FormFieldView>
+            </CardView>
+        </>
+    );
+}
 
-    public override deactivate(): void {
-        super.deactivate();
-        this.bridge.deactivate();
-    }
-
-    public override dispose(): void {
-        this.bridge.dispose();
-        super.dispose();
-    }
+export function createFabTabView(): SettingsView {
+    return createPreactSettingsView({
+        id: 'fab',
+        title: '悬浮球',
+        className: 'da-tab-pane da-view-fab',
+        render: () => <FabTab />,
+    });
 }

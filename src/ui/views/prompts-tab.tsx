@@ -1,712 +1,134 @@
 /**
- * 提示词选项卡视图 (PromptsTabView)。
+ * 提示词管理选项卡视图 (PromptsTab)。
  *
  * @remarks
- * 组织四大提示词注入通道与启用设置面板：
- * 1. 故事插画 (`story`)：场景捕捉、画面描述与生图指令规范条目；
- * 2. 词汇指导 (`vocab`)：常驻基础词汇与条件触发标签条目；
- * 3. 素材创作 (`character`)：角色设定扩写与服装/档案排版规范条目；
- * 4. 素材注入 (`material`)：承载外部 <image_database> 容器并引用素材启用列表变量；
- * 5. 启用设置 (`preview`)：统一管理四大通道启用开关与激活预设，并提供实时分桶注入预览。
+ * 纯声明式 Preact JSX 视图，提示词四通道状态管理、导入导出与预览快照均托管于 `PromptsState`。
  */
 
 import type { VNode } from 'preact';
-import { signal } from '@preact/signals';
-import type {
-    PromptChannelId,
-    PromptInjectionEntry,
-    PromptChannelPresetData,
-    PromptInjectionConfig,
-    PresetCategory,
-    PresetItem,
-} from '@types';
+import type { PromptInjectionEntry } from '@types';
 import {
-    PreactSettingsView,
+    createPreactSettingsView,
     CardView,
-    ButtonControl,
     SegmentedControlView,
-    PresetToolbarView,
+    ButtonControl,
+    type StatefulSettingsView,
 } from '../framework';
-import type { PresetActionType } from '../composite';
-import { PromptEntriesManager } from '../composite/prompt-entries-manager';
+import { PresetToolbar, PromptEntriesManager } from '../composite';
+import { PromptsPreviewPanel } from './prompts-preview-panel';
 import {
-    AppValidationError,
-    normalizePresetNameKey,
-    parsePresetBatchJson,
-    stripJsonExtension,
-    collectKeywordRegexErrors,
-} from '../../domain';
-import { readFileAsText } from '../../util/browser-io';
-import { presetTransferService } from '../../pipeline/preset-transfer-service';
-import {
-    PromptsPreviewPanel,
+    PromptsState,
     PROMPT_CHANNELS,
     type PromptChannelMeta,
-} from './prompts-preview-panel';
-import {
-    PresetController,
-    resolveUniquePresetName,
-} from '../viewmodels';
-import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
-import { getCachedOfficialPresets } from '../../store/static-preset-loader';
-import { eventBus } from '../../util/event-bus';
-import { promptInjector } from '../../pipeline/prompt-injector';
-import {
-    detectPromptImportFormat,
-    normalizePluginPromptChannelPreset,
-    parseStWorldbookEntries,
-} from '../../pipeline/worldbook-converter';
-import {
-    openWorldbookImportModal,
-    openPromptExportFormatModal,
-    type PromptExportFormat,
-} from '../modal/worldbook-import-modal';
-import { ConfirmDialog } from '../feedback/confirm-dialog';
-import { Toast } from '../feedback/toast';
-import { reportRuntimeError } from '../feedback/error-feedback';
-import { evaluatePresetDataDirty } from './materials/material-types';
+    type PromptsSubTabId,
+} from '../state/prompts-state';
 
-export type PromptsSubTabId = PromptChannelId | 'preview';
+export type { PromptsSubTabId };
 
-function createDefaultEntryForChannel(
-    channelId: PromptChannelId,
-    index: number
-): PromptInjectionEntry {
-    const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
+function ChannelWorkspace(props: {
+    state: PromptsState;
+    meta: PromptChannelMeta;
+}): VNode {
+    const { state, meta } = props;
+    const controller = state.controllers[meta.id];
+    const entries: PromptInjectionEntry[] = Array.isArray(controller.draftConfig.value?.entries)
+        ? controller.draftConfig.value.entries
+        : [];
+    const isChannelEnabled = Boolean(state.promptInjectionSignal.value?.[meta.id]?.enabled);
 
-    // 素材注入通道新建空白预设时，优先与本地默认预设保持同源模板
-    if (channelId === 'material') {
-        const officialEntry =
-            getCachedOfficialPresets()?.prompt_material?.[0]?.data?.entries?.[index];
-        if (officialEntry) {
-            return {
-                ...structuredClone(officialEntry),
-                id: `${channelId}_entry_${Date.now().toString(36)}_${index}`,
-            };
-        }
-    }
-
-    const entryName =
-        channelId === 'material' && index === 0
-            ? '核心|绘画素材库'
-            : `${meta.label}条目 #${index + 1}`;
-    const content =
-        channelId === 'material' && index === 0
-            ? '<image_database>\n  <character_database>\n    {{角色启用列表}}\n  </character_database>\n\n  <outfit_database>\n    {{服装启用列表}}\n  </outfit_database>\n</image_database>'
-            : '';
-
-    return {
-        id: `${channelId}_entry_${Date.now().toString(36)}_${index}`,
-        name: entryName,
-        enabled: true,
-        triggerMode: 'always',
-        keywords: '',
-        matchWholeWords: true,
-        scanDepth: channelId === 'vocab' ? 4 : 2,
-        position: 1,
-        depth: meta.defaultDepth,
-        role: 0,
-        order: meta.defaultOrder + index,
-        content,
-    };
+    return (
+        <div className="da-prompts-channel-workspace">
+            {!isChannelEnabled && (
+                <div className="da-channel-disabled-banner">
+                    <span>
+                        当前「{meta.label}」通道未开启注入（可在「启用设置」或此处直接开启）
+                    </span>
+                    <ButtonControl
+                        label="立即开启"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => state.toggleChannelEnabled(meta.id, true)}
+                    />
+                </div>
+            )}
+            <div className="da-prompts-preset-bar">
+                <PresetToolbar
+                    presets={controller.toolbarItems.value}
+                    activePresetId={controller.activePresetId.value}
+                    dirty={controller.isDirty.value}
+                    onAction={(action, id) => state.handleToolbarAction(meta.id, action, id)}
+                    onImportFiles={(files) => void state.handleImportFiles(meta.id, files)}
+                />
+            </div>
+            <CardView className="da-prompt-channel-card">
+                <PromptEntriesManager
+                    key={meta.id}
+                    entries={entries}
+                    channelId={meta.id}
+                    onChange={(next) => state.updateChannelEntries(meta.id, next)}
+                />
+            </CardView>
+        </div>
+    );
 }
 
-export class PromptsTabView extends PreactSettingsView {
-    public readonly id = 'prompts';
-    public readonly title = '提示词';
+export function PromptsTab(props: { state: PromptsState }): VNode {
+    const { state } = props;
+    const currentTab = state.subTab.value;
 
-    public readonly subTab = signal<PromptsSubTabId>('story');
-    public readonly promptInjectionSignal = signal<PromptInjectionConfig>(
-        settingsStore.get('promptInjection')
+    return (
+        <div className="da-prompts-view-container">
+            <div className="da-subtab-nav-bar">
+                <SegmentedControlView
+                    size="lg"
+                    value={currentTab}
+                    options={[
+                        ...PROMPT_CHANNELS.map((c) => ({ label: c.label, value: c.id })),
+                        { label: '启用设置', value: 'preview' },
+                    ]}
+                    onChange={(val) => {
+                        state.subTab.value = val as PromptsSubTabId;
+                    }}
+                />
+            </div>
+
+            {currentTab === 'preview' ? (
+                <PromptsPreviewPanel
+                    injectionConfig={state.promptInjectionSignal.value}
+                    previewVersion={state.previewVersionSignal.value}
+                    getSettingsSnapshot={() => state.buildPreviewSettingsSnapshot()}
+                    onToggleChannel={(channelId, enabled) => {
+                        state.toggleChannelEnabled(channelId, enabled);
+                    }}
+                    onToggleMaterialHideWhenEmpty={(hideWhenEmpty) => {
+                        state.toggleMaterialHideWhenEmpty(hideWhenEmpty);
+                    }}
+                    onSelectChannelPreset={(channelId, presetId) =>
+                        state.controllers[channelId].handleAction('select', presetId)
+                    }
+                />
+            ) : (
+                <ChannelWorkspace
+                    state={state}
+                    meta={PROMPT_CHANNELS.find((c) => c.id === currentTab) || PROMPT_CHANNELS[0]}
+                />
+            )}
+        </div>
     );
-    public readonly previewVersionSignal = signal<number>(0);
+}
 
-    public readonly controllers: Record<
-        PromptChannelId,
-        PresetController<PromptChannelPresetData>
-    >;
-
-    private unlistenSettings: (() => void) | null = null;
-    private isDisposedView = false;
-
-    public constructor() {
-        super('da-tab-pane da-view-prompts');
-
-        const buildController = (
-            meta: PromptChannelMeta
-        ): PresetController<PromptChannelPresetData> =>
-            new PresetController<PromptChannelPresetData>({
-                category: meta.category,
-                idPrefix: `${meta.category}_`,
-                promptMessageForNew: `请输入新「${meta.label}」预设名称:`,
-                defaultNewName: `新建${meta.label}预设`,
-                promptMessageForSaveAs: `请输入「${meta.label}」另存预设名称:`,
-                promptMessageForRename: `请输入新的「${meta.label}」预设名称:`,
-                defaultImportName: `导入${meta.label}预设`,
-                exportFilenamePrefix: `st-draw-${meta.id}-`,
-                minRemainingOnDelete: 1,
-                showToast: true,
-                defaultTemplate: () => ({
-                    entries: [createDefaultEntryForChannel(meta.id, 0)],
-                }),
-                getActiveId: () =>
-                    settingsStore.get('promptInjection')?.[meta.id]?.activePresetId || '',
-                setActiveId: (id) => {
-                    const cur = settingsStore.get('promptInjection');
-                    const next: PromptInjectionConfig = {
-                        ...cur,
-                        [meta.id]: {
-                            ...(cur?.[meta.id] || { enabled: false }),
-                            activePresetId: id,
-                        },
-                    };
-                    settingsStore.set('promptInjection', next);
-                    this.promptInjectionSignal.value = next;
-                },
-                evaluateDirtyFields: evaluatePresetDataDirty,
-                canPerformAction: (action, draft) => {
-                    if (action !== 'save' && action !== 'saveAs') {
-                        return { allowed: true };
-                    }
-                    const draftEntries = Array.isArray(draft?.entries) ? draft.entries : [];
-                    for (const entry of draftEntries) {
-                        if (!entry || entry.triggerMode === 'always') continue;
-                        const mainErr = collectKeywordRegexErrors(entry.keywords, { allowPipe: false })[0];
-                        if (mainErr) {
-                            return {
-                                allowed: false,
-                                message: `请先修正条目「${entry.name || '未命名'}」主关键词中的无效正则：${mainErr}`,
-                            };
-                        }
-                        const secErr = collectKeywordRegexErrors(entry.secondaryKeywords, {
-                            allowPipe: false,
-                        })[0];
-                        if (secErr) {
-                            return {
-                                allowed: false,
-                                message: `请先修正条目「${entry.name || '未命名'}」次要关键词中的无效正则：${secErr}`,
-                            };
-                        }
-                    }
-                    return { allowed: true };
-                },
-                onPresetApplied: () => {
-                    void promptInjector.scheduleSyncToHost();
-                },
-            });
-
-        const channelMap = new Map(PROMPT_CHANNELS.map((m) => [m.id, m]));
-        this.controllers = {
-            story: buildController(channelMap.get('story')!),
-            vocab: buildController(channelMap.get('vocab')!),
-            character: buildController(channelMap.get('character')!),
-            material: buildController(channelMap.get('material')!),
-        };
-
-        this.unlistenSettings = eventBus.on('settings:updated', (data) => {
-            const matchedPromptCategory = PROMPT_CHANNELS.find(
-                (meta) => data.key === `presets.${meta.category}`
-            );
-            if (
-                !data.key ||
-                data.isReset ||
-                data.key === 'promptInjection' ||
-                data.key === 'materialConfig' ||
-                data.key === 'presets.characters' ||
-                data.key === 'presets.outfits' ||
-                data.key === 'presets.material_activations' ||
-                data.key === 'presets.material_extractions' ||
-                data.key === 'presets.material_formats' ||
-                Boolean(matchedPromptCategory) ||
-                data.keys?.includes('promptInjection') ||
-                data.keys?.includes('materialConfig') ||
-                data.keys?.includes('presets')
-            ) {
-                if (
-                    data.isReset ||
-                    data.key === 'promptInjection' ||
-                    data.keys?.includes('presets') ||
-                    data.keys?.includes('promptInjection')
-                ) {
-                    for (const meta of PROMPT_CHANNELS) {
-                        if (!this.controllers[meta.id].isDirty.value) {
-                            this.controllers[meta.id].reloadFromStore();
-                        }
-                    }
-                } else if (matchedPromptCategory) {
-                    const ctrl = this.controllers[matchedPromptCategory.id];
-                    if (!ctrl.isDirty.value) {
-                        ctrl.reloadFromStore();
-                    } else {
-                        ctrl.refreshPresets();
-                    }
-                }
-                this.promptInjectionSignal.value = settingsStore.get('promptInjection');
-                this.previewVersionSignal.value += 1;
-            }
-        });
-
-        this.mountPreact();
-    }
-
-    public override activate(): void {
-        for (const meta of PROMPT_CHANNELS) {
-            if (!this.controllers[meta.id].isDirty.value) {
-                this.controllers[meta.id].reloadFromStore();
-            }
-        }
-        this.promptInjectionSignal.value = settingsStore.get('promptInjection');
-        this.previewVersionSignal.value += 1;
-        super.activate();
-    }
-
-    public hasUnsavedChanges(): boolean {
-        return PROMPT_CHANNELS.some((meta) => this.controllers[meta.id].isDirty.value);
-    }
-
-    public async saveUnsavedChanges(): Promise<boolean> {
-        for (const meta of PROMPT_CHANNELS) {
-            const ctrl = this.controllers[meta.id];
-            if (ctrl.isDirty.value) {
-                const ok = await ctrl.handleAction('save');
-                if (!ok) return false;
-            }
-        }
-        void promptInjector.scheduleSyncToHost();
-        return true;
-    }
-
-    public discardUnsavedChanges(): void {
-        for (const meta of PROMPT_CHANNELS) {
-            this.controllers[meta.id].discardDraft();
-        }
-    }
-
-    public override dispose(): void {
-        this.isDisposedView = true;
-        for (const meta of PROMPT_CHANNELS) {
-            this.controllers[meta.id].dispose();
-        }
-        if (this.unlistenSettings) {
-            this.unlistenSettings();
-            this.unlistenSettings = null;
-        }
-        super.dispose();
-    }
-
-    private toggleChannelEnabled(channelId: PromptChannelId, enabled: boolean): void {
-        const cur = settingsStore.get('promptInjection');
-        const next: PromptInjectionConfig = {
-            ...cur,
-            [channelId]: {
-                ...(cur?.[channelId] || { activePresetId: '' }),
-                enabled,
-            },
-        };
-        settingsStore.set('promptInjection', next);
-        this.promptInjectionSignal.value = next;
-        void promptInjector.scheduleSyncToHost();
-    }
-
-    private toggleMaterialHideWhenEmpty(hideWhenEmpty: boolean): void {
-        const cur = settingsStore.get('promptInjection');
-        const next: PromptInjectionConfig = {
-            ...cur,
-            material: {
-                ...(cur?.material || { enabled: false, activePresetId: '' }),
-                hideWhenEmpty,
-            },
-        };
-        settingsStore.set('promptInjection', next);
-        this.promptInjectionSignal.value = next;
-        void promptInjector.scheduleSyncToHost();
-    }
-
-    /**
-     * 处理预设工具栏动作，拦截 export 以提供「酒馆原生世界书 JSON / 插件预设 JSON」双格式选择。
-     */
-    public async handleToolbarAction(
-        channelId: PromptChannelId,
-        action: PresetActionType,
-        targetId: string,
-        onExportedCallback?: (
-            format: PromptExportFormat,
-            payload: Record<string, unknown>,
-            filename: string
-        ) => void
-    ): Promise<boolean> {
-        const controller = this.controllers[channelId];
-        if (action === 'export') {
-            const cur = controller.currentPreset.value;
-            if (!cur) return false;
-            const entries = controller.draftConfig.value?.entries || cur.data?.entries || [];
-            openPromptExportFormatModal({
-                preset: cur,
-                entries,
-                filenamePrefix: `st-draw-${channelId}-`,
-                onExported: onExportedCallback,
-            });
-            return true;
-        }
-        return await controller.handleAction(action, targetId);
-    }
-
-    /**
-     * 导入解析后的 JSON 对象（自动嗅探插件预设 JSON 与酒馆原生世界书 JSON）。
-     */
-    public async importParsedJsonForChannel(
-        channelId: PromptChannelId,
-        raw: unknown,
-        fallbackFileName?: string
-    ): Promise<void> {
-        if (this.isDisposedView) return;
-        const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
-        const controller = this.controllers[channelId];
-        const format = detectPromptImportFormat(raw);
-
-        if (format === 'invalid') {
-            reportRuntimeError(
-                '[PromptsTabView] 导入提示词预设失败：未识别的 JSON 格式',
-                '导入失败：未识别为有效的插件提示词预设或酒馆原生世界书 JSON，请前往「日志与统计」查看详情',
-                undefined,
-                'warn'
-            );
-            return;
-        }
-
-        if (format === 'plugin-preset') {
-            const fallbackName = stripJsonExtension(fallbackFileName) || `导入${meta.label}预设`;
-            const normalized = normalizePluginPromptChannelPreset(
-                raw as Record<string, unknown>,
-                fallbackName
-            );
-            if (!normalized) {
-                reportRuntimeError(
-                    '[PromptsTabView] 导入提示词预设失败：预设缺少 entries 数组',
-                    '导入失败：预设缺少 entries 数组，请前往「日志与统计」查看详情',
-                    fallbackName,
-                    'warn'
-                );
-                return;
-            }
-            await this.saveNewImportedPreset(
-                channelId,
-                normalized.name,
-                normalized.data.entries
-            );
-            return;
-        }
-
-        // 酒馆原生世界书 JSON：解析全部条目（含分隔线）并打开勾选导入面板
-        const parsedBook = parseStWorldbookEntries(
-            raw as Record<string, unknown>,
-            `${channelId}_wb_`
-        );
-        if (parsedBook.entries.length === 0) {
-            Toast.show('该酒馆世界书不包含可导入的条目', { level: 'warning' });
-            return;
-        }
-
-        openWorldbookImportModal({
-            parsed: parsedBook,
-            hasActivePreset: Boolean(controller.currentPreset.value),
-            activePresetName: controller.currentPreset.value?.name || '',
-            onConfirm: async (res) => {
-                if (res.mode === 'append_current' && controller.currentPreset.value) {
-                    const currentEntries = controller.draftConfig.value?.entries || [];
-                    const existingIds = new Set(currentEntries.map((e) => e.id));
-                    const appended = res.selectedEntries.map((entry, idx) => {
-                        let nextId = entry.id;
-                        if (existingIds.has(nextId)) {
-                            nextId = `${entry.id}_${Date.now().toString(36)}_${idx}`;
-                        }
-                        existingIds.add(nextId);
-                        return { ...entry, id: nextId };
-                    });
-                    const mergedEntries = [...currentEntries, ...appended];
-                    controller.updateDraft('entries', mergedEntries);
-
-                    const saved = await controller.handleAction('save');
-                    if (saved) {
-                        Toast.show(
-                            `已向预设「${controller.currentPreset.value?.name || ''}」追加 ${appended.length} 条世界书条目`,
-                            { level: 'success' }
-                        );
-                    }
-                } else {
-                    await this.saveNewImportedPreset(
-                        channelId,
-                        res.presetName,
-                        res.selectedEntries
-                    );
-                }
-            },
-        });
-    }
-
-    private async saveNewImportedPreset(
-        channelId: PromptChannelId,
-        proposedName: string,
-        entries: PromptInjectionEntry[]
-    ): Promise<void> {
-        if (this.isDisposedView) return;
-        const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
-        const controller = this.controllers[channelId];
-
-        if (controller.isDirty.value) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: '导入预设确认',
-                message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
-            });
-            if (!confirmed || this.isDisposedView) return;
-        }
-
-        const list = controller.fetchPresetsList();
-        const existingNames = new Set(list.map((p) => normalizePresetNameKey(p.name)));
-        const fallbackName = `导入${meta.label}预设`;
-
-        const finalName = await resolveUniquePresetName(
-            proposedName,
-            existingNames,
-            fallbackName
-        );
-        if (!finalName || this.isDisposedView) {
-            return;
-        }
-
-        const existingIds = new Set(list.map((p) => p.id));
-        let newId = `${meta.category}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-        while (existingIds.has(newId)) {
-            newId = `${meta.category}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-        }
-        const newPreset: PresetItem<PromptChannelPresetData> = {
-            id: newId,
-            name: finalName,
-            data: { entries: structuredClone(entries) },
-            updatedAt: Date.now(),
-        };
-        settingsStore.savePreset(meta.category, newPreset);
-        controller.applyActivePreset(newId);
-        void promptInjector.scheduleSyncToHost();
-        Toast.show(`已成功导入预设: ${finalName}（共 ${entries.length} 条条目）`, {
-            level: 'success',
-        });
-    }
-
-    private async handleImportFiles(channelId: PromptChannelId, files: File[]): Promise<void> {
-        if (this.isDisposedView || files.length === 0) return;
-        const meta = PROMPT_CHANNELS.find((c) => c.id === channelId) || PROMPT_CHANNELS[0];
-        const controller = this.controllers[channelId];
-
-        if (files.length === 1) {
-            try {
-                const rawText = await readFileAsText(files[0]);
-                if (this.isDisposedView) return;
-                const parsed: unknown = JSON.parse(rawText);
-                const isBundle =
-                    Array.isArray(parsed) ||
-                    (Boolean(parsed) &&
-                        typeof parsed === 'object' &&
-                        Array.isArray((parsed as Record<string, unknown>).presets));
-                if (!isBundle) {
-                    await this.importParsedJsonForChannel(channelId, parsed, files[0].name);
-                    return;
-                }
-            } catch (err: unknown) {
-                reportRuntimeError(
-                    '[PromptsTabView] 解析 JSON 文件失败:',
-                    '解析 JSON 文件失败，请检查文件格式或在日志查看详情',
-                    err
-                );
-                return;
-            }
-        }
-
-        const existingNames = new Set(
-            controller.fetchPresetsList().map((p) => normalizePresetNameKey(p.name))
-        );
-        const fallbackName = `导入${meta.label}预设`;
-
-        const result = await presetTransferService.importFiles<PromptChannelPresetData>({
-            files,
-            existingNames,
-            fallbackName,
-            logTag: '[PromptsTabView]',
-            isDisposed: () => this.isDisposedView,
-            isDirty: () => controller.isDirty.value,
-            confirmOverwrite: () =>
-                ConfirmDialog.confirm({
-                    title: '导入预设确认',
-                    message: `当前「${meta.label}」预设存在未保存的修改，导入并切换新预设将放弃当前未保存修改。是否确定继续导入？`,
-                }),
-            parseFile: (rawText, file) => {
-                const { candidates, skippedErrors } = parsePresetBatchJson(rawText, file.name);
-                const valid: Array<{ name: string; data: PromptChannelPresetData }> = [];
-                const channelErrors: AppValidationError[] = [...skippedErrors];
-                for (const candidate of candidates) {
-                    const normalized = normalizePluginPromptChannelPreset(
-                        { name: candidate.name, data: candidate.data },
-                        candidate.name
-                    );
-                    if (!normalized) {
-                        channelErrors.push(new AppValidationError('预设缺少 entries 数组'));
-                        continue;
-                    }
-                    valid.push({ name: normalized.name, data: normalized.data });
-                }
-                return { candidates: valid, skippedErrors: channelErrors };
-            },
-            commitItem: (candidate, finalName) => {
-                const newId = `${channelId}_${Date.now()}_${Math.random()
-                    .toString(36)
-                    .slice(2, 6)}`;
-                settingsStore.savePreset(meta.category, {
-                    id: newId,
-                    name: finalName,
-                    data: { entries: structuredClone(candidate.data.entries) },
-                    updatedAt: Date.now(),
-                });
-                return { id: newId, name: finalName };
-            },
-        });
-
-        if (result.aborted) return;
-
-        if (result.lastImportedId) {
-            controller.applyActivePreset(result.lastImportedId);
-            void promptInjector.scheduleSyncToHost();
-        }
-        Toast.show(result.summaryMessage, { level: result.toastLevel });
-    }
-
-    private updateChannelEntries(
-        channelId: PromptChannelId,
-        nextEntries: PromptInjectionEntry[]
-    ): void {
-        const controller = this.controllers[channelId];
-        controller.updateDraft('entries', nextEntries);
-    }
-
-    /**
-     * 构建融合当前四个子页未保存草稿的临时配置快照，使实时预览即时响应编辑。
-     */
-    public buildPreviewSettingsSnapshot(): DrawAssistantSettings {
-        const base = settingsStore.getSettings();
-        const mergeCategory = (
-            channelId: PromptChannelId,
-            category: PresetCategory
-        ): PresetItem<PromptChannelPresetData>[] => {
-            const list = (base.presets[category] ||
-                []) as PresetItem<PromptChannelPresetData>[];
-            const ctrl = this.controllers[channelId];
-            const activeId = ctrl.activePresetId.value;
-            const draft = ctrl.draftConfig.value;
-            if (!activeId || !draft) return list;
-            return list.map((p) =>
-                p.id === activeId ? { ...p, data: draft } : p
-            );
-        };
-
-        return {
-            ...base,
-            presets: {
-                ...base.presets,
-                prompt_story: mergeCategory('story', 'prompt_story'),
-                prompt_character: mergeCategory('character', 'prompt_character'),
-                prompt_vocab: mergeCategory('vocab', 'prompt_vocab'),
-                prompt_material: mergeCategory('material', 'prompt_material'),
-            },
-        };
-    }
-
-    private renderChannelPanel(meta: PromptChannelMeta): VNode {
-        const controller = this.controllers[meta.id];
-        const entries: PromptInjectionEntry[] = Array.isArray(
-            controller.draftConfig.value?.entries
-        )
-            ? controller.draftConfig.value.entries
-            : [];
-        const isChannelEnabled = Boolean(this.promptInjectionSignal.value?.[meta.id]?.enabled);
-
-        return (
-            <div className="da-prompts-channel-workspace">
-                {!isChannelEnabled && (
-                    <div className="da-channel-disabled-banner">
-                        <span>
-                            当前「{meta.label}」通道未开启注入（可在「启用设置」或此处直接开启）
-                        </span>
-                        <ButtonControl
-                            label="立即开启"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => this.toggleChannelEnabled(meta.id, true)}
-                        />
-                    </div>
-                )}
-                <div className="da-prompts-preset-bar">
-                    <PresetToolbarView
-                        presets={controller.toolbarItems.value}
-                        activePresetId={controller.activePresetId.value}
-                        dirty={controller.isDirty.value}
-                        onAction={(action, id) =>
-                            this.handleToolbarAction(meta.id, action, id)
-                        }
-                        onImportFiles={(files) => void this.handleImportFiles(meta.id, files)}
-                    />
-                </div>
-                <CardView className="da-prompt-channel-card">
-                    <PromptEntriesManager
-                        key={meta.id}
-                        entries={entries}
-                        channelId={meta.id}
-                        onChange={(next) => this.updateChannelEntries(meta.id, next)}
-                    />
-                </CardView>
-            </div>
-        );
-    }
-
-    protected renderContent(): VNode {
-        const currentTab = this.subTab.value;
-
-        return (
-            <div className="da-prompts-view-container">
-                {/* 顶部 5 子页切换导航 */}
-                <div className="da-subtab-nav-bar">
-                    <SegmentedControlView
-                        size="lg"
-                        value={currentTab}
-                        options={[
-                            ...PROMPT_CHANNELS.map((c) => ({ label: c.label, value: c.id })),
-                            { label: '启用设置', value: 'preview' },
-                        ]}
-                        onChange={(val) => {
-                            this.subTab.value = val as PromptsSubTabId;
-                        }}
-                    />
-                </div>
-
-                {currentTab === 'preview' ? (
-                    <PromptsPreviewPanel
-                        injectionConfig={this.promptInjectionSignal.value}
-                        previewVersion={this.previewVersionSignal.value}
-                        getSettingsSnapshot={() => this.buildPreviewSettingsSnapshot()}
-                        onToggleChannel={(channelId, enabled) => {
-                            this.toggleChannelEnabled(channelId, enabled);
-                        }}
-                        onToggleMaterialHideWhenEmpty={(hideWhenEmpty) => {
-                            this.toggleMaterialHideWhenEmpty(hideWhenEmpty);
-                        }}
-                        onSelectChannelPreset={(channelId, presetId) =>
-                            this.controllers[channelId].handleAction('select', presetId)
-                        }
-                    />
-                ) : (
-                    this.renderChannelPanel(
-                        PROMPT_CHANNELS.find((c) => c.id === currentTab) || PROMPT_CHANNELS[0]
-                    )
-                )}
-            </div>
-        );
-    }
+export function createPromptsTabView(): StatefulSettingsView<PromptsState> {
+    const state = new PromptsState();
+    return createPreactSettingsView<PromptsState>({
+        id: 'prompts',
+        title: '提示词',
+        className: 'da-tab-pane da-view-prompts',
+        state,
+        render: () => <PromptsTab state={state} />,
+        onActivate: () => state.activate(),
+        onDispose: () => state.dispose(),
+        hasUnsavedChanges: () => state.hasUnsavedChanges(),
+        saveUnsavedChanges: () => state.saveUnsavedChanges(),
+        discardUnsavedChanges: () => state.discardUnsavedChanges(),
+    });
 }

@@ -1,24 +1,25 @@
 /**
- * 本地图库选项卡视图 (GalleryTabView)。
+ * 本地图库选项卡视图 (GalleryTab / createGalleryTabView)。
  *
  * @remarks
- * 基于 Preact JSX 与 GalleryViewModel 构建，专注于图像资产浏览、多维检索与批量管理
+ * 基于 Preact JSX 与 GalleryState 构建，专注于图像资产浏览、多维检索与批量管理
  * （本地存储容量监控与分级清理统一归口至“日志与统计”选项卡）：
  * 1. 顶部快筛与检索工具栏卡片（全部/收藏/未收藏快筛胶囊、关键词搜索、服务引擎筛选、时间排序与批量管理切换）；
  * 2. 批量选择操作条（全选当前页、取消全选、导出元数据 JSON、批量删除）；
- * 3. 响应式图像卡片网格 (MediaCardView)；
+ * 3. 响应式图像卡片网格 (MediaCard)；
  * 4. 底部分页导航栏。
  */
 
 import type { VNode } from 'preact';
 import {
-    PreactSettingsView,
+    createPreactSettingsView,
     TextInputControl,
     SelectControl,
     ButtonControl,
-    MediaCardView,
+    type StatefulSettingsView,
 } from '../framework';
-import { GalleryViewModel } from '../viewmodels/gallery-vm';
+import { MediaCard } from '../composite';
+import { GalleryState } from '../state';
 import { imageInfoModal } from '../media';
 import { renderIcon } from '../components/icons';
 
@@ -37,29 +38,18 @@ const SORT_MODE_OPTIONS = [
     { label: '时间正序 (最早)', value: 'time-asc' },
 ];
 
-export class GalleryTabView extends PreactSettingsView {
-    public readonly id = 'gallery';
-    public readonly title = '本地图库';
-
-    public readonly vm: GalleryViewModel;
-
-    public constructor() {
-        super('da-tab-pane da-gallery-manager-widget');
-        this.vm = new GalleryViewModel();
-        this.mountPreact();
-    }
-
-    protected renderContent(): VNode {
-        const summary = this.vm.storageSummary.value;
-        const pageRecords = this.vm.pageRecords.value;
-        const totalItems = this.vm.filteredRecords.value.length;
-        const totalPages = this.vm.totalPages.value;
-        const currentPage = this.vm.currentPage.value;
-        const isBatchMode = this.vm.isBatchMode.value;
-        const selectedIds = this.vm.selectedIds.value;
-        const favFilter = this.vm.favoriteFilter.value;
-        // 订阅 pageUrlMap 以在异步 Blob URL 解析完成时触发更新
-        const urlMap = this.vm.pageUrlMap.value;
+export function GalleryTab(props: { vm: GalleryState }): VNode {
+    const { vm } = props;
+    const summary = vm.storageSummary.value;
+    const pageRecords = vm.pageRecords.value;
+    const totalItems = vm.filteredRecords.value.length;
+    const totalPages = vm.totalPages.value;
+    const currentPage = vm.currentPage.value;
+    const isBatchMode = vm.isBatchMode.value;
+    const selectedIds = vm.selectedIds.value;
+    const favFilter = vm.favoriteFilter.value;
+    // 订阅 pageUrlMap 以在异步 Blob URL 解析完成时触发更新
+    const urlMap = vm.pageUrlMap.value;
 
         const filterTabs = [
             { value: 'all', label: '全部记录', count: summary.totalImages },
@@ -81,7 +71,7 @@ export class GalleryTabView extends PreactSettingsView {
                                         role="tab"
                                         aria-selected={isActive ? 'true' : 'false'}
                                         className={`da-gallery-pill${isActive ? ' is-active' : ''}`}
-                                        onClick={() => this.vm.setFavoriteFilter(tab.value)}
+                                        onClick={() => vm.setFavoriteFilter(tab.value)}
                                     >
                                         <span>{tab.label}</span>
                                         <span className="da-gallery-pill__count">{tab.count}</span>
@@ -95,35 +85,35 @@ export class GalleryTabView extends PreactSettingsView {
                                 label="刷新"
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => this.vm.refresh()}
+                                onClick={() => vm.refresh()}
                             />
                             <ButtonControl
                                 label={isBatchMode ? '退出批量管理' : '批量管理'}
                                 variant={isBatchMode ? 'primary' : 'secondary'}
                                 size="sm"
-                                onClick={() => this.vm.toggleBatchMode()}
+                                onClick={() => vm.toggleBatchMode()}
                             />
                         </div>
                     </div>
 
                     <div className="da-gallery-toolbar">
                         <TextInputControl
-                            value={this.vm.keyword.value}
+                            value={vm.keyword.value}
                             placeholder="搜索提示词、模型或种子..."
                             clearable={true}
-                            onChange={(val) => this.vm.setKeyword(val)}
+                            onChange={(val) => vm.setKeyword(val)}
                         />
 
                         <div className="da-gallery-filter-row">
                             <SelectControl
-                                value={this.vm.engineFilter.value}
+                                value={vm.engineFilter.value}
                                 options={ENGINE_FILTER_OPTIONS}
-                                onChange={(val) => this.vm.setEngineFilter(val)}
+                                onChange={(val) => vm.setEngineFilter(val)}
                             />
                             <SelectControl
-                                value={this.vm.sortMode.value}
+                                value={vm.sortMode.value}
                                 options={SORT_MODE_OPTIONS}
-                                onChange={(val) => this.vm.setSortMode(val)}
+                                onChange={(val) => vm.setSortMode(val)}
                             />
                         </div>
                     </div>
@@ -139,13 +129,13 @@ export class GalleryTabView extends PreactSettingsView {
                                 label="全选当前页"
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => this.vm.selectAllCurrentPage()}
+                                onClick={() => vm.selectAllCurrentPage()}
                             />
                             <ButtonControl
                                 label="取消全选"
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => this.vm.clearSelection()}
+                                onClick={() => vm.clearSelection()}
                             />
                         </div>
 
@@ -154,13 +144,13 @@ export class GalleryTabView extends PreactSettingsView {
                                 label="导出元数据 (JSON)"
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => this.vm.exportSelectedBackup()}
+                                onClick={() => vm.exportSelectedBackup()}
                             />
                             <ButtonControl
                                 label="批量删除"
                                 variant="danger"
                                 size="sm"
-                                onClick={() => void this.vm.deleteSelectedItems()}
+                                onClick={() => void vm.deleteSelectedItems()}
                             />
                         </div>
                     </div>
@@ -182,14 +172,14 @@ export class GalleryTabView extends PreactSettingsView {
                         ) : (
                             pageRecords.map((record) => {
                                 const displayUrl =
-                                    this.vm.getDisplayUrl(record) ??
+                                    vm.getDisplayUrl(record) ??
                                     urlMap.get(record.imageId);
-                                const isLoadFailed = this.vm.loadFailedIds.value.has(
+                                const isLoadFailed = vm.loadFailedIds.value.has(
                                     record.imageId
                                 );
                                 const effectiveStatus = isLoadFailed ? 'failed' : record.status;
                                 return (
-                                    <MediaCardView
+                                    <MediaCard
                                         key={record.imageId}
                                         item={{
                                             id: record.imageId,
@@ -203,10 +193,10 @@ export class GalleryTabView extends PreactSettingsView {
                                         selectable={isBatchMode}
                                         selected={selectedIds.has(record.imageId)}
                                         onSelect={(selected, item) =>
-                                            this.vm.toggleSelectItem(item.id, selected)
+                                            vm.toggleSelectItem(item.id, selected)
                                         }
                                         onPreview={() =>
-                                            void this.vm.openLightboxForRecord(record.imageId)
+                                            void vm.openLightboxForRecord(record.imageId)
                                         }
                                         onInfo={() => {
                                             imageInfoModal.open({
@@ -214,25 +204,25 @@ export class GalleryTabView extends PreactSettingsView {
                                                 metadata: record.metadata,
                                                 imageUrl: displayUrl,
                                                 onPreview: () =>
-                                                    void this.vm.openLightboxForRecord(
+                                                    void vm.openLightboxForRecord(
                                                         record.imageId
                                                     ),
                                                 onDelete: () => {
-                                                    void this.vm.deleteSingleRecord(record.imageId);
+                                                    void vm.deleteSingleRecord(record.imageId);
                                                 },
                                             });
                                         }}
                                         onToggleFavorite={(fav, item) =>
-                                            void this.vm.toggleFavorite(item.id, fav)
+                                            void vm.toggleFavorite(item.id, fav)
                                         }
                                         onImageError={(item) =>
-                                            this.vm.retryLoadRecord(item.id, true)
+                                            vm.retryLoadRecord(item.id, true)
                                         }
                                         onRetry={(item) =>
-                                            void this.vm.retryLoadRecord(item.id)
+                                            void vm.retryLoadRecord(item.id)
                                         }
                                         onDelete={(item) =>
-                                            void this.vm.deleteSingleRecord(item.id)
+                                            void vm.deleteSingleRecord(item.id)
                                         }
                                     />
                                 );
@@ -247,7 +237,7 @@ export class GalleryTabView extends PreactSettingsView {
                         variant="secondary"
                         size="sm"
                         disabled={currentPage <= 1}
-                        onClick={() => this.vm.prevPage()}
+                        onClick={() => vm.prevPage()}
                     />
                     <span className="da-gallery-pagination__info">
                         {`第 ${currentPage} / ${totalPages} 页 · 共 ${totalItems} 项`}
@@ -257,20 +247,26 @@ export class GalleryTabView extends PreactSettingsView {
                         variant="secondary"
                         size="sm"
                         disabled={currentPage >= totalPages}
-                        onClick={() => this.vm.nextPage()}
+                        onClick={() => vm.nextPage()}
                     />
                 </div>
             </>
         );
-    }
+}
 
-    public override activate(): void {
-        super.activate();
-        void this.vm.refresh();
-    }
-
-    public override dispose(): void {
-        this.vm.dispose();
-        super.dispose();
-    }
+export function createGalleryTabView(): StatefulSettingsView<GalleryState> {
+    const vm = new GalleryState();
+    return createPreactSettingsView<GalleryState>({
+        id: 'gallery',
+        title: '本地图库',
+        className: 'da-tab-pane da-gallery-manager-widget',
+        state: vm,
+        render: () => <GalleryTab vm={vm} />,
+        onActivate: () => {
+            void vm.refresh();
+        },
+        onDispose: () => {
+            vm.dispose();
+        },
+    });
 }

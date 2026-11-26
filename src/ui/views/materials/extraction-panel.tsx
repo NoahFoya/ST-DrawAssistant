@@ -14,11 +14,11 @@ import {
     CardView,
     FormFieldView,
     SwitchControl,
-    PresetToolbarView,
     ButtonControl,
     BadgeView,
 } from '../../framework';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     extractArchivesFromText,
     DEFAULT_EXTRACTION_CONFIG,
@@ -55,7 +55,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
 
     return (
         <div className="da-material-subpanel">
-            <PresetToolbarView
+            <PresetToolbar
                 presets={extractionController.toolbarItems.value}
                 activePresetId={extractionController.activePresetId.value}
                 dirty={extractionController.isDirty.value}

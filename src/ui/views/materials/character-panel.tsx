@@ -12,12 +12,11 @@ import type {
 } from '@types';
 import {
     CardView,
-    PresetToolbarView,
     ButtonControl,
     SelectControl,
 } from '../../framework';
-import type { PresetActionType } from '../../composite';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar, type PresetActionType } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     CHARACTER_PART_DEFS,
     normalizeCharacterData,
@@ -116,7 +115,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
     return (
         <div className="da-material-subpanel">
             <div className="da-material-preset-bar">
-                <PresetToolbarView
+                <PresetToolbar
                     presets={charController.toolbarItems.value}
                     activePresetId={activeId}
                     dirty={isDirty}

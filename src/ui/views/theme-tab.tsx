@@ -10,16 +10,14 @@
  */
 
 import type { VNode } from 'preact';
-import type { ThemePresetData } from '@types';
 import {
-    PreactSettingsView,
+    createPreactSettingsView,
     CardView,
     FormFieldView,
-    PresetToolbarView,
+    type StatefulSettingsView,
 } from '../framework';
-import { PresetController } from '../viewmodels';
-import { settingsStore } from '../../store/settings-store';
-import { eventBus } from '../../util/event-bus';
+import { PresetToolbar } from '../composite';
+import { ThemeState } from '../state';
 import { themeService } from '../theme/theme-service';
 
 /** 轻量双模拾色组件：支持点击色块调用原生拾色器与输入框键入十六进制/RGBA */
@@ -57,319 +55,197 @@ function ColorPickerInput(props: {
     );
 }
 
-export class ThemeTabView extends PreactSettingsView {
-    public readonly id = 'theme';
-    public readonly title = '主题设置';
+export function ThemeTab(props: { state: ThemeState }): VNode {
+    const { presetController } = props.state;
+    const activeThemeId = presetController.activePresetId.value || themeService.getActiveThemeId();
+    const draft = presetController.draftConfig.value;
+    const isDirty = presetController.isDirty.value;
+    const dirtyFields = presetController.dirtyFields.value;
 
-    public readonly presetController: PresetController<ThemePresetData>;
-    private unlistenSettings: (() => void) | null = null;
+    return (
+        <div className="da-settings-stack">
+            {/* 1. 主题预设管理 */}
+            <CardView title="主题预设">
+                <PresetToolbar
+                    presets={presetController.toolbarItems.value}
+                    activePresetId={activeThemeId}
+                    dirty={isDirty}
+                    onAction={(action, id) => presetController.handleAction(action, id)}
+                    onImportFiles={(files) => void presetController.handleImportFiles(files)}
+                />
+            </CardView>
 
-    public constructor() {
-        super('da-tab-pane da-view-theme');
-
-        this.presetController = new PresetController<ThemePresetData>({
-            category: 'themes',
-            idPrefix: 'theme_',
-            promptMessageForNew: '请输入新主题预设名称:',
-            defaultNewName: '新建主题预设',
-            promptMessageForSaveAs: '请输入另存主题预设名称:',
-            promptMessageForRename: '请输入新的主题预设名称:',
-            defaultImportName: '导入主题预设',
-            exportFilenamePrefix: 'st-draw-theme-',
-            minRemainingOnDelete: 1,
-            minRemainingWarning: '至少保留一套基准主题预设，无法删除',
-            showToast: true,
-            getPresetsOverride: () => themeService.getAvailableThemes(),
-            getActiveId: () => themeService.getActiveThemeId(),
-            setActiveId: (id) => {
-                settingsStore.set('activeThemePresetId', id);
-            },
-            evaluateDirtyFields: (draft, snap) => {
-                const dirty = new Set<string>();
-                const colorKeys: (keyof ThemePresetData)[] = [
-                    'accent',
-                    'accentSecondary',
-                    'textOnAccent',
-                    'bgPrimary',
-                    'bgSecondary',
-                    'bgCard',
-                    'bgCardHover',
-                    'bgInput',
-                    'borderColor',
-                    'borderHighlight',
-                    'textPrimary',
-                    'textSecondary',
-                    'textMuted',
-                ];
-                for (const key of colorKeys) {
-                    if (draft[key] !== snap[key]) {
-                        dirty.add(key as string);
-                    }
-                }
-                return dirty;
-            },
-            onDraftChanged: (draft) => {
-                themeService.applyCurrentTheme(draft);
-            },
-            onPresetApplied: () => {
-                themeService.applyCurrentTheme();
-            },
-        });
-
-        this.unlistenSettings = eventBus.on('settings:updated', (data) => {
-            if (
-                !data.key ||
-                data.isReset ||
-                data.key === 'activeThemePresetId' ||
-                data.key === 'presets.themes' ||
-                data.keys?.includes('activeThemePresetId') ||
-                data.keys?.includes('presets')
-            ) {
-                const storedId = themeService.getActiveThemeId();
-                if (!this.presetController.isDirty.value) {
-                    if (
-                        !data.isReset &&
-                        data.key === 'activeThemePresetId' &&
-                        this.presetController.activePresetId.value === storedId
-                    ) {
-                        return;
-                    }
-                    this.presetController.applyActivePreset(storedId, {
-                        persist: false,
-                        silent: true,
-                    });
-                } else {
-                    this.presetController.refreshPresets();
-                }
-            }
-        });
-
-        this.mountPreact();
-    }
-
-    protected renderContent(): VNode {
-        const activeThemeId = this.presetController.activePresetId.value || themeService.getActiveThemeId();
-        const draft = this.presetController.draftConfig.value;
-        const isDirty = this.presetController.isDirty.value;
-        const dirtyFields = this.presetController.dirtyFields.value;
-
-        return (
-            <div className="da-settings-stack">
-                {/* 1. 主题预设管理 */}
-                <CardView title="主题预设">
-                    <PresetToolbarView
-                        presets={this.presetController.toolbarItems.value}
-                        activePresetId={activeThemeId}
-                        dirty={isDirty}
-                        onAction={(action, id) => this.presetController.handleAction(action, id)}
-                        onImportFiles={(files) => void this.presetController.handleImportFiles(files)}
+            {/* 2. 重点颜色 */}
+            <CardView title="重点颜色">
+                <FormFieldView
+                    label="主强调色"
+                    width="auto"
+                    dirty={dirtyFields.has('accent')}
+                >
+                    <ColorPickerInput
+                        value={draft.accent}
+                        placeholder="#cba6f7"
+                        onChange={(val) => presetController.updateDraft('accent', val)}
                     />
-                </CardView>
+                </FormFieldView>
 
-                {/* 2. 重点颜色 */}
-                <CardView title="重点颜色">
-                    <FormFieldView
-                        label="主强调色"
-                        width="auto"
-                        dirty={dirtyFields.has('accent')}
-                    >
-                        <ColorPickerInput
-                            value={draft.accent}
-                            placeholder="#cba6f7"
-                            onChange={(val) => this.presetController.updateDraft('accent', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="辅助渐变色"
+                    width="auto"
+                    dirty={dirtyFields.has('accentSecondary')}
+                >
+                    <ColorPickerInput
+                        value={draft.accentSecondary}
+                        placeholder="#89b4fa"
+                        onChange={(val) => presetController.updateDraft('accentSecondary', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="辅助渐变色"
-                        width="auto"
-                        dirty={dirtyFields.has('accentSecondary')}
-                    >
-                        <ColorPickerInput
-                            value={draft.accentSecondary}
-                            placeholder="#89b4fa"
-                            onChange={(val) => this.presetController.updateDraft('accentSecondary', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="主按钮文字颜色"
+                    tooltip="主要按钮上的前景文字颜色（强调色偏深时建议白色，偏亮时建议深色）"
+                    width="auto"
+                    dirty={dirtyFields.has('textOnAccent')}
+                >
+                    <ColorPickerInput
+                        value={draft.textOnAccent}
+                        placeholder="#11111b"
+                        onChange={(val) => presetController.updateDraft('textOnAccent', val)}
+                    />
+                </FormFieldView>
+            </CardView>
 
-                    <FormFieldView
-                        label="主按钮文字颜色"
-                        tooltip="主要按钮上的前景文字颜色（强调色偏深时建议白色，偏亮时建议深色）"
-                        width="auto"
-                        dirty={dirtyFields.has('textOnAccent')}
-                    >
-                        <ColorPickerInput
-                            value={draft.textOnAccent}
-                            placeholder="#11111b"
-                            onChange={(val) => this.presetController.updateDraft('textOnAccent', val)}
-                        />
-                    </FormFieldView>
-                </CardView>
+            {/* 3. 背景颜色 */}
+            <CardView title="背景颜色">
+                <FormFieldView label="窗口背景" width="auto" dirty={dirtyFields.has('bgPrimary')}>
+                    <ColorPickerInput
+                        value={draft.bgPrimary}
+                        placeholder="#1e1e2e"
+                        onChange={(val) => presetController.updateDraft('bgPrimary', val)}
+                    />
+                </FormFieldView>
 
-                {/* 3. 背景颜色 */}
-                <CardView title="背景颜色">
-                    <FormFieldView
-                        label="窗口背景"
-                        width="auto"
-                        dirty={dirtyFields.has('bgPrimary')}
-                    >
-                        <ColorPickerInput
-                            value={draft.bgPrimary}
-                            placeholder="#1e1e2e"
-                            onChange={(val) => this.presetController.updateDraft('bgPrimary', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="侧边栏背景"
+                    width="auto"
+                    dirty={dirtyFields.has('bgSecondary')}
+                >
+                    <ColorPickerInput
+                        value={draft.bgSecondary}
+                        placeholder="#181825"
+                        onChange={(val) => presetController.updateDraft('bgSecondary', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="侧边栏背景"
-                        width="auto"
-                        dirty={dirtyFields.has('bgSecondary')}
-                    >
-                        <ColorPickerInput
-                            value={draft.bgSecondary}
-                            placeholder="#181825"
-                            onChange={(val) => this.presetController.updateDraft('bgSecondary', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView label="卡片背景" width="auto" dirty={dirtyFields.has('bgCard')}>
+                    <ColorPickerInput
+                        value={draft.bgCard}
+                        placeholder="#28293d"
+                        onChange={(val) => presetController.updateDraft('bgCard', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="卡片背景"
-                        width="auto"
-                        dirty={dirtyFields.has('bgCard')}
-                    >
-                        <ColorPickerInput
-                            value={draft.bgCard}
-                            placeholder="#28293d"
-                            onChange={(val) => this.presetController.updateDraft('bgCard', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="卡片悬停背景"
+                    width="auto"
+                    dirty={dirtyFields.has('bgCardHover')}
+                >
+                    <ColorPickerInput
+                        value={draft.bgCardHover}
+                        placeholder="#313244"
+                        onChange={(val) => presetController.updateDraft('bgCardHover', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="卡片悬停背景"
-                        width="auto"
-                        dirty={dirtyFields.has('bgCardHover')}
-                    >
-                        <ColorPickerInput
-                            value={draft.bgCardHover}
-                            placeholder="#313244"
-                            onChange={(val) => this.presetController.updateDraft('bgCardHover', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView label="输入框背景" width="auto" dirty={dirtyFields.has('bgInput')}>
+                    <ColorPickerInput
+                        value={draft.bgInput}
+                        placeholder="#161622"
+                        onChange={(val) => presetController.updateDraft('bgInput', val)}
+                    />
+                </FormFieldView>
+            </CardView>
 
-                    <FormFieldView
-                        label="输入框背景"
-                        width="auto"
-                        dirty={dirtyFields.has('bgInput')}
-                    >
-                        <ColorPickerInput
-                            value={draft.bgInput}
-                            placeholder="#161622"
-                            onChange={(val) => this.presetController.updateDraft('bgInput', val)}
-                        />
-                    </FormFieldView>
-                </CardView>
+            {/* 4. 边框与文字颜色 */}
+            <CardView title="边框与文字颜色">
+                <FormFieldView
+                    label="边框颜色"
+                    width="auto"
+                    dirty={dirtyFields.has('borderColor')}
+                >
+                    <ColorPickerInput
+                        value={draft.borderColor}
+                        placeholder="rgba(205, 214, 244, 0.10)"
+                        onChange={(val) => presetController.updateDraft('borderColor', val)}
+                    />
+                </FormFieldView>
 
-                {/* 4. 边框与文字颜色 */}
-                <CardView title="边框与文字颜色">
-                    <FormFieldView
-                        label="边框颜色"
-                        width="auto"
-                        dirty={dirtyFields.has('borderColor')}
-                    >
-                        <ColorPickerInput
-                            value={draft.borderColor}
-                            placeholder="rgba(205, 214, 244, 0.10)"
-                            onChange={(val) => this.presetController.updateDraft('borderColor', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="高亮边框颜色"
+                    tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色 (borderHighlight)"
+                    width="auto"
+                    dirty={dirtyFields.has('borderHighlight')}
+                >
+                    <ColorPickerInput
+                        value={draft.borderHighlight}
+                        placeholder="rgba(203, 166, 247, 0.34)"
+                        onChange={(val) => presetController.updateDraft('borderHighlight', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="高亮边框颜色"
-                        tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色 (borderHighlight)"
-                        width="auto"
-                        dirty={dirtyFields.has('borderHighlight')}
-                    >
-                        <ColorPickerInput
-                            value={draft.borderHighlight}
-                            placeholder="rgba(203, 166, 247, 0.34)"
-                            onChange={(val) => this.presetController.updateDraft('borderHighlight', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="正文文字颜色"
+                    width="auto"
+                    dirty={dirtyFields.has('textPrimary')}
+                >
+                    <ColorPickerInput
+                        value={draft.textPrimary}
+                        placeholder="#cdd6f4"
+                        onChange={(val) => presetController.updateDraft('textPrimary', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="正文文字颜色"
-                        width="auto"
-                        dirty={dirtyFields.has('textPrimary')}
-                    >
-                        <ColorPickerInput
-                            value={draft.textPrimary}
-                            placeholder="#cdd6f4"
-                            onChange={(val) => this.presetController.updateDraft('textPrimary', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="次要文字颜色"
+                    width="auto"
+                    dirty={dirtyFields.has('textSecondary')}
+                >
+                    <ColorPickerInput
+                        value={draft.textSecondary}
+                        placeholder="#a6adc8"
+                        onChange={(val) => presetController.updateDraft('textSecondary', val)}
+                    />
+                </FormFieldView>
 
-                    <FormFieldView
-                        label="次要文字颜色"
-                        width="auto"
-                        dirty={dirtyFields.has('textSecondary')}
-                    >
-                        <ColorPickerInput
-                            value={draft.textSecondary}
-                            placeholder="#a6adc8"
-                            onChange={(val) => this.presetController.updateDraft('textSecondary', val)}
-                        />
-                    </FormFieldView>
+                <FormFieldView
+                    label="提示文字颜色"
+                    width="auto"
+                    dirty={dirtyFields.has('textMuted')}
+                >
+                    <ColorPickerInput
+                        value={draft.textMuted}
+                        placeholder="#6c7086"
+                        onChange={(val) => presetController.updateDraft('textMuted', val)}
+                    />
+                </FormFieldView>
+            </CardView>
+        </div>
+    );
+}
 
-                    <FormFieldView
-                        label="提示文字颜色"
-                        width="auto"
-                        dirty={dirtyFields.has('textMuted')}
-                    >
-                        <ColorPickerInput
-                            value={draft.textMuted}
-                            placeholder="#6c7086"
-                            onChange={(val) => this.presetController.updateDraft('textMuted', val)}
-                        />
-                    </FormFieldView>
-                </CardView>
-            </div>
-        );
-    }
-
-    public override activate(): void {
-        super.activate();
-        if (!this.presetController.isDirty.value) {
-            const storedId = themeService.getActiveThemeId();
-            this.presetController.applyActivePreset(storedId, { persist: false, silent: true });
-        } else {
-            themeService.applyCurrentTheme(this.presetController.draftConfig.value);
-        }
-    }
-
-    public override deactivate(): void {
-        super.deactivate();
-        // 切出主题选项卡时恢复已持久化主题，保留内存草稿待切回时继续预览
-        themeService.applyCurrentTheme();
-    }
-
-    public hasUnsavedChanges(): boolean {
-        return this.presetController.isDirty.value;
-    }
-
-    public saveUnsavedChanges(): Promise<boolean> {
-        return this.presetController.handleAction('save');
-    }
-
-    public discardUnsavedChanges(): void {
-        this.presetController.discardDraft();
-    }
-
-    public override dispose(): void {
-        if (this.unlistenSettings) {
-            this.unlistenSettings();
-            this.unlistenSettings = null;
-        }
-        this.presetController.dispose();
-        super.dispose();
-    }
+export function createThemeTabView(): StatefulSettingsView<ThemeState> {
+    const state = new ThemeState();
+    return createPreactSettingsView<ThemeState>({
+        id: 'theme',
+        title: '主题设置',
+        className: 'da-tab-pane da-view-theme',
+        state,
+        render: () => <ThemeTab state={state} />,
+        onActivate: () => state.activate(),
+        onDeactivate: () => state.deactivate(),
+        onDispose: () => state.dispose(),
+        hasUnsavedChanges: () => state.hasUnsavedChanges(),
+        saveUnsavedChanges: () => state.saveUnsavedChanges(),
+        discardUnsavedChanges: () => state.discardUnsavedChanges(),
+    });
 }

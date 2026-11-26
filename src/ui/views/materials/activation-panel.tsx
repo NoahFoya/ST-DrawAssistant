@@ -17,12 +17,11 @@ import {
     FormFieldView,
     SwitchControl,
     SegmentedControlView,
-    PresetToolbarView,
     SearchableSelectControl,
     NumberInputControl,
 } from '../../framework';
-import type { PresetActionType } from '../../composite';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar, type PresetActionType } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     normalizeCharacterData,
     normalizeOutfitData,
@@ -191,7 +190,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
         <div className="da-material-subpanel">
             {/* 顶部独立启用预设工具栏 */}
             <div className="da-material-preset-bar">
-                <PresetToolbarView
+                <PresetToolbar
                     presets={activationController.toolbarItems.value}
                     activePresetId={activationController.activePresetId.value}
                     dirty={activationController.isDirty.value}

@@ -15,49 +15,12 @@ import { computePromptInjections } from '../../pipeline/prompt-injector';
 import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
 import { Toast } from '../feedback/toast';
 
-export interface PromptChannelMeta {
-    readonly id: PromptChannelId;
-    readonly category: PresetCategory;
-    readonly label: string;
-    readonly defaultDepth: number;
-    readonly defaultOrder: number;
-    readonly desc: string;
-}
+import {
+    PROMPT_CHANNELS,
+    type PromptChannelMeta,
+} from '../state/prompts-state';
 
-export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
-    {
-        id: 'story',
-        category: 'prompt_story',
-        label: '故事插画',
-        defaultDepth: 0,
-        defaultOrder: 10,
-        desc: '默认开启的主通道，教 AI 在剧情回复中何时及如何输出生图指令；若已挂载外部绘画世界书，可关闭本通道。',
-    },
-    {
-        id: 'vocab',
-        category: 'prompt_vocab',
-        label: '词汇指导',
-        defaultDepth: 7,
-        defaultOrder: 200,
-        desc: '默认关闭的词表参考通道，以 @D=7 深度注入常见 Danbooru 标签表并按中文联想词扩展触发（与侧边栏本地联想「词库」相互独立）。',
-    },
-    {
-        id: 'character',
-        category: 'prompt_character',
-        label: '素材创作',
-        defaultDepth: 0,
-        defaultOrder: 20,
-        desc: '默认关闭的建档提示词通道，引导 AI 按「素材管理 → 解析设置」的标签格式生成角色与服装设定档案。',
-    },
-    {
-        id: 'material',
-        category: 'prompt_material',
-        label: '素材注入',
-        defaultDepth: 0,
-        defaultOrder: 30,
-        desc: '默认关闭的素材变量通道，通过 {{角色启用列表}}、{{服装启用列表}} 与可用宏模板将已启用的素材注入推理上下文。',
-    },
-];
+export { PROMPT_CHANNELS, type PromptChannelMeta };
 
 const CHANNEL_LABEL_MAP: Record<PromptChannelId, string> = Object.fromEntries(
     PROMPT_CHANNELS.map((c) => [c.id, c.label])

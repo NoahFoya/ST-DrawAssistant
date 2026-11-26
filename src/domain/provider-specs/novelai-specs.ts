@@ -28,6 +28,31 @@ export const OFFICIAL_NOVELAI_MODELS: readonly string[] = [
     'nai-diffusion-furry-3',
 ];
 
+/** NovelAI 常用采样算法选项 */
+export const NOVELAI_SAMPLER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { label: 'k_euler_ancestral', value: 'k_euler_ancestral' },
+    { label: 'k_euler', value: 'k_euler' },
+    { label: 'k_dpmpp_2s_ancestral', value: 'k_dpmpp_2s_ancestral' },
+    { label: 'k_dpmpp_2m', value: 'k_dpmpp_2m' },
+    { label: 'k_dpmpp_sde', value: 'k_dpmpp_sde' },
+    { label: 'ddim', value: 'ddim' },
+];
+
+/** NovelAI 常用调度器选项 */
+export const NOVELAI_SCHEDULER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { label: 'karras (推荐)', value: 'karras' },
+    { label: 'native', value: 'native' },
+    { label: 'exponential', value: 'exponential' },
+    { label: 'polyexponential', value: 'polyexponential' },
+];
+
+/** NovelAI V3 SMEA 采样增强模式选项 */
+export const NOVELAI_SMEA_MODE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { label: 'SMEA + DYN (动态增强)', value: 'smea_dyn' },
+    { label: 'SMEA (采样增强)', value: 'smea' },
+    { label: '关闭', value: 'none' },
+];
+
 const NOVELAI_MODEL_LABELS: Readonly<Record<string, string>> = {
     'nai-diffusion-5-full': 'NAI Diffusion V5 (Full)',
     'nai-diffusion-5-curated': 'NAI Diffusion V5 (Curated)',

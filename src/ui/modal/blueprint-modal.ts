@@ -19,7 +19,7 @@ import {
     COMFYUI_VARIABLE_DEFINITIONS,
     isWorkflowFieldEligibleForVariable,
     parseComfyWorkflowInput,
-} from '../composite/workflow-card';
+} from '../../domain/provider-specs/comfyui-workflow';
 
 export interface WorkflowNodeData {
     class_type: string;

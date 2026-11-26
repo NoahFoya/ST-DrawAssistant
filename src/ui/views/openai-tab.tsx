@@ -17,13 +17,12 @@ import {
     SchemaFieldsView,
     SchemaFieldRenderer,
     type FieldSchema,
-    DimensionPickerView,
-    PresetToolbarView,
     PromptPollingPanelView,
 } from '../framework';
-import { ProviderTabViewModel } from '../viewmodels';
-import { ProviderTabLayout, ProviderTabView } from './provider-tab-layout';
-import { CustomBodyJsonCard, CustomBodyJsonController } from './cloud-tab-helpers';
+import { DimensionPicker, PresetToolbar } from '../composite';
+import { ProviderTabState, CustomBodyJsonController } from '../state';
+import { ProviderTabLayout, createProviderTabView } from './provider-tab-layout';
+import { CustomBodyJsonCard } from './cloud-tab-helpers';
 import {
     DEFAULT_ASPECT_RATIOS,
     GPT_IMAGE_ASPECT_RATIOS,
@@ -144,310 +143,283 @@ const STYLE_FIELD: FieldSchema<DrawingPresetData> = {
     },
 };
 
-export class OpenAITabView extends ProviderTabView {
-    public readonly id = 'openai';
-    public readonly title = 'OpenAI 兼容';
+export function OpenAITab(props: {
+    vm: ProviderTabState;
+    modelFields: FieldSchema<DrawingPresetData>[];
+    customBodyJson: CustomBodyJsonController;
+}): VNode {
+    const { vm, modelFields, customBodyJson } = props;
+    const { presetController } = vm;
+    const draft = presetController.draftConfig.value;
+    const dirtyFields = presetController.dirtyFields.value;
+    const invalidFields = presetController.invalidFields.value;
+    const conn = vm.connectionData.value;
+    const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
 
-    public readonly vm: ProviderTabViewModel;
-    private readonly modelFields: FieldSchema<DrawingPresetData>[];
-    private readonly customBodyJson: CustomBodyJsonController;
+    const effectiveModel =
+        (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'gpt-image-1';
+    const capabilities = resolveOpenAIModelCapabilities(effectiveModel);
+    const isDallE3 = capabilities.family === 'dall-e-3';
+    const isGptImage = capabilities.family === 'gpt-image';
+    const supportsAutoSize = capabilities.supportsAutoSize && !isSiliconFlow;
 
-    public constructor() {
-        super('da-tab-pane da-view-openai');
+    const isDimsDirty =
+        dirtyFields.has('width') || dirtyFields.has('height') || dirtyFields.has('aspectRatio');
 
-        this.vm = new ProviderTabViewModel({
-            provider: 'openai',
-            defaultServerUrl: 'https://api.openai.com/v1',
-            defaultServiceId: 'openai-official',
-            serviceProfiles: {
-                defaultUrls: Object.fromEntries(
-                    OPENAI_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [
-                        p.id,
-                        p.defaultUrl,
-                    ])
-                ),
-            },
-            idPrefix: 'openai_',
-            promptMessageForNew: '请输入新生图参数预设名称:',
-            defaultNewName: '新建预设',
-            defaultModels: OPENAI_MODEL_OPTIONS,
-            defaultDraftTemplate: () => ({
-                baseModel: 'gpt-image-1',
-                width: 1024,
-                height: 1536,
-                quality: 'medium',
-                background: 'auto',
-                outputFormat: 'png',
-                promptPresetId: '',
-            }),
-            onPresetApplied: (_preset, draft) => {
-                this.customBodyJson?.syncFromDraft((draft.customBodyJson as string) || '');
-            },
-            canPerformAction: (action) => {
-                if ((action === 'save' || action === 'saveAs') && this.customBodyJson && !this.customBodyJson.isValid.value) {
-                    return {
-                        allowed: false,
-                        message:
-                            '自定义请求体 JSON 语法格式不正确，无法保存预设。请检查括号与双引号',
-                    };
-                }
-                return { allowed: true };
-            },
-            validateRequired: (cfg) => {
-                const missing: string[] = [];
-                const effectiveModel =
-                    (cfg.customModel && cfg.customModel.trim()) || cfg.baseModel;
-                if (!effectiveModel) missing.push('模型标识 (预置或自定义)');
-                const conn = this.vm?.connectionData.value;
-                const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
-                const supportsAutoSize =
-                    resolveOpenAIModelCapabilities(effectiveModel).supportsAutoSize &&
-                    !isSiliconFlow;
-                const isAutoSize =
-                    supportsAutoSize &&
-                    String(cfg.aspectRatio || '').trim().toLowerCase() === 'auto';
-                if (
-                    !isAutoSize &&
-                    (typeof cfg.width !== 'number' ||
-                        !Number.isFinite(cfg.width) ||
-                        cfg.width <= 0 ||
-                        typeof cfg.height !== 'number' ||
-                        !Number.isFinite(cfg.height) ||
-                        cfg.height <= 0)
-                ) {
-                    missing.push('画幅尺寸 (宽/高)');
-                }
-                return missing;
-            },
-        });
+    return (
+        <ProviderTabLayout
+            vm={vm}
+            showApiKey={true}
+            providerPresets={OPENAI_PROVIDER_PRESETS}
+            showWorkflowManager={false}
+            showLoraInPromptManager={false}
+            showNegativeInPromptManager={false}
+        >
+            <CardView title="生图配置">
+                <PresetToolbar
+                    presets={presetController.toolbarItems.value}
+                    activePresetId={presetController.activePresetId.value}
+                    dirty={presetController.isDirty.value}
+                    onAction={(action, id) => presetController.handleAction(action, id)}
+                    onImportFiles={(files) => void presetController.handleImportFiles(files)}
+                />
 
-        this.customBodyJson = new CustomBodyJsonController(this.vm.presetController);
+                <div className="da-section-banner">
+                    <span className="da-section-banner__title">生图模型</span>
+                </div>
 
-        const syncDimsForModel = () => {
-            const latest = this.vm.presetController.draftConfig.value;
-            const effectiveModel =
-                (latest.customModel && latest.customModel.trim()) ||
-                latest.baseModel ||
-                'gpt-image-1';
-            const conn = this.vm.connectionData.value;
+                <SchemaFieldsView
+                    fields={modelFields}
+                    model={draft}
+                    dirtyFields={dirtyFields}
+                    invalidFields={invalidFields}
+                    onFieldChange={(key, val) => presetController.updateDraft(key, val)}
+                />
+
+                <PromptPollingPanelView vm={vm} />
+
+                <div className="da-section-banner">
+                    <span className="da-section-banner__title">分辨率与画幅</span>
+                </div>
+
+                <DimensionPicker
+                    key={`${capabilities.family}:${supportsAutoSize ? 'auto' : 'fixed'}`}
+                    embedded={true}
+                    allowAuto={supportsAutoSize}
+                    aspectRatio={supportsAutoSize ? draft.aspectRatio : undefined}
+                    width={draft.width ?? 1024}
+                    height={draft.height ?? (isGptImage ? 1536 : 1024)}
+                    aspectRatios={
+                        isGptImage
+                            ? GPT_IMAGE_ASPECT_RATIOS
+                            : isDallE3
+                                ? OPENAI_ASPECT_RATIOS
+                                : DEFAULT_ASPECT_RATIOS
+                    }
+                    dirty={isDimsDirty}
+                    onChange={(dims) =>
+                        presetController.patchDraft({
+                            aspectRatio:
+                                supportsAutoSize && dims.aspectRatio === 'auto'
+                                    ? 'auto'
+                                    : undefined,
+                            width: dims.width,
+                            height: dims.height,
+                        })
+                    }
+                />
+
+                {isDallE3 && (
+                    <>
+                        <div className="da-section-banner">
+                            <span className="da-section-banner__title">画质与风格 (DALL-E 3)</span>
+                        </div>
+
+                        <SchemaFieldRenderer
+                            schema={QUALITY_FIELD}
+                            model={draft}
+                            dirty={dirtyFields.has('quality')}
+                            invalid={invalidFields.has('quality')}
+                            onChange={(val) =>
+                                presetController.updateDraft('quality', val as DrawingPresetData['quality'])
+                            }
+                        />
+                        <SchemaFieldRenderer
+                            schema={STYLE_FIELD}
+                            model={draft}
+                            dirty={dirtyFields.has('style')}
+                            invalid={invalidFields.has('style')}
+                            onChange={(val) =>
+                                presetController.updateDraft('style', val as DrawingPresetData['style'])
+                            }
+                        />
+                    </>
+                )}
+
+                {isGptImage && (
+                    <>
+                        <div className="da-section-banner">
+                            <span className="da-section-banner__title">GPT Image 专属参数</span>
+                        </div>
+
+                        <SchemaFieldRenderer
+                            schema={GPT_IMAGE_QUALITY_FIELD}
+                            model={draft}
+                            dirty={dirtyFields.has('quality')}
+                            invalid={invalidFields.has('quality')}
+                            onChange={(val) =>
+                                presetController.updateDraft('quality', val as DrawingPresetData['quality'])
+                            }
+                        />
+                        <SchemaFieldRenderer
+                            schema={GPT_IMAGE_BACKGROUND_FIELD}
+                            model={draft}
+                            dirty={dirtyFields.has('background')}
+                            invalid={invalidFields.has('background')}
+                            onChange={(val) =>
+                                presetController.updateDraft('background', val as DrawingPresetData['background'])
+                            }
+                        />
+                        <SchemaFieldRenderer
+                            schema={GPT_IMAGE_OUTPUT_FORMAT_FIELD}
+                            model={draft}
+                            dirty={dirtyFields.has('outputFormat')}
+                            invalid={invalidFields.has('outputFormat')}
+                            onChange={(val) =>
+                                presetController.updateDraft('outputFormat', val as DrawingPresetData['outputFormat'])
+                            }
+                        />
+                    </>
+                )}
+            </CardView>
+
+            <CustomBodyJsonCard
+                controller={customBodyJson}
+                dirtyFields={dirtyFields}
+                invalidFields={invalidFields}
+                placeholder={'{\n  "response_format": "b64_json"\n}'}
+            />
+        </ProviderTabLayout>
+    );
+}
+
+export function createOpenAITabView() {
+    let customBodyJson: CustomBodyJsonController | null = null;
+
+    const vm = new ProviderTabState({
+        provider: 'openai',
+        defaultServerUrl: 'https://api.openai.com/v1',
+        defaultServiceId: 'openai-official',
+        serviceProfiles: {
+            defaultUrls: Object.fromEntries(
+                OPENAI_PROVIDER_PRESETS.filter((p) => p.defaultUrl).map((p) => [p.id, p.defaultUrl])
+            ),
+        },
+        idPrefix: 'openai_',
+        promptMessageForNew: '请输入新生图参数预设名称:',
+        defaultNewName: '新建预设',
+        defaultModels: OPENAI_MODEL_OPTIONS,
+        defaultDraftTemplate: () => ({
+            baseModel: 'gpt-image-1',
+            width: 1024,
+            height: 1536,
+            quality: 'medium',
+            background: 'auto',
+            outputFormat: 'png',
+            promptPresetId: '',
+        }),
+        onPresetApplied: (_preset, draft) => {
+            customBodyJson?.syncFromDraft((draft.customBodyJson as string) || '');
+        },
+        canPerformAction: (action) => {
+            if ((action === 'save' || action === 'saveAs') && customBodyJson && !customBodyJson.isValid.value) {
+                return {
+                    allowed: false,
+                    message: '自定义请求体 JSON 语法格式不正确，无法保存预设。请检查括号与双引号',
+                };
+            }
+            return { allowed: true };
+        },
+        validateRequired: (cfg) => {
+            const missing: string[] = [];
+            const effectiveModel = (cfg.customModel && cfg.customModel.trim()) || cfg.baseModel;
+            if (!effectiveModel) missing.push('模型标识 (预置或自定义)');
+            const conn = vm?.connectionData.value;
             const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
             const supportsAutoSize =
                 resolveOpenAIModelCapabilities(effectiveModel).supportsAutoSize && !isSiliconFlow;
-            if (!supportsAutoSize && String(latest.aspectRatio || '').toLowerCase() === 'auto') {
-                this.vm.presetController.updateDraft('aspectRatio', undefined);
+            const isAutoSize =
+                supportsAutoSize && String(cfg.aspectRatio || '').trim().toLowerCase() === 'auto';
+            if (
+                !isAutoSize &&
+                (typeof cfg.width !== 'number' ||
+                    !Number.isFinite(cfg.width) ||
+                    cfg.width <= 0 ||
+                    typeof cfg.height !== 'number' ||
+                    !Number.isFinite(cfg.height) ||
+                    cfg.height <= 0)
+            ) {
+                missing.push('画幅尺寸 (宽/高)');
             }
-        };
+            return missing;
+        },
+    });
 
-        this.modelFields = [
-            {
-                key: 'baseModel',
-                label: '生图模型',
-                type: 'select',
-                options: () => this.vm.effectiveModelOptions.value,
-                transform: {
-                    toView: (v) => (v as string) || 'gpt-image-1',
-                    fromView: (v) => String(v),
-                },
-                onAfterChange: syncDimsForModel,
-            },
-            {
-                key: 'customModel',
-                label: '自定义模型标识',
-                type: 'text',
-                placeholder: '可选填写非标或中转模型标识（若填写将覆盖上述下拉选项）',
-                tooltip:
-                    '第三方中转代理、聚合 API 或特殊微调模型的服务标识名（如硅基流动 FLUX、Kolors 等）。若填写，将覆盖默认下拉选择并直接使用该模型名称发起请求。',
-                transform: {
-                    toView: (v) => (v as string) || '',
-                    fromView: (v) => String(v || '').trim(),
-                },
-                onAfterChange: syncDimsForModel,
-            },
-            {
-                key: 'promptPresetId',
-                label: '提示词预设',
-                type: 'select',
-                options: () => this.vm.promptPresetOptions.value,
-                invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
-            },
-        ];
+    customBodyJson = new CustomBodyJsonController(vm.presetController);
 
-        this.mountPreact();
-    }
-
-    protected renderContent(): VNode {
-        const { presetController } = this.vm;
-        const draft = presetController.draftConfig.value;
-        const dirtyFields = presetController.dirtyFields.value;
-        const invalidFields = presetController.invalidFields.value;
-        const conn = this.vm.connectionData.value;
-        const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
-
+    const syncDimsForModel = () => {
+        const latest = vm.presetController.draftConfig.value;
         const effectiveModel =
-            (draft.customModel && draft.customModel.trim()) || draft.baseModel || 'gpt-image-1';
-        const capabilities = resolveOpenAIModelCapabilities(effectiveModel);
-        const isDallE3 = capabilities.family === 'dall-e-3';
-        const isGptImage = capabilities.family === 'gpt-image';
-        const supportsAutoSize = capabilities.supportsAutoSize && !isSiliconFlow;
-
-        const isDimsDirty =
-            dirtyFields.has('width') || dirtyFields.has('height') || dirtyFields.has('aspectRatio');
-
-        return (
-            <ProviderTabLayout
-                vm={this.vm}
-                showApiKey={true}
-                providerPresets={OPENAI_PROVIDER_PRESETS}
-                showWorkflowManager={false}
-                showLoraInPromptManager={false}
-                showNegativeInPromptManager={false}
-            >
-                <CardView title="生图配置">
-                    <PresetToolbarView
-                        presets={presetController.toolbarItems.value}
-                        activePresetId={presetController.activePresetId.value}
-                        dirty={presetController.isDirty.value}
-                        onAction={(action, id) => presetController.handleAction(action, id)}
-                        onImportFiles={(files) => void presetController.handleImportFiles(files)}
-                    />
-
-                    <div className="da-section-banner">
-                        <span className="da-section-banner__title">生图模型</span>
-                    </div>
-
-                    <SchemaFieldsView
-                        fields={this.modelFields}
-                        model={draft}
-                        dirtyFields={dirtyFields}
-                        invalidFields={invalidFields}
-                        onFieldChange={(key, val) => presetController.updateDraft(key, val)}
-                    />
-
-                    <PromptPollingPanelView vm={this.vm} />
-
-                    <div className="da-section-banner">
-                        <span className="da-section-banner__title">分辨率与画幅</span>
-                    </div>
-
-                    <DimensionPickerView
-                        key={`${capabilities.family}:${supportsAutoSize ? 'auto' : 'fixed'}`}
-                        embedded={true}
-                        allowAuto={supportsAutoSize}
-                        aspectRatio={supportsAutoSize ? draft.aspectRatio : undefined}
-                        width={draft.width ?? 1024}
-                        height={draft.height ?? (isGptImage ? 1536 : 1024)}
-                        aspectRatios={
-                            isGptImage
-                                ? GPT_IMAGE_ASPECT_RATIOS
-                                : isDallE3
-                                    ? OPENAI_ASPECT_RATIOS
-                                    : DEFAULT_ASPECT_RATIOS
-                        }
-                        dirty={isDimsDirty}
-                        onChange={(dims) =>
-                            presetController.patchDraft({
-                                aspectRatio:
-                                    supportsAutoSize && dims.aspectRatio === 'auto'
-                                        ? 'auto'
-                                        : undefined,
-                                width: dims.width,
-                                height: dims.height,
-                            })
-                        }
-                    />
-
-                    {isDallE3 && (
-                        <>
-                            <div className="da-section-banner">
-                                <span className="da-section-banner__title">画质与风格 (DALL-E 3)</span>
-                            </div>
-
-                            <SchemaFieldRenderer
-                                schema={QUALITY_FIELD}
-                                model={draft}
-                                dirty={dirtyFields.has('quality')}
-                                invalid={invalidFields.has('quality')}
-                                onChange={(val) =>
-                                    presetController.updateDraft('quality', val as DrawingPresetData['quality'])
-                                }
-                            />
-                            <SchemaFieldRenderer
-                                schema={STYLE_FIELD}
-                                model={draft}
-                                dirty={dirtyFields.has('style')}
-                                invalid={invalidFields.has('style')}
-                                onChange={(val) =>
-                                    presetController.updateDraft('style', val as DrawingPresetData['style'])
-                                }
-                            />
-                        </>
-                    )}
-
-                    {isGptImage && (
-                        <>
-                            <div className="da-section-banner">
-                                <span className="da-section-banner__title">GPT Image 专属参数</span>
-                            </div>
-
-                            <SchemaFieldRenderer
-                                schema={GPT_IMAGE_QUALITY_FIELD}
-                                model={draft}
-                                dirty={dirtyFields.has('quality')}
-                                invalid={invalidFields.has('quality')}
-                                onChange={(val) =>
-                                    presetController.updateDraft('quality', val as DrawingPresetData['quality'])
-                                }
-                            />
-                            <SchemaFieldRenderer
-                                schema={GPT_IMAGE_BACKGROUND_FIELD}
-                                model={draft}
-                                dirty={dirtyFields.has('background')}
-                                invalid={invalidFields.has('background')}
-                                onChange={(val) =>
-                                    presetController.updateDraft('background', val as DrawingPresetData['background'])
-                                }
-                            />
-                            <SchemaFieldRenderer
-                                schema={GPT_IMAGE_OUTPUT_FORMAT_FIELD}
-                                model={draft}
-                                dirty={dirtyFields.has('outputFormat')}
-                                invalid={invalidFields.has('outputFormat')}
-                                onChange={(val) =>
-                                    presetController.updateDraft('outputFormat', val as DrawingPresetData['outputFormat'])
-                                }
-                            />
-                        </>
-                    )}
-                </CardView>
-
-                <CustomBodyJsonCard
-                    controller={this.customBodyJson}
-                    dirtyFields={dirtyFields}
-                    invalidFields={invalidFields}
-                    placeholder={'{\n  "response_format": "b64_json"\n}'}
-                />
-            </ProviderTabLayout>
-        );
-    }
-
-    public override activate(): void {
-        super.activate();
-        this.customBodyJson.syncOnActivate();
-    }
-
-    public override hasUnsavedChanges(): boolean {
-        return super.hasUnsavedChanges() || !this.customBodyJson.isValid.value;
-    }
-
-    public override async saveUnsavedChanges(): Promise<boolean> {
-        if (!this.customBodyJson.validateBeforeSave()) {
-            return false;
+            (latest.customModel && latest.customModel.trim()) || latest.baseModel || 'gpt-image-1';
+        const conn = vm.connectionData.value;
+        const isSiliconFlow = isSiliconFlowService(conn?.activePresetId, conn?.serverUrl);
+        const supportsAutoSize =
+            resolveOpenAIModelCapabilities(effectiveModel).supportsAutoSize && !isSiliconFlow;
+        if (!supportsAutoSize && String(latest.aspectRatio || '').toLowerCase() === 'auto') {
+            vm.presetController.updateDraft('aspectRatio', undefined);
         }
-        return await super.saveUnsavedChanges();
-    }
+    };
 
-    public override discardUnsavedChanges(): void {
-        super.discardUnsavedChanges();
-        this.customBodyJson.syncFromDraft();
-    }
+    const modelFields: FieldSchema<DrawingPresetData>[] = [
+        {
+            key: 'baseModel',
+            label: '生图模型',
+            type: 'select',
+            options: () => vm.effectiveModelOptions.value,
+            transform: {
+                toView: (v) => (v as string) || 'gpt-image-1',
+                fromView: (v) => String(v),
+            },
+            onAfterChange: syncDimsForModel,
+        },
+        {
+            key: 'customModel',
+            label: '自定义模型标识',
+            type: 'text',
+            placeholder: '可选填写非标或中转模型标识（若填写将覆盖上述下拉选项）',
+            tooltip:
+                '第三方中转代理、聚合 API 或特殊微调模型的服务标识名（如硅基流动 FLUX、Kolors 等）。若填写，将覆盖默认下拉选择并直接使用该模型名称发起请求。',
+            transform: {
+                toView: (v) => (v as string) || '',
+                fromView: (v) => String(v || '').trim(),
+            },
+            onAfterChange: syncDimsForModel,
+        },
+        {
+            key: 'promptPresetId',
+            label: '提示词预设',
+            type: 'select',
+            options: () => vm.promptPresetOptions.value,
+            invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
+        },
+    ];
+
+    return createProviderTabView({
+        id: 'openai',
+        title: 'OpenAI 兼容',
+        className: 'da-tab-pane da-view-openai',
+        vm,
+        customBodyJson,
+        render: () => <OpenAITab vm={vm} modelFields={modelFields} customBodyJson={customBodyJson!} />,
+    });
 }

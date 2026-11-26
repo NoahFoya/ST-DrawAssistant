@@ -5,9 +5,9 @@
 import type { VNode } from 'preact';
 import type { Signal } from '@preact/signals';
 import type { OutfitPresetData, OutfitPartKey } from '@types';
-import { CardView, PresetToolbarView } from '../../framework';
-import type { PresetActionType } from '../../composite';
-import type { PresetController } from '../../viewmodels';
+import { CardView } from '../../framework';
+import { PresetToolbar, type PresetActionType } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     OUTFIT_PART_DEFS,
     normalizeOutfitData,
@@ -60,7 +60,7 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
     return (
         <div className="da-material-subpanel">
             <div className="da-material-preset-bar">
-                <PresetToolbarView
+                <PresetToolbar
                     presets={outfitController.toolbarItems.value}
                     activePresetId={activeId}
                     dirty={isDirty}

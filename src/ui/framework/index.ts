@@ -5,6 +5,5 @@
 export * from './preact-adapter';
 export * from './controls';
 export * from './schema-form';
-export * from './composite-views';
 export * from './prompt-polling-panel-view';
 export * from './overlay-stack';
