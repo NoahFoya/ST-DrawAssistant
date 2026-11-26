@@ -35,6 +35,39 @@ export interface GenerationParameters {
     maskBlur?: number;
     /** 指定的局部重绘预设标识符 */
     inpaintPresetId?: string;
+    /** 指定的工作流预设标识符（复现历史工作流时作为 txt2img / inpaint 工作流回退标识） */
+    workflowId?: string;
+    /** 主模型覆盖 */
+    baseModel?: string;
+    /** 分立 CLIP 模型覆盖 */
+    clipName?: string;
+    /** VAE 模型覆盖 */
+    vaeName?: string;
+    /** 额外模型列表覆盖 */
+    extraModels?: string[];
+    /** CLIP 跳过层数覆盖 */
+    clipSkip?: number;
+    /** 高清修复参数覆盖 (SD-WebUI) */
+    enableHires?: boolean;
+    hiresUpscaler?: string;
+    hiresScale?: number;
+    hiresSteps?: number;
+    hiresDenoise?: number;
+    /** NovelAI 专属参数覆盖 */
+    cfgRescale?: number;
+    smeaMode?: string;
+    decrisper?: boolean;
+    convertSyntax?: boolean;
+    /** 云端服务规格覆盖 */
+    aspectRatio?: string;
+    imageSize?: string;
+    resolution?: string;
+    quality?: string;
+    style?: string;
+    background?: string;
+    outputFormat?: string;
+    /** 来源图片资产 ID */
+    parentImageId?: string;
     /** 随机种子覆盖 */
     seed?: number;
     /** 采样步数覆盖 */
@@ -108,6 +141,8 @@ export interface GenerationResult {
     readonly blob: Blob;
     /** 图像生成技术参数快照，用于写入资产记录与详情展示 */
     readonly metadata: ImageGenerationMetadata;
+    /** 运行时瞬态：ComfyUI 本次实际注入并提交至 /prompt 的工作流 API JSON（仅用于元数据无损写回，不污染存储索引） */
+    readonly comfyPromptGraph?: Record<string, unknown>;
 }
 
 /** 绘图服务提供方健康状态检查结果 */

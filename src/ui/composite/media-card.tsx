@@ -11,7 +11,11 @@
 import type { VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { imageStorage } from '../../store/image-storage';
-import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
+import {
+    attachImageDragFile,
+    copyImageBlobToClipboard,
+    downloadImageAsset,
+} from '../../util/browser-io';
 import { renderIcon } from '../components/icons';
 import { Toast } from '../feedback/toast';
 
@@ -48,8 +52,12 @@ export interface MediaCardProps {
     onPreview?: (item: MediaCardItemData) => void;
     /** 点击卡片查看生成信息回调 */
     onInfo?: (item: MediaCardItemData) => void;
+    /** 点击卡片编辑并重新生成回调 */
+    onRegenerate?: (item: MediaCardItemData) => void;
     /** 切换标星收藏回调 */
     onToggleFavorite?: (favorite: boolean, item: MediaCardItemData) => void;
+    /** 生成中卡片点击取消回调 */
+    onCancel?: (item: MediaCardItemData) => void;
     /** 失败卡片点击重试回调 */
     onRetry?: (item: MediaCardItemData) => void;
     /** 图像加载异常时的自动恢复回调，返回 true 表示已调度替代地址 */
@@ -173,73 +181,88 @@ export function MediaCard(props: MediaCardProps): VNode {
             data-id={props.item.id}
             onClick={handleCardClick}
         >
-            <div className="da-media-card__overlay">
-                <button
-                    type="button"
-                    className={`da-media-card__action-btn da-media-card__action-btn--fav${effectiveFav ? ' is-active' : ''}`}
-                    title={effectiveFav ? '取消收藏' : '加入收藏'}
-                    dangerouslySetInnerHTML={{
-                        __html: renderIcon(effectiveFav ? 'starFilled' : 'star', 14),
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        const nextFav = !effectiveFav;
-                        setFavOverride(nextFav);
-                        props.onToggleFavorite?.(nextFav, {
-                            ...effectiveItem,
-                            isFavorite: nextFav,
-                        });
-                    }}
-                />
-                {props.onInfo && (
+            {effectiveStatus === 'ready' && (
+                <div className="da-media-card__overlay">
                     <button
                         type="button"
-                        className="da-media-card__action-btn da-media-card__action-btn--info"
-                        title="查看生成元信息"
-                        dangerouslySetInnerHTML={{ __html: renderIcon('info', 14) }}
+                        className={`da-media-card__action-btn da-media-card__action-btn--fav${effectiveFav ? ' is-active' : ''}`}
+                        title={effectiveFav ? '取消收藏' : '加入收藏'}
+                        dangerouslySetInnerHTML={{
+                            __html: renderIcon(effectiveFav ? 'starFilled' : 'star', 14),
+                        }}
                         onClick={(e) => {
                             e.stopPropagation();
-                            props.onInfo?.(effectiveItem);
+                            const nextFav = !effectiveFav;
+                            setFavOverride(nextFav);
+                            props.onToggleFavorite?.(nextFav, {
+                                ...effectiveItem,
+                                isFavorite: nextFav,
+                            });
                         }}
                     />
-                )}
-                <button
-                    type="button"
-                    className="da-media-card__action-btn da-media-card__action-btn--copy"
-                    title="复制图片"
-                    dangerouslySetInnerHTML={{ __html: renderIcon('copy', 14) }}
-                    onClick={async (e) => {
-                        e.stopPropagation();
-                        const blob = await resolveMediaItemBlob(effectiveItem);
-                        if (!blob) {
-                            Toast.error('获取图片数据失败');
-                            return;
-                        }
-                        const ok = await copyImageBlobToClipboard(blob);
-                        if (ok) {
-                            Toast.success('已复制图片到剪贴板');
-                        } else {
-                            Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
-                        }
-                    }}
-                />
-                <button
-                    type="button"
-                    className="da-media-card__action-btn da-media-card__action-btn--download"
-                    title="下载图片"
-                    dangerouslySetInnerHTML={{ __html: renderIcon('download', 14) }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (!props.item.url) return;
-                        const a = document.createElement('a');
-                        a.href = props.item.url;
-                        a.download = `st_draw_${props.item.id.slice(0, 8)}_${Date.now()}.png`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                    }}
-                />
-            </div>
+                    {props.onInfo && (
+                        <button
+                            type="button"
+                            className="da-media-card__action-btn da-media-card__action-btn--info"
+                            title="查看生成元信息"
+                            dangerouslySetInnerHTML={{ __html: renderIcon('info', 14) }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                props.onInfo?.(effectiveItem);
+                            }}
+                        />
+                    )}
+                    {props.onRegenerate && (
+                        <button
+                            type="button"
+                            className="da-media-card__action-btn da-media-card__action-btn--regen"
+                            title="编辑并重新生成"
+                            dangerouslySetInnerHTML={{ __html: renderIcon('refresh', 14) }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                props.onRegenerate?.(effectiveItem);
+                            }}
+                        />
+                    )}
+                    <button
+                        type="button"
+                        className="da-media-card__action-btn da-media-card__action-btn--copy"
+                        title="复制图片"
+                        dangerouslySetInnerHTML={{ __html: renderIcon('copy', 14) }}
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const blob = await resolveMediaItemBlob(effectiveItem);
+                            if (!blob) {
+                                Toast.error('获取图片数据失败');
+                                return;
+                            }
+                            const ok = await copyImageBlobToClipboard(blob);
+                            if (ok) {
+                                Toast.success('已复制图片到剪贴板');
+                            } else {
+                                Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
+                            }
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="da-media-card__action-btn da-media-card__action-btn--download"
+                        title="下载图片"
+                        dangerouslySetInnerHTML={{ __html: renderIcon('download', 14) }}
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const ok = await downloadImageAsset({
+                                resolveBlob: () => resolveMediaItemBlob(effectiveItem),
+                                url: props.item.url,
+                                fileNameBase: `st_draw_${props.item.id.slice(0, 8)}_${Date.now()}`,
+                            });
+                            if (!ok) {
+                                Toast.error('下载失败，未找到可用图像资源');
+                            }
+                        }}
+                    />
+                </div>
+            )}
 
             {effectiveStatus === 'ready' && props.item.url && (
                 <img
@@ -260,6 +283,18 @@ export function MediaCard(props: MediaCardProps): VNode {
                             ? `生成中 (${props.item.durationSec.toFixed(0)}s)...`
                             : '生成中...'}
                     </div>
+                    {props.onCancel && (
+                        <button
+                            type="button"
+                            className="da-btn da-btn--secondary da-btn--sm da-media-card__error-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                props.onCancel?.(effectiveItem);
+                            }}
+                        >
+                            取消
+                        </button>
+                    )}
                 </div>
             )}
 

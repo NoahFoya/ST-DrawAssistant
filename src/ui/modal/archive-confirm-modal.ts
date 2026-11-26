@@ -256,7 +256,7 @@ export function openArchiveConfirmModal(options: ArchiveConfirmModalOptions): Di
             refs.statusBadgeEl.textContent = `与本批第 ${batchDupIdx + 1} 项重名`;
         } else {
             refs.statusBadgeEl.className = 'da-badge da-badge--success';
-            refs.statusBadgeEl.textContent = '全新档案';
+            refs.statusBadgeEl.textContent = '新增档案';
         }
 
         const isSkipped = currentStrategy === 'skip';

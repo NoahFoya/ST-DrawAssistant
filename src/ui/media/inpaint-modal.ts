@@ -62,6 +62,8 @@ export interface InpaintModalOptions {
     readonly initialPrompt?: string;
     /** 初始负向提示词 */
     readonly initialNegativePrompt?: string;
+    /** 目标服务引擎是否支持负向提示词（未传时按当前激活服务判断） */
+    readonly supportsNegativePrompt?: boolean;
     /** 确认提交重绘回调，返回 false 时表示用户取消或未实际入队 */
     readonly onConfirm: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
     /** 取消或关闭回调 */
@@ -478,9 +480,11 @@ export class InpaintModal implements Disposable {
         promptGroup.appendChild(promptInput);
         promptSection.appendChild(promptGroup);
 
-        // 负向提示词（遵循当前激活引擎能力）
+        // 负向提示词（遵循实际目标引擎或当前激活引擎能力）
         const activeProvider = settingsStore.getSettings().activeProvider;
-        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
+        const supportsNegative =
+            this.options.supportsNegativePrompt ??
+            providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const negGroup = document.createElement('div');
         negGroup.className = 'da-inpaint-field-group';
         if (!supportsNegative) {
@@ -1204,7 +1208,9 @@ export class InpaintModal implements Disposable {
         }
 
         const activeProvider = settingsStore.getSettings().activeProvider;
-        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
+        const supportsNegative =
+            this.options.supportsNegativePrompt ??
+            providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const prompt = this.promptInput?.value.trim() ?? '';
         const negativePrompt = supportsNegative ? this.negPromptInput?.value.trim() || undefined : undefined;
 

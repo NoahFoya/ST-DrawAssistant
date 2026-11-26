@@ -522,7 +522,7 @@ export function ConnectionCard(props: ConnectionCardProps): VNode {
             subtitle={props.subtitle}
             dirty={props.dirty}
             className={cardClasses}
-            badges={badgeNode}
+            titleBadges={badgeNode}
             actions={actionButtonNode}
         >
             {presetOptions.length > 0 && (

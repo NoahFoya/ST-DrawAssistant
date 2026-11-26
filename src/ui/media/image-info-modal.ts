@@ -14,7 +14,7 @@ import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
 import { providerRegistry } from '../../provider/registry';
 import { imageStorage } from '../../store/image-storage';
-import { copyTextToClipboard } from '../../util/browser-io';
+import { copyTextToClipboard, downloadImageAsset } from '../../util/browser-io';
 import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
 import { logger } from '../../util/logger';
 
@@ -650,39 +650,24 @@ export class ImageInfoModal implements Disposable {
     }
 
     /**
-     * 下载原图到本地（优先从 IDB 读取原始 Blob，避免已释放的 blob: URL 下载失败）。
+     * 下载原图到本地（优先从 IDB 读取原始 Blob，并按真实二进制格式匹配文件扩展名）。
      */
     private async downloadImage(url: string, imageId?: string): Promise<void> {
-        let tempObjectUrl: string | undefined;
         try {
-            let downloadUrl = url;
-            if (imageId) {
-                const blob = await imageStorage.getImageBlob(imageId);
-                if (blob && blob.size > 0) {
-                    tempObjectUrl = URL.createObjectURL(blob);
-                    downloadUrl = tempObjectUrl;
-                }
-            }
-            if (!downloadUrl) {
+            const ok = await downloadImageAsset({
+                resolveBlob: () =>
+                    imageId ? imageStorage.getImageBlob(imageId) : Promise.resolve(null),
+                url,
+                fileNameBase: `st_draw_${imageId || Date.now()}`,
+            });
+            if (!ok) {
                 Toast.error('下载失败，未找到可用图像资源');
                 return;
             }
-
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `st_draw_${imageId || Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
             Toast.success('已开始下载图片');
         } catch (err) {
             logger.error('下载图片异常:', err);
             Toast.error('下载失败，请检查图像资源');
-        } finally {
-            if (tempObjectUrl) {
-                const revokeTarget = tempObjectUrl;
-                setTimeout(() => URL.revokeObjectURL(revokeTarget), 1500);
-            }
         }
     }
 

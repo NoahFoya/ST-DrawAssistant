@@ -3,8 +3,10 @@
  *
  * @remarks
  * 统一封装剪贴板文本复制（优先异步 Clipboard API，受限环境自动降级为临时 textarea）
- * 与浏览器端文本 / JSON 文件下载（延迟回收临时 Object URL）。
+ * 与浏览器端文本 / JSON / 图像文件下载（按真实二进制格式匹配扩展名并延迟回收临时 Object URL）。
  */
+
+import { detectImageMimeFromHeader } from './image-metadata';
 
 /**
  * 复制文本至系统剪贴板。
@@ -90,6 +92,120 @@ function inferImageExt(mimeType: string): string {
     return 'png';
 }
 
+function inferImageExtFromUrl(url: string): string {
+    const lower = url.trim().toLowerCase();
+    if (lower.startsWith('data:image/')) {
+        const semi = lower.indexOf(';');
+        const mime = semi !== -1 ? lower.slice(5, semi) : lower.slice(5);
+        return inferImageExt(mime);
+    }
+    const cleanPath = lower.split('?')[0].split('#')[0];
+    if (cleanPath.endsWith('.webp')) return 'webp';
+    if (cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg')) return 'jpg';
+    if (cleanPath.endsWith('.gif')) return 'gif';
+    return 'png';
+}
+
+/**
+ * 综合二进制魔数、MIME 类型与备用 URL 嗅探真实图像格式与文件扩展名。
+ */
+export async function resolveImageFormatInfo(
+    blob?: Blob | null,
+    fallbackUrl?: string
+): Promise<{ mimeType: string; ext: string }> {
+    if (blob && blob.size > 0) {
+        if (typeof blob.arrayBuffer === 'function' && typeof blob.slice === 'function') {
+            try {
+                const header = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+                const detected = detectImageMimeFromHeader(header);
+                if (detected) {
+                    return { mimeType: detected, ext: inferImageExt(detected) };
+                }
+            } catch {
+                // 忽略部分 mock 环境 slice/arrayBuffer 异常，降级为 type 字段推断
+            }
+        }
+        const mime = blob.type || 'image/png';
+        return { mimeType: mime, ext: inferImageExt(mime) };
+    }
+    if (fallbackUrl) {
+        const ext = inferImageExtFromUrl(fallbackUrl);
+        const mimeType =
+            ext === 'jpg'
+                ? 'image/jpeg'
+                : ext === 'webp'
+                  ? 'image/webp'
+                  : ext === 'gif'
+                    ? 'image/gif'
+                    : 'image/png';
+        return { mimeType, ext };
+    }
+    return { mimeType: 'image/png', ext: 'png' };
+}
+
+/** 统一图像资产下载参数 */
+export interface DownloadImageAssetOptions {
+    readonly blob?: Blob | null;
+    readonly resolveBlob?: () => Promise<Blob | null | undefined>;
+    readonly url?: string;
+    readonly fileNameBase: string;
+}
+
+/**
+ * 统一下载图像资产至本地：优先读取原始 Blob 以保证元数据与画质完整，并按真实二进制格式匹配扩展名（.png / .webp / .jpg）。
+ */
+export async function downloadImageAsset(options: DownloadImageAssetOptions): Promise<boolean> {
+    if (typeof document === 'undefined') {
+        return false;
+    }
+
+    let resolvedBlob: Blob | null | undefined = options.blob;
+    if ((!resolvedBlob || resolvedBlob.size === 0) && options.resolveBlob) {
+        try {
+            resolvedBlob = await options.resolveBlob();
+        } catch {
+            resolvedBlob = null;
+        }
+    }
+
+    let downloadUrl = options.url || '';
+    let tempObjectUrl: string | undefined;
+
+    try {
+        if (resolvedBlob && resolvedBlob.size > 0) {
+            tempObjectUrl = URL.createObjectURL(resolvedBlob);
+            downloadUrl = tempObjectUrl;
+        }
+        if (!downloadUrl) {
+            return false;
+        }
+
+        const { ext } = await resolveImageFormatInfo(resolvedBlob, downloadUrl);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${options.fileNameBase}.${ext}`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        try {
+            a.click();
+        } finally {
+            a.remove();
+        }
+        return true;
+    } finally {
+        if (tempObjectUrl) {
+            const revokeTarget = tempObjectUrl;
+            setTimeout(() => {
+                try {
+                    URL.revokeObjectURL(revokeTarget);
+                } catch {
+                    // 忽略临时 URL 回收异常
+                }
+            }, 1500);
+        }
+    }
+}
+
 /**
  * 将图像 Blob 转换为 PNG Blob（浏览器 ClipboardItem 通用要求 image/png）。
  */
@@ -163,9 +279,8 @@ export function attachImageDragFile(
         try {
             const blob = await resolveBlob();
             if (blob && blob.size > 0 && typeof File !== 'undefined') {
-                const mime = blob.type || 'image/png';
-                const ext = inferImageExt(mime);
-                cachedFile = new File([blob], `${fileNameBase}.${ext}`, { type: mime });
+                const { mimeType, ext } = await resolveImageFormatInfo(blob, imgEl.src);
+                cachedFile = new File([blob], `${fileNameBase}.${ext}`, { type: mimeType });
             }
         } catch {
             // 忽略预加载异常

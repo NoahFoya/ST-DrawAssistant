@@ -24,6 +24,7 @@ export interface CardViewProps {
     tooltip?: string;
     dirty?: boolean;
     className?: string;
+    titleBadges?: ComponentChildren;
     badges?: ComponentChildren;
     actions?: ComponentChildren;
     children?: ComponentChildren;
@@ -38,7 +39,14 @@ export function CardView(props: CardViewProps) {
         .filter(Boolean)
         .join(' ');
 
-    const hasHeader = Boolean(props.title || props.badges || props.actions || props.subtitle || props.tooltip);
+    const hasHeader = Boolean(
+        props.title ||
+            props.titleBadges ||
+            props.badges ||
+            props.actions ||
+            props.subtitle ||
+            props.tooltip
+    );
 
     return (
         <div className={rootClasses}>
@@ -59,6 +67,9 @@ export function CardView(props: CardViewProps) {
                                         ?
                                     </span>
                                 )}
+                                {props.titleBadges && (
+                                    <div className="da-card__title-badges">{props.titleBadges}</div>
+                                )}
                             </div>
                             <p
                                 className="da-card__subtitle"
@@ -69,7 +80,7 @@ export function CardView(props: CardViewProps) {
                         </div>
                     </div>
                     <div className="da-card__header-right">
-                        <div className="da-card__badges">{props.badges}</div>
+                        {props.badges && <div className="da-card__badges">{props.badges}</div>}
                         <div
                             className="da-card__actions"
                             onClick={(e) => e.stopPropagation()}

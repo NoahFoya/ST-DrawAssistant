@@ -26,7 +26,11 @@ import {
     getTransportModeTooltip,
     TRANSPORT_MODE_OPTIONS,
 } from '../../util/http-client';
-import { PROVIDER_SELECT_OPTIONS } from '../../domain';
+import {
+    IMAGE_STORAGE_QUALITY_OPTIONS,
+    IMAGE_STORAGE_QUALITY_TOOLTIP,
+    PROVIDER_SELECT_OPTIONS,
+} from '../../domain';
 
 interface GeneralFormModel {
     enabled: boolean;
@@ -126,7 +130,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认开启，右滑重 roll 生成全新候选分支时自动取消旧分支尚未完成的生图任务，优先处理新版队列；左右翻看已有分支时保留后台队列，关闭后允许旧分支继续完成。',
+                    '默认开启，右滑重 roll 生成新候选分支时自动取消旧分支尚未完成的生图任务，优先处理新版队列；左右翻看已有分支时保留后台队列，关闭后允许旧分支继续完成。',
             },
         ],
     },
@@ -341,13 +345,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 type: 'select',
                 width: 'w-240',
                 disabledWhen: (m) => !m.enabled,
-                tooltip:
-                    '原始格式保留完整像素与 EXIF 绘图参数信息；WebP 格式可明显减少浏览器本地存储占用。',
-                options: [
-                    { label: '原始格式 (无损)', value: 'original' },
-                    { label: 'WebP 高质量 (90%)', value: 'webp-high' },
-                    { label: 'WebP 均衡压缩 (80%)', value: 'webp-medium' },
-                ],
+                tooltip: IMAGE_STORAGE_QUALITY_TOOLTIP,
+                options: [...IMAGE_STORAGE_QUALITY_OPTIONS],
             },
             {
                 key: 'saveToServer',

@@ -18,7 +18,11 @@ import { imageInfoModal } from './image-info-modal';
 import { Toast } from '../feedback/toast';
 import { reportRuntimeError } from '../feedback/error-feedback';
 import { logger } from '../../util/logger';
-import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
+import {
+    attachImageDragFile,
+    copyImageBlobToClipboard,
+    downloadImageAsset,
+} from '../../util/browser-io';
 
 /** 灯箱条目数据接口 */
 export interface LightboxItem {
@@ -783,12 +787,14 @@ export class LightboxModal implements Disposable {
      * 打开当前图像的元信息弹窗。
      */
     private async openCurrentMetadata(): Promise<void> {
+        const capturedGen = this.openGeneration;
         const snapshotItems = [...this.items];
         const snapshotIndex = this.currentIndex;
         const item = snapshotItems[snapshotIndex];
         if (!item) return;
 
         const record = item.imageId ? await imageStorage.getImageRecord(item.imageId) : undefined;
+        if (!this.isOpenState || this.openGeneration !== capturedGen) return;
         this.close();
         imageInfoModal.open({
             record,
@@ -800,33 +806,23 @@ export class LightboxModal implements Disposable {
     }
 
     /**
-     * 触发下载当前大图（优先从 IDB 读取原始 Blob，避免已释放的 blob: URL 失效）。
+     * 触发下载当前大图（优先从 IDB 读取原始 Blob，按真实二进制格式匹配扩展名）。
      */
     private async downloadCurrent(): Promise<void> {
         const item = this.items[this.currentIndex];
         if (!item || (!item.url && !item.imageId)) return;
 
-        let tempObjectUrl: string | undefined;
         try {
-            let downloadUrl = item.url;
-            if (item.imageId) {
-                const blob = await imageStorage.getImageBlob(item.imageId);
-                if (blob && blob.size > 0) {
-                    tempObjectUrl = URL.createObjectURL(blob);
-                    downloadUrl = tempObjectUrl;
-                }
-            }
-            if (!downloadUrl) {
+            const ok = await downloadImageAsset({
+                resolveBlob: () =>
+                    item.imageId ? imageStorage.getImageBlob(item.imageId) : Promise.resolve(null),
+                url: item.url,
+                fileNameBase: `st_draw_${item.imageId || Date.now()}`,
+            });
+            if (!ok) {
                 Toast.error('下载失败，未找到可用图像资源');
                 return;
             }
-
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `st_draw_${item.imageId || Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
             Toast.success('已开始下载原图');
         } catch (err) {
             reportRuntimeError(
@@ -834,11 +830,6 @@ export class LightboxModal implements Disposable {
                 '下载失败，请检查网络或前往「日志与统计」查看详情',
                 err
             );
-        } finally {
-            if (tempObjectUrl) {
-                const revokeTarget = tempObjectUrl;
-                setTimeout(() => URL.revokeObjectURL(revokeTarget), 1500);
-            }
         }
     }
 

@@ -10,7 +10,10 @@ import type {
     ThinkingDisplayMode,
     TransportMode,
 } from '@types';
-import { PROVIDER_SELECT_OPTIONS } from '../../../domain';
+import {
+    IMAGE_STORAGE_QUALITY_OPTIONS,
+    PROVIDER_SELECT_OPTIONS,
+} from '../../../domain';
 import { detectHostRuntime, TRANSPORT_MODE_OPTIONS } from '../../../util/http-client';
 import { TauriRelayNotice } from '../../components';
 import {
@@ -235,11 +238,7 @@ export function QuickGeneralTab(props: QuickPanelSubViewProps): VNode {
                     <SelectControl
                         value={imageQuality}
                         disabled={!enabled}
-                        options={[
-                            { label: '原始格式 (无损)', value: 'original' },
-                            { label: 'WebP 高质量 (90%)', value: 'webp-high' },
-                            { label: 'WebP 均衡压缩 (80%)', value: 'webp-medium' },
-                        ]}
+                        options={[...IMAGE_STORAGE_QUALITY_OPTIONS]}
                         onChange={(val) =>
                             state.setSetting('imageQuality', val as ImageStorageQuality)
                         }

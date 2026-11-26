@@ -48,6 +48,8 @@ export function GalleryTab(props: { vm: GalleryState }): VNode {
     const isBatchMode = vm.isBatchMode.value;
     const selectedIds = vm.selectedIds.value;
     const favFilter = vm.favoriteFilter.value;
+    const galleryTasks = vm.galleryTasks.value;
+    const tickNow = vm.taskTickNow.value;
     // 订阅 pageUrlMap 以在异步 Blob URL 解析完成时触发更新
     const urlMap = vm.pageUrlMap.value;
 
@@ -156,7 +158,41 @@ export function GalleryTab(props: { vm: GalleryState }): VNode {
 
                 <div className="da-gallery-stream-container">
                     <div className="da-media-grid">
-                        {pageRecords.length === 0 ? (
+                        {currentPage === 1 &&
+                            galleryTasks.map((task) => {
+                                const isFailed = task.status === 'failed';
+                                const elapsedSec = Math.max(
+                                    0,
+                                    Math.floor((tickNow - task.createdAt) / 1000)
+                                );
+                                return (
+                                    <MediaCard
+                                        key={`task_${task.taskId}`}
+                                        item={{
+                                            id: task.taskId,
+                                            status: isFailed ? 'failed' : 'generating',
+                                            durationSec: isFailed ? undefined : elapsedSec,
+                                            errorMessage: task.error,
+                                        }}
+                                        onCancel={
+                                            !isFailed
+                                                ? () => vm.cancelGalleryTask(task.taskId)
+                                                : undefined
+                                        }
+                                        onRetry={
+                                            isFailed
+                                                ? () => void vm.retryGalleryTask(task.taskId)
+                                                : undefined
+                                        }
+                                        onDelete={
+                                            isFailed
+                                                ? () => vm.dismissGalleryTask(task.taskId)
+                                                : undefined
+                                        }
+                                    />
+                                );
+                            })}
+                        {pageRecords.length === 0 && (currentPage !== 1 || galleryTasks.length === 0) ? (
                             <div className="da-gallery-empty">
                                 <div
                                     className="da-gallery-empty__icon"
@@ -201,6 +237,11 @@ export function GalleryTab(props: { vm: GalleryState }): VNode {
                                                 record,
                                                 metadata: record.metadata,
                                                 imageUrl: displayUrl,
+                                                onEdit: () =>
+                                                    void vm.openRegenerateForRecord(
+                                                        record,
+                                                        displayUrl
+                                                    ),
                                                 onPreview: () =>
                                                     void vm.openLightboxForRecord(
                                                         record.imageId
@@ -210,6 +251,9 @@ export function GalleryTab(props: { vm: GalleryState }): VNode {
                                                 },
                                             });
                                         }}
+                                        onRegenerate={() =>
+                                            void vm.openRegenerateForRecord(record, displayUrl)
+                                        }
                                         onToggleFavorite={(fav, item) =>
                                             void vm.toggleFavorite(item.id, fav)
                                         }

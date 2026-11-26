@@ -17,6 +17,7 @@ import type {
     DrawingTask,
     ProviderStoredConfig,
     ProviderType,
+    ResolvedLoraSpec,
     SillyTavernContext,
     SlotMountTarget,
 } from '@types';
@@ -110,7 +111,7 @@ export function isLatestAiMessage(
     return false;
 }
 
-/** 判断当前触发的候选分支滑动是否为右滑重 roll 生成的全新分支 (Overswipe) */
+/** 判断当前触发的候选分支滑动是否为右滑重 roll 生成的新分支 (Overswipe) */
 export function isOverswipeTarget(
     message: ChatMessage | undefined,
     targetSwipeId: number
@@ -396,7 +397,10 @@ export class FloorCoordinator {
     }
 
     /** 检查是否处于目标会话与目标分支（用于 `image:ready` / `task:status` 防串台守卫） */
-    public isTargetActiveInHost(target: SlotMountTarget): boolean {
+    public isTargetActiveInHost(target?: SlotMountTarget): target is SlotMountTarget {
+        if (!target) {
+            return false;
+        }
         const hostContext = getHostContext();
         const currentChatId = hostContext?.chatId;
         if (!currentChatId || currentChatId !== target.chatId) {
@@ -639,9 +643,16 @@ export class FloorCoordinator {
         target: SlotMountTarget;
         rawPrompt: string;
         negativePrompt?: string;
+        providerType?: ProviderType;
+        promptMode?: 'raw' | 'final';
+        explicitLoras?: readonly ResolvedLoraSpec[];
+        sourceImageId?: string;
+        originRawPrompt?: string;
+        originRawNegativePrompt?: string;
         extraParams?: Record<string, unknown>;
     }): Promise<{ taskId: string; status: string | undefined }> {
-        const activeProvider = settingsStore.getSettings().activeProvider as ProviderType;
+        const resolvedProvider =
+            options.providerType ?? (settingsStore.getSettings().activeProvider as ProviderType);
         const {
             sourceImage: rawSourceImage,
             maskImage: rawMaskImage,
@@ -653,10 +664,16 @@ export class FloorCoordinator {
         }
 
         const submitOptions: SubmitTaskOptions = {
+            destination: 'floor',
             rawPrompt: options.rawPrompt,
+            promptMode: options.promptMode,
+            explicitLoras: options.explicitLoras,
+            sourceImageId: options.sourceImageId,
+            originRawPrompt: options.originRawPrompt,
+            originRawNegativePrompt: options.originRawNegativePrompt,
             sourceImage: rawSourceImage as Blob | string | undefined,
             maskImage: rawMaskImage as Blob | string | undefined,
-            providerType: activeProvider,
+            providerType: resolvedProvider,
             target: options.target,
             parameters: Object.keys(mergedParams).length > 0 ? mergedParams : undefined,
         };

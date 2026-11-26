@@ -22,7 +22,11 @@ import { sessionLifecycle } from '../../pipeline/session-lifecycle';
 import { imageStorage } from '../../store/image-storage';
 import { settingsStore } from '../../store/settings-store';
 import { urlPool } from '../../store/url-pool';
-import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
+import {
+    attachImageDragFile,
+    copyImageBlobToClipboard,
+    downloadImageAsset,
+} from '../../util/browser-io';
 import { logger } from '../../util/logger';
 import { renderIcon } from '../components/icons';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
@@ -752,21 +756,41 @@ export class FloorSlotRenderer {
         downloadBtn.className = 'da-floor-image__action-btn';
         downloadBtn.title = '下载图片';
         downloadBtn.innerHTML = renderIcon('download', 14);
-        downloadBtn.addEventListener('click', (e) => {
+        downloadBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             try {
-                const a = document.createElement('a');
-                a.href = slotState.displayUrl;
                 const safePrefix = slotState.imageId ? slotState.imageId.slice(0, 8) : Date.now();
-                a.download = `st_draw_${safePrefix}.png`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+                const ok = await downloadImageAsset({
+                    resolveBlob: resolveSlotBlob,
+                    url: slotState.displayUrl,
+                    fileNameBase: `st_draw_${safePrefix}`,
+                });
+                if (!ok) {
+                    Toast.error('下载失败，未找到可用图像资源');
+                }
             } catch (err) {
                 logger.error('下载图片异常:', err);
             }
         });
         actionsContainer.appendChild(downloadBtn);
+
+        if (isImageActionPanelEnabled) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'da-floor-image__action-btn';
+            editBtn.title = '编辑并重新生成';
+            editBtn.innerHTML = renderIcon('sliders', 14);
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                void this.hooks.openImageActionPanel(
+                    messageId,
+                    instructionIndex,
+                    slotState.imageId,
+                    slotState.displayUrl
+                );
+            });
+            actionsContainer.appendChild(editBtn);
+        }
 
         imageBox.appendChild(actionsContainer);
 

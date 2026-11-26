@@ -15,6 +15,12 @@ import {
     type ExtractedFloorCommand,
 } from '../../pipeline/floor-coordinator';
 import { promptPipeline } from '../../pipeline/prompt-pipeline';
+import {
+    buildRegenerationSubmitSpec,
+    type ReplayMode,
+    type SeedMode,
+    type InpaintOverrideInput,
+} from '../../pipeline/regeneration-planner';
 import { sessionLifecycle } from '../../pipeline/session-lifecycle';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus, type TaskStatusEventData } from '../../util/event-bus';
@@ -235,8 +241,8 @@ export class MessageDecorator implements Disposable {
     }
 
     private listenEvents(): void {
-        const unbindImageReady = eventBus.on('image:ready', async ({ imageId, target }) => {
-            if (!floorCoordinator.isTargetActiveInHost(target)) {
+        const unbindImageReady = eventBus.on('image:ready', async ({ imageId, destination, target }) => {
+            if (destination === 'gallery' || !target || !floorCoordinator.isTargetActiveInHost(target)) {
                 return;
             }
             const swipeId = target.swipeId ?? 0;
@@ -267,11 +273,11 @@ export class MessageDecorator implements Disposable {
         });
 
         const unbindTaskStatus = eventBus.on('task:status', (eventData: TaskStatusEventData) => {
-            if (!eventData.task) {
+            if (!eventData.task || eventData.task.destination === 'gallery') {
                 return;
             }
             const target = eventData.task.target;
-            if (!floorCoordinator.isTargetActiveInHost(target)) {
+            if (!target || !floorCoordinator.isTargetActiveInHost(target)) {
                 return;
             }
 
@@ -765,6 +771,7 @@ export class MessageDecorator implements Disposable {
         const rawPrompt = floorCoordinator.extractSlotRawPrompt(messageId, instructionIndex);
 
         imageActionPanel.open({
+            source: 'floor',
             messageId,
             instructionIndex,
             imageId,
@@ -772,6 +779,53 @@ export class MessageDecorator implements Disposable {
             prompt: record?.metadata?.rawPrompt || rawPrompt || '',
             negativePrompt: record?.metadata?.rawNegativePrompt ?? '',
             record,
+            defaultReplayMode: 'current',
+            onSubmitRegenerate: async (decision) => {
+                return await this.submitFloorRegenWithSpec(
+                    {
+                        chatId: coords.chatId,
+                        messageId,
+                        swipeId: coords.swipeId,
+                        instructionIndex,
+                    },
+                    {
+                        record,
+                        fallbackRawPrompt: rawPrompt,
+                        fallbackRawNegativePrompt: record?.metadata?.rawNegativePrompt,
+                        replayMode: decision.replayMode,
+                        seedMode: decision.seedMode,
+                        editedPrompt: decision.prompt,
+                        editedNegativePrompt: decision.negativePrompt,
+                    }
+                );
+            },
+            onSubmitInpaint: async (inpaintData, decision) => {
+                return await this.submitFloorRegenWithSpec(
+                    {
+                        chatId: coords.chatId,
+                        messageId,
+                        swipeId: coords.swipeId,
+                        instructionIndex,
+                    },
+                    {
+                        record,
+                        fallbackRawPrompt: rawPrompt,
+                        fallbackRawNegativePrompt: record?.metadata?.rawNegativePrompt,
+                        replayMode: decision.replayMode,
+                        seedMode: decision.seedMode,
+                        editedPrompt: inpaintData.prompt,
+                        editedNegativePrompt: inpaintData.negativePrompt,
+                        inpaint: {
+                            initImage: inpaintData.initImage,
+                            maskImage: inpaintData.maskImage,
+                            width: inpaintData.width,
+                            height: inpaintData.height,
+                            denoiseStrength: inpaintData.denoiseStrength,
+                            maskBlur: inpaintData.maskBlur,
+                        },
+                    }
+                );
+            },
             onRegenerate: async (newPrompt, newNegPrompt) => {
                 return await this.regenerateSlot(
                     {
@@ -1014,29 +1068,65 @@ export class MessageDecorator implements Disposable {
         }
     }
 
-    /** 使用指定提示词对楼层中的特定位置发起重新生成请求 */
-    public async regenerateSlot(
+    /** 依据重绘决策构建规范提交参数并回传至楼层队列（同时支持原参数复现与当前配置重绘） */
+    private async submitFloorRegenWithSpec(
         target: SlotMountTarget,
-        newPrompt: string,
-        newNegativePrompt?: string,
-        extraParams?: Record<string, unknown>
+        options: {
+            record?: import('@types').StoredImageRecord;
+            fallbackRawPrompt?: string;
+            fallbackRawNegativePrompt?: string;
+            replayMode: ReplayMode;
+            seedMode: SeedMode;
+            editedPrompt: string;
+            editedNegativePrompt?: string;
+            inpaint?: InpaintOverrideInput;
+        }
     ): Promise<boolean> {
-        const currentSettings = settingsStore.getSettings();
-        const check = floorCoordinator.validateCurrentPresetAssets(
-            currentSettings.activeProvider as ProviderType
-        );
-        if (!check.valid) {
-            const confirmed = await ConfirmDialog.confirm({
-                title: '模型缺失确认',
-                message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
-                confirmText: '继续生图',
-                cancelText: '取消',
-            });
-            if (!confirmed) {
-                return false;
+        const spec = buildRegenerationSubmitSpec(options);
+        const targetProvider =
+            spec.providerType ?? (settingsStore.getSettings().activeProvider as ProviderType);
+
+        if (options.replayMode === 'current') {
+            const check = floorCoordinator.validateCurrentPresetAssets(targetProvider);
+            if (!check.valid) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '模型缺失确认',
+                    message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
+                    confirmText: '继续生图',
+                    cancelText: '取消',
+                });
+                if (!confirmed) {
+                    return false;
+                }
             }
         }
 
+        const extraParams: Record<string, unknown> = { ...(spec.parameters ?? {}) };
+        if (spec.sourceImage !== undefined) {
+            extraParams.sourceImage = spec.sourceImage;
+        }
+        if (spec.maskImage !== undefined) {
+            extraParams.maskImage = spec.maskImage;
+        }
+
+        return await this.submitSlotTaskWithFeedback(target, {
+            rawPrompt: spec.rawPrompt,
+            negativePrompt: spec.parameters?.negativePrompt as string | undefined,
+            providerType: targetProvider,
+            promptMode: spec.promptMode,
+            explicitLoras: spec.explicitLoras,
+            sourceImageId: spec.sourceImageId,
+            originRawPrompt: spec.originRawPrompt,
+            originRawNegativePrompt: spec.originRawNegativePrompt,
+            extraParams: Object.keys(extraParams).length > 0 ? extraParams : undefined,
+        });
+    }
+
+    /** 公共楼层提交与视觉反馈封装 */
+    private async submitSlotTaskWithFeedback(
+        target: SlotMountTarget,
+        submitArgs: Omit<Parameters<typeof floorCoordinator.submitSlotTask>[0], 'target'>
+    ): Promise<boolean> {
         const swipeId = target.swipeId ?? 0;
         const containerKey = buildFloorSlotKey(
             target.chatId,
@@ -1060,9 +1150,7 @@ export class MessageDecorator implements Disposable {
         try {
             await floorCoordinator.submitSlotTask({
                 target,
-                rawPrompt: newPrompt,
-                negativePrompt: newNegativePrompt,
-                extraParams,
+                ...submitArgs,
             });
             return true;
         } catch (err: unknown) {
@@ -1071,8 +1159,38 @@ export class MessageDecorator implements Disposable {
             this.removeSkeleton(target.messageId, target.instructionIndex, target.chatId, swipeId);
             imgEl?.classList.remove('da-floor-image--regenerating');
             Toast.error('重新生成任务提交失败，请前往「日志与统计」查看详情');
-            throw err;
+            return false;
         }
+    }
+
+    /** 使用指定提示词对楼层中的特定位置发起重新生成请求 */
+    public async regenerateSlot(
+        target: SlotMountTarget,
+        newPrompt: string,
+        newNegativePrompt?: string,
+        extraParams?: Record<string, unknown>
+    ): Promise<boolean> {
+        const currentSettings = settingsStore.getSettings();
+        const check = floorCoordinator.validateCurrentPresetAssets(
+            currentSettings.activeProvider as ProviderType
+        );
+        if (!check.valid) {
+            const confirmed = await ConfirmDialog.confirm({
+                title: '模型缺失确认',
+                message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
+                confirmText: '继续生图',
+                cancelText: '取消',
+            });
+            if (!confirmed) {
+                return false;
+            }
+        }
+
+        return await this.submitSlotTaskWithFeedback(target, {
+            rawPrompt: newPrompt,
+            negativePrompt: newNegativePrompt,
+            extraParams,
+        });
     }
 
     /** 释放所有已挂载的楼层组件与事件监听 */

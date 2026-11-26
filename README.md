@@ -49,7 +49,7 @@ ST-DrawAssistant 是一款运行于 SillyTavern（酒馆）网页前端的 AI �
 - **ComfyUI**：
   - 支持 API 格式工作流解析与自动填参，基于 `/object_info` 精确匹配节点类型并解析展示服务端节点报错明细；任务取消或超时仅中止本地等待，不打断服务端既有任务队列；
   - **工作流基本知识与 API 格式要求**：ComfyUI 通过节点连线控制出图，插件会自动把提示词、主模型、CLIP、VAE、宽高、步数、CFG 与种子填入工作流执行。导入自用工作流时须使用 **API 格式 JSON**：新版 ComfyUI 菜单点 **`工作流 (Workflow) → 导出 (API) / Export (API)`**，旧版网页需先在设置开启「Enable Dev mode Options」再点 **「Save (API Format)」**（普通保存带网页坐标的 JSON 无法直接运行）；导入后点击「格式化变量」一键映射参数，或点「打开蓝图」可视化查看与调整；
-  - **内置 2 套开箱原生工作流**：提供「默认 Checkpoint 模型文生图 (原生)」（默认项）与「默认 UNet 模型文生图 (原生)」。常规单文件底模（`models/checkpoints/`）选 Checkpoint 版即可，CLIP/VAE 保持内置；Flux / SD3 / Qwen-Image / MOSS / Anima 等分立模型（`models/diffusion_models/` 或 `unet/`）选 UNet 版并须在「模型配置」指定 `CLIP 模型` 与 `VAE 模型`（不同架构可在「打开蓝图」切换加载器类型），提交前会自动拦截空项；生图时会自动串联内置 `LoraLoader` / `LoraLoaderModelOnly` 节点加载所选 LoRA（检测到不兼容的 `.gguf` LoRA 文件或 Nunchaku 量化节点图时会给出明确报错拦截）。若自行导入含 `WeiLinPromptUI` 等 WeiLin 节点的工作流以启用 `<wlr:...>` 触发词权重等精细控制，工作流管理器将自动识别并提示确认安装 `ComfyUI-WeiLin` 插件。
+  - **内置 2 套原生工作流**：提供「默认 Checkpoint 模型文生图 (原生)」（默认项）与「默认 UNet 模型文生图 (原生)」。常规单文件底模（`models/checkpoints/`）选 Checkpoint 版即可，CLIP/VAE 保持内置；Flux / SD3 / Qwen-Image / MOSS / Anima 等分立模型（`models/diffusion_models/` 或 `unet/`）选 UNet 版并须在「模型配置」指定 `CLIP 模型` 与 `VAE 模型`（不同架构可在「打开蓝图」切换加载器类型），提交前会自动拦截空项；生图时会自动串联内置 `LoraLoader` / `LoraLoaderModelOnly` 节点加载所选 LoRA（检测到不兼容的 `.gguf` LoRA 文件或 Nunchaku 量化节点图时会给出明确报错拦截）。若自行导入含 `WeiLinPromptUI` 等 WeiLin 节点的工作流以启用 `<wlr:...>` 触发词权重等精细控制，工作流管理器将自动识别并提示确认安装 `ComfyUI-WeiLin` 插件。
 - **Stable Diffusion WebUI / Forge**：
   - 支持文生图 (`txt2img`) 与局部重绘 (`img2img`) 接口，自动采纳重绘画板实际宽高并适配 `Automatic` VAE；
   - 支持高分辨率修复 (Hires.fix)、采样器/调度器自动同步及 `<lora:name:weight>` 提示词嵌入转换；取消任务时同样仅中止本地网络等待。

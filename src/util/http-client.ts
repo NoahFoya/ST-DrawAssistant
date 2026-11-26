@@ -653,7 +653,7 @@ export function resolveHttpErrorMessage(
 }
 
 /**
- * 按当前连接通道、宿主环境与生图服务生成上下文精准的连接排查指引。
+ * 按当前连接通道、宿主环境与生图服务生成对应上下文的连接排查指引。
  */
 export function buildTransportTroubleshootingLines(options: {
     readonly transport: TransportMode;

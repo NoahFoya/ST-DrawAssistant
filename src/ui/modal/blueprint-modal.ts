@@ -891,7 +891,7 @@ export class BlueprintModal implements Disposable {
             }
         }
 
-        // 2. 字段名精准映射
+        // 2. 字段名对应映射
         for (const def of COMFYUI_VARIABLE_DEFINITIONS) {
             if (def.variable === '%prompt%' || def.variable === '%negative_prompt%') {
                 continue;

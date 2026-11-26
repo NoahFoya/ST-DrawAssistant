@@ -14,6 +14,7 @@ import type {
     ProviderHealthResult,
     ProviderType,
     SlotMountTarget,
+    TaskDestination,
     UpdateState,
 } from '@types';
 import { logger } from './logger';
@@ -40,11 +41,16 @@ export interface TaskStatusEventData {
 export type AppEventMap = {
     /** 生图任务状态流转变更（统一承载 pending、generating、completed、failed、cancelled） */
     'task:status': TaskStatusEventData;
-    /** 图像资产就绪通知（本地 IndexedDB 持久化存储完成，通知楼层展示图片） */
-    'image:ready': { imageId: string; target: SlotMountTarget };
+    /** 图像资产就绪通知（本地 IndexedDB 持久化存储完成，通知楼层展示图片或图库实时刷新） */
+    'image:ready': {
+        imageId: string;
+        destination?: TaskDestination;
+        target?: SlotMountTarget;
+        sourceImageId?: string;
+    };
     /** 图像标星收藏状态变更通知 */
     'image:favorite-changed': { imageId: string; favorited: boolean };
-    /** 图像资产从存储中彻底删除通知 */
+    /** 图像资产从存储中永久删除通知 */
     'image:deleted': { imageId: string };
     /** 插件设置项更新 */
     'settings:updated': {

@@ -15,9 +15,11 @@ import type {
     GenerationResult,
     ProviderRegistry,
     ProviderType,
+    ResolvedLoraSpec,
     SlotMountTarget,
     StoredImageRecord,
     ImageStorageQuality,
+    TaskDestination,
 } from '@types';
 import { providerRegistry } from '../provider/registry';
 import { imageStorage, type ImageStorage } from '../store/image-storage';
@@ -28,15 +30,34 @@ import { eventBus, type EventBus } from '../util/event-bus';
 import { sessionLifecycle, type SessionLifecycleManager } from './session-lifecycle';
 import { logger } from '../util/logger';
 import { applyImageStorageQuality } from '../util/image-compress';
+import {
+    ensureImageBlobMetadata,
+    extractGenerationMetadataFromBytes,
+    type ExtractedImageMetadata,
+} from '../util/image-metadata';
 import { ensureValidImageBlob } from '../util/http-client';
 import { getHostActiveChatId, getHostChatMessage } from '../host';
 
 /** 提交生图任务参数选项 */
 export interface SubmitTaskOptions {
-    /** 目标楼层挂载定位坐标（含 chatId、messageId、swipeId、instructionIndex） */
-    target: SlotMountTarget;
-    /** 用户原始输入或楼层提取的提示词文本 */
+    /** 任务投递通道：'floor' 写入宿主消息楼层，'gallery' 作为独立图库生成直接入库 */
+    destination?: TaskDestination;
+    /** 目标楼层挂载定位坐标（destination === 'floor' 时必填） */
+    target?: SlotMountTarget;
+    /** 独立图库任务可选关联的来源图像 ID */
+    sourceImageId?: string;
+    /** 独立图库任务可选保留的关联会话标识（仅用于资产归档元数据，不触碰聊天消息） */
+    sourceChatId?: string;
+    /** 用户原始输入或确认后的提示词文本 */
     rawPrompt: string;
+    /** 提示词编译模式：'raw' 执行预设拼接；'final' 终稿直发不二次叠加预设 */
+    promptMode?: 'raw' | 'final';
+    /** 可选显式继承的 LoRA 列表快照 */
+    explicitLoras?: readonly ResolvedLoraSpec[];
+    /** 'final' 模式下可选保留的原始 rawPrompt（用于再次按当前预设重绘溯源） */
+    originRawPrompt?: string;
+    /** 'final' 模式下可选保留的原始 rawNegativePrompt */
+    originRawNegativePrompt?: string;
     /** 选用的服务提供方类型，未指定时采用配置中心当前激活的提供方 */
     providerType?: ProviderType;
     /** 可选输入底图（图生图或局部重绘使用） */
@@ -161,6 +182,8 @@ export class GenerationOrchestrator {
     public getActiveTaskByTarget(target: SlotMountTarget): DrawingTask | undefined {
         for (const task of this._tasks.values()) {
             if (
+                task.destination !== 'gallery' &&
+                task.target &&
                 task.target.chatId === target.chatId &&
                 task.target.messageId === target.messageId &&
                 (task.target.swipeId ?? 0) === (target.swipeId ?? 0) &&
@@ -174,6 +197,21 @@ export class GenerationOrchestrator {
     }
 
     /**
+     * 按投递通道检索当前记录中的任务列表（按创建时间降序排列）。
+     */
+    public getTasksByDestination(destination: TaskDestination): DrawingTask[] {
+        const result: DrawingTask[] = [];
+        for (const task of this._tasks.values()) {
+            const taskDest: TaskDestination = task.destination ?? 'floor';
+            if (taskDest === destination) {
+                result.push(task);
+            }
+        }
+        result.sort((a, b) => b.createdAt - a.createdAt);
+        return result;
+    }
+
+    /**
      * 取消指定会话下的全部活跃生图任务（用于会话切换时清理未完成任务）。
      *
      * @param chatId 目标会话标识符
@@ -181,7 +219,11 @@ export class GenerationOrchestrator {
      */
     public cancelTasksByChat(chatId: string, reason = '会话已切换'): void {
         for (const task of this._tasks.values()) {
-            if (task.target.chatId === chatId && (task.status === 'pending' || task.status === 'generating')) {
+            if (
+                task.destination !== 'gallery' &&
+                task.target?.chatId === chatId &&
+                (task.status === 'pending' || task.status === 'generating')
+            ) {
                 this.cancelTask(task.taskId, reason);
             }
         }
@@ -198,6 +240,8 @@ export class GenerationOrchestrator {
     ): void {
         for (const task of this._tasks.values()) {
             if (
+                task.destination === 'gallery' ||
+                !task.target ||
                 task.target.chatId !== chatId ||
                 task.target.messageId !== messageId ||
                 (task.status !== 'pending' && task.status !== 'generating')
@@ -229,7 +273,7 @@ export class GenerationOrchestrator {
             msg: { mes?: string; swipes?: unknown[]; swipe_id?: number } | undefined,
             task: DrawingTask
         ): boolean => {
-            if (!msg) return false;
+            if (!msg || !task.target) return false;
             const sw = task.target.swipeId ?? 0;
             const rawText =
                 Array.isArray(msg.swipes) && typeof msg.swipes[sw] === 'string'
@@ -245,11 +289,14 @@ export class GenerationOrchestrator {
 
         for (const task of this._tasks.values()) {
             if (
+                task.destination === 'gallery' ||
+                !task.target ||
                 task.target.chatId !== chatId ||
                 (task.status !== 'pending' && task.status !== 'generating')
             ) {
                 continue;
             }
+            const origIdx = task.target.messageId;
             const findShiftedIndex = (targetRef?: object): number => {
                 const startIdx = Math.min(origIdx - 1, currentChat.length - 1);
                 if (targetRef) {
@@ -268,7 +315,6 @@ export class GenerationOrchestrator {
                 return -1;
             };
 
-            const origIdx = task.target.messageId;
             const targetRef = this._targetMessageRefs.get(task.taskId);
             if (targetRef) {
                 if (origIdx >= 0 && origIdx < currentChat.length && currentChat[origIdx] === targetRef) {
@@ -320,6 +366,8 @@ export class GenerationOrchestrator {
     ): void {
         for (const task of this._tasks.values()) {
             if (
+                task.destination !== 'gallery' &&
+                task.target &&
                 task.target.chatId === chatId &&
                 task.target.messageId === messageId &&
                 (task.target.swipeId ?? 0) === swipeId &&
@@ -334,7 +382,7 @@ export class GenerationOrchestrator {
      * 取消同一楼层下除当前激活分支外的其余历史分支未完成生图任务。
      *
      * @remarks
-     * 用于右滑重 roll 生成全新候选分支时释放单并发队列，使新分支生图请求得以优先执行。
+     * 用于右滑重 roll 生成新候选分支时释放单并发队列，使新分支生图请求得以优先执行。
      *
      * @returns 本次实际取消的任务数量
      */
@@ -348,6 +396,8 @@ export class GenerationOrchestrator {
         const targetIds: string[] = [];
         for (const task of this._tasks.values()) {
             if (
+                task.destination !== 'gallery' &&
+                task.target &&
                 task.target.chatId === chatId &&
                 task.target.messageId === messageId &&
                 (task.target.swipeId ?? 0) !== activeSwipeId &&
@@ -374,6 +424,8 @@ export class GenerationOrchestrator {
     public cancelTasksOutOfRange(chatId: string, validChatLength: number, reason = '目标消息楼层已删除'): void {
         for (const task of this._tasks.values()) {
             if (
+                task.destination !== 'gallery' &&
+                task.target &&
                 task.target.chatId === chatId &&
                 task.target.messageId >= validChatLength &&
                 (task.status === 'pending' || task.status === 'generating')
@@ -398,11 +450,18 @@ export class GenerationOrchestrator {
             throw new Error('调度器已销毁，拒绝接收新任务');
         }
 
+        const destination: TaskDestination = options.destination ?? (options.target ? 'floor' : 'gallery');
+        if (destination === 'floor' && !options.target) {
+            throw new Error('楼层生图任务缺少有效的挂载定位坐标 (target)');
+        }
+
         // 目标楼层防重：若同一楼层位置已有处于 pending 或 generating 状态的任务，直接返回已有任务 ID
-        const existingTask = this.getActiveTaskByTarget(options.target);
-        if (existingTask) {
-            logger.info(`目标楼层已有活跃生图任务 (${existingTask.taskId})，跳过重复提交`);
-            return existingTask.taskId;
+        if (destination === 'floor' && options.target) {
+            const existingTask = this.getActiveTaskByTarget(options.target);
+            if (existingTask) {
+                logger.info(`目标楼层已有活跃生图任务 (${existingTask.taskId})，跳过重复提交`);
+                return existingTask.taskId;
+            }
         }
 
         const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -422,7 +481,7 @@ export class GenerationOrchestrator {
                 : undefined;
         const resolvedDrawing = this._settingsStore.resolveDrawingPreset(providerType, {
             explicitPresetId: explicitDrawingId,
-            throwOnMissingActive: true,
+            throwOnMissingActive: options.promptMode !== 'final',
         });
         const effectiveDrawingPresetId = resolvedDrawing.presetId;
 
@@ -446,6 +505,10 @@ export class GenerationOrchestrator {
 
         const request = this._promptPipeline.buildGenerationRequest({
             rawPrompt: options.rawPrompt,
+            promptMode: options.promptMode,
+            explicitLoras: options.explicitLoras,
+            originRawPrompt: options.originRawPrompt,
+            originRawNegativePrompt: options.originRawNegativePrompt,
             sourceImage: effectiveSourceImage,
             maskImage: effectiveMaskImage,
             parameters: mergedParamsSnapshot,
@@ -456,7 +519,10 @@ export class GenerationOrchestrator {
         const task: DrawingTask = {
             taskId,
             imageId,
+            destination,
             target: options.target,
+            sourceImageId: options.sourceImageId,
+            sourceChatId: options.sourceChatId,
             prompt: request.prompt,
             negativePrompt: request.negativePrompt,
             rawPrompt: request.rawPrompt,
@@ -473,17 +539,23 @@ export class GenerationOrchestrator {
         };
 
         this._tasks.set(taskId, task);
-        const hostMessage = getHostChatMessage(options.target.messageId);
-        if (hostMessage && typeof hostMessage === 'object') {
-            this._targetMessageRefs.set(taskId, hostMessage);
+        if (destination === 'floor' && options.target) {
+            const hostMessage = getHostChatMessage(options.target.messageId);
+            if (hostMessage && typeof hostMessage === 'object') {
+                this._targetMessageRefs.set(taskId, hostMessage);
+            }
         }
         this._queue.push(taskId);
 
         const transport = this._settingsStore.get('transport') || 'direct';
         const promptPresetLabel =
             request.resolvedPromptPresetName || request.resolvedPromptPresetId || '无';
+        const targetLabel =
+            destination === 'gallery'
+                ? `独立图库${options.sourceImageId ? ` (溯源: ${options.sourceImageId})` : ''}`
+                : `会话: ${options.target!.chatId}, 楼层 #${options.target!.messageId}`;
         logger.info(
-            `生图任务已入队: ${taskId} (资产: ${imageId}, 引擎: ${providerType}, 通道: ${transport}, 提示词预设: ${promptPresetLabel}, 会话: ${options.target.chatId}, 楼层 #${options.target.messageId})`
+            `生图任务已入队: ${taskId} (资产: ${imageId}, 引擎: ${providerType}, 通道: ${transport}, 提示词预设: ${promptPresetLabel}, ${targetLabel})`
         );
         this.transitionTaskStatus(taskId, 'pending');
 
@@ -679,13 +751,23 @@ export class GenerationOrchestrator {
                 return;
             }
 
-            // 8. 生成图像有效性校验与质量处理（拦截 0 字节或损坏结果，防止写入库中）
+            // 8. 生成图像有效性校验与质量处理（先无损读取原图自带参数，转码后再按原图有参不重写的原则补全缺失元数据）
             const validatedRawBlob = await ensureValidImageBlob(
                 result?.blob,
                 provider.name || task.providerType
             );
+            let extractedSource: ExtractedImageMetadata | undefined;
+            if (typeof validatedRawBlob.arrayBuffer === 'function') {
+                try {
+                    const sourceBytes = new Uint8Array(await validatedRawBlob.arrayBuffer());
+                    extractedSource = extractGenerationMetadataFromBytes(sourceBytes);
+                } catch {
+                    // 忽略原图头部解析异常
+                }
+            }
+
             const configuredQuality = (this._settingsStore.get('imageQuality') || 'original') as ImageStorageQuality;
-            const finalBlob = await applyImageStorageQuality(validatedRawBlob, configuredQuality);
+            const processedQualityBlob = await applyImageStorageQuality(validatedRawBlob, configuredQuality);
 
             if (await handleAbortedOrTimedOut()) {
                 return;
@@ -708,11 +790,22 @@ export class GenerationOrchestrator {
                     result.metadata?.resolvedPromptPresetName ?? task.resolvedPromptPresetName,
             };
 
+            const finalBlob = await ensureImageBlobMetadata({
+                processedBlob: processedQualityBlob,
+                metadata: finalizedMetadata,
+                comfyPromptGraph: result.comfyPromptGraph,
+                extractedSource,
+            });
+
+            if (await handleAbortedOrTimedOut()) {
+                return;
+            }
+
             // 9. 分表持久化（写入元数据索引与图像二进制 Blob）
             const record: StoredImageRecord = {
                 imageId,
                 taskId: task.taskId,
-                chatId: task.target.chatId,
+                chatId: task.target?.chatId ?? task.sourceChatId,
                 mimeType: finalBlob.type || 'image/png',
                 byteSize: finalBlob.size,
                 status: 'ready',
@@ -732,37 +825,48 @@ export class GenerationOrchestrator {
                 return;
             }
 
-            // 10. 调度宿主楼层消息资产回写（回写期间保持 generating 状态，确保转存上传仍可响应 cancelTask / CHAT_CHANGED 中止）
-            const currentChatId = this._getActiveChatId();
-            const isCrossSession = !currentChatId || currentChatId !== task.target.chatId;
-            if (isCrossSession) {
-                logger.info(
-                    `[GenerationOrchestrator] 任务 [${taskId}] 完成时当前活跃会话 (${currentChatId ?? 'none'}) 与目标会话 (${task.target.chatId}) 不一致，仅保存至 IndexedDB 图库`
-                );
-            } else {
-                let wroteSlot = false;
-                try {
-                    wroteSlot = await this._sessionLifecycle.updateMessageSlot(
-                        task.target,
-                        { imageId },
-                        { signal: controller.signal }
-                    );
-                } catch (writeErr) {
-                    logger.error(`任务 [${taskId}] 楼层资产回写异常:`, writeErr);
-                }
+            const isGalleryDestination = task.destination === 'gallery' || !task.target;
 
-                // 仅在尚未实际写入宿主楼层时才回滚已入库图像并中断收尾，避免楼层引用指向已删除资产
-                if (!wroteSlot && (await handleAbortedOrTimedOut(imageId))) {
-                    return;
+            // 10. 调度宿主楼层消息资产回写（仅限楼层通道；图库独立生成不修改任何聊天消息）
+            let shouldEmitReady = true;
+            if (!isGalleryDestination && task.target) {
+                const currentChatId = this._getActiveChatId();
+                const isCrossSession = !currentChatId || currentChatId !== task.target.chatId;
+                if (isCrossSession) {
+                    shouldEmitReady = false;
+                    logger.info(
+                        `[GenerationOrchestrator] 任务 [${taskId}] 完成时当前活跃会话 (${currentChatId ?? 'none'}) 与目标会话 (${task.target.chatId}) 不一致，仅保存至 IndexedDB 图库`
+                    );
+                } else {
+                    let wroteSlot = false;
+                    try {
+                        wroteSlot = await this._sessionLifecycle.updateMessageSlot(
+                            task.target,
+                            { imageId },
+                            { signal: controller.signal }
+                        );
+                    } catch (writeErr) {
+                        logger.error(`任务 [${taskId}] 楼层资产回写异常:`, writeErr);
+                    }
+
+                    // 仅在尚未实际写入宿主楼层时才回滚已入库图像并中断收尾，避免楼层引用指向已删除资产
+                    if (!wroteSlot && (await handleAbortedOrTimedOut(imageId))) {
+                        return;
+                    }
                 }
             }
 
-            // 11. 更新为完成状态并仅在同一会话内通知前端渲染
+            // 11. 更新为完成状态并广播事件（图库独立任务固定广播，楼层任务仅同会话广播）
             task.generationMetadata = finalizedMetadata;
             this.transitionTaskStatus(taskId, 'completed', { imageId });
 
-            if (!isCrossSession) {
-                this._eventBus.emit('image:ready', { imageId, target: task.target });
+            if (shouldEmitReady) {
+                this._eventBus.emit('image:ready', {
+                    imageId,
+                    destination: isGalleryDestination ? 'gallery' : 'floor',
+                    ...(task.target ? { target: task.target } : {}),
+                    ...(task.sourceImageId ? { sourceImageId: task.sourceImageId } : {}),
+                });
             }
             const dimSummary =
                 finalizedMetadata.width && finalizedMetadata.height

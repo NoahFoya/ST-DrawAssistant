@@ -8,13 +8,27 @@
  */
 
 import { signal, computed, type Signal, type ReadonlySignal } from '@preact/signals';
-import type { StoredImageRecord } from '@types';
+import type { DrawingTask, ProviderType, StoredImageRecord } from '@types';
 import type { Disposable } from '../types';
 import type { StorageSummaryData } from '../composite/storage-bar';
 import { StorageMaintenanceService, GALLERY_QUERY_LIMIT } from './storage-maintenance';
 import { imageStorage } from '../../store/image-storage';
+import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
 import { downloadJsonFile } from '../../util/browser-io';
+import { validateCurrentPresetAssets } from '../../pipeline/floor-coordinator';
+import {
+    generationOrchestrator,
+    type SubmitTaskOptions,
+} from '../../pipeline/generation-orchestrator';
+import {
+    buildRegenerationSubmitSpec,
+    inspectRecordForRegeneration,
+    type InpaintOverrideInput,
+    type ReplayMode,
+    type SeedMode,
+} from '../../pipeline/regeneration-planner';
+import { imageActionPanel } from '../media/image-action-panel';
 import { lightboxModal, type LightboxItem } from '../media/lightbox-modal';
 import { Toast } from '../feedback/toast';
 import { reportRuntimeError } from '../feedback/error-feedback';
@@ -46,6 +60,10 @@ export class GalleryState implements Disposable {
     public readonly pageUrlMap: Signal<Map<string, string>>;
     /** 已确认无法载入的图像 ID 集合（记录加载失败项，避免重绘时重复请求） */
     public readonly loadFailedIds: Signal<Set<string>>;
+    /** 图库通道进行中与待处理的生图任务（用于卡片实时呈现进度与重试/取消） */
+    public readonly galleryTasks: Signal<DrawingTask[]>;
+    /** 实时耗时刷新时间戳（仅在存在进行中图库任务时启用 1 秒定时器） */
+    public readonly taskTickNow: Signal<number>;
 
     /** 经过关键词、引擎、收藏状态与排序后的记录列表 */
     public readonly filteredRecords: ReadonlySignal<StoredImageRecord[]>;
@@ -57,9 +75,14 @@ export class GalleryState implements Disposable {
     private readonly allocatedBlobUrls = new Set<string>();
     private readonly lightboxHeldUrls = new Set<string>();
     private readonly autoRecoveryAttemptedIds = new Set<string>();
+    private readonly dismissedTaskIds = new Set<string>();
+    private readonly gallerySubmitSpecs = new Map<string, SubmitTaskOptions>();
+    private readonly temporaryPreviewUrls = new Map<string, string>();
     private readonly disposers: (() => void)[] = [];
+    private taskTickTimer: ReturnType<typeof setInterval> | null = null;
     private renderSeq = 0;
     private refreshSeq = 0;
+    private regenOpenSeq = 0;
     private isActive = false;
     private isDisposed = false;
 
@@ -87,6 +110,8 @@ export class GalleryState implements Disposable {
         this.selectedIds = signal<Set<string>>(new Set());
         this.pageUrlMap = signal<Map<string, string>>(new Map());
         this.loadFailedIds = signal<Set<string>>(new Set());
+        this.galleryTasks = signal<DrawingTask[]>([]);
+        this.taskTickNow = signal<number>(Date.now());
 
         this.filteredRecords = computed(() => {
             let result = [...this.allRecords.value];
@@ -156,25 +181,43 @@ export class GalleryState implements Disposable {
             });
         });
 
-        // 监听全局图片删除与生成完成事件（楼层删除/后台持久化后同步刷新图库状态）
+        // 监听全局图片删除、任务状态变更与生成完成事件（后台持久化后同步刷新图库状态）
         const unsubDeleted = eventBus.on('image:deleted', ({ imageId }) => {
             if (this.isDisposed) return;
             this.removeRecordFromMemory(imageId);
         });
-        const unsubReady = eventBus.on('image:ready', () => {
+        const unsubTaskStatus = eventBus.on('task:status', (payload) => {
+            if (this.isDisposed || !payload?.task || payload.task.destination !== 'gallery') {
+                return;
+            }
+            if (this.isActive) {
+                this.syncGalleryTasks();
+                if (payload.status === 'failed') {
+                    Toast.error('图库重新生成失败，可在卡片重试或前往「日志与统计」查看详情');
+                } else if (payload.status === 'cancelled' && !payload.silentToast) {
+                    Toast.info('图库生成任务已取消');
+                }
+            }
+        });
+        const unsubReady = eventBus.on('image:ready', (payload) => {
             if (this.isDisposed || !this.isActive) return;
+            this.syncGalleryTasks();
             void this.refresh();
+            if (payload?.destination === 'gallery') {
+                Toast.success('新图片已生成并保存至本地图库');
+            }
         });
 
-        this.disposers.push(unsubFav, unsubDeleted, unsubReady);
+        this.disposers.push(unsubFav, unsubDeleted, unsubTaskStatus, unsubReady);
     }
 
     /**
-     * 页签激活时标记为活跃并拉取最新图库记录。
+     * 页签激活时标记为活跃并拉取最新图库记录与图库通道任务状态。
      */
     public activate(): void {
         if (this.isDisposed) return;
         this.isActive = true;
+        this.syncGalleryTasks();
         void this.refresh();
     }
 
@@ -183,6 +226,209 @@ export class GalleryState implements Disposable {
      */
     public deactivate(): void {
         this.isActive = false;
+        this.stopTaskTickTimer();
+    }
+
+    private stopTaskTickTimer(): void {
+        if (this.taskTickTimer !== null) {
+            clearInterval(this.taskTickTimer);
+            this.taskTickTimer = null;
+        }
+    }
+
+    /**
+     * 同步图库独立通道中的活跃及失败任务列表，并按需启停耗时计时器。
+     */
+    public syncGalleryTasks(): void {
+        if (this.isDisposed) return;
+        const tasks = generationOrchestrator
+            .getTasksByDestination('gallery')
+            .filter(
+                (t) =>
+                    (t.status === 'pending' || t.status === 'generating' || t.status === 'failed') &&
+                    !this.dismissedTaskIds.has(t.taskId)
+            );
+        this.galleryTasks.value = tasks;
+
+        const hasRunning = tasks.some((t) => t.status === 'pending' || t.status === 'generating');
+        if (hasRunning && this.isActive) {
+            this.taskTickNow.value = Date.now();
+            if (this.taskTickTimer === null) {
+                this.taskTickTimer = setInterval(() => {
+                    if (this.isDisposed || !this.isActive) {
+                        this.stopTaskTickTimer();
+                        return;
+                    }
+                    this.taskTickNow.value = Date.now();
+                }, 1000);
+            }
+        } else {
+            this.stopTaskTickTimer();
+        }
+    }
+
+    /**
+     * 从图库记录唤起统一重绘工作台（默认优先复现原图参数，支持切换当前全局配置与种子模式）。
+     */
+    public async openRegenerateForRecord(
+        record: StoredImageRecord,
+        preferredUrl?: string
+    ): Promise<void> {
+        if (this.isDisposed) return;
+        const seq = ++this.regenOpenSeq;
+
+        let displayUrl =
+            preferredUrl ||
+            this.getDisplayUrl(record) ||
+            this.temporaryPreviewUrls.get(record.imageId);
+        if (!displayUrl) {
+            try {
+                const blob = await imageStorage.getImageBlob(record.imageId);
+                if (this.isDisposed || seq !== this.regenOpenSeq) return;
+                if (blob && blob.size > 0) {
+                    displayUrl = URL.createObjectURL(blob);
+                    this.temporaryPreviewUrls.set(record.imageId, displayUrl);
+                }
+            } catch {
+                // 忽略临时 URL 解析异常
+            }
+        }
+
+        if (this.isDisposed || seq !== this.regenOpenSeq) return;
+
+        const inspection = inspectRecordForRegeneration(record);
+
+        imageActionPanel.open({
+            source: 'gallery',
+            imageId: record.imageId,
+            imageUrl: displayUrl,
+            prompt: inspection.originalPrompt || inspection.currentPrompt,
+            negativePrompt:
+                inspection.originalNegativePrompt || inspection.currentNegativePrompt,
+            record,
+            defaultReplayMode: inspection.hasReplaySnapshot ? 'original' : 'current',
+            onSubmitRegenerate: async (decision) => {
+                return await this.submitGalleryRegen(record, {
+                    replayMode: decision.replayMode,
+                    seedMode: decision.seedMode,
+                    editedPrompt: decision.prompt,
+                    editedNegativePrompt: decision.negativePrompt,
+                });
+            },
+            onSubmitInpaint: async (inpaintData, decision) => {
+                return await this.submitGalleryRegen(record, {
+                    replayMode: decision.replayMode,
+                    seedMode: decision.seedMode,
+                    editedPrompt: inpaintData.prompt,
+                    editedNegativePrompt: inpaintData.negativePrompt,
+                    inpaint: {
+                        initImage: inpaintData.initImage,
+                        maskImage: inpaintData.maskImage,
+                        width: inpaintData.width,
+                        height: inpaintData.height,
+                        denoiseStrength: inpaintData.denoiseStrength,
+                        maskBlur: inpaintData.maskBlur,
+                    },
+                });
+            },
+        });
+    }
+
+    private async submitGalleryRegen(
+        record: StoredImageRecord,
+        options: {
+            replayMode: ReplayMode;
+            seedMode: SeedMode;
+            editedPrompt: string;
+            editedNegativePrompt?: string;
+            inpaint?: InpaintOverrideInput;
+        }
+    ): Promise<boolean> {
+        const spec = buildRegenerationSubmitSpec({
+            record,
+            replayMode: options.replayMode,
+            seedMode: options.seedMode,
+            editedPrompt: options.editedPrompt,
+            editedNegativePrompt: options.editedNegativePrompt,
+            inpaint: options.inpaint,
+        });
+        const targetProvider =
+            spec.providerType ?? (settingsStore.getSettings().activeProvider as ProviderType);
+
+        if (options.replayMode === 'current') {
+            const check = validateCurrentPresetAssets(targetProvider);
+            if (!check.valid) {
+                const confirmed = await ConfirmDialog.confirm({
+                    title: '模型缺失确认',
+                    message: `当前生图参数预设引用的部分模型未在服务端检测到：\n- ${check.missing.join('\n- ')}\n\n是否仍继续尝试生图？`,
+                    confirmText: '继续生图',
+                    cancelText: '取消',
+                });
+                if (!confirmed) {
+                    return false;
+                }
+            }
+        }
+
+        const submitOptions: SubmitTaskOptions = {
+            destination: 'gallery',
+            ...spec,
+            providerType: targetProvider,
+        };
+
+        try {
+            const taskId = await generationOrchestrator.submitTask(submitOptions);
+            this.gallerySubmitSpecs.set(taskId, submitOptions);
+            this.currentPage.value = 1;
+            this.syncGalleryTasks();
+            Toast.info('已加入图库生成队列');
+            return true;
+        } catch (err) {
+            reportRuntimeError(
+                '[GalleryViewModel] 提交图库重绘任务失败:',
+                '提交重新生成任务失败，请前往「日志与统计」查看详情',
+                err
+            );
+            return false;
+        }
+    }
+
+    /** 取消进行中的图库任务 */
+    public cancelGalleryTask(taskId: string): void {
+        generationOrchestrator.cancelTask(taskId, '用户主动取消图库任务');
+        this.syncGalleryTasks();
+    }
+
+    /** 从图库网格移除失败任务的临时占位卡片 */
+    public dismissGalleryTask(taskId: string): void {
+        this.dismissedTaskIds.add(taskId);
+        this.gallerySubmitSpecs.delete(taskId);
+        this.syncGalleryTasks();
+    }
+
+    /** 一键重试失败的图库任务 */
+    public async retryGalleryTask(taskId: string): Promise<void> {
+        const spec = this.gallerySubmitSpecs.get(taskId);
+        if (!spec) {
+            this.dismissGalleryTask(taskId);
+            Toast.info('未找到任务参数快照，请从原图卡片重新发起生成');
+            return;
+        }
+        try {
+            const nextTaskId = await generationOrchestrator.submitTask(spec);
+            this.dismissedTaskIds.add(taskId);
+            this.gallerySubmitSpecs.delete(taskId);
+            this.gallerySubmitSpecs.set(nextTaskId, spec);
+            this.currentPage.value = 1;
+            this.syncGalleryTasks();
+            Toast.info('已重新提交图库生成任务');
+        } catch (err) {
+            reportRuntimeError(
+                '[GalleryViewModel] 重试图库任务失败:',
+                '重新提交失败，请前往「日志与统计」查看详情',
+                err
+            );
+        }
     }
 
     private removeRecordFromMemory(imageId: string): void {
@@ -195,6 +441,12 @@ export class GalleryState implements Disposable {
             const nextSel = new Set(this.selectedIds.value);
             nextSel.delete(imageId);
             this.selectedIds.value = nextSel;
+        }
+
+        const tempUrl = this.temporaryPreviewUrls.get(imageId);
+        if (tempUrl) {
+            this.revokeUrlForce(tempUrl);
+            this.temporaryPreviewUrls.delete(imageId);
         }
 
         const currentMap = this.pageUrlMap.value;
@@ -588,6 +840,11 @@ export class GalleryState implements Disposable {
             await imageStorage.deleteImage(rec.imageId);
             if (this.isDisposed) return;
             nextSel.delete(rec.imageId);
+            const tempUrl = this.temporaryPreviewUrls.get(rec.imageId);
+            if (tempUrl) {
+                this.revokeUrlForce(tempUrl);
+                this.temporaryPreviewUrls.delete(rec.imageId);
+            }
             const oldUrl = nextUrlMap.get(rec.imageId);
             if (oldUrl) {
                 this.revokeUrlForce(oldUrl);
@@ -640,11 +897,15 @@ export class GalleryState implements Disposable {
                 if (url.startsWith('blob:')) {
                     this.lightboxHeldUrls.add(url);
                 }
+                const resolvedRecordUrl = url;
                 lightboxItems.push({
-                    url,
+                    url: resolvedRecordUrl,
                     imageId: r.imageId,
                     title: r.metadata?.prompt || '未命名作品',
                     favorited: Boolean(r.favorited),
+                    onEdit: () => {
+                        void this.openRegenerateForRecord(r, resolvedRecordUrl);
+                    },
                     onFavoriteChange: (newFav) => {
                         if (this.isDisposed) return;
                         this.allRecords.value = this.allRecords.value.map((rec) =>
@@ -704,8 +965,21 @@ export class GalleryState implements Disposable {
     public dispose(): void {
         this.isActive = false;
         this.isDisposed = true;
+        this.stopTaskTickTimer();
         this.renderSeq += 1;
         this.refreshSeq += 1;
+        this.regenOpenSeq += 1;
+        for (const url of this.temporaryPreviewUrls.values()) {
+            if (url.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch {
+                    // 忽略释放异常
+                }
+            }
+        }
+        this.temporaryPreviewUrls.clear();
+        this.gallerySubmitSpecs.clear();
         for (const url of this.lightboxHeldUrls) {
             if (url.startsWith('blob:')) {
                 try {

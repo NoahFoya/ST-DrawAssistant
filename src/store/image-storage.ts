@@ -168,7 +168,7 @@ export class ImageStorage implements ImageStorageService {
     }
 
     /**
-     * 彻底删除指定图像资产，同步清除元数据索引与二进制数据所占存储空间，并释放内存 URL 与广播清理事件。
+     * 永久删除指定图像资产，同步清除元数据索引与二进制数据所占存储空间，并释放内存 URL 与广播清理事件。
      * @param imageId 图像全局唯一标识符
      */
     public async deleteImage(imageId: string): Promise<void> {

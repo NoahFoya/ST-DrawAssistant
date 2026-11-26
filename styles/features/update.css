@@ -77,8 +77,8 @@
     align-self: flex-end;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 9px;
+    justify-content: center;
+    padding: 3px 10px;
     border-radius: var(--da-radius-sm, 6px);
     border: 1px solid transparent;
     background: rgba(var(--da-accent-rgb), 0.06);
@@ -104,17 +104,6 @@
 .da-changelog-details-toggle:focus-visible {
     outline: 2px solid var(--da-accent-color);
     outline-offset: 2px;
-}
-
-.da-changelog-details-chevron {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.18s var(--da-ease);
-}
-
-.da-changelog-details-toggle[aria-expanded="true"] .da-changelog-details-chevron {
-    transform: rotate(90deg);
 }
 
 .da-changelog-details-panel {

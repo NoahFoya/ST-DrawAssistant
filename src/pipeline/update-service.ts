@@ -1132,7 +1132,7 @@ export class UpdateService {
 
     /**
      * 判断已初始化用户在版本升级后是否存在尚未阅读的更新说明。
-     * 首次全新安装（`!ui.seenGuides?.plugin`）由新手引导接管，不重复弹窗。
+     * 首次安装（`!ui.seenGuides?.plugin`）由新手引导接管，不重复弹窗。
      */
     public hasPendingChangelogNotice(
         store: Pick<SettingsStore, 'get'> = settingsStore

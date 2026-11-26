@@ -6,7 +6,12 @@
  * `serviceProfiles` 切换补丁的单一数据源，供设置选项卡视图与悬浮球快捷面板共同消费。
  */
 
-import type { ProviderAssetCache, ProviderStoredConfig, ProviderType } from '@types';
+import type {
+    ImageStorageQuality,
+    ProviderAssetCache,
+    ProviderStoredConfig,
+    ProviderType,
+} from '@types';
 import {
     NOVELAI_CUSTOM_SERVICE_ID,
     NOVELAI_IMAGE_HOST,
@@ -252,3 +257,19 @@ export function resolveProviderServiceSwitchPatch(
         },
     };
 }
+
+/** 本地图像存储格式下拉选项（供常规设置与悬浮球快捷面板共同消费） */
+export const IMAGE_STORAGE_QUALITY_OPTIONS: ReadonlyArray<{
+    readonly value: ImageStorageQuality;
+    readonly label: string;
+}> = [
+    { value: 'original', label: '原始格式 (原样保留)' },
+    { value: 'png', label: 'PNG 无损 (统一含参 PNG)' },
+    { value: 'webp-high', label: 'WebP 高质量 (90%)' },
+    { value: 'webp-medium', label: 'WebP 均衡压缩 (80%)' },
+    { value: 'jpeg-high', label: 'JPEG 高质量 (92%)' },
+    { value: 'jpeg-medium', label: 'JPEG 均衡压缩 (85%)' },
+];
+
+export const IMAGE_STORAGE_QUALITY_TOOLTIP =
+    '原始格式保留后端直出格式与自带参数，缺参 PNG 自动补充绘图参数；PNG 无损会将非 PNG 转为 PNG 并写入参数；WebP 90%/80% 占用空间更小并按 EXIF 规范保留参数（兼容拖入 ComfyUI）；JPEG 92%/85% 文件较小并写入标准 EXIF 参数（透明底将填充白色）。';

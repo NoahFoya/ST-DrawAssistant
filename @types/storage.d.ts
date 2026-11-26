@@ -9,7 +9,13 @@
 import type { StoredImageRecord, DrawingSlotEntry } from './st/chat';
 
 /** 图像本地存储压缩格式档位 */
-export type ImageStorageQuality = 'original' | 'webp-high' | 'webp-medium';
+export type ImageStorageQuality =
+    | 'original'
+    | 'png'
+    | 'webp-high'
+    | 'webp-medium'
+    | 'jpeg-high'
+    | 'jpeg-medium';
 
 /** 本地图像资产查询选项 */
 export interface ImageQueryOptions {

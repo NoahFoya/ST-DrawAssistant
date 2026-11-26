@@ -99,7 +99,7 @@ export interface OfficialPresetSyncResult {
 export interface SyncOfficialPresetsOptions {
     /** 需要同步的分组清单，未传时同步全部分组 */
     readonly categories?: readonly OfficialPresetSyncCategory[];
-    /** 同步模式：'add-only' 仅补充新增项、绝不覆盖；'selected' 按 selectedItemKeys（未传时默认全选）同步 */
+    /** 同步模式：'add-only' 仅补充新增项、不覆盖现有项；'selected' 按 selectedItemKeys（未传时默认全选）同步 */
     readonly mode?: OfficialPresetSyncMode;
     /** 显式勾选同步的差异条目 key 列表 */
     readonly selectedItemKeys?: readonly string[];

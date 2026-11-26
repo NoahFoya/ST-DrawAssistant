@@ -113,7 +113,7 @@ export const HIRES_UPSCALER_OPTIONS: ReadonlyArray<{ value: string; label: strin
     { label: 'ESRGAN_4x', value: 'ESRGAN_4x' },
 ];
 
-/** NovelAI 官方规范参数范围配置 (普通账号上限 28，Opus 顶级订阅上限 50) */
+/** NovelAI 官方规范参数范围配置 (普通账号上限 28，Opus 订阅上限 50) */
 export const NOVELAI_RANGE_CONFIG: SamplerRangeConfig = {
     steps: { min: 1, max: 50, step: 1, defaultValue: 28 },
     cfgScale: { min: 0.0, max: 10.0, step: 0.1, defaultValue: 5.0 },

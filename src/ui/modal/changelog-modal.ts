@@ -212,17 +212,7 @@ export class ChangelogModal implements Disposable {
                 toggleBtn.setAttribute('aria-controls', detailsId);
                 toggleBtn.setAttribute('aria-label', expandHint);
                 toggleBtn.title = expandHint;
-
-                const chevron = document.createElement('span');
-                chevron.className = 'da-changelog-details-chevron';
-                chevron.innerHTML = renderIcon('chevronRight', 13);
-
-                const toggleLabel = document.createElement('span');
-                toggleLabel.className = 'da-changelog-details-label';
-                toggleLabel.textContent = collapsedText;
-
-                toggleBtn.appendChild(chevron);
-                toggleBtn.appendChild(toggleLabel);
+                toggleBtn.textContent = collapsedText;
 
                 const detailsPanel = document.createElement('div');
                 detailsPanel.id = detailsId;
@@ -246,7 +236,7 @@ export class ChangelogModal implements Disposable {
                     toggleBtn.setAttribute('aria-expanded', String(nextExpanded));
                     card.classList.toggle('is-expanded', nextExpanded);
                     detailsPanel.hidden = !nextExpanded;
-                    toggleLabel.textContent = nextExpanded ? '收起' : collapsedText;
+                    toggleBtn.textContent = nextExpanded ? '收起' : collapsedText;
                     const nextHint = nextExpanded ? collapseHint : expandHint;
                     toggleBtn.setAttribute('aria-label', nextHint);
                     toggleBtn.title = nextHint;

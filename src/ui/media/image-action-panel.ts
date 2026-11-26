@@ -19,15 +19,33 @@ import { imageInfoModal } from './image-info-modal';
 import { openInpaintModal, type InpaintConfirmResult } from './inpaint-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from '../composite/tag-autocomplete';
 import { resolvePromptMacros } from '../../pipeline/macro-resolver';
-import { providerRegistry } from '../../provider/registry';
+import {
+    inspectRecordForRegeneration,
+    resolveRegenCapabilities,
+    type RecordReplayInspection,
+    type ReplayMode,
+    type SeedMode,
+} from '../../pipeline/regeneration-planner';
+import { imageStorage } from '../../store/image-storage';
 import { settingsStore } from '../../store/settings-store';
+import { downloadImageAsset } from '../../util/browser-io';
+
+/** 重新生成提交决策负载 */
+export interface ImageActionSubmitDecision {
+    readonly prompt: string;
+    readonly negativePrompt?: string;
+    readonly replayMode: ReplayMode;
+    readonly seedMode: SeedMode;
+}
 
 /** 图像操作弹窗上下文数据 */
 export interface ImageActionContext {
-    /** 宿主消息楼层序号 */
-    readonly messageId: number;
+    /** 调用来源：楼层消息或本地图库（缺省视为 'floor'） */
+    readonly source?: 'floor' | 'gallery';
+    /** 宿主消息楼层序号（楼层来源时展示 `#N`） */
+    readonly messageId?: number;
     /** 指令序号 (默认 0) */
-    readonly instructionIndex: number;
+    readonly instructionIndex?: number;
     /** 图像全局唯一标识符 */
     readonly imageId?: string;
     /** 图像展示地址 (Blob URL / 远程静态相对路径) */
@@ -38,10 +56,19 @@ export interface ImageActionContext {
     readonly negativePrompt?: string;
     /** 完整的图像资产持久化记录快照 */
     readonly record?: StoredImageRecord;
-    /** 触发整图重新生成回调 */
+    /** 默认重绘参数模式（图库默认 'original'，楼层默认 'current'） */
+    readonly defaultReplayMode?: ReplayMode;
+    /** 触发整图重新生成兼容回调（仅传正/负向提示词） */
     readonly onRegenerate?: (newPrompt: string, newNegativePrompt?: string) => Promise<boolean | void> | boolean | void;
+    /** 触发结构化双通道重绘回调（携带参数模式与种子决策） */
+    readonly onSubmitRegenerate?: (decision: ImageActionSubmitDecision) => Promise<boolean | void> | boolean | void;
     /** 触发局部重绘 Inpaint 回调 */
     readonly onInpaint?: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
+    /** 触发结构化局部重绘回调（携带当前选择的参数模式与种子决策） */
+    readonly onSubmitInpaint?: (
+        data: InpaintConfirmResult,
+        decision: Pick<ImageActionSubmitDecision, 'replayMode' | 'seedMode'>
+    ) => Promise<boolean | void> | boolean | void;
 }
 
 /**
@@ -59,11 +86,26 @@ export class ImageActionPanel implements Disposable {
     private negSectionEl?: HTMLElement;
     private negTextarea?: HTMLTextAreaElement;
     private inpaintBtnEl?: HTMLButtonElement;
+    private replayPanelEl?: HTMLElement;
+    private modeOriginalBtnEl?: HTMLButtonElement;
+    private modeCurrentBtnEl?: HTMLButtonElement;
+    private seedRowEl?: HTMLElement;
+    private seedRandomBtnEl?: HTMLButtonElement;
+    private seedFixedBtnEl?: HTMLButtonElement;
+    private replaySummaryEl?: HTMLElement;
+    private replayWarningEl?: HTMLElement;
     private resetPosUndo?: () => void;
     private resetNegUndo?: () => void;
     private updatePosHighlight?: () => void;
     private updateNegHighlight?: () => void;
     private readonly autocompletes: TagAutocomplete[] = [];
+
+    private currentReplayMode: ReplayMode = 'current';
+    private currentSeedMode: SeedMode = 'random';
+    private currentInspection: RecordReplayInspection | null = null;
+    private hasManualPosEdit = false;
+    private hasManualNegEdit = false;
+    private isSyncingTextareas = false;
 
     // 全局事件解绑器列表
     private readonly disposers: (() => void)[] = [];
@@ -118,9 +160,90 @@ export class ImageActionPanel implements Disposable {
         const body = document.createElement('div');
         body.className = 'da-action-panel__body';
 
+        // 4.1 历史参数与随机种子控制卡（存在有效图像元数据时自动展示）
+        const replayPanel = document.createElement('div');
+        replayPanel.className = 'da-action-panel__replay-panel';
+        replayPanel.style.display = 'none';
+
+        const modeRow = document.createElement('div');
+        modeRow.className = 'da-action-panel__replay-row';
+        const modeLabel = document.createElement('span');
+        modeLabel.className = 'da-action-panel__replay-label';
+        modeLabel.textContent = '参数模式';
+        const modeGroup = document.createElement('div');
+        modeGroup.className = 'da-action-panel__seg-group';
+
+        const modeOriginalBtn = document.createElement('button');
+        modeOriginalBtn.type = 'button';
+        modeOriginalBtn.className = 'da-action-panel__seg-btn';
+        modeOriginalBtn.textContent = '复现原参数';
+        modeOriginalBtn.addEventListener('click', () => this.switchReplayMode('original'));
+
+        const modeCurrentBtn = document.createElement('button');
+        modeCurrentBtn.type = 'button';
+        modeCurrentBtn.className = 'da-action-panel__seg-btn';
+        modeCurrentBtn.textContent = '按当前配置';
+        modeCurrentBtn.addEventListener('click', () => this.switchReplayMode('current'));
+
+        modeGroup.appendChild(modeOriginalBtn);
+        modeGroup.appendChild(modeCurrentBtn);
+        modeRow.appendChild(modeLabel);
+        modeRow.appendChild(modeGroup);
+        replayPanel.appendChild(modeRow);
+
+        const seedRow = document.createElement('div');
+        seedRow.className = 'da-action-panel__replay-row';
+        const seedLabel = document.createElement('span');
+        seedLabel.className = 'da-action-panel__replay-label';
+        seedLabel.textContent = '随机种子';
+        const seedGroup = document.createElement('div');
+        seedGroup.className = 'da-action-panel__seg-group';
+
+        const seedRandomBtn = document.createElement('button');
+        seedRandomBtn.type = 'button';
+        seedRandomBtn.className = 'da-action-panel__seg-btn';
+        seedRandomBtn.textContent = '随机新种子';
+        seedRandomBtn.addEventListener('click', () => this.switchSeedMode('random'));
+
+        const seedFixedBtn = document.createElement('button');
+        seedFixedBtn.type = 'button';
+        seedFixedBtn.className = 'da-action-panel__seg-btn';
+        seedFixedBtn.textContent = '锁定原种子';
+        seedFixedBtn.addEventListener('click', () => this.switchSeedMode('fixed'));
+
+        seedGroup.appendChild(seedRandomBtn);
+        seedGroup.appendChild(seedFixedBtn);
+        seedRow.appendChild(seedLabel);
+        seedRow.appendChild(seedGroup);
+        replayPanel.appendChild(seedRow);
+
+        const replaySummary = document.createElement('div');
+        replaySummary.className = 'da-action-panel__replay-summary';
+        replayPanel.appendChild(replaySummary);
+
+        const replayWarning = document.createElement('div');
+        replayWarning.className = 'da-action-panel__replay-warning';
+        replayWarning.style.display = 'none';
+        replayPanel.appendChild(replayWarning);
+
+        this.replayPanelEl = replayPanel;
+        this.modeOriginalBtnEl = modeOriginalBtn;
+        this.modeCurrentBtnEl = modeCurrentBtn;
+        this.seedRowEl = seedRow;
+        this.seedRandomBtnEl = seedRandomBtn;
+        this.seedFixedBtnEl = seedFixedBtn;
+        this.replaySummaryEl = replaySummary;
+        this.replayWarningEl = replayWarning;
+        body.appendChild(replayPanel);
+
         // 正向提示词卡片
         const posSection = this.createPromptSection('正向提示词 (Prompt)', '输入正向描述提示词...');
         this.posTextarea = posSection.textarea;
+        this.posTextarea.addEventListener('input', () => {
+            if (!this.isSyncingTextareas) {
+                this.hasManualPosEdit = true;
+            }
+        });
         this.resetPosUndo = posSection.resetUndo;
         this.updatePosHighlight = posSection.updateHighlight;
         const posAc = attachTagAutocomplete(this.posTextarea, { mode: 'prompt-with-macro' });
@@ -132,6 +255,11 @@ export class ImageActionPanel implements Disposable {
         const negSection = this.createPromptSection('负向提示词 (Negative Prompt)', '输入负向过滤提示词...');
         this.negSectionEl = negSection.container;
         this.negTextarea = negSection.textarea;
+        this.negTextarea.addEventListener('input', () => {
+            if (!this.isSyncingTextareas) {
+                this.hasManualNegEdit = true;
+            }
+        });
         this.resetNegUndo = negSection.resetUndo;
         this.updateNegHighlight = negSection.updateHighlight;
         const negAc = attachTagAutocomplete(this.negTextarea, { mode: 'prompt-with-macro' });
@@ -475,6 +603,8 @@ export class ImageActionPanel implements Disposable {
         }
         this.currentContext = context;
         this.isOpenState = true;
+        this.hasManualPosEdit = false;
+        this.hasManualNegEdit = false;
         overlayStack.push('image-action-panel', () => this.close(), () => this.close());
         this.resetPosUndo?.();
         this.resetNegUndo?.();
@@ -482,29 +612,32 @@ export class ImageActionPanel implements Disposable {
             ac.closePopup();
         }
 
+        const isGallery = context.source === 'gallery' || context.messageId === undefined;
         if (this.titleTextEl) {
-            this.titleTextEl.textContent = `图像编辑 (楼层 #${context.messageId})`;
+            this.titleTextEl.textContent = isGallery
+                ? '图像编辑 (本地图库)'
+                : `图像编辑 (楼层 #${context.messageId})`;
         }
 
-        if (this.posTextarea) {
-            this.posTextarea.value = context.prompt || '';
-            this.updatePosHighlight?.();
-        }
-        const { supportsNegative, supportsInpaint } = this.getActiveProviderCapabilities();
+        const inspection = context.record?.metadata
+            ? inspectRecordForRegeneration(
+                  context.record,
+                  context.prompt,
+                  context.negativePrompt || ''
+              )
+            : null;
+        this.currentInspection = inspection;
 
-        if (this.negSectionEl) {
-            this.negSectionEl.style.display = supportsNegative ? '' : 'none';
-        }
-        if (this.negTextarea) {
-            this.negTextarea.value = supportsNegative ? context.negativePrompt || '' : '';
-            this.updateNegHighlight?.();
-        }
-        if (this.inpaintBtnEl) {
-            this.inpaintBtnEl.disabled = !supportsInpaint;
-            this.inpaintBtnEl.title = supportsInpaint
-                ? '打开局部重绘画板涂抹修改本图局部细节'
-                : '当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
-        }
+        const desiredDefaultMode: ReplayMode =
+            context.defaultReplayMode ?? (isGallery ? 'original' : 'current');
+        this.currentReplayMode =
+            desiredDefaultMode === 'original' && inspection?.hasReplaySnapshot
+                ? 'original'
+                : 'current';
+        this.currentSeedMode = 'random';
+
+        this.applyModePrompts(true);
+        this.syncReplayControlsUI();
 
         for (const ac of this.autocompletes) {
             ac.refreshMacroStatus();
@@ -517,16 +650,145 @@ export class ImageActionPanel implements Disposable {
         }
     }
 
+    private switchReplayMode(nextMode: ReplayMode): void {
+        if (nextMode === 'original' && !this.currentInspection?.hasReplaySnapshot) {
+            return;
+        }
+        if (this.currentReplayMode === nextMode) {
+            return;
+        }
+        this.currentReplayMode = nextMode;
+        this.applyModePrompts(false);
+        this.syncReplayControlsUI();
+    }
+
+    private switchSeedMode(nextSeedMode: SeedMode): void {
+        if (nextSeedMode === 'fixed' && !this.currentInspection?.hasFixedSeed) {
+            return;
+        }
+        this.currentSeedMode = nextSeedMode;
+        this.syncReplayControlsUI();
+    }
+
+    private applyModePrompts(isInitialOpen: boolean): void {
+        const ctx = this.currentContext;
+        if (!ctx) return;
+
+        const inspection = this.currentInspection;
+        const targetPos =
+            this.currentReplayMode === 'original' && inspection
+                ? inspection.originalPrompt
+                : inspection && inspection.currentPrompt
+                  ? inspection.currentPrompt
+                  : ctx.prompt || '';
+        const targetNeg =
+            this.currentReplayMode === 'original' && inspection
+                ? inspection.originalNegativePrompt
+                : inspection && inspection.currentNegativePrompt
+                  ? inspection.currentNegativePrompt
+                  : ctx.negativePrompt || '';
+
+        this.isSyncingTextareas = true;
+        try {
+            if ((isInitialOpen || !this.hasManualPosEdit) && this.posTextarea) {
+                this.posTextarea.value = isInitialOpen && ctx.prompt && !inspection ? ctx.prompt : targetPos;
+                this.resetPosUndo?.();
+                this.updatePosHighlight?.();
+            }
+
+            const { supportsNegative } = this.getActiveProviderCapabilities();
+            if ((isInitialOpen || !this.hasManualNegEdit) && this.negTextarea) {
+                const nextNegVal = supportsNegative
+                    ? isInitialOpen && ctx.negativePrompt && !inspection
+                        ? ctx.negativePrompt
+                        : targetNeg
+                    : '';
+                this.negTextarea.value = nextNegVal;
+                this.resetNegUndo?.();
+                this.updateNegHighlight?.();
+            }
+        } finally {
+            this.isSyncingTextareas = false;
+        }
+    }
+
+    private syncReplayControlsUI(): void {
+        const inspection = this.currentInspection;
+        const { supportsNegative, supportsInpaint, supportsSeed } = this.getActiveProviderCapabilities();
+
+        if (this.negSectionEl) {
+            this.negSectionEl.style.display = supportsNegative ? '' : 'none';
+        }
+        if (this.inpaintBtnEl) {
+            this.inpaintBtnEl.disabled = !supportsInpaint;
+            this.inpaintBtnEl.title = supportsInpaint
+                ? '打开局部重绘画板涂抹修改本图局部细节'
+                : '当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
+        }
+
+        if (!this.replayPanelEl) {
+            return;
+        }
+
+        if (!inspection || (!inspection.hasReplaySnapshot && !inspection.hasFixedSeed)) {
+            this.replayPanelEl.style.display = 'none';
+            return;
+        }
+
+        this.replayPanelEl.style.display = '';
+        if (this.modeOriginalBtnEl) {
+            this.modeOriginalBtnEl.disabled = !inspection.hasReplaySnapshot;
+            this.modeOriginalBtnEl.classList.toggle('is-active', this.currentReplayMode === 'original');
+        }
+        if (this.modeCurrentBtnEl) {
+            this.modeCurrentBtnEl.classList.toggle('is-active', this.currentReplayMode === 'current');
+        }
+
+        if (this.seedRowEl && this.seedRandomBtnEl && this.seedFixedBtnEl) {
+            this.seedRowEl.style.display = supportsSeed ? '' : 'none';
+            if (supportsSeed) {
+                this.seedRandomBtnEl.classList.toggle('is-active', this.currentSeedMode === 'random');
+                this.seedFixedBtnEl.disabled = !inspection.hasFixedSeed;
+                this.seedFixedBtnEl.textContent =
+                    inspection.recordedSeed !== undefined
+                        ? `锁定原种子 (${inspection.recordedSeed})`
+                        : '锁定原种子 (无记录)';
+                this.seedFixedBtnEl.classList.toggle(
+                    'is-active',
+                    this.currentSeedMode === 'fixed' && inspection.hasFixedSeed
+                );
+            }
+        }
+
+        if (this.replaySummaryEl) {
+            this.replaySummaryEl.textContent =
+                this.currentReplayMode === 'original'
+                    ? `将沿用原配置：${inspection.originalSummary}`
+                    : `将使用当前激活配置：${inspection.currentSummary}${inspection.currentUsesRawPipeline ? '（经当前提示词预设管线编译）' : ''}`;
+        }
+
+        if (this.replayWarningEl) {
+            const warningText =
+                this.currentReplayMode === 'original' ? inspection.missingWorkflowWarning : undefined;
+            if (warningText) {
+                this.replayWarningEl.textContent = warningText;
+                this.replayWarningEl.style.display = '';
+            } else {
+                this.replayWarningEl.textContent = '';
+                this.replayWarningEl.style.display = 'none';
+            }
+        }
+    }
+
     /**
-     * 统一按当前全局激活后端查询负向词与局部重绘能力。
+     * 统一按当前所选重绘模式与目标引擎查询负向词、局部重绘与随机种子能力。
      */
-    private getActiveProviderCapabilities(): { supportsNegative: boolean; supportsInpaint: boolean } {
-        const activeProvider = settingsStore.getSettings().activeProvider;
-        const provider = providerRegistry.getProvider(activeProvider);
-        return {
-            supportsNegative: provider?.supportsNegativePrompt !== false,
-            supportsInpaint: provider?.supportsInpaint === true,
-        };
+    private getActiveProviderCapabilities(): {
+        supportsNegative: boolean;
+        supportsInpaint: boolean;
+        supportsSeed: boolean;
+    } {
+        return resolveRegenCapabilities(this.currentContext?.record, this.currentReplayMode);
     }
 
     /**
@@ -544,10 +806,18 @@ export class ImageActionPanel implements Disposable {
             return;
         }
 
-        const onRegen = this.currentContext.onRegenerate;
+        const decision: ImageActionSubmitDecision = {
+            prompt: newPrompt,
+            negativePrompt: newNegativePrompt,
+            replayMode: this.currentReplayMode,
+            seedMode: this.currentSeedMode,
+        };
+        const { onSubmitRegenerate, onRegenerate } = this.currentContext;
         this.close();
-        if (onRegen) {
-            void onRegen(newPrompt, newNegativePrompt);
+        if (onSubmitRegenerate) {
+            void onSubmitRegenerate(decision);
+        } else if (onRegenerate) {
+            void onRegenerate(newPrompt, newNegativePrompt);
         }
     }
 
@@ -557,7 +827,7 @@ export class ImageActionPanel implements Disposable {
     private handleInpaint(): void {
         if (!this.currentContext) return;
 
-        const { supportsInpaint } = this.getActiveProviderCapabilities();
+        const { supportsInpaint, supportsNegative } = this.getActiveProviderCapabilities();
         if (!supportsInpaint) {
             Toast.warning('当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
             return;
@@ -569,8 +839,16 @@ export class ImageActionPanel implements Disposable {
         }
 
         const ctx = this.currentContext;
-        const initialPrompt = this.posTextarea?.value.trim() || ctx.prompt || '';
-        const initialNegPrompt = this.negTextarea?.value.trim() || ctx.negativePrompt || '';
+        const initialPrompt = this.posTextarea ? this.posTextarea.value.trim() : ctx.prompt || '';
+        const initialNegPrompt = this.negTextarea
+            ? supportsNegative
+                ? this.negTextarea.value.trim()
+                : ''
+            : ctx.negativePrompt || '';
+        const replayDecision = {
+            replayMode: this.currentReplayMode,
+            seedMode: this.currentSeedMode,
+        };
 
         this.close();
 
@@ -579,9 +857,20 @@ export class ImageActionPanel implements Disposable {
             imageId: ctx.imageId ?? ctx.record?.imageId,
             initialPrompt,
             initialNegativePrompt: initialNegPrompt,
+            supportsNegativePrompt: supportsNegative,
             onConfirm: async (data) => {
+                if (typeof ctx.onSubmitInpaint === 'function') {
+                    return await ctx.onSubmitInpaint(data, replayDecision);
+                }
                 if (typeof ctx.onInpaint === 'function') {
                     return await ctx.onInpaint(data);
+                }
+                if (typeof ctx.onSubmitRegenerate === 'function') {
+                    return await ctx.onSubmitRegenerate({
+                        prompt: data.prompt,
+                        negativePrompt: data.negativePrompt,
+                        ...replayDecision,
+                    });
                 }
                 if (typeof ctx.onRegenerate === 'function') {
                     return await ctx.onRegenerate(data.prompt, data.negativePrompt);
@@ -605,18 +894,23 @@ export class ImageActionPanel implements Disposable {
     }
 
     /**
-     * 触发下载图像文件。
+     * 触发下载图像文件（优先从 IDB 读取原始 Blob，自动匹配真实文件后缀）。
      */
-    private handleDownload(): void {
-        const url = this.currentContext?.imageUrl;
-        if (!url) return;
+    private async handleDownload(): Promise<void> {
+        const ctx = this.currentContext;
+        if (!ctx || (!ctx.imageUrl && !ctx.imageId && !ctx.record?.imageId)) return;
+        const targetId = ctx.imageId ?? ctx.record?.imageId;
         try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `st_draw_${this.currentContext?.imageId || Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            const ok = await downloadImageAsset({
+                resolveBlob: () =>
+                    targetId ? imageStorage.getImageBlob(targetId) : Promise.resolve(null),
+                url: ctx.imageUrl,
+                fileNameBase: `st_draw_${targetId || Date.now()}`,
+            });
+            if (!ok) {
+                Toast.error('下载失败，未找到可用图像资源');
+                return;
+            }
             Toast.success('已开始下载图像');
         } catch (err) {
             reportRuntimeError(
