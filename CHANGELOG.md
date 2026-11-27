@@ -15,7 +15,7 @@
 - **单向分层与领域/宿主抽离**：将代码依赖统一规范为 `entry -> ui -> pipeline -> provider / store -> host / util -> domain`。抽离 `src/domain/` 纯规则层（`lora-syntax`、`keyword-matcher`、`preset/`、`provider-specs/`）、`src/host/` 宿主边界适配层（`HostEventBridge`）、`src/pipeline/` 协调器（`FloorCoordinator`、`PresetTransferService`），并将 `SettingsStore` 拆分为 `SettingsRepository`、`PresetRepository` 与 `PresetLifecycle`。
 - **UI 声明式迁移与状态层拆分**：将复合组件、设置页签及 `FabQuickPanel`（拆分为 `src/ui/entry/quick-panel/`）统一迁移至 Preact + Signals 与无 DOM 状态层 `src/ui/state/`；移除旧式视图模型适配层及冗余命令式输入组件（`form-field.ts`、`text-input.ts`）；统一 `ViewportService` 与 `floating-sheet.ts` 两阶段视口锚定定位。
 - **服务商档位与存储规格统一**：将云端服务商档案预设与切换补丁统一归集至 `src/domain/provider-specs/service-profiles.ts`；本地 `imageQuality` 规范为 6 档存储格式，并结合真实魔数与 MIME 类型处理文件下载后缀。
-- **预设与更新流程优化**：重构 `config/presets/prompt-channels.json`（故事插画四预设去耦、去补丁注释与固定括号模板并重制差异化示例；素材注入与素材创作改为自包含规范）、整理 `vocab-guidance.json` 与 `material-formats.json`、完善 `prompts.json` 自然语言风格句式（保留 NovelAI 画师串原样）并将 `drawing.json` 云端模型默认画幅调为 `auto`，同时优化 `UpdateService` 取消控制与 `CHARACTER_MESSAGE_RENDERED` 自动生图稳定时机。
+- **预设与更新流程优化**：重写 `config/presets/prompt-channels.json`（改为简明清单式 `<imagethink>` / `<designthink>`，消除多人重复计数标签与自然语言“写实”偏置，明确剧情变化优先于档案、画面文字忠于原文、`DESCRIPTION` 与结构化标签分工、状态可见边界与搭配及局部缺失回退规则）、整理 `vocab-guidance.json` 与 `material-formats.json`、完善 `prompts.json` 自然语言风格句式（保留 NovelAI 画师串原样）并将 `drawing.json` 云端模型默认画幅调为 `auto`，同时优化 `UpdateService` 取消控制与 `CHARACTER_MESSAGE_RENDERED` 自动生图稳定时机。
 
 ### 问题修复
 - 修复 `TagAutocomplete` 在句中、已有标签前或闭合 `$...$` 宏内触发补全时覆盖光标右侧文本的问题（改为仅向前扫描前缀起点并锁定 `replaceEnd`）。
