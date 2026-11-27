@@ -12,6 +12,7 @@
 import type { UIComponent, Disposable } from '../types';
 import { settingsStore } from '../../store/settings-store';
 import { eventBus } from '../../util/event-bus';
+import { browserStorage } from '../../util/storage-port';
 import { FAB_BUILTIN_ICONS } from '../views/fab-tab';
 import { getViewportRect } from '../layout/viewport';
 import { FabQuickPanel } from './fab-quick-panel';
@@ -333,29 +334,18 @@ export class FloatingActionButton implements UIComponent, Disposable {
     }
 
     private clampAndSavePosition(): void {
-        try {
-            const pos: FabPositionState = {
-                ratioX: this.currentRatioX,
-                ratioY: this.currentRatioY,
-            };
-            localStorage.setItem(STORAGE_KEY_POSITION, JSON.stringify(pos));
-        } catch {
-            // 忽略存储写入限制
-        }
+        const pos: FabPositionState = {
+            ratioX: this.currentRatioX,
+            ratioY: this.currentRatioY,
+        };
+        browserStorage.setJson(STORAGE_KEY_POSITION, pos);
     }
 
     private restoreSavedPosition(): void {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY_POSITION);
-            if (raw) {
-                const pos = JSON.parse(raw);
-                if (typeof pos.ratioX === 'number' && typeof pos.ratioY === 'number') {
-                    this.applyRatioPosition(pos.ratioX, pos.ratioY);
-                    return;
-                }
-            }
-        } catch {
-            // 恢复基准停靠比例
+        const pos = browserStorage.getJson<Partial<FabPositionState>>(STORAGE_KEY_POSITION);
+        if (pos && typeof pos.ratioX === 'number' && typeof pos.ratioY === 'number') {
+            this.applyRatioPosition(pos.ratioX, pos.ratioY);
+            return;
         }
 
         // 默认右下角安全相对比例停靠
@@ -382,12 +372,8 @@ export class FloatingActionButton implements UIComponent, Disposable {
 
         this.applyRatioPosition(DEFAULT_FAB_RATIO.ratioX, DEFAULT_FAB_RATIO.ratioY);
 
-        if (clearStorage && typeof localStorage !== 'undefined') {
-            try {
-                localStorage.removeItem(STORAGE_KEY_POSITION);
-            } catch {
-                // 忽略异常
-            }
+        if (clearStorage) {
+            browserStorage.removeItem(STORAGE_KEY_POSITION);
         }
     }
 

@@ -7,6 +7,7 @@
  */
 
 import type { ImageGenerationMetadata } from './st/chat';
+import type { PresetCategory, PresetItem } from './preset';
 
 /** 绘图服务提供方类型标识 */
 export type ProviderType = 'sdwebui' | 'comfyui' | 'novelai' | 'openai' | 'gemini' | 'grok';
@@ -34,6 +35,39 @@ export interface GenerationParameters {
     maskBlur?: number;
     /** 指定的局部重绘预设标识符 */
     inpaintPresetId?: string;
+    /** 指定的工作流预设标识符（复现历史工作流时作为 txt2img / inpaint 工作流回退标识） */
+    workflowId?: string;
+    /** 主模型覆盖 */
+    baseModel?: string;
+    /** 分立 CLIP 模型覆盖 */
+    clipName?: string;
+    /** VAE 模型覆盖 */
+    vaeName?: string;
+    /** 额外模型列表覆盖 */
+    extraModels?: string[];
+    /** CLIP 跳过层数覆盖 */
+    clipSkip?: number;
+    /** 高清修复参数覆盖 (SD-WebUI) */
+    enableHires?: boolean;
+    hiresUpscaler?: string;
+    hiresScale?: number;
+    hiresSteps?: number;
+    hiresDenoise?: number;
+    /** NovelAI 专属参数覆盖 */
+    cfgRescale?: number;
+    smeaMode?: string;
+    decrisper?: boolean;
+    convertSyntax?: boolean;
+    /** 云端服务规格覆盖 */
+    aspectRatio?: string;
+    imageSize?: string;
+    resolution?: string;
+    quality?: string;
+    style?: string;
+    background?: string;
+    outputFormat?: string;
+    /** 来源图片资产 ID */
+    parentImageId?: string;
     /** 随机种子覆盖 */
     seed?: number;
     /** 采样步数覆盖 */
@@ -107,6 +141,8 @@ export interface GenerationResult {
     readonly blob: Blob;
     /** 图像生成技术参数快照，用于写入资产记录与详情展示 */
     readonly metadata: ImageGenerationMetadata;
+    /** 运行时瞬态：ComfyUI 本次实际注入并提交至 /prompt 的工作流 API JSON（仅用于元数据无损写回，不污染存储索引） */
+    readonly comfyPromptGraph?: Record<string, unknown>;
 }
 
 /** 绘图服务提供方健康状态检查结果 */
@@ -117,6 +153,8 @@ export interface ProviderHealthResult {
     readonly latencyMs?: number;
     /** 状态说明或版本信息 */
     readonly message?: string;
+    /** 当原地址不可达但补全标准后缀后可达时，提供待用户确认应用的建议完整地址 */
+    readonly suggestedUrl?: string;
 }
 
 /** 绘图服务提供方本地持久化资产缓存模型 */
@@ -182,6 +220,11 @@ export interface GenerationProvider {
     readonly supportsInpaint?: boolean;
     /** 是否支持周期性健康状态轮询（纯鉴权云端服务设为 false） */
     readonly supportsHealthPolling?: boolean;
+
+    /**
+     * 获取当前生效的服务端基础地址 (可选能力)
+     */
+    getServerUrl?(): string;
 
     /**
      * 执行图像生成
@@ -262,4 +305,35 @@ export interface ProviderRegistry {
     registerProvider(provider: GenerationProvider): void;
     /** 获取所有已就绪的绘图服务提供方标识列表 */
     getAvailableTypes(): ProviderType[];
+}
+
+/**
+ * 提供方运行期配置、预设与告警通知抽象端口。
+ *
+ * @remarks
+ * 使 `src/provider` 仅依赖类型抽象而非具体 `SettingsStore` 实现。
+ */
+export interface ProviderRuntimePort {
+    get?(key: 'transport'): TransportMode;
+    get?(key: 'taskTimeoutMs'): number | undefined;
+    getProviderConfig<T = ProviderStoredConfig>(providerType: ProviderType): T | undefined;
+    getPreset?<T = Record<string, unknown>>(
+        category: PresetCategory,
+        id: string,
+        providerType?: string
+    ): PresetItem<T> | undefined;
+    resolveDrawingPreset?<T = Record<string, unknown>>(
+        providerType: ProviderType,
+        options?: {
+            explicitPresetId?: string;
+            throwOnMissingActive?: boolean;
+        }
+    ): { presetId?: string; preset?: T };
+    onWarning?(
+        message: string,
+        context?: {
+            readonly source?: string;
+            readonly strippedTags?: readonly string[];
+        }
+    ): void;
 }

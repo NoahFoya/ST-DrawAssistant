@@ -17,12 +17,11 @@ import {
     FormFieldView,
     SwitchControl,
     SegmentedControlView,
-    PresetToolbarView,
     SearchableSelectControl,
     NumberInputControl,
 } from '../../framework';
-import type { PresetActionType } from '../../composite';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar, type PresetActionType } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     normalizeCharacterData,
     normalizeOutfitData,
@@ -191,7 +190,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
         <div className="da-material-subpanel">
             {/* 顶部独立启用预设工具栏 */}
             <div className="da-material-preset-bar">
-                <PresetToolbarView
+                <PresetToolbar
                     presets={activationController.toolbarItems.value}
                     activePresetId={activationController.activePresetId.value}
                     dirty={activationController.isDirty.value}
@@ -205,7 +204,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                 <div className="da-form-grid">
                     <FormFieldView
                         label="随角色卡自动切换预设"
-                        tooltip="开启后，扩展将监听酒馆宿主的角色加载事件；当切换至不同角色卡时，自动将素材启用预设切换为与该角色卡绑定的预设，自动同步切换专属服装与触发词。"
+                        tooltip="开启后，在酒馆切换不同角色卡时，自动切到该角色卡绑定的素材启用预设，同步更换当前启用的角色和服装。"
                         width="w-toggle"
                     >
                         <SwitchControl
@@ -222,8 +221,8 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
 
                     <FormFieldView
                         label="关联酒馆角色卡"
-                        tooltip="将当前启用预设与宿主特定角色卡名称进行绑定。若列表中未列出，可手动输入角色卡名称（支持逗号分隔多个名称，忽略大小写）。"
-                        width="auto"
+                        tooltip="把当前启用预设和酒馆里的角色卡名绑定在一起。如果下拉框里找不到，可以手动输入角色卡名（多个名称用英文逗号分隔，不区分大小写）。"
+                        width="w-240"
                     >
                         {hostCards.length === 0 ? (
                                     <input
@@ -295,7 +294,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
                     <FormFieldView
                         label="聊天消息扫描深度"
                         tooltip="从最近几条对话消息中检索角色/服装名称或别名（默认 2 条；设为 0 表示不扫描聊天正文，仅注入「常驻」素材）。"
-                        width="w-120"
+                        width="w-240"
                     >
                         <NumberInputControl
                             min={0}
@@ -325,7 +324,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
             {renderRuleSection({
                 title: `角色启用列表 (${characters.length})`,
                 subtitle:
-                    '控制参与生图的角色档案；支持「关键词触发」（聊天文本中命中角色名称或别名时自动注入）与「常驻触发」（每次生成强制注入该角色外貌）',
+                    '管理哪些角色参与生图；「关键词」在聊天提到角色名或别名时自动生效，「常驻」每次出图都会带给 AI',
                 emptyHint: '暂无角色预设，请先在「角色管理」中新增角色。',
                 ruleGroup: 'characterRules',
                 items: charRuleItems,
@@ -336,7 +335,7 @@ export function ActivationPanel(props: ActivationPanelProps): VNode {
             {renderRuleSection({
                 title: `通用服装启用列表 (${universalOutfits.length})`,
                 subtitle:
-                    '未绑定特定角色的独立通用服装；支持「关键词触发」（聊天文本中命中服装名称或别名时自动注入）与「常驻触发」（每次生成强制注入该服装）',
+                    '不绑定特定角色的通用服装；「关键词」在聊天提到服装名或别名时自动生效，「常驻」每次出图都会带给 AI',
                 emptyHint: '暂无独立通用服装（专属服装已归属于角色并在角色触发时生效）。',
                 ruleGroup: 'outfitRules',
                 items: outfitRuleItems,

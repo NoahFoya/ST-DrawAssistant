@@ -72,7 +72,7 @@ export function resolveSeed(seed?: number): number {
  *
  * @param rawWorkflow 原始 ComfyUI API 节点图对象
  * @param variables 待注入的变量字典
- * @returns 变量注入完成后的全新工作流对象
+ * @returns 变量注入完成后的新工作流对象
  */
 export function buildWorkflow(
     rawWorkflow: Record<string, unknown>,

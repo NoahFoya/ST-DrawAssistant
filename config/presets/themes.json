@@ -114,7 +114,7 @@
   {
     "id": "linear-indigo",
     "name": "Linear · 深灰靛蓝",
-    "description": "高对比极简炭黑与靛蓝暗色主题",
+    "description": "高对比炭黑与靛蓝暗色主题",
     "data": {
       "accent": "#818cf8",
       "accentSecondary": "#6366f1",
@@ -198,7 +198,7 @@
   {
     "id": "github-light",
     "name": "GitHub Light · 素白晴蓝",
-    "description": "清爽纯白与晴空蓝亮色主题",
+    "description": "纯白与晴空蓝亮色主题",
     "data": {
       "accent": "#0969da",
       "accentSecondary": "#0550ae",

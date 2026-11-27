@@ -15,6 +15,7 @@ import type {
     GenerationRequest,
     GenerationResult,
     ProviderHealthResult,
+    ProviderRuntimePort,
     ProviderType,
     TransportMode,
 } from '@types';
@@ -27,14 +28,24 @@ import {
     type HttpRequestOptions,
     type PingResult,
 } from '../util/http-client';
-import { type SettingsStore, settingsStore, DEFAULT_TASK_TIMEOUT_MS } from '../store/settings-store';
+import { DEFAULT_TASK_TIMEOUT_MS } from '../config/constants';
+import { getDefaultProviderRuntime } from '../util/provider-runtime';
+import { logger } from '../util/logger';
+import { eventBus } from '../util/event-bus';
 
 /** 提供方基础依赖配置项（主要用于测试隔离与依赖替换） */
 export interface BaseProviderOptions {
     /** 自定义 HTTP 客户端实例，缺省使用全局单例 */
     httpClient?: HttpClient;
-    /** 自定义配置中心实例，缺省使用全局单例 */
-    settingsStore?: SettingsStore;
+    /** 运行期配置与预设抽象端口（替代具体 SettingsStore 耦合） */
+    runtimePort?: ProviderRuntimePort;
+    /** 兼容旧调用方注入的配置读取对象 */
+    settingsStore?: ProviderRuntimePort;
+    /** 协议清洗警告通知回调（未传时优先委托 runtimePort.onWarning，否则走统一警告总线） */
+    onWarning?: (
+        message: string,
+        context?: { readonly source?: string; readonly strippedTags?: readonly string[] }
+    ) => void;
 }
 
 /** 提供方在途资产请求复用状态 */
@@ -56,11 +67,28 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
     public readonly supportsHealthPolling: boolean = true;
 
     protected readonly _httpClient: HttpClient;
-    protected readonly _settingsStore?: SettingsStore;
+    private readonly _hasExplicitRuntime: boolean;
+    private readonly _explicitRuntime?: ProviderRuntimePort;
+    private readonly _onWarning?: BaseProviderOptions['onWarning'];
 
     protected constructor(options: BaseProviderOptions = {}) {
         this._httpClient = options.httpClient ?? httpClient;
-        this._settingsStore = 'settingsStore' in options ? options.settingsStore : settingsStore;
+        if ('runtimePort' in options) {
+            this._hasExplicitRuntime = true;
+            this._explicitRuntime = options.runtimePort;
+        } else if ('settingsStore' in options) {
+            this._hasExplicitRuntime = true;
+            this._explicitRuntime = options.settingsStore;
+        } else {
+            this._hasExplicitRuntime = false;
+            this._explicitRuntime = undefined;
+        }
+        this._onWarning = options.onWarning;
+    }
+
+    /** 动态解析运行期端口，解除提供方与配置单例初始化顺序的耦合 */
+    protected get _settingsStore(): ProviderRuntimePort | undefined {
+        return this._hasExplicitRuntime ? this._explicitRuntime : getDefaultProviderRuntime();
     }
 
     /**
@@ -95,13 +123,9 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
 
     /**
      * 获取当前环境配置的有效通信传输通道。
-     *
-     * @remarks
-     * 实时读取配置中心 settingsStore.get('transport')，
-     * 缺省使用默认值 'direct'。
      */
     protected getTransport(): TransportMode {
-        const store = this._settingsStore ?? settingsStore;
+        const store = this._settingsStore;
         if (typeof store?.get === 'function') {
             return store.get('transport') || 'direct';
         }
@@ -110,13 +134,9 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
 
     /**
      * 获取当前环境配置的单任务超时时限（毫秒）。
-     *
-     * @remarks
-     * 实时读取配置中心 settingsStore.get('taskTimeoutMs')，
-     * 缺省使用系统默认常量 DEFAULT_TASK_TIMEOUT_MS。
      */
     protected getTimeoutMs(): number {
-        const store = this._settingsStore ?? settingsStore;
+        const store = this._settingsStore;
         if (typeof store?.get === 'function') {
             const storeTimeout = store.get('taskTimeoutMs');
             if (typeof storeTimeout === 'number' && storeTimeout > 0) {
@@ -124,6 +144,34 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
             }
         }
         return DEFAULT_TASK_TIMEOUT_MS;
+    }
+
+    /**
+     * 输出与模型/标签协议兼容性相关的运行期告警。
+     */
+    protected reportLoraWarning(
+        warningMessage?: string,
+        source?: string,
+        strippedTags?: readonly string[]
+    ): void {
+        if (!warningMessage) {
+            return;
+        }
+        if (this._onWarning) {
+            this._onWarning(warningMessage, { source, strippedTags });
+            return;
+        }
+        const port = this._settingsStore;
+        if (typeof port?.onWarning === 'function') {
+            port.onWarning(warningMessage, { source, strippedTags });
+            return;
+        }
+        logger.warn(`[LoraGuard] ${warningMessage}`);
+        eventBus.emit('toast:show', {
+            type: 'warn',
+            message: warningMessage,
+            duration: 5000,
+        });
     }
 
     /**
@@ -353,7 +401,7 @@ export abstract class BaseGenerationProvider implements GenerationProvider {
                 ? params.drawingPresetId.trim()
                 : undefined;
 
-        return this._settingsStore?.resolveDrawingPreset<T>(this.providerType, {
+        return this._settingsStore?.resolveDrawingPreset?.<T>(this.providerType, {
             explicitPresetId: paramPresetId,
             throwOnMissingActive: true,
         }).preset;

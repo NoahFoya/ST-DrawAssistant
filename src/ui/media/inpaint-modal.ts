@@ -15,10 +15,12 @@ import { NumberInput } from '../components/number-input';
 import { SegmentedControl } from '../components/segmented-control';
 import { renderIcon } from '../components/icons';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 import { providerRegistry } from '../../provider/registry';
 import { settingsStore } from '../../store/settings-store';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
+import { browserStorage } from '../../util/storage-port';
 
 /** 局部重绘偏好配置缓存键名 */
 const INPAINT_PREFS_KEY = 'st_da_inpaint_prefs';
@@ -60,6 +62,8 @@ export interface InpaintModalOptions {
     readonly initialPrompt?: string;
     /** 初始负向提示词 */
     readonly initialNegativePrompt?: string;
+    /** 目标服务引擎是否支持负向提示词（未传时按当前激活服务判断） */
+    readonly supportsNegativePrompt?: boolean;
     /** 确认提交重绘回调，返回 false 时表示用户取消或未实际入队 */
     readonly onConfirm: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
     /** 取消或关闭回调 */
@@ -70,30 +74,14 @@ export interface InpaintModalOptions {
  * 读取本地存储中的局部重绘参数偏好。
  */
 function loadPreferences(): InpaintPreferences {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            const raw = window.localStorage.getItem(INPAINT_PREFS_KEY);
-            if (raw) {
-                return JSON.parse(raw) as InpaintPreferences;
-            }
-        }
-    } catch {
-        // 读取异常时使用默认基准值
-    }
-    return {};
+    return browserStorage.getJson<InpaintPreferences>(INPAINT_PREFS_KEY) ?? {};
 }
 
 /**
  * 保存局部重绘参数偏好至本地存储。
  */
 function savePreferences(prefs: InpaintPreferences): void {
-    try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem(INPAINT_PREFS_KEY, JSON.stringify(prefs));
-        }
-    } catch {
-        // 存储受限或异常时忽略
-    }
+    browserStorage.setJson(INPAINT_PREFS_KEY, prefs);
 }
 
 /**
@@ -414,7 +402,7 @@ export class InpaintModal implements Disposable {
         denoiseHeader.className = 'da-inpaint-field-header';
         const denoiseLabel = document.createElement('span');
         denoiseLabel.className = 'da-inpaint-field-label';
-        denoiseLabel.textContent = '重绘幅度 (Denoise)';
+        denoiseLabel.textContent = '重绘幅度';
         const denoiseNote = document.createElement('span');
         denoiseNote.className = 'da-inpaint-field-note';
         denoiseNote.textContent = '0.05~1.00';
@@ -442,7 +430,7 @@ export class InpaintModal implements Disposable {
         blurHeader.className = 'da-inpaint-field-header';
         const blurLabel = document.createElement('span');
         blurLabel.className = 'da-inpaint-field-label';
-        blurLabel.textContent = '蒙版羽化 (Mask Blur)';
+        blurLabel.textContent = '蒙版羽化';
         const blurNote = document.createElement('span');
         blurNote.className = 'da-inpaint-field-note';
         blurNote.textContent = '边缘柔化';
@@ -492,9 +480,11 @@ export class InpaintModal implements Disposable {
         promptGroup.appendChild(promptInput);
         promptSection.appendChild(promptGroup);
 
-        // 负向提示词（遵循当前激活引擎能力）
+        // 负向提示词（遵循实际目标引擎或当前激活引擎能力）
         const activeProvider = settingsStore.getSettings().activeProvider;
-        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
+        const supportsNegative =
+            this.options.supportsNegativePrompt ??
+            providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const negGroup = document.createElement('div');
         negGroup.className = 'da-inpaint-field-group';
         if (!supportsNegative) {
@@ -707,8 +697,11 @@ export class InpaintModal implements Disposable {
             if (this.isDisposed) {
                 return;
             }
-            logger.error('[InpaintModal] 底图加载失败:', err);
-            Toast.error('底图加载失败，请检查网络或资源地址');
+            reportRuntimeError(
+                '[InpaintModal] 底图加载失败:',
+                '底图加载失败，请检查网络或在「日志与统计」查看详情',
+                err
+            );
             this.handleCancel();
         };
 
@@ -1215,7 +1208,9 @@ export class InpaintModal implements Disposable {
         }
 
         const activeProvider = settingsStore.getSettings().activeProvider;
-        const supportsNegative = providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
+        const supportsNegative =
+            this.options.supportsNegativePrompt ??
+            providerRegistry.getProvider(activeProvider)?.supportsNegativePrompt !== false;
         const prompt = this.promptInput?.value.trim() ?? '';
         const negativePrompt = supportsNegative ? this.negPromptInput?.value.trim() || undefined : undefined;
 
@@ -1268,8 +1263,11 @@ export class InpaintModal implements Disposable {
             }
             Toast.success('已提交局部重绘任务');
         } catch (err) {
-            logger.error('[InpaintModal] 导出或提交局部重绘异常:', err);
-            Toast.error('提交局部重绘任务失败');
+            reportRuntimeError(
+                '[InpaintModal] 导出或提交局部重绘异常:',
+                '提交局部重绘任务失败，请前往「日志与统计」查看详情',
+                err
+            );
         } finally {
             this.isSubmitting = false;
             if (this.confirmBtnEl && !this.isDisposed) {

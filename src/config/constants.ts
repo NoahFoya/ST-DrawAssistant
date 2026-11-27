@@ -5,7 +5,7 @@
 import type { ThemePresetData } from '@types';
 
 export const EXTENSION_TITLE = 'ST-DrawAssistant 绘画助手';
-export const EXTENSION_VERSION = '1.5.0';
+export const EXTENSION_VERSION = '1.6.0';
 
 /** 插件 GitHub 仓库与更新检测配置 */
 export const GITHUB_REPO = 'NoahFoya/ST-DrawAssistant';
@@ -15,6 +15,9 @@ export const GITHUB_CDN_BASE = 'https://cdn.jsdelivr.net/gh';
 export const UPDATE_CHECK_COOLDOWN_MS = 5 * 60 * 1000;
 export const INSTALLED_COMMIT_SHA_KEY = 'st_da_installed_sha';
 export const PENDING_CHANGELOG_POPUP_KEY = 'st_da_pending_changelog_popup';
+
+/** 默认单任务超时时间（毫秒） */
+export const DEFAULT_TASK_TIMEOUT_MS = 120_000;
 
 /** 提示词预设“使用轮询”特殊绑定标识 */
 export const PROMPT_POLLING_PRESET_ID = '__polling__';

@@ -18,7 +18,7 @@
       "data": {
         "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up",
         "positiveSuffix": "",
-        "negativePrompt": "score_4, score_5, score_6, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
+        "negativePrompt": "score_6, score_5, score_4, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
         "loras": []
       }
     },
@@ -36,10 +36,10 @@
     {
       "id": "prompt_comfyui_flux",
       "name": "ComfyUI · Flux 自然语言",
-      "description": "适用于 Flux 系列自然语言模型，在末尾补充自然光影与清晰对焦",
+      "description": "适用于 Flux 系列自然语言模型，在句末温和补充自然光影与清晰对焦",
       "data": {
         "positivePrefix": "",
-        "positiveSuffix": "natural lighting, sharp focus",
+        "positiveSuffix": "Natural lighting and sharp focus.",
         "negativePrompt": "",
         "loras": []
       }
@@ -64,7 +64,7 @@
       "data": {
         "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up",
         "positiveSuffix": "",
-        "negativePrompt": "score_4, score_5, score_6, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
+        "negativePrompt": "score_6, score_5, score_4, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
         "loras": []
       }
     },
@@ -120,7 +120,7 @@
       "description": "NovelAI V4.5 Curated 质量后缀与 Heavy 负向提示词，适配 Curated 模型",
       "data": {
         "positivePrefix": "",
-        "positiveSuffix": "location, masterpiece, no text",
+        "positiveSuffix": "location, masterpiece, no text, -0.8::feet::, rating:general",
         "negativePrompt": "blurry, lowres, upscaled, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, negative space, blank page",
         "loras": []
       }
@@ -130,7 +130,7 @@
       "name": "NovelAI · V4.5 柔和日系平涂",
       "description": "适用于 NovelAI V4.5（V5 不支持），融合 hoshi / chen_bin / amashiro_natsuki / rurudo 等画师，呈现低饱和柔和暖调的日系平涂画风",
       "data": {
-        "positivePrefix": "1.3::artist:hoshi_(snacherubi)::, 0.9::artist:chen_bin::, 0.7::artist:amashiro_natsuki::, 0.8::sonao::, 0.8::sparrowl::, 1::parsley::, 1::lunch_(shin_new)::, 0.9::artist:rurudo::, 1::gaou_(umaiyo_puyoman)::, 1::lakilolom::, year 2025, year 2024, anime coloring, 2::masterpiece, best illustration, hyper detail, 8k render, no text, low saturation, soft colors, warm gentle palette, best quality, amazing quality, highres, absurdres::, -2::simple illustration::",
+        "positivePrefix": "1.3::artist:hoshi_(snacherubi)::, 0.9::artist:chen_bin::, 0.7::artist:amashiro_natsuki::, 0.8::sonao::, 0.8::sparrowl::, 1::parsley::, 1::lunch_(shin_new)::, 0.9::artist:rurudo::, 1::gaou_(umaiyo_puyoman)::, 1::lakilolom::, year 2025, year 2024, anime coloring, 2::Masterpiece, best illustration, hyper detail, 8k render, no text, low saturation, soft colors, warm gentle palette, best quality, amazing quality, highres, absurdres::, -3::simple illustration::",
         "positiveSuffix": "",
         "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
         "loras": []
@@ -141,9 +141,9 @@
       "name": "NovelAI · V4.5 清透日系插画",
       "description": "适用于 NovelAI V4.5（V5 不支持），融合 higashiyama shou / hiro (dismaless) / horideiyasumi / mannack / gomennasai / healthyman 等画师，线条利落、色彩鲜明通透",
       "data": {
-        "positivePrefix": "0.9::artist:gomennasai::, 1.1::artist:mannack::, 1.6::artist:higashiyama shou::, 1.2::artist:horideiyasumi::, 1.3::artist:hiro (dismaless)::, 0.9::artist:healthyman::, 1::artist:ponsuke (pon00000)::, year 2025, 1.2::ambient occlusion::, subsurface scattering, 1.1::volumetric lighting::, 1.05::intricate linework, crisp outlines, vibrant colors, smooth skin, smooth gradients, soft shading, subtle bloom, rich saturation, balanced contrast::, very aesthetic, amazing quality, absurdres, masterpiece, best quality",
+        "positivePrefix": "0.9::artist:gomennasai::, 1.1::artist:mannack::, 1.6::artist:higashiyama shou::, 1.2::artist:horideiyasumi::, 1.3::artist:hiro (dismaless)::, 0.9::artist:healthyman::, ::artist:ponsuke (pon00000)::, year 2025, 1::extremely detailed 8k wallpaper,1.3::8k wallpaper::, 1.1::ultra detailed::, best quality, amazing quality,high resolution,masterpiece,incredibly absurdres,intricate details,highres,5::4k::,stunning composition,1.2::ambient occlusion::,ray tracing reflections,1::skin detail,1::subsurface scattering::,1.1::volumetric lighting::,micro details,realistic shading,complex lighting, {intricate linework, realistic textures, realistic skin, smooth skin details, fine details,natural shadows, subtle bloom, soft shading, smooth gradients, crisp outlines, vibrant colors, rich saturation, color harmony, balanced contrast, very aesthetic,amazing quality,absurdres, masterpiece, amazing,best quality}",
         "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, bar censor, censored, bad anatomy, bad hands, extra digits, missing fingers, fused fingers, extra limbs, missing limb, @_@, mismatched pupils, blurry, unfinished, incomplete, text, title, signature, watermark, username, simple illustration, 3::anatomical nonsense::",
+        "negativePrompt": "bar censor, censored, {crotchless}, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, {cubism}, {worst quality}, {normal quality}, {bad quality}, {{{{unskillful}}}}, {unfinished}, {incomplete}, {{failure}}, {inferior}, {terrifying}, {haunting}, {bad joint}, {monster}, {ugly}, {retro artstyle}, {key}, low quality, disfigured, poorly drawn, deformed, mutation, fused fingers, fused limb, extra limb, missing fingers, missing limb, missing digit, missing legs, disappearing arms, extra limbs, aged up, old, long neck, long body, rib, dusty sunbeams, depth of field, bokeh, out of focus, blurry, text, title, signature, watermark, jpeg artifacts, breast apart, lineart, dithering, dark areolae, simple illustration, 3::anatomical nonsense::, upscaled, fewer details, unfinished, incomplete, cheesy, unsatisfactory, inadequate, deficient, subpar, poor, scan artifacts, jpeg artifacts",
         "loras": []
       }
     },
@@ -152,9 +152,9 @@
       "name": "NovelAI · V4.5 冷色调写实厚涂",
       "description": "适用于 NovelAI V4.5（V5 不支持），融合 konya_karasue / wlop / ciloranko / zombie_ke 等画师，偏冷色调与写实光影厚涂质感",
       "data": {
-        "positivePrefix": "1.25::konya_karasue::, 0.85::wlop, zombie_ke, ciloranko::, 0.7::junpaku_karen, achiki::, 0.65::dizi930::, year 2025, 3::hyperrealistic::, film_grain, -0.6::warm color::, 2::realistic::, amazing quality, very aesthetic, absurdres, masterpiece, best quality",
+        "positivePrefix": "1.25::konya_karasue::, 0.85::wlop, zombie_ke, ciloranko::, 0.7::junpaku_karen, achiki ::, 0.65::dizi930 ::, year 2025, 3::hyperrealistic::, film_grain, -0.6::warm color::, 2::realistic::, amazing quality,very aesthetic, absurdres, masterpiece, amazing,best quality",
         "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, bar censor, censored, bad anatomy, bad hands, extra digits, missing fingers, fused fingers, extra limbs, missing limb, @_@, mismatched pupils, blurry, unfinished, incomplete, text, title, signature, watermark, username, simple illustration, 3::anatomical nonsense::",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, bar censor, censored, {crotchless}, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, {cubism}, {worst quality}, {normal quality}, {bad quality}, {{{{unskillful}}}}, {unfinished}, {incomplete}, {{failure}}, {inferior}, {terrifying}, {haunting}, {bad joint}, {monster}, {ugly}, {retro artstyle}, {key}, low quality, disfigured, poorly drawn, deformed, mutation, fused fingers, fused limb, extra limb, missing fingers, missing limb, missing digit, missing legs, disappearing arms, extra limbs, aged up, old, long neck, long body, rib, dusty sunbeams, depth of field, bokeh, out of focus, blurry, text, title, signature, watermark, jpeg artifacts, breast apart, lineart, dithering, dark areolae, simple illustration, 3::anatomical nonsense::, upscaled, fewer details, unfinished, incomplete, cheesy, unsatisfactory, inadequate, deficient, subpar, poor, scan artifacts, jpeg artifacts",
         "loras": []
       }
     },
@@ -163,9 +163,9 @@
       "name": "NovelAI · V4.5 柔润二次元插画",
       "description": "适用于 NovelAI V4.5（V5 不支持），融合 healthyman / dorontabi / freng / kanzarin 等画师，光影柔和、肌肤质感细腻通透",
       "data": {
-        "positivePrefix": "2::artist:healthyman::, 0.5::artist:kakure eria::, 1::artist:freng::, 1.2::artist:dorontabi::, 1::artist:kanzarin::, year 2025, year 2024, 1.2::ambient occlusion::, subsurface scattering, 1.1::volumetric lighting::, 1.05::intricate linework, crisp outlines, smooth skin, natural shadows, soft shading, smooth gradients, subtle bloom, vibrant colors, rich saturation, color harmony, balanced contrast::, very aesthetic, amazing quality, absurdres, masterpiece, best quality",
+        "positivePrefix": "2::artist:healthyman::, 0.5::artist:kakure eria::, 1::artist:freng::, 1.2::artist:dorontabi::, 1::artist:kanzarin::, year 2025, year 2024, 1::extremely detailed 8k wallpaper,1.3::8k wallpaper::, 1.1::ultra detailed::, best quality, amazing quality,high resolution,masterpiece,incredibly absurdres,intricate details,highres,5::4k::,stunning composition,1.2::ambient occlusion::,ray tracing reflections,1::skin detail,1::subsurface scattering::,1.1::volumetric lighting::,micro details,realistic shading,complex lighting, {intricate linework, realistic textures, realistic skin, smooth skin details, fine details,natural shadows, subtle bloom, soft shading, smooth gradients, crisp outlines, vibrant colors, rich saturation, color harmony, balanced contrast, very aesthetic,amazing quality,absurdres, masterpiece, amazing,best quality}",
         "positiveSuffix": "",
-        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, bar censor, censored, bad anatomy, bad hands, extra digits, missing fingers, fused fingers, extra limbs, missing limb, @_@, mismatched pupils, blurry, unfinished, incomplete, text, title, signature, watermark, username, simple illustration, 3::anatomical nonsense::",
+        "negativePrompt": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, bar censor, censored, {crotchless}, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, {cubism}, {worst quality}, {normal quality}, {bad quality}, {{{{unskillful}}}}, {unfinished}, {incomplete}, {{failure}}, {inferior}, {terrifying}, {haunting}, {bad joint}, {monster}, {ugly}, {retro artstyle}, {key}, low quality, disfigured, poorly drawn, deformed, mutation, fused fingers, fused limb, extra limb, missing fingers, missing limb, missing digit, missing legs, disappearing arms, extra limbs, aged up, old, long neck, long body, rib, dusty sunbeams, depth of field, bokeh, out of focus, blurry, text, title, signature, watermark, jpeg artifacts, breast apart, lineart, dithering, dark areolae, simple illustration, 3::anatomical nonsense::, upscaled, fewer details, unfinished, incomplete, cheesy, unsatisfactory, inadequate, deficient, subpar, poor, scan artifacts, jpeg artifacts",
         "loras": []
       }
     },
@@ -174,9 +174,9 @@
       "name": "NovelAI · V4.5 水光肌厚涂",
       "description": "适用于 NovelAI V4.5（V5 不支持），融合 haoni / xiaoluo_xl / rororo / misaka12003-gou / houkisei / dishwasher1910 等画师，抑制平涂感、突出水光肌肤与厚涂质感",
       "data": {
-        "positivePrefix": "1.4::artist:haoni::, 1.2::xiaoluo_xl::, 1.2::artist:rororo::, 1.1::artist:misaka12003-gou::, 1.1::houkisei::, 0.8::artist:dishwasher1910::, 0.7::thirty8ght::, 0.6::artist:pottsness::, 0.2::artist:qiandaiyiyu::, 1.1::dino (dinoartforame), wanke, liduke::, year 2025, realistic, 4k, 1.4::oily skin, shiny skin::, 1.3::porcelain skin, smooth skin::, 1.2::glossy skin::, 1.2::subsurface scattering::, 1.1::soft flesh, skin indentation::, graphic texture, 1.2::soft lighting, rim light, volumetric lighting::, 1.3::intricate details, finely detailed features::, 1.1::thick painting, impasto::, 1.5::best quality, absurdres, very aesthetic, detailed, masterpiece::, -2::artist collaboration, anime coloring::, -2::flat color::",
+        "positivePrefix": "1.4::Artist:haoni::1.2::xiaoluo_xl::1.2::Artist:rororo::1.1::Artist:misaka12003-gou::1.1::houkisei::0.8::Artist:dishwasher1910::0.7::thirty8ght::0.6::Artist:pottsness::0.2::Artist:qiandaiyiyu::{{dino(dinoartforame)wankelidukeyear2025realistic4k}}1.4::oilyshinyskin::1.3::porcelainskinsmothskinperfectskin::1.2::glossyskin::1.2::subsurfacescattering::1.1::softfleshskinindentation::graphictexture1.2::softlightingrimlightvolumetriclighting::1.3::intricatedetailsfinelydetailedfeatures::1.1::thickpaintingimpasto::15::bestqualityabsurdresveryaestheticdetailedmasterpiece::-5.1::artistcollaborationanimecoloring::-2::flat_color::",
         "positiveSuffix": "",
-        "negativePrompt": "1.4::artist collaboration::, 1.2::polydactyly::, 1.2::more than 5 toes::, 1.1::fused toes::, 1.2::bad feet::, 1.2::extra toes::, 1.1::mitten hands::, 1.1::sausage fingers::, 1.1::claw::, 1.1::paw::, 1.1::webbed fingers::, 1.2::extra hands::, 1.2::detached hands::, 1.2::disembodied hands::, 1.2::more than two hands::, 1.3::fused bodies::, 1.3::intertwined limbs::, 1.4::grid::, 1.4::collage::, 1.4::split screen::, 1.4::plastic skin::, 1.4::silicone::, 1.4::mannequin::, 1.3::flawless::, 1.4::airbrushed::, 1.3::porcelain doll::, 1.4::waxy skin::, 1.3::uniform skin tone::, 1.4::no pores::, 1.3::smooth all over::, 1.4::doll-like::, 1.2::cloned face::, 1.2::error::",
+        "negativePrompt": "1.4::artistcollaboration::1.2::polydactyly::1.2::morethan5toes::1.1::fusedtoes::1.2::badfeet::1.2::extratoes::1.1::mittenhands::1.1::sausagefingers::1.1::claw::1.1::paw::1.1::webbedfingers::1.2::extrahands::1.2::detachedhands::1.2::disembodiedhands::1.2::morethantwohands::1.3::fusedbodies::1.3::intertwinedlimbs::1.4::grid::1.4::collage::1.4::splitscreen::1.4::plasticskin::1.4::silicone::1.4::mannequin::1.3::perfectskin::1.3::flawless::1.4::airbrushed::1.3::porcelaindoll::1.4::waxyskin::1.3::uniformskintone::1.4::nopores::1.3::smoothallover::1.4::doll-like::1.2::clonedface::1.2::error::",
         "loras": []
       }
     }
@@ -187,8 +187,8 @@
       "name": "OpenAI · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -198,8 +198,8 @@
       "name": "OpenAI · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -209,8 +209,8 @@
       "name": "OpenAI · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -220,8 +220,8 @@
       "name": "OpenAI · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }
@@ -233,8 +233,8 @@
       "name": "Gemini · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -244,8 +244,8 @@
       "name": "Gemini · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -255,8 +255,8 @@
       "name": "Gemini · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -266,8 +266,8 @@
       "name": "Gemini · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }
@@ -279,8 +279,8 @@
       "name": "Grok · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -290,8 +290,8 @@
       "name": "Grok · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -301,8 +301,8 @@
       "name": "Grok · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -312,8 +312,8 @@
       "name": "Grok · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }

@@ -23,6 +23,15 @@ import type {
     MaterialMacroRule,
 } from '@types';
 import type { DrawAssistantSettings } from '../store/settings-store';
+import {
+    hasValidUniqueRegexFlags,
+    parseKeywordRegexLiteral,
+    validateKeywordRegexToken,
+    type KeywordTokenSplitOptions,
+    collectKeywordRegexErrors,
+    splitKeywordTokens,
+    splitCommaKeywordTokens,
+} from '../domain/prompt/keyword-matcher';
 import defaultMaterialExtractionsJson from '../../config/presets/material-extractions.json';
 import defaultMaterialFormatsJson from '../../config/presets/material-formats.json';
 
@@ -542,215 +551,15 @@ export function normalizeOutfitData(
     };
 }
 
-const VALID_REGEX_FLAGS_RE = /^[dgimsuvy]*$/;
-
-export function hasValidUniqueRegexFlags(flags: string): boolean {
-    if (!VALID_REGEX_FLAGS_RE.test(flags)) {
-        return false;
-    }
-    const seen = new Set<string>();
-    for (const ch of flags) {
-        if (seen.has(ch)) {
-            return false;
-        }
-        seen.add(ch);
-    }
-    return !(seen.has('u') && seen.has('v'));
-}
-
-/** 扫描位于 startIdx 处的 `/pattern/` 正则结束斜杠位置（跳过转义斜杠与 `[...]` 字符类内斜杠） */
-function findRegexLiteralClosingSlash(src: string, startIdx: number): number {
-    let j = startIdx + 1;
-    let escaped = false;
-    let inCharClass = false;
-    while (j < src.length) {
-        const inner = src[j];
-        if (escaped) {
-            escaped = false;
-        } else if (inner === '\\') {
-            escaped = true;
-        } else if (inner === '[' && !inCharClass) {
-            inCharClass = true;
-        } else if (inner === ']' && inCharClass) {
-            inCharClass = false;
-        } else if (inner === '/' && !inCharClass) {
-            return j;
-        }
-        j++;
-    }
-    return -1;
-}
-
-/**
- * 若 token 为 `/pattern/flags` 格式则拆出主体与标志串（未校验 flags 合法性）。
- */
-export function parseKeywordRegexLiteral(
-    rawToken: string
-): { pattern: string; flags: string } | null {
-    const token = rawToken.trim();
-    if (!token.startsWith('/')) {
-        return null;
-    }
-    const closedAt = findRegexLiteralClosingSlash(token, 0);
-    if (closedAt <= 1) {
-        return null;
-    }
-    const pattern = token.slice(1, closedAt);
-    const flags = token.slice(closedAt + 1);
-    return { pattern, flags };
-}
-
-/**
- * 校验关键词是否为合法 `/pattern/flags` 正则字面量；非法时返回错误信息。
- */
-export function validateKeywordRegexToken(rawToken: string): string | null {
-    const token = rawToken.trim();
-    if (!token.startsWith('/')) {
-        return null;
-    }
-    const parsed = parseKeywordRegexLiteral(token);
-    if (!parsed || !/^[a-zA-Z]*$/.test(parsed.flags)) {
-        return `正则字面量格式无效: ${token}`;
-    }
-    if (!hasValidUniqueRegexFlags(parsed.flags)) {
-        return `正则标志无效或重复: ${token}`;
-    }
-    try {
-        new RegExp(parsed.pattern, parsed.flags.replace(/[gy]/g, ''));
-        return null;
-    } catch (err: unknown) {
-        return err instanceof Error ? err.message : `无效正则: ${token}`;
-    }
-}
-
-export interface KeywordTokenSplitOptions {
-    /** 是否将管道符 `|` 视为分隔符（默认 `true` 以兼容角色/服装别名；LoRA 与提示词条目应传 `false` 仅按逗号与换行分隔） */
-    readonly allowPipe?: boolean;
-}
-
-/**
- * 扫描关键词字符串，收集所有非法 `/pattern/flags` 正则词元的错误信息。
- */
-export function collectKeywordRegexErrors(
-    rawKeywords?: string,
-    options?: KeywordTokenSplitOptions
-): string[] {
-    if (!rawKeywords) {
-        return [];
-    }
-    const errors: string[] = [];
-    for (const token of splitKeywordTokens(rawKeywords, options)) {
-        if (!token.startsWith('/')) continue;
-        const err = validateKeywordRegexToken(token);
-        if (err) {
-            errors.push(`${token}: ${err}`);
-        }
-    }
-    return errors;
-}
-
-function isKeywordSeparatorChar(ch: string | undefined, allowPipe: boolean): boolean {
-    return (
-        ch === undefined ||
-        (allowPipe && ch === '|') ||
-        ch === ',' ||
-        ch === '，' ||
-        ch === '\n' ||
-        ch === '\r' ||
-        /\s/.test(ch)
-    );
-}
-
-/**
- * 解析关键词或别名列表（支持 `,` / `，` / 换行，及按需支持 `|`），完整保留合法 `/pattern/flags` 正则字面量（含 `[...]` 字符类内 `/` 与 `,`）。
- */
-export function splitKeywordTokens(
-    rawKeywords?: string,
-    options?: KeywordTokenSplitOptions
-): string[] {
-    const src = (rawKeywords || '').trim();
-    if (!src) {
-        return [];
-    }
-    const allowPipe = options?.allowPipe !== false;
-
-    const tokens: string[] = [];
-    let current = '';
-    let i = 0;
-
-    while (i < src.length) {
-        const ch = src[i];
-        // 仅当闭合 `/` 后到分隔符之间全为合法且不重复的标志时，才按 /pattern/flags 整体提取
-        if (ch === '/' && !current.trim()) {
-            const closedAt = findRegexLiteralClosingSlash(src, i);
-            if (closedAt > i + 1) {
-                let flagEnd = closedAt + 1;
-                while (
-                    flagEnd < src.length &&
-                    !(allowPipe && src[flagEnd] === '|') &&
-                    src[flagEnd] !== ',' &&
-                    src[flagEnd] !== '，' &&
-                    src[flagEnd] !== '\n' &&
-                    src[flagEnd] !== '\r' &&
-                    !/\s/.test(src[flagEnd])
-                ) {
-                    flagEnd++;
-                }
-                const flagsPart = src.slice(closedAt + 1, flagEnd);
-                if (
-                    hasValidUniqueRegexFlags(flagsPart) &&
-                    isKeywordSeparatorChar(src[flagEnd], allowPipe)
-                ) {
-                    tokens.push(src.slice(i, flagEnd).trim());
-                    current = '';
-                    i = flagEnd;
-                    while (
-                        i < src.length &&
-                        ((allowPipe && src[i] === '|') ||
-                            src[i] === ',' ||
-                            src[i] === '，' ||
-                            /\s/.test(src[i]))
-                    ) {
-                        i++;
-                    }
-                    continue;
-                }
-            }
-        }
-
-        if (
-            (allowPipe && ch === '|') ||
-            ch === ',' ||
-            ch === '，' ||
-            ch === '\n' ||
-            ch === '\r'
-        ) {
-            const trimmed = current.trim();
-            if (trimmed) {
-                tokens.push(trimmed);
-            }
-            current = '';
-            i++;
-            continue;
-        }
-
-        current += ch;
-        i++;
-    }
-
-    const tail = current.trim();
-    if (tail) {
-        tokens.push(tail);
-    }
-    return tokens;
-}
-
-/**
- * 仅按中英文逗号与换行分隔的关键词解析（不以 `|` 拆词），保留 `/pattern/flags` 正则字面量。
- */
-export function splitCommaKeywordTokens(rawKeywords?: string): string[] {
-    return splitKeywordTokens(rawKeywords, { allowPipe: false });
-}
+export {
+    hasValidUniqueRegexFlags,
+    parseKeywordRegexLiteral,
+    validateKeywordRegexToken,
+    type KeywordTokenSplitOptions,
+    collectKeywordRegexErrors,
+    splitKeywordTokens,
+    splitCommaKeywordTokens,
+};
 
 /**
  * 严格按预设 ID 判断服装是否被角色 boundOutfitIds 绑定。
@@ -890,7 +699,7 @@ export function splitTopLevelTags(line: string, normalizeChinesePunctuation = tr
 /**
  * 规范化标签文本：拆分换行与顶层逗号分隔词条，支持保序去重（保留 `<...>` 语法标签并对 LoRA 路径统一斜杠大小写比较）。
  */
-export function cleanTagSegments(
+function cleanTagSegments(
     rawText: string,
     options?: { readonly deduplicate?: boolean; readonly normalizeChinesePunctuation?: boolean }
 ): string {

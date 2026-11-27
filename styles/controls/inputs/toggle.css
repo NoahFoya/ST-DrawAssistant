@@ -3,7 +3,7 @@
  *
  * @remarks
  * 基于 .da-switch 规范结构：
- * 1. 结构布局：38×20px 胶囊形滑动轨道与 14×14px 圆形滑动钮；
+ * 1. 结构布局：46×20px 胶囊形滑动轨道与 14×14px 圆形滑动钮；
  * 2. 状态联动：支持 checked 激活、.is-dirty / .da-switch--dirty 未保存高亮与禁用态；
  * 3. 无障碍访问：隐藏原生 input[type="checkbox"] 但保留在 DOM 中，支持键盘 Tab 聚焦与空格切换；
  * 4. 宿主环境防护：清除 SillyTavern 全局注入的 label 冒号与额外外边距。
@@ -14,7 +14,7 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    width: 38px;
+    width: 46px;
     height: 20px;
     flex-shrink: 0;
     margin: 0;
@@ -80,7 +80,7 @@
 
 .da-switch.is-checked .da-switch__thumb,
 .da-switch input:checked + .da-switch__track .da-switch__thumb {
-    transform: translateX(18px);
+    transform: translateX(26px);
 }
 
 .da-switch input:focus-visible + .da-switch__track {
@@ -89,7 +89,7 @@
 
 /* 4. 开关伴随标签文本 (.da-switch__label) */
 .da-switch__label {
-    margin-left: 46px;
+    margin-left: 54px;
     font-size: var(--da-font-size-sm, 13px);
     color: var(--da-text-secondary);
     white-space: nowrap;

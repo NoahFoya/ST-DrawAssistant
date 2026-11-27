@@ -122,6 +122,21 @@ interface TauriWindowProbe {
     };
 }
 
+/** 宿主环境能力与 CSRF 请求头读取接口（由 host 层在启动时注入） */
+export interface HostEnvironmentProvider {
+    hasHostContext(): boolean;
+    getRequestHeaders(): Record<string, string>;
+}
+
+let hostEnvironmentProvider: HostEnvironmentProvider | null = null;
+
+/** 注册宿主环境适配器（通常由 `src/host` 模块自动或随入口初始化注册） */
+export function registerHostEnvironmentProvider(
+    provider: HostEnvironmentProvider | null
+): void {
+    hostEnvironmentProvider = provider;
+}
+
 /**
  * 识别当前前端页面的宿主环境与代理能力。
  */
@@ -137,7 +152,7 @@ export function detectHostRuntime(): HostRuntimeInfo {
         };
     }
 
-    const hasSillyTavern = Boolean(window.SillyTavern?.getContext);
+    const hasSillyTavern = Boolean(hostEnvironmentProvider?.hasHostContext());
     const tauriWin = window as unknown as TauriWindowProbe;
     const tauriHostObj = tauriWin.__TAURITAVERN_HOST__;
     const tauriPlatform =
@@ -177,7 +192,7 @@ export function detectHostRuntime(): HostRuntimeInfo {
 /**
  * 生成针对 TauriTavern 环境选错「酒馆代理」时的显式提示文案。
  */
-export function getTauriRelayUnsupportedMessage(targetUrl?: string): string {
+function getTauriRelayUnsupportedMessage(targetUrl?: string): string {
     const targetSuffix = targetUrl ? ` [${targetUrl}]` : '';
     return `当前宿主为 TauriTavern，未提供 SillyTavern /proxy/ 代理转发接口，无法通过「酒馆代理」访问外部服务${targetSuffix}。请到「插件设置 -> 连接方式」切换为「浏览器直连」；若目标服务不支持跨域请求，请为后端开启跨域响应头或填写允许跨域的中转服务地址。`;
 }
@@ -189,7 +204,7 @@ export function getTransportModeTooltip(hostRuntime: HostRuntimeInfo = detectHos
     const baseTip =
         '默认由浏览器直连生图服务；遇到跨域 (CORS) 拦截或远程 HTTPS 酒馆访问本地 HTTP 服务时，可切换为「酒馆代理」（需在 SillyTavern config.yaml 开启 enableCorsProxy: true；若同时启用 privateAddressWhitelist 且访问本机/内网服务，须将该地址加入 allowedRanges；注意 ComfyUI 局部重绘因须提交图片表单，不支持酒馆代理）。';
     if (hostRuntime.isTauriTavern) {
-        return `${baseTip} 当前检测到 TauriTavern 宿主环境，暂不支持「酒馆代理」，请保持「浏览器直连」。`;
+        return `${baseTip} 当前为 TauriTavern 环境，不支持「酒馆代理」，请保持「浏览器直连」。`;
     }
     return baseTip;
 }
@@ -277,20 +292,15 @@ function attachResponseAbortCleanup(response: Response, signal: AbortSignal, cle
  * 获取 SillyTavern 宿主环境的认证凭据与 CSRF Token 请求头。
  */
 export function getHostRequestHeaders(): Record<string, string> {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !hostEnvironmentProvider) {
         return {};
     }
-    const hostContext = window.SillyTavern?.getContext?.();
-    if (typeof hostContext?.getRequestHeaders === 'function') {
-        try {
-            return hostContext.getRequestHeaders() ?? {};
-        } catch (err) {
-            logger.warn('获取宿主 CSRF 请求头凭据异常:', err);
-            return {};
-        }
+    try {
+        return hostEnvironmentProvider.getRequestHeaders() ?? {};
+    } catch (err) {
+        logger.warn('获取宿主 CSRF 请求头凭据异常:', err);
+        return {};
     }
-
-    return {};
 }
 
 /**
@@ -595,7 +605,7 @@ function isAuthFailureSignal(
 /**
  * 从 HttpError.details 或纯文本中提取简洁可读的错误摘要。
  */
-export function extractBriefErrorDetail(details: unknown, maxLen = 260): string | undefined {
+function extractBriefErrorDetail(details: unknown, maxLen = 260): string | undefined {
     if (!details) return undefined;
     if (typeof details === 'string') {
         const cleaned = details.replace(/\s+/g, ' ').trim();
@@ -643,7 +653,7 @@ export function resolveHttpErrorMessage(
 }
 
 /**
- * 按当前连接通道、宿主环境与生图服务生成上下文精准的连接排查指引。
+ * 按当前连接通道、宿主环境与生图服务生成对应上下文的连接排查指引。
  */
 export function buildTransportTroubleshootingLines(options: {
     readonly transport: TransportMode;

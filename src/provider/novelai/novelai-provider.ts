@@ -31,11 +31,12 @@ import {
     NOVELAI_OFFICIAL_SERVICE_ID,
     resolveNovelAIModelFamily,
     resolveNovelAIModelName,
-} from './novelai-models';
+} from '../../domain';
 
 /** NovelAI 图像生成 API 接口路径 */
 const NOVELAI_GENERATE_ENDPOINT = '/ai/generate-image';
-const NOVELAI_USER_DATA_ENDPOINT = 'https://api.novelai.net/user/data';
+/** NovelAI 第三方自定义服务缺失后缀时的候选补全后缀 */
+const NOVELAI_CUSTOM_SUFFIX_CANDIDATES = ['/ai/generate-image', '/generate-image'] as const;
 
 /**
  * 解析并构建最终的生图请求地址。
@@ -492,35 +493,31 @@ export class NovelAIProvider extends BaseGenerationProvider {
      * 检查 NovelAI 服务连通性。
      *
      * @remarks
-     * 1. 官方服务请求用户数据接口 (/user/data)，可确认 Token 有效性；
+     * 1. 官方服务直接向生图接口 (`https://image.novelai.net/ai/generate-image`) 发送轻量连通性检查请求，
+     *    以 405 等协议响应判定接口可达（真实密钥将在生图时校验）；
      * 2. 第三方服务向生图接口发送轻量连通性检查请求 (Ping)，优先拦截代理/传输诊断报错及 401/403（含酒馆代理从 401 改写的 400 Unauthorized）；
-     *    纯 HTTP 400 / 405 / 415 / 422 表明生图接口可达；仅当生图接口返回 404 时才补充检测站点 `/api/health`。
-     *    第三方中转的连通性检测通常不校验完整参数或密钥，可达时提示密钥将在生图时校验。
+     *    纯 HTTP 400 / 405 / 415 / 422 表明生图接口可达；
+     *    当生图接口返回 404 时，先依次尝试补全 `/ai/generate-image`、`/generate-image` 返回 `suggestedUrl` 供用户确认应用，
+     *    若均不可达再补充检查站点 `/api/health`。
      *
      * @param signal 中止信号
      */
     public async checkHealth(signal?: AbortSignal): Promise<ProviderHealthResult> {
         const config = this._getConfig();
         const transport = this.getTransport();
+        const reachableErrorStatuses = new Set([400, 405, 415, 422]);
 
         if (this._isOfficial()) {
             if (!config?.apiKey) {
                 return { status: 'error', message: '未配置 NovelAI API Key' };
             }
-            const pingResult = await this._httpClient.ping(NOVELAI_USER_DATA_ENDPOINT, {
+            const officialEndpoint = resolveNovelAIEndpoint(NOVELAI_IMAGE_HOST);
+            const pingResult = await this._httpClient.ping(officialEndpoint, {
                 transport,
                 signal,
                 timeoutMs: 5000,
                 headers: { Authorization: `Bearer ${config.apiKey}` },
             });
-
-            if (pingResult.ok) {
-                return {
-                    status: 'ok',
-                    latencyMs: pingResult.latencyMs,
-                    message: `NovelAI 官方服务响应正常 (${pingResult.latencyMs}ms)`,
-                };
-            }
 
             if (
                 pingResult.isTransportDiagnostic ||
@@ -531,9 +528,20 @@ export class NovelAIProvider extends BaseGenerationProvider {
                 return this.formatPingFailure(pingResult, 'NovelAI API Key 无效或已过期');
             }
 
+            if (
+                pingResult.ok ||
+                (pingResult.status !== undefined && reachableErrorStatuses.has(pingResult.status))
+            ) {
+                return {
+                    status: 'ok',
+                    latencyMs: pingResult.latencyMs,
+                    message: `NovelAI 官方生图接口可达 (${pingResult.latencyMs ?? '-'}ms)，密钥将在生图时校验`,
+                };
+            }
+
             const unreachableHint =
                 transport === 'relay'
-                    ? '无法经由酒馆代理连接 NovelAI 官方服务（请确认 SillyTavern enableCorsProxy 已开启且服务端网络可访问 api.novelai.net）'
+                    ? '无法经由酒馆代理连接 NovelAI 官方服务（请确认 SillyTavern enableCorsProxy 已开启且服务端网络可访问 image.novelai.net）'
                     : detectHostRuntime().supportsRelayProxy
                         ? '无法直连 NovelAI 官方域名（可能受跨域或网络限制，可在「插件设置」切换为“酒馆代理”或改用自定义反代）'
                         : '无法直连 NovelAI 官方域名（可能受跨域或网络限制，当前 TauriTavern 不支持酒馆代理，请改用支持跨域的自定义反代）';
@@ -567,7 +575,8 @@ export class NovelAIProvider extends BaseGenerationProvider {
         };
 
         // 1. 首选单点检查：先排除宿主代理/HTML 回退诊断与鉴权失败，再识别 400/405/415/422 可达状态
-        const endpointPing = await this._httpClient.ping(resolveNovelAIEndpoint(serverUrl), pingOptions);
+        const primaryUrl = resolveNovelAIEndpoint(serverUrl);
+        const endpointPing = await this._httpClient.ping(primaryUrl, pingOptions);
         if (
             endpointPing.isTransportDiagnostic ||
             endpointPing.isAuthError ||
@@ -577,7 +586,6 @@ export class NovelAIProvider extends BaseGenerationProvider {
             return this.formatPingFailure(endpointPing, 'API Key 无效或无权访问');
         }
 
-        const reachableErrorStatuses = new Set([400, 405, 415, 422]);
         if (
             endpointPing.ok ||
             (endpointPing.status !== undefined && reachableErrorStatuses.has(endpointPing.status))
@@ -600,23 +608,62 @@ export class NovelAIProvider extends BaseGenerationProvider {
             return this.formatPingFailure(endpointPing);
         }
 
-        // 3. 仅当生图接口返回 404 时才检查 /api/health（不附带 Authorization 以减少 CORS 预检阻塞）
+        // 3. 原地址返回 404 时：先尝试补全标准生图后缀，返回 suggestedUrl 由用户确认应用
         if (endpointPing.status === 404 && !signal?.aborted) {
-            try {
-                const healthUrl = `${new URL(serverUrl).origin}/api/health`;
-                const res = await this._httpClient.ping(healthUrl, {
-                    transport,
-                    signal,
-                    timeoutMs: 4000,
-                });
-                if (res.isTransportDiagnostic) {
-                    return this.formatPingFailure(res);
+            const trimmedBase = serverUrl.trim().replace(/\/+$/, '');
+            const alreadyHasSuffix = NOVELAI_CUSTOM_SUFFIX_CANDIDATES.some((suffix) =>
+                trimmedBase.endsWith(suffix)
+            );
+            if (!alreadyHasSuffix) {
+                for (const suffix of NOVELAI_CUSTOM_SUFFIX_CANDIDATES) {
+                    if (signal?.aborted) {
+                        break;
+                    }
+                    const candidateUrl = `${trimmedBase}${suffix}`;
+                    if (candidateUrl === primaryUrl) {
+                        continue;
+                    }
+                    const candidatePing = await this._httpClient.ping(candidateUrl, pingOptions);
+                    if (
+                        candidatePing.isTransportDiagnostic ||
+                        candidatePing.isAuthError ||
+                        candidatePing.status === 401 ||
+                        candidatePing.status === 403
+                    ) {
+                        return this.formatPingFailure(candidatePing, 'API Key 无效或无权访问');
+                    }
+                    if (
+                        candidatePing.ok ||
+                        (candidatePing.status !== undefined && reachableErrorStatuses.has(candidatePing.status))
+                    ) {
+                        return {
+                            status: 'error',
+                            latencyMs: candidatePing.latencyMs,
+                            suggestedUrl: candidateUrl,
+                            message: `检测到可用地址: ${candidateUrl}`,
+                        };
+                    }
                 }
-                if (res.ok) {
-                    return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
+            }
+
+            // 4. 补全后缀仍未命中时，补充检查 /api/health（不附带 Authorization 以减少 CORS 预检阻塞）
+            if (!signal?.aborted) {
+                try {
+                    const healthUrl = `${new URL(serverUrl).origin}/api/health`;
+                    const res = await this._httpClient.ping(healthUrl, {
+                        transport,
+                        signal,
+                        timeoutMs: 4000,
+                    });
+                    if (res.isTransportDiagnostic) {
+                        return this.formatPingFailure(res);
+                    }
+                    if (res.ok) {
+                        return { status: 'ok', latencyMs: res.latencyMs, message: okMessage(res.latencyMs) };
+                    }
+                } catch {
+                    // 忽略非标准 URL
                 }
-            } catch {
-                // 忽略非标准 URL
             }
         }
 

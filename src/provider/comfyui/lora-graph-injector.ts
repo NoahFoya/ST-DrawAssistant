@@ -9,6 +9,7 @@
  */
 
 import type { ResolvedLoraSpec } from '@types';
+export { hasWeilinNodeInGraph } from '../../domain/provider-specs/comfyui-workflow';
 
 /** ComfyUI API 节点连线引用 `[nodeId, outputSlot]` */
 export type ComfyNodeLink = [string, number];
@@ -99,26 +100,6 @@ function linksEqual(a: ComfyNodeLink, b: ComfyNodeLink): boolean {
 
 function serializeLink(link: ComfyNodeLink): string {
     return `${link[0]}#${link[1]}`;
-}
-
-/**
- * 检测解析后的 ComfyUI API 节点图对象中是否包含 WeiLin 扩展节点。
- */
-export function hasWeilinNodeInGraph(workflow: Record<string, unknown> | undefined | null): boolean {
-    if (!workflow || typeof workflow !== 'object') {
-        return false;
-    }
-    return Object.values(workflow).some((node) => {
-        if (!isPlainRecord(node)) {
-            return false;
-        }
-        const classType = getNodeClassType(node);
-        const title =
-            isPlainRecord(node._meta) && typeof node._meta.title === 'string'
-                ? node._meta.title
-                : '';
-        return /weilin/i.test(classType) || /weilin/i.test(title);
-    });
 }
 
 /**

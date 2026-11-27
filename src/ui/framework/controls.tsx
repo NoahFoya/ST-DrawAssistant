@@ -8,13 +8,14 @@
 
 import { render, type ComponentChildren } from 'preact';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'preact/hooks';
-import type { FormFieldControlWidth } from '../components/form-field';
+import type { FormFieldControlWidth } from '../types';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { SegmentedControlOption } from '../components/segmented-control';
 import type { ButtonVariant, ButtonSize } from '../components/button';
 import type { BadgeVariant } from '../components/badge';
 import { renderIcon } from '../components/icons';
 import { overlayStack } from './overlay-stack';
+import { computeAnchoredPosition, getViewportRect } from '../layout/viewport';
 
 // 1. 通用卡片容器组件 (CardView)
 
@@ -24,6 +25,7 @@ export interface CardViewProps {
     tooltip?: string;
     dirty?: boolean;
     className?: string;
+    titleBadges?: ComponentChildren;
     badges?: ComponentChildren;
     actions?: ComponentChildren;
     children?: ComponentChildren;
@@ -38,7 +40,14 @@ export function CardView(props: CardViewProps) {
         .filter(Boolean)
         .join(' ');
 
-    const hasHeader = Boolean(props.title || props.badges || props.actions || props.subtitle || props.tooltip);
+    const hasHeader = Boolean(
+        props.title ||
+            props.titleBadges ||
+            props.badges ||
+            props.actions ||
+            props.subtitle ||
+            props.tooltip
+    );
 
     return (
         <div className={rootClasses}>
@@ -59,6 +68,9 @@ export function CardView(props: CardViewProps) {
                                         ?
                                     </span>
                                 )}
+                                {props.titleBadges && (
+                                    <div className="da-card__title-badges">{props.titleBadges}</div>
+                                )}
                             </div>
                             <p
                                 className="da-card__subtitle"
@@ -69,7 +81,7 @@ export function CardView(props: CardViewProps) {
                         </div>
                     </div>
                     <div className="da-card__header-right">
-                        <div className="da-card__badges">{props.badges}</div>
+                        {props.badges && <div className="da-card__badges">{props.badges}</div>}
                         <div
                             className="da-card__actions"
                             onClick={(e) => e.stopPropagation()}
@@ -468,6 +480,8 @@ export interface TextInputControlProps {
     readonly?: boolean;
     disabled?: boolean;
     clearable?: boolean;
+    /** 是否支持密码显隐切换按钮（仅当 type="password" 时生效，默认 true） */
+    showPasswordToggle?: boolean;
     debounceMs?: number;
     prefixIcon?: string;
     dirty?: boolean;
@@ -480,7 +494,14 @@ export function TextInputControl(props: TextInputControlProps) {
     const val = props.value ?? '';
     const debounceMs = props.debounceMs ?? 0;
     const [draftVal, setDraftVal] = useState(val);
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (props.type !== 'password') {
+            setIsPasswordVisible(false);
+        }
+    }, [props.type]);
 
     useEffect(() => {
         if (timerRef.current) {
@@ -497,6 +518,8 @@ export function TextInputControl(props: TextInputControlProps) {
     }, []);
 
     const displayVal = debounceMs > 0 ? draftVal : val;
+    const wantsPasswordToggle = props.type === 'password' && props.showPasswordToggle !== false;
+    const inputType = wantsPasswordToggle && isPasswordVisible ? 'text' : (props.type ?? 'text');
 
     const triggerChange = (nextVal: string) => {
         if (debounceMs > 0) {
@@ -517,6 +540,7 @@ export function TextInputControl(props: TextInputControlProps) {
         props.clearable && displayVal.length > 0 && !props.disabled && !props.readonly
             ? 'has-clear-visible'
             : '',
+        wantsPasswordToggle ? 'has-password-toggle' : '',
         props.disabled ? 'da-input-wrapper--disabled' : '',
         props.dirty ? 'da-input-wrapper--dirty is-dirty' : '',
         props.invalid ? 'is-invalid' : '',
@@ -534,7 +558,7 @@ export function TextInputControl(props: TextInputControlProps) {
                 />
             )}
             <input
-                type={(props.type ?? 'text') as 'text'}
+                type={inputType as 'text'}
                 className={`da-input${props.invalid ? ' is-invalid' : ''}`}
                 value={displayVal}
                 placeholder={props.placeholder}
@@ -564,6 +588,28 @@ export function TextInputControl(props: TextInputControlProps) {
                     }}
                     dangerouslySetInnerHTML={{
                         __html: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+                    }}
+                />
+            )}
+            {wantsPasswordToggle && (
+                <button
+                    type="button"
+                    className="da-input__toggle-password"
+                    title={isPasswordVisible ? '隐藏密码' : '显示明文'}
+                    aria-label={isPasswordVisible ? '隐藏密码' : '显示密码'}
+                    disabled={props.disabled}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!props.disabled) {
+                            setIsPasswordVisible((prev) => !prev);
+                        }
+                    }}
+                    dangerouslySetInnerHTML={{
+                        __html: renderIcon(isPasswordVisible ? 'eyeOff' : 'eye', 13),
                     }}
                 />
             )}
@@ -910,25 +956,34 @@ export function SearchableSelectControl(props: SearchableSelectControlProps) {
 
         const rect = trigger.getBoundingClientRect?.();
         if (!rect) return;
-        const vw = window.innerWidth || 1024;
-        const vh = window.innerHeight || 768;
-
+        const vp = getViewportRect();
         const minWidth = Math.max(rect.width || 0, 220);
-        const width = Math.min(minWidth, Math.max(180, vw - 16));
-        const left = Math.max(8, Math.min(rect.left || 0, vw - width - 8));
+        const dropdownRect = dropdown.getBoundingClientRect?.();
+        const estimatedHeight = dropdownRect && dropdownRect.height > 0 ? dropdownRect.height : 220;
 
-        const spaceBelow = vh - (rect.bottom || 0) - 8;
-        const spaceAbove = (rect.top || 0) - 8;
-        const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+        const pos = computeAnchoredPosition({
+            anchorRect: rect,
+            floatingWidth: minWidth,
+            floatingHeight: estimatedHeight,
+            preferredPlacement: 'bottom',
+            align: 'start',
+            gap: 4,
+            margin: 8,
+            viewport: vp,
+            maxWidth: minWidth,
+            maxHeight: 280,
+        });
 
-        dropdown.style.width = `${width}px`;
-        dropdown.style.left = `${left}px`;
-        if (openAbove) {
+        dropdown.style.width = `${Math.min(minWidth, pos.maxWidth)}px`;
+        dropdown.style.left = `${pos.left}px`;
+        dropdown.style.maxHeight = `${pos.maxHeight}px`;
+        if (pos.placement === 'top') {
+            const layoutH = window.innerHeight || document.documentElement?.clientHeight || vp.height;
             dropdown.style.top = 'auto';
-            dropdown.style.bottom = `${Math.max(8, vh - (rect.top || 0) + 4)}px`;
+            dropdown.style.bottom = `${Math.max(8, layoutH - (rect.top || 0) + 4)}px`;
         } else {
             dropdown.style.bottom = 'auto';
-            dropdown.style.top = `${Math.max(8, (rect.bottom || 0) + 4)}px`;
+            dropdown.style.top = `${pos.top}px`;
         }
     };
 

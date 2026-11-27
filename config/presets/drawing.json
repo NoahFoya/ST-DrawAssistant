@@ -57,9 +57,10 @@
     {
       "id": "drawing_openai_default",
       "name": "OpenAI · 默认预设",
-      "description": "gpt-image-1 模型（1024×1536 竖屏），默认不绑定提示词预设",
+      "description": "gpt-image-1 模型（自动画幅，兼容后端回退 1024×1536），默认不绑定提示词预设",
       "data": {
         "baseModel": "gpt-image-1",
+        "aspectRatio": "auto",
         "width": 1024,
         "height": 1536,
         "quality": "medium",
@@ -73,10 +74,10 @@
     {
       "id": "drawing_gemini_default",
       "name": "Gemini · 默认预设",
-      "description": "gemini-2.5-flash-image 原生模型（1:1 比例），默认不绑定提示词预设",
+      "description": "gemini-2.5-flash-image 原生模型（自动画幅），默认不绑定提示词预设",
       "data": {
         "baseModel": "gemini-2.5-flash-image",
-        "aspectRatio": "1:1",
+        "aspectRatio": "auto",
         "promptPresetId": ""
       }
     }
@@ -85,10 +86,10 @@
     {
       "id": "drawing_grok_default",
       "name": "Grok · 默认预设",
-      "description": "grok-imagine-image 原生模型（1:1 比例，1k 分辨率），默认不绑定提示词预设",
+      "description": "grok-imagine-image 原生模型（自动画幅，1k 分辨率），默认不绑定提示词预设",
       "data": {
         "baseModel": "grok-imagine-image",
-        "aspectRatio": "1:1",
+        "aspectRatio": "auto",
         "resolution": "1k",
         "promptPresetId": ""
       }

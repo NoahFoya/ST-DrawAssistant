@@ -13,8 +13,8 @@
     bottom: calc(var(--da-vv-bottom-inset, 0px) + max(16px, env(safe-area-inset-bottom)));
     left: calc(var(--da-vv-left, 0px) + var(--da-vvw, 100vw) / 2);
     transform: translateX(-50%);
-    max-width: calc(var(--da-vvw, 100vw) - 24px);
-    padding: 7px 14px;
+    max-width: min(440px, calc(var(--da-vvw, 100vw) - 24px));
+    padding: 8px 14px;
     border-radius: var(--da-radius-input, 6px);
     background: var(--da-bg-modal, rgba(24, 27, 34, 0.92));
     backdrop-filter: blur(var(--da-blur-panel, 18px)) saturate(180%);
@@ -23,16 +23,28 @@
     box-shadow: var(--da-shadow-md), var(--da-inset-top-light);
     border: 1px solid var(--da-border-color);
     font-size: var(--da-font-size-sm, 0.80rem);
+    line-height: 1.45;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     z-index: var(--da-z-toast, 100200);
     pointer-events: none;
     animation: da-toast-in 0.2s var(--da-ease-spring);
     box-sizing: border-box;
+}
+
+.da-toast__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.da-toast__text {
+    min-width: 0;
 }
 
 .da-toast--success {

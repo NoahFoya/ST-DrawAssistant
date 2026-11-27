@@ -2,15 +2,19 @@
  * 图像格式与存储画质压缩处理函数。
  *
  * @remarks
- * 支持将原始 Blob 转码为 WebP 格式：
- * - 'original': 返回原始 Blob，不执行二次编码；
- * - 'webp-high': 转码为高质量 WebP (quality: 0.9)，保持高保真度同时压缩 60%-75% 空间；
- * - 'webp-medium': 转码为平衡 WebP (quality: 0.8)，适合磁盘配额敏感场景。
+ * 支持六档图像存储格式处理：
+ * - 'original': 返回原始 Blob，不执行图像重编码；
+ * - 'png': 统一为无损 PNG（原图已是 PNG 时直接原样返回，非 PNG 时转为 PNG）；
+ * - 'webp-high': 转码为高画质 WebP (quality: 0.9)；
+ * - 'webp-medium': 转码为标准 WebP (quality: 0.8)；
+ * - 'jpeg-high': 转码为高画质 JPEG (quality: 0.92，自动纯白铺底)；
+ * - 'jpeg-medium': 转码为标准 JPEG (quality: 0.85，自动纯白铺底)。
  * 优先采用 OffscreenCanvas 与 createImageBitmap 在无 DOM 干扰下高效率转码；
  * 当环境不支持 OffscreenCanvas 时降级为 HTMLCanvasElement 或在异常时安全回退原始 Blob。
  */
 
 import type { ImageStorageQuality } from '@types';
+import { detectImageMimeFromHeader } from './image-metadata';
 
 function computeScaledDimensions(
     width: number,
@@ -28,13 +32,18 @@ function computeScaledDimensions(
 }
 
 /**
- * 内部共用的 Canvas WebP 转码与可选等比缩放实现。
+ * 内部共用的 Canvas 图像格式转码与可选等比缩放实现。
  */
-async function encodeWebpWithCanvas(
+async function encodeImageWithCanvas(
     blob: Blob,
-    options: { quality: number; maxEdge?: number }
+    options: {
+        targetMime: 'image/png' | 'image/webp' | 'image/jpeg';
+        quality?: number;
+        maxEdge?: number;
+        fillOpaqueBackground?: boolean;
+    }
 ): Promise<Blob> {
-    const { quality, maxEdge } = options;
+    const { targetMime, quality, maxEdge, fillOpaqueBackground } = options;
 
     try {
         if (typeof createImageBitmap === 'function' && typeof OffscreenCanvas !== 'undefined') {
@@ -48,13 +57,20 @@ async function encodeWebpWithCanvas(
                 const canvas = new OffscreenCanvas(width, height);
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
+                    if (fillOpaqueBackground) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
+                    }
                     if (width === bitmap.width && height === bitmap.height) {
                         ctx.drawImage(bitmap, 0, 0);
                     } else {
                         ctx.drawImage(bitmap, 0, 0, width, height);
                     }
-                    const converted = await canvas.convertToBlob({ type: 'image/webp', quality });
-                    return converted && converted.size > 0 && converted.type === 'image/webp'
+                    const converted = await canvas.convertToBlob({
+                        type: targetMime,
+                        ...(quality !== undefined ? { quality } : {}),
+                    });
+                    return converted && converted.size > 0 && converted.type === targetMime
                         ? converted
                         : blob;
                 }
@@ -78,6 +94,10 @@ async function encodeWebpWithCanvas(
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (ctx && typeof canvas.toBlob === 'function') {
+                    if (fillOpaqueBackground) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
+                    }
                     if (width === sourceW && height === sourceH) {
                         ctx.drawImage(img, 0, 0);
                     } else {
@@ -87,9 +107,9 @@ async function encodeWebpWithCanvas(
                         canvas.toBlob(
                             (b) =>
                                 resolve(
-                                    b && b.size > 0 && b.type === 'image/webp' ? b : blob
+                                    b && b.size > 0 && b.type === targetMime ? b : blob
                                 ),
-                            'image/webp',
+                            targetMime,
                             quality
                         );
                     });
@@ -120,8 +140,33 @@ export async function applyImageStorageQuality(
         return blob;
     }
 
+    if (quality === 'png') {
+        let isAlreadyPng = blob.type === 'image/png';
+        if (!isAlreadyPng && typeof blob.arrayBuffer === 'function') {
+            try {
+                const header = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+                isAlreadyPng = detectImageMimeFromHeader(header) === 'image/png';
+            } catch {
+                // 忽略魔数读取异常
+            }
+        }
+        if (isAlreadyPng) {
+            return blob;
+        }
+        return encodeImageWithCanvas(blob, { targetMime: 'image/png' });
+    }
+
+    if (quality === 'jpeg-high' || quality === 'jpeg-medium') {
+        const qualityValue = quality === 'jpeg-high' ? 0.92 : 0.85;
+        return encodeImageWithCanvas(blob, {
+            targetMime: 'image/jpeg',
+            quality: qualityValue,
+            fillOpaqueBackground: true,
+        });
+    }
+
     const qualityValue = quality === 'webp-high' ? 0.9 : 0.8;
-    return encodeWebpWithCanvas(blob, { quality: qualityValue });
+    return encodeImageWithCanvas(blob, { targetMime: 'image/webp', quality: qualityValue });
 }
 
 /**
@@ -134,5 +179,9 @@ export async function compressMaterialAvatar(blob: Blob, maxEdge = 1024): Promis
     if (!blob) {
         return blob;
     }
-    return encodeWebpWithCanvas(blob, { quality: 0.86, maxEdge });
+    return encodeImageWithCanvas(blob, {
+        targetMime: 'image/webp',
+        quality: 0.86,
+        maxEdge,
+    });
 }

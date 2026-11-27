@@ -5,144 +5,43 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { VNode } from 'preact';
 import type { Signal } from '@preact/signals';
-import type {
-    MaterialActivationPresetData,
-    CharacterPresetData,
-    OutfitPresetData,
-} from '@types';
 import {
     estimateTagTokens,
     CHAR_PART_GROUPS,
     OUTFIT_PART_GROUPS,
     type MaterialPartDef,
 } from '../../../pipeline/material-definitions';
-import { settingsStore } from '../../../store/settings-store';
-import { PresetController } from '../../viewmodels/preset-controller';
+import { evaluatePresetDataDirty } from '../../state/preset-controller';
+import {
+    DEFAULT_SANDBOX_SAMPLE,
+    createEmptyActivationTemplate,
+    parseBoundCardNamesInput,
+    splitBoundCardNames,
+    applyPrimaryBoundCardSelection,
+    type MaterialsSubTab,
+} from '../../state/materials-state';
 import { lightboxModal } from '../../media/lightbox-modal';
 import { Toast } from '../../feedback/toast';
+import { getHostCharacterCards as readHostCharacterCards } from '../../../host';
 
-export type MaterialsSubTab =
-    | 'characters'
-    | 'outfits'
-    | 'activation'
-    | 'extraction'
-    | 'format';
-
-export { CHAR_PART_GROUPS, OUTFIT_PART_GROUPS };
-
-export const DEFAULT_SANDBOX_SAMPLE = `<character>
-NAME: 爱丽丝
-ALIASES: alice
-TRIGGER:
-DESCRIPTION: 金发蓝眼的见习魔法使，性格温顺文雅
-OUTFITS: 学院制服
-APPEARANCE: fair_skin, slender, petite
-HAIR: blonde_hair, long_hair
-FACE: blue_eyes, delicate_face
-FEATURES:
-ACCESSORIES: hair_ribbon, gold_pendant
-NECK_SHOULDERS: |[covered]collarbone|[nude]bare_shoulders, collarbone
-BREASTS: medium_breasts|[exposed]cleavage, nipples|[nude]nipples, areolae
-ABDOMEN: |[exposed]midriff, navel|[nude]narrow_waist, navel
-ARMS: slender_arms|[nude]bare_arms
-HIPS: |[exposed]gentle_hips|[nude]gentle_hips
-HANDS: slender_fingers
-LEGS: slender_legs|[nude]bare_legs, slender_thighs
-FEET: |[exposed]barefoot, slender_ankles, toes|[nude]barefoot, slender_ankles, toes
-GENITALS: |[nude]pussy, trimmed_pubic_hair
-</character>`;
+export {
+    type MaterialsSubTab,
+    DEFAULT_SANDBOX_SAMPLE,
+    createEmptyActivationTemplate,
+    evaluatePresetDataDirty,
+    CHAR_PART_GROUPS,
+    OUTFIT_PART_GROUPS,
+};
 
 export function getHostCharacterCards(): Array<{ id: string; name: string }> {
-    if (typeof window === 'undefined') return [];
-    const ctx = window.SillyTavern?.getContext?.();
-    const chars = ctx?.characters;
-    if (!Array.isArray(chars)) return [];
-    return chars.map((c, i) => {
-        const item = c as { avatar?: string; name?: string };
-        return {
-            id: item.avatar || item.name || `char_${i}`,
-            name: item.name || item.avatar || `角色卡 #${i + 1}`,
-        };
-    });
+    return readHostCharacterCards();
 }
 
-/** 将逗号或换行分隔的角色卡名称文本解析为大小写不敏感去重数组 */
-export function parseBoundCardNamesInput(raw: string): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const token of raw.split(/[,，\r\n]/)) {
-        const clean = token.trim();
-        if (!clean) continue;
-        const key = clean.toLowerCase();
-        if (!seen.has(key)) {
-            seen.add(key);
-            result.push(clean);
-        }
-    }
-    return result;
-}
-
-/** 拆分已关联的角色卡列表为首卡、其余附加卡与规范化全量清单 */
-export function splitBoundCardNames(boundCardNames?: readonly string[]): {
-    primaryCard: string;
-    extraCards: string[];
-    allCards: string[];
-} {
-    const allCards = (boundCardNames || []).map((n) => (n || '').trim()).filter(Boolean);
-    return {
-        primaryCard: allCards[0] || '',
-        extraCards: allCards.slice(1),
-        allCards,
-    };
-}
-
-/** 根据单选控件提交值更新关联角色卡清单（留空时整体解绑，选中时保留其余附加卡并去重） */
-export function applyPrimaryBoundCardSelection(
-    selectedCard: string,
-    extraCards: readonly string[]
-): string[] {
-    const trimmed = selectedCard.trim();
-    if (!trimmed) {
-        return [];
-    }
-    const lower = trimmed.toLowerCase();
-    return [trimmed, ...extraCards.filter((n) => n.toLowerCase() !== lower)];
-}
-
-export function createEmptyActivationTemplate(): MaterialActivationPresetData {
-    const charRules: MaterialActivationPresetData['characterRules'] = {};
-    for (const c of settingsStore.getPresets<CharacterPresetData>('characters')) {
-        charRules[c.id] = { enabled: true, triggerMode: 'keyword' };
-    }
-    const outfitRules: MaterialActivationPresetData['outfitRules'] = {};
-    for (const o of settingsStore.getPresets<OutfitPresetData>('outfits')) {
-        outfitRules[o.id] = { enabled: true, triggerMode: 'keyword' };
-    }
-    return {
-        boundCardNames: [],
-        scanDepth: 2,
-        includeBoundOutfits: true,
-        characterRules: charRules,
-        outfitRules,
-    };
-}
-
-/**
- * 比较预设草稿与基线快照的脏字段（复用 PresetController 键序无关深比较实现）。
- */
-export function evaluatePresetDataDirty(
-    draft: Record<string, unknown>,
-    base: Record<string, unknown>
-): Set<string> {
-    const dirty = new Set<string>();
-    const keys = new Set([...Object.keys(draft || {}), ...Object.keys(base || {})]);
-    for (const k of keys) {
-        if (!PresetController.isCanonicalEqual(draft?.[k], base?.[k])) {
-            dirty.add(k);
-        }
-    }
-    return dirty;
-}
+export {
+    parseBoundCardNamesInput,
+    splitBoundCardNames,
+    applyPrimaryBoundCardSelection,
+};
 
 export interface FullWidthTagFieldOptions {
     fieldKey: string;
@@ -160,7 +59,7 @@ export interface FullWidthTagFieldOptions {
 /**
  * 渲染单行 100% 全宽的 Tag 文本域字段（右上角显示实时预估 Token 数）。
  */
-export function renderFullWidthTagField(options: FullWidthTagFieldOptions): VNode {
+function renderFullWidthTagField(options: FullWidthTagFieldOptions): VNode {
     const tokenCount = estimateTagTokens(options.value);
     return (
         <div

@@ -33,7 +33,7 @@ import {
     GROK_API_BASE,
     filterGrokImageModels,
     resolveGrokModelCapabilities,
-} from './grok-models';
+} from '../../domain';
 import {
     base64ToBlob,
     ensureValidImageBlob,

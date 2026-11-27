@@ -40,7 +40,7 @@
         {
           "id": "char_macro_cowboy",
           "name": "cowboy",
-          "description": "膝上七分身构图，包含上半身全部部位、臀部、大腿与生殖器（半裸或全裸时可见）。",
+          "description": "膝上七分身构图，包含上半身全部部位、臀部、大腿与生殖器（按当前遮蔽状态呈现）。",
           "targetParts": [
             "appearance",
             "hair",
@@ -60,7 +60,7 @@
         {
           "id": "char_macro_full",
           "name": "full",
-          "description": "全身或大场景构图，包含从头到脚全套身体部位（按遮蔽状态过滤不展开的隐私部位）。",
+          "description": "全身或大场景构图，包含从头到脚全套身体部位（按所选状态呈现对应部位）。",
           "targetParts": [
             "appearance",
             "hair",
@@ -82,7 +82,7 @@
         {
           "id": "char_macro_back",
           "name": "back",
-          "description": "背影或背面视角构图，省略正面五官与胸部，包含外貌、发型、颈肩、背部、手臂、手部、臀部、肛门与腿足（按遮蔽状态过滤不展开的隐私部位）。",
+          "description": "背影或背面视角构图，省略正面五官与胸部，包含外貌、发型、颈肩、背部、手臂、手部、臀部、肛门与腿足（按所选状态呈现对应部位）。",
           "targetParts": [
             "appearance",
             "hair",
@@ -101,7 +101,7 @@
         {
           "id": "char_macro_lower",
           "name": "lower",
-          "description": "腰胯以下构图，包含臀部、生殖器、肛门/后庭、腿部与足部（半裸或全裸时可见）。",
+          "description": "腰胯以下构图，包含臀部、生殖器、肛门/后庭、腿部与足部（按当前遮蔽状态呈现）。",
           "targetParts": [
             "hips",
             "genitals",

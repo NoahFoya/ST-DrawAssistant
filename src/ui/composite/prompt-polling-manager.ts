@@ -15,7 +15,7 @@ import { Button } from '../components/button';
 import { Select } from '../components/select';
 import { Switch } from '../components/switch';
 import { renderIcon } from '../components/icons';
-import { normalizePresetNameKey } from '../../store/settings-store';
+import { normalizePresetNameKey } from '../../domain';
 
 export interface PromptPollingManagerOptions {
     /** 当前服务可用的全部提示词预设列表 */
@@ -40,7 +40,7 @@ export interface PromptPollingPoolSummary {
 }
 
 /** 按预设 ID 或规范化名称匹配当前可用的提示词预设 */
-export function resolvePollingPoolPreset(
+function resolvePollingPoolPreset(
     entry: PromptPollingPoolItem,
     availablePresets: readonly PresetItem<PromptPresetData>[]
 ): PresetItem<PromptPresetData> | undefined {

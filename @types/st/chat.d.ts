@@ -18,6 +18,8 @@ export interface DrawingSlotEntry {
     readonly imageId: string;
     /** 宿主静态资源相对路径，在成功保存至服务端时存在 */
     readonly imageUrl?: string;
+    /** 同一插槽历史生成的图像资产 ID 列表（按时间升序排列，旧版本缺省视为空） */
+    readonly history?: string[];
 }
 
 /**

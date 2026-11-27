@@ -275,6 +275,7 @@
 .da-searchable-select__search-bar {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
     gap: 6px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--da-border-subtle, var(--da-border-color));
@@ -309,6 +310,8 @@
 .da-searchable-select__list {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 2px;
     padding: 4px;
     overflow-y: auto;
@@ -375,7 +378,7 @@
 
 /* 快捷面板紧致行内尺寸适配 */
 .da-fqp-row__control .da-searchable-select__trigger {
-    height: 27px;
+    height: 28px;
     font-size: 12px;
     padding: 0 6px 0 8px;
 }

@@ -3,7 +3,7 @@
  *
  * 基于 ComfyUI API 对接服务端：
  * 1. 将提示词与参数注入工作流模板并提交至 POST /prompt；
- * 2. 深度解析服务端返回的 node_errors 节点校验异常；
+ * 2. 解析服务端返回的 node_errors 节点校验异常；
  * 3. 轮询 GET /history/{prompt_id} 并在完成后从 GET /view 下载图片；
  * 4. 任务取消或超时时采用客户端丢弃策略，仅中止本地轮询，不向服务端发送队列删除或中断指令。
  */
@@ -34,8 +34,8 @@ import {
 } from './lora-graph-injector';
 import {
     applyTextLoraTagsToPrompt,
-    sanitizeLoraPrompts,
-} from '../../pipeline/lora-utils';
+    sanitizeLoraPromptsPure,
+} from '../../domain';
 import { resolveAssetMatch } from '../../util/asset-matcher';
 import {
     imageInputToBlob,
@@ -573,8 +573,8 @@ export class ComfyUIProvider extends BaseGenerationProvider {
 
         if (params.workflow) {
             resolvedWorkflowId = (isInpaintMode
-                ? (params.inpaintPresetId ?? drawingPreset?.inpaintPresetId)
-                : (params.txt2imgWorkflowId ?? drawingPreset?.txt2imgWorkflowId)) as string | undefined;
+                ? (params.inpaintPresetId ?? params.workflowId ?? drawingPreset?.inpaintPresetId)
+                : (params.txt2imgWorkflowId ?? params.workflowId ?? drawingPreset?.txt2imgWorkflowId)) as string | undefined;
             if (typeof params.workflow === 'string') {
                 try {
                     rawWorkflow = JSON.parse(params.workflow);
@@ -586,8 +586,10 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             }
         } else if (this._settingsStore) {
             resolvedWorkflowId = isInpaintMode
-                ? ((params.inpaintPresetId ?? drawingPreset?.inpaintPresetId) as string | undefined)
-                : ((params.txt2imgWorkflowId as string | undefined) ?? drawingPreset?.txt2imgWorkflowId);
+                ? ((params.inpaintPresetId ?? params.workflowId ?? drawingPreset?.inpaintPresetId) as string | undefined)
+                : ((params.txt2imgWorkflowId as string | undefined) ??
+                  (params.workflowId as string | undefined) ??
+                  drawingPreset?.txt2imgWorkflowId);
 
             if (!resolvedWorkflowId) {
                 throw new Error(
@@ -597,7 +599,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
                 );
             }
 
-            const workflowPreset = this._settingsStore.getPreset<WorkflowPresetData>(
+            const workflowPreset = this._settingsStore.getPreset?.<WorkflowPresetData>(
                 'workflows',
                 resolvedWorkflowId
             );
@@ -635,12 +637,13 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         const requestedLoras = request.loras ?? [];
 
         if (isWeilinWorkflow) {
-            const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+            const sanitized = sanitizeLoraPromptsPure(request.prompt, request.negativePrompt, {
                 allowLora: false,
                 allowWlr: true,
                 sourceLabel: 'ComfyUI WeiLin 工作流',
                 guidance: 'WeiLin 节点仅支持正向提示词中的 <wlr:...> 语法，已剥离不兼容的 <lora:...> 或负向 LoRA 标签',
             });
+            this.reportLoraWarning(sanitized.warningMessage, 'ComfyUI WeiLin 工作流', sanitized.strippedTags);
             return {
                 isWeilinWorkflow: true,
                 promptText: applyTextLoraTagsToPrompt(sanitized.positivePrompt, requestedLoras, 'wlr'),
@@ -657,12 +660,13 @@ export class ComfyUIProvider extends BaseGenerationProvider {
             };
         }
 
-        const sanitized = sanitizeLoraPrompts(request.prompt, request.negativePrompt, {
+        const sanitized = sanitizeLoraPromptsPure(request.prompt, request.negativePrompt, {
             allowLora: false,
             allowWlr: false,
             sourceLabel: 'ComfyUI 原生工作流',
             guidance: '原生工作流通过 LoRA 模型管理自动拼接节点，正文中手写的 <lora:...>/<wlr:...> 不生效',
         });
+        this.reportLoraWarning(sanitized.warningMessage, 'ComfyUI 原生工作流', sanitized.strippedTags);
 
         let resolvedNativeLoras: ResolvedLoraSpec[] = [];
         let supportsLoraLoader = true;
@@ -1130,6 +1134,7 @@ export class ComfyUIProvider extends BaseGenerationProvider {
         return {
             blob,
             metadata,
+            comfyPromptGraph: injectedWorkflow,
         };
     }
 }

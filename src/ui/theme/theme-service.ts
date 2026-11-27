@@ -3,7 +3,7 @@
  *
  * @remarks
  * 负责管理插件 CSS 变量设计令牌与主题切换监听：
- * 1. 采用声明式 Token 映射注册表 (THEME_TOKEN_RULES)，将规范化主题预设直接精准映射并注入 DOM（:root / document.documentElement）；
+ * 1. 采用声明式 Token 映射注册表 (THEME_TOKEN_RULES)，将规范化主题预设直接映射并注入 DOM（:root / document.documentElement）；
  * 2. 具备 WCAG 感知相对亮度算法，自动自适应强调色按钮反色（#ffffff 或 #18181b）；
  * 3. 监听 settingsStore 配置广播，动态平滑切换全局主题。
  */

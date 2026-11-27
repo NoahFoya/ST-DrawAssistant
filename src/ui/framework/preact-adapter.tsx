@@ -10,7 +10,7 @@
 
 import { render, options, type ComponentChildren } from 'preact';
 import { effect, signal } from '@preact/signals';
-import type { SettingsView, UIComponent, Disposable } from '../types';
+import type { SettingsView, UIComponent } from '../types';
 
 // 禁用异步渲染防抖批处理，确保状态与 Signal 变更后 DOM 在当前调用栈同步完成更新
 options.debounceRendering = (cb: () => void) => {
@@ -91,69 +91,89 @@ export abstract class PreactUIComponent implements UIComponent {
     }
 }
 
+export interface FunctionalSettingsViewOptions<TState = unknown> {
+    id: string;
+    title: string;
+    className?: string;
+    state?: TState;
+    render: () => ComponentChildren;
+    onActivate?: () => void;
+    onDeactivate?: () => void;
+    onDispose?: () => void;
+    hasUnsavedChanges?: () => boolean;
+    saveUnsavedChanges?: () => Promise<boolean>;
+    discardUnsavedChanges?: () => void;
+}
+
+export type StatefulSettingsView<TState> = SettingsView & { readonly state: TState };
+
 /**
- * 基于 Preact + Signals 的设置选项卡视图基类。
- *
- * @remarks
- * 自动实现 SettingsView 的 id、title、element、activate、deactivate 与 dispose。
+ * 声明式函数选项卡适配器：将纯函数式 Preact 视图挂载为遵循 `SettingsView` 接口约定的容器实例。
  */
-export abstract class PreactSettingsView extends PreactUIComponent implements SettingsView {
-    public abstract readonly id: string;
-    public abstract readonly title: string;
+export function createPreactSettingsView<TState = undefined>(
+    options: FunctionalSettingsViewOptions<TState>
+): TState extends undefined ? SettingsView : StatefulSettingsView<TState> {
+    const trimmed = (options.className || '').trim();
+    const cls = trimmed
+        ? trimmed.includes('da-tab-pane')
+            ? trimmed
+            : `da-tab-pane ${trimmed}`
+        : 'da-tab-pane';
 
-    protected readonly extraDisposables: Disposable[] = [];
+    const element = document.createElement('div');
+    element.className = cls;
 
-    protected constructor(paneClassName = '') {
-        const trimmed = paneClassName.trim();
-        const cls = trimmed
-            ? trimmed.includes('da-tab-pane')
-                ? trimmed
-                : `da-tab-pane ${trimmed}`
-            : 'da-tab-pane';
-        super('div', cls);
-    }
+    const renderTrigger = signal(0);
+    let isDisposed = false;
 
-    /**
-     * 注册需要随视图销毁自动释放的控制器或外部订阅资源。
-     */
-    protected registerDisposable<T extends Disposable>(item: T): T {
-        this.extraDisposables.push(item);
-        return item;
-    }
+    const Root = () => {
+        void renderTrigger.value;
+        return <>{options.render()}</>;
+    };
 
-    public activate(): void {
-        this.onActivate();
-        this.requestUpdate();
-    }
+    let disposeEffect: (() => void) | null = effect(() => {
+        void renderTrigger.value;
+        render(<Root />, element);
+    });
 
-    public deactivate(): void {
-        this.onDeactivate();
-    }
-
-    /**
-     * 子类可覆盖：当选项卡被激活显示时调用。
-     */
-    protected onActivate(): void {
-        // 默认空实现
-    }
-
-    /**
-     * 子类可覆盖：当选项卡切走或面板关闭时调用。
-     */
-    protected onDeactivate(): void {
-        // 默认空实现
-    }
-
-    public override dispose(): void {
-        this.deactivate();
-        for (const item of this.extraDisposables) {
-            try {
-                item.dispose();
-            } catch {
-                // 忽略单个资源释放异常
+    const view: SettingsView & { state?: TState } = {
+        id: options.id,
+        title: options.title,
+        element,
+        activate: () => {
+            if (isDisposed) return;
+            options.onActivate?.();
+            renderTrigger.value++;
+        },
+        deactivate: () => {
+            options.onDeactivate?.();
+        },
+        dispose: () => {
+            if (isDisposed) return;
+            isDisposed = true;
+            options.onDeactivate?.();
+            if (disposeEffect) {
+                disposeEffect();
+                disposeEffect = null;
             }
-        }
-        this.extraDisposables.length = 0;
-        super.dispose();
+            options.onDispose?.();
+            render(null, element);
+            element.remove();
+        },
+    };
+
+    if (options.state !== undefined) {
+        view.state = options.state;
     }
+    if (options.hasUnsavedChanges) {
+        view.hasUnsavedChanges = options.hasUnsavedChanges;
+    }
+    if (options.saveUnsavedChanges) {
+        view.saveUnsavedChanges = options.saveUnsavedChanges;
+    }
+    if (options.discardUnsavedChanges) {
+        view.discardUnsavedChanges = options.discardUnsavedChanges;
+    }
+
+    return view as TState extends undefined ? SettingsView : StatefulSettingsView<TState>;
 }

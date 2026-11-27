@@ -9,6 +9,9 @@
 import type { ImageGenerationMetadata } from './st/chat';
 import type { ProviderType, ResolvedLoraSpec } from './provider';
 
+/** 生图任务投递通道：楼层内联挂载或独立图库入库 */
+export type TaskDestination = 'floor' | 'gallery';
+
 /** 绘图容器挂载目标定位坐标 */
 export interface SlotMountTarget {
     /** 宿主会话标识符 */
@@ -28,8 +31,14 @@ export type DrawingTaskStatus = 'pending' | 'generating' | 'completed' | 'failed
 export interface DrawingTask {
     /** 任务全局唯一标识符 */
     readonly taskId: string;
-    /** 容器挂载目标定位坐标（消息或分支增删后可重定位校准） */
-    target: SlotMountTarget;
+    /** 任务投递通道，缺省视为 'floor' */
+    readonly destination?: TaskDestination;
+    /** 容器挂载目标定位坐标（楼层任务必填，图库独立任务可省略） */
+    target?: SlotMountTarget;
+    /** 触发本次重新生成/重绘的来源图像资产 ID（可选溯源标记） */
+    readonly sourceImageId?: string;
+    /** 独立图库任务的原始会话 ID 溯源（仅用于图库归档与筛选，不触发楼层挂载） */
+    readonly sourceChatId?: string;
     /** 正向提示词文本 */
     readonly prompt: string;
     /** 负向提示词文本 */

@@ -3,9 +3,9 @@
  *
  * @remarks
  * 负责本地图库与楼层大图全屏预览、缩放平移、翻页与快捷操作：
- * 1. 全屏视窗：全屏暗色遮罩展示图片；
- * 2. 交互手势：支持滚轮缩放 (0.2x ~ 5.0x)、鼠标拖拽平移及双击复位；
- * 3. 统一顶栏矢量操作：收藏（星标 SVG）、元信息（`!` 感叹号 SVG）、编辑与重新生成（当具备楼层上下文时呈现，便于移动端唤出）、下载图片（下箭头 SVG）、关闭（叉号 SVG）；
+ * 1. 全屏视窗：全屏暗色遮罩展示图片，常态允许原生拖出图片，放大平移态自动锁定拖出；
+ * 2. 交互手势：支持滚轮缩放 (0.2x ~ 5.0x)、鼠标拖拽平移、双击复位及轻扫切图；
+ * 3. 统一顶栏操作：收藏、元信息、复制图片、下载图片、编辑与重新生成、历史对比「设为当前」、关闭；
  * 4. 键盘与生命周期：支持 Esc 退出、左右方向键翻页，销毁时自动注销全局监听。
  */
 
@@ -16,8 +16,10 @@ import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { imageInfoModal } from './image-info-modal';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
+import { copyResolvedImageWithToast } from '../feedback/image-clipboard';
 import { logger } from '../../util/logger';
-import { attachImageDragFile, copyImageBlobToClipboard } from '../../util/browser-io';
+import { downloadImageAsset } from '../../util/browser-io';
 
 /** 灯箱条目数据接口 */
 export interface LightboxItem {
@@ -33,6 +35,10 @@ export interface LightboxItem {
     readonly onFavoriteChange?: (favorited: boolean) => void;
     /** 打开图片编辑面板回调（移动端辅助唤出入口） */
     readonly onEdit?: () => void;
+    /** 是否为楼层历史对比图片 */
+    readonly isHistory?: boolean;
+    /** 将当前历史图片设为楼层当前展示图的回调 */
+    readonly onSetCurrent?: () => Promise<boolean | void> | boolean | void;
 }
 
 /** 单图快捷打开灯箱视窗时的可选配置项 */
@@ -68,17 +74,20 @@ export class LightboxModal implements Disposable {
 
     // DOM 元素引用
     private backdropEl?: HTMLElement;
+    private stageEl?: HTMLElement;
     private wrapperEl?: HTMLElement;
     private imgEl?: HTMLImageElement;
     private counterEl?: HTMLElement;
+    private historyBadgeEl?: HTMLElement;
     private titleEl?: HTMLElement;
     private scaleTextEl?: HTMLElement;
     private prevBtnEl?: HTMLElement;
     private nextBtnEl?: HTMLElement;
     private favBtnEl?: HTMLButtonElement;
     private infoBtnEl?: HTMLButtonElement;
+    private setCurrentBtnEl?: HTMLButtonElement;
     private editBtnEl?: HTMLButtonElement;
-    private detachDragShare?: () => void;
+    private isSettingCurrent = false;
 
     // 全局事件解绑器与灯箱自建回退 URL 管理列表（独立于楼层会话 urlPool）
     private readonly disposers: (() => void)[] = [];
@@ -112,6 +121,7 @@ export class LightboxModal implements Disposable {
         const img = document.createElement('img');
         img.className = 'da-lightbox-img';
         img.alt = '图像全屏预览';
+        img.draggable = true;
         img.addEventListener('error', async () => {
             if (!this.isOpenState) return;
             const capturedGen = this.openGeneration;
@@ -146,7 +156,12 @@ export class LightboxModal implements Disposable {
                 }
             }
             if (this.isOpenState && this.openGeneration === capturedGen && this.currentIndex === capturedIndex) {
-                Toast.error('图片资源无法载入');
+                reportRuntimeError(
+                    '[LightboxModal] 图片资源载入失败:',
+                    '图片资源无法载入，请前往「日志与统计」查看详情',
+                    currentItem.url,
+                    'warn'
+                );
             }
         });
 
@@ -165,10 +180,16 @@ export class LightboxModal implements Disposable {
         counter.className = 'da-lightbox-counter';
         counter.textContent = '1 / 1';
 
+        const historyBadge = document.createElement('span');
+        historyBadge.className = 'da-lightbox-history-badge';
+        historyBadge.textContent = '历史';
+        historyBadge.style.display = 'none';
+
         const title = document.createElement('span');
         title.className = 'da-lightbox-title';
 
         info.appendChild(counter);
+        info.appendChild(historyBadge);
         info.appendChild(title);
         header.appendChild(info);
 
@@ -240,6 +261,29 @@ export class LightboxModal implements Disposable {
             }
         });
         headerActions.appendChild(editBtn);
+
+        // 4.5 设为当前按钮（翻看楼层历史图片时展示，将所选历史图设回当前楼层图）
+        const setCurrentBtn = document.createElement('button');
+        setCurrentBtn.type = 'button';
+        setCurrentBtn.className = 'da-lightbox-btn da-lightbox-btn--pill da-lightbox-btn--set-current';
+        setCurrentBtn.title = '将此历史图片设为楼层当前展示图';
+        setCurrentBtn.innerHTML = `${renderIcon('check', 15)}<span>设为当前</span>`;
+        setCurrentBtn.style.display = 'none';
+        setCurrentBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (this.isSettingCurrent) return;
+            const item = this.items[this.currentIndex];
+            if (!item?.onSetCurrent) return;
+            this.isSettingCurrent = true;
+            setCurrentBtn.disabled = true;
+            try {
+                await item.onSetCurrent();
+            } finally {
+                this.isSettingCurrent = false;
+                setCurrentBtn.disabled = false;
+            }
+        });
+        headerActions.appendChild(setCurrentBtn);
 
         // 5. 关闭预览按钮
         const closeBtn = document.createElement('button');
@@ -329,15 +373,18 @@ export class LightboxModal implements Disposable {
 
         // 6. 保存 DOM 引用（保持游离态，在 openItems() 打开时动态挂至 document.body 末位以保证置顶层级）
         this.backdropEl = backdrop;
+        this.stageEl = stage;
         this.wrapperEl = wrapper;
         this.imgEl = img;
         this.counterEl = counter;
+        this.historyBadgeEl = historyBadge;
         this.titleEl = title;
         this.scaleTextEl = scaleText;
         this.prevBtnEl = prevBtn;
         this.nextBtnEl = nextBtn;
         this.favBtnEl = favBtn;
         this.infoBtnEl = infoBtn;
+        this.setCurrentBtnEl = setCurrentBtn;
         this.editBtnEl = editBtn;
 
         // 7. 绑定拖拽与滚轮手势交互
@@ -441,7 +488,9 @@ export class LightboxModal implements Disposable {
             this.isDragging = this.zoom > 1.05;
             this.dragStartX = e.clientX - this.translateX;
             this.dragStartY = e.clientY - this.translateY;
-            stage.setPointerCapture?.(e.pointerId);
+            if (this.isDragging || e.pointerType !== 'mouse') {
+                stage.setPointerCapture?.(e.pointerId);
+            }
             if (this.isDragging) {
                 stage.classList.add('is-dragging');
             }
@@ -472,29 +521,37 @@ export class LightboxModal implements Disposable {
     }
 
     /**
-     * 绑定全屏方向键切图与缩放等快捷键盘操作（Escape 退出由全局浮层栈调度）。
+     * 绑定全屏方向键切图与缩放等快捷键盘操作（在捕获阶段拦截并阻断传播，防止方向键联动触发酒馆分支切换）。
      */
     private bindKeyboard(): void {
         const onKeyDown = (e: KeyboardEvent) => {
             if (!this.isOpenState || !overlayStack.isTop('lightbox-modal')) return;
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 this.prev();
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 this.next();
             } else if (e.key === '+' || e.key === '=') {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 this.adjustZoom(0.25);
             } else if (e.key === '-') {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 this.adjustZoom(-0.25);
             }
         };
 
-        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keydown', onKeyDown, true);
         this.disposers.push(() => {
-            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keydown', onKeyDown, true);
         });
     }
 
@@ -503,6 +560,11 @@ export class LightboxModal implements Disposable {
      */
     private applyTransform(): void {
         if (!this.wrapperEl) return;
+        const isZoomed = this.zoom > 1.05;
+        this.stageEl?.classList.toggle('is-zoomed', isZoomed);
+        if (this.imgEl) {
+            this.imgEl.draggable = !isZoomed;
+        }
         this.wrapperEl.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.zoom})`;
         if (this.scaleTextEl) {
             this.scaleTextEl.textContent = `${Math.round(this.zoom * 100)}%`;
@@ -603,19 +665,16 @@ export class LightboxModal implements Disposable {
 
         if (this.imgEl) {
             this.imgEl.src = item.url;
-            this.detachDragShare?.();
-            const fileBase = `st_draw_${item.imageId ? item.imageId.slice(0, 8) : Date.now()}`;
-            this.detachDragShare = attachImageDragFile(
-                this.imgEl,
-                () => this.resolveCurrentBlob(),
-                fileBase
-            );
+            this.imgEl.draggable = true;
         }
 
         const total = this.items.length;
         if (this.counterEl) {
             this.counterEl.textContent = `${this.currentIndex + 1} / ${total}`;
             this.counterEl.style.display = total > 1 ? 'inline-block' : 'none';
+        }
+        if (this.historyBadgeEl) {
+            this.historyBadgeEl.style.display = item.isHistory ? 'inline-flex' : 'none';
         }
 
         if (this.titleEl) {
@@ -635,6 +694,9 @@ export class LightboxModal implements Disposable {
         if (this.infoBtnEl) {
             this.infoBtnEl.style.display = item.imageId ? 'flex' : 'none';
         }
+        if (this.setCurrentBtnEl) {
+            this.setCurrentBtnEl.style.display = item.isHistory && item.onSetCurrent ? 'inline-flex' : 'none';
+        }
         if (this.editBtnEl) {
             this.editBtnEl.style.display = item.onEdit ? 'flex' : 'none';
         }
@@ -645,29 +707,11 @@ export class LightboxModal implements Disposable {
     private async resolveCurrentBlob(): Promise<Blob | null> {
         const item = this.items[this.currentIndex];
         if (!item) return null;
-        if (item.imageId) {
-            const stored = await imageStorage.getImageBlob(item.imageId);
-            if (stored && stored.size > 0) return stored;
-        }
-        if (item.url) {
-            const res = await fetch(item.url);
-            if (res.ok) return await res.blob();
-        }
-        return null;
+        return imageStorage.resolveImageBlob(item.imageId, item.url);
     }
 
     private async copyCurrent(): Promise<void> {
-        const blob = await this.resolveCurrentBlob();
-        if (!blob) {
-            Toast.error('获取图片数据失败');
-            return;
-        }
-        const ok = await copyImageBlobToClipboard(blob);
-        if (ok) {
-            Toast.success('已复制图片到剪贴板');
-        } else {
-            Toast.error('当前浏览器不支持复制图片，请使用右键或下载');
-        }
+        await copyResolvedImageWithToast(() => this.resolveCurrentBlob());
     }
 
     /**
@@ -712,8 +756,11 @@ export class LightboxModal implements Disposable {
             }
             return newFav;
         } catch (err) {
-            logger.error('切换图像标星收藏异常:', err);
-            Toast.error('操作失败，请重试');
+            reportRuntimeError(
+                '[LightboxModal] 切换图像标星收藏异常:',
+                '操作失败，请前往「日志与统计」查看详情',
+                err
+            );
             return false;
         }
     }
@@ -722,12 +769,14 @@ export class LightboxModal implements Disposable {
      * 打开当前图像的元信息弹窗。
      */
     private async openCurrentMetadata(): Promise<void> {
+        const capturedGen = this.openGeneration;
         const snapshotItems = [...this.items];
         const snapshotIndex = this.currentIndex;
         const item = snapshotItems[snapshotIndex];
         if (!item) return;
 
         const record = item.imageId ? await imageStorage.getImageRecord(item.imageId) : undefined;
+        if (!this.isOpenState || this.openGeneration !== capturedGen) return;
         this.close();
         imageInfoModal.open({
             record,
@@ -739,42 +788,30 @@ export class LightboxModal implements Disposable {
     }
 
     /**
-     * 触发下载当前大图（优先从 IDB 读取原始 Blob，避免已释放的 blob: URL 失效）。
+     * 触发下载当前大图（优先从 IDB 读取原始 Blob，按真实二进制格式匹配扩展名）。
      */
     private async downloadCurrent(): Promise<void> {
         const item = this.items[this.currentIndex];
         if (!item || (!item.url && !item.imageId)) return;
 
-        let tempObjectUrl: string | undefined;
         try {
-            let downloadUrl = item.url;
-            if (item.imageId) {
-                const blob = await imageStorage.getImageBlob(item.imageId);
-                if (blob && blob.size > 0) {
-                    tempObjectUrl = URL.createObjectURL(blob);
-                    downloadUrl = tempObjectUrl;
-                }
-            }
-            if (!downloadUrl) {
+            const ok = await downloadImageAsset({
+                resolveBlob: () =>
+                    item.imageId ? imageStorage.getImageBlob(item.imageId) : Promise.resolve(null),
+                url: item.url,
+                fileNameBase: `st_draw_${item.imageId || Date.now()}`,
+            });
+            if (!ok) {
                 Toast.error('下载失败，未找到可用图像资源');
                 return;
             }
-
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `st_draw_${item.imageId || Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
             Toast.success('已开始下载原图');
         } catch (err) {
-            logger.error('下载大图异常:', err);
-            Toast.error('下载失败，请检查网络或图片资源');
-        } finally {
-            if (tempObjectUrl) {
-                const revokeTarget = tempObjectUrl;
-                setTimeout(() => URL.revokeObjectURL(revokeTarget), 1500);
-            }
+            reportRuntimeError(
+                '[LightboxModal] 下载大图异常:',
+                '下载失败，请检查网络或前往「日志与统计」查看详情',
+                err
+            );
         }
     }
 
@@ -806,8 +843,6 @@ export class LightboxModal implements Disposable {
     public close(): void {
         this.isOpenState = false;
         this.openGeneration += 1;
-        this.detachDragShare?.();
-        this.detachDragShare = undefined;
         overlayStack.remove('lightbox-modal');
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';

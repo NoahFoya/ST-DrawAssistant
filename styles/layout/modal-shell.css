@@ -494,6 +494,8 @@ html.da-has-active-modal body {
 .da-floating-menu-item__desc {
     font-size: var(--da-font-size-xs, 11.5px);
     color: var(--da-text-secondary);
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 640px) {

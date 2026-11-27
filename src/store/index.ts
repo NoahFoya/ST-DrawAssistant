@@ -12,5 +12,8 @@ export * from './material-image-storage';
 export * from './static-preset-loader';
 export * from './static-lexicon-loader';
 export * from './local-lexicon-storage';
+export * from './settings-repository';
+export * from './preset-repository';
+export * from './preset-lifecycle';
 export * from './settings-store';
 

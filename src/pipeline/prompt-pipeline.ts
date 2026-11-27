@@ -16,16 +16,18 @@ import type {
     ResolvedLoraSpec,
 } from '@types';
 import { PROMPT_POLLING_PRESET_ID } from '../config/constants';
-import { type SettingsStore, normalizePresetNameKey, settingsStore } from '../store/settings-store';
-import { resolveNovelAIModelFamily, resolveNovelAIModelName } from '../provider/novelai/novelai-models';
+import { type SettingsStore, settingsStore } from '../store/settings-store';
+import {
+    normalizePresetNameKey,
+    resolveNovelAIModelFamily,
+    resolveNovelAIModelName,
+    resolveTriggeredLoras,
+    supportsLoraSyntax,
+} from '../domain';
 import { resolvePromptMacros } from './macro-resolver';
 import { splitTopLevelTags } from './material-definitions';
 import { stripThinkingAndComments } from './prompt-injector';
-import {
-    resolveTriggeredLoras,
-    sanitizeLoraPrompts,
-    supportsLoraSyntax,
-} from './lora-utils';
+import { sanitizeLoraPrompts } from './lora-utils';
 import { providerRegistry } from '../provider/registry';
 import { logger } from '../util/logger';
 
@@ -372,7 +374,7 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
  * @param rawText 原始文本
  * @returns 净化后的文本
  */
-export function sanitizeMessageText(rawText: string): string {
+function sanitizeMessageText(rawText: string): string {
     if (!rawText || typeof rawText !== 'string') {
         return '';
     }
@@ -721,6 +723,14 @@ export function separatePromptByPipe(input: string): { positive: string; negativ
 export interface BuildPromptOptions {
     /** 用户原始输入或楼层提取文本 */
     rawPrompt: string;
+    /** 提示词编译模式：'raw' 执行预设拼接/宏展开/LoRA触发解析；'final' 直发终稿不二次叠加预设 */
+    promptMode?: 'raw' | 'final';
+    /** 可选显式继承的结构化 LoRA 列表（常用于 'final' 模式原参数复现） */
+    explicitLoras?: readonly ResolvedLoraSpec[];
+    /** 可选保留的源原始正向提示词（用于在 'final' 重绘后仍保留 rawPrompt 溯源） */
+    originRawPrompt?: string;
+    /** 可选保留的源原始负向提示词 */
+    originRawNegativePrompt?: string;
     /** 可选的图生图原图数据（Blob 或 Base64 字符串） */
     sourceImage?: Blob | string;
     /** 可选的局部重绘蒙版遮罩数据（Blob 或 Base64 字符串） */
@@ -764,27 +774,49 @@ export class PromptPipeline {
         const normalizeChinesePunctuation = Boolean(currentSettings?.normalizeChinesePunctuation);
         const provider = options.providerType;
         const params = options.parameters || {};
+        const isFinalMode = options.promptMode === 'final';
 
-        // 1. 先行对原始提示词进行思考链与代码块清洗，保留正文中合法的行内反引号内容
-        const sanitizedRaw = sanitizeMessageText(options.rawPrompt);
-
-        // 2. 按顶层管道符 | 分离正向与负向提示词；若后端不支持负向提示词则丢弃负向段
         const supportsNegative = provider
             ? providerRegistry.getProvider(provider)?.supportsNegativePrompt !== false
             : true;
-        const { positive: rawPositive, negative: parsedNegative } = separatePromptByPipe(sanitizedRaw);
-        const rawNegative = supportsNegative ? parsedNegative : '';
 
-        // 提取 options.parameters 中的显式负向词 (若后端支持)
-        const paramNegative =
-            supportsNegative && typeof params.negativePrompt === 'string'
-                ? params.negativePrompt.trim()
-                : '';
+        // 1 & 2. 根据提示词模式解析正负向基础文本：
+        // - 'raw' 模式：清洗思考链/代码块后按顶层 `|` 分离正负向并合并参数负向词；
+        // - 'final' 模式：直收弹窗确认后的终稿正文，不再剥离代码块或按 `|` 拆切。
+        let rawPositive = '';
+        let combinedNegative = '';
+        if (isFinalMode) {
+            rawPositive = typeof options.rawPrompt === 'string' ? options.rawPrompt : '';
+            combinedNegative =
+                supportsNegative && typeof params.negativePrompt === 'string'
+                    ? params.negativePrompt.trim()
+                    : '';
+        } else {
+            const sanitizedRaw = sanitizeMessageText(options.rawPrompt);
+            const { positive: parsedPositive, negative: parsedNegative } =
+                separatePromptByPipe(sanitizedRaw);
+            rawPositive = parsedPositive;
+            const rawNegative = supportsNegative ? parsedNegative : '';
+            const paramNegative =
+                supportsNegative && typeof params.negativePrompt === 'string'
+                    ? params.negativePrompt.trim()
+                    : '';
+            combinedNegative = [rawNegative, paramNegative].filter(Boolean).join(', ');
+        }
 
-        // 合并正文提取的负向词与参数显式指定的负向词
-        const combinedNegative = [rawNegative, paramNegative].filter(Boolean).join(', ');
-        const rawPositiveInput = rawPositive.trim();
-        const rawNegativeInput = combinedNegative.trim();
+        const rawPositiveInput =
+            isFinalMode &&
+            typeof options.originRawPrompt === 'string' &&
+            options.originRawPrompt.trim()
+                ? options.originRawPrompt.trim()
+                : rawPositive.trim();
+        const rawNegativeInput =
+            isFinalMode &&
+            supportsNegative &&
+            typeof options.originRawNegativePrompt === 'string' &&
+            options.originRawNegativePrompt.trim()
+                ? options.originRawNegativePrompt.trim()
+                : combinedNegative.trim();
 
         // 3. 展开本地素材库宏 ($ID$ / $ID-key1-key2$)
         let positive = rawPositive;
@@ -808,13 +840,15 @@ export class PromptPipeline {
         // 保留仅包含当次生图正文与素材宏展开的快照，供关键词触发 LoRA 判定（不纳入预设自身前后缀）
         const macroExpandedPositive = positive;
 
-        // 4. 解析绑定的提示词预设 (支持固定预设与轮询候选池随机触发)
+        // 4. 解析关联的生图参数预设与提示词预设（'final' 模式跳过提示词预设双拼，仅保留必要参数/语法参考）
         let promptPreset: PromptPresetData | undefined;
         let drawingPreset: DrawingPresetData | undefined;
         let resolvedPromptPresetId: string | undefined;
         let resolvedPromptPresetName: string | undefined;
         let promptPresetId =
-            typeof params.promptPresetId === 'string' && params.promptPresetId.trim()
+            !isFinalMode &&
+            typeof params.promptPresetId === 'string' &&
+            params.promptPresetId.trim()
                 ? params.promptPresetId.trim()
                 : undefined;
         if (provider) {
@@ -824,14 +858,14 @@ export class PromptPipeline {
                     : undefined;
             const resolved = this._settingsStore.resolveDrawingPreset<DrawingPresetData>(provider, {
                 explicitPresetId: explicitDrawingId,
-                throwOnMissingActive: true,
+                throwOnMissingActive: !isFinalMode,
             });
             drawingPreset = resolved.preset;
-            if (!promptPresetId) {
+            if (!isFinalMode && !promptPresetId) {
                 promptPresetId = drawingPreset?.promptPresetId;
             }
         }
-        if (promptPresetId === PROMPT_POLLING_PRESET_ID) {
+        if (!isFinalMode && promptPresetId === PROMPT_POLLING_PRESET_ID) {
             if (!provider) {
                 throw new Error('使用提示词轮询时必须指定生图后端 (provider)');
             }
@@ -858,7 +892,7 @@ export class PromptPipeline {
             promptPreset = chosen.data;
             resolvedPromptPresetId = chosen.id;
             resolvedPromptPresetName = chosen.name;
-        } else if (promptPresetId) {
+        } else if (!isFinalMode && promptPresetId) {
             const pp = this._settingsStore.getPreset<PromptPresetData>('prompts', promptPresetId, provider);
             if (!pp) {
                 throw new Error(`关联的提示词预设已失效或不存在 (ID: ${promptPresetId})，请重新选择预设`);
@@ -868,8 +902,11 @@ export class PromptPipeline {
             resolvedPromptPresetName = pp.name;
         }
 
-        // 5. 应用提示词预设（前缀、后缀、负向词基底，同样支持本地素材宏展开）
-        let resolvedLoras: ResolvedLoraSpec[] = [];
+        // 5. 应用提示词预设（'final' 模式下跳过前后缀拼接，优先继承显式传递的 LoRA 快照）
+        let resolvedLoras: ResolvedLoraSpec[] =
+            isFinalMode && Array.isArray(options.explicitLoras) && supportsLoraSyntax(provider)
+                ? [...options.explicitLoras]
+                : [];
         if (promptPreset) {
             const prefix = applyMaterialMacros((promptPreset.positivePrefix || '').trim());
             const suffix = applyMaterialMacros((promptPreset.positiveSuffix || '').trim());
@@ -932,14 +969,14 @@ export class PromptPipeline {
             }
         }
 
-        // 9. 统一规整文本：按独立开关控制去重、标点与空行整理，以及中文标点转换
+        // 9. 统一规整文本：'raw' 模式按独立开关规整；'final' 模式完整保留终稿措辞顺序，仅做首尾空白裁剪
         const cleanOptions: CleanPromptOptions = {
             deduplicate: shouldDeduplicate,
             cleanPunctuation: shouldCleanPunctuation,
             normalizeChinesePunctuation,
         };
-        const cleanPositive = cleanPromptText(positive, cleanOptions);
-        const cleanNegative = cleanPromptText(negative, cleanOptions);
+        const cleanPositive = isFinalMode ? positive.trim() : cleanPromptText(positive, cleanOptions);
+        const cleanNegative = isFinalMode ? negative.trim() : cleanPromptText(negative, cleanOptions);
 
         return {
             prompt: cleanPositive,

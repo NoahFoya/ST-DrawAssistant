@@ -11,6 +11,7 @@ import type { SlotMountTarget, DrawingSlotEntry, ChatMessage, Disposable } from 
 import { urlPool, type UrlPool } from '../store/url-pool';
 import { settingsStore, type SettingsStore } from '../store/settings-store';
 import { logger } from '../util/logger';
+import { getHostContext } from '../host';
 import { serverStorageService } from './server-storage-service';
 import { promptPipeline } from './prompt-pipeline';
 
@@ -40,6 +41,7 @@ export interface SessionLifecycleOptions {
     getContext?: () => HostContextLike | undefined;
     cancelTasksByChat?: (chatId: string, reason?: string) => void;
     settingsStore?: SettingsStore;
+    validateImageExists?: (imageId: string) => Promise<boolean>;
 }
 
 /**
@@ -51,6 +53,7 @@ export class SessionLifecycleManager implements Disposable {
     private readonly _settingsStore: SettingsStore;
     private readonly _cleanups: Array<() => void> = [];
     private _cancelTasksByChat?: (chatId: string, reason?: string) => void;
+    private _validateImageExists?: (imageId: string) => Promise<boolean>;
 
     private _isBound = false;
     private _lastChatId?: string;
@@ -59,11 +62,8 @@ export class SessionLifecycleManager implements Disposable {
         this._urlPool = options.urlPoolInstance ?? urlPool;
         this._cancelTasksByChat = options.cancelTasksByChat;
         this._settingsStore = options.settingsStore ?? settingsStore;
-        this._getContext =
-            options.getContext ??
-            (() => {
-                return window.SillyTavern?.getContext?.();
-            });
+        this._validateImageExists = options.validateImageExists;
+        this._getContext = options.getContext ?? (() => getHostContext());
     }
 
     /**
@@ -356,16 +356,53 @@ export class SessionLifecycleManager implements Disposable {
                 : slotEntryOrId;
         const existingSlot = this.getSlotEntry(target);
 
-        // 重新生成新图时（imageId 变更），新图尚未转存服务端，不继承旧图的 imageUrl
+        // 重新生成新图时（imageId 变更），新图尚未转存服务端，不继承旧图的 imageUrl，
+        // 同时将旧 imageId 按时间顺序追加至 history（去重并受保留上限约束）
         const isSameImage = Boolean(
             existingSlot?.imageId &&
             baseEntry.imageId &&
             existingSlot.imageId === baseEntry.imageId
         );
 
+        let resolvedHistory: string[] | undefined;
+        if (isSameImage) {
+            resolvedHistory = Array.isArray(baseEntry.history)
+                ? this.normalizeSlotHistory(baseEntry.history, baseEntry.imageId)
+                : existingSlot?.history
+                  ? this.normalizeSlotHistory(existingSlot.history, baseEntry.imageId)
+                  : undefined;
+        } else if (Array.isArray(baseEntry.history)) {
+            resolvedHistory = this.normalizeSlotHistory(baseEntry.history, baseEntry.imageId);
+        } else if (existingSlot?.imageId) {
+            const rawPrevHistory = Array.isArray(existingSlot.history) ? existingSlot.history : [];
+            const filteredPrevHistory: string[] = [];
+            for (const histId of rawPrevHistory) {
+                if (!histId || histId === baseEntry.imageId || histId === existingSlot.imageId) {
+                    continue;
+                }
+                if (this._validateImageExists) {
+                    const exists = await this._validateImageExists(histId).catch(() => false);
+                    if (!exists) continue;
+                }
+                filteredPrevHistory.push(histId);
+            }
+            filteredPrevHistory.push(existingSlot.imageId);
+            resolvedHistory = this.normalizeSlotHistory(filteredPrevHistory, baseEntry.imageId);
+        }
+
         const candidateEntry: DrawingSlotEntry = isSameImage
-            ? { ...existingSlot, ...baseEntry }
-            : { ...baseEntry };
+            ? {
+                  ...existingSlot,
+                  ...baseEntry,
+                  ...(resolvedHistory && resolvedHistory.length > 0 ? { history: resolvedHistory } : {}),
+              }
+            : {
+                  ...baseEntry,
+                  ...(resolvedHistory && resolvedHistory.length > 0 ? { history: resolvedHistory } : {}),
+              };
+        if ((!resolvedHistory || resolvedHistory.length === 0) && 'history' in candidateEntry) {
+            delete (candidateEntry as { history?: string[] }).history;
+        }
 
         const charName = this.getCurrentCharacterName(context);
         const targetMessageObj = message;
@@ -443,6 +480,183 @@ export class SessionLifecycleManager implements Disposable {
         }
 
         return true;
+    }
+
+    private resolveHistoryLimit(): number {
+        const raw = this._settingsStore.get('ui')?.lightbox?.historyLimit;
+        if (typeof raw === 'number' && Number.isFinite(raw)) {
+            return Math.max(0, Math.min(50, Math.round(raw)));
+        }
+        return 10;
+    }
+
+    private normalizeSlotHistory(rawHistory: readonly string[], currentImageId: string): string[] | undefined {
+        const limit = this.resolveHistoryLimit();
+        if (limit <= 0) {
+            return undefined;
+        }
+        const deduped: string[] = [];
+        const seen = new Set<string>();
+        for (let i = rawHistory.length - 1; i >= 0; i--) {
+            const id = rawHistory[i];
+            if (!id || id === currentImageId || seen.has(id)) {
+                continue;
+            }
+            seen.add(id);
+            deduped.unshift(id);
+            if (deduped.length >= limit) {
+                break;
+            }
+        }
+        return deduped.length > 0 ? deduped : undefined;
+    }
+
+    /**
+     * 将指定历史图像设为楼层插槽当前展示图，原当前图保留至 history（仅变更索引关系，不删除图像资产）。
+     */
+    public async switchSlotToHistoryImage(
+        target: SlotMountTarget,
+        historyImageId: string,
+        options?: { imageUrl?: string }
+    ): Promise<DrawingSlotEntry | null> {
+        const context = this._getContext();
+        if (!context || !context.chatId || context.chatId !== target.chatId || !Array.isArray(context.chat)) {
+            return null;
+        }
+        const message = context.chat[target.messageId];
+        if (!message || target.instructionIndex < 0) {
+            return null;
+        }
+
+        const swipeId = target.swipeId ?? message.swipe_id ?? 0;
+        const existingSlot = this.getSwipeDrawings(target.messageId, swipeId)?.[target.instructionIndex];
+        if (!existingSlot || !existingSlot.imageId) {
+            return null;
+        }
+        if (existingSlot.imageId === historyImageId) {
+            return existingSlot;
+        }
+
+        const prevHistory = Array.isArray(existingSlot.history) ? existingSlot.history : [];
+        if (!prevHistory.includes(historyImageId)) {
+            return null;
+        }
+
+        const nextHistoryRaw = prevHistory.filter((id) => id !== historyImageId);
+        nextHistoryRaw.push(existingSlot.imageId);
+        const normalizedHistory = this.normalizeSlotHistory(nextHistoryRaw, historyImageId);
+
+        const nextEntry: DrawingSlotEntry = {
+            imageId: historyImageId,
+            ...(options?.imageUrl ? { imageUrl: options.imageUrl } : {}),
+            ...(normalizedHistory && normalizedHistory.length > 0 ? { history: normalizedHistory } : {}),
+        };
+
+        this.writeSlotToMessage(message, swipeId, target.instructionIndex, nextEntry);
+
+        const saveChatFn = context.saveChat;
+        if (typeof saveChatFn === 'function') {
+            try {
+                await saveChatFn.call(context);
+            } catch (err) {
+                logger.error(`切换历史图后保存会话失败 (#${target.messageId})`, err);
+            }
+        }
+        return nextEntry;
+    }
+
+    /**
+     * 从指定楼层插槽的 history 引用中移除已不存在的图像 ID。
+     */
+    public async pruneSlotHistory(
+        target: SlotMountTarget,
+        invalidImageIds: ReadonlySet<string>
+    ): Promise<boolean> {
+        if (invalidImageIds.size === 0) {
+            return false;
+        }
+        const context = this._getContext();
+        if (!context || !context.chatId || context.chatId !== target.chatId || !Array.isArray(context.chat)) {
+            return false;
+        }
+        const message = context.chat[target.messageId];
+        if (!message) {
+            return false;
+        }
+
+        const swipeId = target.swipeId ?? message.swipe_id ?? 0;
+        const existingSlot = this.getSwipeDrawings(target.messageId, swipeId)?.[target.instructionIndex];
+        if (!existingSlot || !Array.isArray(existingSlot.history) || existingSlot.history.length === 0) {
+            return false;
+        }
+
+        const filtered = existingSlot.history.filter((id) => !invalidImageIds.has(id));
+        if (filtered.length === existingSlot.history.length) {
+            return false;
+        }
+
+        const nextEntry: DrawingSlotEntry = {
+            imageId: existingSlot.imageId,
+            ...(existingSlot.imageUrl ? { imageUrl: existingSlot.imageUrl } : {}),
+            ...(filtered.length > 0 ? { history: filtered } : {}),
+        };
+        this.writeSlotToMessage(message, swipeId, target.instructionIndex, nextEntry);
+
+        const saveChatFn = context.saveChat;
+        if (typeof saveChatFn === 'function') {
+            try {
+                await saveChatFn.call(context);
+            } catch (err) {
+                logger.warn(`清理失效历史引用后保存会话失败 (#${target.messageId})`, err);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 当图库删除某张图片时，同步清理当前会话各楼层分支 history 中的悬空引用。
+     */
+    public pruneHistoryImageIdFromChat(imageId: string): boolean {
+        if (!imageId) {
+            return false;
+        }
+        const context = this._getContext();
+        if (!context || !Array.isArray(context.chat)) {
+            return false;
+        }
+
+        let changed = false;
+        const pruneMap = (drawings?: Record<number, DrawingSlotEntry>) => {
+            if (!drawings) return;
+            for (const [idxKey, entry] of Object.entries(drawings)) {
+                if (!entry || !Array.isArray(entry.history) || !entry.history.includes(imageId)) {
+                    continue;
+                }
+                const nextHistory = entry.history.filter((id) => id !== imageId);
+                const nextEntry: DrawingSlotEntry = {
+                    imageId: entry.imageId,
+                    ...(entry.imageUrl ? { imageUrl: entry.imageUrl } : {}),
+                    ...(nextHistory.length > 0 ? { history: nextHistory } : {}),
+                };
+                drawings[Number(idxKey)] = nextEntry;
+                changed = true;
+            }
+        };
+
+        for (const msg of context.chat) {
+            if (!msg) continue;
+            pruneMap(msg.extra?.drawings);
+            if (Array.isArray(msg.swipe_info)) {
+                for (const sw of msg.swipe_info) {
+                    pruneMap(sw?.extra?.drawings);
+                }
+            }
+        }
+
+        if (changed && typeof context.saveChat === 'function') {
+            void context.saveChat();
+        }
+        return changed;
     }
 
     /**

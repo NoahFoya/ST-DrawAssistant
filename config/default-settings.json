@@ -118,7 +118,8 @@
       "quickPanelEnabled": false
     },
     "lightbox": {
-      "enabled": true
+      "enabled": true,
+      "historyLimit": 10
     },
     "floorButton": {
       "hideOnDone": false

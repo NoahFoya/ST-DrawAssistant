@@ -5,7 +5,7 @@
  * 图像资产持久化存储实现：
  * 1. 分表存储：
  *    - metadata 表：存储轻量索引记录（imageId、taskId、chatId、status、byteSize、prompt 等）；
- *    - blobs 表：存储图像二进制数据（按 imageQuality 配置可能为原始格式或压缩后的 WebP Blob）；
+ *    - blobs 表：存储图像二进制数据（按 imageQuality 配置存储原图、无损 PNG、WebP 或 JPEG，并保留或补写绘图参数元数据）；
  *    - 列表查询与筛选仅反序列化 metadata，避免非必要二进制加载；
  * 2. 状态写入：
  *    - 任务生图成功后调用 saveImage 分表顺序写入图像 Blob 与元数据索引（任一步失败时尝试回滚清理）；
@@ -159,6 +159,30 @@ export class ImageStorage implements ImageStorageService {
     }
 
     /**
+     * 优先从本地 IndexedDB 解析非空图像 Blob；缺失时尝试回退抓取可见预览地址。
+     */
+    public async resolveImageBlob(imageId?: string, url?: string): Promise<Blob | null> {
+        if (imageId) {
+            const stored = await this.getImageBlob(imageId);
+            if (stored && stored.size > 0) {
+                return stored;
+            }
+        }
+        if (url) {
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    return blob.size > 0 ? blob : null;
+                }
+            } catch {
+                // 忽略失效预览地址回退抓取异常
+            }
+        }
+        return null;
+    }
+
+    /**
      * 根据图像标识获取图像元数据记录。
      * @param imageId 图像全局唯一标识符
      */
@@ -168,7 +192,7 @@ export class ImageStorage implements ImageStorageService {
     }
 
     /**
-     * 彻底删除指定图像资产，同步清除元数据索引与二进制数据所占存储空间，并释放内存 URL 与广播清理事件。
+     * 永久删除指定图像资产，同步清除元数据索引与二进制数据所占存储空间，并释放内存 URL 与广播清理事件。
      * @param imageId 图像全局唯一标识符
      */
     public async deleteImage(imageId: string): Promise<void> {

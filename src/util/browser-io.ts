@@ -3,8 +3,10 @@
  *
  * @remarks
  * 统一封装剪贴板文本复制（优先异步 Clipboard API，受限环境自动降级为临时 textarea）
- * 与浏览器端文本 / JSON 文件下载（延迟回收临时 Object URL）。
+ * 与浏览器端文本 / JSON / 图像文件下载（按真实二进制格式匹配扩展名并延迟回收临时 Object URL）。
  */
+
+import { detectImageMimeFromHeader } from './image-metadata';
 
 /**
  * 复制文本至系统剪贴板。
@@ -90,6 +92,120 @@ function inferImageExt(mimeType: string): string {
     return 'png';
 }
 
+function inferImageExtFromUrl(url: string): string {
+    const lower = url.trim().toLowerCase();
+    if (lower.startsWith('data:image/')) {
+        const semi = lower.indexOf(';');
+        const mime = semi !== -1 ? lower.slice(5, semi) : lower.slice(5);
+        return inferImageExt(mime);
+    }
+    const cleanPath = lower.split('?')[0].split('#')[0];
+    if (cleanPath.endsWith('.webp')) return 'webp';
+    if (cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg')) return 'jpg';
+    if (cleanPath.endsWith('.gif')) return 'gif';
+    return 'png';
+}
+
+/**
+ * 综合二进制魔数、MIME 类型与备用 URL 嗅探真实图像格式与文件扩展名。
+ */
+export async function resolveImageFormatInfo(
+    blob?: Blob | null,
+    fallbackUrl?: string
+): Promise<{ mimeType: string; ext: string }> {
+    if (blob && blob.size > 0) {
+        if (typeof blob.arrayBuffer === 'function' && typeof blob.slice === 'function') {
+            try {
+                const header = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+                const detected = detectImageMimeFromHeader(header);
+                if (detected) {
+                    return { mimeType: detected, ext: inferImageExt(detected) };
+                }
+            } catch {
+                // 忽略部分 mock 环境 slice/arrayBuffer 异常，降级为 type 字段推断
+            }
+        }
+        const mime = blob.type || 'image/png';
+        return { mimeType: mime, ext: inferImageExt(mime) };
+    }
+    if (fallbackUrl) {
+        const ext = inferImageExtFromUrl(fallbackUrl);
+        const mimeType =
+            ext === 'jpg'
+                ? 'image/jpeg'
+                : ext === 'webp'
+                  ? 'image/webp'
+                  : ext === 'gif'
+                    ? 'image/gif'
+                    : 'image/png';
+        return { mimeType, ext };
+    }
+    return { mimeType: 'image/png', ext: 'png' };
+}
+
+/** 统一图像资产下载参数 */
+export interface DownloadImageAssetOptions {
+    readonly blob?: Blob | null;
+    readonly resolveBlob?: () => Promise<Blob | null | undefined>;
+    readonly url?: string;
+    readonly fileNameBase: string;
+}
+
+/**
+ * 统一下载图像资产至本地：优先读取原始 Blob 以保证元数据与画质完整，并按真实二进制格式匹配扩展名（.png / .webp / .jpg）。
+ */
+export async function downloadImageAsset(options: DownloadImageAssetOptions): Promise<boolean> {
+    if (typeof document === 'undefined') {
+        return false;
+    }
+
+    let resolvedBlob: Blob | null | undefined = options.blob;
+    if ((!resolvedBlob || resolvedBlob.size === 0) && options.resolveBlob) {
+        try {
+            resolvedBlob = await options.resolveBlob();
+        } catch {
+            resolvedBlob = null;
+        }
+    }
+
+    let downloadUrl = options.url || '';
+    let tempObjectUrl: string | undefined;
+
+    try {
+        if (resolvedBlob && resolvedBlob.size > 0) {
+            tempObjectUrl = URL.createObjectURL(resolvedBlob);
+            downloadUrl = tempObjectUrl;
+        }
+        if (!downloadUrl) {
+            return false;
+        }
+
+        const { ext } = await resolveImageFormatInfo(resolvedBlob, downloadUrl);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${options.fileNameBase}.${ext}`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        try {
+            a.click();
+        } finally {
+            a.remove();
+        }
+        return true;
+    } finally {
+        if (tempObjectUrl) {
+            const revokeTarget = tempObjectUrl;
+            setTimeout(() => {
+                try {
+                    URL.revokeObjectURL(revokeTarget);
+                } catch {
+                    // 忽略临时 URL 回收异常
+                }
+            }, 1500);
+        }
+    }
+}
+
 /**
  * 将图像 Blob 转换为 PNG Blob（浏览器 ClipboardItem 通用要求 image/png）。
  */
@@ -145,66 +261,14 @@ export async function copyImageBlobToClipboard(blob: Blob): Promise<boolean> {
 }
 
 /**
- * 为 `<img>` 元素绑定跨应用拖拽分享支持：
- * 在指针悬停/按下时预加载 File 对象，于 `dragstart` 同步写入 `DataTransfer.items` 与 `DownloadURL`。
+ * 以 UTF-8 编码读取浏览器 `File` 对象文本内容。
  */
-export function attachImageDragFile(
-    imgEl: HTMLImageElement,
-    resolveBlob: () => Promise<Blob | null>,
-    fileNameBase: string
-): () => void {
-    imgEl.draggable = true;
-    let cachedFile: File | null = null;
-    let loading = false;
-
-    const ensureCachedFile = async (): Promise<void> => {
-        if (cachedFile || loading) return;
-        loading = true;
-        try {
-            const blob = await resolveBlob();
-            if (blob && blob.size > 0 && typeof File !== 'undefined') {
-                const mime = blob.type || 'image/png';
-                const ext = inferImageExt(mime);
-                cachedFile = new File([blob], `${fileNameBase}.${ext}`, { type: mime });
-            }
-        } catch {
-            // 忽略预加载异常
-        } finally {
-            loading = false;
-        }
-    };
-
-    const onPreload = () => {
-        void ensureCachedFile();
-    };
-
-    const onDragStart = (e: DragEvent) => {
-        if (!e.dataTransfer) return;
-        if (cachedFile && e.dataTransfer.items) {
-            try {
-                e.dataTransfer.items.add(cachedFile);
-            } catch {
-                // 部分宿主环境可能限制 items.add
-            }
-        }
-        if (imgEl.src) {
-            const mime = cachedFile?.type || 'image/png';
-            const name = cachedFile?.name || `${fileNameBase}.png`;
-            try {
-                e.dataTransfer.setData('DownloadURL', `${mime}:${name}:${imgEl.src}`);
-            } catch {
-                // 忽略部分浏览器不支持 DownloadURL 的情况
-            }
-        }
-    };
-
-    imgEl.addEventListener('pointerenter', onPreload);
-    imgEl.addEventListener('pointerdown', onPreload);
-    imgEl.addEventListener('dragstart', onDragStart);
-
-    return () => {
-        imgEl.removeEventListener('pointerenter', onPreload);
-        imgEl.removeEventListener('pointerdown', onPreload);
-        imgEl.removeEventListener('dragstart', onDragStart);
-    };
+export function readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(reader.error || new Error(`读取文件失败: ${file.name}`));
+        reader.readAsText(file, 'utf-8');
+    });
 }
+

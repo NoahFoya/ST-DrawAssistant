@@ -15,49 +15,12 @@ import { computePromptInjections } from '../../pipeline/prompt-injector';
 import { settingsStore, type DrawAssistantSettings } from '../../store/settings-store';
 import { Toast } from '../feedback/toast';
 
-export interface PromptChannelMeta {
-    readonly id: PromptChannelId;
-    readonly category: PresetCategory;
-    readonly label: string;
-    readonly defaultDepth: number;
-    readonly defaultOrder: number;
-    readonly desc: string;
-}
+import {
+    PROMPT_CHANNELS,
+    type PromptChannelMeta,
+} from '../state/prompts-state';
 
-export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
-    {
-        id: 'story',
-        category: 'prompt_story',
-        label: '故事插画',
-        defaultDepth: 0,
-        defaultOrder: 10,
-        desc: '默认开启的主通道，教 AI 在剧情回复中何时及如何输出生图指令；若已挂载外部绘画世界书，可关闭本通道。',
-    },
-    {
-        id: 'vocab',
-        category: 'prompt_vocab',
-        label: '词汇指导',
-        defaultDepth: 7,
-        defaultOrder: 200,
-        desc: '默认关闭的词表参考通道，以 @D=7 深度注入常见 Danbooru 标签表并按中文联想词扩展触发（与侧边栏本地联想「词库」相互独立）。',
-    },
-    {
-        id: 'character',
-        category: 'prompt_character',
-        label: '素材创作',
-        defaultDepth: 0,
-        defaultOrder: 20,
-        desc: '默认关闭的建档提示词通道，引导 AI 按「素材管理 → 解析设置」的标签格式生成角色与服装设定档案。',
-    },
-    {
-        id: 'material',
-        category: 'prompt_material',
-        label: '素材注入',
-        defaultDepth: 0,
-        defaultOrder: 30,
-        desc: '默认关闭的素材变量通道，通过 {{角色启用列表}}、{{服装启用列表}} 与可用宏模板将已启用的素材注入推理上下文。',
-    },
-];
+export { PROMPT_CHANNELS, type PromptChannelMeta };
 
 const CHANNEL_LABEL_MAP: Record<PromptChannelId, string> = Object.fromEntries(
     PROMPT_CHANNELS.map((c) => [c.id, c.label])
@@ -200,7 +163,7 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
         <div className="da-prompts-preview-panel">
             {/* 最上方卡片：4 通道统一启用设置 */}
             <CardView
-                title="提示词启用设置"
+                title="提示词开关与预设"
                 actions={
                     <div className="da-preview-summary-badges">
                         <BadgeView
@@ -328,7 +291,7 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                                             </span>
                                             <span
                                                 className="da-help-icon"
-                                                data-tooltip="开启后，若当前上下文未命中任何有效角色或服装档案，将整体跳过「素材注入」通道，避免向模型注入空列表或无关宏指令。"
+                                                data-tooltip="开启后，若当前没有启用或命中任何有效角色或服装，就跳过发送「素材注入」内容，避免把空白列表发给 AI。"
                                                 role="button"
                                                 tabIndex={0}
                                                 aria-label="无有效素材时，跳过素材注入说明"
@@ -355,15 +318,15 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
             {/* 核心卡片：发送给 AI 的注入段落 */}
             <CardView
                 className="da-card--padded"
-                title={`注入段落预览 (${computed.buckets.length})`}
+                title={`实际发送内容预览 (${computed.buckets.length})`}
                 actions={
                     <div className="da-preview-actions-group">
                         {computed.buckets.length > 0 && (
                             <ButtonControl
                                 label={
                                     computed.buckets.every((b) => Boolean(collapsedBuckets[b.key]))
-                                        ? '展开全部深度'
-                                        : '折叠全部深度'
+                                        ? '展开全部段落'
+                                        : '折叠全部段落'
                                 }
                                 variant="secondary"
                                 size="sm"
@@ -433,9 +396,36 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                                                 >
                                                     {isCollapsed ? '▸' : '▾'}
                                                 </span>
-                                                <span className="da-paragraph-badge da-paragraph-badge--pos">
-                                                    {posText}
-                                                </span>
+                                                {(() => {
+                                                    const posHelpText =
+                                                        bucket.position === 1
+                                                            ? '@D 表示距最新消息的对话轮数：@D=0 紧贴最新消息（优先级最高），数值越大位置越靠前。'
+                                                            : '提示词插入在酒馆角色设定里的位置';
+                                                    return (
+                                                        <>
+                                                            <span
+                                                                className="da-paragraph-badge da-paragraph-badge--pos"
+                                                            >
+                                                                {posText}
+                                                            </span>
+                                                            <span
+                                                                className="da-help-icon"
+                                                                data-tooltip={posHelpText}
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                aria-label={posHelpText}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                                        e.stopPropagation();
+                                                                    }
+                                                                }}
+                                                            >
+                                                                ?
+                                                            </span>
+                                                        </>
+                                                    );
+                                                })()}
                                                 <span className="da-paragraph-badge da-paragraph-badge--role">
                                                     {roleText}
                                                 </span>
@@ -570,9 +560,9 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                 >
                     <div className="da-material-inspect-accordion__title">
                         <span>{isMaterialInspectOpen ? '▾' : '▸'}</span>
-                        <strong>素材变量渲染检视</strong>
+                        <strong>角色与服装内容详情</strong>
                         <span className="da-material-inspect-accordion__hint">
-                            (点击{isMaterialInspectOpen ? '收起' : '展开'}查看角色与服装替换文本)
+                            (点击{isMaterialInspectOpen ? '收起' : '展开'}查看实际发送给 AI 的角色与服装文本)
                         </span>
                     </div>
                 </div>

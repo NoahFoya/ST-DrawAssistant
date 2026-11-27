@@ -6,83 +6,10 @@
  * 以便独立进行单元测试并保持主控制器聚焦于事件调度与交互生命周期。
  */
 
-import type {
-    DrawingPresetData,
-    ProviderStoredConfig,
-    ProviderType,
-} from '@types';
-import {
-    type promptPipeline,
-    resolveEffectivePromptPresetsForValidation,
-} from '../../pipeline/prompt-pipeline';
+import type { promptPipeline } from '../../pipeline/prompt-pipeline';
 import { settingsStore } from '../../store/settings-store';
-import { validatePresetAssets } from '../../util/asset-matcher';
 
 type ExtractedFloorCommand = ReturnType<typeof promptPipeline.extractCommands>[number];
-
-/** 构造楼层按钮与容器的唯一映射键 */
-export function buildFloorSlotKey(
-    chatId: string,
-    messageId: number,
-    swipeId: number,
-    instructionIndex: number
-): string {
-    return `${chatId}:${messageId}:${swipeId}:${instructionIndex}`;
-}
-
-/** 从尾部安全判断容器映射键是否归属指定楼层（兼容含 `:` 的 chatId） */
-export function matchesFloorSlotMessage(key: string, messageId: number): boolean {
-    const parts = key.split(':');
-    return parts.length >= 4 && Number(parts[parts.length - 3]) === messageId;
-}
-
-/** 判断容器映射键是否精确匹配指定会话、楼层与候选分支 */
-export function matchesFloorSlotScope(
-    key: string,
-    chatId: string,
-    messageId: number,
-    swipeId: number
-): boolean {
-    const suffix = `:${messageId}:${swipeId}:`;
-    const lastColon = key.lastIndexOf(':');
-    if (lastColon <= chatId.length) {
-        return false;
-    }
-    const prefix = key.slice(0, lastColon + 1);
-    return prefix === `${chatId}${suffix}`;
-}
-
-/**
- * 校验当前激活预设中的资产（主模型、VAE、CLIP、LoRA）是否存在于资产缓存中。
- *
- * @param providerType 生图后端服务提供方标识
- * @returns 校验结果：valid 为是否齐备，missing 记录缺失的模型文件名列表
- */
-export function validateCurrentPresetAssets(
-    providerType: ProviderType
-): { valid: boolean; missing: string[] } {
-    const pCfg = settingsStore.getProviderConfig<ProviderStoredConfig>(providerType);
-    const activeDrawingId = pCfg?.activeDrawingPresetId;
-    const cache = pCfg?.assetCache;
-
-    if (!activeDrawingId) {
-        return { valid: true, missing: [] };
-    }
-
-    const dp = settingsStore.getPreset<DrawingPresetData>('drawing', activeDrawingId, providerType);
-    const promptPresetsForCheck = resolveEffectivePromptPresetsForValidation(
-        settingsStore,
-        providerType,
-        dp?.data
-    );
-
-    return validatePresetAssets({
-        drawingPreset: dp?.data,
-        promptPresets: promptPresetsForCheck,
-        assetCache: cache,
-        providerType,
-    });
-}
 
 const IGNORED_FLOOR_CONTAINER_TAGS = new Set(['CODE', 'PRE', 'DETAILS']);
 const NON_TEXT_VISIBLE_TAGS = new Set([

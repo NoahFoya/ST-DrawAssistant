@@ -251,21 +251,37 @@ export function openFloatingSurface(options: OpenFloatingSurfaceOptions): Dispos
         rootContainer.appendChild(panel);
         document.body.appendChild(rootContainer);
 
+        const ceilingWidth = options.desktopWidth ?? 320;
         const applyDesktopPosition = (): void => {
             if (isDisposed) {
                 return;
             }
+            const vp = getViewportRect();
+            const maxPopoverWidth = Math.max(120, Math.min(ceilingWidth, vp.width - 20));
+            // 测量前先按组件上限约束宽度并清除残留高度上限，避免按不限宽尺寸定位后溢出
+            panel.style.maxWidth = `${maxPopoverWidth}px`;
+            panel.style.maxHeight = '';
+            if (options.desktopWidth) {
+                panel.style.width = `${maxPopoverWidth}px`;
+            }
+
             const rect = panel.getBoundingClientRect();
-            const measuredW = rect.width > 0 ? rect.width : (options.desktopWidth ?? 210);
+            const measuredW = Math.min(
+                maxPopoverWidth,
+                rect.width > 0 ? rect.width : (options.desktopWidth ?? 210)
+            );
             const measuredH = rect.height > 0 ? rect.height : (options.estimatedHeight ?? 240);
             const pos = computeAnchoredPosition({
                 anchorRect: options.anchorRect,
-                floatingWidth: Math.max(measuredW, options.desktopWidth ?? 0),
+                floatingWidth: Math.max(measuredW, Math.min(maxPopoverWidth, options.desktopWidth ?? 0)),
                 floatingHeight: measuredH,
                 preferredPlacement: options.preferredPlacement ?? 'bottom',
                 align: options.align ?? 'start',
                 gap: 6,
                 margin: 10,
+                viewport: vp,
+                maxWidth: maxPopoverWidth,
+                maxHeight: 340,
             });
             panel.style.left = `${pos.left}px`;
             panel.style.top = `${pos.top}px`;

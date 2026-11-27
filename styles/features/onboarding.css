@@ -309,6 +309,69 @@
     color: var(--da-text-primary);
 }
 
+/* 默认折叠细节与排障抽屉 (.da-onboarding-details) */
+.da-onboarding-details {
+    border-radius: var(--da-radius-lg, 10px);
+    background: var(--da-bg-secondary);
+    border: 1px solid var(--da-border-color);
+    padding: 0;
+    overflow: hidden;
+}
+
+.da-onboarding-details__summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    font-size: var(--da-font-size-sm, 12.6px);
+    font-weight: 600;
+    color: var(--da-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.16s var(--da-ease), color 0.16s var(--da-ease);
+}
+
+.da-onboarding-details__summary::-webkit-details-marker {
+    display: none;
+}
+
+.da-onboarding-details__summary:hover {
+    background: var(--da-bg-hover);
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-details__summary-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.da-onboarding-details__summary-text::before {
+    content: '▸';
+    font-size: 11px;
+    color: var(--da-accent-color);
+    transition: transform 0.16s var(--da-ease);
+    display: inline-block;
+}
+
+.da-onboarding-details[open] .da-onboarding-details__summary-text::before {
+    transform: rotate(90deg);
+}
+
+.da-onboarding-details[open] .da-onboarding-details__summary {
+    border-bottom: 1px solid var(--da-border-color);
+    color: var(--da-text-primary);
+}
+
+.da-onboarding-details__list {
+    margin: 0;
+    padding: 10px 16px 12px 30px;
+    background: var(--da-bg-card);
+}
+
 /* 3. 底部操作栏 */
 .da-onboarding-footer {
     display: flex;

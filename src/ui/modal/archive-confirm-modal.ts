@@ -27,6 +27,7 @@ import { attachTagAutocomplete } from '../composite/tag-autocomplete';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
 
 export interface ArchiveConfirmModalOptions {
     /** 提取出的角色与服装档案列表 */
@@ -255,7 +256,7 @@ export function openArchiveConfirmModal(options: ArchiveConfirmModalOptions): Di
             refs.statusBadgeEl.textContent = `与本批第 ${batchDupIdx + 1} 项重名`;
         } else {
             refs.statusBadgeEl.className = 'da-badge da-badge--success';
-            refs.statusBadgeEl.textContent = '全新档案';
+            refs.statusBadgeEl.textContent = '新增档案';
         }
 
         const isSkipped = currentStrategy === 'skip';
@@ -773,8 +774,11 @@ export function openArchiveConfirmModal(options: ArchiveConfirmModalOptions): Di
             options.onConfirmed?.(savedCount);
             dispose();
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : '保存预设失败';
-            Toast.error(msg);
+            reportRuntimeError(
+                '[ArchiveConfirmModal] 保存角色/服装档案异常:',
+                '保存档案失败，请前往「日志与统计」查看详情',
+                err
+            );
         } finally {
             isSubmitting = false;
             if (!isDisposed) {

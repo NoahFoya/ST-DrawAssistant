@@ -12,12 +12,11 @@ import type {
 } from '@types';
 import {
     CardView,
-    PresetToolbarView,
     ButtonControl,
     SelectControl,
 } from '../../framework';
-import type { PresetActionType } from '../../composite';
-import type { PresetController } from '../../viewmodels';
+import { PresetToolbar, type PresetActionType } from '../../composite';
+import type { PresetController } from '../../state';
 import {
     CHARACTER_PART_DEFS,
     normalizeCharacterData,
@@ -116,7 +115,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
     return (
         <div className="da-material-subpanel">
             <div className="da-material-preset-bar">
-                <PresetToolbarView
+                <PresetToolbar
                     presets={charController.toolbarItems.value}
                     activePresetId={activeId}
                     dirty={isDirty}
@@ -186,7 +185,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                         <textarea
                             className="da-char-description-textarea"
                             value={draft.description}
-                            placeholder="填写角色性格背景、身份设定与故事定位，将注入模型上下文供 AI 理解人设..."
+                            placeholder="填写角色性格背景、外貌气质与剧情定位，会随素材通道发给 AI 参考..."
                             onInput={(e) =>
                                 charController.updateDraft(
                                     'description',
@@ -220,7 +219,7 @@ export function CharacterPanel(props: CharacterPanelProps): VNode {
                             <label className="da-material-compact-label">角色触发词 (Trigger Tags)</label>
                             <span
                                 className="da-help-icon"
-                                data-tooltip="官方或专用触发规范：若为动漫/游戏等知名 IP 角色，请填写 Danbooru 标准角色标签与作品出处（例如 hatsune_miku, vocaloid），或填写专用触发标签；若为原创自设角色且无专用触发标签，此处留空即可，模型将依据下方外貌特征标签进行生成。"
+                                data-tooltip="若为动漫/游戏等知名角色，填写模型认识的角色与作品标签（如 hatsune_miku, vocaloid）或专用触发词；原创角色没有专属触发词时留空即可，生图会以下方外貌细节为准。"
                                 role="button"
                                 tabIndex={0}
                                 aria-label="查看角色触发词填写规范"

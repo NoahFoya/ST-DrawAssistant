@@ -1,12 +1,12 @@
 /**
- * 楼层图像操作与编辑面板 (ImageActionPanel)。
+ * 图像编辑与双通道重绘工作台 (ImageActionPanel)。
  *
  * @remarks
- * 负责楼层图片的提示词编辑与重新生成：
- * 1. 唤出方式：桌面端右键图片 (`contextmenu`)、移动端长按图片 (`touchstart` 500ms)，或从元信息/灯箱的“操作”按钮进入；
- * 2. 提示词在线编辑：展示当前图像的正向/负向提示词，支持编辑与一键复制；
- * 3. 重新生成：点击“重新生成”基于修改后的提示词重新生成当前楼层图片；
- * 4. 辅助功能：底部提供查看完整元信息、局部重绘与下载图片入口。
+ * 统一服务楼层与本地图库图像的提示词微调、参数模式切换与重新生成：
+ * 1. 唤出方式：楼层图片右键/长按/角落编辑按钮、本地图库卡片/灯箱重绘入口或元信息弹窗；
+ * 2. 双栏布局：桌面端采用左编辑（正向/负向提示词、宏补全与展开）右控制（缩略图预览、参数模式与独立种子徽标）工作台，窄屏自动保持编辑区置顶；
+ * 3. 双模式重绘：支持「复现原参数 / 按当前配置」与「随机新种子 / 锁定原种子」组合提交（支持 Ctrl/Cmd+Enter 快捷触发）；
+ * 4. 辅助工具：底部提供元信息详情、复制图片到剪贴板、局部重绘画板与图像文件下载。
  */
 
 import type { Disposable } from '../types';
@@ -14,20 +14,39 @@ import type { StoredImageRecord } from '@types';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { Toast } from '../feedback/toast';
+import { reportRuntimeError } from '../feedback/error-feedback';
+import { copyResolvedImageWithToast } from '../feedback/image-clipboard';
 import { imageInfoModal } from './image-info-modal';
 import { openInpaintModal, type InpaintConfirmResult } from './inpaint-modal';
 import { attachTagAutocomplete, type TagAutocomplete } from '../composite/tag-autocomplete';
 import { resolvePromptMacros } from '../../pipeline/macro-resolver';
-import { providerRegistry } from '../../provider/registry';
+import {
+    inspectRecordForRegeneration,
+    resolveRegenCapabilities,
+    type RecordReplayInspection,
+    type ReplayMode,
+    type SeedMode,
+} from '../../pipeline/regeneration-planner';
+import { imageStorage } from '../../store/image-storage';
 import { settingsStore } from '../../store/settings-store';
-import { logger } from '../../util/logger';
+import { copyTextToClipboard, downloadImageAsset } from '../../util/browser-io';
+
+/** 重新生成提交决策负载 */
+export interface ImageActionSubmitDecision {
+    readonly prompt: string;
+    readonly negativePrompt?: string;
+    readonly replayMode: ReplayMode;
+    readonly seedMode: SeedMode;
+}
 
 /** 图像操作弹窗上下文数据 */
 export interface ImageActionContext {
-    /** 宿主消息楼层序号 */
-    readonly messageId: number;
+    /** 调用来源：楼层消息或本地图库（缺省视为 'floor'） */
+    readonly source?: 'floor' | 'gallery';
+    /** 宿主消息楼层序号（楼层来源时展示 `#N`） */
+    readonly messageId?: number;
     /** 指令序号 (默认 0) */
-    readonly instructionIndex: number;
+    readonly instructionIndex?: number;
     /** 图像全局唯一标识符 */
     readonly imageId?: string;
     /** 图像展示地址 (Blob URL / 远程静态相对路径) */
@@ -38,10 +57,19 @@ export interface ImageActionContext {
     readonly negativePrompt?: string;
     /** 完整的图像资产持久化记录快照 */
     readonly record?: StoredImageRecord;
-    /** 触发整图重新生成回调 */
+    /** 默认重绘参数模式（图库默认 'original'，楼层默认 'current'） */
+    readonly defaultReplayMode?: ReplayMode;
+    /** 触发整图重新生成兼容回调（仅传正/负向提示词） */
     readonly onRegenerate?: (newPrompt: string, newNegativePrompt?: string) => Promise<boolean | void> | boolean | void;
+    /** 触发结构化双通道重绘回调（携带参数模式与种子决策） */
+    readonly onSubmitRegenerate?: (decision: ImageActionSubmitDecision) => Promise<boolean | void> | boolean | void;
     /** 触发局部重绘 Inpaint 回调 */
     readonly onInpaint?: (data: InpaintConfirmResult) => Promise<boolean | void> | boolean | void;
+    /** 触发结构化局部重绘回调（携带当前选择的参数模式与种子决策） */
+    readonly onSubmitInpaint?: (
+        data: InpaintConfirmResult,
+        decision: Pick<ImageActionSubmitDecision, 'replayMode' | 'seedMode'>
+    ) => Promise<boolean | void> | boolean | void;
 }
 
 /**
@@ -53,17 +81,41 @@ export class ImageActionPanel implements Disposable {
 
     // DOM 元素引用
     private backdropEl?: HTMLElement;
+    private panelEl?: HTMLElement;
+    private bodyEl?: HTMLElement;
+    private sideColEl?: HTMLElement;
     private unbindBackdrop?: () => void;
     private titleTextEl?: HTMLElement;
+    private previewCardEl?: HTMLElement;
+    private previewBoxEl?: HTMLElement;
+    private previewImgEl?: HTMLImageElement;
+    private specsEl?: HTMLElement;
     private posTextarea?: HTMLTextAreaElement;
     private negSectionEl?: HTMLElement;
     private negTextarea?: HTMLTextAreaElement;
     private inpaintBtnEl?: HTMLButtonElement;
+    private replayPanelEl?: HTMLElement;
+    private modeOriginalBtnEl?: HTMLButtonElement;
+    private modeCurrentBtnEl?: HTMLButtonElement;
+    private seedRowEl?: HTMLElement;
+    private seedChipEl?: HTMLElement;
+    private seedRandomBtnEl?: HTMLButtonElement;
+    private seedFixedBtnEl?: HTMLButtonElement;
+    private replayWarningEl?: HTMLElement;
     private resetPosUndo?: () => void;
     private resetNegUndo?: () => void;
     private updatePosHighlight?: () => void;
     private updateNegHighlight?: () => void;
     private readonly autocompletes: TagAutocomplete[] = [];
+
+    private openGeneration = 0;
+    private allocatedFallbackUrls: string[] = [];
+    private currentReplayMode: ReplayMode = 'current';
+    private currentSeedMode: SeedMode = 'random';
+    private currentInspection: RecordReplayInspection | null = null;
+    private hasManualPosEdit = false;
+    private hasManualNegEdit = false;
+    private isSyncingTextareas = false;
 
     // 全局事件解绑器列表
     private readonly disposers: (() => void)[] = [];
@@ -85,9 +137,10 @@ export class ImageActionPanel implements Disposable {
         backdrop.className = 'da-modal-backdrop da-modal-backdrop--sheet st-da-root da-action-panel-backdrop';
         backdrop.style.display = 'none';
 
-        // 2. 居中面板
+        // 2. 居中双栏工作台面板
         const panel = document.createElement('div');
         panel.className = 'da-modal-shell da-action-panel';
+        this.panelEl = panel;
 
         // 3. Header 顶栏
         const header = document.createElement('div');
@@ -114,31 +167,179 @@ export class ImageActionPanel implements Disposable {
 
         panel.appendChild(header);
 
-        // 4. Body 提示词与参数区域
+        // 4. Body 双栏区域（左/上：正负向提示词输入；右/下：图像缩略图与参数切换）
         const body = document.createElement('div');
         body.className = 'da-action-panel__body';
+        this.bodyEl = body;
+
+        const editorCol = document.createElement('div');
+        editorCol.className = 'da-action-panel__col-editor';
+
+        const bindShortcutSubmit = (ta: HTMLTextAreaElement) => {
+            ta.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    this.handleRegenerate();
+                }
+            });
+        };
 
         // 正向提示词卡片
-        const posSection = this.createPromptSection('正向提示词 (Prompt)', '输入正向描述提示词...');
+        const posSection = this.createPromptSection('正向提示词', '输入正向描述提示词...', 5);
         this.posTextarea = posSection.textarea;
+        this.posTextarea.addEventListener('input', () => {
+            if (!this.isSyncingTextareas) {
+                this.hasManualPosEdit = true;
+            }
+        });
+        bindShortcutSubmit(this.posTextarea);
         this.resetPosUndo = posSection.resetUndo;
         this.updatePosHighlight = posSection.updateHighlight;
         const posAc = attachTagAutocomplete(this.posTextarea, { mode: 'prompt-with-macro' });
         this.autocompletes.push(posAc);
         this.disposers.push(() => posAc.dispose());
-        body.appendChild(posSection.container);
+        editorCol.appendChild(posSection.container);
 
         // 负向提示词卡片
-        const negSection = this.createPromptSection('负向提示词 (Negative Prompt)', '输入负向过滤提示词...');
+        const negSection = this.createPromptSection('负向提示词', '输入负向过滤提示词...', 3);
         this.negSectionEl = negSection.container;
         this.negTextarea = negSection.textarea;
+        this.negTextarea.addEventListener('input', () => {
+            if (!this.isSyncingTextareas) {
+                this.hasManualNegEdit = true;
+            }
+        });
+        bindShortcutSubmit(this.negTextarea);
         this.resetNegUndo = negSection.resetUndo;
         this.updateNegHighlight = negSection.updateHighlight;
         const negAc = attachTagAutocomplete(this.negTextarea, { mode: 'prompt-with-macro' });
         this.autocompletes.push(negAc);
         this.disposers.push(() => negAc.dispose());
-        body.appendChild(negSection.container);
+        editorCol.appendChild(negSection.container);
 
+        body.appendChild(editorCol);
+
+        // 4.2 右侧视觉预览与重绘设置栏
+        const sideCol = document.createElement('div');
+        sideCol.className = 'da-action-panel__col-side';
+        this.sideColEl = sideCol;
+
+        const previewCard = document.createElement('div');
+        previewCard.className = 'da-action-panel__preview-card';
+        const previewBox = document.createElement('div');
+        previewBox.className = 'da-action-panel__preview-box';
+        const previewImg = document.createElement('img');
+        previewImg.className = 'da-action-panel__preview-img';
+        previewImg.alt = '当前编辑图像';
+        previewImg.draggable = true;
+        previewImg.addEventListener('error', () => {
+            void this.recoverPreviewFallback(previewImg);
+        });
+        previewBox.appendChild(previewImg);
+        previewCard.appendChild(previewBox);
+
+        const specsEl = document.createElement('div');
+        specsEl.className = 'da-action-panel__specs';
+        previewCard.appendChild(specsEl);
+
+        this.previewCardEl = previewCard;
+        this.previewBoxEl = previewBox;
+        this.previewImgEl = previewImg;
+        this.specsEl = specsEl;
+        sideCol.appendChild(previewCard);
+
+        const replayPanel = document.createElement('div');
+        replayPanel.className = 'da-action-panel__replay-panel';
+        replayPanel.style.display = 'none';
+
+        const modeBlock = document.createElement('div');
+        modeBlock.className = 'da-action-panel__control-block';
+        const modeHeader = document.createElement('div');
+        modeHeader.className = 'da-action-panel__control-header';
+        const modeLabel = document.createElement('span');
+        modeLabel.className = 'da-action-panel__replay-label';
+        modeLabel.textContent = '参数模式';
+        modeHeader.appendChild(modeLabel);
+        const modeGroup = document.createElement('div');
+        modeGroup.className = 'da-action-panel__seg-group';
+
+        const modeOriginalBtn = document.createElement('button');
+        modeOriginalBtn.type = 'button';
+        modeOriginalBtn.className = 'da-action-panel__seg-btn';
+        modeOriginalBtn.textContent = '复现原参数';
+        modeOriginalBtn.addEventListener('click', () => this.switchReplayMode('original'));
+
+        const modeCurrentBtn = document.createElement('button');
+        modeCurrentBtn.type = 'button';
+        modeCurrentBtn.className = 'da-action-panel__seg-btn';
+        modeCurrentBtn.textContent = '按当前配置';
+        modeCurrentBtn.addEventListener('click', () => this.switchReplayMode('current'));
+
+        modeGroup.appendChild(modeOriginalBtn);
+        modeGroup.appendChild(modeCurrentBtn);
+        modeBlock.appendChild(modeHeader);
+        modeBlock.appendChild(modeGroup);
+        replayPanel.appendChild(modeBlock);
+
+        const seedBlock = document.createElement('div');
+        seedBlock.className = 'da-action-panel__control-block';
+        const seedHeader = document.createElement('div');
+        seedHeader.className = 'da-action-panel__control-header';
+        const seedLabel = document.createElement('span');
+        seedLabel.className = 'da-action-panel__replay-label';
+        seedLabel.textContent = '随机种子';
+        const seedChip = document.createElement('button');
+        seedChip.type = 'button';
+        seedChip.className = 'da-action-panel__seed-chip';
+        seedChip.title = '点击复制原图种子';
+        seedChip.style.display = 'none';
+        seedChip.addEventListener('click', () => {
+            const seed = this.currentInspection?.recordedSeed;
+            if (seed === undefined) return;
+            void copyTextToClipboard(String(seed)).then((ok) => {
+                if (ok) Toast.success(`已复制种子 ${seed}`);
+            });
+        });
+        seedHeader.appendChild(seedLabel);
+        seedHeader.appendChild(seedChip);
+
+        const seedGroup = document.createElement('div');
+        seedGroup.className = 'da-action-panel__seg-group';
+
+        const seedRandomBtn = document.createElement('button');
+        seedRandomBtn.type = 'button';
+        seedRandomBtn.className = 'da-action-panel__seg-btn';
+        seedRandomBtn.textContent = '随机新种子';
+        seedRandomBtn.addEventListener('click', () => this.switchSeedMode('random'));
+
+        const seedFixedBtn = document.createElement('button');
+        seedFixedBtn.type = 'button';
+        seedFixedBtn.className = 'da-action-panel__seg-btn';
+        seedFixedBtn.textContent = '锁定原种子';
+        seedFixedBtn.addEventListener('click', () => this.switchSeedMode('fixed'));
+
+        seedGroup.appendChild(seedRandomBtn);
+        seedGroup.appendChild(seedFixedBtn);
+        seedBlock.appendChild(seedHeader);
+        seedBlock.appendChild(seedGroup);
+        replayPanel.appendChild(seedBlock);
+
+        const replayWarning = document.createElement('div');
+        replayWarning.className = 'da-action-panel__replay-warning';
+        replayWarning.style.display = 'none';
+        replayPanel.appendChild(replayWarning);
+
+        this.replayPanelEl = replayPanel;
+        this.modeOriginalBtnEl = modeOriginalBtn;
+        this.modeCurrentBtnEl = modeCurrentBtn;
+        this.seedRowEl = seedBlock;
+        this.seedChipEl = seedChip;
+        this.seedRandomBtnEl = seedRandomBtn;
+        this.seedFixedBtnEl = seedFixedBtn;
+        this.replayWarningEl = replayWarning;
+        sideCol.appendChild(replayPanel);
+
+        body.appendChild(sideCol);
         panel.appendChild(body);
 
         // 5. Footer 底部操作按钮行
@@ -152,7 +353,7 @@ export class ImageActionPanel implements Disposable {
         const infoBtn = document.createElement('button');
         infoBtn.type = 'button';
         infoBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        infoBtn.title = '查看完整生成参数与技术元信息';
+        infoBtn.title = '查看完整生成参数';
         infoBtn.textContent = '元信息';
         infoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -160,11 +361,23 @@ export class ImageActionPanel implements Disposable {
         });
         footerLeft.appendChild(infoBtn);
 
+        // 复制图片按钮（便于直接 Ctrl+V 粘贴至 QQ / 微信）
+        const copyImgBtn = document.createElement('button');
+        copyImgBtn.type = 'button';
+        copyImgBtn.className = 'da-btn da-btn--secondary da-btn--sm';
+        copyImgBtn.title = '复制图片到剪贴板（支持直接粘贴到 QQ / 微信）';
+        copyImgBtn.textContent = '复制图片';
+        copyImgBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            void copyResolvedImageWithToast(() => this.resolveCurrentBlob());
+        });
+        footerLeft.appendChild(copyImgBtn);
+
         // 下载原图按钮
         const downloadBtn = document.createElement('button');
         downloadBtn.type = 'button';
         downloadBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        downloadBtn.title = '下载原图至本地';
+        downloadBtn.title = '下载图片到本地';
         downloadBtn.textContent = '下载';
         downloadBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -192,7 +405,7 @@ export class ImageActionPanel implements Disposable {
         const inpaintBtn = document.createElement('button');
         inpaintBtn.type = 'button';
         inpaintBtn.className = 'da-btn da-btn--secondary da-btn--sm';
-        inpaintBtn.title = '打开局部重绘画板涂抹修改本图局部细节';
+        inpaintBtn.title = '打开局部重绘画板涂抹修改细节';
         inpaintBtn.textContent = '局部重绘';
         inpaintBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -205,7 +418,7 @@ export class ImageActionPanel implements Disposable {
         const regenBtn = document.createElement('button');
         regenBtn.type = 'button';
         regenBtn.className = 'da-btn da-btn--primary da-btn--sm';
-        regenBtn.title = '重新生成本图';
+        regenBtn.title = '重新生成 (Ctrl+Enter)';
         regenBtn.textContent = '重新生成';
         regenBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -230,7 +443,7 @@ export class ImageActionPanel implements Disposable {
     /**
      * 构建提示词编辑卡片块（双层镜像宏高亮）。
      */
-    private createPromptSection(label: string, placeholder: string): {
+    private createPromptSection(label: string, placeholder: string, defaultRows = 3): {
         container: HTMLElement;
         textarea: HTMLTextAreaElement;
         resetUndo: () => void;
@@ -264,7 +477,7 @@ export class ImageActionPanel implements Disposable {
         const textarea = document.createElement('textarea');
         textarea.className = 'da-textarea da-action-panel__textarea da-highlight-editor__textarea';
         textarea.placeholder = placeholder;
-        textarea.rows = 3;
+        textarea.rows = defaultRows;
 
         editorContainer.appendChild(backdrop);
         editorContainer.appendChild(textarea);
@@ -473,8 +686,12 @@ export class ImageActionPanel implements Disposable {
         if (!this.backdropEl) {
             this.initDom();
         }
+        this.openGeneration += 1;
+        this.revokeAllocatedFallbackUrls();
         this.currentContext = context;
         this.isOpenState = true;
+        this.hasManualPosEdit = false;
+        this.hasManualNegEdit = false;
         overlayStack.push('image-action-panel', () => this.close(), () => this.close());
         this.resetPosUndo?.();
         this.resetNegUndo?.();
@@ -482,29 +699,41 @@ export class ImageActionPanel implements Disposable {
             ac.closePopup();
         }
 
+        const isGallery = context.source === 'gallery' || context.messageId === undefined;
         if (this.titleTextEl) {
-            this.titleTextEl.textContent = `图像编辑 (楼层 #${context.messageId})`;
+            this.titleTextEl.textContent = isGallery
+                ? '图像编辑 · 本地图库'
+                : `图像编辑 · 楼层 #${context.messageId}`;
         }
 
-        if (this.posTextarea) {
-            this.posTextarea.value = context.prompt || '';
-            this.updatePosHighlight?.();
+        if (this.previewImgEl) {
+            this.previewImgEl.dataset.fallbackTried = '';
+            if (context.imageUrl) {
+                this.previewImgEl.src = context.imageUrl;
+            } else {
+                this.previewImgEl.removeAttribute('src');
+            }
         }
-        const { supportsNegative, supportsInpaint } = this.getActiveProviderCapabilities();
 
-        if (this.negSectionEl) {
-            this.negSectionEl.style.display = supportsNegative ? '' : 'none';
-        }
-        if (this.negTextarea) {
-            this.negTextarea.value = supportsNegative ? context.negativePrompt || '' : '';
-            this.updateNegHighlight?.();
-        }
-        if (this.inpaintBtnEl) {
-            this.inpaintBtnEl.disabled = !supportsInpaint;
-            this.inpaintBtnEl.title = supportsInpaint
-                ? '打开局部重绘画板涂抹修改本图局部细节'
-                : '当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
-        }
+        const inspection = context.record?.metadata
+            ? inspectRecordForRegeneration(
+                  context.record,
+                  context.prompt,
+                  context.negativePrompt || ''
+              )
+            : null;
+        this.currentInspection = inspection;
+
+        const desiredDefaultMode: ReplayMode =
+            context.defaultReplayMode ?? (isGallery ? 'original' : 'current');
+        this.currentReplayMode =
+            desiredDefaultMode === 'original' && inspection?.hasReplaySnapshot
+                ? 'original'
+                : 'current';
+        this.currentSeedMode = 'random';
+
+        this.applyModePrompts(true);
+        this.syncReplayControlsUI();
 
         for (const ac of this.autocompletes) {
             ac.refreshMacroStatus();
@@ -517,16 +746,213 @@ export class ImageActionPanel implements Disposable {
         }
     }
 
+    private switchReplayMode(nextMode: ReplayMode): void {
+        if (nextMode === 'original' && !this.currentInspection?.hasReplaySnapshot) {
+            return;
+        }
+        if (this.currentReplayMode === nextMode) {
+            return;
+        }
+        this.currentReplayMode = nextMode;
+        this.applyModePrompts(false);
+        this.syncReplayControlsUI();
+    }
+
+    private switchSeedMode(nextSeedMode: SeedMode): void {
+        if (nextSeedMode === 'fixed' && !this.currentInspection?.hasFixedSeed) {
+            return;
+        }
+        this.currentSeedMode = nextSeedMode;
+        this.syncReplayControlsUI();
+    }
+
+    private applyModePrompts(isInitialOpen: boolean): void {
+        const ctx = this.currentContext;
+        if (!ctx) return;
+
+        const inspection = this.currentInspection;
+        const targetPos =
+            this.currentReplayMode === 'original' && inspection
+                ? inspection.originalPrompt
+                : inspection && inspection.currentPrompt
+                  ? inspection.currentPrompt
+                  : ctx.prompt || '';
+        const targetNeg =
+            this.currentReplayMode === 'original' && inspection
+                ? inspection.originalNegativePrompt
+                : inspection && inspection.currentNegativePrompt
+                  ? inspection.currentNegativePrompt
+                  : ctx.negativePrompt || '';
+
+        this.isSyncingTextareas = true;
+        try {
+            if ((isInitialOpen || !this.hasManualPosEdit) && this.posTextarea) {
+                this.posTextarea.value = isInitialOpen && ctx.prompt && !inspection ? ctx.prompt : targetPos;
+                this.resetPosUndo?.();
+                this.updatePosHighlight?.();
+            }
+
+            const { supportsNegative } = this.getActiveProviderCapabilities();
+            if ((isInitialOpen || !this.hasManualNegEdit) && this.negTextarea) {
+                const nextNegVal = supportsNegative
+                    ? isInitialOpen && ctx.negativePrompt && !inspection
+                        ? ctx.negativePrompt
+                        : targetNeg
+                    : '';
+                this.negTextarea.value = nextNegVal;
+                this.resetNegUndo?.();
+                this.updateNegHighlight?.();
+            }
+        } finally {
+            this.isSyncingTextareas = false;
+        }
+    }
+
+    private syncReplayControlsUI(): void {
+        const ctx = this.currentContext;
+        const inspection = this.currentInspection;
+        const { supportsNegative, supportsInpaint, supportsSeed } = this.getActiveProviderCapabilities();
+
+        if (this.negSectionEl) {
+            this.negSectionEl.style.display = supportsNegative ? '' : 'none';
+        }
+        if (this.inpaintBtnEl) {
+            this.inpaintBtnEl.disabled = !supportsInpaint;
+            this.inpaintBtnEl.title = supportsInpaint
+                ? '打开局部重绘画板涂抹修改细节'
+                : '当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）';
+        }
+
+        const hasPreview = Boolean(ctx?.imageUrl);
+        if (this.previewBoxEl) {
+            this.previewBoxEl.style.display = hasPreview ? '' : 'none';
+        }
+
+        const hasReplayControls = Boolean(
+            inspection && (inspection.hasReplaySnapshot || inspection.hasFixedSeed)
+        );
+
+        if (this.specsEl) {
+            let specText = '';
+            if (hasReplayControls && inspection) {
+                specText =
+                    this.currentReplayMode === 'original'
+                        ? inspection.originalSummary
+                        : `当前服务：${inspection.activeEngineLabel}`;
+            } else if (hasPreview && ctx?.record?.width && ctx?.record?.height) {
+                specText = `${ctx.record.width}×${ctx.record.height}`;
+            }
+            this.specsEl.textContent = specText;
+            this.specsEl.style.display = specText ? '' : 'none';
+        }
+
+        const hasSpecs = Boolean(this.specsEl && this.specsEl.style.display !== 'none');
+        if (this.previewCardEl) {
+            this.previewCardEl.style.display = hasPreview || hasSpecs ? '' : 'none';
+        }
+
+        if (this.replayPanelEl) {
+            this.replayPanelEl.style.display = hasReplayControls ? '' : 'none';
+        }
+
+        if (hasReplayControls && inspection) {
+            if (this.modeOriginalBtnEl) {
+                this.modeOriginalBtnEl.disabled = !inspection.hasReplaySnapshot;
+                this.modeOriginalBtnEl.classList.toggle('is-active', this.currentReplayMode === 'original');
+            }
+            if (this.modeCurrentBtnEl) {
+                this.modeCurrentBtnEl.classList.toggle('is-active', this.currentReplayMode === 'current');
+            }
+
+            if (this.seedRowEl && this.seedRandomBtnEl && this.seedFixedBtnEl) {
+                this.seedRowEl.style.display = supportsSeed ? '' : 'none';
+                if (supportsSeed) {
+                    this.seedRandomBtnEl.classList.toggle('is-active', this.currentSeedMode === 'random');
+                    this.seedFixedBtnEl.disabled = !inspection.hasFixedSeed;
+                    this.seedFixedBtnEl.classList.toggle(
+                        'is-active',
+                        this.currentSeedMode === 'fixed' && inspection.hasFixedSeed
+                    );
+                    if (this.seedChipEl) {
+                        if (inspection.hasFixedSeed && inspection.recordedSeed !== undefined) {
+                            this.seedChipEl.textContent = `#${inspection.recordedSeed}`;
+                            this.seedChipEl.style.display = '';
+                        } else {
+                            this.seedChipEl.textContent = '';
+                            this.seedChipEl.style.display = 'none';
+                        }
+                    }
+                }
+            }
+
+            if (this.replayWarningEl) {
+                const warningText =
+                    this.currentReplayMode === 'original' ? inspection.missingWorkflowWarning : undefined;
+                if (warningText) {
+                    this.replayWarningEl.textContent = warningText;
+                    this.replayWarningEl.style.display = '';
+                } else {
+                    this.replayWarningEl.textContent = '';
+                    this.replayWarningEl.style.display = 'none';
+                }
+            }
+        }
+
+        const hasSideContent = hasPreview || hasSpecs || hasReplayControls;
+        if (this.sideColEl) {
+            this.sideColEl.style.display = hasSideContent ? '' : 'none';
+        }
+        this.bodyEl?.classList.toggle('is-single-col', !hasSideContent);
+        this.panelEl?.classList.toggle('is-compact', !hasSideContent);
+    }
+
+    private async resolveCurrentBlob(): Promise<Blob | null> {
+        const ctx = this.currentContext;
+        if (!ctx) return null;
+        return imageStorage.resolveImageBlob(ctx.imageId ?? ctx.record?.imageId, ctx.imageUrl);
+    }
+
+    private async recoverPreviewFallback(imgEl: HTMLImageElement): Promise<void> {
+        const ctx = this.currentContext;
+        const targetId = ctx?.imageId ?? ctx?.record?.imageId;
+        if (!this.isOpenState || !targetId || imgEl.dataset.fallbackTried === '1') {
+            return;
+        }
+        imgEl.dataset.fallbackTried = '1';
+        const capturedGen = this.openGeneration;
+        try {
+            const blob = await imageStorage.getImageBlob(targetId);
+            if (!this.isOpenState || this.openGeneration !== capturedGen || !blob || blob.size === 0) {
+                return;
+            }
+            const fallbackUrl = URL.createObjectURL(blob);
+            this.allocatedFallbackUrls.push(fallbackUrl);
+            imgEl.src = fallbackUrl;
+        } catch {
+            // 忽略本地预览回退异常
+        }
+    }
+
+    private revokeAllocatedFallbackUrls(): void {
+        for (const url of this.allocatedFallbackUrls) {
+            try {
+                URL.revokeObjectURL(url);
+            } catch {
+                // 忽略临时 URL 回收异常
+            }
+        }
+        this.allocatedFallbackUrls.length = 0;
+    }
+
     /**
-     * 统一按当前全局激活后端查询负向词与局部重绘能力。
+     * 统一按当前所选重绘模式与目标引擎查询负向词、局部重绘与随机种子能力。
      */
-    private getActiveProviderCapabilities(): { supportsNegative: boolean; supportsInpaint: boolean } {
-        const activeProvider = settingsStore.getSettings().activeProvider;
-        const provider = providerRegistry.getProvider(activeProvider);
-        return {
-            supportsNegative: provider?.supportsNegativePrompt !== false,
-            supportsInpaint: provider?.supportsInpaint === true,
-        };
+    private getActiveProviderCapabilities(): {
+        supportsNegative: boolean;
+        supportsInpaint: boolean;
+        supportsSeed: boolean;
+    } {
+        return resolveRegenCapabilities(this.currentContext?.record, this.currentReplayMode);
     }
 
     /**
@@ -544,10 +970,18 @@ export class ImageActionPanel implements Disposable {
             return;
         }
 
-        const onRegen = this.currentContext.onRegenerate;
+        const decision: ImageActionSubmitDecision = {
+            prompt: newPrompt,
+            negativePrompt: newNegativePrompt,
+            replayMode: this.currentReplayMode,
+            seedMode: this.currentSeedMode,
+        };
+        const { onSubmitRegenerate, onRegenerate } = this.currentContext;
         this.close();
-        if (onRegen) {
-            void onRegen(newPrompt, newNegativePrompt);
+        if (onSubmitRegenerate) {
+            void onSubmitRegenerate(decision);
+        } else if (onRegenerate) {
+            void onRegenerate(newPrompt, newNegativePrompt);
         }
     }
 
@@ -557,7 +991,7 @@ export class ImageActionPanel implements Disposable {
     private handleInpaint(): void {
         if (!this.currentContext) return;
 
-        const { supportsInpaint } = this.getActiveProviderCapabilities();
+        const { supportsInpaint, supportsNegative } = this.getActiveProviderCapabilities();
         if (!supportsInpaint) {
             Toast.warning('当前生图服务不支持局部重绘（仅 ComfyUI / SD-WebUI 支持）');
             return;
@@ -569,8 +1003,16 @@ export class ImageActionPanel implements Disposable {
         }
 
         const ctx = this.currentContext;
-        const initialPrompt = this.posTextarea?.value.trim() || ctx.prompt || '';
-        const initialNegPrompt = this.negTextarea?.value.trim() || ctx.negativePrompt || '';
+        const initialPrompt = this.posTextarea ? this.posTextarea.value.trim() : ctx.prompt || '';
+        const initialNegPrompt = this.negTextarea
+            ? supportsNegative
+                ? this.negTextarea.value.trim()
+                : ''
+            : ctx.negativePrompt || '';
+        const replayDecision = {
+            replayMode: this.currentReplayMode,
+            seedMode: this.currentSeedMode,
+        };
 
         this.close();
 
@@ -579,9 +1021,20 @@ export class ImageActionPanel implements Disposable {
             imageId: ctx.imageId ?? ctx.record?.imageId,
             initialPrompt,
             initialNegativePrompt: initialNegPrompt,
+            supportsNegativePrompt: supportsNegative,
             onConfirm: async (data) => {
+                if (typeof ctx.onSubmitInpaint === 'function') {
+                    return await ctx.onSubmitInpaint(data, replayDecision);
+                }
                 if (typeof ctx.onInpaint === 'function') {
                     return await ctx.onInpaint(data);
+                }
+                if (typeof ctx.onSubmitRegenerate === 'function') {
+                    return await ctx.onSubmitRegenerate({
+                        prompt: data.prompt,
+                        negativePrompt: data.negativePrompt,
+                        ...replayDecision,
+                    });
                 }
                 if (typeof ctx.onRegenerate === 'function') {
                     return await ctx.onRegenerate(data.prompt, data.negativePrompt);
@@ -605,22 +1058,30 @@ export class ImageActionPanel implements Disposable {
     }
 
     /**
-     * 触发下载图像文件。
+     * 触发下载图像文件（优先从 IDB 读取原始 Blob，自动匹配真实文件后缀）。
      */
-    private handleDownload(): void {
-        const url = this.currentContext?.imageUrl;
-        if (!url) return;
+    private async handleDownload(): Promise<void> {
+        const ctx = this.currentContext;
+        if (!ctx || (!ctx.imageUrl && !ctx.imageId && !ctx.record?.imageId)) return;
+        const targetId = ctx.imageId ?? ctx.record?.imageId;
         try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `st_draw_${this.currentContext?.imageId || Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            const ok = await downloadImageAsset({
+                resolveBlob: () =>
+                    targetId ? imageStorage.getImageBlob(targetId) : Promise.resolve(null),
+                url: ctx.imageUrl,
+                fileNameBase: `st_draw_${targetId || Date.now()}`,
+            });
+            if (!ok) {
+                Toast.error('下载失败，未找到可用图像资源');
+                return;
+            }
             Toast.success('已开始下载图像');
         } catch (err) {
-            logger.error('下载图像异常:', err);
-            Toast.error('下载失败，请检查网络或资源');
+            reportRuntimeError(
+                '[ImageActionPanel] 下载图像异常:',
+                '下载失败，请检查网络或前往「日志与统计」查看详情',
+                err
+            );
         }
     }
 
@@ -629,11 +1090,16 @@ export class ImageActionPanel implements Disposable {
      */
     public close(): void {
         this.isOpenState = false;
+        this.openGeneration += 1;
+        this.revokeAllocatedFallbackUrls();
         overlayStack.remove('image-action-panel');
         this.resetPosUndo?.();
         this.resetNegUndo?.();
         for (const ac of this.autocompletes) {
             ac.closePopup();
+        }
+        if (this.previewImgEl) {
+            this.previewImgEl.removeAttribute('src');
         }
         if (this.backdropEl) {
             this.backdropEl.style.display = 'none';

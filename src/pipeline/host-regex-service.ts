@@ -28,6 +28,7 @@ import {
 } from '../store/settings-store';
 import { resolveActiveMaterialExtractionConfig } from './material-definitions';
 import { logger } from '../util/logger';
+import { getHostContext } from '../host';
 
 /** 绘图与设计思维链显示控制正则固定唯一 ID */
 export const THINKING_DISPLAY_REGEX_ID = 'st_da_regex_thinking_display';
@@ -298,8 +299,7 @@ export class HostRegexService {
     public syncToHost(options?: {
         readonly reloadChatOnDisplayChange?: boolean;
     }): { changed: boolean; displayChanged: boolean } {
-        const hostContext =
-            typeof window !== 'undefined' ? window.SillyTavern?.getContext?.() : undefined;
+        const hostContext = getHostContext();
         const extSettings = hostContext?.extensionSettings;
         if (!hostContext || !extSettings || typeof extSettings !== 'object') {
             return { changed: false, displayChanged: false };
