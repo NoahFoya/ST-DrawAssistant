@@ -182,7 +182,7 @@ export function ThemeTab(props: { state: ThemeState }): VNode {
 
                 <FormFieldView
                     label="高亮边框颜色"
-                    tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色 (borderHighlight)"
+                    tooltip="控件聚焦及可交互元素悬停时的边框高亮颜色"
                     width="w-240"
                     dirty={dirtyFields.has('borderHighlight')}
                 >

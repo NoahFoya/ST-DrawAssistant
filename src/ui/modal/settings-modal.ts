@@ -1610,6 +1610,9 @@ export class SettingsModal implements Disposable {
             onClose: () => {
                 this.activeGuideModal = null;
             },
+            onNavigateTarget: (targetTabId) => {
+                void this.switchTab(targetTabId);
+            },
         });
     }
 

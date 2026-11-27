@@ -204,7 +204,7 @@ export function getTransportModeTooltip(hostRuntime: HostRuntimeInfo = detectHos
     const baseTip =
         '默认由浏览器直连生图服务；遇到跨域 (CORS) 拦截或远程 HTTPS 酒馆访问本地 HTTP 服务时，可切换为「酒馆代理」（需在 SillyTavern config.yaml 开启 enableCorsProxy: true；若同时启用 privateAddressWhitelist 且访问本机/内网服务，须将该地址加入 allowedRanges；注意 ComfyUI 局部重绘因须提交图片表单，不支持酒馆代理）。';
     if (hostRuntime.isTauriTavern) {
-        return `${baseTip} 当前检测到 TauriTavern 宿主环境，暂不支持「酒馆代理」，请保持「浏览器直连」。`;
+        return `${baseTip} 当前为 TauriTavern 环境，不支持「酒馆代理」，请保持「浏览器直连」。`;
     }
     return baseTip;
 }

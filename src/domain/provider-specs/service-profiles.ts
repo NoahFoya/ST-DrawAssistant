@@ -272,4 +272,4 @@ export const IMAGE_STORAGE_QUALITY_OPTIONS: ReadonlyArray<{
 ];
 
 export const IMAGE_STORAGE_QUALITY_TOOLTIP =
-    '「原图」保留服务直出格式并补充缺失的绘图参数；「无损 PNG」适合下载后导入 ComfyUI，WebP 与 JPEG 体积更小且同样支持写入参数。';
+    '「原图」保留出图服务原始格式并写入完整绘图参数；「无损 PNG」兼容下载后拖入 ComfyUI 读取参数，WebP 与 JPEG 体积更小且同样保留参数。';

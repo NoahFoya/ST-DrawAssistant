@@ -218,6 +218,8 @@ export function createSDWebUITabView() {
             key: 'promptPresetId',
             label: '提示词预设',
             type: 'select',
+            tooltip:
+                '出图时自动拼接在画面描述前后的正负向画风/质量词预设（也支持切换随机轮询，轮流套用不同画风）。如果想完全由剧情 AI 或手写指令决定画风，选「未选择提示词预设」留空即可。',
             options: () => vm.promptPresetOptions.value,
             invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
         },

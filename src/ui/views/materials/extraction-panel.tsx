@@ -67,7 +67,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
             <CardView
                 title="楼层档案提取设置"
                 subtitle="角色与服装档案正文提取规则"
-                tooltip={`从酒馆会话消息中自动识别 <character> 与 <outfit> 档案数据块：\n- 解析起止标记与内部键值对（如 NAME、ALIASES、外观及身体部位标签）；\n- 支持弹窗预览并录入本地素材库。`}
+                tooltip={`从酒馆聊天消息里自动识别 <character> 与 <outfit> 档案数据块：\n- 自动解析角色/服装名、别名、外观与身体部位标签；\n- 支持弹窗预览后选择跳过或收入素材库。`}
                 className="da-card--padded"
             >
                 <FormFieldView
@@ -84,7 +84,7 @@ export function ExtractionPanel(props: ExtractionPanelProps): VNode {
 
                 <FormFieldView
                     label="AI 回复后自动检测并弹窗确认"
-                    tooltip="开启后，当 AI 回复中包含匹配的 <character> 或 <outfit> 档案数据块时，弹出确认框供预览并录入或更新本地素材库。"
+                    tooltip="开启后，当 AI 回复中包含 <character> 或 <outfit> 档案数据块时，自动弹窗让你预览后收录或更新到素材库。"
                     width="w-toggle"
                 >
                     <SwitchControl

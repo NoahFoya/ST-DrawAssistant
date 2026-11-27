@@ -57,8 +57,12 @@ export interface CursorTokenRange {
 
 const attachedInstances = new WeakMap<HTMLElement, TagAutocomplete>();
 
+// 代码编辑器式词元分界字符：遇到空白、中英文标点、竖线或括弧即视为词元起止边界
+const AUTOCOMPLETE_BREAK_CHAR_RE = /[\s,，.。;；:：!！?？、|()[\]{}<>"'`\\]/;
+const ASCII_TAG_CHAR_RE = /[A-Za-z0-9_/-]/;
+
 /**
- * 提取光标所在位置的当前逗号分隔词条或 `$宏` 片段。
+ * 提取光标左侧当前正在输入的词元或未闭合 `$宏` 片段（不检索、不覆盖光标之后的任何内容）。
  */
 export function extractTokenAtCursor(
     text: string,
@@ -66,50 +70,65 @@ export function extractTokenAtCursor(
 ): CursorTokenRange {
     const safeText = text || '';
     const pos = Math.max(0, Math.min(cursorPos, safeText.length));
+    if (pos === 0) {
+        return { token: '', replaceStart: 0, replaceEnd: 0 };
+    }
 
-    // 1. 向前查找最近的分隔符（英文逗号、中文逗号、换行）
-    let segStart = 0;
+    // 仅观察当前行自换行符至光标处的左侧文本，完全不向光标右侧检索
+    let lineStart = 0;
     for (let i = pos - 1; i >= 0; i--) {
-        const ch = safeText[i];
-        if (ch === ',' || ch === '，' || ch === '\n' || ch === '\r') {
-            segStart = i + 1;
+        if (safeText[i] === '\n' || safeText[i] === '\r') {
+            lineStart = i + 1;
             break;
         }
     }
 
-    // 跳过分隔符后的前导空格与制表符
-    while (
-        segStart < pos &&
-        (safeText[segStart] === ' ' || safeText[segStart] === '\t')
-    ) {
-        segStart++;
-    }
-
-    // 若片段中存在未闭合的 '$'（例如在空格后输入 $ranran），以最后一个未配对 '$' 作为起点
-    const sliceBeforeCursor = safeText.slice(segStart, pos);
-    const dollarCount = (sliceBeforeCursor.match(/\$/g) || []).length;
-    if (dollarCount % 2 === 1) {
-        const lastDollarOffset = sliceBeforeCursor.lastIndexOf('$');
-        if (lastDollarOffset > 0) {
-            segStart += lastDollarOffset;
+    const beforeInLine = safeText.slice(lineStart, pos);
+    const dollarPositions: number[] = [];
+    for (let i = 0; i < beforeInLine.length; i++) {
+        if (beforeInLine[i] === '$') {
+            dollarPositions.push(lineStart + i);
         }
     }
 
-    // 2. 向后查找当前词条的结束边界
-    let segEnd = pos;
-    while (segEnd < safeText.length) {
-        const ch = safeText[segEnd];
-        if (ch === ',' || ch === '，' || ch === '\n' || ch === '\r') {
+    // 1. 当前行光标前 '$' 为奇数个，表明处于未闭合的 `$...` 宏输入中，截取最近一个 '$' 到光标位置
+    if (dollarPositions.length % 2 === 1) {
+        const dollarPos = dollarPositions[dollarPositions.length - 1];
+        const macroBody = safeText.slice(dollarPos + 1, pos);
+        if (!AUTOCOMPLETE_BREAK_CHAR_RE.test(macroBody)) {
+            return {
+                token: `$${macroBody}`,
+                replaceStart: dollarPos,
+                replaceEnd: pos,
+            };
+        }
+    }
+
+    // 2. 非未闭合 '$' 宏片段：严格按代码编辑器词元逻辑从光标向左扫描当前词元
+    const lastChar = safeText[pos - 1];
+    if (lastChar === '$' || AUTOCOMPLETE_BREAK_CHAR_RE.test(lastChar)) {
+        return { token: '', replaceStart: pos, replaceEnd: pos };
+    }
+
+    let segStart = pos;
+    const isAsciiWord = ASCII_TAG_CHAR_RE.test(lastChar);
+    while (segStart > 0) {
+        const ch = safeText[segStart - 1];
+        if (ch === '$' || AUTOCOMPLETE_BREAK_CHAR_RE.test(ch)) {
             break;
         }
-        segEnd++;
+        // 在中文语句后直接连写英文 tag（如 "少女smil"）时，于脚本边界自然断开，避免吞掉前文汉字
+        if (isAsciiWord && !ASCII_TAG_CHAR_RE.test(ch)) {
+            break;
+        }
+        segStart--;
     }
 
     const token = safeText.slice(segStart, pos).trim();
     return {
         token,
         replaceStart: segStart,
-        replaceEnd: segEnd,
+        replaceEnd: pos,
     };
 }
 
@@ -360,6 +379,7 @@ export class TagAutocomplete implements Disposable {
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 this._activeIndex = (this._activeIndex + 1) % this._candidates.length;
                 this._renderCandidates();
                 return;
@@ -368,6 +388,7 @@ export class TagAutocomplete implements Disposable {
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 this._activeIndex =
                     (this._activeIndex - 1 + this._candidates.length) %
                     this._candidates.length;
@@ -378,6 +399,7 @@ export class TagAutocomplete implements Disposable {
             if (e.key === 'Enter' || e.key === 'Tab') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 this._applyCandidate(this._activeIndex);
                 return;
             }
@@ -650,14 +672,12 @@ export class TagAutocomplete implements Disposable {
                 : candidate.insertText;
 
         const prefix = rawValue.slice(0, replaceStart);
+        // 严格只替换到光标位置，保留光标之后的全部原内容不做删改
         const suffix = rawValue.slice(replaceEnd);
-        const trimmedSuffix = suffix.trimStart();
-
-        const needsComma =
-            trimmedSuffix.length === 0 ||
-            (!trimmedSuffix.startsWith(',') && !trimmedSuffix.startsWith('，'));
-
-        const insertedSegment = needsComma ? `${safeInsert}, ` : safeInsert;
+        const isMacroCandidate =
+            candidate.kind === 'material-macro' || candidate.kind === 'material-suffix';
+        const appendComma = !isMacroCandidate && suffix.length === 0;
+        const insertedSegment = appendComma ? `${safeInsert}, ` : safeInsert;
         const nextValue = `${prefix}${insertedSegment}${suffix}`;
         const nextCursor = prefix.length + insertedSegment.length;
 

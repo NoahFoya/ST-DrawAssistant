@@ -344,7 +344,7 @@ export function LexiconTab(props: LexiconTabProps): VNode {
             <CardView
                 className="da-card--padded"
                 title={`词汇文件 (${files.length})`}
-                subtitle="按需载入本地词库或导入自定义词表用于输入联想（支持 CSV / TSV / JSON）"
+                subtitle="仅用于手动输入提示词时的联想补全，不会发给 AI（支持载入内置词库或导入 CSV / TSV / JSON）"
                 actions={
                     <div className="da-extra-fields-toolbar">
                         {presetPacks.length > 0 && hasUnloadedPresetPacks && (
@@ -599,7 +599,7 @@ export function LexiconTab(props: LexiconTabProps): VNode {
             <CardView
                 className="da-card--padded"
                 title={`自定义词库 (${allWords.length})`}
-                subtitle="维护本地专用的生图 Tag 与中文释义，在提示词输入框中自动联想补全"
+                subtitle="整理常用生图标签与中文释义，在手动输入提示词时自动联想补全"
                 actions={
                     <div className="da-extra-fields-toolbar">
                         <ButtonControl
@@ -1096,7 +1096,7 @@ export function LexiconTab(props: LexiconTabProps): VNode {
                         variant="secondary"
                         size="sm"
                         className="da-lexicon-reindex-btn"
-                        tooltip="从本地 IndexedDB 重新读取词库文件与自定义词条并重建检索索引；若标签联想未及时更新可点击刷新。"
+                        tooltip="重新读取本机保存的词库文件与自定义词条并刷新联想目录；若刚改完词条未及时联想出来，可点此刷新。"
                         onClick={() => void state.rebuildIndex()}
                     />
                 </div>

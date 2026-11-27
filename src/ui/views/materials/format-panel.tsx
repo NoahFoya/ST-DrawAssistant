@@ -236,7 +236,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             <CardView
                 title="生图宏规则配置"
                 subtitle="生图宏指令与展开部位维护"
-                tooltip={`定义生图宏（固定语法为 $名称-宏-状态$，例如 $角色名-full-covered$、$服装名-full-intact$）：\n1. 组合展开：按选中部位顺序读取各部位通用标签与目标状态标签，自动去重拼装为逗号分隔的出图提示词；\n2. 固定状态后缀：角色支持 covered（遮蔽状态，不含服装）/ exposed（局部露出）/ nude（全裸），服装支持 intact（完整）/ disheveled（凌乱）；\n3. 提示词通道注入：所有已配置的宏条目将由行模板渲染，并注入上下文中的 {{角色可用宏列表}} 与 {{服装可用宏列表}}。`}
+                tooltip={`定义生图宏（固定写法为 $名称-宏-状态$，例如 $角色名-full-covered$、$服装名-full-intact$）：\n1. 组合展开：按选中部位顺序读取各部位通用标签与对应状态标签，自动去重拼成完整提示词；\n2. 固定状态后缀：角色支持 covered（穿衣遮蔽态）/ exposed（局部露出）/ nude（全裸），服装支持 intact（完整）/ disheveled（凌乱）；\n3. 发给 AI 选用：配置好的宏会自动填入 {{角色可用宏列表}} 与 {{服装可用宏列表}}，方便 AI 按剧情调用。`}
                 className="da-card--padded"
             >
                 <div className="da-macro-unified-toolbar">
@@ -467,7 +467,7 @@ export function FormatPanel(props: FormatPanelProps): VNode {
             <CardView
                 title="行模板变量管理"
                 subtitle="素材单行格式与宏说明模板配置"
-                tooltip={`定制素材数据注入到酒馆上下文时的文本格式与占位变量：\n- 角色行模板：聚合生成 {{角色启用列表}}，支持 {{name}}、{{aliases}}、{{description}} 与 {{outfits}}；\n- 服装行模板：聚合生成 {{服装启用列表}}，支持专属服装缩进与通用服装展示；\n- 宏说明模板：聚合生成 {{角色可用宏列表}} 与 {{服装可用宏列表}}，告知大语言模型每个宏的触发场景。\n支持点击下方「展开可用变量」在光标处插入属性占位符。`}
+                tooltip={`定制角色与服装资料发给 AI 时的文本格式与占位变量：\n- 角色行模板：生成 {{角色启用列表}}，可用 {{name}}、{{aliases}}、{{description}} 与 {{outfits}}；\n- 服装行模板：生成 {{服装启用列表}}，支持区分专属服装与通用服装；\n- 宏说明模板：生成 {{角色可用宏列表}} 与 {{服装可用宏列表}}，告诉 AI 每个宏什么时候用。\n点击下方「展开可用变量」可在光标处快速插入占位符。`}
                 className="da-card--padded"
             >
                 <div className="da-macro-unified-toolbar">

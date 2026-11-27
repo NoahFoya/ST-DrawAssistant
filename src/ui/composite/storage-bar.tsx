@@ -128,8 +128,8 @@ export function StorageBar(props: StorageBarProps): VNode {
 
     return (
         <CardView
-            title={props.title ?? '本地存储空间 (IndexedDB)'}
-            subtitle={props.subtitle ?? '浏览器配额占用、存储分布与分级清理'}
+            title={props.title ?? '本机存储空间'}
+            subtitle={props.subtitle ?? '浏览器本机配额、图库分布与按需清理'}
             className={rootClass}
             actions={
                 props.onRefresh ? (
@@ -188,7 +188,7 @@ export function StorageBar(props: StorageBarProps): VNode {
                             size="sm"
                             disabled={data.failedCount === 0}
                             loading={loadingAction === 'failed'}
-                            tooltip="清除本地生成失败、超时中断的任务报错记录，释放无效状态缓存"
+                            tooltip="清除生成失败或超时中断的任务记录，不影响已生成的图片"
                             onClick={() => void runAction('failed', props.onCleanFailed)}
                         />
                     )}
@@ -215,7 +215,7 @@ export function StorageBar(props: StorageBarProps): VNode {
                             variant="danger"
                             size="sm"
                             loading={loadingAction === 'clearAll'}
-                            tooltip="危险操作：清空本地 IndexedDB 中的全部图像资产（含收藏图片与元数据），不可逆"
+                            tooltip="危险操作：清空浏览器本机保存的全部图库图片与参数记录（含已收藏图片），不可恢复"
                             onClick={() =>
                                 void runAction(
                                     'clearAll',

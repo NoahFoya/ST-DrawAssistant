@@ -130,7 +130,7 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                         <textarea
                             className="da-material-description-textarea da-outfit-description-textarea"
                             value={draft.description}
-                            placeholder="填写服装设计风格、面料剪裁与整体外观，将注入模型上下文供 AI 理解服饰细节..."
+                            placeholder="填写服装风格、面料剪裁与整体款式说明，会随素材通道发给 AI 参考..."
                             onInput={(e) =>
                                 outfitController.updateDraft(
                                     'description',
@@ -164,7 +164,7 @@ export function OutfitPanel(props: OutfitPanelProps): VNode {
                             <label className="da-material-compact-label">服装触发词 (Trigger Tags)</label>
                             <span
                                 className="da-help-icon"
-                                data-tooltip="官方或专用触发规范：若为具有专属名称的成套服装或制服，填写 Danbooru 标准服饰标签（例如 school_uniform, serafuku）或专用触发标签；若为通用散件搭配或自设日常服装且无专用触发标签，此处留空即可，模型将依据下方各部位衣着标签进行生成。"
+                                data-tooltip="若有成套制服或专属服装标签（如 school_uniform, serafuku）可填在此处；常见日常散搭没有专属触发词时留空即可，生图会以下方各部位描写为准。"
                                 role="button"
                                 tabIndex={0}
                                 aria-label="查看服装触发词填写规范"

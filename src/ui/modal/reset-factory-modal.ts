@@ -143,15 +143,15 @@ const RESET_GROUPS: ResetGroupDef[] = [
         options: [
             {
                 key: 'resetLocalLexicon',
-                label: '清空本地 IndexedDB 联想词库',
+                label: '清空本机联想词库',
                 desc: '清空所有已导入的词库文件与自定义词汇表（默认不勾选）',
                 defaultChecked: false,
                 isDanger: true,
             },
             {
                 key: 'resetLocalGallery',
-                label: '清空本地 IndexedDB 生成图库与图片缓存',
-                desc: '清空本地已生成的历史图像记录、元数据与 Blob 缓存（默认不勾选）',
+                label: '清空本机生成图库与图片缓存',
+                desc: '清空浏览器本机保存的历史图片与参数记录（默认不勾选）',
                 defaultChecked: false,
                 isDanger: true,
             },

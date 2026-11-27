@@ -102,7 +102,7 @@ export function AboutTab(props: { state: AboutState }): VNode {
                         {statusPill}
                     </div>
                     <div className="da-about-header__desc">
-                        适用于 SillyTavern 的上下文感知多后端 AI 生图扩展插件 · 作者: NoahFoya · 开源协议: GPL-3.0 License
+                        适用于 SillyTavern 的多后端 AI 生图扩展插件 · 作者: NoahFoya · 开源协议: GPL-3.0 License
                     </div>
                     <div className="da-about-header__actions">
                         {update.hasUpdate && (
@@ -168,18 +168,18 @@ export function AboutTab(props: { state: AboutState }): VNode {
                     </div>
                 </div>
 
-                {/* 分组 1: 运行环境与诊断 */}
+                {/* 分组 1: 状态与诊断 */}
                 <div className="da-settings-section">
-                    <h3 className="da-settings-section__title">运行环境与诊断</h3>
+                    <h3 className="da-settings-section__title">状态与诊断</h3>
                     <div className="da-settings-group">
-                        {/* 行 1: 宿主环境 */}
+                        {/* 行 1: 酒馆连接状态 */}
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span>SillyTavern 宿主环境</span>
+                                    <span>酒馆连接状态</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    扩展插件在浏览器端与酒馆前端宿主的通信集成状态
+                                    扩展与当前酒馆页面的连接与运行状态
                                 </div>
                             </div>
                             <div className="da-settings-row__action">
@@ -191,7 +191,7 @@ export function AboutTab(props: { state: AboutState }): VNode {
                                 ) : (
                                     <span className="da-version-pill da-version-pill--warn">
                                         <span className="da-version-pill__dot" />
-                                        <span>未检测到宿主</span>
+                                        <span>未连接酒馆</span>
                                     </span>
                                 )}
                             </div>
@@ -201,10 +201,10 @@ export function AboutTab(props: { state: AboutState }): VNode {
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span>当前生效生图服务</span>
+                                    <span>当前默认出图服务</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    当前选定且生效的生成服务提供商与网络连接方式
+                                    当前选中的出图服务与网络连接方式
                                 </div>
                             </div>
                             <div className="da-settings-row__action">
@@ -216,14 +216,14 @@ export function AboutTab(props: { state: AboutState }): VNode {
                             </div>
                         </div>
 
-                        {/* 行 3: 本地图库存储配额 */}
+                        {/* 行 3: 本机图库占用 */}
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span>本地图库存储空间</span>
+                                    <span>本机图库占用</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    浏览器 IndexedDB 离线图库缓存与生成元数据存储配额
+                                    浏览器本机存储配额与图库图片占用空间
                                 </div>
                             </div>
                             <div className="da-settings-row__action">
@@ -249,14 +249,14 @@ export function AboutTab(props: { state: AboutState }): VNode {
                             </div>
                         </div>
 
-                        {/* 行 4: 系统诊断排障报告 */}
+                        {/* 行 4: 问题诊断报告 */}
                         <div className="da-settings-row">
                             <div className="da-settings-row__main">
                                 <div className="da-settings-row__title">
-                                    <span>系统诊断排障报告</span>
+                                    <span>问题诊断报告</span>
                                 </div>
                                 <div className="da-settings-row__desc">
-                                    汇总扩展版本、宿主环境与当前生图配置信息至剪贴板，用于 Issue 反馈与故障排查
+                                    复制扩展版本、运行环境与当前配置信息到剪贴板，方便反馈或排查问题
                                 </div>
                             </div>
                             <div className="da-settings-row__action">
@@ -278,9 +278,9 @@ export function AboutTab(props: { state: AboutState }): VNode {
                     </div>
                 </div>
 
-                {/* 分组 2: 本地预设管理 */}
+                {/* 分组 2: 内置预设管理 */}
                 <div id="da-about-static-presets" className="da-settings-section">
-                    <h3 className="da-settings-section__title">本地预设管理</h3>
+                    <h3 className="da-settings-section__title">内置预设管理</h3>
                     <StaticPresetManagerCard />
                 </div>
 

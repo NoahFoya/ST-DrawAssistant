@@ -151,9 +151,9 @@ export function StaticPresetManagerCard(props: StaticPresetManagerCardProps): VN
         <div className={rootClass}>
             <div className="da-sync-card__header">
                 <div className="da-sync-card__title-wrap">
-                    <div className="da-sync-card__title">{props.title || '本地预设管理'}</div>
+                    <div className="da-sync-card__title">{props.title || '内置预设管理'}</div>
                     <div className="da-sync-card__desc">
-                        按分类载入或卸载本地预设；卸载仅移除对应条目，不影响您自建的预设。
+                        按分类载入或卸载内置预设；卸载仅移除对应条目，不影响你自建的预设。
                     </div>
                 </div>
                 <span className={badgeClass}>{badgeText}</span>

@@ -113,6 +113,8 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 step: 10,
                 unit: '秒',
                 disabledWhen: (m) => !m.enabled,
+                tooltip:
+                    '单次出图或等待接口响应的最长等待时间；高清放大或生图较慢时建议适当调大，避免中途提前中断。',
             },
             {
                 key: 'cancelOnChatChange',
@@ -121,7 +123,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认开启，切换至其他酒馆会话时将取消未完成任务；关闭后任务继续在后台完成并仅保存至「本地图库」。',
+                    '默认开启：切到其他聊天会话时取消未完成的任务；关闭后任务继续在后台完成，成图仅保存到「本地图库」。',
             },
             {
                 key: 'cancelOnSwipe',
@@ -130,7 +132,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '默认开启，右滑重 roll 生成新候选分支时自动取消旧分支尚未完成的生图任务，优先处理新版队列；左右翻看已有分支时保留后台队列，关闭后允许旧分支继续完成。',
+                    '默认开启：右滑重 roll 生成新回复分支时，自动取消旧分支尚未完成的出图；仅左右翻看已有分支时保留后台队列，关闭后允许旧分支继续完成。',
             },
         ],
     },
@@ -355,7 +357,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
                 width: 'w-toggle',
                 disabledWhen: (m) => !m.enabled,
                 tooltip:
-                    '生成成功后，通过酒馆宿主 API 将图片文件同步上传转存至酒馆服务端存储目录，便于在多设备漫游或备份酒馆数据时直接保留完整图片资产。',
+                    '出图成功后，同步上传一份图片到酒馆服务器目录，方便更换设备同步或备份聊天数据时直接保留图片。',
             },
         ],
     },

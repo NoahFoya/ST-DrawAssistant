@@ -187,6 +187,8 @@ export function createGrokTabView() {
             key: 'promptPresetId',
             label: '提示词预设',
             type: 'select',
+            tooltip:
+                '出图时自动附加在画面描述前后的画风与构图补充预设（也支持多预设随机轮询）。如果希望完全按剧情指令或原句出图，选「未选择提示词预设」留空即可。',
             options: () => vm.promptPresetOptions.value,
             invalidTooltip: (m) => `关联的提示词预设不存在或已失效 (ID: ${m.promptPresetId || ''})`,
         },
