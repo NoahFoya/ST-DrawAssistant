@@ -121,7 +121,7 @@ export function createGeminiTabView() {
         defaultModels: GEMINI_MODEL_OPTIONS,
         defaultDraftTemplate: () => ({
             baseModel: 'gemini-2.5-flash-image',
-            aspectRatio: '1:1',
+            aspectRatio: 'auto',
         }),
         onPresetApplied: (_preset, draft) => {
             customBodyJson?.syncFromDraft((draft.customBodyJson as string) || '');

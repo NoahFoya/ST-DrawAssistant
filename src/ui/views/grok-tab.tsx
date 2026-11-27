@@ -130,7 +130,7 @@ export function createGrokTabView() {
         defaultModels: GROK_MODEL_OPTIONS,
         defaultDraftTemplate: () => ({
             baseModel: 'grok-imagine-image',
-            aspectRatio: '1:1',
+            aspectRatio: 'auto',
             resolution: '1k',
         }),
         onPresetApplied: (_preset, draft) => {

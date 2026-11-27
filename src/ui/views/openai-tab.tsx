@@ -312,6 +312,7 @@ export function createOpenAITabView() {
         defaultModels: OPENAI_MODEL_OPTIONS,
         defaultDraftTemplate: () => ({
             baseModel: 'gpt-image-1',
+            aspectRatio: 'auto',
             width: 1024,
             height: 1536,
             quality: 'medium',

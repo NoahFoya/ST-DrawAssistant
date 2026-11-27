@@ -18,7 +18,7 @@
       "data": {
         "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up",
         "positiveSuffix": "",
-        "negativePrompt": "score_4, score_5, score_6, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
+        "negativePrompt": "score_6, score_5, score_4, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
         "loras": []
       }
     },
@@ -36,10 +36,10 @@
     {
       "id": "prompt_comfyui_flux",
       "name": "ComfyUI · Flux 自然语言",
-      "description": "适用于 Flux 系列自然语言模型，在末尾补充自然光影与清晰对焦",
+      "description": "适用于 Flux 系列自然语言模型，在句末温和补充自然光影与清晰对焦",
       "data": {
         "positivePrefix": "",
-        "positiveSuffix": "natural lighting, sharp focus",
+        "positiveSuffix": "Natural lighting and sharp focus.",
         "negativePrompt": "",
         "loras": []
       }
@@ -64,7 +64,7 @@
       "data": {
         "positivePrefix": "score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up",
         "positiveSuffix": "",
-        "negativePrompt": "score_4, score_5, score_6, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
+        "negativePrompt": "score_6, score_5, score_4, worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, blurry, text, watermark, signature",
         "loras": []
       }
     },
@@ -187,8 +187,8 @@
       "name": "OpenAI · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -198,8 +198,8 @@
       "name": "OpenAI · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -209,8 +209,8 @@
       "name": "OpenAI · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -220,8 +220,8 @@
       "name": "OpenAI · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }
@@ -233,8 +233,8 @@
       "name": "Gemini · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -244,8 +244,8 @@
       "name": "Gemini · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -255,8 +255,8 @@
       "name": "Gemini · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -266,8 +266,8 @@
       "name": "Gemini · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }
@@ -279,8 +279,8 @@
       "name": "Grok · 日系二次元",
       "description": "清透日系动漫插画风格，线条利落、赛璐璐光影鲜明",
       "data": {
-        "positivePrefix": "Japanese anime illustration, clean lineart, expressive cel shading",
-        "positiveSuffix": "cohesive color palette, soft atmospheric lighting",
+        "positivePrefix": "Japanese anime illustration style with clean lineart and expressive cel shading.",
+        "positiveSuffix": "Cohesive color palette with soft atmospheric lighting.",
         "negativePrompt": "",
         "loras": []
       }
@@ -290,8 +290,8 @@
       "name": "Grok · 半写实厚涂",
       "description": "介于二次元与写实之间的厚涂插画风格，兼顾立体光影与肌肤质感",
       "data": {
-        "positivePrefix": "semi-realistic digital painting, rich painterly brushwork",
-        "positiveSuffix": "soft directional lighting, nuanced skin texture, balanced depth",
+        "positivePrefix": "Semi-realistic digital painting style with rich painterly brushwork.",
+        "positiveSuffix": "Soft directional lighting, nuanced skin texture, and balanced visual depth.",
         "negativePrompt": "",
         "loras": []
       }
@@ -301,8 +301,8 @@
       "name": "Grok · 电影感摄影",
       "description": "电影感实拍人像与场景摄影风格，强调自然光线、真实肤质与镜头景深",
       "data": {
-        "positivePrefix": "candid cinematic photography, 35mm lens, natural ambient lighting",
-        "positiveSuffix": "realistic skin texture, natural film grain, shallow depth of field",
+        "positivePrefix": "Candid cinematic photography style shot on a 35mm lens with natural ambient lighting.",
+        "positiveSuffix": "Realistic skin texture, subtle natural film grain, and shallow depth of field.",
         "negativePrompt": "",
         "loras": []
       }
@@ -312,8 +312,8 @@
       "name": "Grok · 唯美水彩插画",
       "description": "柔和通透的水彩绘本插画风格，适合治愈日常与抒情氛围画面",
       "data": {
-        "positivePrefix": "delicate watercolor and gouache illustration, soft translucent washes",
-        "positiveSuffix": "gentle paper texture, airy pastel lighting, lyrical atmosphere",
+        "positivePrefix": "Delicate watercolor and gouache illustration style with soft translucent washes.",
+        "positiveSuffix": "Gentle paper texture, airy pastel lighting, and lyrical atmosphere.",
         "negativePrompt": "",
         "loras": []
       }
