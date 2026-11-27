@@ -36,9 +36,10 @@ import type {
 } from '../domain';
 import { SettingsRepository, type SettingsSignals } from './settings-repository';
 import { PresetRepository, resolveDrawingPresetFromPorts } from './preset-repository';
-import { PresetLifecycle } from './preset-lifecycle';
+import { PresetLifecycle, ALL_OFFICIAL_SYNC_CATEGORIES } from './preset-lifecycle';
 import type { LoadStaticPresetsOptions } from './static-preset-loader';
 export type { SettingsSignals };
+export { ALL_OFFICIAL_SYNC_CATEGORIES };
 
 /** 官方预设更新同步分组 */
 export type OfficialPresetSyncCategory =
@@ -47,15 +48,6 @@ export type OfficialPresetSyncCategory =
     | 'workflows'
     | 'materialsAndThemes'
     | 'injectionAndRules';
-
-/** 全部官方预设更新同步分组列表（按依赖先后排列） */
-export const ALL_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[] = [
-    'prompts',
-    'workflows',
-    'drawing',
-    'materialsAndThemes',
-    'injectionAndRules',
-];
 
 /** 官方预设差异条目类型 */
 export type OfficialPresetDiffKind = 'add' | 'update';

@@ -103,7 +103,7 @@ function escapeHtml(str: string): string {
 /**
  * 弹出工作流变量分析与格式化诊断模态弹窗。
  */
-export function openWorkflowFormatModal(
+function openWorkflowFormatModal(
     rawJson: string,
     onApply: (formattedJson: string) => void,
     onOpenBlueprint?: (currentJson: string) => void

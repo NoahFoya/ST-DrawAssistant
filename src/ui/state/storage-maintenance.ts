@@ -11,7 +11,7 @@ import type { StorageSummaryData } from '../composite/storage-bar';
 import { imageStorage } from '../../store/image-storage';
 import { logger } from '../../util/logger';
 
-/** 图库与存储统计单次扫描上限，与 GalleryViewModel 保持一致 */
+/** 图库与存储统计单次扫描上限，与 GalleryState 保持一致 */
 export const GALLERY_QUERY_LIMIT = 10000;
 
 export class StorageMaintenanceService {

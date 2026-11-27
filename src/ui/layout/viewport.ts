@@ -40,6 +40,10 @@ export interface AnchorPositionOptions {
     readonly gap?: number;
     readonly margin?: number;
     readonly viewport?: ViewportRect;
+    /** 组件自身的最大宽度上限（计算时取可视视口可用宽与该值的较小值） */
+    readonly maxWidth?: number;
+    /** 组件自身的最大高度上限（计算时取当前方向可用高与该值的较小值） */
+    readonly maxHeight?: number;
 }
 
 /** 锚点相对定位输出结果 */
@@ -126,19 +130,32 @@ export function computeAnchoredPosition(options: AnchorPositionOptions): AnchorP
     const spaceBelow = vpBottom - margin - (options.anchorRect.bottom + gap);
     const spaceAbove = options.anchorRect.top - gap - (vp.top + margin);
 
+    const targetHeight =
+        options.maxHeight !== undefined
+            ? Math.min(options.floatingHeight, Math.max(80, options.maxHeight))
+            : options.floatingHeight;
+
     const placement: 'top' | 'bottom' =
         preferred === 'top'
-            ? spaceAbove >= options.floatingHeight || spaceAbove >= spaceBelow
+            ? spaceAbove >= targetHeight || spaceAbove >= spaceBelow
                 ? 'top'
                 : 'bottom'
-            : spaceBelow >= options.floatingHeight || spaceBelow >= spaceAbove
+            : spaceBelow >= targetHeight || spaceBelow >= spaceAbove
               ? 'bottom'
               : 'top';
 
     const availableHeight = Math.max(80, placement === 'bottom' ? spaceBelow : spaceAbove);
-    const maxWidth = Math.max(120, vp.width - margin * 2);
+    const viewportMaxWidth = Math.max(120, vp.width - margin * 2);
+    const maxWidth =
+        options.maxWidth !== undefined
+            ? Math.min(viewportMaxWidth, Math.max(120, options.maxWidth))
+            : viewportMaxWidth;
+    const maxHeight =
+        options.maxHeight !== undefined
+            ? Math.min(availableHeight, Math.max(80, options.maxHeight))
+            : availableHeight;
     const effectiveWidth = Math.min(options.floatingWidth, maxWidth);
-    const effectiveHeight = Math.min(options.floatingHeight, availableHeight);
+    const effectiveHeight = Math.min(targetHeight, maxHeight);
 
     let idealLeft = options.anchorRect.left;
     if (align === 'end') {
@@ -165,7 +182,7 @@ export function computeAnchoredPosition(options: AnchorPositionOptions): AnchorP
         top: Math.round(top),
         placement,
         maxWidth: Math.floor(maxWidth),
-        maxHeight: Math.floor(availableHeight),
+        maxHeight: Math.floor(maxHeight),
     };
 }
 

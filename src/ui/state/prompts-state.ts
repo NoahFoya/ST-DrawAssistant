@@ -91,7 +91,7 @@ export const PROMPT_CHANNELS: readonly PromptChannelMeta[] = [
 
 export type PromptsSubTabId = PromptChannelId | 'preview';
 
-export function createDefaultEntryForChannel(
+function createDefaultEntryForChannel(
     channelId: PromptChannelId,
     index: number
 ): PromptInjectionEntry {

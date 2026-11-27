@@ -21,15 +21,13 @@ import {
     normalizePresetNameKey,
     resolveNovelAIModelFamily,
     resolveNovelAIModelName,
+    resolveTriggeredLoras,
+    supportsLoraSyntax,
 } from '../domain';
 import { resolvePromptMacros } from './macro-resolver';
 import { splitTopLevelTags } from './material-definitions';
 import { stripThinkingAndComments } from './prompt-injector';
-import {
-    resolveTriggeredLoras,
-    sanitizeLoraPrompts,
-    supportsLoraSyntax,
-} from './lora-utils';
+import { sanitizeLoraPrompts } from './lora-utils';
 import { providerRegistry } from '../provider/registry';
 import { logger } from '../util/logger';
 
@@ -376,7 +374,7 @@ export function joinPromptParts(...parts: Array<string | undefined | null>): str
  * @param rawText 原始文本
  * @returns 净化后的文本
  */
-export function sanitizeMessageText(rawText: string): string {
+function sanitizeMessageText(rawText: string): string {
     if (!rawText || typeof rawText !== 'string') {
         return '';
     }

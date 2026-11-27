@@ -89,7 +89,7 @@ function hasChineseChar(text: string): boolean {
  * - `cowboy_shot(七分身)`
  * - `cowboy_shot, 七分身` / `cowboy_shot\t七分身` / `cowboy_shot: 七分身`
  */
-export function parseSingleCustomWordLine(
+function parseSingleCustomWordLine(
     rawLine: string
 ): { tag: string; cn?: string } | null {
     let line = rawLine.trim();

@@ -63,7 +63,7 @@ function isPureAscii(text: string): boolean {
 }
 
 /** 将含非 ASCII 字符的 JSON 文本安全转义为 `\uXXXX` 纯 ASCII（严格符合 PNG `tEXt` Latin-1 规范且可被 `JSON.parse` 无损还原） */
-export function escapeJsonToAscii(jsonText: string): string {
+function escapeJsonToAscii(jsonText: string): string {
     return jsonText.replace(/[\u007f-\uffff]/g, (ch) => {
         const hex = ch.charCodeAt(0).toString(16).padStart(4, '0');
         return `\\u${hex}`;
@@ -665,7 +665,7 @@ function buildRiffChunk(fourcc: string, payload: Uint8Array): Uint8Array {
 }
 
 /** 按 WebP RIFF 规范写入 VP8X 标志位并附加 EXIF 元数据块 */
-export function injectExifIntoWebp(webpBytes: Uint8Array, tiffExifBytes: Uint8Array): Uint8Array {
+function injectExifIntoWebp(webpBytes: Uint8Array, tiffExifBytes: Uint8Array): Uint8Array {
     if (detectImageMimeFromHeader(webpBytes) !== 'image/webp' || tiffExifBytes.length === 0) {
         return webpBytes;
     }

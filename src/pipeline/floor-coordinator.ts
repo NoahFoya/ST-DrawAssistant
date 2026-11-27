@@ -95,7 +95,7 @@ export function validateCurrentPresetAssets(
 }
 
 /** 判断指定楼层是否为当前会话中的最新一条非用户（AI）消息 */
-export function isLatestAiMessage(
+function isLatestAiMessage(
     chat: ReadonlyArray<ChatMessage | undefined> | undefined,
     messageId: number
 ): boolean {

@@ -581,10 +581,12 @@ export class TagAutocomplete implements Disposable {
             align: 'start',
             gap: 4,
             margin: 8,
+            maxWidth: desiredWidth,
+            maxHeight: 240,
         });
 
         this._popupEl.style.width = `${Math.min(desiredWidth, pos.maxWidth)}px`;
-        this._popupEl.style.maxHeight = `${Math.min(240, pos.maxHeight)}px`;
+        this._popupEl.style.maxHeight = `${pos.maxHeight}px`;
         this._popupEl.style.left = `${pos.left}px`;
         this._popupEl.style.top = `${pos.top}px`;
         this._popupEl.classList.add('da-autocomplete-popup--open');

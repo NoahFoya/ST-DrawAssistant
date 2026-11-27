@@ -8,7 +8,7 @@
  */
 
 import type { Disposable } from '../types';
-import { computeAnchoredPosition, getViewportRect, viewportService } from '../layout/viewport';
+import { computeAnchoredPosition, getViewportRect, viewportService, type ViewportRect } from '../layout/viewport';
 
 type TooltipTriggerMode = 'hover' | 'focus' | 'pinned';
 
@@ -213,18 +213,31 @@ export class TooltipService implements Disposable {
         }
 
         const vp = getViewportRect();
+        if (this.isAnchorClipped(this.activeAnchor, anchorRect, vp)) {
+            this.hide();
+            return;
+        }
 
-        // 先隐藏视觉呈现以测量自然宽高，避免测量期间闪烁
+        const isNarrow = vp.isNarrowMobile;
+        const ceilingWidth = Math.max(
+            120,
+            Math.min(isNarrow ? 360 : 340, vp.width - VIEWPORT_MARGIN * 2)
+        );
+
+        // 阶段一：在测量自然宽高前先施加宽度上限，清除上次残留高度限制，确保长文案正确折行后再定位
         this.bubbleEl.style.visibility = 'hidden';
         this.bubbleEl.style.left = '0px';
         this.bubbleEl.style.top = '0px';
+        this.bubbleEl.style.maxWidth = `${ceilingWidth}px`;
+        this.bubbleEl.style.maxHeight = '';
+        this.bubbleEl.style.width = isNarrow
+            ? `${Math.max(120, Math.min(360, vp.width - 24))}px`
+            : '';
         this.bubbleEl.classList.remove('da-help-bubble--top', 'da-help-bubble--centered-mobile');
-
-        const isNarrow = vp.isNarrowMobile;
         this.bubbleEl.classList.toggle('da-help-bubble--centered-mobile', isNarrow);
 
         const bubbleRect = this.bubbleEl.getBoundingClientRect();
-        const bubbleWidth = bubbleRect.width || 260;
+        const bubbleWidth = Math.min(ceilingWidth, bubbleRect.width || 260);
         const bubbleHeight = bubbleRect.height || 64;
 
         const pos = computeAnchoredPosition({
@@ -236,6 +249,8 @@ export class TooltipService implements Disposable {
             gap: TRIGGER_GAP,
             margin: VIEWPORT_MARGIN,
             viewport: vp,
+            maxWidth: ceilingWidth,
+            maxHeight: 340,
         });
 
         // 窄屏竖屏下横向按视口居中展示，避免靠边问号触发器挤压气泡阅读宽度
@@ -247,7 +262,7 @@ export class TooltipService implements Disposable {
         this.bubbleEl.style.left = `${finalLeft}px`;
         this.bubbleEl.style.top = `${pos.top}px`;
         this.bubbleEl.style.maxWidth = `${pos.maxWidth}px`;
-        this.bubbleEl.style.maxHeight = `${Math.min(340, pos.maxHeight)}px`;
+        this.bubbleEl.style.maxHeight = `${pos.maxHeight}px`;
         this.bubbleEl.style.visibility = 'visible';
     }
 
@@ -263,6 +278,9 @@ export class TooltipService implements Disposable {
         if (this.bubbleEl) {
             this.bubbleEl.style.display = 'none';
             this.bubbleEl.style.visibility = 'hidden';
+            this.bubbleEl.style.width = '';
+            this.bubbleEl.style.maxWidth = '';
+            this.bubbleEl.style.maxHeight = '';
         }
     }
 
@@ -308,6 +326,59 @@ export class TooltipService implements Disposable {
             this.bubbleEl = null;
         }
         this.bodyEl = null;
+    }
+
+    private isAnchorClipped(anchor: HTMLElement, anchorRect: DOMRect, vp: ViewportRect): boolean {
+        if (
+            anchorRect.bottom <= vp.top ||
+            anchorRect.top >= vp.top + vp.height ||
+            anchorRect.right <= vp.left ||
+            anchorRect.left >= vp.left + vp.width
+        ) {
+            return true;
+        }
+
+        if (typeof window.getComputedStyle !== 'function') {
+            return false;
+        }
+
+        let parent = anchor.parentElement;
+        while (parent && parent !== document.body && parent !== document.documentElement) {
+            const style = window.getComputedStyle(parent);
+            const clipsY =
+                style.overflowY === 'auto' ||
+                style.overflowY === 'scroll' ||
+                style.overflowY === 'hidden' ||
+                style.overflowY === 'clip' ||
+                style.overflowY === 'overlay';
+            const clipsX =
+                style.overflowX === 'auto' ||
+                style.overflowX === 'scroll' ||
+                style.overflowX === 'hidden' ||
+                style.overflowX === 'clip' ||
+                style.overflowX === 'overlay';
+
+            if (clipsY || clipsX) {
+                const parentRect = parent.getBoundingClientRect();
+                // 跳过测试环境等未布局的占位父元素，避免误判隐藏
+                if (parentRect.width > 0 && parentRect.height > 0) {
+                    if (
+                        clipsY &&
+                        (anchorRect.bottom <= parentRect.top || anchorRect.top >= parentRect.bottom)
+                    ) {
+                        return true;
+                    }
+                    if (
+                        clipsX &&
+                        (anchorRect.right <= parentRect.left || anchorRect.left >= parentRect.right)
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            parent = parent.parentElement;
+        }
+        return false;
     }
 
     private findAnchor(target: EventTarget | null): HTMLElement | null {

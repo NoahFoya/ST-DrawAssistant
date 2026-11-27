@@ -248,10 +248,12 @@ export class FabQuickPanel implements Disposable {
             gap: 10,
             margin: 10,
             viewport: vp,
+            maxWidth: 392,
+            maxHeight: 500,
         });
 
         this.element.style.width = `${Math.min(panelWidth, pos.maxWidth)}px`;
-        this.element.style.maxHeight = `${Math.min(500, Math.max(240, pos.maxHeight))}px`;
+        this.element.style.maxHeight = `${pos.maxHeight}px`;
         this.element.style.left = `${pos.left}px`;
         this.element.style.top = `${pos.top}px`;
     }

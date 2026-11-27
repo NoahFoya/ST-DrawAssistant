@@ -21,7 +21,7 @@ import { renderIcon } from '../components/icons';
 import { overlayStack } from '../framework/overlay-stack';
 import { computeAnchoredPosition, viewportService } from '../layout/viewport';
 import { collectKeywordRegexErrors } from '../../pipeline/material-definitions';
-import { DEFAULT_LORA_WEIGHTS, formatLoraWeightSummary } from '../../pipeline/lora-utils';
+import { DEFAULT_LORA_WEIGHTS, formatLoraWeightSummary } from '../../domain/lora/lora-syntax';
 import { attachTagAutocomplete } from './tag-autocomplete';
 
 /** 单个已挂载 LoRA 条目数据模型 */
@@ -779,10 +779,12 @@ export class LoraManager implements UIComponent, Disposable {
             align: 'start',
             gap: 4,
             margin: 8,
+            maxWidth: desiredWidth,
+            maxHeight: 220,
         });
 
         this.comboboxDropdown.style.width = `${Math.min(desiredWidth, pos.maxWidth)}px`;
-        this.comboboxDropdown.style.maxHeight = `${Math.min(220, pos.maxHeight)}px`;
+        this.comboboxDropdown.style.maxHeight = `${pos.maxHeight}px`;
         this.comboboxDropdown.style.left = `${pos.left}px`;
         this.comboboxDropdown.style.top = `${pos.top}px`;
     }

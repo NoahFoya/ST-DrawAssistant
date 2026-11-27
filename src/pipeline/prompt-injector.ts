@@ -63,7 +63,7 @@ export interface HostCardContextLike {
 /**
  * 统一收集当前活跃角色卡候选名称列表（涵盖单聊角色卡名、群聊名与 name2，去重）。
  */
-export function resolveHostCardCandidates(
+function resolveHostCardCandidates(
     hostContext?: HostCardContextLike,
     explicitCardKey?: string | readonly string[]
 ): string[] {
@@ -559,7 +559,7 @@ export function renderArchiveRowTemplate(
 /**
  * 解析当前生效的素材启用预设（支持跟随酒馆角色卡自动匹配切换）。
  */
-export function resolveActiveMaterialActivationPreset(
+function resolveActiveMaterialActivationPreset(
     settings: DrawAssistantSettings,
     activeCardKey?: string | readonly string[]
 ): PresetItem<MaterialActivationPresetData> | undefined {

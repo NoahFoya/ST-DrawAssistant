@@ -40,7 +40,7 @@ export interface PromptPollingPoolSummary {
 }
 
 /** 按预设 ID 或规范化名称匹配当前可用的提示词预设 */
-export function resolvePollingPoolPreset(
+function resolvePollingPoolPreset(
     entry: PromptPollingPoolItem,
     availablePresets: readonly PresetItem<PromptPresetData>[]
 ): PresetItem<PromptPresetData> | undefined {

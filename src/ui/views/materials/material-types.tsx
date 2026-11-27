@@ -59,7 +59,7 @@ export interface FullWidthTagFieldOptions {
 /**
  * 渲染单行 100% 全宽的 Tag 文本域字段（右上角显示实时预估 Token 数）。
  */
-export function renderFullWidthTagField(options: FullWidthTagFieldOptions): VNode {
+function renderFullWidthTagField(options: FullWidthTagFieldOptions): VNode {
     const tokenCount = estimateTagTokens(options.value);
     return (
         <div

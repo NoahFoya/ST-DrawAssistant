@@ -192,7 +192,7 @@ export function detectHostRuntime(): HostRuntimeInfo {
 /**
  * 生成针对 TauriTavern 环境选错「酒馆代理」时的显式提示文案。
  */
-export function getTauriRelayUnsupportedMessage(targetUrl?: string): string {
+function getTauriRelayUnsupportedMessage(targetUrl?: string): string {
     const targetSuffix = targetUrl ? ` [${targetUrl}]` : '';
     return `当前宿主为 TauriTavern，未提供 SillyTavern /proxy/ 代理转发接口，无法通过「酒馆代理」访问外部服务${targetSuffix}。请到「插件设置 -> 连接方式」切换为「浏览器直连」；若目标服务不支持跨域请求，请为后端开启跨域响应头或填写允许跨域的中转服务地址。`;
 }
@@ -605,7 +605,7 @@ function isAuthFailureSignal(
 /**
  * 从 HttpError.details 或纯文本中提取简洁可读的错误摘要。
  */
-export function extractBriefErrorDetail(details: unknown, maxLen = 260): string | undefined {
+function extractBriefErrorDetail(details: unknown, maxLen = 260): string | undefined {
     if (!details) return undefined;
     if (typeof details === 'string') {
         const cleaned = details.replace(/\s+/g, ' ').trim();

@@ -110,7 +110,7 @@ const PROVIDER_DISPLAY_NAMES: Readonly<Record<ProviderType, string>> = {
 };
 
 /** 校验并归一化服务提供方标识 */
-export function normalizeProviderType(engine: unknown): ProviderType | undefined {
+function normalizeProviderType(engine: unknown): ProviderType | undefined {
     if (typeof engine !== 'string') {
         return undefined;
     }
@@ -119,7 +119,7 @@ export function normalizeProviderType(engine: unknown): ProviderType | undefined
 }
 
 /** 获取服务提供方可读显示名称 */
-export function getProviderDisplayLabel(provider?: ProviderType): string {
+function getProviderDisplayLabel(provider?: ProviderType): string {
     if (!provider) {
         return '未知服务';
     }
@@ -127,7 +127,7 @@ export function getProviderDisplayLabel(provider?: ProviderType): string {
 }
 
 /** 将持久化 LoRA 元数据转换回运行时 LoRA 请求结构 */
-export function toResolvedLoras(
+function toResolvedLoras(
     loras?: readonly AppliedLoraMetadata[]
 ): ResolvedLoraSpec[] | undefined {
     if (!Array.isArray(loras) || loras.length === 0) {

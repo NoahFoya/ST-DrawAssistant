@@ -699,7 +699,7 @@ export function splitTopLevelTags(line: string, normalizeChinesePunctuation = tr
 /**
  * 规范化标签文本：拆分换行与顶层逗号分隔词条，支持保序去重（保留 `<...>` 语法标签并对 LoRA 路径统一斜杠大小写比较）。
  */
-export function cleanTagSegments(
+function cleanTagSegments(
     rawText: string,
     options?: { readonly deduplicate?: boolean; readonly normalizeChinesePunctuation?: boolean }
 ): string {

@@ -168,7 +168,7 @@ export function purgeMessageFloorDom(
 }
 
 /** 判断 DOM 节点是否属于插件自身的 `.da-floor-*` 元素 */
-export function isPluginFloorDomNode(node: Node): boolean {
+function isPluginFloorDomNode(node: Node): boolean {
     if (!(node instanceof Element)) {
         return false;
     }
@@ -181,7 +181,7 @@ export function isPluginFloorDomNode(node: Node): boolean {
 }
 
 /** 判断 MutationRecord 是否全部由插件自身楼层节点引发 */
-export function isPluginOnlyMutation(mutation: MutationRecord): boolean {
+function isPluginOnlyMutation(mutation: MutationRecord): boolean {
     if (mutation.target instanceof Element && isPluginFloorDomNode(mutation.target)) {
         return true;
     }

@@ -55,7 +55,8 @@ import type {
     SyncOfficialPresetsOptions,
 } from './settings-store';
 
-const DEFAULT_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[] = [
+/** 全部官方预设更新同步分组列表（按依赖先后排列） */
+export const ALL_OFFICIAL_SYNC_CATEGORIES: readonly OfficialPresetSyncCategory[] = [
     'prompts',
     'workflows',
     'drawing',
@@ -306,7 +307,7 @@ interface OfficialSyncPlan {
     readonly result: OfficialPresetSyncResult;
 }
 
-export function planOfficialPresetSync(
+function planOfficialPresetSync(
     current: PresetSettings,
     official: PresetSettings,
     selectedCategories: readonly OfficialPresetSyncCategory[],
@@ -1075,7 +1076,7 @@ export class PresetLifecycle {
         const categories =
             options?.categories && options.categories.length > 0
                 ? options.categories
-                : DEFAULT_OFFICIAL_SYNC_CATEGORIES;
+                : ALL_OFFICIAL_SYNC_CATEGORIES;
         return planOfficialPresetSync(this.repo.getRaw().presets, official, categories).result;
     }
 
@@ -1086,7 +1087,7 @@ export class PresetLifecycle {
         const categories =
             options?.categories && options.categories.length > 0
                 ? options.categories
-                : DEFAULT_OFFICIAL_SYNC_CATEGORIES;
+                : ALL_OFFICIAL_SYNC_CATEGORIES;
         const current = this.repo.getRaw();
         const plan = planOfficialPresetSync(current.presets, official, categories, {
             mode: options?.mode,
@@ -1225,7 +1226,7 @@ export class PresetLifecycle {
             }
         };
 
-        return DEFAULT_OFFICIAL_SYNC_CATEGORIES.map((category) => {
+        return ALL_OFFICIAL_SYNC_CATEGORIES.map((category) => {
             const items: StaticPresetCatalogItem[] = [];
             for (const bucket of bucketsForCategory(category)) {
                 const idMap = buildOfficialIdMap(bucket.localList, bucket.officialList);

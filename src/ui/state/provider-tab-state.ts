@@ -1,5 +1,5 @@
 /**
- * 生图服务选项卡通用视图模型 (ProviderTabViewModel)。
+ * 生图服务选项卡通用状态控制器 (ProviderTabState)。
  *
  * @remarks
  * 统一封装 ComfyUI、SD-WebUI、NovelAI、OpenAI 兼容、Google Gemini 与 xAI Grok 各生图服务视图的数据状态与交互逻辑：
@@ -1195,7 +1195,7 @@ export class ProviderTabState implements Disposable {
             files,
             existingNames,
             fallbackName,
-            logTag: '[ProviderTabViewModel]',
+            logTag: '[ProviderTabState]',
             isDisposed: () => this.isDisposed,
             isDirty: () =>
                 cfg.draftField === 'txt2imgWorkflowId'
@@ -1358,7 +1358,7 @@ export class ProviderTabState implements Disposable {
                     const res = parseComfyWorkflowInput(effectiveData!.json);
                     if (!res.ok) {
                         reportRuntimeError(
-                            '[ProviderTabViewModel] 工作流保存解析失败:',
+                            '[ProviderTabState] 工作流保存解析失败:',
                             '工作流保存失败：配置格式无效，详情见日志',
                             res.error,
                             'warn'
@@ -1372,7 +1372,7 @@ export class ProviderTabState implements Disposable {
                     const res = parseComfyWorkflowInput(effectiveData.json);
                     if (!res.ok) {
                         reportRuntimeError(
-                            '[ProviderTabViewModel] 工作流导出解析失败:',
+                            '[ProviderTabState] 工作流导出解析失败:',
                             '工作流导出失败：配置格式无效，详情见日志',
                             res.error,
                             'warn'
@@ -1387,7 +1387,7 @@ export class ProviderTabState implements Disposable {
                     const res = parseComfyWorkflowInput(effectiveData.json);
                     if (!res.ok) {
                         reportRuntimeError(
-                            '[ProviderTabViewModel] 工作流另存解析失败:',
+                            '[ProviderTabState] 工作流另存解析失败:',
                             '工作流另存失败：配置格式无效，详情见日志',
                             res.error,
                             'warn'

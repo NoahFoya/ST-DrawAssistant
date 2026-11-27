@@ -92,7 +92,7 @@ export function formatLogDetailsText(rawDetails: unknown): string {
     }
 }
 
-export function isTerminalLogVisible(
+function isTerminalLogVisible(
     item: TerminalLogItem,
     filterMode: TerminalFilterMode,
     searchKeyword: string

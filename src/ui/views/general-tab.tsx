@@ -363,7 +363,7 @@ const GENERAL_CARDS_SCHEMA: CardSchema<GeneralFormModel>[] = [
     },
 ];
 
-function buildGeneralViewModel(): GeneralFormModel {
+function buildGeneralFormModel(): GeneralFormModel {
     const s = settingsStore.signals.settings.value;
     const ui = s.ui;
     const floorButton = ui?.floorButton;
@@ -561,7 +561,7 @@ function handleGeneralFieldChange<K extends keyof GeneralFormModel>(
 }
 
 export function GeneralTab(): VNode {
-    const model = buildGeneralViewModel();
+    const model = buildGeneralFormModel();
     const hostRuntime = detectHostRuntime();
     const cards = GENERAL_CARDS_SCHEMA.map((card) => {
         if (card.id !== 'general-basic') {

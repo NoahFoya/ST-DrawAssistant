@@ -26,7 +26,7 @@ import { Toast } from '../feedback/toast';
 
 type FabAnimationOption = NonNullable<DrawAssistantSettings['ui']['fab']['animationType']>;
 
-export const FAB_ANIMATION_OPTIONS: readonly { value: FabAnimationOption; label: string }[] = [
+const FAB_ANIMATION_OPTIONS: readonly { value: FabAnimationOption; label: string }[] = [
     { value: 'starlight', label: '星光环绕' },
     { value: 'orbit-ring', label: '流光环绕' },
     { value: 'aurora-pulse', label: '呼吸脉冲' },

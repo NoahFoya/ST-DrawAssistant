@@ -2,7 +2,7 @@
  * ComfyUI 生图服务专属设置选项卡视图 (ComfyUITabView)。
  *
  * @remarks
- * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
+ * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabState 构建：
  * 1. 顶部服务连接与状态检测卡片 (ProviderTabLayout 内置 ConnectionCardView)；
  * 2. 生图参数预设工具栏 (PresetToolbarView) 与统一配置卡片 (CardView)：包含模型/工作流字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
  * 3. 底部工作流管理器 (WorkflowCardView) 与提示词/LoRA 预设卡片 (PromptPresetCardView)。

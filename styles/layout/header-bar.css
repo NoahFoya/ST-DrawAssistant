@@ -84,11 +84,6 @@
     .da-header-title__prefix {
         display: none;
     }
-
-    .da-quick-theme-select,
-    select.da-quick-theme-select {
-        max-width: 120px;
-    }
 }
 
 /* 快捷主题切换胶囊外壳 (.da-quick-theme-selector) */

@@ -32,6 +32,9 @@ export interface SetValueOptions {
  */
 export type ControlChangeCallback<T> = (value: T) => void | boolean;
 
+/** 表单右侧控件阶梯宽度预设 */
+export type FormFieldControlWidth = 'auto' | 'w-80' | 'w-120' | 'w-240' | 'w-toggle';
+
 /**
  * 纯受控基础控件通用操作句柄接口。
  *

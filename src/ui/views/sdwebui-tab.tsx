@@ -2,7 +2,7 @@
  * SD-WebUI / Forge 生图服务专属设置选项卡视图 (SDWebUITabView)。
  *
  * @remarks
- * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
+ * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabState 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView)；
  * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型与网络架构字段 (SchemaFieldsView)、画幅尺寸 (DimensionPickerView) 与采样控制 (SamplerCardView)；
  * 3. 高清修复 (Hires. fix) 级联声明式卡片 (SchemaCard，子项通过 disabledWhen 联动)；

@@ -15,7 +15,7 @@ import { Toast } from '../feedback/toast';
 import { providerRegistry } from '../../provider/registry';
 import { imageStorage } from '../../store/image-storage';
 import { copyTextToClipboard, downloadImageAsset } from '../../util/browser-io';
-import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
+import { DEFAULT_LORA_WEIGHTS } from '../../domain/lora/lora-syntax';
 import { logger } from '../../util/logger';
 
 export interface ImageInfoModalOpenOptions {

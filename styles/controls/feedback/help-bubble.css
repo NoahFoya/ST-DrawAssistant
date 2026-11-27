@@ -27,6 +27,7 @@
     box-sizing: border-box;
     white-space: normal;
     word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 /* 浮动提示气泡 (.da-tooltip-bubble)
@@ -39,7 +40,7 @@
     max-height: min(calc(var(--da-vvh, 100dvh) * 0.55), 340px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: var(--da-bg-card, #202430);
+    background: var(--da-bg-modal, var(--da-bg-secondary, #181825));
     border-color: var(--da-border-highlight, rgba(129, 140, 248, 0.45));
     z-index: var(--da-z-tooltip, 100300);
     transform: none;
@@ -57,6 +58,7 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .da-help-bubble-body {

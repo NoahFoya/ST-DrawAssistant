@@ -12,7 +12,7 @@ import type { Disposable } from '../types';
 import { renderIcon } from '../components/icons';
 import { bindBackdropDismiss, overlayStack } from '../framework/overlay-stack';
 import { LoraManager, type LoraEntryItem } from '../composite/lora-manager';
-import { DEFAULT_LORA_WEIGHTS } from '../../pipeline/lora-utils';
+import { DEFAULT_LORA_WEIGHTS } from '../../domain/lora/lora-syntax';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { Toast } from '../feedback/toast';
 

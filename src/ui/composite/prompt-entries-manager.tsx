@@ -61,7 +61,7 @@ export interface PromptEntriesManagerProps {
  * 角色定义前 (pos 2, Order 升序) -> 角色定义后 (pos 0, Order 升序) -> 深度插入 @D (pos 1, Depth 降序，同 Depth 按 Order 升序)。
  * 排序结果中，越靠后的条目在实际组装上下文时越贴近最新一条聊天消息。
  */
-export function comparePromptEntriesByInjectionSequence(
+function comparePromptEntriesByInjectionSequence(
     a: PromptInjectionEntry,
     b: PromptInjectionEntry
 ): number {

@@ -10,7 +10,7 @@
  */
 
 import type { ComponentChildren } from 'preact';
-import type { FormFieldControlWidth } from '../components/form-field';
+import type { FormFieldControlWidth } from '../types';
 import type { SelectOption, SelectOptGroup } from '../components/select';
 import type { SegmentedControlOption } from '../components/segmented-control';
 import {

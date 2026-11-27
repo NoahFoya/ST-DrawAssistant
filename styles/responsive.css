@@ -142,6 +142,38 @@
     }
 }
 
+/* 2.5 中等分栏平板适配 (641px - 900px)
+   保持侧边栏分栏同时允许长标签温和折行，避免挤压右侧 240px 控件溢出所属卡片 */
+@media (min-width: 641px) and (max-width: 900px) {
+    .da-form-row {
+        gap: var(--da-space-sm, 8px);
+    }
+
+    .da-form-row .da-field-label-group,
+    .st-da-root .da-form-row .da-field-label-group {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+
+    .da-form-row .da-field-label,
+    .st-da-root .da-form-row .da-field-label {
+        white-space: normal !important;
+        word-break: break-word;
+        flex-shrink: 1 !important;
+    }
+
+    .da-form-row .da-slot--w-240,
+    .da-form-row .da-form-row__control:has(.da-select-wrapper),
+    .da-form-row .da-form-row__control:has(.da-input-wrapper),
+    .da-form-row .da-form-row__control:not(.da-slot--w-120):not(.da-slot--w-80):has(> .da-number-input),
+    .da-form-row .da-form-row__control:has(.da-segmented),
+    .da-form-row .da-form-row__control:has(.da-dimension-picker__size-group),
+    .da-form-row .da-form-row__control:has(.da-color-picker) {
+        flex: 0 1 240px;
+        min-width: 140px;
+    }
+}
+
 /* 3. 移动端与紧凑手机屏幕适配 (max-width: 640px)
    主弹窗全屏平铺；侧边栏转为顶部横向滚动 Tab 导航条；基础字阶微调收缩；
    表单行由水平两端对齐转为垂直列布局，标签置顶，控件撑满整行。 */
@@ -324,7 +356,8 @@
         padding: 2px 6px;
     }
 
-    .da-quick-theme-select {
+    .da-quick-theme-select,
+    select.da-quick-theme-select {
         max-width: 72px;
     }
 }

@@ -2,7 +2,7 @@
  * NovelAI 生图服务专属设置选项卡视图 (NovelAITabView)。
  *
  * @remarks
- * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabViewModel 构建：
+ * 基于 Preact JSX、ProviderTabLayout、SchemaCard 与 ProviderTabState 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持官方/自定义预设切换与 Bearer Token)；
  * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型与画质参数 (SchemaFieldsView)、轮询候选池入口行 (PromptPollingPanelView)、画幅尺寸 (DimensionPickerView)、采样与调度控制 (SamplerCardView) 与 CFG Rescale；
  * 3. V3 模型采样增强选项卡片 (SchemaCard，仅 V3 系列模型时渲染 SMEA 与 Decrisper 选项)；

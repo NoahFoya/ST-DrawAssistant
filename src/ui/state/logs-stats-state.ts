@@ -204,7 +204,7 @@ export class LogsStatsState implements Disposable {
             this.storageSummary.value = nextStorageSummary;
         } catch (err) {
             if (!this.isDisposed && seq === this.metricsSeq) {
-                logger.warn('[LogsStatsViewModel] 汇总指标数据异常:', err);
+                logger.warn('[LogsStatsState] 汇总指标数据异常:', err);
             }
         } finally {
             if (!this.isDisposed && seq === this.metricsSeq) {
@@ -224,13 +224,13 @@ export class LogsStatsState implements Disposable {
         } catch (err) {
             if (!this.isDisposed) {
                 reportRuntimeError(
-                    '[LogsStatsViewModel] 清理失败记录异常:',
+                    '[LogsStatsState] 清理失败记录异常:',
                     '清理失败记录异常，请前往「日志与统计」查看详情',
                     err,
                     'warn'
                 );
             } else {
-                logger.warn('[LogsStatsViewModel] 清理失败记录异常:', err);
+                logger.warn('[LogsStatsState] 清理失败记录异常:', err);
             }
         }
     }
@@ -246,13 +246,13 @@ export class LogsStatsState implements Disposable {
         } catch (err) {
             if (!this.isDisposed) {
                 reportRuntimeError(
-                    '[LogsStatsViewModel] 清理未收藏记录异常:',
+                    '[LogsStatsState] 清理未收藏记录异常:',
                     '清理未收藏记录异常，请前往「日志与统计」查看详情',
                     err,
                     'warn'
                 );
             } else {
-                logger.warn('[LogsStatsViewModel] 清理未收藏记录异常:', err);
+                logger.warn('[LogsStatsState] 清理未收藏记录异常:', err);
             }
         }
     }
@@ -268,13 +268,13 @@ export class LogsStatsState implements Disposable {
         } catch (err) {
             if (!this.isDisposed) {
                 reportRuntimeError(
-                    '[LogsStatsViewModel] 清空本地图像记录异常:',
+                    '[LogsStatsState] 清空本地图像记录异常:',
                     '清空本地图像记录异常，请前往「日志与统计」查看详情',
                     err,
                     'warn'
                 );
             } else {
-                logger.warn('[LogsStatsViewModel] 清空本地图像记录异常:', err);
+                logger.warn('[LogsStatsState] 清空本地图像记录异常:', err);
             }
         }
     }

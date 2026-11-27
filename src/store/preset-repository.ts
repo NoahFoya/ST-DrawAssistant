@@ -107,7 +107,7 @@ export function resolveDrawingPresetFromPorts<T = Record<string, unknown>>(
  * 纯函数：更新或追加带时间戳的预设项（对角色/服装预设同步更新外层与内层名称，并保证名称唯一性与 ID 稳定）。
  * 新建预设（`idIndex === -1`）优先采信外层传入的新名称，避免模板或来源副本中的旧 `data.name` 反向覆盖已有条目。
  */
-export function upsertPresetItem<P>(
+function upsertPresetItem<P>(
     list: PresetItem<P>[],
     item: PresetItem<P>,
     enforceUniqueName = false

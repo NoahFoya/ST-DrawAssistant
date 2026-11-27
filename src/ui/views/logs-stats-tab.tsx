@@ -2,7 +2,7 @@
  * 日志与统计专属选项卡视图 (LogsStatsTabView)。
  *
  * @remarks
- * 基于 Preact JSX 与 LogsStatsViewModel 声明式构建：
+ * 基于 Preact JSX 与 LogsStatsState 声明式构建：
  * 1. 运行数据统计看板 (StatCardView)；
  * 2. 本地存储空间监控与分级清理卡片 (StorageBarView)；
  * 3. 实时运行与排障终端卡片 (CardView + LogTerminalView)。

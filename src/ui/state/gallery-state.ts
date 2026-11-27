@@ -35,7 +35,7 @@ import { reportRuntimeError } from '../feedback/error-feedback';
 import { ConfirmDialog } from '../feedback/confirm-dialog';
 import { logger } from '../../util/logger';
 
-export const DEFAULT_GALLERY_PAGE_SIZE = 24;
+const DEFAULT_GALLERY_PAGE_SIZE = 24;
 
 export class GalleryState implements Disposable {
     public readonly pageSize: number;
@@ -385,7 +385,7 @@ export class GalleryState implements Disposable {
             return true;
         } catch (err) {
             reportRuntimeError(
-                '[GalleryViewModel] 提交图库重绘任务失败:',
+                '[GalleryState] 提交图库重绘任务失败:',
                 '提交重新生成任务失败，请前往「日志与统计」查看详情',
                 err
             );
@@ -424,7 +424,7 @@ export class GalleryState implements Disposable {
             Toast.info('已重新提交图库生成任务');
         } catch (err) {
             reportRuntimeError(
-                '[GalleryViewModel] 重试图库任务失败:',
+                '[GalleryState] 重试图库任务失败:',
                 '重新提交失败，请前往「日志与统计」查看详情',
                 err
             );
@@ -494,7 +494,7 @@ export class GalleryState implements Disposable {
         } catch (err) {
             if (!this.isDisposed && seq === this.refreshSeq) {
                 reportRuntimeError(
-                    '[GalleryViewModel] 刷新本地图库异常:',
+                    '[GalleryState] 刷新本地图库异常:',
                     '刷新本地图库记录失败，请前往「日志与统计」查看详情',
                     err
                 );
@@ -622,13 +622,13 @@ export class GalleryState implements Disposable {
             markFailed();
             if (!silent) {
                 reportRuntimeError(
-                    `[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`,
+                    `[GalleryState] 重试载入图像失败 (imageId: ${imageId}):`,
                     '重新载入图像失败，请前往「日志与统计」查看详情',
                     err,
                     'warn'
                 );
             } else {
-                logger.warn(`[GalleryViewModel] 重试载入图像失败 (imageId: ${imageId}):`, err);
+                logger.warn(`[GalleryState] 重试载入图像失败 (imageId: ${imageId}):`, err);
             }
             return false;
         }
@@ -782,7 +782,7 @@ export class GalleryState implements Disposable {
             Toast.success(`成功导出 ${selectedRecords.length} 项备份清单`);
         } catch (err) {
             reportRuntimeError(
-                '[GalleryViewModel] 导出备份异常:',
+                '[GalleryState] 导出备份异常:',
                 '导出失败，请前往「日志与统计」查看详情',
                 err
             );

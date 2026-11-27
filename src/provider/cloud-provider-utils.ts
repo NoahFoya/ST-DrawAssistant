@@ -23,7 +23,7 @@ export function hashKeyFingerprint(apiKey?: string): string {
  * 从 HttpError 提取可读的错误信息。
  * 若为宿主代理/传输诊断错误，优先返回完整诊断说明；否则按通用云端格式提取上游错误字段。
  */
-export function extractHttpErrorMessage(err: HttpError): string {
+function extractHttpErrorMessage(err: HttpError): string {
     return resolveHttpErrorMessage(err, (details) => {
         if (details && typeof details === 'object' && !Array.isArray(details)) {
             const record = details as Record<string, unknown>;

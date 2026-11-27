@@ -2,7 +2,7 @@
  * OpenAI 兼容生图服务专属设置选项卡视图 (OpenAITabView)。
  *
  * @remarks
- * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabViewModel 构建：
+ * 基于 Preact JSX、ProviderTabLayout 与 ProviderTabState 构建：
  * 1. 顶部服务连接与状态检测卡片 (ConnectionCardView，支持服务商模板与 Bearer Token)；
  * 2. 生图参数预设主控卡片 (CardView + PresetToolbarView)：包含模型选择、画幅比例 (DimensionPickerView) 及 DALL-E 3 / GPT Image 专属参数；
  * 3. 自定义请求参数 JSON 扩展卡片（支持实时语法校验，非法时标红 .is-invalid 并拦截保存）；

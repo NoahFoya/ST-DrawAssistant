@@ -396,16 +396,36 @@ export function PromptsPreviewPanel(props: PromptsPreviewPanelProps): VNode {
                                                 >
                                                     {isCollapsed ? '▸' : '▾'}
                                                 </span>
-                                                <span
-                                                    className="da-paragraph-badge da-paragraph-badge--pos"
-                                                    title={
+                                                {(() => {
+                                                    const posHelpText =
                                                         bucket.position === 1
                                                             ? '@D 表示距最新消息的对话轮数：@D=0 紧贴最新消息（优先级最高），数值越大位置越靠前。'
-                                                            : '提示词插入在酒馆角色设定里的位置'
-                                                    }
-                                                >
-                                                    {posText}
-                                                </span>
+                                                            : '提示词插入在酒馆角色设定里的位置';
+                                                    return (
+                                                        <>
+                                                            <span
+                                                                className="da-paragraph-badge da-paragraph-badge--pos"
+                                                            >
+                                                                {posText}
+                                                            </span>
+                                                            <span
+                                                                className="da-help-icon"
+                                                                data-tooltip={posHelpText}
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                aria-label={posHelpText}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                                        e.stopPropagation();
+                                                                    }
+                                                                }}
+                                                            >
+                                                                ?
+                                                            </span>
+                                                        </>
+                                                    );
+                                                })()}
                                                 <span className="da-paragraph-badge da-paragraph-badge--role">
                                                     {roleText}
                                                 </span>
